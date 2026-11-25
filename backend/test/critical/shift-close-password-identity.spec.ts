@@ -46,13 +46,23 @@ const CASHIER_PASSWORD = 'cashier-secret-1';
 const ADMIN_PASSWORD = 'admin-secret-1';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const adminAuth: AuthContext = {
-  userId: 3, sessionId: 'spec', username: 'admin-a', role: 'admin',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 3,
+  sessionId: 'spec',
+  username: 'admin-a',
+  role: 'admin',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -122,27 +132,81 @@ async function seed(db: Kysely<Database>): Promise<void> {
   const adminRecord = await createPasswordRecord(ADMIN_PASSWORD);
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('users').values({
-    id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true,
-    password_hash: cashierRecord.hash, password_salt: cashierRecord.salt,
-  }).execute();
-  await anyDb.insertInto('users').values({
-    id: 3, tenant_id: TENANT, username: 'admin-a', role: 'admin', is_active: true,
-    password_hash: adminRecord.hash, password_salt: adminRecord.salt,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      username: 'cashier-a',
+      role: 'cashier',
+      is_active: true,
+      password_hash: cashierRecord.hash,
+      password_salt: cashierRecord.salt,
+    })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 3,
+      tenant_id: TENANT,
+      username: 'admin-a',
+      role: 'admin',
+      is_active: true,
+      password_hash: adminRecord.hash,
+      password_salt: adminRecord.salt,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
   await anyDb.insertInto('user_branches').values({ tenant_id: TENANT, user_id: 2, branch_id: 1 }).execute();
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, supplier_payable_account_id: 2110, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300, cogs_account_id: 5100,
-    sales_tax_account_id: 2120, purchase_tax_account_id: 1150,
-  }).execute();
-  for (const [code, type] of [[1110, 'asset'], [7110, 'revenue'], [7210, 'expense'], [1135, 'asset']] as const) {
-    await anyDb.insertInto('accounting_accounts').values({
-      id: code, tenant_id: TENANT, code: String(code), account_type: type, is_active: true,
-    }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      supplier_payable_account_id: 2110,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+      purchase_tax_account_id: 1150,
+    })
+    .execute();
+  for (const [code, type] of [
+    [1110, 'asset'],
+    [7110, 'revenue'],
+    [7210, 'expense'],
+    [1135, 'asset'],
+  ] as const) {
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id: code,
+        tenant_id: TENANT,
+        code: String(code),
+        account_type: type,
+        is_active: true,
+      })
+      .execute();
   }
 }
 
@@ -177,11 +241,7 @@ async function auditCount(db: Kysely<Database>, eventCode: string): Promise<numb
 }
 
 async function shiftRow(db: Kysely<Database>, shiftId: number): Promise<Record<string, unknown>> {
-  const row = await (db as any)
-    .selectFrom('cashier_shifts')
-    .selectAll()
-    .where('id', '=', shiftId)
-    .executeTakeFirst();
+  const row = await (db as any).selectFrom('cashier_shifts').selectAll().where('id', '=', shiftId).executeTakeFirst();
   assert.ok(row, `shift ${shiftId} must exist`);
   return row as Record<string, unknown>;
 }
@@ -226,7 +286,9 @@ async function runOwnPasswordCloseCase(): Promise<void> {
     const shiftId = await openShift(drawer, 170);
     // Trial figures: blind total 170.00, counted 70.00, 100.00 short.
     const closed = await drawer.closeCashierShift(
-      shiftId, { countedCash: 70, managerPin: CASHIER_PASSWORD }, cashierAuth,
+      shiftId,
+      { countedCash: 70, managerPin: CASHIER_PASSWORD },
+      cashierAuth,
     );
     assert.equal(closed.ok, true, 'own-password close must succeed');
     const closedShift = closed.closedShift as Record<string, unknown>;
@@ -252,9 +314,7 @@ async function runAuditCase(): Promise<void> {
     assert.equal(await auditCount(db, 'CASHIER_SHIFT_OPENED'), 0);
     const shiftId = await openShift(drawer, 170);
     assert.equal(await auditCount(db, 'CASHIER_SHIFT_OPENED'), 1, 'open must write one audit row');
-    await drawer.closeCashierShift(
-      shiftId, { countedCash: 70, managerPin: CASHIER_PASSWORD }, cashierAuth,
-    );
+    await drawer.closeCashierShift(shiftId, { countedCash: 70, managerPin: CASHIER_PASSWORD }, cashierAuth);
     assert.equal(await auditCount(db, 'CASHIER_SHIFT_CLOSED'), 1, 'close must write one audit row');
     const closeRows = await (db as any)
       .selectFrom('audit_logs')
@@ -280,9 +340,7 @@ async function runShortCountFindableCase(): Promise<void> {
     await seed(db);
     const drawer = buildDrawer(db);
     const shiftId = await openShift(drawer, 170);
-    await drawer.closeCashierShift(
-      shiftId, { countedCash: 70, managerPin: CASHIER_PASSWORD }, cashierAuth,
-    );
+    await drawer.closeCashierShift(shiftId, { countedCash: 70, managerPin: CASHIER_PASSWORD }, cashierAuth);
     // As the cashier closer: the differences filter must find the
     // short-count shift (old code zeroed variance for the cashier
     // viewer, so the filter returned zero shifts). The amount stays
@@ -319,4 +377,7 @@ async function main(): Promise<void> {
   console.log('shift-close-password-identity: OK');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

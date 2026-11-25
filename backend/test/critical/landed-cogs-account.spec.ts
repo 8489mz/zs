@@ -36,7 +36,10 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const landed = new PurchaseLandedCostsService(db as any, posting);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
@@ -110,16 +113,33 @@ async function main() {
       INSERT INTO stock_movements VALUES (1,'t1','a1',10,'purchase',10,0,10,10,100,'purchase','PUR-1','purchase',1,NULL,NULL,1);
       INSERT INTO stock_movements VALUES (2,'t1','a1',10,'sale',-5,10,5,10,-50,'sale','SALE-1','sale',1,NULL,NULL,1);
     `);
-    for (const code of [1110,1120,1130,1140,2110,2120,4100,4300,5100,5190,7290]) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), '']);
+    for (const code of [1110, 1120, 1130, 1140, 2110, 2120, 4100, 4300, 5100, 5190, 7290]) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        '',
+      ]);
     }
-    await landed.applyPurchaseLandedCosts(1, { costs: [{ costType: 'freight', description: 'Freight', amount: 100, vendorId: 9 }], allocationMethod: 'value' } as any, auth);
+    await landed.applyPurchaseLandedCosts(
+      1,
+      {
+        costs: [{ costType: 'freight', description: 'Freight', amount: 100, vendorId: 9 }],
+        allocationMethod: 'value',
+      } as any,
+      auth,
+    );
 
-    const entry = await pg.query<{ id: string }>(`SELECT id FROM journal_entries WHERE source_type='purchase_landed_cost' AND source_id=1`);
+    const entry = await pg.query<{ id: string }>(
+      `SELECT id FROM journal_entries WHERE source_type='purchase_landed_cost' AND source_id=1`,
+    );
     assert.equal(entry.rows.length, 1);
     const entryId = Number(entry.rows[0].id);
     const amount = async (code: number, side: 'debit' | 'credit') => {
-      const rows = await pg.query<{ amount: string }>(`SELECT coalesce(sum(l.${side}),0) AS amount FROM journal_entry_lines l JOIN accounting_accounts a ON a.id=l.account_id WHERE l.journal_entry_id=$1 AND a.code=$2`, [entryId, String(code)]);
+      const rows = await pg.query<{ amount: string }>(
+        `SELECT coalesce(sum(l.${side}),0) AS amount FROM journal_entry_lines l JOIN accounting_accounts a ON a.id=l.account_id WHERE l.journal_entry_id=$1 AND a.code=$2`,
+        [entryId, String(code)],
+      );
       return Number(rows.rows[0].amount);
     };
     assert.equal(await amount(1140, 'debit'), 50);
@@ -135,4 +155,7 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

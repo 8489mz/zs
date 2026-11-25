@@ -96,12 +96,18 @@ async function main(): Promise<void> {
   const service = new MaritimeFreightService(db, {} as never, {} as never, postingStub as never);
 
   async function customerBalance(): Promise<number> {
-    const row = await (db as any).selectFrom('customers').select('balance').where('id', '=', 4).executeTakeFirstOrThrow() as any;
+    const row = (await (db as any)
+      .selectFrom('customers')
+      .select('balance')
+      .where('id', '=', 4)
+      .executeTakeFirstOrThrow()) as any;
     return Number(row.balance);
   }
 
-  async function ledgerRows(): Promise<Array<{ amount: number; balance_after: number; entry_type: string; reference_type: string }>> {
-    const rows = await (db.selectFrom('customer_ledger' as never).selectAll() as any).execute() as any[];
+  async function ledgerRows(): Promise<
+    Array<{ amount: number; balance_after: number; entry_type: string; reference_type: string }>
+  > {
+    const rows = (await (db.selectFrom('customer_ledger' as never).selectAll() as any).execute()) as any[];
     rows.sort((a, b) => Number(a.id) - Number(b.id));
     return rows.map((r) => ({
       amount: Number(r.amount),
@@ -112,12 +118,12 @@ async function main(): Promise<void> {
   }
 
   async function glPartnerSum(): Promise<number> {
-    const rows = await (db as any)
+    const rows = (await (db as any)
       .selectFrom('journal_entry_lines')
       .selectAll()
       .where('partner_type', '=', 'customer')
       .where('partner_id', '=', 4)
-      .execute() as any[];
+      .execute()) as any[];
     return rows.reduce((sum, r) => sum + Number(r.debit || 0) - Number(r.credit || 0), 0);
   }
 
@@ -181,14 +187,21 @@ async function main(): Promise<void> {
     // 4. Linked customer that does not exist: fails closed, no journal
     // row survives (the stub's in-memory push is not the database:
     // the transaction rolls the journal insert back), totals untouched.
-    const entriesBefore = await db.selectFrom('journal_entries' as never).selectAll().execute();
-    await assert.rejects(
-      service.issueJobSalesInvoice(auth, '3', { amount: 50, currency: 'USD' }),
-      /العميل المرتبط/,
-    );
-    const entriesAfter = await db.selectFrom('journal_entries' as never).selectAll().execute();
+    const entriesBefore = await db
+      .selectFrom('journal_entries' as never)
+      .selectAll()
+      .execute();
+    await assert.rejects(service.issueJobSalesInvoice(auth, '3', { amount: 50, currency: 'USD' }), /العميل المرتبط/);
+    const entriesAfter = await db
+      .selectFrom('journal_entries' as never)
+      .selectAll()
+      .execute();
     assert.equal(entriesAfter.length, entriesBefore.length);
-    const ghost = await (db as any).selectFrom('maritime_jobs').selectAll().where('id', '=', 3).executeTakeFirstOrThrow() as any;
+    const ghost = (await (db as any)
+      .selectFrom('maritime_jobs')
+      .selectAll()
+      .where('id', '=', 3)
+      .executeTakeFirstOrThrow()) as any;
     assert.equal(Number(ghost.client_invoiced_total), 0);
     assert.equal((await ledgerRows()).length, 2);
 
@@ -196,14 +209,22 @@ async function main(): Promise<void> {
     // expense-voucher path does not (supplier subledger undecided).
     // Maritime split: the invoice path (issue + expense voucher + settle
     // + the ledger helper) lives entirely in the invoicing slice.
-    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-invoicing.service.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-invoicing.service.ts'),
+      'utf8',
+    );
     const invoiceStart = source.indexOf('async issueJobSalesInvoice(');
     const expenseStart = source.indexOf('async recordJobExpenseVoucher(');
     const settleStart = source.indexOf('async settleJobFromCustomerBalance(');
     assert.ok(invoiceStart > 0 && expenseStart > invoiceStart && settleStart > expenseStart);
     const invoiceBody = source.slice(invoiceStart, expenseStart);
     assert.ok(invoiceBody.includes('maintainCustomerLedgerForInvoice'));
-    assert.ok(invoiceBody.includes("insertInto('customer_ledger')") || source.slice(source.indexOf('async maintainCustomerLedgerForInvoice('), invoiceStart).includes("insertInto('customer_ledger')"));
+    assert.ok(
+      invoiceBody.includes("insertInto('customer_ledger')") ||
+        source
+          .slice(source.indexOf('async maintainCustomerLedgerForInvoice('), invoiceStart)
+          .includes("insertInto('customer_ledger')"),
+    );
     const expenseBody = source.slice(expenseStart, settleStart);
     assert.ok(!expenseBody.includes('customer_ledger'));
     assert.ok(!expenseBody.includes('maintainCustomerLedgerForInvoice'));

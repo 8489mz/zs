@@ -29,7 +29,6 @@
  * with the fix.
  */
 
-
 import 'reflect-metadata';
 import { strict as assert } from 'node:assert';
 import { PGlite } from '@electric-sql/pglite';
@@ -53,16 +52,24 @@ const ACCOUNT = 'a1';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec', username: 'cashier-a', role: 'cashier',
-  permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: [],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
-
-
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -129,46 +136,132 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 4, tenant_id: TENANT, username: 'other-login', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 4, tenant_id: TENANT, username: 'other-login', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string, string, string, boolean]> = [
-    [1110, '1110', 'asset', 'debit', true], [1111, '1111', 'asset', 'debit', true], [1120, '1120', 'asset', 'debit', true],
-    [1130, '1130', 'asset', 'debit', false], [1140, '1140', 'asset', 'debit', false],
-    [2120, '2120', 'liability', 'credit', false], [4100, '4100', 'income', 'credit', false],
-    [4300, '4300', 'income', 'credit', false], [5100, '5100', 'expense', 'debit', false],
-    [6950, '6950', 'expense', 'debit', false], [7100, '7100', 'income', 'credit', false],
+    [1110, '1110', 'asset', 'debit', true],
+    [1111, '1111', 'asset', 'debit', true],
+    [1120, '1120', 'asset', 'debit', true],
+    [1130, '1130', 'asset', 'debit', false],
+    [1140, '1140', 'asset', 'debit', false],
+    [2120, '2120', 'liability', 'credit', false],
+    [4100, '4100', 'income', 'credit', false],
+    [4300, '4300', 'income', 'credit', false],
+    [5100, '5100', 'expense', 'debit', false],
+    [6950, '6950', 'expense', 'debit', false],
+    [7100, '7100', 'income', 'credit', false],
   ];
   for (const [id, code, accountType, normalBalance, isCashBank] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: accountType, normal_balance: normalBalance, is_cash_bank: isCashBank, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id,
+        tenant_id: TENANT,
+        code,
+        name_ar: code,
+        account_type: accountType,
+        normal_balance: normalBalance,
+        is_cash_bank: isCashBank,
+        is_active: true,
+        is_tax: false,
+      })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
 /**
@@ -180,7 +273,11 @@ async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Pr
  * writes no sale treasury row (field cash sits with the rep).
  */
 
-function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer: CashDrawerService; posting: AccountingPostingService } {
+function buildServices(db: Kysely<Database>): {
+  sales: SalesWriteService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -195,36 +292,57 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   return { sales, drawer, posting };
 }
 
-
-
-
 async function seedOperatorPassword(db: Kysely<Database>): Promise<void> {
   const { createPasswordRecord } = await import('../../src/core/auth/utils/password-hasher');
   const record = await createPasswordRecord(PASSWORD);
-  await (db as any).updateTable('users').set({ password_hash: record.hash, password_salt: record.salt }).where('id', '=', 1).execute();
+  await (db as any)
+    .updateTable('users')
+    .set({ password_hash: record.hash, password_salt: record.salt })
+    .where('id', '=', 1)
+    .execute();
 }
 
 async function treasuryRows(db: Kysely<Database>, shiftId: number): Promise<any[]> {
-  const res = await sql<any>`select id, txn_type, amount, note from treasury_transactions where reference_type = 'cashier_shift' and reference_id = ${shiftId} order by id asc`.execute(db);
+  const res =
+    await sql<any>`select id, txn_type, amount, note from treasury_transactions where reference_type = 'cashier_shift' and reference_id = ${shiftId} order by id asc`.execute(
+      db,
+    );
   return res.rows || [];
 }
 
 async function journalLines(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<any[]> {
-  const res = await sql<any>`select je.id as entry_id, jel.account_id, jel.debit, jel.credit from journal_entries je join journal_entry_lines jel on jel.journal_entry_id = je.id where je.source_type = ${sourceType} and je.source_id = ${sourceId} order by jel.id asc`.execute(db);
+  const res =
+    await sql<any>`select je.id as entry_id, jel.account_id, jel.debit, jel.credit from journal_entries je join journal_entry_lines jel on jel.journal_entry_id = je.id where je.source_type = ${sourceType} and je.source_id = ${sourceId} order by jel.id asc`.execute(
+      db,
+    );
   return res.rows || [];
 }
 
-async function journalTotals(db: Kysely<Database>): Promise<{ count: number; byAccount: Record<string, { debit: number; credit: number }> }> {
-  const res = await sql<any>`select jel.account_id, coalesce(sum(jel.debit), 0) as debit, coalesce(sum(jel.credit), 0) as credit from journal_entry_lines jel join journal_entries je on je.id = jel.journal_entry_id group by jel.account_id`.execute(db);
+async function journalTotals(
+  db: Kysely<Database>,
+): Promise<{ count: number; byAccount: Record<string, { debit: number; credit: number }> }> {
+  const res =
+    await sql<any>`select jel.account_id, coalesce(sum(jel.debit), 0) as debit, coalesce(sum(jel.credit), 0) as credit from journal_entry_lines jel join journal_entries je on je.id = jel.journal_entry_id group by jel.account_id`.execute(
+      db,
+    );
   const byAccount: Record<string, { debit: number; credit: number }> = {};
-  for (const row of res.rows || []) byAccount[String(row.account_id)] = { debit: Number(row.debit), credit: Number(row.credit) };
+  for (const row of res.rows || [])
+    byAccount[String(row.account_id)] = { debit: Number(row.debit), credit: Number(row.credit) };
   const countRes = await sql<any>`select count(*) as n from journal_entries`.execute(db);
   return { count: Number(countRes.rows[0].n), byAccount };
 }
@@ -241,7 +359,11 @@ async function main(): Promise<void> {
       await seedOperatorPassword(db);
       await seedShift(db, 1, 1);
       const { drawer } = buildServices(db);
-      await drawer.recordCashMovement(1, { type: 'cash_in', amount: 20, note: 'توريد', requestKey: 'cash-in-nopw-key-001' } as never, adminAuth);
+      await drawer.recordCashMovement(
+        1,
+        { type: 'cash_in', amount: 20, note: 'توريد', requestKey: 'cash-in-nopw-key-001' } as never,
+        adminAuth,
+      );
       const rows = await treasuryRows(db, 1);
       assert.equal(rows.length, 1, 'one treasury row');
       assert.equal(rows[0].txn_type, 'cash_in', 'the row carries the type');
@@ -252,7 +374,8 @@ async function main(): Promise<void> {
       assert.deepEqual([Number(lines[1].account_id), Number(lines[1].credit)], [7100, 20], 'cash_in Cr income');
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 20, 'expected cash reflects the deposit');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  cash_in with no password succeeds passed');
   }
@@ -266,18 +389,37 @@ async function main(): Promise<void> {
       await seedOperatorPassword(db);
       await seedShift(db, 1, 1);
       const { drawer } = buildServices(db);
-      await drawer.recordCashMovement(1, { type: 'safe_replenishment', amount: 30, note: 'تغذية الدرج', requestKey: 'safe-repl-nopw-key-001', counterpartAccountId: 1120 } as never, adminAuth);
+      await drawer.recordCashMovement(
+        1,
+        {
+          type: 'safe_replenishment',
+          amount: 30,
+          note: 'تغذية الدرج',
+          requestKey: 'safe-repl-nopw-key-001',
+          counterpartAccountId: 1120,
+        } as never,
+        adminAuth,
+      );
       const rows = await treasuryRows(db, 1);
       assert.equal(rows.length, 1, 'one treasury row');
       assert.equal(rows[0].txn_type, 'safe_replenishment', 'the row carries the type');
       assert.equal(Number(rows[0].amount), 30, 'a replenishment enters the drawer');
       const lines = await journalLines(db, 'cash_drawer_safe_replenishment', Number(rows[0].id));
       assert.equal(lines.length, 2, 'one transfer journal with two legs');
-      assert.deepEqual([Number(lines[0].account_id), Number(lines[0].debit), Number(lines[0].credit)], [1110, 30, 0], 'Dr drawer cash');
-      assert.deepEqual([Number(lines[1].account_id), Number(lines[1].debit), Number(lines[1].credit)], [1120, 0, 30], 'Cr bank counterpart');
+      assert.deepEqual(
+        [Number(lines[0].account_id), Number(lines[0].debit), Number(lines[0].credit)],
+        [1110, 30, 0],
+        'Dr drawer cash',
+      );
+      assert.deepEqual(
+        [Number(lines[1].account_id), Number(lines[1].debit), Number(lines[1].credit)],
+        [1120, 0, 30],
+        'Cr bank counterpart',
+      );
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 30, 'expected cash reflects the replenishment');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  safe_replenishment with no password succeeds passed');
   }
@@ -291,13 +433,18 @@ async function main(): Promise<void> {
       await seedOperatorPassword(db);
       await seedShift(db, 1, 2);
       const { drawer } = buildServices(db);
-      await drawer.recordCashMovement(1, { type: 'cash_in', amount: 50, note: 'توريد كاشير', requestKey: 'cash-in-cashier-key-001' } as never, cashierAuth);
+      await drawer.recordCashMovement(
+        1,
+        { type: 'cash_in', amount: 50, note: 'توريد كاشير', requestKey: 'cash-in-cashier-key-001' } as never,
+        cashierAuth,
+      );
       const rows = await treasuryRows(db, 1);
       assert.equal(rows.length, 1, 'one treasury row');
       assert.equal(Number(rows[0].amount), 50, 'a cashier deposit enters the drawer');
       assert.equal(await drawer.computeShiftExpectedCash(1, cashierAuth), 50, 'expected cash reflects the deposit');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  cashier cash_in with no password succeeds passed');
   }
@@ -315,13 +462,18 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { drawer } = buildServices(db);
       await assert.rejects(
-        drawer.recordCashMovement(1, { type: 'cash_out', amount: 10, note: 'صرف', requestKey: 'cash-out-nopw-key-001' } as never, cashierAuth),
+        drawer.recordCashMovement(
+          1,
+          { type: 'cash_out', amount: 10, note: 'صرف', requestKey: 'cash-out-nopw-key-001' } as never,
+          cashierAuth,
+        ),
         (err: any) => err && err.code === 'CURRENT_USER_PASSWORD_REQUIRED',
       );
       assert.equal((await treasuryRows(db, 1)).length, 0, 'no treasury row is written');
       assert.equal((await journalTotals(db)).count, 0, 'no journal is written');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  cash_out with no password fails closed passed');
   }
@@ -339,13 +491,24 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { drawer } = buildServices(db);
       await assert.rejects(
-        drawer.recordCashMovement(1, { type: 'safe_drop', amount: 300, note: 'إيداع الخزينة', requestKey: 'safe-drop-nopw-key-001', counterpartAccountId: 1111 } as never, cashierAuth),
+        drawer.recordCashMovement(
+          1,
+          {
+            type: 'safe_drop',
+            amount: 300,
+            note: 'إيداع الخزينة',
+            requestKey: 'safe-drop-nopw-key-001',
+            counterpartAccountId: 1111,
+          } as never,
+          cashierAuth,
+        ),
         (err: any) => err && err.code === 'CURRENT_USER_PASSWORD_REQUIRED',
       );
       assert.equal((await treasuryRows(db, 1)).length, 0, 'no treasury row is written');
       assert.equal((await journalTotals(db)).count, 0, 'no journal is written');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  safe_drop with no password fails closed passed');
   }
@@ -359,13 +522,24 @@ async function main(): Promise<void> {
       await seedOperatorPassword(db);
       await seedShift(db, 1, 1);
       const { drawer } = buildServices(db);
-      await drawer.recordCashMovement(1, { type: 'cash_out', amount: 10, note: 'صرف', managerPin: PASSWORD, requestKey: 'cash-out-pw-key-0001' } as never, adminAuth);
+      await drawer.recordCashMovement(
+        1,
+        {
+          type: 'cash_out',
+          amount: 10,
+          note: 'صرف',
+          managerPin: PASSWORD,
+          requestKey: 'cash-out-pw-key-0001',
+        } as never,
+        adminAuth,
+      );
       const rows = await treasuryRows(db, 1);
       assert.equal(rows.length, 1, 'one treasury row');
       assert.equal(Number(rows[0].amount), -10, 'a withdrawal leaves the drawer');
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), -10, 'expected cash reflects the withdrawal');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  cash_out with the right password still succeeds passed');
   }
@@ -379,17 +553,37 @@ async function main(): Promise<void> {
       await seedOperatorPassword(db);
       await seedShift(db, 1, 1);
       const { drawer } = buildServices(db);
-      await drawer.recordCashMovement(1, { type: 'safe_drop', amount: 300, note: 'إيداع الخزينة', managerPin: PASSWORD, requestKey: 'safe-drop-pw-key-0001', counterpartAccountId: 1111 } as never, adminAuth);
+      await drawer.recordCashMovement(
+        1,
+        {
+          type: 'safe_drop',
+          amount: 300,
+          note: 'إيداع الخزينة',
+          managerPin: PASSWORD,
+          requestKey: 'safe-drop-pw-key-0001',
+          counterpartAccountId: 1111,
+        } as never,
+        adminAuth,
+      );
       const rows = await treasuryRows(db, 1);
       assert.equal(rows.length, 1, 'one treasury row');
       assert.equal(Number(rows[0].amount), -300, 'a safe drop leaves the drawer');
       const lines = await journalLines(db, 'cash_drawer_safe_drop', Number(rows[0].id));
       assert.equal(lines.length, 2, 'one transfer journal with two legs');
-      assert.deepEqual([Number(lines[0].account_id), Number(lines[0].debit), Number(lines[0].credit)], [1111, 300, 0], 'Dr safe account 1111');
-      assert.deepEqual([Number(lines[1].account_id), Number(lines[1].debit), Number(lines[1].credit)], [1110, 0, 300], 'Cr drawer cash');
+      assert.deepEqual(
+        [Number(lines[0].account_id), Number(lines[0].debit), Number(lines[0].credit)],
+        [1111, 300, 0],
+        'Dr safe account 1111',
+      );
+      assert.deepEqual(
+        [Number(lines[1].account_id), Number(lines[1].debit), Number(lines[1].credit)],
+        [1110, 0, 300],
+        'Cr drawer cash',
+      );
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), -300, 'expected cash reflects the drop');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  safe_drop with the right password still succeeds passed');
   }
@@ -400,12 +594,27 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const helperSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/helpers/cash-drawer.helper.ts'), 'utf8');
+    const helperSource = readFileSync(
+      resolve(here, '../../src/modules/cash-drawer/helpers/cash-drawer.helper.ts'),
+      'utf8',
+    );
     assert.ok(helperSource.includes('export function isCashDrawerOutboundType'), 'the outbound helper exists');
-    assert.ok(helperSource.includes("type === 'cash_out' || type === 'safe_drop'"), 'outbound is exactly cash_out + safe_drop');
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/cash-drawer-write.service.ts'), 'utf8');
-    assert.ok(serviceSource.includes('if (isCashDrawerOutboundType(movementType)) {'), 'the gate runs only for outbound movements');
-    assert.ok(serviceSource.includes('await this.assertCashDrawerApproval(movementType, secret, auth);'), 'the gate calls the approval check with the provided secret');
+    assert.ok(
+      helperSource.includes("type === 'cash_out' || type === 'safe_drop'"),
+      'outbound is exactly cash_out + safe_drop',
+    );
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/cash-drawer/cash-drawer-write.service.ts'),
+      'utf8',
+    );
+    assert.ok(
+      serviceSource.includes('if (isCashDrawerOutboundType(movementType)) {'),
+      'the gate runs only for outbound movements',
+    );
+    assert.ok(
+      serviceSource.includes('await this.assertCashDrawerApproval(movementType, secret, auth);'),
+      'the gate calls the approval check with the provided secret',
+    );
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     // Line-anchored counts: the entry text itself mentions the #9 id,
     // so a substring split would count the mention as a second entry.
@@ -418,7 +627,6 @@ async function main(): Promise<void> {
 
   console.log('Drawer money-in no-password tests passed');
 }
-
 
 main().catch((error) => {
   console.error(error);

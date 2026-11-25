@@ -115,9 +115,15 @@ const payload: any = { tripId: 11, countedCash: 500, unloadRemainingToWarehouse:
 
 function openTrip(): any {
   return {
-    id: 11, tenant_id: 't1', rep_id: 4, status: 'open',
-    van_location_id: 10, vehicle_id: 5,
-    start_odometer: 100, end_odometer: null, cash_collected: 500,
+    id: 11,
+    tenant_id: 't1',
+    rep_id: 4,
+    status: 'open',
+    van_location_id: 10,
+    vehicle_id: 5,
+    start_odometer: 100,
+    end_odometer: null,
+    cash_collected: 500,
   };
 }
 
@@ -131,10 +137,7 @@ async function main() {
       inTxTrip: { ...openTrip(), status: 'settled' },
       counters,
     });
-    await assert.rejects(
-      async () => service.settleTrip(4, 't1', 'a1', payload, adminAuth),
-      /TRIP_ALREADY_SETTLED/,
-    );
+    await assert.rejects(async () => service.settleTrip(4, 't1', 'a1', payload, adminAuth), /TRIP_ALREADY_SETTLED/);
     assert.equal(counters.outerTripReads, 1, 'the pre-check read runs once');
     assert.equal(counters.trxTripReads, 1, 'the trip is re-read inside the transaction');
     assert.equal(counters.trxForUpdate, true, 'the in-transaction re-read locks the row');
@@ -165,14 +168,14 @@ async function main() {
       inTxTrip: { ...openTrip(), status: 'settled' },
       counters,
     });
-    await assert.rejects(
-      async () => service.settleTrip(4, 't1', 'a1', payload, adminAuth),
-      /TRIP_NOT_FOUND/,
-    );
+    await assert.rejects(async () => service.settleTrip(4, 't1', 'a1', payload, adminAuth), /TRIP_NOT_FOUND/);
     assert.equal(counters.trxTripReads, 0, 'no transaction starts when the pre-check fails');
   }
 
   console.log('Van double-settle guard tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

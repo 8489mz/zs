@@ -90,34 +90,179 @@ async function seed(db: Kysely<Database>): Promise<void> {
   // The supervisor (id 2) holds no password; the rep's own login
   // (id 7, phone = rep phone) still carries his old PLAINTEXT pin
   // '1111' — the bug's regression fixture: it must never approve.
-  await anyDb.insertInto('settings').values({ tenant_id: T_PIN, key: 'managerPin', value: JSON.stringify(managerHash) }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: T_PIN, account_id: ACCOUNT, username: 'admin', display_name: 'Admin', phone: '5550009', role: 'admin', pin: null, pin_hash: null, password_hash: adminRecord.hash, password_salt: adminRecord.salt, permissions_json: null, is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: T_PIN, account_id: ACCOUNT, username: 'sup', display_name: 'Supervisor', phone: '5550002', role: 'supervisor', pin: null, pin_hash: null, password_hash: '', password_salt: '', permissions_json: null, is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 7, tenant_id: T_PIN, account_id: ACCOUNT, username: '5550001', display_name: 'Rep 4', phone: '5550001', role: 'rep', pin: '1111', pin_hash: null, password_hash: '', password_salt: '', permissions_json: null, is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: 4, tenant_id: T_PIN, account_id: ACCOUNT, name: 'Rep 4',
-    phone: '5550001', pin_hash: '1111', vehicle_plate: null, van_location_id: 10,
-    employee_id: null, national_id: null,
-  }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: T_PIN, key: 'managerPin', value: JSON.stringify(managerHash) })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 1,
+      tenant_id: T_PIN,
+      account_id: ACCOUNT,
+      username: 'admin',
+      display_name: 'Admin',
+      phone: '5550009',
+      role: 'admin',
+      pin: null,
+      pin_hash: null,
+      password_hash: adminRecord.hash,
+      password_salt: adminRecord.salt,
+      permissions_json: null,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: T_PIN,
+      account_id: ACCOUNT,
+      username: 'sup',
+      display_name: 'Supervisor',
+      phone: '5550002',
+      role: 'supervisor',
+      pin: null,
+      pin_hash: null,
+      password_hash: '',
+      password_salt: '',
+      permissions_json: null,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 7,
+      tenant_id: T_PIN,
+      account_id: ACCOUNT,
+      username: '5550001',
+      display_name: 'Rep 4',
+      phone: '5550001',
+      role: 'rep',
+      pin: '1111',
+      pin_hash: null,
+      password_hash: '',
+      password_salt: '',
+      permissions_json: null,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 4,
+      tenant_id: T_PIN,
+      account_id: ACCOUNT,
+      name: 'Rep 4',
+      phone: '5550001',
+      pin_hash: '1111',
+      vehicle_plate: null,
+      van_location_id: 10,
+      employee_id: null,
+      national_id: null,
+    })
+    .execute();
 
   // T_PLAIN_SUP: the supervisor's PIN lives ONLY as plaintext
   // users.pin — no managerPin setting, no admin passwords.
-  await anyDb.insertInto('users').values({ id: 12, tenant_id: T_PLAIN_SUP, account_id: ACCOUNT, username: 'sup', display_name: 'Supervisor', phone: '5550002', role: 'supervisor', pin: MANAGER_PIN, pin_hash: null, password_hash: '', password_salt: '', permissions_json: null, is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 12,
+      tenant_id: T_PLAIN_SUP,
+      account_id: ACCOUNT,
+      username: 'sup',
+      display_name: 'Supervisor',
+      phone: '5550002',
+      role: 'supervisor',
+      pin: MANAGER_PIN,
+      pin_hash: null,
+      password_hash: '',
+      password_salt: '',
+      permissions_json: null,
+      is_active: true,
+    })
+    .execute();
 
   // T_SELF: the rep's own login IS an admin (his own credential), plus
   // a different admin as the control.
-  await anyDb.insertInto('users').values({ id: 21, tenant_id: T_SELF, account_id: ACCOUNT, username: 'admin', display_name: 'Admin', phone: '5550009', role: 'admin', pin: null, pin_hash: null, password_hash: adminRecord.hash, password_salt: adminRecord.salt, permissions_json: null, is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 27, tenant_id: T_SELF, account_id: ACCOUNT, username: '5550001', display_name: 'Rep 4', phone: '5550001', role: 'admin', pin: null, pin_hash: null, password_hash: repAdminRecord.hash, password_salt: repAdminRecord.salt, permissions_json: null, is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: 14, tenant_id: T_SELF, account_id: ACCOUNT, name: 'Rep 4',
-    phone: '5550001', pin_hash: null, vehicle_plate: null, van_location_id: 10,
-    employee_id: null, national_id: null,
-  }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 21,
+      tenant_id: T_SELF,
+      account_id: ACCOUNT,
+      username: 'admin',
+      display_name: 'Admin',
+      phone: '5550009',
+      role: 'admin',
+      pin: null,
+      pin_hash: null,
+      password_hash: adminRecord.hash,
+      password_salt: adminRecord.salt,
+      permissions_json: null,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 27,
+      tenant_id: T_SELF,
+      account_id: ACCOUNT,
+      username: '5550001',
+      display_name: 'Rep 4',
+      phone: '5550001',
+      role: 'admin',
+      pin: null,
+      pin_hash: null,
+      password_hash: repAdminRecord.hash,
+      password_salt: repAdminRecord.salt,
+      permissions_json: null,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 14,
+      tenant_id: T_SELF,
+      account_id: ACCOUNT,
+      name: 'Rep 4',
+      phone: '5550001',
+      pin_hash: null,
+      vehicle_plate: null,
+      van_location_id: 10,
+      employee_id: null,
+      national_id: null,
+    })
+    .execute();
 
   // T_LEGACY: the manager PIN stored as JSON-quoted PLAINTEXT, the
   // format the settings writer produces for a pre-hash tenant.
-  await anyDb.insertInto('settings').values({ tenant_id: T_LEGACY, key: 'managerPin', value: JSON.stringify(LEGACY_PIN) }).execute();
-  await anyDb.insertInto('users').values({ id: 31, tenant_id: T_LEGACY, account_id: ACCOUNT, username: 'sys', display_name: 'System', phone: null, role: 'admin', pin: null, pin_hash: null, password_hash: '', password_salt: '', permissions_json: null, is_active: true }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: T_LEGACY, key: 'managerPin', value: JSON.stringify(LEGACY_PIN) })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 31,
+      tenant_id: T_LEGACY,
+      account_id: ACCOUNT,
+      username: 'sys',
+      display_name: 'System',
+      phone: null,
+      role: 'admin',
+      pin: null,
+      pin_hash: null,
+      password_hash: '',
+      password_salt: '',
+      permissions_json: null,
+      is_active: true,
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>, events: unknown[]): any {
@@ -188,7 +333,11 @@ async function main(): Promise<void> {
         'a wrong PIN must fail closed with INVALID_SUPERVISOR_PIN (403)',
       );
       assert.equal(events.length, before + 1, 'exactly one suspicion event is recorded');
-      assert.equal(events[events.length - 1].eventCode, 'VAN_SUSPICION_INVALID_PIN', 'the event is the invalid-PIN suspicion');
+      assert.equal(
+        events[events.length - 1].eventCode,
+        'VAN_SUSPICION_INVALID_PIN',
+        'the event is the invalid-PIN suspicion',
+      );
       console.log('  (3) wrong PIN fails closed with INVALID_SUPERVISOR_PIN passed');
     }
 
@@ -215,7 +364,11 @@ async function main(): Promise<void> {
         (error: unknown) => errorCode(error) === 'INVALID_SUPERVISOR_PIN' && errorStatus(error) === 403,
         'the rep’s own plaintext PIN must fail as a wrong PIN',
       );
-      assert.equal(events[events.length - 1].eventCode, 'VAN_SUSPICION_INVALID_PIN', 'the rep PIN attempt records an invalid-PIN event, not self-approval');
+      assert.equal(
+        events[events.length - 1].eventCode,
+        'VAN_SUSPICION_INVALID_PIN',
+        'the rep PIN attempt records an invalid-PIN event, not self-approval',
+      );
       assert.equal(events.length, before + 1, 'exactly one suspicion event is recorded');
       console.log('  (4b) rep’s own plaintext PIN does not approve passed');
     }
@@ -233,7 +386,11 @@ async function main(): Promise<void> {
         'the rep’s own admin credential must be refused as self-approval',
       );
       assert.equal(events.length, before + 1, 'exactly one suspicion event is recorded');
-      assert.equal(events[events.length - 1].eventCode, 'VAN_SUSPICION_SELF_APPROVAL', 'the event is the self-approval suspicion');
+      assert.equal(
+        events[events.length - 1].eventCode,
+        'VAN_SUSPICION_SELF_APPROVAL',
+        'the event is the self-approval suspicion',
+      );
       const control = await service.verifySupervisorPin(T_SELF, ADMIN_PASSWORD, 14, db, ACCOUNT);
       assert.equal(control.approved, true, 'another admin’s password still approves');
       assert.equal(Number(control.supervisorId), 21, 'the control approval attributes to the other admin');

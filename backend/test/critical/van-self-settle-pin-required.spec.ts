@@ -72,16 +72,30 @@ const ACCOUNT = 'a1';
 // managerPin in settings. User 1 is the admin used by the
 // service-level (admin path) cases.
 const adminAuth: any = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['deliveryReps', 'accounting'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 };
 const repAsAdminAuth: any = {
-  userId: 7, sessionId: 'spec', username: 'rep7', role: 'admin',
-  permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 7,
+  sessionId: 'spec',
+  username: 'rep7',
+  role: 'admin',
+  permissions: ['deliveryReps', 'accounting'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 };
 const DRIVER = {
-  repId: 4, tenantId: TENANT, accountId: ACCOUNT,
-  name: 'Rep 4', phone: '5550001', tenantSuspended: false,
+  repId: 4,
+  tenantId: TENANT,
+  accountId: ACCOUNT,
+  name: 'Rep 4',
+  phone: '5550001',
+  tenantSuspended: false,
 };
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -110,36 +124,126 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Warehouse', code: 'WH', is_active: true, location_type: 'branch_stock' }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van', code: 'VAN_4', is_active: true, location_type: 'van_stock' }).execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Warehouse',
+      code: 'WH',
+      is_active: true,
+      location_type: 'branch_stock',
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van',
+      code: 'VAN_4',
+      is_active: true,
+      location_type: 'van_stock',
+    })
+    .execute();
   // Supervisor approval is the bcrypt manager PIN in settings (the
   // shared rule); the rep's own login (id 7, phone = rep phone) is an
   // admin whose own login password is '1111'. The rep must never
   // authorize himself — his own credential is what case (3) refuses.
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin('4321')) }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'sup', display_name: 'Supervisor', phone: '5550002', role: 'supervisor', pin: null, pin_hash: null, password_hash: '', password_salt: '', permissions_json: null, is_active: true }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin('4321')) })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      username: 'sup',
+      display_name: 'Supervisor',
+      phone: '5550002',
+      role: 'supervisor',
+      pin: null,
+      pin_hash: null,
+      password_hash: '',
+      password_salt: '',
+      permissions_json: null,
+      is_active: true,
+    })
+    .execute();
   const repPassword = await createPasswordRecord('1111');
-  await anyDb.insertInto('users').values({ id: 7, tenant_id: TENANT, username: '5550001', display_name: 'Rep 4', phone: '5550001', role: 'admin', pin: null, pin_hash: null, password_hash: repPassword.hash, password_salt: repPassword.salt, permissions_json: null, is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      username: '5550001',
+      display_name: 'Rep 4',
+      phone: '5550001',
+      role: 'admin',
+      pin: null,
+      pin_hash: null,
+      password_hash: repPassword.hash,
+      password_salt: repPassword.salt,
+      permissions_json: null,
+      is_active: true,
+    })
+    .execute();
 }
 
 async function seedRep(db: Kysely<Database>): Promise<void> {
-  await (db as any).insertInto('delivery_representatives').values({
-    id: 4, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 4',
-    phone: '5550001', pin_hash: null, vehicle_plate: null, van_location_id: 10,
-    employee_id: null, national_id: null,
-  }).execute();
+  await (db as any)
+    .insertInto('delivery_representatives')
+    .values({
+      id: 4,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 4',
+      phone: '5550001',
+      pin_hash: null,
+      vehicle_plate: null,
+      van_location_id: 10,
+      employee_id: null,
+      national_id: null,
+    })
+    .execute();
 }
 
 async function seedTrip(db: Kysely<Database>, tripId: number): Promise<void> {
-  await (db as any).insertInto('van_sales_trips').values({
-    id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 4, vehicle_id: null,
-    start_odometer: 100, end_odometer: null, van_location_id: 10, source_warehouse_id: 1,
-    status: 'open', settlement_status: 'open', loaded_amount: 0, sales_amount: 0,
-    cash_collected: 0, credit_sales: 0, returns_amount: 0, cash_refunds: 0,
-    total_instapay_sales: 0, total_instapay_collections: 0, variance: 0,
-  }).execute();
+  await (db as any)
+    .insertInto('van_sales_trips')
+    .values({
+      id: tripId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: 4,
+      vehicle_id: null,
+      start_odometer: 100,
+      end_odometer: null,
+      van_location_id: 10,
+      source_warehouse_id: 1,
+      status: 'open',
+      settlement_status: 'open',
+      loaded_amount: 0,
+      sales_amount: 0,
+      cash_collected: 0,
+      credit_sales: 0,
+      returns_amount: 0,
+      cash_refunds: 0,
+      total_instapay_sales: 0,
+      total_instapay_collections: 0,
+      variance: 0,
+    })
+    .execute();
 }
 
 // Van holds 10 units of product 1 at cost 5. Counting 8 leaves a
@@ -147,15 +251,35 @@ async function seedTrip(db: Kysely<Database>, tripId: number): Promise<void> {
 // turns into a pending rep claim (charge) or a waived loss (waive).
 async function seedVanStock(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Item', name_en: 'Item',
-    barcode: '1', cost_price: 5, retail_price: 10, stock_qty: 10, reserved_qty: 0,
-    is_active: true, default_location_id: 1,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, branch_id: 1,
-    location_id: 10, qty: 10, reserved_qty: 0,
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Item',
+      name_en: 'Item',
+      barcode: '1',
+      cost_price: 5,
+      retail_price: 10,
+      stock_qty: 10,
+      reserved_qty: 0,
+      is_active: true,
+      default_location_id: 1,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 1,
+      branch_id: 1,
+      location_id: 10,
+      qty: 10,
+      reserved_qty: 0,
+    })
+    .execute();
 }
 
 async function tripRow(db: Kysely<Database>, tripId: number): Promise<any> {
@@ -163,7 +287,11 @@ async function tripRow(db: Kysely<Database>, tripId: number): Promise<any> {
 }
 
 async function stockShortageRows(db: Kysely<Database>): Promise<any[]> {
-  return (db as any).selectFrom('van_rep_financial_settlements').selectAll().where('entry_type', '=', 'stock_shortage').execute();
+  return (db as any)
+    .selectFrom('van_rep_financial_settlements')
+    .selectAll()
+    .where('entry_type', '=', 'stock_shortage')
+    .execute();
 }
 
 function buildService(db: any, postCalls: unknown[]): any {
@@ -212,13 +340,42 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const service = buildService(db, []);
-      assert.equal(await service.isSupervisorPinRequiredForSettlement(TENANT), true, 'no settings row means PIN required');
-      await (db as any).insertInto('settings').values({ tenant_id: TENANT, key: 'vanSettlementRequireSupervisorPin', value: 'false' }).execute();
-      assert.equal(await service.isSupervisorPinRequiredForSettlement(TENANT), false, 'explicit false disables the PIN');
-      await (db as any).updateTable('settings').set({ value: 'maybe' }).where('tenant_id', '=', TENANT).where('key', '=', 'vanSettlementRequireSupervisorPin').execute();
-      assert.equal(await service.isSupervisorPinRequiredForSettlement(TENANT), true, 'an unparseable value fails closed to PIN required');
-      await (db as any).updateTable('settings').set({ value: 'true' }).where('tenant_id', '=', TENANT).where('key', '=', 'vanSettlementRequireSupervisorPin').execute();
-      assert.equal(await service.isSupervisorPinRequiredForSettlement(TENANT), true, 'explicit true keeps the PIN required');
+      assert.equal(
+        await service.isSupervisorPinRequiredForSettlement(TENANT),
+        true,
+        'no settings row means PIN required',
+      );
+      await (db as any)
+        .insertInto('settings')
+        .values({ tenant_id: TENANT, key: 'vanSettlementRequireSupervisorPin', value: 'false' })
+        .execute();
+      assert.equal(
+        await service.isSupervisorPinRequiredForSettlement(TENANT),
+        false,
+        'explicit false disables the PIN',
+      );
+      await (db as any)
+        .updateTable('settings')
+        .set({ value: 'maybe' })
+        .where('tenant_id', '=', TENANT)
+        .where('key', '=', 'vanSettlementRequireSupervisorPin')
+        .execute();
+      assert.equal(
+        await service.isSupervisorPinRequiredForSettlement(TENANT),
+        true,
+        'an unparseable value fails closed to PIN required',
+      );
+      await (db as any)
+        .updateTable('settings')
+        .set({ value: 'true' })
+        .where('tenant_id', '=', TENANT)
+        .where('key', '=', 'vanSettlementRequireSupervisorPin')
+        .execute();
+      assert.equal(
+        await service.isSupervisorPinRequiredForSettlement(TENANT),
+        true,
+        'explicit true keeps the PIN required',
+      );
     } finally {
       await db.destroy();
     }
@@ -235,9 +392,12 @@ async function main(): Promise<void> {
       const postCalls: unknown[] = [];
       const controller = buildController(buildService(db, postCalls));
       await assert.rejects(
-        () => controller.settleTrip('Bearer driver', {
-          tripId: 11, countedCash: 0, unloadRemainingToWarehouse: true,
-        }),
+        () =>
+          controller.settleTrip('Bearer driver', {
+            tripId: 11,
+            countedCash: 0,
+            unloadRemainingToWarehouse: true,
+          }),
         /SETTLEMENT_REQUIRES_SUPERVISOR_PIN/,
       );
       assert.equal((await tripRow(db, 11)).status, 'open', 'the refused settle leaves the trip open');
@@ -259,10 +419,13 @@ async function main(): Promise<void> {
       await seedTrip(db, 11);
       const controller = buildController(buildService(db, []));
       await assert.rejects(
-        () => controller.settleTrip('Bearer driver', {
-          tripId: 11, countedCash: 0, unloadRemainingToWarehouse: true,
-          supervisorPin: '1111',
-        }),
+        () =>
+          controller.settleTrip('Bearer driver', {
+            tripId: 11,
+            countedCash: 0,
+            unloadRemainingToWarehouse: true,
+            supervisorPin: '1111',
+          }),
         /MAKER_CHECKER_SELF_APPROVAL/,
       );
       assert.equal((await tripRow(db, 11)).status, 'open', 'the self-approved settle leaves the trip open');
@@ -284,7 +447,9 @@ async function main(): Promise<void> {
       await seedTrip(db, 11);
       const controller = buildController(buildService(db, []));
       const result = await controller.settleTrip('Bearer driver', {
-        tripId: 11, countedCash: 0, unloadRemainingToWarehouse: true,
+        tripId: 11,
+        countedCash: 0,
+        unloadRemainingToWarehouse: true,
         supervisorPin: '4321',
       });
       assert.equal(result.status, 'settled', 'the supervisor-PIN settle completes');
@@ -314,14 +479,27 @@ async function main(): Promise<void> {
       await seedTrip(db, 12);
       const service = buildService(db, []);
       await assert.rejects(
-        () => service.settleTrip(4, TENANT, ACCOUNT, {
-          tripId: 11, countedCash: 0, unloadRemainingToWarehouse: true, endOdometer: 120,
-        }, repAsAdminAuth),
+        () =>
+          service.settleTrip(
+            4,
+            TENANT,
+            ACCOUNT,
+            {
+              tripId: 11,
+              countedCash: 0,
+              unloadRemainingToWarehouse: true,
+              endOdometer: 120,
+            },
+            repAsAdminAuth,
+          ),
         /MAKER_CHECKER_SELF_APPROVAL/,
       );
       assert.equal((await tripRow(db, 11)).status, 'open', 'the refused settle leaves the trip open');
       const legacy = await service.settleTrip(4, TENANT, ACCOUNT, {
-        tripId: 12, countedCash: 0, unloadRemainingToWarehouse: true, endOdometer: 120,
+        tripId: 12,
+        countedCash: 0,
+        unloadRemainingToWarehouse: true,
+        endOdometer: 120,
       });
       assert.equal(legacy.status, 'settled', 'the legacy direct call still settles');
     } finally {
@@ -345,7 +523,9 @@ async function main(): Promise<void> {
       const postCalls: any[] = [];
       const controller = buildController(buildService(db, postCalls));
       const result = await controller.settleTrip('Bearer driver', {
-        tripId: 11, countedCash: 0, unloadRemainingToWarehouse: true,
+        tripId: 11,
+        countedCash: 0,
+        unloadRemainingToWarehouse: true,
         countedStock: [{ productId: 1, countedQty: 8 }],
         chargeStockVarianceToRep: false,
         supervisorPin: '4321',
@@ -378,12 +558,21 @@ async function main(): Promise<void> {
       await seedVanStock(db);
       const postCalls: any[] = [];
       const service = buildService(db, postCalls);
-      const result = await service.settleTrip(4, TENANT, ACCOUNT, {
-        tripId: 11, countedCash: 0, unloadRemainingToWarehouse: true, endOdometer: 120,
-        countedStock: [{ productId: 1, countedQty: 8 }],
-        chargeStockVarianceToRep: false,
-        chargeStockVarianceDecidedBySupervisor: true,
-      }, adminAuth);
+      const result = await service.settleTrip(
+        4,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 11,
+          countedCash: 0,
+          unloadRemainingToWarehouse: true,
+          endOdometer: 120,
+          countedStock: [{ productId: 1, countedQty: 8 }],
+          chargeStockVarianceToRep: false,
+          chargeStockVarianceDecidedBySupervisor: true,
+        },
+        adminAuth,
+      );
       assert.equal(result.status, 'settled', 'the admin settle completes');
       let rows = await stockShortageRows(db);
       assert.equal(rows.length, 1, 'exactly one stock shortage row');
@@ -394,16 +583,33 @@ async function main(): Promise<void> {
       // already exists; only the location balance is restored).
       await (db as any).deleteFrom('product_location_stock').execute();
       await (db as any).updateTable('products').set({ stock_qty: 10 }).execute();
-      await (db as any).insertInto('product_location_stock').values({
-        tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, branch_id: 1,
-        location_id: 10, qty: 10, reserved_qty: 0,
-      }).execute();
-      await service.settleTrip(4, TENANT, ACCOUNT, {
-        tripId: 12, countedCash: 0, unloadRemainingToWarehouse: true, endOdometer: 120,
-        countedStock: [{ productId: 1, countedQty: 8 }],
-        chargeStockVarianceToRep: true,
-        chargeStockVarianceDecidedBySupervisor: true,
-      }, adminAuth);
+      await (db as any)
+        .insertInto('product_location_stock')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          product_id: 1,
+          branch_id: 1,
+          location_id: 10,
+          qty: 10,
+          reserved_qty: 0,
+        })
+        .execute();
+      await service.settleTrip(
+        4,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 12,
+          countedCash: 0,
+          unloadRemainingToWarehouse: true,
+          endOdometer: 120,
+          countedStock: [{ productId: 1, countedQty: 8 }],
+          chargeStockVarianceToRep: true,
+          chargeStockVarianceDecidedBySupervisor: true,
+        },
+        adminAuth,
+      );
       rows = await stockShortageRows(db);
       assert.equal(rows.length, 2, 'one shortage row per settled trip');
       assert.equal(rows[1].status, 'pending', 'the supervisor’s charge decision is honored');
@@ -429,16 +635,21 @@ async function main(): Promise<void> {
       await seedVanStock(db);
       const controller = buildController(buildService(db, []));
       await assert.rejects(
-        () => controller.settleTrip('Bearer driver', {
-          tripId: 11, countedCash: 0, unloadRemainingToWarehouse: false,
-          countedStock: [{ productId: 1, countedQty: 10 }],
-          supervisorPin: '4321',
-        }),
+        () =>
+          controller.settleTrip('Bearer driver', {
+            tripId: 11,
+            countedCash: 0,
+            unloadRemainingToWarehouse: false,
+            countedStock: [{ productId: 1, countedQty: 10 }],
+            supervisorPin: '4321',
+          }),
         /NIGHT_STOCK_UNAPPROVED/,
       );
       assert.equal((await tripRow(db, 11)).status, 'open', 'the refused settle leaves the trip open');
       const result = await controller.settleTrip('Bearer driver', {
-        tripId: 12, countedCash: 0, unloadRemainingToWarehouse: false,
+        tripId: 12,
+        countedCash: 0,
+        unloadRemainingToWarehouse: false,
         countedStock: [{ productId: 1, countedQty: 10 }],
         nightStockApproved: true,
         supervisorPin: '4321',
@@ -461,12 +672,24 @@ async function main(): Promise<void> {
   // by the coordinator and is not pinned here.)
   {
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'),
+      'utf8',
+    );
     assert.ok(serviceSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'service names the invariant');
-    assert.ok(serviceSource.includes('chargeStockVarianceDecidedBySupervisor'), 'service carries the supervisor-decision flag');
-    const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-trips-settle.ts'), 'utf8');
+    assert.ok(
+      serviceSource.includes('chargeStockVarianceDecidedBySupervisor'),
+      'service carries the supervisor-decision flag',
+    );
+    const controllerSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-trips-settle.ts'),
+      'utf8',
+    );
     assert.ok(controllerSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'settle slice names the invariant');
-    assert.ok(!controllerSource.includes('nightStockApproved: !body.unloadRemainingToWarehouse'), 'the slice no longer auto-approves night stock');
+    assert.ok(
+      !controllerSource.includes('nightStockApproved: !body.unloadRemainingToWarehouse'),
+      'the slice no longer auto-approves night stock',
+    );
     // #51 split: the facade holds 0 INV lines — the 4 SELF-SETTLE-PIN
     // lines live in the van-settle slices (S0/S2/S6/S7). Read them.
     const tabSource = [
@@ -475,11 +698,16 @@ async function main(): Promise<void> {
       'van-settle/stock-audit.tsx',
       'van-settle/settle-submit.tsx',
     ]
-      .map((rel) => readFileSync(resolve(here, `../../../frontend/src/features/delivery-reps/components/${rel}`), 'utf8'))
+      .map((rel) =>
+        readFileSync(resolve(here, `../../../frontend/src/features/delivery-reps/components/${rel}`), 'utf8'),
+      )
       .join('\n');
     assert.ok(tabSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'settle tab names the invariant');
     assert.ok(!tabSource.includes('setChargeStockVarianceToRep'), 'the rep-side charge checkbox is gone');
-    const pageSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/pages/van-sales-mobile/useVanSettle.tsx'), 'utf8');
+    const pageSource = readFileSync(
+      resolve(here, '../../../frontend/src/features/delivery-reps/pages/van-sales-mobile/useVanSettle.tsx'),
+      'utf8',
+    );
     assert.ok(pageSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'mobile page names the invariant');
     console.log('  source pins passed');
   }

@@ -120,45 +120,182 @@ async function makeFieldDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFieldFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values([
-    { id: REP_OWN, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep Own', van_location_id: 20, is_van_rep: true },
-    { id: REP_OTHER, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep Other', van_location_id: 20, is_van_rep: true },
-  ]).execute();
-  await anyDb.insertInto('van_sales_trips').values([
-    { id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OWN, van_location_id: 20, status: 'open' },
-    { id: 2, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OTHER, van_location_id: 20, status: 'open' },
-  ]).execute();
-  await anyDb.insertInto('products').values({ id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Product 101', stock_qty: 10, cost_price: 50, retail_price: 100, credit_price: 0, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, location_id: 20, qty: 10 }).execute();
-  await anyDb.insertInto('customers').values([
-    { id: CUST_OWN, tenant_id: TENANT, account_id: ACCOUNT, name: 'Own Customer', balance: 0, credit_limit: 0, metadata: '{}', is_active: true },
-    { id: CUST_OTHER_SALE, tenant_id: TENANT, account_id: ACCOUNT, name: 'Other Sale Customer', balance: 0, credit_limit: 0, metadata: '{}', is_active: true },
-    { id: CUST_OTHER_ORDER, tenant_id: TENANT, account_id: ACCOUNT, name: 'Other Order Customer', balance: 0, credit_limit: 0, metadata: '{}', is_active: true },
-    { id: CUST_NOBODY, tenant_id: TENANT, account_id: ACCOUNT, name: 'Nobody Customer', balance: 0, credit_limit: 0, metadata: '{}', is_active: true },
-  ]).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values([
+      { id: REP_OWN, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep Own', van_location_id: 20, is_van_rep: true },
+      {
+        id: REP_OTHER,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Rep Other',
+        van_location_id: 20,
+        is_van_rep: true,
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values([
+      { id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OWN, van_location_id: 20, status: 'open' },
+      { id: 2, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OTHER, van_location_id: 20, status: 'open' },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Product 101',
+      stock_qty: 10,
+      cost_price: 50,
+      retail_price: 100,
+      credit_price: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, location_id: 20, qty: 10 })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values([
+      {
+        id: CUST_OWN,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Own Customer',
+        balance: 0,
+        credit_limit: 0,
+        metadata: '{}',
+        is_active: true,
+      },
+      {
+        id: CUST_OTHER_SALE,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Other Sale Customer',
+        balance: 0,
+        credit_limit: 0,
+        metadata: '{}',
+        is_active: true,
+      },
+      {
+        id: CUST_OTHER_ORDER,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Other Order Customer',
+        balance: 0,
+        credit_limit: 0,
+        metadata: '{}',
+        is_active: true,
+      },
+      {
+        id: CUST_NOBODY,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Nobody Customer',
+        balance: 0,
+        credit_limit: 0,
+        metadata: '{}',
+        is_active: true,
+      },
+    ])
+    .execute();
   // History evidence: own customer via a field visit by rep 1; other
   // customer 200 via a delivered sale by rep 2; other customer 300
   // via a pre-sale order assigned to rep 2; customer 400 has none.
-  await anyDb.insertInto('van_field_visits').values({ tenant_id: TENANT, account_id: ACCOUNT, trip_id: 1, rep_id: REP_OWN, customer_id: CUST_OWN, visit_type: 'positive' }).execute();
-  await anyDb.insertInto('sales').values({ id: 70, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'INV-70', total: 500, paid_amount: 500, status: 'posted', payment_type: 'cash', customer_id: CUST_OTHER_SALE, delivery_rep_id: REP_OTHER, van_trip_id: 2 }).execute();
-  await anyDb.insertInto('sales_orders').values({ tenant_id: TENANT, account_id: ACCOUNT, order_number: 'SO-300', customer_id: CUST_OTHER_ORDER, rep_id: REP_OTHER, status: 'confirmed' }).execute();
+  await anyDb
+    .insertInto('van_field_visits')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      trip_id: 1,
+      rep_id: REP_OWN,
+      customer_id: CUST_OWN,
+      visit_type: 'positive',
+    })
+    .execute();
+  await anyDb
+    .insertInto('sales')
+    .values({
+      id: 70,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'INV-70',
+      total: 500,
+      paid_amount: 500,
+      status: 'posted',
+      payment_type: 'cash',
+      customer_id: CUST_OTHER_SALE,
+      delivery_rep_id: REP_OTHER,
+      van_trip_id: 2,
+    })
+    .execute();
+  await anyDb
+    .insertInto('sales_orders')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      order_number: 'SO-300',
+      customer_id: CUST_OTHER_ORDER,
+      rep_id: REP_OTHER,
+      status: 'confirmed',
+    })
+    .execute();
 }
 
 function buildFieldService(db: Kysely<Database>, pinApproved: boolean): VanSalesService {
@@ -167,20 +304,42 @@ function buildFieldService(db: Kysely<Database>, pinApproved: boolean): VanSales
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   (service as any).verifySupervisorPin = async () => ({
-    approved: pinApproved, supervisorId: 2, supervisorName: 'Supervisor',
+    approved: pinApproved,
+    supervisorId: 2,
+    supervisorName: 'Supervisor',
   });
   return service;
 }
 
 async function fieldSaleCount(db: Kysely<Database>): Promise<number> {
-  const row = await (db as any).selectFrom('sales').select(sql`count(*)`.as('c')).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('sales')
+    .select(sql`count(*)`.as('c'))
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.c);
 }
 
@@ -260,13 +419,23 @@ async function makePosDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 const repAuth: AuthContext = {
-  userId: 4, sessionId: 'spec-rep', username: 'vanrep1', role: 'cashier',
-  permissions: ['sales', 'canDiscount'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 4,
+  sessionId: 'spec-rep',
+  username: 'vanrep1',
+  role: 'cashier',
+  permissions: ['sales', 'canDiscount'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAuth: AuthContext = {
-  userId: 3, sessionId: 'spec-b', username: 'cashier-b', role: 'cashier',
-  permissions: ['sales', 'canDiscount'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 3,
+  sessionId: 'spec-b',
+  username: 'cashier-b',
+  role: 'cashier',
+  permissions: ['sales', 'canDiscount'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function seedPosFoundation(db: Kysely<Database>): Promise<void> {
@@ -274,53 +443,218 @@ async function seedPosFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 4, tenant_id: TENANT, username: 'vanrep1', phone: '01000000001', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 5, tenant_id: TENANT, username: '01000000002', phone: '01000000009', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: POS_REP_OWN, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van Rep One', phone: '01000000001', is_van_rep: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: POS_REP_OTHER, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van Rep Two', phone: '01000000002', is_van_rep: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 4, tenant_id: TENANT, username: 'vanrep1', phone: '01000000001', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 5,
+      tenant_id: TENANT,
+      username: '01000000002',
+      phone: '01000000009',
+      role: 'cashier',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: POS_REP_OWN,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Van Rep One',
+      phone: '01000000001',
+      is_van_rep: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: POS_REP_OTHER,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Van Rep Two',
+      phone: '01000000002',
+      is_van_rep: true,
+    })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
-  await anyDb.insertInto('van_sales_trips').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: POS_REP_OWN, van_location_id: 10, status: 'open' }).execute();
-  await anyDb.insertInto('cashier_shifts').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-1',
-    opened_by: 4, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
-  await anyDb.insertInto('customers').values([
-    { id: CUST_OWN, tenant_id: TENANT, account_id: ACCOUNT, name: 'Own Customer', metadata: '{}', is_active: true },
-    { id: CUST_OTHER_SALE, tenant_id: TENANT, account_id: ACCOUNT, name: 'Other Sale Customer', metadata: '{}', is_active: true },
-    { id: CUST_OTHER_ORDER, tenant_id: TENANT, account_id: ACCOUNT, name: 'Other Order Customer', metadata: '{}', is_active: true },
-    { id: CUST_NOBODY, tenant_id: TENANT, account_id: ACCOUNT, name: 'Nobody Customer', metadata: '{}', is_active: true },
-  ]).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: POS_REP_OWN, van_location_id: 10, status: 'open' })
+    .execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'SHIFT-1',
+      opened_by: 4,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values([
+      { id: CUST_OWN, tenant_id: TENANT, account_id: ACCOUNT, name: 'Own Customer', metadata: '{}', is_active: true },
+      {
+        id: CUST_OTHER_SALE,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Other Sale Customer',
+        metadata: '{}',
+        is_active: true,
+      },
+      {
+        id: CUST_OTHER_ORDER,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Other Order Customer',
+        metadata: '{}',
+        is_active: true,
+      },
+      {
+        id: CUST_NOBODY,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Nobody Customer',
+        metadata: '{}',
+        is_active: true,
+      },
+    ])
+    .execute();
   // Same history evidence as the field side, against the POS rep ids.
-  await anyDb.insertInto('van_field_visits').values({ tenant_id: TENANT, account_id: ACCOUNT, trip_id: 1, rep_id: POS_REP_OWN, customer_id: CUST_OWN, visit_type: 'positive' }).execute();
-  await anyDb.insertInto('sales').values({ id: 70, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'INV-70', total: 500, paid_amount: 500, status: 'posted', payment_type: 'cash', customer_id: CUST_OTHER_SALE, delivery_rep_id: POS_REP_OTHER, van_trip_id: 2 }).execute();
-  await anyDb.insertInto('sales_orders').values({ tenant_id: TENANT, account_id: ACCOUNT, order_number: 'SO-300', customer_id: CUST_OTHER_ORDER, rep_id: POS_REP_OTHER, status: 'confirmed' }).execute();
+  await anyDb
+    .insertInto('van_field_visits')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      trip_id: 1,
+      rep_id: POS_REP_OWN,
+      customer_id: CUST_OWN,
+      visit_type: 'positive',
+    })
+    .execute();
+  await anyDb
+    .insertInto('sales')
+    .values({
+      id: 70,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'INV-70',
+      total: 500,
+      paid_amount: 500,
+      status: 'posted',
+      payment_type: 'cash',
+      customer_id: CUST_OTHER_SALE,
+      delivery_rep_id: POS_REP_OTHER,
+      van_trip_id: 2,
+    })
+    .execute();
+  await anyDb
+    .insertInto('sales_orders')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      order_number: 'SO-300',
+      customer_id: CUST_OTHER_ORDER,
+      rep_id: POS_REP_OTHER,
+      status: 'confirmed',
+    })
+    .execute();
 }
 
 function buildPosServices(db: Kysely<Database>): { sales: SalesWriteService } {
@@ -342,8 +676,16 @@ function buildPosServices(db: Kysely<Database>): { sales: SalesWriteService } {
   const planFeatures = { hasFeature: (_planId: any, _extra: any, feature: string) => feature === 'pos' };
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   return { sales };
 }
@@ -351,19 +693,36 @@ function buildPosServices(db: Kysely<Database>): { sales: SalesWriteService } {
 function posPayload(customerId: number, managerPin?: string): any {
   return {
     items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
-    branchId: 1, locationId: 10, source: 'pos', customerId, managerPin,
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: 100 }],
+    tenderedAmount: 100,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
+    customerId,
+    managerPin,
   };
 }
 
 async function posSaleCount(db: Kysely<Database>): Promise<number> {
-  const row = await (db as any).selectFrom('sales').select(sql`count(*)`.as('c')).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('sales')
+    .select(sql`count(*)`.as('c'))
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.c);
 }
 
 async function posSaleRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll().where('id', '=', id).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', id)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function main(): Promise<void> {
@@ -378,13 +737,19 @@ async function main(): Promise<void> {
       const service = buildFieldService(db, false);
       await expectCode(
         service.executeFieldSale(REP_OWN, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash', customerId: CUST_OTHER_SALE,
+          tripId: 1,
+          paymentMethod: 'cash',
+          customerId: CUST_OTHER_SALE,
           items: [{ productId: 101, qty: 1 }],
         }),
         'CUSTOMER_NOT_ON_REP_ROUTE',
       );
       assert.equal(await fieldSaleCount(db), 1, 'refused off-route sale posts nothing (only the history seed row)');
-      const cust = await (db as any).selectFrom('customers').select('metadata').where('id', '=', CUST_OTHER_SALE).executeTakeFirstOrThrow() as any;
+      const cust = (await (db as any)
+        .selectFrom('customers')
+        .select('metadata')
+        .where('id', '=', CUST_OTHER_SALE)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(String(cust.metadata || ''), '{}', 'refused sale records no rep link on the customer');
     } finally {
       await db.destroy();
@@ -400,7 +765,9 @@ async function main(): Promise<void> {
       const service = buildFieldService(db, false);
       await expectCode(
         service.executeFieldSale(REP_OWN, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash', customerId: CUST_OTHER_ORDER,
+          tripId: 1,
+          paymentMethod: 'cash',
+          customerId: CUST_OTHER_ORDER,
           items: [{ productId: 101, qty: 1 }],
         }),
         'CUSTOMER_NOT_ON_REP_ROUTE',
@@ -419,12 +786,19 @@ async function main(): Promise<void> {
       await seedFieldFoundation(db);
       const service = buildFieldService(db, true);
       const res = await service.executeFieldSale(REP_OWN, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', customerId: CUST_OTHER_SALE,
+        tripId: 1,
+        paymentMethod: 'cash',
+        customerId: CUST_OTHER_SALE,
         supervisorOverridePin: '4321',
         items: [{ productId: 101, qty: 1 }],
       });
       assert.equal(res.total, 100);
-      const sale = await (db as any).selectFrom('sales').selectAll().where('id', '=', res.saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+      const sale = await (db as any)
+        .selectFrom('sales')
+        .selectAll()
+        .where('id', '=', res.saleId)
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(sale.customer_id), CUST_OTHER_SALE);
       assert.equal(Number(sale.delivery_rep_id), REP_OWN);
     } finally {
@@ -442,7 +816,9 @@ async function main(): Promise<void> {
       const service = buildFieldService(db, false);
       await expectCode(
         service.executeFieldSale(REP_OWN, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash', customerId: CUST_OTHER_SALE,
+          tripId: 1,
+          paymentMethod: 'cash',
+          customerId: CUST_OTHER_SALE,
           supervisorOverridePin: '0000',
           items: [{ productId: 101, qty: 1 }],
         }),
@@ -464,11 +840,18 @@ async function main(): Promise<void> {
       await seedFieldFoundation(db);
       const service = buildFieldService(db, false);
       const res = await service.executeFieldSale(REP_OWN, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', customerId: CUST_NOBODY,
+        tripId: 1,
+        paymentMethod: 'cash',
+        customerId: CUST_NOBODY,
         items: [{ productId: 101, qty: 1 }],
       });
       assert.equal(res.total, 100);
-      const sale = await (db as any).selectFrom('sales').selectAll().where('id', '=', res.saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+      const sale = await (db as any)
+        .selectFrom('sales')
+        .selectAll()
+        .where('id', '=', res.saleId)
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(sale.customer_id), CUST_NOBODY);
     } finally {
       await db.destroy();
@@ -483,11 +866,18 @@ async function main(): Promise<void> {
       await seedFieldFoundation(db);
       const service = buildFieldService(db, false);
       const res = await service.executeFieldSale(REP_OWN, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', customerId: CUST_OWN,
+        tripId: 1,
+        paymentMethod: 'cash',
+        customerId: CUST_OWN,
         items: [{ productId: 101, qty: 1 }],
       });
       assert.equal(res.total, 100);
-      const sale = await (db as any).selectFrom('sales').selectAll().where('id', '=', res.saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+      const sale = await (db as any)
+        .selectFrom('sales')
+        .selectAll()
+        .where('id', '=', res.saleId)
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(sale.customer_id), CUST_OWN);
     } finally {
       await db.destroy();
@@ -504,10 +894,7 @@ async function main(): Promise<void> {
       SalesWriteService.invalidateSettingsCache(TENANT);
       await seedPosFoundation(db);
       const { sales } = buildPosServices(db);
-      await expectCode(
-        sales.createSale(posPayload(CUST_OTHER_SALE), repAuth),
-        'CUSTOMER_NOT_ON_REP_ROUTE',
-      );
+      await expectCode(sales.createSale(posPayload(CUST_OTHER_SALE), repAuth), 'CUSTOMER_NOT_ON_REP_ROUTE');
       assert.equal(await posSaleCount(db), 1);
     } finally {
       await db.destroy();
@@ -543,10 +930,7 @@ async function main(): Promise<void> {
       SalesWriteService.invalidateSettingsCache(TENANT);
       await seedPosFoundation(db);
       const { sales } = buildPosServices(db);
-      await expectCode(
-        sales.createSale(posPayload(CUST_OTHER_SALE, '9999'), repAuth),
-        'CUSTOMER_NOT_ON_REP_ROUTE',
-      );
+      await expectCode(sales.createSale(posPayload(CUST_OTHER_SALE, '9999'), repAuth), 'CUSTOMER_NOT_ON_REP_ROUTE');
       assert.equal(await posSaleCount(db), 1);
     } finally {
       await db.destroy();
@@ -599,11 +983,22 @@ async function main(): Promise<void> {
     try {
       SalesWriteService.invalidateSettingsCache(TENANT);
       await seedPosFoundation(db);
-      await (db as any).insertInto('cashier_shifts').values({
-        id: 2, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-2',
-        opened_by: 3, status: 'open', branch_id: 1, location_id: 10,
-        opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-      }).execute();
+      await (db as any)
+        .insertInto('cashier_shifts')
+        .values({
+          id: 2,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          doc_no: 'SHIFT-2',
+          opened_by: 3,
+          status: 'open',
+          branch_id: 1,
+          location_id: 10,
+          opening_cash: 0,
+          expected_cash: 0,
+          created_at: SHIFT_OPENED_AT,
+        })
+        .execute();
       const { sales } = buildPosServices(db);
       const created: any = await sales.createSale(posPayload(CUST_OTHER_SALE), cashierAuth);
       assert.ok(Number(created?.sale?.id) > 0, 'non-rep counter sale must create the sale');
@@ -621,20 +1016,35 @@ async function main(): Promise<void> {
   // before the transaction opens on each, and the shared predicate
   // is the history transpose (empty serving set = first sale).
   {
-    const gate = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-collections-and-swaps/rep-route-gate.ts'), 'utf8');
+    const gate = readFileSync(
+      resolve(__dirname, '../../src/modules/delivery-reps/services/van-collections-and-swaps/rep-route-gate.ts'),
+      'utf8',
+    );
     assert.ok(gate.includes("'CUSTOMER_NOT_ON_REP_ROUTE'"), 'shared gate names the refusal code');
     assert.ok(gate.includes('serving.size === 0'), 'empty serving set (no history anywhere) allows the first sale');
     assert.ok(gate.includes('serving.has(Number(repId))'), 'own served customer allows the sale');
     assert.ok(gate.includes("selectFrom('van_field_visits')"), 'field-visit evidence in the gate');
     assert.ok(gate.includes("selectFrom('sales_orders')"), 'pre-sale-order evidence in the gate');
     assert.ok(gate.includes("selectFrom('sales')"), 'delivered-sale evidence in the gate');
-    const fieldSlice = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'), 'utf8');
+    const fieldSlice = readFileSync(
+      resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'),
+      'utf8',
+    );
     assert.ok(fieldSlice.includes('assertRouteGate'), 'field sale calls the route gate');
-    assert.ok(fieldSlice.includes("import { assertRouteGate } from '../van-collections-and-swaps/rep-route-gate'"), 'field sale calls the gate from the shared gate module (moved at the Batch 3 merge so the slice stays at its size baseline; the refusal code itself is pinned on the gate file above)');
-    const posGate = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale/assert-pos-rep-route.ts'), 'utf8');
+    assert.ok(
+      fieldSlice.includes("import { assertRouteGate } from '../van-collections-and-swaps/rep-route-gate'"),
+      'field sale calls the gate from the shared gate module (moved at the Batch 3 merge so the slice stays at its size baseline; the refusal code itself is pinned on the gate file above)',
+    );
+    const posGate = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/create-sale/assert-pos-rep-route.ts'),
+      'utf8',
+    );
     assert.ok(posGate.includes('assertRepRouteForSale'), 'POS gate calls the shared predicate');
     assert.ok(posGate.includes('authorizeDiscountOverride'), 'POS override uses the existing manager-PIN path');
-    const orchestrator = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
+    const orchestrator = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/create-sale.service.ts'),
+      'utf8',
+    );
     const gateAt = orchestrator.indexOf('assertPosRepRouteForSale(this.db');
     const txAt = orchestrator.indexOf('runInTransaction');
     assert.ok(gateAt > 0 && txAt > gateAt, 'POS gate runs before the transaction opens');
@@ -644,7 +1054,8 @@ async function main(): Promise<void> {
   // Wiring: this spec is in both critical lists (309 specs, identical
   // order) — the suite count moves 297 -> 300 with this batch (F7c + F3 + F8).
   {
-    const specs = JSON.parse(readFileSync(join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+    const specs = JSON.parse(readFileSync(join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+      .specs as string[];
     const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));

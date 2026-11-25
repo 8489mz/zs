@@ -55,32 +55,64 @@ async function makeDb(): Promise<{ db: Kysely<Database> }> {
 }
 
 async function seedWorld(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('delivery_representatives' as never).values({
-    id: 7, tenant_id: 't1', name: 'مندوب اختبار', full_name: 'مندوب اختبار', is_active: true,
-  } as never).execute();
-  await db.insertInto('sales_orders' as never).values({
-    id: 100, tenant_id: 't1', account_id: 'a1', order_number: 'SO-261122-0001',
-    customer_name: 'عميل اختبار', warehouse_location_id: 1, status: 'approved',
-    order_source: 'van_presales', notes: '',
-  } as never).execute();
-  await db.insertInto('sales_order_items' as never).values({
-    tenant_id: 't1', sales_order_id: 100, product_id: 1, product_name: 'صنف اختبار',
-    unit_name: 'قطعة', quantity: 2, reserved_quantity: 0, delivered_quantity: 0, unit_multiplier: 1,
-  } as never).execute();
+  await db
+    .insertInto('delivery_representatives' as never)
+    .values({
+      id: 7,
+      tenant_id: 't1',
+      name: 'مندوب اختبار',
+      full_name: 'مندوب اختبار',
+      is_active: true,
+    } as never)
+    .execute();
+  await db
+    .insertInto('sales_orders' as never)
+    .values({
+      id: 100,
+      tenant_id: 't1',
+      account_id: 'a1',
+      order_number: 'SO-261122-0001',
+      customer_name: 'عميل اختبار',
+      warehouse_location_id: 1,
+      status: 'approved',
+      order_source: 'van_presales',
+      notes: '',
+    } as never)
+    .execute();
+  await db
+    .insertInto('sales_order_items' as never)
+    .values({
+      tenant_id: 't1',
+      sales_order_id: 100,
+      product_id: 1,
+      product_name: 'صنف اختبار',
+      unit_name: 'قطعة',
+      quantity: 2,
+      reserved_quantity: 0,
+      delivered_quantity: 0,
+      unit_multiplier: 1,
+    } as never)
+    .execute();
 }
 
 async function requisitionRow(db: Kysely<Database>, id: number): Promise<any> {
-  const rows = await (db as any).selectFrom('van_load_requisitions')
+  const rows = (await (db as any)
+    .selectFrom('van_load_requisitions')
     .select(['rep_id as repId', 'status', 'doc_no as docNo'])
-    .where('id', '=', id).where('tenant_id', '=', 't1').execute() as any[];
+    .where('id', '=', id)
+    .where('tenant_id', '=', 't1')
+    .execute()) as any[];
   assert.equal(rows.length, 1, `expected exactly one requisition ${id}`);
   return rows[0];
 }
 
 async function orderStatus(db: Kysely<Database>, id: number): Promise<string> {
-  const rows = await (db as any).selectFrom('sales_orders')
+  const rows = (await (db as any)
+    .selectFrom('sales_orders')
     .select(['status'])
-    .where('id', '=', id).where('tenant_id', '=', 't1').execute() as any[];
+    .where('id', '=', id)
+    .where('tenant_id', '=', 't1')
+    .execute()) as any[];
   assert.equal(rows.length, 1, `expected exactly one order ${id}`);
   return String(rows[0].status);
 }
@@ -104,7 +136,9 @@ async function main(): Promise<void> {
       assert.equal(req.status, 'pending', 'requisition starts pending');
       assert.equal(await orderStatus(db, 100), 'converted', 'source order marked converted');
       console.log('case 1 passed: deliveryRepId 7 consolidates, requisition pending');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 2: neither rep field -> still refuses TARGET_REP_REQUIRED.
@@ -119,7 +153,9 @@ async function main(): Promise<void> {
         'missing rep still refuses',
       );
       console.log('case 2 passed: no rep -> TARGET_REP_REQUIRED');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 3: targetRepId still works (other callers).
@@ -135,7 +171,9 @@ async function main(): Promise<void> {
       assert.equal(res.ok, true, 'consolidate succeeds with targetRepId');
       assert.equal(res.targetRepId, 7, 'targetRepId kept');
       console.log('case 3 passed: targetRepId 7 still consolidates');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 4: deliveryRepId for an unknown rep -> REP_NOT_FOUND.
@@ -153,14 +191,17 @@ async function main(): Promise<void> {
         'unknown rep refuses',
       );
       console.log('case 4 passed: deliveryRepId 999 -> REP_NOT_FOUND');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 5. This spec is wired into both critical lists, in identical order
   // (309 specs — F18 wired van-presales-consolidate-delivery-rep-alias
   // and van-presales-order-details-line-total).
   {
-    const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+    const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+      .specs as string[];
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));

@@ -60,7 +60,11 @@ function runTokenLifecycle(): void {
   assert.equal(classifyPasswordResetToken({ ...base, used_at: now }, now), 'used');
   assert.equal(classifyPasswordResetToken({ ...base, invalidated_at: now }, now), 'invalidated');
   assert.equal(classifyPasswordResetToken({ ...base, expires_at: past }, now), 'expired');
-  assert.equal(classifyPasswordResetToken({ ...base, expires_at: now }, now), 'expired', 'اللحظة نفسها منتهية لا صالحة');
+  assert.equal(
+    classifyPasswordResetToken({ ...base, expires_at: now }, now),
+    'expired',
+    'اللحظة نفسها منتهية لا صالحة',
+  );
   assert.equal(classifyPasswordResetToken(undefined, now), 'unknown');
 
   // التواريخ تصل من القاعدة كنصوص أحياناً (حسب السائق) — لا يجوز أن يقلب هذا الحكم.
@@ -71,9 +75,21 @@ function runTokenLifecycle(): void {
 function runTtl(): void {
   assert.equal(passwordResetTokenTtlMs({} as NodeJS.ProcessEnv), 30 * 60 * 1000, 'الافتراضي 30 دقيقة');
   assert.equal(passwordResetTokenTtlMs({ PASSWORD_RESET_TOKEN_TTL_MINUTES: '15' } as any), 15 * 60 * 1000);
-  assert.equal(passwordResetTokenTtlMs({ PASSWORD_RESET_TOKEN_TTL_MINUTES: 'abc' } as any), 30 * 60 * 1000, 'قيمة غير رقمية تعود للافتراضي');
-  assert.equal(passwordResetTokenTtlMs({ PASSWORD_RESET_TOKEN_TTL_MINUTES: '0' } as any), 30 * 60 * 1000, 'صفر يعود للافتراضي');
-  assert.equal(passwordResetTokenTtlMs({ PASSWORD_RESET_TOKEN_TTL_MINUTES: '99999' } as any), 120 * 60 * 1000, 'العمر مقصوص عند ساعتين');
+  assert.equal(
+    passwordResetTokenTtlMs({ PASSWORD_RESET_TOKEN_TTL_MINUTES: 'abc' } as any),
+    30 * 60 * 1000,
+    'قيمة غير رقمية تعود للافتراضي',
+  );
+  assert.equal(
+    passwordResetTokenTtlMs({ PASSWORD_RESET_TOKEN_TTL_MINUTES: '0' } as any),
+    30 * 60 * 1000,
+    'صفر يعود للافتراضي',
+  );
+  assert.equal(
+    passwordResetTokenTtlMs({ PASSWORD_RESET_TOKEN_TTL_MINUTES: '99999' } as any),
+    120 * 60 * 1000,
+    'العمر مقصوص عند ساعتين',
+  );
 }
 
 /**
@@ -82,7 +98,9 @@ function runTtl(): void {
  */
 function runResetUrl(): void {
   const token = 'abc-123_XYZ';
-  const url = buildPasswordResetUrl('https://ignored.example', token, { APP_PUBLIC_URL: 'https://app.example.com' } as any);
+  const url = buildPasswordResetUrl('https://ignored.example', token, {
+    APP_PUBLIC_URL: 'https://app.example.com',
+  } as any);
   assert.equal(url, `https://app.example.com/reset-password#token=${encodeURIComponent(token)}`);
   assert.ok(!String(url).includes('?token='), 'الرمز يجب ألّا يظهر في الـquery string');
 
@@ -96,7 +114,10 @@ function runResetUrl(): void {
     `http://127.0.0.1:5173/reset-password#token=${encodeURIComponent(token)}`,
     'نسخة الديسكتوب المحلية تسمح فقط بعنوان loopback',
   );
-  assert.equal(buildPasswordResetUrl('https://attacker.example.com', token, { APP_MODE: 'SELF_CONTAINED' } as any), null);
+  assert.equal(
+    buildPasswordResetUrl('https://attacker.example.com', token, { APP_MODE: 'SELF_CONTAINED' } as any),
+    null,
+  );
 
   assert.equal(
     buildPasswordResetUrl('https://app.example.com/', token, { APP_PUBLIC_URL: 'https://app.example.com/' } as any),
@@ -115,7 +136,9 @@ function runRouteShape(): void {
 
   for (const method of publicMethods) {
     assert.equal(typeof proto[method], 'function', `SessionsController.${method} مفقود`);
-    const guards = (Reflect.getMetadata(GUARDS_METADATA, proto[method]) || []).map((g: { name?: string }) => g?.name || '');
+    const guards = (Reflect.getMetadata(GUARDS_METADATA, proto[method]) || []).map(
+      (g: { name?: string }) => g?.name || '',
+    );
     assert.ok(!guards.includes(SessionAuthGuard.name), `${method} يجب أن يبقى عاماً بلا SessionAuthGuard`);
     assert.equal(Reflect.getMetadata(METHOD_METADATA, proto[method]), 1, `${method} يجب أن يكون POST`);
   }
@@ -126,7 +149,9 @@ function runRouteShape(): void {
   assert.equal(Reflect.getMetadata(PATH_METADATA, SessionsController), 'api/auth');
 
   // الجار المحروس: لو سقط الحارس عن تغيير كلمة المرور صار أي مجهول يغيّرها.
-  const changePasswordGuards = (Reflect.getMetadata(GUARDS_METADATA, proto.changePassword) || []).map((g: { name?: string }) => g?.name || '');
+  const changePasswordGuards = (Reflect.getMetadata(GUARDS_METADATA, proto.changePassword) || []).map(
+    (g: { name?: string }) => g?.name || '',
+  );
   assert.ok(changePasswordGuards.includes(SessionAuthGuard.name), 'change-password يجب أن يبقى خلف SessionAuthGuard');
 }
 

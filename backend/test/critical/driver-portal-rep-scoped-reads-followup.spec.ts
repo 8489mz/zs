@@ -76,32 +76,148 @@ async function main(): Promise<void> {
     (vanService as any).resolveSystemAuthContext = async () => ({ userId: 1, sessionId: 'spec', username: 'spec' });
 
     await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, is_active: true }).execute();
-    await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van 11', code: 'VAN_11', location_type: 'van', is_active: true }).execute();
-    await anyDb.insertInto('delivery_representatives').values([
-      { id: REP_OWN, tenant_id: TENANT, account_id: ACCOUNT, full_name: 'Own Rep', name: 'Own Rep', phone: '01000000001', van_location_id: 10, is_active: true },
-      { id: REP_OTHER, tenant_id: TENANT, account_id: ACCOUNT, full_name: 'Other Rep', name: 'Other Rep', phone: '01000000002', van_location_id: 10, is_active: true },
-      { id: REP_NOLOC, tenant_id: TENANT, account_id: ACCOUNT, full_name: 'No Loc Rep', name: 'No Loc Rep', phone: '01000000003', van_location_id: null, is_active: true },
-    ]).execute();
+    await anyDb
+      .insertInto('stock_locations')
+      .values({
+        id: 10,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        branch_id: 1,
+        name: 'Van 11',
+        code: 'VAN_11',
+        location_type: 'van',
+        is_active: true,
+      })
+      .execute();
+    await anyDb
+      .insertInto('delivery_representatives')
+      .values([
+        {
+          id: REP_OWN,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          full_name: 'Own Rep',
+          name: 'Own Rep',
+          phone: '01000000001',
+          van_location_id: 10,
+          is_active: true,
+        },
+        {
+          id: REP_OTHER,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          full_name: 'Other Rep',
+          name: 'Other Rep',
+          phone: '01000000002',
+          van_location_id: 10,
+          is_active: true,
+        },
+        {
+          id: REP_NOLOC,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          full_name: 'No Loc Rep',
+          name: 'No Loc Rep',
+          phone: '01000000003',
+          van_location_id: null,
+          is_active: true,
+        },
+      ])
+      .execute();
     await anyDb.insertInto('packaging_units').values({ id: 1, name: 'قطعة' }).execute();
-    await anyDb.insertInto('products').values({ id: 5, tenant_id: TENANT, name: 'Product 5', barcode: 'B5', retail_price: 60, packaging_unit_id: 1 }).execute();
-    await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, location_id: 10, product_id: 5, qty: 4 }).execute();
+    await anyDb
+      .insertInto('products')
+      .values({ id: 5, tenant_id: TENANT, name: 'Product 5', barcode: 'B5', retail_price: 60, packaging_unit_id: 1 })
+      .execute();
+    await anyDb
+      .insertInto('product_location_stock')
+      .values({ tenant_id: TENANT, location_id: 10, product_id: 5, qty: 4 })
+      .execute();
     // Customers: 100 served by OWN via a field visit, 200 served by OTHER
     // via a delivered sale, 300 served by NOBODY.
-    await anyDb.insertInto('customers').values([
-      { id: 100, tenant_id: TENANT, name: 'Visited Customer', phone: '011100', address: 'Addr 100' },
-      { id: 200, tenant_id: TENANT, name: 'Sold-To Customer', phone: '011200', address: 'Addr 200' },
-      { id: 300, tenant_id: TENANT, name: 'Stranger Customer', phone: '011300', address: 'Addr 300' },
-    ]).execute();
-    await anyDb.insertInto('van_field_visits').values({ tenant_id: TENANT, account_id: ACCOUNT, trip_id: 1, rep_id: REP_OWN, customer_id: 100, visit_type: 'positive' }).execute();
-    await anyDb.insertInto('sales').values({ id: 70, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'INV-70', total: 500, paid_amount: 500, status: 'posted', payment_type: 'cash', customer_id: 200, delivery_rep_id: REP_OTHER, van_trip_id: 2 }).execute();
-    await anyDb.insertInto('sale_items').values({ sale_id: 70, tenant_id: TENANT, account_id: ACCOUNT, product_id: 5, product_name: 'Product 5', unit_name: 'قطعة', unit_multiplier: 1, quantity: 2, unit_price: 123 }).execute();
-    await anyDb.insertInto('van_trip_packaging_movements').values([
-      { tenant_id: TENANT, account_id: ACCOUNT, trip_id: 1, customer_id: 100, package_type: 'crate_plastic', delivered_qty: 3, returned_qty: 1 },
-      { tenant_id: TENANT, account_id: ACCOUNT, trip_id: 2, customer_id: 200, package_type: 'crate_plastic', delivered_qty: 5, returned_qty: 2 },
-    ]).execute();
+    await anyDb
+      .insertInto('customers')
+      .values([
+        { id: 100, tenant_id: TENANT, name: 'Visited Customer', phone: '011100', address: 'Addr 100' },
+        { id: 200, tenant_id: TENANT, name: 'Sold-To Customer', phone: '011200', address: 'Addr 200' },
+        { id: 300, tenant_id: TENANT, name: 'Stranger Customer', phone: '011300', address: 'Addr 300' },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('van_field_visits')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        trip_id: 1,
+        rep_id: REP_OWN,
+        customer_id: 100,
+        visit_type: 'positive',
+      })
+      .execute();
+    await anyDb
+      .insertInto('sales')
+      .values({
+        id: 70,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'INV-70',
+        total: 500,
+        paid_amount: 500,
+        status: 'posted',
+        payment_type: 'cash',
+        customer_id: 200,
+        delivery_rep_id: REP_OTHER,
+        van_trip_id: 2,
+      })
+      .execute();
+    await anyDb
+      .insertInto('sale_items')
+      .values({
+        sale_id: 70,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        product_id: 5,
+        product_name: 'Product 5',
+        unit_name: 'قطعة',
+        unit_multiplier: 1,
+        quantity: 2,
+        unit_price: 123,
+      })
+      .execute();
+    await anyDb
+      .insertInto('van_trip_packaging_movements')
+      .values([
+        {
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          trip_id: 1,
+          customer_id: 100,
+          package_type: 'crate_plastic',
+          delivered_qty: 3,
+          returned_qty: 1,
+        },
+        {
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          trip_id: 2,
+          customer_id: 200,
+          package_type: 'crate_plastic',
+          delivered_qty: 5,
+          returned_qty: 2,
+        },
+      ])
+      .execute();
 
     const forbidden = (err: any) => err && err.code === 'FORBIDDEN' && err.statusCode === 403;
-    const countLocations = async () => Number((await anyDb.selectFrom('stock_locations').select((eb: any) => eb.fn.countAll().as('n')).executeTakeFirst()).n);
+    const countLocations = async () =>
+      Number(
+        (
+          await anyDb
+            .selectFrom('stock_locations')
+            .select((eb: any) => eb.fn.countAll().as('n'))
+            .executeTakeFirst()
+        ).n,
+      );
 
     // 1. Own rep reads succeed on both functions.
     const ownBalance = await vanService.getCustomerPackagingBalance(100, TENANT, REP_OWN);

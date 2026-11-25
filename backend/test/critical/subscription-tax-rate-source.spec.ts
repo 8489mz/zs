@@ -48,8 +48,13 @@ async function main(): Promise<void> {
 
     function authFor(tenantId: string): AuthContext {
       return {
-        userId: 1, sessionId: 'sess-spec', username: 'actor-1', role: 'admin',
-        permissions: [], tenantId, accountId: tenantId,
+        userId: 1,
+        sessionId: 'sess-spec',
+        username: 'actor-1',
+        role: 'admin',
+        permissions: [],
+        tenantId,
+        accountId: tenantId,
       } as unknown as AuthContext;
     }
 
@@ -58,9 +63,15 @@ async function main(): Promise<void> {
       settings: Array<{ key: string; value: string }>,
       customerId: number,
     ): Promise<void> {
-      await anyDb.insertInto('settings').values({ key: 'currency', value: 'EGP', tenant_id: tenantId, account_id: tenantId }).execute();
+      await anyDb
+        .insertInto('settings')
+        .values({ key: 'currency', value: 'EGP', tenant_id: tenantId, account_id: tenantId })
+        .execute();
       for (const setting of settings) {
-        await anyDb.insertInto('settings').values({ ...setting, tenant_id: tenantId, account_id: tenantId }).execute();
+        await anyDb
+          .insertInto('settings')
+          .values({ ...setting, tenant_id: tenantId, account_id: tenantId })
+          .execute();
       }
       await anyDb
         .insertInto('currency_exchange_rates')
@@ -73,7 +84,9 @@ async function main(): Promise<void> {
       const line: any = { description: 'Monthly service', quantity: 5, unitPrice: 200 };
       if (taxRate !== undefined) line.taxRate = taxRate;
       return {
-        customerId, billingPeriod: 'monthly', startDate: '2026-01-01',
+        customerId,
+        billingPeriod: 'monthly',
+        startDate: '2026-01-01',
         lines: [line],
       };
     }
@@ -113,9 +126,17 @@ async function main(): Promise<void> {
     await seedTenant('t-14', [{ key: 'taxRate', value: '14' }], 1);
     const created = await service.createSubscription(authFor('t-14'), dto(14));
     assert.equal(created.success, true);
-    const sub14 = await anyDb.selectFrom('commercial_subscriptions').selectAll().where('tenant_id', '=', 't-14').executeTakeFirstOrThrow();
+    const sub14 = await anyDb
+      .selectFrom('commercial_subscriptions')
+      .selectAll()
+      .where('tenant_id', '=', 't-14')
+      .executeTakeFirstOrThrow();
     assert.equal(Number(sub14.recurring_amount), 1140);
-    const line14 = await anyDb.selectFrom('commercial_subscription_lines').selectAll().where('subscription_id', '=', created.subscriptionId).executeTakeFirstOrThrow();
+    const line14 = await anyDb
+      .selectFrom('commercial_subscription_lines')
+      .selectAll()
+      .where('subscription_id', '=', created.subscriptionId)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(line14.tax_rate), 14);
     assert.equal(Number(line14.total_price), 1140);
 
@@ -127,11 +148,19 @@ async function main(): Promise<void> {
     // 4. Exempt (0 / omitted) still passes on a taxed tenant.
     const exempt = await service.createSubscription(authFor('t-14'), dto(0));
     assert.equal(exempt.success, true);
-    const subExempt = await anyDb.selectFrom('commercial_subscriptions').selectAll().where('id', '=', exempt.subscriptionId).executeTakeFirstOrThrow();
+    const subExempt = await anyDb
+      .selectFrom('commercial_subscriptions')
+      .selectAll()
+      .where('id', '=', exempt.subscriptionId)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(subExempt.recurring_amount), 1000);
     const omitted = await service.createSubscription(authFor('t-14'), dto(undefined));
     assert.equal(omitted.success, true);
-    const lineOmitted = await anyDb.selectFrom('commercial_subscription_lines').selectAll().where('subscription_id', '=', omitted.subscriptionId).executeTakeFirstOrThrow();
+    const lineOmitted = await anyDb
+      .selectFrom('commercial_subscription_lines')
+      .selectAll()
+      .where('subscription_id', '=', omitted.subscriptionId)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(lineOmitted.tax_rate), 0);
 
     // 5. Legacy `tax_rate` settings key resolves the same way.

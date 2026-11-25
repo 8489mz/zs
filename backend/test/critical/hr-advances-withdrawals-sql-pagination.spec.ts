@@ -85,18 +85,21 @@ type WithdrawalsResult = {
   };
 };
 
-async function list(
-  hr: HrService,
-  query: Record<string, unknown>,
-  auth: AuthContext,
-): Promise<WithdrawalsResult> {
+async function list(hr: HrService, query: Record<string, unknown>, auth: AuthContext): Promise<WithdrawalsResult> {
   return (await hr.withdrawals(query, auth)) as unknown as WithdrawalsResult;
 }
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const hr = new HrService(db, new TransactionHelper(), { log: async () => {} } as never, {} as never, {} as never, undefined);
+  const hr = new HrService(
+    db,
+    new TransactionHelper(),
+    { log: async () => {} } as never,
+    {} as never,
+    {} as never,
+    undefined,
+  );
 
   try {
     await pg.exec(`SET TIME ZONE 'UTC'`);
@@ -142,8 +145,16 @@ async function main(): Promise<void> {
     assert.equal(p150.pagination.totalItems, 249, 'totalItems must count the full merged set');
     assert.equal(p150.pagination.totalPages, 2, 'totalPages must be ceil(249 / 150)');
     assert.equal(p150.rows[0].id, 'loan-7', 'page 1 must start at loan-7 (latest movementAt)');
-    assert.equal(p150.rows[0].movementAt, '2026-06-30 08:00', 'loan-7 movementAt is createdAt (paid branch prefers created over issue)');
-    assert.equal(p150.rows[149].id, 'loan-190', 'page 1 of 150 must end at loan-190 (id tie-break DESC, lexicographic)');
+    assert.equal(
+      p150.rows[0].movementAt,
+      '2026-06-30 08:00',
+      'loan-7 movementAt is createdAt (paid branch prefers created over issue)',
+    );
+    assert.equal(
+      p150.rows[149].id,
+      'loan-190',
+      'page 1 of 150 must end at loan-190 (id tie-break DESC, lexicographic)',
+    );
 
     // 1b. The 200 cap: pageSize=1000 returns 200 rows.
     const capped = await list(hr, { ...all, pageSize: 1000 }, AUTH);

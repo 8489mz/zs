@@ -83,10 +83,20 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { GoodsReceiptService } from '../../src/modules/purchases/services/goods-receipt.service';
 import { PurchasesFinanceService } from '../../src/modules/purchases/services/purchases-finance.service';
-import { allocateGrnAccrual, allocateGrniBillPortion } from '../../src/modules/purchases/engines/grni-settlement.engine';
+import {
+  allocateGrnAccrual,
+  allocateGrniBillPortion,
+} from '../../src/modules/purchases/engines/grni-settlement.engine';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
-const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'tester', permissions: [] } as unknown as AuthContext;
+const auth = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'tester',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -191,76 +201,161 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 2125, 4100, 5100, 5190, 7290]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-      [code, 't1', String(code), code === 1150 || code === 2120]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      String(code),
+      code === 1150 || code === 2120,
+    ]);
   }
   return { pg, db };
 }
 
 async function seedCurrency(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: 'EGP' } as never).execute();
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'timezone', value: 'Africa/Cairo' } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: 'EGP' } as never)
+    .execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'timezone', value: 'Africa/Cairo' } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeGrnService(db: Kysely<Database>): GoodsReceiptService {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const finance = new PurchasesFinanceService();
   return new GoodsReceiptService(db as any, posting as any, finance as any);
 }
 
 async function seedBase(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('branches' as never).values({ id: 5, tenant_id: 't1', default_stock_location_id: 1 } as never).execute();
-  await db.insertInto('stock_locations' as never).values({ id: 1, tenant_id: 't1', branch_id: 5, name: 'Main' } as never).execute();
-  await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier', balance: 0 } as never).execute();
+  await db
+    .insertInto('branches' as never)
+    .values({ id: 5, tenant_id: 't1', default_stock_location_id: 1 } as never)
+    .execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values({ id: 1, tenant_id: 't1', branch_id: 5, name: 'Main' } as never)
+    .execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({ id: 9, tenant_id: 't1', name: 'Supplier', balance: 0 } as never)
+    .execute();
   // The tester example: prior stock 15 @ 56.08 (pool 841.20).
-  await db.insertInto('products' as never).values({
-    id: 10, tenant_id: 't1', account_id: 'a1', name: 'Widget 10',
-    stock_qty: 15, reserved_qty: 0, cost_price: 56.08, track_serials: false,
-  } as never).execute();
-  await db.insertInto('product_location_stock' as never).values({
-    tenant_id: 't1', account_id: 'a1', product_id: 10, branch_id: 5, location_id: 1, qty: 15, reserved_qty: 0,
-  } as never).execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 10,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Widget 10',
+      stock_qty: 15,
+      reserved_qty: 0,
+      cost_price: 56.08,
+      track_serials: false,
+    } as never)
+    .execute();
+  await db
+    .insertInto('product_location_stock' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 'a1',
+      product_id: 10,
+      branch_id: 5,
+      location_id: 1,
+      qty: 15,
+      reserved_qty: 0,
+    } as never)
+    .execute();
 }
 
 async function seedPo(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('purchase_orders' as never).values({
-    id: 7, tenant_id: 't1', account_id: 'a1', order_number: 'PO-7', supplier_id: 9,
-    supplier_name: 'Supplier', warehouse_id: 1, subtotal: 300, tax_amount: 0, discount_amount: 0,
-    total_amount: 300, status: 'confirmed', updated_at: new Date('2026-10-01'),
-  } as never).execute();
-  await db.insertInto('purchase_order_items' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', purchase_order_id: 7, product_id: 10,
-    product_name: 'Widget 10', unit_name: 'piece', quantity: 10, received_quantity: 0,
-    unit_cost: 100, tax_rate: 0, discount: 0, total: 1000,
-  } as never).execute();
-  await db.insertInto('purchase_order_items' as never).values({
-    id: 2, tenant_id: 't1', account_id: 'a1', purchase_order_id: 7, product_id: 10,
-    product_name: 'Widget 10', unit_name: 'piece', quantity: 10, received_quantity: 0,
-    unit_cost: 100, tax_rate: 0, discount: 0, total: 1000,
-  } as never).execute();
+  await db
+    .insertInto('purchase_orders' as never)
+    .values({
+      id: 7,
+      tenant_id: 't1',
+      account_id: 'a1',
+      order_number: 'PO-7',
+      supplier_id: 9,
+      supplier_name: 'Supplier',
+      warehouse_id: 1,
+      subtotal: 300,
+      tax_amount: 0,
+      discount_amount: 0,
+      total_amount: 300,
+      status: 'confirmed',
+      updated_at: new Date('2026-10-01'),
+    } as never)
+    .execute();
+  await db
+    .insertInto('purchase_order_items' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      purchase_order_id: 7,
+      product_id: 10,
+      product_name: 'Widget 10',
+      unit_name: 'piece',
+      quantity: 10,
+      received_quantity: 0,
+      unit_cost: 100,
+      tax_rate: 0,
+      discount: 0,
+      total: 1000,
+    } as never)
+    .execute();
+  await db
+    .insertInto('purchase_order_items' as never)
+    .values({
+      id: 2,
+      tenant_id: 't1',
+      account_id: 'a1',
+      purchase_order_id: 7,
+      product_id: 10,
+      product_name: 'Widget 10',
+      unit_name: 'piece',
+      quantity: 10,
+      received_quantity: 0,
+      unit_cost: 100,
+      tax_rate: 0,
+      discount: 0,
+      total: 1000,
+    } as never)
+    .execute();
 }
 
 type GrnLineInput = { poItemId: number; qty: number; accepted: number; rejected: number; unitCost: number };
 
 async function createGrn(db: Kysely<Database>, freight: number | undefined, lines: GrnLineInput[]): Promise<number> {
   const grn = makeGrnService(db);
-  const created = await grn.createGoodsReceipt({
-    purchaseOrderId: 7,
-    supplierId: 9,
-    locationId: 1,
-    ...(freight != null ? { freight } : {}),
-    lines: lines.map((l) => ({
-      purchaseOrderItemId: l.poItemId,
-      productId: 10,
-      orderedQty: l.qty,
-      receivedQty: l.qty,
-      acceptedQty: l.accepted,
-      rejectedQty: l.rejected,
-      unitCost: l.unitCost,
-    })),
-  } as any, auth);
+  const created = await grn.createGoodsReceipt(
+    {
+      purchaseOrderId: 7,
+      supplierId: 9,
+      locationId: 1,
+      ...(freight != null ? { freight } : {}),
+      lines: lines.map((l) => ({
+        purchaseOrderItemId: l.poItemId,
+        productId: 10,
+        orderedQty: l.qty,
+        receivedQty: l.qty,
+        acceptedQty: l.accepted,
+        rejectedQty: l.rejected,
+        unitCost: l.unitCost,
+      })),
+    } as any,
+    auth,
+  );
   return Number(created.id);
 }
 
@@ -273,12 +368,21 @@ async function readJournal(db: Kysely<Database>): Promise<any> {
 }
 
 async function readProduct(db: Kysely<Database>): Promise<{ stockQty: number; costPrice: number }> {
-  const row = await (db as any).selectFrom('products').select(['stock_qty', 'cost_price']).where('id', '=', 10).executeTakeFirstOrThrow();
+  const row = await (db as any)
+    .selectFrom('products')
+    .select(['stock_qty', 'cost_price'])
+    .where('id', '=', 10)
+    .executeTakeFirstOrThrow();
   return { stockQty: Number(row.stock_qty), costPrice: Number(row.cost_price) };
 }
 
 async function readGrnLines(db: Kysely<Database>, grnId: number): Promise<any[]> {
-  return (db as any).selectFrom('goods_receipt_lines').selectAll().where('grn_id', '=', grnId).orderBy('id', 'asc').execute();
+  return (db as any)
+    .selectFrom('goods_receipt_lines')
+    .selectAll()
+    .where('grn_id', '=', grnId)
+    .orderBy('id', 'asc')
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -309,7 +413,10 @@ async function main(): Promise<void> {
       const product = await readProduct(db);
       assert.equal(product.stockQty, 16, 'goods enter stock');
       assert.equal(product.costPrice, 60.075, 'WAC blends the landed cost: (841.20 + 120) / 16');
-      const movement = await (db as any).selectFrom('stock_movements').select(['qty', 'unit_cost', 'total_cost']).executeTakeFirstOrThrow();
+      const movement = await (db as any)
+        .selectFrom('stock_movements')
+        .select(['qty', 'unit_cost', 'total_cost'])
+        .executeTakeFirstOrThrow();
       assert.equal(Number(movement.qty), 1);
       assert.equal(Number(movement.unit_cost), 120, 'movement carries the landed unit cost');
       assert.equal(Number(movement.total_cost), 120, 'movement total equals the posted leg');
@@ -342,7 +449,10 @@ async function main(): Promise<void> {
       const product = await readProduct(db);
       assert.equal(product.stockQty, 16);
       assert.equal(product.costPrice, 58.825, 'WAC blends the bare cost: (841.20 + 100) / 16');
-      const movement = await (db as any).selectFrom('stock_movements').select(['unit_cost', 'total_cost']).executeTakeFirstOrThrow();
+      const movement = await (db as any)
+        .selectFrom('stock_movements')
+        .select(['unit_cost', 'total_cost'])
+        .executeTakeFirstOrThrow();
       assert.equal(Number(movement.unit_cost), 100);
       assert.equal(Number(movement.total_cost), 100);
       const grnLines = await readGrnLines(db, grnId);
@@ -378,7 +488,11 @@ async function main(): Promise<void> {
       // single-blend 65.066667, invisible at book digits (65.07).
       assert.equal(product.costPrice, 65.066666, 'WAC blends the landed cost line by line');
       assert.equal(Number(product.costPrice.toFixed(2)), 65.07, 'the merchant-visible WAC is 65.07');
-      const movements = await (db as any).selectFrom('stock_movements').select(['unit_cost', 'total_cost']).orderBy('id', 'asc').execute();
+      const movements = await (db as any)
+        .selectFrom('stock_movements')
+        .select(['unit_cost', 'total_cost'])
+        .orderBy('id', 'asc')
+        .execute();
       assert.equal(movements.length, 2);
       assert.equal(Number(movements[0].unit_cost), 110, 'line 1 landed unit: 100 + 20 / 2');
       assert.equal(Number(movements[0].total_cost), 220);
@@ -425,29 +539,43 @@ async function main(): Promise<void> {
 
   // Case 5: settlement — the GRN-bill accrual reconciles to the landed total, not the bare one.
   {
-    const landed = [...allocateGrnAccrual([
-      { id: 1, acceptedQty: 1, unitCost: 100, landedLineTotal: 120 },
-    ], 2).entries()];
+    const landed = [
+      ...allocateGrnAccrual([{ id: 1, acceptedQty: 1, unitCost: 100, landedLineTotal: 120 }], 2).entries(),
+    ];
     assert.deepEqual(landed, [[1, 12000]], 'the landed accrual clears the full journal total');
     const portion = allocateGrniBillPortion({
-      lineAccrualMinor: 12000, acceptedQty: 1, previouslyBilledQty: 0, previouslyClearedMinor: 0, newQty: 1,
+      lineAccrualMinor: 12000,
+      acceptedQty: 1,
+      previouslyBilledQty: 0,
+      previouslyClearedMinor: 0,
+      newQty: 1,
     });
     assert.equal(portion, 12000, 'billing the full receipt clears the whole landed accrual');
-    const bare = [...allocateGrnAccrual([
-      { id: 1, acceptedQty: 1, unitCost: 100 },
-    ], 2).entries()];
+    const bare = [...allocateGrnAccrual([{ id: 1, acceptedQty: 1, unitCost: 100 }], 2).entries()];
     assert.deepEqual(bare, [[1, 10000]], 'the bare path is unchanged when no freight is carried');
   }
 
   // Case 6: source pins — the canonical allocator and the modal wiring.
   {
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/purchases/services/goods-receipt-post.service.ts'), 'utf8');
-    assert.ok(serviceSource.includes('allocateLandedCosts'), 'postGoodsReceipt allocates through the canonical allocator');
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/purchases/services/goods-receipt-post.service.ts'),
+      'utf8',
+    );
+    assert.ok(
+      serviceSource.includes('allocateLandedCosts'),
+      'postGoodsReceipt allocates through the canonical allocator',
+    );
     assert.ok(serviceSource.includes('INV-SHIPPING-ALLOCATION'), 'postGoodsReceipt names the invariant');
-    const modalSource = readFileSync(resolve(here, '../../../frontend/src/features/purchases/components/GoodsReceiptModal.tsx'), 'utf8');
+    const modalSource = readFileSync(
+      resolve(here, '../../../frontend/src/features/purchases/components/GoodsReceiptModal.tsx'),
+      'utf8',
+    );
     assert.ok(modalSource.includes('freight: freightAmount'), 'the receipt modal sends the freight it collects');
-    const apiSource = readFileSync(resolve(here, '../../../frontend/src/features/purchases/api/goods-receipts.api.ts'), 'utf8');
+    const apiSource = readFileSync(
+      resolve(here, '../../../frontend/src/features/purchases/api/goods-receipts.api.ts'),
+      'utf8',
+    );
     assert.ok(apiSource.includes('freight?: number'), 'the receipt payload type carries freight');
     console.log('  source pins passed');
   }

@@ -49,8 +49,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(currency: string): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -71,7 +76,10 @@ async function makeDb(currency: string): Promise<{ pg: PGlite; db: Kysely<Databa
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: currency }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('accounting_settings').values({ id: 1, tenant_id: TENANT }).execute();
   const accounts: Array<[number, string, string, boolean]> = [
     [1120, '1120', 'asset', true],
@@ -80,10 +88,19 @@ async function makeDb(currency: string): Promise<{ pg: PGlite; db: Kysely<Databa
     [6700, '6700', 'expense', false],
   ];
   for (const [id, code, type, isCashBank] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({
-      id, tenant_id: TENANT, code, name_ar: code, account_type: type,
-      is_active: true, is_cash_bank: isCashBank, allow_manual_entries: true,
-    }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id,
+        tenant_id: TENANT,
+        code,
+        name_ar: code,
+        account_type: type,
+        is_active: true,
+        is_cash_bank: isCashBank,
+        allow_manual_entries: true,
+      })
+      .execute();
   }
   return { pg, db };
 }
@@ -97,20 +114,34 @@ function buildService(db: Kysely<Database>): MarketplaceSyncService {
   return new MarketplaceSyncService(db, new AuditService(db), posting);
 }
 
-async function journalLeg(db: Kysely<Database>, entryId: number, accountId: number, side: 'debit' | 'credit'): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entry_lines').select([side])
+async function journalLeg(
+  db: Kysely<Database>,
+  entryId: number,
+  accountId: number,
+  side: 'debit' | 'credit',
+): Promise<number> {
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select([side])
     .where('journal_entry_id', '=', entryId)
-    .where('account_id', '=', accountId).execute();
+    .where('account_id', '=', accountId)
+    .execute();
   return rows.reduce((sum: number, row: any) => sum + Number(row[side] || 0), 0);
 }
 
 async function journalTotals(db: Kysely<Database>, entryId: number): Promise<{ debit: number; credit: number }> {
-  const rows = await (db as any).selectFrom('journal_entry_lines').select(['debit', 'credit'])
-    .where('journal_entry_id', '=', entryId).execute();
-  return rows.reduce((acc: { debit: number; credit: number }, row: any) => ({
-    debit: acc.debit + Number(row.debit || 0),
-    credit: acc.credit + Number(row.credit || 0),
-  }), { debit: 0, credit: 0 });
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['debit', 'credit'])
+    .where('journal_entry_id', '=', entryId)
+    .execute();
+  return rows.reduce(
+    (acc: { debit: number; credit: number }, row: any) => ({
+      debit: acc.debit + Number(row.debit || 0),
+      credit: acc.credit + Number(row.credit || 0),
+    }),
+    { debit: 0, credit: 0 },
+  );
 }
 
 async function expectThrow(fn: () => Promise<unknown>, fragment: string): Promise<void> {
@@ -130,16 +161,34 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb('KWD');
     try {
       const service = buildService(db);
-      const result = await service.reconcileSettlement({
-        marketplace: 'amazon', settlementId: 'SET-1',
-        periodStart: '2026-10-01', periodEnd: '2026-10-31', currency: 'KWD',
-        grossSales: 100.005, referralFees: 10, fulfillmentFees: 5,
-        refunds: 0, storageOrOtherFees: 0.5, netPayout: 84.505,
-      }, adminAuth);
+      const result = await service.reconcileSettlement(
+        {
+          marketplace: 'amazon',
+          settlementId: 'SET-1',
+          periodStart: '2026-10-01',
+          periodEnd: '2026-10-31',
+          currency: 'KWD',
+          grossSales: 100.005,
+          referralFees: 10,
+          fulfillmentFees: 5,
+          refunds: 0,
+          storageOrOtherFees: 0.5,
+          netPayout: 84.505,
+        },
+        adminAuth,
+      );
       assert.equal(result.ok, true, 'a 3-decimal settlement must reconcile');
       assert.ok(result.journalEntryId > 0, 'a journal entry is posted');
-      assert.equal(await journalLeg(db, result.journalEntryId, 1120, 'debit'), 84.505, 'bank leg equals the net payout');
-      assert.equal(await journalLeg(db, result.journalEntryId, 4100, 'credit'), 100.005, 'revenue leg equals gross sales');
+      assert.equal(
+        await journalLeg(db, result.journalEntryId, 1120, 'debit'),
+        84.505,
+        'bank leg equals the net payout',
+      );
+      assert.equal(
+        await journalLeg(db, result.journalEntryId, 4100, 'credit'),
+        100.005,
+        'revenue leg equals gross sales',
+      );
       const totals = await journalTotals(db, result.journalEntryId);
       assert.equal(totals.debit, totals.credit, 'the settlement journal balances');
     } finally {
@@ -153,12 +202,26 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb('EGP');
     try {
       const service = buildService(db);
-      await expectThrow(() => service.reconcileSettlement({
-        marketplace: 'amazon', settlementId: 'SET-2',
-        periodStart: '2026-10-01', periodEnd: '2026-10-31', currency: 'EGP',
-        grossSales: 100.005, referralFees: 10, fulfillmentFees: 5,
-        refunds: 0, storageOrOtherFees: 0.5, netPayout: 84.505,
-      }, adminAuth), 'دقة عملة الأساس');
+      await expectThrow(
+        () =>
+          service.reconcileSettlement(
+            {
+              marketplace: 'amazon',
+              settlementId: 'SET-2',
+              periodStart: '2026-10-01',
+              periodEnd: '2026-10-31',
+              currency: 'EGP',
+              grossSales: 100.005,
+              referralFees: 10,
+              fulfillmentFees: 5,
+              refunds: 0,
+              storageOrOtherFees: 0.5,
+              netPayout: 84.505,
+            },
+            adminAuth,
+          ),
+        'دقة عملة الأساس',
+      );
       const rows = await (db as any).selectFrom('journal_entries').select('id').execute();
       assert.equal(rows.length, 0, 'a rejected settlement posts nothing');
     } finally {
@@ -172,12 +235,26 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb('KWD');
     try {
       const service = buildService(db);
-      await expectThrow(() => service.reconcileSettlement({
-        marketplace: 'noon', settlementId: 'SET-3',
-        periodStart: '2026-10-01', periodEnd: '2026-10-31', currency: 'KWD',
-        grossSales: 100.0005, referralFees: 10, fulfillmentFees: 5,
-        refunds: 0, storageOrOtherFees: 0.5, netPayout: 84.5005,
-      }, adminAuth), 'دقة عملة الأساس');
+      await expectThrow(
+        () =>
+          service.reconcileSettlement(
+            {
+              marketplace: 'noon',
+              settlementId: 'SET-3',
+              periodStart: '2026-10-01',
+              periodEnd: '2026-10-31',
+              currency: 'KWD',
+              grossSales: 100.0005,
+              referralFees: 10,
+              fulfillmentFees: 5,
+              refunds: 0,
+              storageOrOtherFees: 0.5,
+              netPayout: 84.5005,
+            },
+            adminAuth,
+          ),
+        'دقة عملة الأساس',
+      );
     } finally {
       await db.destroy();
     }
@@ -189,12 +266,26 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb('KWD');
     try {
       const service = buildService(db);
-      await expectThrow(() => service.reconcileSettlement({
-        marketplace: 'amazon', settlementId: 'SET-4',
-        periodStart: '2026-10-01', periodEnd: '2026-10-31', currency: 'KWD',
-        grossSales: 100.005, referralFees: 10, fulfillmentFees: 5,
-        refunds: 0, storageOrOtherFees: 0.5, netPayout: 84.504,
-      }, adminAuth), 'لا يطابق');
+      await expectThrow(
+        () =>
+          service.reconcileSettlement(
+            {
+              marketplace: 'amazon',
+              settlementId: 'SET-4',
+              periodStart: '2026-10-01',
+              periodEnd: '2026-10-31',
+              currency: 'KWD',
+              grossSales: 100.005,
+              referralFees: 10,
+              fulfillmentFees: 5,
+              refunds: 0,
+              storageOrOtherFees: 0.5,
+              netPayout: 84.504,
+            },
+            adminAuth,
+          ),
+        'لا يطابق',
+      );
     } finally {
       await db.destroy();
     }

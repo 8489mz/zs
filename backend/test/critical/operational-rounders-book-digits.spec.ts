@@ -103,7 +103,10 @@ async function main(): Promise<void> {
     `);
 
     // Identical 3dp rollup + margin fixtures on the KWD and EGP tenants.
-    const tenantIds: Array<[string, number]> = [['t-kwd', 1], ['t-egp', 2]];
+    const tenantIds: Array<[string, number]> = [
+      ['t-kwd', 1],
+      ['t-egp', 2],
+    ];
     for (const [tenant, n] of tenantIds) {
       await pg.exec(`
         INSERT INTO sales VALUES (${n},'${tenant}','posted','2026-10-15 10:00:00+00',NULL,100.125,'cash','cash',100.125,0,0,0,0,false);
@@ -131,11 +134,11 @@ async function main(): Promise<void> {
     assert.equal(kwd.grossProfit, 90);
     assert.equal(kwd.expensesTotal, 5.125);
     assert.equal(kwd.netProfit, 84.875);
-    const stored = await (db as any)
+    const stored = (await (db as any)
       .selectFrom('daily_commercial_rollups')
       .selectAll()
       .where('tenant_id', '=', 't-kwd')
-      .executeTakeFirst() as unknown as Record<string, unknown>;
+      .executeTakeFirst()) as unknown as Record<string, unknown>;
     assert.equal(Number(stored.sales_total), 100.125);
     assert.equal(Number(stored.net_profit), 84.875);
     const kwdYears = await rollup.getHistoricalMultiYearComparison('t-kwd', [2026]);
@@ -193,8 +196,14 @@ async function main(): Promise<void> {
     // ---- 7. reports-math digits contract (helper already digits-aware) ----
     assert.equal(toMoney(100.125, 3), 100.125);
     assert.equal(toMoney(100.125), 100.13);
-    assert.equal(sumMoney([{ v: 100.125 }, { v: 0.005 }], (row) => row.v, 3), 100.13);
-    assert.equal(sumMoney([{ v: 100.125 }], (row) => row.v), 100.13);
+    assert.equal(
+      sumMoney([{ v: 100.125 }, { v: 0.005 }], (row) => row.v, 3),
+      100.13,
+    );
+    assert.equal(
+      sumMoney([{ v: 100.125 }], (row) => row.v),
+      100.13,
+    );
 
     console.log('Operational rounders book digits tests passed');
   } finally {

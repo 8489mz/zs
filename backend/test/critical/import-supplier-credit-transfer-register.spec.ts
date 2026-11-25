@@ -86,18 +86,21 @@ async function seedPayment(
     createdAt: string;
   },
 ): Promise<void> {
-  await db.insertInto('supplier_payments' as never).values({
-    tenant_id: row.tenantId,
-    supplier_id: row.supplierId,
-    doc_no: row.docNo,
-    amount: row.amount,
-    amount_foreign: row.amountForeign ?? null,
-    note: 'live re-test probe',
-    payment_date: row.createdAt,
-    currency: row.currency ?? 'EGP',
-    exchange_rate: row.exchangeRate ?? 1,
-    created_at: row.createdAt,
-  } as never).execute();
+  await db
+    .insertInto('supplier_payments' as never)
+    .values({
+      tenant_id: row.tenantId,
+      supplier_id: row.supplierId,
+      doc_no: row.docNo,
+      amount: row.amount,
+      amount_foreign: row.amountForeign ?? null,
+      note: 'live re-test probe',
+      payment_date: row.createdAt,
+      currency: row.currency ?? 'EGP',
+      exchange_rate: row.exchangeRate ?? 1,
+      created_at: row.createdAt,
+    } as never)
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -108,8 +111,12 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedPayment(db, {
-        tenantId: 't1', supplierId: 1, docNo: 'ZPV-261108-000004',
-        amount: 1200, amountForeign: null, currency: 'EGP',
+        tenantId: 't1',
+        supplierId: 1,
+        docNo: 'ZPV-261108-000004',
+        amount: 1200,
+        amountForeign: null,
+        currency: 'EGP',
         createdAt: '2026-11-08T10:00:00Z',
       });
       const rows = await service.listForeignTransfers('t1');
@@ -131,8 +138,13 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedPayment(db, {
-        tenantId: 't1', supplierId: 1, docNo: 'FT-7',
-        amount: -5000, amountForeign: 100, currency: 'USD', exchangeRate: 50,
+        tenantId: 't1',
+        supplierId: 1,
+        docNo: 'FT-7',
+        amount: -5000,
+        amountForeign: 100,
+        currency: 'USD',
+        exchangeRate: 50,
         createdAt: '2026-11-08T11:00:00Z',
       });
       const rows = await service.listForeignTransfers('t1');
@@ -152,18 +164,31 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedPayment(db, {
-        tenantId: 't1', supplierId: 1, docNo: 'ZPV-261108-000004',
-        amount: 1200, amountForeign: null, currency: 'EGP',
+        tenantId: 't1',
+        supplierId: 1,
+        docNo: 'ZPV-261108-000004',
+        amount: 1200,
+        amountForeign: null,
+        currency: 'EGP',
         createdAt: '2026-11-08T10:00:00Z',
       });
       await seedPayment(db, {
-        tenantId: 't1', supplierId: 2, docNo: 'FT-8',
-        amount: -2500, amountForeign: 50, currency: 'USD', exchangeRate: 50,
+        tenantId: 't1',
+        supplierId: 2,
+        docNo: 'FT-8',
+        amount: -2500,
+        amountForeign: 50,
+        currency: 'USD',
+        exchangeRate: 50,
         createdAt: '2026-11-08T12:00:00Z',
       });
       await seedPayment(db, {
-        tenantId: 't2', supplierId: 3, docNo: 'ZPV-261108-000009',
-        amount: 999, amountForeign: null, currency: 'EGP',
+        tenantId: 't2',
+        supplierId: 3,
+        docNo: 'ZPV-261108-000009',
+        amount: 999,
+        amountForeign: null,
+        currency: 'EGP',
         createdAt: '2026-11-08T13:00:00Z',
       });
       const rows = await service.listForeignTransfers('t1');
@@ -183,4 +208,7 @@ async function main(): Promise<void> {
   console.log('Import supplier-credit transfer register tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

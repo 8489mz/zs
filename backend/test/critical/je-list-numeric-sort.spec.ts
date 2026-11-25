@@ -127,8 +127,15 @@ async function main(): Promise<void> {
         first.entries.map((entry) => entry.entryNo),
         ['JE-00015029', 'JE-00015026'],
       );
-      assert.equal(first.pagination.nextCursor, 'JE-00015026', 'the cursor must be the last document number, not the row id');
-      const second = (await svc.listJournalEntries({ page: 1, pageSize: 2, cursor: first.pagination.nextCursor } as any, auth)) as unknown as ListResult;
+      assert.equal(
+        first.pagination.nextCursor,
+        'JE-00015026',
+        'the cursor must be the last document number, not the row id',
+      );
+      const second = (await svc.listJournalEntries(
+        { page: 1, pageSize: 2, cursor: first.pagination.nextCursor } as any,
+        auth,
+      )) as unknown as ListResult;
       assert.deepEqual(
         second.entries.map((entry) => entry.entryNo),
         ['JE-00015009'],
@@ -141,7 +148,10 @@ async function main(): Promise<void> {
 
   // Case 3: source pins — service order, page default sort, column key.
   {
-    const service = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/accounting-journals-read.service.ts'), 'utf8');
+    const service = readFileSync(
+      resolve(__dirname, '../../src/modules/accounting/services/accounting-journals-read.service.ts'),
+      'utf8',
+    );
     const start = service.indexOf('async listJournalEntries(');
     const end = service.indexOf('async getJournalEntry(');
     assert.ok(start > 0 && end > start);
@@ -161,10 +171,16 @@ async function main(): Promise<void> {
       page.includes("defaultSort={{ columnId: 'entryNo', direction: 'desc' }}"),
       'the page must default to the entryNo column, newest document first — not the date column',
     );
-    assert.ok(!page.includes("defaultSort={{ columnId: 'date', direction: 'desc' }}"), 'the date default sort must be gone');
+    assert.ok(
+      !page.includes("defaultSort={{ columnId: 'date', direction: 'desc' }}"),
+      'the date default sort must be gone',
+    );
     assert.ok(page.includes('exec(row.entryNo'), 'the entryNo sort key must parse the visible number');
     assert.ok(page.includes('Number(match[1])'), 'the entryNo sort key must use the parsed trailing digits');
-    assert.ok(!page.includes('sortValue: (row) => Number(row.id || 0)'), 'the entryNo sort key must not sort by the row identity');
+    assert.ok(
+      !page.includes('sortValue: (row) => Number(row.id || 0)'),
+      'the entryNo sort key must not sort by the row identity',
+    );
   }
 
   console.log('je-list-numeric-sort: all cases passed');

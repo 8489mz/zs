@@ -80,8 +80,13 @@ const ACCOUNT = 'a1';
 
 function authFor(userId: number, role: string, username: string): AuthContext {
   return {
-    userId, sessionId: `spec-m7-${userId}`, username, role,
-    permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId,
+    sessionId: `spec-m7-${userId}`,
+    username,
+    role,
+    permissions: ['deliveryReps', 'accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   } as unknown as AuthContext;
 }
 const adminAuth = authFor(1, 'admin', 'admin-one');
@@ -110,12 +115,51 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin-one' }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 4, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', phone: '01000000001', employee_id: null, vehicle_plate: 'ABC-123' }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 5, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep Two', phone: '01000000002', employee_id: null, vehicle_plate: 'DEF-456' }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 6, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep Three', phone: '01000000003', employee_id: null, vehicle_plate: 'GHI-789' }).execute();
-  await anyDb.insertInto('van_sales_trips').values({ id: 11, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 4, shift_name: 'Morning', status: 'settled' }).execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 4,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep One',
+      phone: '01000000001',
+      employee_id: null,
+      vehicle_plate: 'ABC-123',
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 5,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep Two',
+      phone: '01000000002',
+      employee_id: null,
+      vehicle_plate: 'DEF-456',
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 6,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep Three',
+      phone: '01000000003',
+      employee_id: null,
+      vehicle_plate: 'GHI-789',
+    })
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({ id: 11, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 4, shift_name: 'Morning', status: 'settled' })
+    .execute();
 }
 
 async function seedItem(
@@ -126,10 +170,20 @@ async function seedItem(
   amount: number,
   status: string,
 ): Promise<void> {
-  await (db as any).insertInto('van_rep_financial_settlements').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: repId, trip_id: 11,
-    entry_type: entryType, amount, status, notes: `m7 fixture ${entryType} ${status}`,
-  }).execute();
+  await (db as any)
+    .insertInto('van_rep_financial_settlements')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: repId,
+      trip_id: 11,
+      entry_type: entryType,
+      amount,
+      status,
+      notes: `m7 fixture ${entryType} ${status}`,
+    })
+    .execute();
 }
 
 /** The headline mixed fixture for rep 4: a waived bonus (must leave
@@ -156,7 +210,19 @@ function buildServices(db: Kysely<Database>): { controller: VanSalesAdminControl
   const posting = new AccountingPostingService(foundation);
   const audit = new AuditService(db);
   const fraudRadarStub = { recordSuspicionEvent: async () => {} } as never;
-  const van = new VanSalesService(db, audit, {} as never, posting, undefined, undefined, undefined, undefined, undefined, undefined, fraudRadarStub);
+  const van = new VanSalesService(
+    db,
+    audit,
+    {} as never,
+    posting,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudRadarStub,
+  );
   const controller = new VanSalesAdminController(van, {} as never, {} as never, {} as never, {} as never);
   return { controller };
 }
@@ -177,37 +243,46 @@ async function main(): Promise<void> {
   // settled + pushed shortages stay in the balance; waived shortage
   // leaves it; overages are shown (65) and never netted.
   // net = 600 - (150 + 80 + 70) = 300.
-  await check('M7 headline: commissions 600, net 300, overages 65 (waived bonus out, settled+pushed shortages in)', async () => {
-    const { pg, db } = await makeDb();
-    try {
-      await seedFoundation(db);
-      await seedRepFourMixed(db);
-      const { controller } = buildServices(db);
-      const result: any = await controller.getRepFinancialLedger(controllerReqFor(adminAuth), undefined, undefined, undefined, undefined);
-      assert.equal(result.items.length, 9, 'all nine fixture rows are listed');
-      const s = result.summary;
-      assert.equal(s.totalCommissions, 600, 'waived bonus 200 leaves commissions: 500 + 100');
-      assert.equal(s.totalPendingShortages, 150);
-      assert.equal(s.totalSettledShortages, 80, 'settled shortage stays visible in its bucket');
-      assert.equal(s.totalWaivedShortages, 60);
-      assert.equal(s.totalPushedToPayroll, 70, 'pushed shortage stays visible in its bucket');
-      assert.equal(s.totalOverages, 65, 'cash overage 40 + stock overage 25 are shown');
-      assert.equal(s.netRepBalance, 300, 'net = 600 - (150 + 80 + 70)');
-      assert.equal(s.repsBreakdown.length, 1, 'one rep in the breakdown');
-      const rep = s.repsBreakdown[0];
-      assert.equal(rep.repId, 4);
-      assert.equal(rep.commissions, 600);
-      assert.equal(rep.pendingShortages, 150);
-      assert.equal(rep.settledShortages, 80);
-      assert.equal(rep.waivedShortages, 60);
-      assert.equal(rep.pushedToPayroll, 70);
-      assert.equal(rep.overages, 65);
-      assert.equal(rep.netBalance, 300, 'per-rep net matches the totals formula');
-      assert.equal(rep.itemsCount, 9);
-    } finally {
-      await db.destroy();
-    }
-  });
+  await check(
+    'M7 headline: commissions 600, net 300, overages 65 (waived bonus out, settled+pushed shortages in)',
+    async () => {
+      const { pg, db } = await makeDb();
+      try {
+        await seedFoundation(db);
+        await seedRepFourMixed(db);
+        const { controller } = buildServices(db);
+        const result: any = await controller.getRepFinancialLedger(
+          controllerReqFor(adminAuth),
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        );
+        assert.equal(result.items.length, 9, 'all nine fixture rows are listed');
+        const s = result.summary;
+        assert.equal(s.totalCommissions, 600, 'waived bonus 200 leaves commissions: 500 + 100');
+        assert.equal(s.totalPendingShortages, 150);
+        assert.equal(s.totalSettledShortages, 80, 'settled shortage stays visible in its bucket');
+        assert.equal(s.totalWaivedShortages, 60);
+        assert.equal(s.totalPushedToPayroll, 70, 'pushed shortage stays visible in its bucket');
+        assert.equal(s.totalOverages, 65, 'cash overage 40 + stock overage 25 are shown');
+        assert.equal(s.netRepBalance, 300, 'net = 600 - (150 + 80 + 70)');
+        assert.equal(s.repsBreakdown.length, 1, 'one rep in the breakdown');
+        const rep = s.repsBreakdown[0];
+        assert.equal(rep.repId, 4);
+        assert.equal(rep.commissions, 600);
+        assert.equal(rep.pendingShortages, 150);
+        assert.equal(rep.settledShortages, 80);
+        assert.equal(rep.waivedShortages, 60);
+        assert.equal(rep.pushedToPayroll, 70);
+        assert.equal(rep.overages, 65);
+        assert.equal(rep.netBalance, 300, 'per-rep net matches the totals formula');
+        assert.equal(rep.itemsCount, 9);
+      } finally {
+        await db.destroy();
+      }
+    },
+  );
 
   // 2. Two reps: totals sum both reps, breakdowns stay per-rep.
   // Rep 5: commission 1000 pending, stock shortage 400 pending.
@@ -220,7 +295,13 @@ async function main(): Promise<void> {
       await seedItem(db, 410, 5, 'commission', 1000, 'pending');
       await seedItem(db, 411, 5, 'stock_shortage', 400, 'pending');
       const { controller } = buildServices(db);
-      const result: any = await controller.getRepFinancialLedger(controllerReqFor(adminAuth), undefined, undefined, undefined, undefined);
+      const result: any = await controller.getRepFinancialLedger(
+        controllerReqFor(adminAuth),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
       const s = result.summary;
       assert.equal(s.totalCommissions, 1600);
       assert.equal(s.totalPendingShortages, 550);
@@ -251,7 +332,13 @@ async function main(): Promise<void> {
       await seedItem(db, 412, 6, 'bonus', 50, 'waived');
       await seedItem(db, 413, 6, 'stock_shortage', 30, 'waived');
       const { controller } = buildServices(db);
-      const result: any = await controller.getRepFinancialLedger(controllerReqFor(adminAuth), undefined, undefined, undefined, undefined);
+      const result: any = await controller.getRepFinancialLedger(
+        controllerReqFor(adminAuth),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
       const s = result.summary;
       assert.equal(s.totalCommissions, 0, 'a waived bonus is not commission due');
       assert.equal(s.totalWaivedShortages, 30);
@@ -273,7 +360,13 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const { controller } = buildServices(db);
-      const result: any = await controller.getRepFinancialLedger(controllerReqFor(adminAuth), undefined, undefined, undefined, undefined);
+      const result: any = await controller.getRepFinancialLedger(
+        controllerReqFor(adminAuth),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
       assert.equal(result.items.length, 0);
       const s = result.summary;
       assert.equal(s.totalCommissions, 0);
@@ -298,7 +391,13 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedRepFourMixed(db);
       const { controller } = buildServices(db);
-      const result: any = await controller.getRepFinancialLedger(controllerReqFor(adminAuth), undefined, 'settled', undefined, undefined);
+      const result: any = await controller.getRepFinancialLedger(
+        controllerReqFor(adminAuth),
+        undefined,
+        'settled',
+        undefined,
+        undefined,
+      );
       assert.equal(result.items.length, 3, 'settled shortage + two settled overages');
       const s = result.summary;
       assert.equal(s.totalCommissions, 0);
@@ -323,7 +422,13 @@ async function main(): Promise<void> {
       await seedItem(db, 410, 5, 'commission', 1000, 'pending');
       await seedItem(db, 411, 5, 'stock_shortage', 400, 'pending');
       const { controller } = buildServices(db);
-      const result: any = await controller.getRepFinancialLedger(controllerReqFor(adminAuth), '5', undefined, undefined, undefined);
+      const result: any = await controller.getRepFinancialLedger(
+        controllerReqFor(adminAuth),
+        '5',
+        undefined,
+        undefined,
+        undefined,
+      );
       assert.equal(result.items.length, 2);
       const s = result.summary;
       assert.equal(s.totalCommissions, 1000);
@@ -343,16 +448,31 @@ async function main(): Promise<void> {
     const here = __dirname;
     // File #59 split: getRepFinancialLedger moved to the S1 slice; the
     // facade keeps only a thin delegate.
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/get-rep-financial-ledger.slice.ts'), 'utf8');
+    const vanSource = readFileSync(
+      resolve(
+        here,
+        '../../src/modules/delivery-reps/services/van-rep-financial-ledger/get-rep-financial-ledger.slice.ts',
+      ),
+      'utf8',
+    );
     assert.ok(vanSource.includes('INV-REP-LEDGER-SUMMARY-BALANCE'), 'the ledger-summary invariant is named');
     assert.ok(vanSource.includes('totalOverages'), 'overages are totalled');
     assert.ok(vanSource.includes("['cash_overage', 'stock_overage']"), 'both overage types are recognised');
-    assert.ok(vanSource.includes('repEntry.settledShortages + repEntry.pushedToPayroll'), 'settled and pushed shortages enter the per-rep net');
-    assert.ok(vanSource.includes('totalSettledShortages + totalPushedToPayroll'), 'settled and pushed shortages enter the totals net');
+    assert.ok(
+      vanSource.includes('repEntry.settledShortages + repEntry.pushedToPayroll'),
+      'settled and pushed shortages enter the per-rep net',
+    );
+    assert.ok(
+      vanSource.includes('totalSettledShortages + totalPushedToPayroll'),
+      'settled and pushed shortages enter the totals net',
+    );
     // File #30 split: getRepFinancialLedger moved to the S10
     // promotions-ledger slice; the admin facade keeps only a thin
     // delegate that forwards req itself.
-    const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-admin/van-sales-admin-promotions-ledger.ts'), 'utf8');
+    const controllerSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/van-sales-admin/van-sales-admin-promotions-ledger.ts'),
+      'utf8',
+    );
     assert.ok(controllerSource.includes('getRepFinancialLedger'), 'the ledger slice exposes the ledger endpoint');
     assert.ok(controllerSource.includes('req.authContext!'), 'the ledger slice forwards the real auth context');
     console.log('  PASS M7 source pins');

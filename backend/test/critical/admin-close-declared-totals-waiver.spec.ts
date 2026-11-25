@@ -49,29 +49,55 @@ const codeOf = (error: unknown): string => (error as { code?: string })?.code ||
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
-  const admin1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin1', permissions: [] } as unknown as AuthContext;
-  const cashier3 = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 3, username: 'cashier3', permissions: [] } as unknown as AuthContext;
+  const admin1 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 1,
+    username: 'admin1',
+    permissions: [],
+  } as unknown as AuthContext;
+  const cashier3 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'cashier',
+    userId: 3,
+    username: 'cashier3',
+    permissions: [],
+  } as unknown as AuthContext;
 
   const shiftRow = async (id: number) => {
-    const r = await pg.query<{ status: string; close_note: string }>('SELECT status, close_note FROM cashier_shifts WHERE id=$1', [id]);
+    const r = await pg.query<{ status: string; close_note: string }>(
+      'SELECT status, close_note FROM cashier_shifts WHERE id=$1',
+      [id],
+    );
     return r.rows[0];
   };
   const journalCount = async () => {
-    const r = await pg.query<{ count: string }>(`SELECT count(*) AS count FROM journal_entries WHERE source_type='cashier_shift_variance'`);
+    const r = await pg.query<{ count: string }>(
+      `SELECT count(*) AS count FROM journal_entries WHERE source_type='cashier_shift_variance'`,
+    );
     return Number(r.rows[0].count);
   };
   const shiftIdOf = async (opener: number): Promise<number> => {
     const r = await pg.query<{ id: string }>(
-      'SELECT id FROM cashier_shifts WHERE opened_by=$1 ORDER BY id DESC LIMIT 1', [opener]);
+      'SELECT id FROM cashier_shifts WHERE opened_by=$1 ORDER BY id DESC LIMIT 1',
+      [opener],
+    );
     return Number(r.rows[0].id);
   };
   const seedSale = async (id: number, channel: string, amount: number, opener = 1) => {
-    await pg.query(`INSERT INTO sales(id,tenant_id,account_id,table_number,order_type,status,payment_type,payment_channel,total,paid_amount,branch_id,created_by,created_at)
+    await pg.query(
+      `INSERT INTO sales(id,tenant_id,account_id,table_number,order_type,status,payment_type,payment_channel,total,paid_amount,branch_id,created_by,created_at)
       VALUES ($1,'t1','a1','','takeaway','posted',$2,$3,$4,$4,1,$5,now())`,
-      [id, channel, channel, amount, opener]);
+      [id, channel, channel, amount, opener],
+    );
   };
   const expectCode = async (promise: Promise<unknown>, code: string, message: string) => {
     try {
@@ -144,11 +170,24 @@ async function main() {
       INSERT INTO accounting_settings VALUES
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
     `);
-    for (const [code, type] of [[1110, 'asset'], [7110, 'revenue'], [7210, 'expense'], [1135, 'asset']] as const) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), type]);
+    for (const [code, type] of [
+      [1110, 'asset'],
+      [7110, 'revenue'],
+      [7210, 'expense'],
+      [1135, 'asset'],
+    ] as const) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        type,
+      ]);
     }
     const passwords: Record<number, string> = { 1: 'pw-admin-1', 3: 'pw-cashier-3' };
-    for (const [id, role, branch] of [[1, 'admin', null], [3, 'cashier', 1]] as const) {
+    for (const [id, role, branch] of [
+      [1, 'admin', null],
+      [3, 'cashier', 1],
+    ] as const) {
       const rec = await createPasswordRecord(passwords[id as number]);
       await pg.query(
         'INSERT INTO users(id,tenant_id,username,role,is_active,password_hash,password_salt,default_branch_id) VALUES ($1,$2,$3,$4,true,$5,$6,$7)',
@@ -163,9 +202,19 @@ async function main() {
     await seedSale(1, 'card', 100);
     await drawer.closeCashierShift(shiftAdmin, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1);
     const adminRow = await shiftRow(shiftAdmin);
-    assert.equal(adminRow.status, 'closed', 'an admin closing his own shift with Visa ops and no declared totals must close');
-    assert.ok(String(adminRow.close_note || '').includes('إقرار معفى بقرار إداري'), 'the admin close note must carry the declared-totals waiver stamp');
-    assert.ok(String(adminRow.close_note || '').includes('الفيزا'), 'the waiver stamp must name the waived Visa declaration');
+    assert.equal(
+      adminRow.status,
+      'closed',
+      'an admin closing his own shift with Visa ops and no declared totals must close',
+    );
+    assert.ok(
+      String(adminRow.close_note || '').includes('إقرار معفى بقرار إداري'),
+      'the admin close note must carry the declared-totals waiver stamp',
+    );
+    assert.ok(
+      String(adminRow.close_note || '').includes('الفيزا'),
+      'the waiver stamp must name the waived Visa declaration',
+    );
     assert.ok(String(adminRow.close_note || '').includes('admin1'), 'the waiver stamp must name the admin who closed');
 
     // ---------- Admin closes a CASHIER-opened shift with Visa ops, no declared totals: pending_review + waiver stamp. ----------
@@ -174,9 +223,19 @@ async function main() {
     await seedSale(2, 'card', 100, 3);
     await drawer.closeCashierShift(shiftCashier, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1);
     const cashierRow = await shiftRow(shiftCashier);
-    assert.equal(cashierRow.status, 'pending_review', 'an admin closing a cashier-opened shift with Visa ops and no declared totals must go to pending_review');
-    assert.ok(String(cashierRow.close_note || '').includes('إقرار معفى بقرار إداري'), 'the blind-close note must carry the declared-totals waiver stamp');
-    assert.ok(String(cashierRow.close_note || '').includes('"cardTotal":0'), 'the stored blind declaration must carry cardTotal 0 so review reconciles the full delta');
+    assert.equal(
+      cashierRow.status,
+      'pending_review',
+      'an admin closing a cashier-opened shift with Visa ops and no declared totals must go to pending_review',
+    );
+    assert.ok(
+      String(cashierRow.close_note || '').includes('إقرار معفى بقرار إداري'),
+      'the blind-close note must carry the declared-totals waiver stamp',
+    );
+    assert.ok(
+      String(cashierRow.close_note || '').includes('"cardTotal":0'),
+      'the stored blind declaration must carry cardTotal 0 so review reconciles the full delta',
+    );
 
     // ---------- Cashier closing his OWN shift without declared totals: still refused, posts nothing. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
@@ -191,12 +250,21 @@ async function main() {
     assert.equal((await shiftRow(shiftOwn)).status, 'open', 'a refused close must leave the shift open');
     assert.equal(await journalCount(), journalsBefore, 'a refused close must post no variance journal');
     // Declaring an explicit 0.00 lets the cashier close proceed to review.
-    await drawer.closeCashierShift(shiftOwn, { countedCash: 100, cardDeclaredTotal: 0, managerPin: 'pw-cashier-3' }, cashier3);
-    assert.equal((await shiftRow(shiftOwn)).status, 'pending_review', 'an explicitly entered 0.00 card total must let the cashier close proceed to review');
+    await drawer.closeCashierShift(
+      shiftOwn,
+      { countedCash: 100, cardDeclaredTotal: 0, managerPin: 'pw-cashier-3' },
+      cashier3,
+    );
+    assert.equal(
+      (await shiftRow(shiftOwn)).status,
+      'pending_review',
+      'an explicitly entered 0.00 card total must let the cashier close proceed to review',
+    );
 
     // ---------- Wiring: this spec is in both critical lists, in identical order (326 specs — the solo-admin-carrier-invoice-override spec is the last entry). ----------
     {
-      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+        .specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
@@ -213,4 +281,7 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

@@ -63,18 +63,40 @@ async function main(): Promise<void> {
 
     const now = new Date();
     const future = new Date(now.getTime() + 30 * 24 * 3600 * 1000).toISOString();
-    await anyDb.insertInto('tenants').values({ id: 't1', slug: 't1', business_name: 'Test Co', status: 'active', trial_ends_at: null }).execute();
-    await anyDb.insertInto('tenant_subscriptions').values({ tenant_id: 't1', status: 'active', ends_at: future, grace_ends_at: null }).execute();
+    await anyDb
+      .insertInto('tenants')
+      .values({ id: 't1', slug: 't1', business_name: 'Test Co', status: 'active', trial_ends_at: null })
+      .execute();
+    await anyDb
+      .insertInto('tenant_subscriptions')
+      .values({ tenant_id: 't1', status: 'active', ends_at: future, grace_ends_at: null })
+      .execute();
     await anyDb.insertInto('branches').values({ id: 1, tenant_id: 't1', name: 'Main' }).execute();
 
     const pin = await createPasswordRecord('1234');
-    await anyDb.insertInto('hr_employees').values({
-      id: 1, tenant_id: 't1', account_id: 'a1', employee_no: '001',
-      display_name: 'Emp One', first_name: 'Emp', last_name: 'One',
-      pin_hash: pin.hash, pin_salt: pin.salt, hire_date: '2020-01-01',
-      status: 'active', branch_id: 1, department_id: null, position_id: null,
-    }).execute();
-    await anyDb.insertInto('hr_employee_contacts').values({ tenant_id: 't1', employee_id: 1, value: '01000000001', contact_type: 'phone' }).execute();
+    await anyDb
+      .insertInto('hr_employees')
+      .values({
+        id: 1,
+        tenant_id: 't1',
+        account_id: 'a1',
+        employee_no: '001',
+        display_name: 'Emp One',
+        first_name: 'Emp',
+        last_name: 'One',
+        pin_hash: pin.hash,
+        pin_salt: pin.salt,
+        hire_date: '2020-01-01',
+        status: 'active',
+        branch_id: 1,
+        department_id: null,
+        position_id: null,
+      })
+      .execute();
+    await anyDb
+      .insertInto('hr_employee_contacts')
+      .values({ tenant_id: 't1', employee_id: 1, value: '01000000001', contact_type: 'phone' })
+      .execute();
 
     const service = new EmployeePortalService(db);
 

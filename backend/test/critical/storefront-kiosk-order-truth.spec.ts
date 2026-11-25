@@ -102,37 +102,70 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('tenants').values({
-    id: TENANT, slug: SLUG, activity_type: 'restaurant', plan_id: 'plan_basic',
-    extra_features: '["storefront"]', owner_phone: null,
-  }).execute();
+  await anyDb
+    .insertInto('tenants')
+    .values({
+      id: TENANT,
+      slug: SLUG,
+      activity_type: 'restaurant',
+      plan_id: 'plan_basic',
+      extra_features: '["storefront"]',
+      owner_phone: null,
+    })
+    .execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' }).execute();
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: `${TENANT}:main`, name: 'Product 101',
-    stock_qty: 100, cost_price: 10, retail_price: 50,
-    wholesale_price: 50, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      name: 'Product 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 50,
+      wholesale_price: 50,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
 }
 
 async function seedPercentOffer(db: Kysely<Database>): Promise<void> {
-  await (db as any).insertInto('product_offers').values({
-    id: 1, tenant_id: TENANT, product_id: 101, offer_type: 'percent', value: 20,
-    start_date: '2026-01-01', end_date: '2026-12-31', is_active: true,
-  }).execute();
+  await (db as any)
+    .insertInto('product_offers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      product_id: 101,
+      offer_type: 'percent',
+      value: 20,
+      start_date: '2026-01-01',
+      end_date: '2026-12-31',
+      is_active: true,
+    })
+    .execute();
 }
 
 async function openShift(db: Kysely<Database>): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    tenant_id: TENANT, account_id: `${TENANT}:main`, opened_by: 7, status: 'open',
-    branch_id: 1, location_id: null,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      opened_by: 7,
+      status: 'open',
+      branch_id: 1,
+      location_id: null,
+    })
+    .execute();
 }
 
 async function closeAllShifts(db: Kysely<Database>): Promise<void> {
-  await (db as any).updateTable('cashier_shifts').set({ status: 'closed' })
-    .where('tenant_id', '=', TENANT).execute();
+  await (db as any).updateTable('cashier_shifts').set({ status: 'closed' }).where('tenant_id', '=', TENANT).execute();
 }
 
 function buildService(db: Kysely<Database>): StorefrontService {
@@ -141,13 +174,16 @@ function buildService(db: Kysely<Database>): StorefrontService {
 }
 
 async function readOrder(db: Kysely<Database>, orderId: number): Promise<any> {
-  return (db as any).selectFrom('online_orders').selectAll()
-    .where('id', '=', orderId).executeTakeFirstOrThrow();
+  return (db as any).selectFrom('online_orders').selectAll().where('id', '=', orderId).executeTakeFirstOrThrow();
 }
 
 async function readDraftItems(db: Kysely<Database>, saleId: number): Promise<any[]> {
-  return (db as any).selectFrom('sale_items').selectAll()
-    .where('sale_id', '=', saleId).where('tenant_id', '=', TENANT).execute();
+  return (db as any)
+    .selectFrom('sale_items')
+    .selectAll()
+    .where('sale_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .execute();
 }
 
 function parseModifiers(value: unknown): any[] {
@@ -158,22 +194,47 @@ function parseModifiers(value: unknown): any[] {
 /** One optional modifier group + one priced option, linked to product 101. */
 async function seedModifierTruth(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('pos_modifier_groups').values({
-    id: 1, tenant_id: TENANT, account_id: `${TENANT}:main`, name: 'Extras',
-    selection_type: 'multiple', is_mandatory: false, min_selections: 0, max_selections: 10, is_active: true,
-  }).execute();
-  await anyDb.insertInto('pos_modifier_options').values({
-    id: 12, tenant_id: TENANT, account_id: `${TENANT}:main`, group_id: 1,
-    name: 'Mayo', price: 5, cost_price: 1, is_active: true,
-  }).execute();
-  await anyDb.insertInto('product_pos_modifiers').values({
-    id: 1, tenant_id: TENANT, account_id: `${TENANT}:main`, product_id: 101, modifier_group_id: 1,
-  }).execute();
+  await anyDb
+    .insertInto('pos_modifier_groups')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      name: 'Extras',
+      selection_type: 'multiple',
+      is_mandatory: false,
+      min_selections: 0,
+      max_selections: 10,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('pos_modifier_options')
+    .values({
+      id: 12,
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      group_id: 1,
+      name: 'Mayo',
+      price: 5,
+      cost_price: 1,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_pos_modifiers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      product_id: 101,
+      modifier_group_id: 1,
+    })
+    .execute();
 }
 
 async function countOrders(db: Kysely<Database>): Promise<number> {
-  const rows = await (db as any).selectFrom('online_orders').select('id')
-    .where('tenant_id', '=', TENANT).execute();
+  const rows = await (db as any).selectFrom('online_orders').select('id').where('tenant_id', '=', TENANT).execute();
   return rows.length;
 }
 
@@ -307,7 +368,11 @@ async function main(): Promise<void> {
         paymentMethod: 'cod',
       } as any);
       assert.equal(result.ok, true, 'the order must be created');
-      assert.equal(Number(result.totalAmount), 80, 'the response total is the server repriced total (2 x 40), not the raw 100');
+      assert.equal(
+        Number(result.totalAmount),
+        80,
+        'the response total is the server repriced total (2 x 40), not the raw 100',
+      );
       const order = await readOrder(db, Number(result.orderId));
       assert.equal(Number(order.total_amount), 80, 'the stored total is the server total');
       assert.equal(Number(result.items[0].total), 80, 'the stored line total is repriced too');
@@ -334,7 +399,11 @@ async function main(): Promise<void> {
       } as any);
       assert.equal(dineIn.ok, true, 'a dine-in order without a phone must be created');
       const dineInOrder = await readOrder(db, Number(dineIn.orderId));
-      assert.equal(dineInOrder.customer_phone, '', 'a dine-in order without a phone stores an empty phone, never a fake one');
+      assert.equal(
+        dineInOrder.customer_phone,
+        '',
+        'a dine-in order without a phone stores an empty phone, never a fake one',
+      );
       await assert.rejects(
         service.createOnlineOrder(SLUG, {
           customerName: 'عميل اختبار',
@@ -377,7 +446,11 @@ async function main(): Promise<void> {
       assert.ok(order.kitchen_draft_sale_id, 'the takeaway order links a kitchen draft sale');
       const draftItems = await readDraftItems(db, Number(order.kitchen_draft_sale_id));
       assert.equal(draftItems.length, 1, 'the draft has one line');
-      assert.deepEqual(parseModifiers(draftItems[0].modifiers), [], 'the draft line stores modifiers as an empty list, never NULL');
+      assert.deepEqual(
+        parseModifiers(draftItems[0].modifiers),
+        [],
+        'the draft line stores modifiers as an empty list, never NULL',
+      );
     } finally {
       await db.destroy();
     }
@@ -402,11 +475,18 @@ async function main(): Promise<void> {
       assert.equal(result.ok, true, 'a modifier-less dine-in order must place');
       assert.match(result.orderNumber, /^ON-/, 'the placed order has a real ON- order number');
       const order = await readOrder(db, Number(result.orderId));
-      const draft = await (db as any).selectFrom('sales').selectAll()
-        .where('id', '=', Number(order.kitchen_draft_sale_id)).executeTakeFirstOrThrow();
+      const draft = await (db as any)
+        .selectFrom('sales')
+        .selectAll()
+        .where('id', '=', Number(order.kitchen_draft_sale_id))
+        .executeTakeFirstOrThrow();
       assert.equal(draft.order_type, 'dine_in', 'the draft carries the dine-in order type');
       const draftItems = await readDraftItems(db, Number(order.kitchen_draft_sale_id));
-      assert.deepEqual(parseModifiers(draftItems[0].modifiers), [], 'the dine-in draft line stores modifiers as an empty list, never NULL');
+      assert.deepEqual(
+        parseModifiers(draftItems[0].modifiers),
+        [],
+        'the dine-in draft line stores modifiers as an empty list, never NULL',
+      );
     } finally {
       await db.destroy();
     }
@@ -437,7 +517,11 @@ async function main(): Promise<void> {
       const draftItems = await readDraftItems(db, Number(order.kitchen_draft_sale_id));
       const draftMods = parseModifiers(draftItems[0].modifiers);
       assert.equal(draftMods.length, 1, 'the draft line carries the one modifier');
-      assert.equal(Number(draftMods.find((m: any) => m.optionId === 12)?.price), 5, 'the draft carries the re-priced modifier price 5, not the spoofed 999');
+      assert.equal(
+        Number(draftMods.find((m: any) => m.optionId === 12)?.price),
+        5,
+        'the draft carries the re-priced modifier price 5, not the spoofed 999',
+      );
     } finally {
       await db.destroy();
     }

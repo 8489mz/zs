@@ -120,16 +120,16 @@ console.log('--- Claude Audit 3: Exhaustive Trip Financial Equations & Fractiona
 
 const fullTripReconciliation = reconcileTripFinancials({
   moneyDigits: 2,
-  loadedAmount: 45678.50,
-  salesAmount: 29651.00, // 18,250.75 + 11,400.25
+  loadedAmount: 45678.5,
+  salesAmount: 29651.0, // 18,250.75 + 11,400.25
   cashSales: 18250.75,
   creditSales: 11400.25,
-  fieldCollections: 6850.50,
-  returnsAmount: 1350.50,
-  cashRefunds: 450.50,
-  tripExpenses: 265.00,
+  fieldCollections: 6850.5,
+  returnsAmount: 1350.5,
+  cashRefunds: 450.5,
+  tripExpenses: 265.0,
   countedCash: 24385.75, // Exact piastre match!
-  remainingVanStockValue: 17378.00,
+  remainingVanStockValue: 17378.0,
 });
 
 assert.equal(fullTripReconciliation.expectedCash, 24385.75);
@@ -142,16 +142,16 @@ assert.equal(fullTripReconciliation.cashOverageAmount, 0);
 // Audit Scenario: Rep pockets 385.75 EGP
 const shortTripReconciliation = reconcileTripFinancials({
   moneyDigits: 2,
-  loadedAmount: 45678.50,
-  salesAmount: 29651.00,
+  loadedAmount: 45678.5,
+  salesAmount: 29651.0,
   cashSales: 18250.75,
   creditSales: 11400.25,
-  fieldCollections: 6850.50,
-  returnsAmount: 1350.50,
-  cashRefunds: 450.50,
-  tripExpenses: 265.00,
-  countedCash: 24000.00, // Shortage of 385.75 EGP
-  remainingVanStockValue: 17378.00,
+  fieldCollections: 6850.5,
+  returnsAmount: 1350.5,
+  cashRefunds: 450.5,
+  tripExpenses: 265.0,
+  countedCash: 24000.0, // Shortage of 385.75 EGP
+  remainingVanStockValue: 17378.0,
 });
 
 assert.equal(shortTripReconciliation.cashVariance, -385.75);
@@ -173,12 +173,12 @@ const baseQty = Number((inputCartonQty * cartonMultiplier).toFixed(4));
 assert.equal(baseQty, 84, 'Expected exactly 84 base units');
 
 // System pricing:
-const basePiecePrice = 12.50; // 12.50 EGP / piece
+const basePiecePrice = 12.5; // 12.50 EGP / piece
 const cartonAuthorizedPrice = Number((basePiecePrice * cartonMultiplier).toFixed(2));
-assert.equal(cartonAuthorizedPrice, 300.00); // 300 EGP per carton
+assert.equal(cartonAuthorizedPrice, 300.0); // 300 EGP per carton
 
 const lineTotal = Number((cartonAuthorizedPrice * inputCartonQty).toFixed(2));
-assert.equal(lineTotal, 1050.00); // 3.5 * 300 = 1,050 EGP
+assert.equal(lineTotal, 1050.0); // 3.5 * 300 = 1,050 EGP
 
 // ============================================================================
 // AUDIT VECTOR 5: Multi-Warehouse Auto-Split with Default Fallback Robustness
@@ -216,15 +216,15 @@ assert.equal(isValidCoordinatePair(0, 0), false);
 assert.equal(isValidCoordinatePair(0.00001, 0.00001), false);
 
 // Latitude extremes
-assert.equal(isValidCoordinatePair(90.0000, 31.2357), true);
+assert.equal(isValidCoordinatePair(90.0, 31.2357), true);
 assert.equal(isValidCoordinatePair(90.0001, 31.2357), false);
-assert.equal(isValidCoordinatePair(-90.0000, 31.2357), true);
+assert.equal(isValidCoordinatePair(-90.0, 31.2357), true);
 assert.equal(isValidCoordinatePair(-90.0001, 31.2357), false);
 
 // Longitude extremes
-assert.equal(isValidCoordinatePair(30.0444, 180.0000), true);
+assert.equal(isValidCoordinatePair(30.0444, 180.0), true);
 assert.equal(isValidCoordinatePair(30.0444, 180.0001), false);
-assert.equal(isValidCoordinatePair(30.0444, -180.0000), true);
+assert.equal(isValidCoordinatePair(30.0444, -180.0), true);
 assert.equal(isValidCoordinatePair(30.0444, -180.0001), false);
 
 // Non-finite values
@@ -245,7 +245,7 @@ console.log('--- Claude Audit 7: Commission Achievement Tier Boundary Invariants
 // Case A: Actual sales = 99,999.99 EGP (Achievement rate = 99.999% -> Bonus NOT eligible!)
 const commSubTarget = calculateRepCommissionMetrics({
   actualSales: 99999.99,
-  salesTarget: 100000.00,
+  salesTarget: 100000.0,
   actualCollections: 50000,
   salesCommissionRatePercent: 1.0,
   collectionCommissionRatePercent: 0.5,
@@ -255,12 +255,12 @@ const commSubTarget = calculateRepCommissionMetrics({
 
 assert.equal(commSubTarget.isTargetBonusEligible, false);
 assert.equal(commSubTarget.targetBonusAmount, 0);
-assert.equal(commSubTarget.salesCommissionAmount, 1000.00); // 99,999.99 * 1.0% = 1,000.00 rounded
+assert.equal(commSubTarget.salesCommissionAmount, 1000.0); // 99,999.99 * 1.0% = 1,000.00 rounded
 
 // Case B: Actual sales = 100,000.00 EGP exact (Achievement rate = 100% -> Bonus ELIGIBLE!)
 const commExactTarget = calculateRepCommissionMetrics({
-  actualSales: 100000.00,
-  salesTarget: 100000.00,
+  actualSales: 100000.0,
+  salesTarget: 100000.0,
   actualCollections: 50000,
   salesCommissionRatePercent: 1.0,
   collectionCommissionRatePercent: 0.5,
@@ -269,7 +269,7 @@ const commExactTarget = calculateRepCommissionMetrics({
 });
 
 assert.equal(commExactTarget.isTargetBonusEligible, true);
-assert.equal(commExactTarget.targetBonusAmount, 1000.00); // 100,000 * 1.0% = 1,000.00
-assert.equal(commExactTarget.totalEarnedCommission, 2250.00); // 1,000 sales + 250 collections + 1,000 bonus
+assert.equal(commExactTarget.targetBonusAmount, 1000.0); // 100,000 * 1.0% = 1,000.00
+assert.equal(commExactTarget.totalEarnedCommission, 2250.0); // 1,000 sales + 250 collections + 1,000 bonus
 
 console.log('>>> [SUCCESS] ALL 7 CLAUDE OPUS FORENSIC AUDIT VECTORS PASSED 100% WITH ZERO FLAWS!');

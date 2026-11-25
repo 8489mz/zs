@@ -87,8 +87,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice', 'canDiscount'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice', 'canDiscount'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -155,49 +160,119 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'taxRate', value: '14' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
   // The admin holds an open shift: createSale's cash-sale gate
   // (INV-ADMIN-CASH-SALE-SHIFT-REQUIRED) requires it for the
   // dashboard-source cash payloads the conversions build.
-  await anyDb.insertInto('cashier_shifts').values({
-    tenant_id: TENANT, account_id: ACCOUNT, opened_by: 1, status: 'open', branch_id: 1,
-  }).execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      opened_by: 1,
+      status: 'open',
+      branch_id: 1,
+    })
+    .execute();
 }
 
 async function seedProducts(db: Kysely<Database>, itemType = 'product'): Promise<void> {
   const anyDb = db as any;
-  for (const [id, retail] of [[101, 50], [102, 30]] as const) {
-    await anyDb.insertInto('products').values({
-      id, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${id}`,
-      stock_qty: 100, cost_price: itemType === 'service' ? 0 : 10, retail_price: retail,
-      wholesale_price: retail, min_selling_price: 0,
-      is_active: true, item_type: itemType,
-    }).execute();
+  for (const [id, retail] of [
+    [101, 50],
+    [102, 30],
+  ] as const) {
+    await anyDb
+      .insertInto('products')
+      .values({
+        id,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: `Product ${id}`,
+        stock_qty: 100,
+        cost_price: itemType === 'service' ? 0 : 10,
+        retail_price: retail,
+        wholesale_price: retail,
+        min_selling_price: 0,
+        is_active: true,
+        item_type: itemType,
+      })
+      .execute();
     if (itemType !== 'service') {
-      await anyDb.insertInto('product_location_stock').values({
-        tenant_id: TENANT, account_id: ACCOUNT, product_id: id, branch_id: 1, location_id: 10, qty: 100,
-      }).execute();
+      await anyDb
+        .insertInto('product_location_stock')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          product_id: id,
+          branch_id: 1,
+          location_id: 10,
+          qty: 100,
+        })
+        .execute();
     }
   }
 }
 
-function buildServices(db: Kysely<Database>): { salesWrite: SalesWriteService; orders: SalesOrdersService; quotations: QuotationsService } {
+function buildServices(db: Kysely<Database>): {
+  salesWrite: SalesWriteService;
+  orders: SalesOrdersService;
+  quotations: QuotationsService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -212,8 +287,16 @@ function buildServices(db: Kysely<Database>): { salesWrite: SalesWriteService; o
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
   const salesWrite = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const orders = new SalesOrdersService(db, salesWrite);
   const quotations = new QuotationsService(db, salesWrite);
@@ -222,58 +305,128 @@ function buildServices(db: Kysely<Database>): { salesWrite: SalesWriteService; o
 
 async function seedOrderItems(db: Kysely<Database>, orderId: number): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('sales_order_items').values({
-    tenant_id: TENANT, account_id: ACCOUNT, sales_order_id: orderId,
-    product_id: 101, product_name: 'Product 101', quantity: 2, unit_price: 50, discount: 5, total: 95,
-  }).execute();
-  await anyDb.insertInto('sales_order_items').values({
-    tenant_id: TENANT, account_id: ACCOUNT, sales_order_id: orderId,
-    product_id: 102, product_name: 'Product 102', quantity: 1, unit_price: 30, discount: 5, total: 25,
-  }).execute();
+  await anyDb
+    .insertInto('sales_order_items')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      sales_order_id: orderId,
+      product_id: 101,
+      product_name: 'Product 101',
+      quantity: 2,
+      unit_price: 50,
+      discount: 5,
+      total: 95,
+    })
+    .execute();
+  await anyDb
+    .insertInto('sales_order_items')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      sales_order_id: orderId,
+      product_id: 102,
+      product_name: 'Product 102',
+      quantity: 1,
+      unit_price: 30,
+      discount: 5,
+      total: 25,
+    })
+    .execute();
 }
 
 async function seedQuotationItems(db: Kysely<Database>, quotationId: number): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('quotation_items').values({
-    tenant_id: TENANT, account_id: ACCOUNT, quotation_id: quotationId,
-    product_id: 101, product_name: 'Product 101', quantity: 2, unit_price: 50, discount: 5, total: 95,
-  }).execute();
-  await anyDb.insertInto('quotation_items').values({
-    tenant_id: TENANT, account_id: ACCOUNT, quotation_id: quotationId,
-    product_id: 102, product_name: 'Product 102', quantity: 1, unit_price: 30, discount: 5, total: 25,
-  }).execute();
+  await anyDb
+    .insertInto('quotation_items')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      quotation_id: quotationId,
+      product_id: 101,
+      product_name: 'Product 101',
+      quantity: 2,
+      unit_price: 50,
+      discount: 5,
+      total: 95,
+    })
+    .execute();
+  await anyDb
+    .insertInto('quotation_items')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      quotation_id: quotationId,
+      product_id: 102,
+      product_name: 'Product 102',
+      quantity: 1,
+      unit_price: 30,
+      discount: 5,
+      total: 25,
+    })
+    .execute();
 }
 
 async function readSale(db: Kysely<Database>, saleId: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll()
-    .where('id', '=', saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function readSaleItems(db: Kysely<Database>, saleId: number): Promise<Array<any>> {
-  return (db as any).selectFrom('sale_items').selectAll()
-    .where('sale_id', '=', saleId).where('tenant_id', '=', TENANT)
-    .orderBy('id', 'asc').execute();
+  return (db as any)
+    .selectFrom('sale_items')
+    .selectAll()
+    .where('sale_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .orderBy('id', 'asc')
+    .execute();
 }
 
-async function journalLeg(db: Kysely<Database>, saleId: number, accountId: number, side: 'debit' | 'credit'): Promise<number> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', 'sale').where('source_id', '=', saleId).execute();
+async function journalLeg(
+  db: Kysely<Database>,
+  saleId: number,
+  accountId: number,
+  side: 'debit' | 'credit',
+): Promise<number> {
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', 'sale')
+    .where('source_id', '=', saleId)
+    .execute();
   assert.equal(entries.length, 1, 'exactly one posted sale journal');
-  const rows = await (db as any).selectFrom('journal_entry_lines').select([side])
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select([side])
     .where('journal_entry_id', '=', entries[0].id)
-    .where('account_id', '=', accountId).execute();
+    .where('account_id', '=', accountId)
+    .execute();
   return rows.reduce((sum: number, row: any) => sum + Number(row[side] || 0), 0);
 }
 
 async function journalTotals(db: Kysely<Database>, saleId: number): Promise<{ debit: number; credit: number }> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', 'sale').where('source_id', '=', saleId).execute();
-  const rows = await (db as any).selectFrom('journal_entry_lines').select(['debit', 'credit'])
-    .where('journal_entry_id', '=', entries[0].id).execute();
-  return rows.reduce((acc: { debit: number; credit: number }, row: any) => ({
-    debit: acc.debit + Number(row.debit || 0),
-    credit: acc.credit + Number(row.credit || 0),
-  }), { debit: 0, credit: 0 });
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', 'sale')
+    .where('source_id', '=', saleId)
+    .execute();
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['debit', 'credit'])
+    .where('journal_entry_id', '=', entries[0].id)
+    .execute();
+  return rows.reduce(
+    (acc: { debit: number; credit: number }, row: any) => ({
+      debit: acc.debit + Number(row.debit || 0),
+      credit: acc.credit + Number(row.credit || 0),
+    }),
+    { debit: 0, credit: 0 },
+  );
 }
 
 async function main(): Promise<void> {
@@ -285,12 +438,21 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedProducts(db);
       const { salesWrite } = buildServices(db);
-      const created: any = await salesWrite.createSale({
-        items: [{ productId: 101, qty: 2, price: 50, priceType: 'retail', unitMultiplier: 1 }],
-        discount: 33.33, taxRate: 14, paymentType: 'cash', paymentChannel: 'cash',
-        payments: [{ paymentChannel: 'cash', amount: 76 }],
-        tenderedAmount: 76, branchId: 1, locationId: 10, source: 'dashboard',
-      }, adminAuth);
+      const created: any = await salesWrite.createSale(
+        {
+          items: [{ productId: 101, qty: 2, price: 50, priceType: 'retail', unitMultiplier: 1 }],
+          discount: 33.33,
+          taxRate: 14,
+          paymentType: 'cash',
+          paymentChannel: 'cash',
+          payments: [{ paymentChannel: 'cash', amount: 76 }],
+          tenderedAmount: 76,
+          branchId: 1,
+          locationId: 10,
+          source: 'dashboard',
+        },
+        adminAuth,
+      );
       const saleId = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
       assert.ok(Number.isInteger(saleId) && saleId > 0, 'createSale must return a sale id');
       const sale = await readSale(db, saleId);
@@ -298,7 +460,11 @@ async function main(): Promise<void> {
       assert.equal(Number(sale.total), 76, 'stored total is the pre-rounded book figure');
       assert.equal(await journalLeg(db, saleId, 2120, 'credit'), 9.33, 'posted tax leg equals the stored tax');
       assert.equal(await journalLeg(db, saleId, 4100, 'credit'), 100, 'posted revenue leg equals the gross subtotal');
-      assert.equal(await journalLeg(db, saleId, 4300, 'debit'), 33.33, 'posted discount leg equals the header discount');
+      assert.equal(
+        await journalLeg(db, saleId, 4300, 'debit'),
+        33.33,
+        'posted discount leg equals the header discount',
+      );
       assert.equal(await journalLeg(db, saleId, 1110, 'debit'), 76, 'posted cash leg equals the collected total');
       assert.equal(await journalLeg(db, saleId, 5100, 'debit'), 20, 'posted COGS leg covers both units at cost');
       const totals = await journalTotals(db, saleId);
@@ -321,11 +487,20 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedProducts(db, 'service');
       const { orders } = buildServices(db);
-      await (db as any).insertInto('sales_orders').values({
-        id: 1, tenant_id: TENANT, account_id: ACCOUNT, order_number: 'SO-1',
-        customer_name: 'Cust', branch_id: 1, discount_amount: 10, total_amount: 120,
-        status: 'confirmed',
-      }).execute();
+      await (db as any)
+        .insertInto('sales_orders')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          order_number: 'SO-1',
+          customer_name: 'Cust',
+          branch_id: 1,
+          discount_amount: 10,
+          total_amount: 120,
+          status: 'confirmed',
+        })
+        .execute();
       await seedOrderItems(db, 1);
       const result: any = await orders.convertToSale(1, adminAuth);
       const saleId = Number(result?.saleId);
@@ -339,8 +514,11 @@ async function main(): Promise<void> {
       assert.equal(Number(items[1].net_line_total), 25, 'second line net carries its 5 discount');
       assert.equal(await journalLeg(db, saleId, 1110, 'debit'), 120, 'cash leg equals the converted total');
       assert.equal(await journalLeg(db, saleId, 4100, 'credit'), 120, 'revenue leg equals the converted total');
-      const order = await (db as any).selectFrom('sales_orders').select(['status', 'sale_id'])
-        .where('id', '=', 1).executeTakeFirstOrThrow();
+      const order = await (db as any)
+        .selectFrom('sales_orders')
+        .select(['status', 'sale_id'])
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(order.status, 'converted', 'the order is marked converted');
       assert.equal(Number(order.sale_id), saleId, 'the order links the posted sale');
     } finally {
@@ -357,16 +535,35 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await seedProducts(db, 'service');
-      await (db as any).insertInto('customers').values({
-        id: 201, tenant_id: TENANT, account_id: ACCOUNT, name: 'Credit Cust',
-        balance: 0, credit_limit: 1000, is_credit_blocked: false,
-      }).execute();
+      await (db as any)
+        .insertInto('customers')
+        .values({
+          id: 201,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Credit Cust',
+          balance: 0,
+          credit_limit: 1000,
+          is_credit_blocked: false,
+        })
+        .execute();
       const { orders } = buildServices(db);
-      await (db as any).insertInto('sales_orders').values({
-        id: 2, tenant_id: TENANT, account_id: ACCOUNT, order_number: 'SO-2',
-        customer_id: 201, customer_name: 'Credit Cust', branch_id: 1,
-        discount_amount: 10, total_amount: 120, status: 'confirmed', payment_terms: 'credit',
-      }).execute();
+      await (db as any)
+        .insertInto('sales_orders')
+        .values({
+          id: 2,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          order_number: 'SO-2',
+          customer_id: 201,
+          customer_name: 'Credit Cust',
+          branch_id: 1,
+          discount_amount: 10,
+          total_amount: 120,
+          status: 'confirmed',
+          payment_terms: 'credit',
+        })
+        .execute();
       await seedOrderItems(db, 2);
       const result: any = await orders.convertToSale(2, adminAuth);
       const saleId = Number(result?.saleId);
@@ -375,13 +572,19 @@ async function main(): Promise<void> {
       assert.equal(sale.payment_type, 'credit', 'the sale carries the stored credit terms');
       assert.equal(Number(sale.paid_amount), 0, 'a credit sale collects nothing at conversion');
       assert.equal(Number(sale.total), 120, 'the credit total carries the line discounts');
-      const ledger = await (db as any).selectFrom('customer_ledger').selectAll()
-        .where('customer_id', '=', 201).execute();
+      const ledger = await (db as any)
+        .selectFrom('customer_ledger')
+        .selectAll()
+        .where('customer_id', '=', 201)
+        .execute();
       assert.equal(ledger.length, 1, 'exactly one customer-ledger entry');
       assert.equal(Number(ledger[0].amount), 120, 'the ledger entry is the converted total');
       assert.equal(Number(ledger[0].balance_after), 120, 'the ledger balance carries the converted total');
-      const customer = await (db as any).selectFrom('customers').select('balance')
-        .where('id', '=', 201).executeTakeFirstOrThrow();
+      const customer = await (db as any)
+        .selectFrom('customers')
+        .select('balance')
+        .where('id', '=', 201)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(customer.balance), 120, 'the customer balance carries the converted total');
       assert.equal(await journalLeg(db, saleId, 1130, 'debit'), 120, 'receivable leg equals the converted total');
       assert.equal(await journalLeg(db, saleId, 4100, 'credit'), 120, 'revenue leg equals the converted total');
@@ -399,11 +602,20 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedProducts(db, 'service');
       const { quotations } = buildServices(db);
-      await (db as any).insertInto('quotations').values({
-        id: 1, tenant_id: TENANT, account_id: ACCOUNT, quotation_number: 'Q-1',
-        customer_name: 'Cust', branch_id: 1, discount_amount: 10, total_amount: 120,
-        status: 'draft',
-      }).execute();
+      await (db as any)
+        .insertInto('quotations')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          quotation_number: 'Q-1',
+          customer_name: 'Cust',
+          branch_id: 1,
+          discount_amount: 10,
+          total_amount: 120,
+          status: 'draft',
+        })
+        .execute();
       await seedQuotationItems(db, 1);
       const result: any = await quotations.convertToSale(1, adminAuth);
       const saleId = Number(result?.saleId);
@@ -414,8 +626,11 @@ async function main(): Promise<void> {
       assert.equal(Number(items[0].net_line_total), 95, 'first line net carries its 5 discount');
       assert.equal(Number(items[1].net_line_total), 25, 'second line net carries its 5 discount');
       assert.equal(await journalLeg(db, saleId, 1110, 'debit'), 120, 'cash leg equals the converted total');
-      const quotation = await (db as any).selectFrom('quotations').select(['status', 'sale_id'])
-        .where('id', '=', 1).executeTakeFirstOrThrow();
+      const quotation = await (db as any)
+        .selectFrom('quotations')
+        .select(['status', 'sale_id'])
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(quotation.status, 'converted', 'the quotation is marked converted');
       assert.equal(Number(quotation.sale_id), saleId, 'the quotation links the posted sale');
     } finally {
@@ -435,11 +650,20 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedProducts(db);
       const { orders } = buildServices(db);
-      await (db as any).insertInto('sales_orders').values({
-        id: 3, tenant_id: TENANT, account_id: ACCOUNT, order_number: 'SO-3',
-        customer_name: 'Cust', branch_id: 1, discount_amount: 10, total_amount: 120,
-        status: 'confirmed',
-      }).execute();
+      await (db as any)
+        .insertInto('sales_orders')
+        .values({
+          id: 3,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          order_number: 'SO-3',
+          customer_name: 'Cust',
+          branch_id: 1,
+          discount_amount: 10,
+          total_amount: 120,
+          status: 'confirmed',
+        })
+        .execute();
       await seedOrderItems(db, 3);
       const result: any = await orders.convertToSale(3, adminAuth);
       const saleId = Number(result?.saleId);
@@ -447,24 +671,33 @@ async function main(): Promise<void> {
       const sale = await readSale(db, saleId);
       assert.equal(Number(sale.total), 120, 'converted total carries the line discounts');
       assert.equal(Number(sale.location_id), 10, 'the posted sale carries the branch default location');
-      const locStock = await (db as any).selectFrom('product_location_stock')
-        .select(['product_id', 'qty']).where('tenant_id', '=', TENANT)
+      const locStock = await (db as any)
+        .selectFrom('product_location_stock')
+        .select(['product_id', 'qty'])
+        .where('tenant_id', '=', TENANT)
         .where('location_id', '=', 10)
-        .orderBy('product_id', 'asc').execute();
+        .orderBy('product_id', 'asc')
+        .execute();
       assert.equal(Number(locStock[0].qty), 98, 'location stock deducts the 2 sold units');
       assert.equal(Number(locStock[1].qty), 99, 'location stock deducts the 1 sold unit');
-      const allocations = await (db as any).selectFrom('sale_line_stock_allocations')
+      const allocations = await (db as any)
+        .selectFrom('sale_line_stock_allocations')
         .select(['product_id', 'location_id', 'quantity'])
-        .where('sale_id', '=', saleId).orderBy('product_id', 'asc').execute();
+        .where('sale_id', '=', saleId)
+        .orderBy('product_id', 'asc')
+        .execute();
       assert.equal(allocations.length, 2, 'one stock allocation per converted line');
       assert.equal(Number(allocations[0].location_id), 10, 'first allocation targets the default location');
       assert.equal(Number(allocations[0].quantity), 2, 'first allocation deducts 2 units');
       assert.equal(Number(allocations[1].location_id), 10, 'second allocation targets the default location');
       assert.equal(Number(allocations[1].quantity), 1, 'second allocation deducts 1 unit');
-      const movements = await (db as any).selectFrom('stock_movements')
+      const movements = await (db as any)
+        .selectFrom('stock_movements')
         .select(['product_id', 'qty', 'location_id'])
-        .where('reference_type', '=', 'sale').where('reference_id', '=', saleId)
-        .orderBy('product_id', 'asc').execute();
+        .where('reference_type', '=', 'sale')
+        .where('reference_id', '=', saleId)
+        .orderBy('product_id', 'asc')
+        .execute();
       assert.equal(movements.length, 2, 'one stock movement per converted line');
       assert.equal(Number(movements[0].qty), -2, 'first movement removes 2 units');
       assert.equal(Number(movements[0].location_id), 10, 'first movement is booked at the default location');
@@ -483,25 +716,43 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedProducts(db);
       const { quotations } = buildServices(db);
-      await (db as any).insertInto('quotations').values({
-        id: 2, tenant_id: TENANT, account_id: ACCOUNT, quotation_number: 'Q-2',
-        customer_name: 'Cust', branch_id: 1, discount_amount: 10, total_amount: 120,
-        status: 'draft',
-      }).execute();
+      await (db as any)
+        .insertInto('quotations')
+        .values({
+          id: 2,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          quotation_number: 'Q-2',
+          customer_name: 'Cust',
+          branch_id: 1,
+          discount_amount: 10,
+          total_amount: 120,
+          status: 'draft',
+        })
+        .execute();
       await seedQuotationItems(db, 2);
       const result: any = await quotations.convertToSale(2, adminAuth);
       const saleId = Number(result?.saleId);
       assert.ok(Number.isInteger(saleId) && saleId > 0, 'conversion must return a sale id');
-      const locStock = await (db as any).selectFrom('product_location_stock')
-        .select(['product_id', 'qty']).where('tenant_id', '=', TENANT)
+      const locStock = await (db as any)
+        .selectFrom('product_location_stock')
+        .select(['product_id', 'qty'])
+        .where('tenant_id', '=', TENANT)
         .where('location_id', '=', 10)
-        .orderBy('product_id', 'asc').execute();
+        .orderBy('product_id', 'asc')
+        .execute();
       assert.equal(Number(locStock[0].qty), 98, 'location stock deducts the 2 sold units');
       assert.equal(Number(locStock[1].qty), 99, 'location stock deducts the 1 sold unit');
-      const allocations = await (db as any).selectFrom('sale_line_stock_allocations')
-        .select(['location_id']).where('sale_id', '=', saleId).execute();
+      const allocations = await (db as any)
+        .selectFrom('sale_line_stock_allocations')
+        .select(['location_id'])
+        .where('sale_id', '=', saleId)
+        .execute();
       assert.equal(allocations.length, 2, 'one stock allocation per converted line');
-      assert.ok(allocations.every((a: any) => Number(a.location_id) === 10), 'allocations target the default location');
+      assert.ok(
+        allocations.every((a: any) => Number(a.location_id) === 10),
+        'allocations target the default location',
+      );
       assert.equal(await journalLeg(db, saleId, 5100, 'debit'), 30, 'COGS leg covers 3 units at cost 10');
     } finally {
       await db.destroy();
@@ -514,22 +765,48 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const writeSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale/compute-totals-and-gates.ts'), 'utf8');
+    const writeSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/create-sale/compute-totals-and-gates.ts'),
+      'utf8',
+    );
     assert.ok(writeSource.includes('roundSaleInvoiceTotals'), 'createSale rounds totals through the shared seam');
     // File #119: the order-conversion body moved to
     // sales-orders-conversion.ts — the facade holds none of these pins.
-    const ordersSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-orders/sales-orders-conversion.ts'), 'utf8');
+    const ordersSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/sales-orders/sales-orders-conversion.ts'),
+      'utf8',
+    );
     assert.ok(ordersSource.includes('resolveConversionDiscounts'), 'order conversion reconciles line discounts');
     assert.ok(ordersSource.includes('resolveConversionPaymentTerms'), 'order conversion carries payment terms');
     assert.ok(ordersSource.includes('lineDiscount'), 'order conversion payloads carry lineDiscount');
-    const quotationsSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/quotations.service.ts'), 'utf8');
-    assert.ok(quotationsSource.includes('resolveConversionDiscounts'), 'quotation conversion reconciles line discounts');
+    const quotationsSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/quotations.service.ts'),
+      'utf8',
+    );
+    assert.ok(
+      quotationsSource.includes('resolveConversionDiscounts'),
+      'quotation conversion reconciles line discounts',
+    );
     assert.ok(quotationsSource.includes('lineDiscount'), 'quotation conversion payloads carry lineDiscount');
-    assert.ok(ordersSource.includes('INV-CONVERSION-STOCK-DEDUCTION'), 'order conversion carries the branch default location');
-    assert.ok(quotationsSource.includes('INV-CONVERSION-STOCK-DEDUCTION'), 'quotation conversion carries the branch default location');
+    assert.ok(
+      ordersSource.includes('INV-CONVERSION-STOCK-DEDUCTION'),
+      'order conversion carries the branch default location',
+    );
+    assert.ok(
+      quotationsSource.includes('INV-CONVERSION-STOCK-DEDUCTION'),
+      'quotation conversion carries the branch default location',
+    );
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-CONVERSION-INTEGRATION-GUARD').length - 1, 1, 'the invariant entry must exist exactly once');
-    assert.equal(invariants.split('INV-CONVERSION-STOCK-DEDUCTION').length - 1, 1, 'the stock-deduction invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-CONVERSION-INTEGRATION-GUARD').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
+    assert.equal(
+      invariants.split('INV-CONVERSION-STOCK-DEDUCTION').length - 1,
+      1,
+      'the stock-deduction invariant entry must exist exactly once',
+    );
     console.log('  source + invariant pins passed');
   }
 

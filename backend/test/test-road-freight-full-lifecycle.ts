@@ -97,7 +97,10 @@ async function runRoadFreightLifecycleTest() {
     });
     assert(truckCalc.requiredTrucks === 2, '54,000 kg on Flatbed (28T max) must require 2 trucks');
     assert(truckCalc.limitingFactor === 'weight', 'Limiting factor must be weight');
-    assert(truckCalc.weightUtilizationPercent === 96.43, `Weight utilization must be 96.43%, got ${truckCalc.weightUtilizationPercent}`);
+    assert(
+      truckCalc.weightUtilizationPercent === 96.43,
+      `Weight utilization must be 96.43%, got ${truckCalc.weightUtilizationPercent}`,
+    );
 
     // 2. Cost calculation with tolls, fuel, and detention
     const costCalc = calculateRoadFreightCost({
@@ -206,7 +209,7 @@ async function runRoadFreightLifecycleTest() {
       marginType: 'fixed' as const,
       marginValue: 100,
       currency: 'USD',
-      exchangeRate: 48.50,
+      exchangeRate: 48.5,
       polName: inquiry.pol_name,
       podName: inquiry.pod_name,
       grossWeightKg: inquiry.gross_weight_kg,
@@ -217,7 +220,10 @@ async function runRoadFreightLifecycleTest() {
     const quotation = await freightService.createQuotation(auth, quoteDto);
     console.log(`  -> Created Road Quotation #${quotation.quotation_number} (ID: ${quotation.id})`);
     assert(Boolean(quotation.id), 'Quotation ID must exist');
-    assert(/^QUO(T)?-\d{6}-\d{4}$/.test(quotation.quotation_number), `Quotation format valid: ${quotation.quotation_number}`);
+    assert(
+      /^QUO(T)?-\d{6}-\d{4}$/.test(quotation.quotation_number),
+      `Quotation format valid: ${quotation.quotation_number}`,
+    );
     assert(quotation.transport_mode === 'road', 'Quotation transport mode must be "road"');
     console.log('  [PASS] STEP 5 PASSED: Road Quotation generated with profit margin.\n');
 
@@ -236,16 +242,22 @@ async function runRoadFreightLifecycleTest() {
     const jobDetails = await freightService.getJobById(auth, String(job.id));
     assert(
       !jobDetails.containers || jobDetails.containers.length === 0,
-      `Road Job must have ZERO ocean containers, found: ${jobDetails.containers?.length}`
+      `Road Job must have ZERO ocean containers, found: ${jobDetails.containers?.length}`,
     );
 
     // Initial Milestone Invariant: Road Freight starts with TRK_ASSIGN, not ocean BOOK
-    assert(job.milestone_status === 'TRK_ASSIGN', `Road job initial milestone must be TRK_ASSIGN, got ${job.milestone_status}`);
+    assert(
+      job.milestone_status === 'TRK_ASSIGN',
+      `Road job initial milestone must be TRK_ASSIGN, got ${job.milestone_status}`,
+    );
     const initialMilestone = jobDetails.milestones.find((m: any) => m.milestone_key === 'TRK_ASSIGN');
     assert(Boolean(initialMilestone), 'Initial TRK_ASSIGN milestone record must exist');
     assert(
-      Boolean(initialMilestone?.milestone_title.includes('النقل البري') || initialMilestone?.milestone_title.includes('Truck')),
-      `Initial milestone title must refer to road transport: ${initialMilestone?.milestone_title}`
+      Boolean(
+        initialMilestone?.milestone_title.includes('النقل البري') ||
+        initialMilestone?.milestone_title.includes('Truck'),
+      ),
+      `Initial milestone title must refer to road transport: ${initialMilestone?.milestone_title}`,
     );
 
     // Cost center created
@@ -256,17 +268,22 @@ async function runRoadFreightLifecycleTest() {
       bookingNumber: 'CMR-EG-261009-001',
     });
 
-    await db.insertInto('maritime_job_documents').values({
-      tenant_id: tenantId,
-      job_id: String(job.id),
-      doc_type: 'other',
-      title: 'إثبات التسليم بوليصة CMR موقعة POD',
-      file_name: 'cmr-signed-001.pdf',
-      mime_type: 'application/pdf',
-      file_url: 'https://storage.z-systems.io/pods/cmr-signed-001.pdf',
-    }).execute();
+    await db
+      .insertInto('maritime_job_documents')
+      .values({
+        tenant_id: tenantId,
+        job_id: String(job.id),
+        doc_type: 'other',
+        title: 'إثبات التسليم بوليصة CMR موقعة POD',
+        file_name: 'cmr-signed-001.pdf',
+        mime_type: 'application/pdf',
+        file_url: 'https://storage.z-systems.io/pods/cmr-signed-001.pdf',
+      })
+      .execute();
 
-    console.log('  [PASS] STEP 6 PASSED: Road Job created with zero containers, initial TRK_ASSIGN milestone, and CMR booking number.\n');
+    console.log(
+      '  [PASS] STEP 6 PASSED: Road Job created with zero containers, initial TRK_ASSIGN milestone, and CMR booking number.\n',
+    );
 
     // -------------------------------------------------------------------------
     // STEP 7: Dispatch Inland Trucking Trips (تسيير رحلات النقل البري للشاحنتين)
@@ -301,9 +318,14 @@ async function runRoadFreightLifecycleTest() {
 
     assert(Boolean(trip.id), 'Trip 1 ID must exist');
     assert(Boolean(trip2.id), 'Trip 2 ID must exist');
-    assert(/^TRIP-\d{6}-\d{4}$/.test(trip.trip_number), `Trip number must follow TRIP-YYMMDD-XXXX format: ${trip.trip_number}`);
+    assert(
+      /^TRIP-\d{6}-\d{4}$/.test(trip.trip_number),
+      `Trip number must follow TRIP-YYMMDD-XXXX format: ${trip.trip_number}`,
+    );
     assert(trip.trip_status === 'assigned', 'Trip status must be "assigned"');
-    console.log('  [PASS] STEP 7 PASSED: Both required Inland Trucking Trips created with standard sequence numbering.\n');
+    console.log(
+      '  [PASS] STEP 7 PASSED: Both required Inland Trucking Trips created with standard sequence numbering.\n',
+    );
 
     // -------------------------------------------------------------------------
     // STEP 8: Real-Time Trip Status Progression & Milestone Auto-Sync
@@ -317,7 +339,10 @@ async function runRoadFreightLifecycleTest() {
       notes: 'بدء تحميل وتربيط البضاعة وتأمين الأحزمة',
     });
     const jobAfterLoading = await freightService.getJobById(auth, String(job.id));
-    assert(jobAfterLoading.milestone_status === 'TRK_LOADED', `Job milestone must be TRK_LOADED, got ${jobAfterLoading.milestone_status}`);
+    assert(
+      jobAfterLoading.milestone_status === 'TRK_LOADED',
+      `Job milestone must be TRK_LOADED, got ${jobAfterLoading.milestone_status}`,
+    );
     const loadedMilestone = jobAfterLoading.milestones.find((m: any) => m.milestone_key === 'TRK_LOADED');
     assert(Boolean(loadedMilestone), 'TRK_LOADED milestone record must be logged');
 
@@ -328,7 +353,10 @@ async function runRoadFreightLifecycleTest() {
       notes: 'تحركت الشاحنة على الطريق الدائري الأوسطي متجهة للعاشر من رمضان',
     });
     const jobAfterDispatch = await freightService.getJobById(auth, String(job.id));
-    assert(jobAfterDispatch.milestone_status === 'TRK_DISPATCH', `Job milestone must be TRK_DISPATCH, got ${jobAfterDispatch.milestone_status}`);
+    assert(
+      jobAfterDispatch.milestone_status === 'TRK_DISPATCH',
+      `Job milestone must be TRK_DISPATCH, got ${jobAfterDispatch.milestone_status}`,
+    );
     const dispatchMilestone = jobAfterDispatch.milestones.find((m: any) => m.milestone_key === 'TRK_DISPATCH');
     assert(Boolean(dispatchMilestone), 'TRK_DISPATCH milestone record must be logged');
 
@@ -340,7 +368,10 @@ async function runRoadFreightLifecycleTest() {
       notes: 'وصلت الشاحنة وتم التفريغ بمستودع العميل وتوقيع إشعار التسليم',
     });
     const jobAfterDelivered = await freightService.getJobById(auth, String(job.id));
-    assert(jobAfterDelivered.milestone_status === 'TRK_POD', `Job milestone must be TRK_POD, got ${jobAfterDelivered.milestone_status}`);
+    assert(
+      jobAfterDelivered.milestone_status === 'TRK_POD',
+      `Job milestone must be TRK_POD, got ${jobAfterDelivered.milestone_status}`,
+    );
     const podMilestone = jobAfterDelivered.milestones.find((m: any) => m.milestone_key === 'TRK_POD');
     assert(Boolean(podMilestone), 'TRK_POD milestone record must be logged');
 
@@ -353,8 +384,14 @@ async function runRoadFreightLifecycleTest() {
     const finalJobDetails = await freightService.getJobById(auth, String(job.id));
 
     assert(Boolean(finalJobDetails.truckingTrips), 'truckingTrips array must exist on job details');
-    assert(finalJobDetails.truckingTrips.length === 2, `Expected 2 trucking trips, got ${finalJobDetails.truckingTrips.length}`);
-    assert(finalJobDetails.truckingTrips.some(t => t.trip_number === trip.trip_number), 'Attached trip number must match');
+    assert(
+      finalJobDetails.truckingTrips.length === 2,
+      `Expected 2 trucking trips, got ${finalJobDetails.truckingTrips.length}`,
+    );
+    assert(
+      finalJobDetails.truckingTrips.some((t) => t.trip_number === trip.trip_number),
+      'Attached trip number must match',
+    );
     assert(Boolean(finalJobDetails.roadFreightDefinitions), 'roadFreightDefinitions must exist');
     assert(finalJobDetails.roadFreightDefinitions.length >= 8, 'Must have at least 8 road freight definitions');
     console.log('  [PASS] STEP 9 PASSED: Job details includes truckingTrips and roadFreightDefinitions.\n');
@@ -364,13 +401,18 @@ async function runRoadFreightLifecycleTest() {
     // -------------------------------------------------------------------------
     console.log('[STEP 10] Testing releaseDeliveryOrder for Road Freight (TRK_POD)...');
     const dlvResult = await freightService.releaseDeliveryOrder(auth, String(job.id));
-    assert(dlvResult.milestone_status === 'TRK_POD', `releaseDeliveryOrder on road job must update job milestone_status to TRK_POD, got ${dlvResult.milestone_status}`);
+    assert(
+      dlvResult.milestone_status === 'TRK_POD',
+      `releaseDeliveryOrder on road job must update job milestone_status to TRK_POD, got ${dlvResult.milestone_status}`,
+    );
     const updatedJobAfterDlv = await freightService.getJobById(auth, String(job.id));
     const dlvMilestone = updatedJobAfterDlv.milestones.find((m: any) => m.milestone_key === 'TRK_POD');
     assert(Boolean(dlvMilestone), 'TRK_POD milestone must exist in job milestones');
     assert(
-      Boolean(dlvMilestone?.milestone_title.includes('بوليصة الشحن البري') || dlvMilestone?.milestone_title.includes('POD')),
-      `Milestone title must refer to road waybill / POD: ${dlvMilestone?.milestone_title}`
+      Boolean(
+        dlvMilestone?.milestone_title.includes('بوليصة الشحن البري') || dlvMilestone?.milestone_title.includes('POD'),
+      ),
+      `Milestone title must refer to road waybill / POD: ${dlvMilestone?.milestone_title}`,
     );
     console.log('  [PASS] STEP 10 PASSED: releaseDeliveryOrder appropriately registered TRK_POD for road job.\n');
 
@@ -379,12 +421,21 @@ async function runRoadFreightLifecycleTest() {
     // -------------------------------------------------------------------------
     console.log('[STEP 11] Testing WhatsApp Milestone Notifications for Road Freight...');
     const waDispatch = await freightService.getMilestoneWhatsAppMessage(auth, String(job.id), 'TRK_DISPATCH');
-    assert(Boolean(waDispatch.message.includes('البرية')), `Message must indicate road shipment ("البرية"): ${waDispatch.message}`);
-    assert(Boolean(waDispatch.message.includes('انطلقت الشاحنة')), `Message must include road dispatch context: ${waDispatch.message}`);
+    assert(
+      Boolean(waDispatch.message.includes('البرية')),
+      `Message must indicate road shipment ("البرية"): ${waDispatch.message}`,
+    );
+    assert(
+      Boolean(waDispatch.message.includes('انطلقت الشاحنة')),
+      `Message must include road dispatch context: ${waDispatch.message}`,
+    );
     assert(Boolean(waDispatch.message.includes(job.job_number)), 'Message must include job number');
 
     const waPod = await freightService.getMilestoneWhatsAppMessage(auth, String(job.id), 'TRK_POD');
-    assert(Boolean(waPod.message.includes('بوليصة الاستلام')), `POD message must include proof of delivery context: ${waPod.message}`);
+    assert(
+      Boolean(waPod.message.includes('بوليصة الاستلام')),
+      `POD message must include proof of delivery context: ${waPod.message}`,
+    );
 
     console.log('  [PASS] STEP 11 PASSED: Road Freight WhatsApp notifications generated with road templates.\n');
 

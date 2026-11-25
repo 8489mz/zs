@@ -45,10 +45,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 async function searchIds(db: Kysely<Database>, pattern: string): Promise<number[]> {
-  const query = db
-    .selectFrom('audit_logs as a')
-    .leftJoin('users as u', 'u.id', 'a.created_by')
-    .select(['a.id']);
+  const query = db.selectFrom('audit_logs as a').leftJoin('users as u', 'u.id', 'a.created_by').select(['a.id']);
   const rows = await applyAuditSearch(query, pattern).execute();
   return (rows as Array<{ id: number }>).map((r) => Number(r.id)).sort((a, b) => a - b);
 }

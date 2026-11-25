@@ -38,7 +38,13 @@ async function runMultiModuleMasterSimulation() {
   const accountingPosting = new AccountingPostingService(accountingFoundation);
 
   const manufacturingService = new ManufacturingService(db as any, tx, auditService, accountingPosting);
-  const maintenanceService = new MaintenanceService(db as any, tx, auditService, accountingPosting, accountingFoundation);
+  const maintenanceService = new MaintenanceService(
+    db as any,
+    tx,
+    auditService,
+    accountingPosting,
+    accountingFoundation,
+  );
   const tradeinService = new TradeInService(db as any, tx, auditService, accountingPosting);
   const importSalesService = new ImportSalesService(db as any);
 
@@ -65,7 +71,9 @@ async function runMultiModuleMasterSimulation() {
     permissions: ['*'],
   };
 
-  console.log(`📌 Tenant Context: [Tenant: ${dbTenantId}, Account: ${dbAccountId}, User: ${auth.username} (#${auth.userId})]\n`);
+  console.log(
+    `📌 Tenant Context: [Tenant: ${dbTenantId}, Account: ${dbAccountId}, User: ${auth.username} (#${auth.userId})]\n`,
+  );
 
   // Ensure system accounts 5400 and 1140 exist and are active for this tenant
   await sql`
@@ -125,26 +133,53 @@ async function runMultiModuleMasterSimulation() {
     console.log(`      • منتج تام الصنع (#${finishedProductId}): كابينة سيرفرات 42U (رصيد حالي: 0)`);
 
     // 3. Create Bill of Materials (BOM / قائمة المكونات)
-    const bomRes = await manufacturingService.createBom({
-      productId: finishedProductId,
-      quantity: 1, // 1 Finished Cabinet
-      overheadCost: 450, // مصاريف صناعية وعمالة وتشغيل ماكينات
-      lines: [
-        { componentProductId: rawMetalId, quantity: 4, unitName: 'لوح', unitMultiplier: 1, expectedCost: 250, wastePercentage: 5 },
-        { componentProductId: rawScrewsId, quantity: 50, unitName: 'مسمار', unitMultiplier: 1, expectedCost: 2, wastePercentage: 2 },
-        { componentProductId: rawPaintId, quantity: 2, unitName: 'لتر', unitMultiplier: 1, expectedCost: 80, wastePercentage: 0 },
-      ],
-    }, auth);
+    const bomRes = await manufacturingService.createBom(
+      {
+        productId: finishedProductId,
+        quantity: 1, // 1 Finished Cabinet
+        overheadCost: 450, // مصاريف صناعية وعمالة وتشغيل ماكينات
+        lines: [
+          {
+            componentProductId: rawMetalId,
+            quantity: 4,
+            unitName: 'لوح',
+            unitMultiplier: 1,
+            expectedCost: 250,
+            wastePercentage: 5,
+          },
+          {
+            componentProductId: rawScrewsId,
+            quantity: 50,
+            unitName: 'مسمار',
+            unitMultiplier: 1,
+            expectedCost: 2,
+            wastePercentage: 2,
+          },
+          {
+            componentProductId: rawPaintId,
+            quantity: 2,
+            unitName: 'لتر',
+            unitMultiplier: 1,
+            expectedCost: 80,
+            wastePercentage: 0,
+          },
+        ],
+      },
+      auth,
+    );
 
     const bomId = Number((bomRes as any).bomId);
     console.log(`   ✅ تم إنشاء قائمة المكونات (BOM #${bomId}) مع احتساب نسب الهالك والمصاريف الصناعية.`);
 
     // 4. Create Work Order (أمر الإنتاج) to produce 5 Cabinets
-    const woRes = await manufacturingService.createWorkOrder({
-      bomId,
-      quantityToProduce: 5,
-      note: `تشغيل دفعة إنتاج 5 كبائن سيرفرات لطلبية معتمدة #${simUid}`,
-    }, auth);
+    const woRes = await manufacturingService.createWorkOrder(
+      {
+        bomId,
+        quantityToProduce: 5,
+        note: `تشغيل دفعة إنتاج 5 كبائن سيرفرات لطلبية معتمدة #${simUid}`,
+      },
+      auth,
+    );
     const woId = Number((woRes as any).workOrderId);
     console.log(`   ✅ تم إصدار أمر الإنتاج #${woId} لإنتاج 5 كبائن (الحالة: Draft).`);
 
@@ -189,85 +224,115 @@ async function runMultiModuleMasterSimulation() {
     // 3. Create Maintenance Ticket 1: iPhone 14 Pro Max
     const ticketNo = `TKT-${simUid}-01`;
     const imeiCode1 = `356984110294${simUid}`;
-    const ticket1Res = await maintenanceService.createTicket({
-      ticketNo,
-      customerId,
-      customerName: 'أستاذ / طارق العوضي',
-      customerPhone: '01055667788',
-      deviceModel: 'iPhone 14 Pro Max 256GB Deep Purple',
-      serialNumber: imeiCode1,
-      problemDescription: 'شاشة مكسورة تماماً وتفريغ شحن سريع جداً مع سخونة',
-      deviceCondition: 'خدوش خفيفة بالإطار الخارجي',
-      expectedCost: 4500,
-      advancePayment: 1000,
-      passcode: '198420',
-      technicianNotes: 'تم الاستلام وإرسال إشعار للعميل',
-    } as any, auth);
+    const ticket1Res = await maintenanceService.createTicket(
+      {
+        ticketNo,
+        customerId,
+        customerName: 'أستاذ / طارق العوضي',
+        customerPhone: '01055667788',
+        deviceModel: 'iPhone 14 Pro Max 256GB Deep Purple',
+        serialNumber: imeiCode1,
+        problemDescription: 'شاشة مكسورة تماماً وتفريغ شحن سريع جداً مع سخونة',
+        deviceCondition: 'خدوش خفيفة بالإطار الخارجي',
+        expectedCost: 4500,
+        advancePayment: 1000,
+        passcode: '198420',
+        technicianNotes: 'تم الاستلام وإرسال إشعار للعميل',
+      } as any,
+      auth,
+    );
 
     const ticket1Id = Number((ticket1Res as any).ticket?.id || (ticket1Res as any).id);
-    console.log(`   ✅ تم فتح تذكرة صيانة #${ticket1Id} (رقم: ${ticketNo}) لجهاز iPhone 14 Pro Max (IMEI: ${imeiCode1}).`);
+    console.log(
+      `   ✅ تم فتح تذكرة صيانة #${ticket1Id} (رقم: ${ticketNo}) لجهاز iPhone 14 Pro Max (IMEI: ${imeiCode1}).`,
+    );
 
     // Add Spare Parts to Ticket
-    await maintenanceService.addPart(ticket1Id, {
-      productId: screenPartId,
-      productName: 'شاشة أصلية Apple iPhone 14 Pro Max',
-      qty: 1,
-      unitCost: 3200,
-      unitPrice: 3500,
-    } as any, auth);
+    await maintenanceService.addPart(
+      ticket1Id,
+      {
+        productId: screenPartId,
+        productName: 'شاشة أصلية Apple iPhone 14 Pro Max',
+        qty: 1,
+        unitCost: 3200,
+        unitPrice: 3500,
+      } as any,
+      auth,
+    );
 
-    await maintenanceService.addPart(ticket1Id, {
-      productId: batteryPartId,
-      productName: 'بطارية أصلية Apple MagSafe',
-      qty: 1,
-      unitCost: 700,
-      unitPrice: 900,
-    } as any, auth);
+    await maintenanceService.addPart(
+      ticket1Id,
+      {
+        productId: batteryPartId,
+        productName: 'بطارية أصلية Apple MagSafe',
+        qty: 1,
+        unitCost: 700,
+        unitPrice: 900,
+      } as any,
+      auth,
+    );
 
     console.log(`   ✅ تم إضافة قطع الغيار للتذكرة: شاشة أصلية + بطارية.`);
 
     // Progress Ticket Status: in_progress -> repaired -> delivered
-    await maintenanceService.updateTicketStatus(ticket1Id, {
-      status: 'in_progress',
-      technicianNotes: 'جاري فك الجهاز وتركيب الشاشة والبطارية الجديدة',
-    } as any, auth);
+    await maintenanceService.updateTicketStatus(
+      ticket1Id,
+      {
+        status: 'in_progress',
+        technicianNotes: 'جاري فك الجهاز وتركيب الشاشة والبطارية الجديدة',
+      } as any,
+      auth,
+    );
 
-    await maintenanceService.updateTicketStatus(ticket1Id, {
-      status: 'repaired',
-      technicianNotes: 'تم الإصلاح والاختبار بنجاح بنسبة 100% والجهاز جاهز للتسليم',
-    } as any, auth);
+    await maintenanceService.updateTicketStatus(
+      ticket1Id,
+      {
+        status: 'repaired',
+        technicianNotes: 'تم الإصلاح والاختبار بنجاح بنسبة 100% والجهاز جاهز للتسليم',
+      } as any,
+      auth,
+    );
 
-    await maintenanceService.updateTicketStatus(ticket1Id, {
-      status: 'delivered',
-      finalCost: 4400,
-      collectedAmount: 3400, // 4400 - 1000 advance
-      paymentMethod: 'cash',
-      technicianNotes: 'تم تسليم الجهاز للعميل وتجربته واستلام المتبقي نقداً مع فاتورة وضمان',
-    } as any, auth);
+    await maintenanceService.updateTicketStatus(
+      ticket1Id,
+      {
+        status: 'delivered',
+        finalCost: 4400,
+        collectedAmount: 3400, // 4400 - 1000 advance
+        paymentMethod: 'cash',
+        technicianNotes: 'تم تسليم الجهاز للعميل وتجربته واستلام المتبقي نقداً مع فاتورة وضمان',
+      } as any,
+      auth,
+    );
 
     console.log(`   ✅ تم إكمال دورة الصيانة بالكامل: فحص -> قيد العمل -> تم الإصلاح -> تم التسليم للعميل بنجاح.`);
 
     // 3. Trade-in: شراء واستبدال جهاز مستعمل من عميل
     const tradeinImei = `359874100982${simUid}`;
-    const tradeinRes = await tradeinService.createTransaction({
-      sellerName: 'أستاذ / طارق العوضي',
-      sellerPhone: '01055667788',
-      sellerNationalId: `2910405${simUid}999`,
-      deviceBrand: 'Apple',
-      deviceModel: 'iPhone 13 128GB Midnight',
-      serialNumber: tradeinImei,
-      deviceConditionState: 'like_new',
-      deviceConditionNotes: 'حالة ممتازة شاشة أصلية وبطارية 88% بدون خدوش',
-      agreedPurchasePrice: 18000,
-      transactionType: 'cash_purchase',
-      autoAddToInventory: true,
-      resalePrice: 21500,
-      paymentMethod: 'cash',
-      notes: 'تم فحص الجهاز بالكامل وشراؤه من العميل لإعادة بيعه في قسم المستعمل',
-    } as any, auth);
+    const tradeinRes = await tradeinService.createTransaction(
+      {
+        sellerName: 'أستاذ / طارق العوضي',
+        sellerPhone: '01055667788',
+        sellerNationalId: `2910405${simUid}999`,
+        deviceBrand: 'Apple',
+        deviceModel: 'iPhone 13 128GB Midnight',
+        serialNumber: tradeinImei,
+        deviceConditionState: 'like_new',
+        deviceConditionNotes: 'حالة ممتازة شاشة أصلية وبطارية 88% بدون خدوش',
+        agreedPurchasePrice: 18000,
+        transactionType: 'cash_purchase',
+        autoAddToInventory: true,
+        resalePrice: 21500,
+        paymentMethod: 'cash',
+        notes: 'تم فحص الجهاز بالكامل وشراؤه من العميل لإعادة بيعه في قسم المستعمل',
+      } as any,
+      auth,
+    );
 
     const tradeinId = Number((tradeinRes as any).transaction?.id || (tradeinRes as any).id);
-    console.log(`   ✅ تم تنفيذ عملية استبدال وشراء جهاز مستعمل (#${tradeinId}) بمبلغ 18,000 ج.م (IMEI: ${tradeinImei}).\n`);
+    console.log(
+      `   ✅ تم تنفيذ عملية استبدال وشراء جهاز مستعمل (#${tradeinId}) بمبلغ 18,000 ج.م (IMEI: ${tradeinImei}).\n`,
+    );
 
     // =========================================================================
     // MODULE 3: الاستيراد والشراكة (IMPORT CONTAINERS, PARTNERS & PROFIT POOL)
@@ -282,7 +347,7 @@ async function runMultiModuleMasterSimulation() {
       auth.userId!,
       `الحاج / محمود زكريا ${simUid}`,
       60, // 60%
-      500000 // 500,000 EGP Capital
+      500000, // 500,000 EGP Capital
     );
     const partner1Id = String((partner1Res as any).id || (partner1Res as any).partner?.id);
 
@@ -291,7 +356,7 @@ async function runMultiModuleMasterSimulation() {
       auth.userId!,
       `المهندس / حسام البدري ${simUid}`,
       40, // 40%
-      300000 // 300,000 EGP Capital
+      300000, // 300,000 EGP Capital
     );
     const partner2Id = String((partner2Res as any).id || (partner2Res as any).partner?.id);
 
@@ -300,17 +365,12 @@ async function runMultiModuleMasterSimulation() {
     console.log(`      • الشريك الثاني: المهندس حسام البدري (حصة 40% | رأس مال: 300,000 ج.م)`);
 
     // Record Capital Deposit for Partner 2: +50,000 EGP
-    await importSalesService.recordCapitalTransaction(
-      auth.tenantId!,
-      auth.userId!,
-      partner2Id,
-      {
-        type: 'DEPOSIT',
-        amount: 50000,
-        date: '2026-08-15',
-        note: 'إيداع نقدي إضافي لتمويل شحنة الشاشات الجديدة',
-      }
-    );
+    await importSalesService.recordCapitalTransaction(auth.tenantId!, auth.userId!, partner2Id, {
+      type: 'DEPOSIT',
+      amount: 50000,
+      date: '2026-08-15',
+      note: 'إيداع نقدي إضافي لتمويل شحنة الشاشات الجديدة',
+    });
     console.log(`   ✅ تم تسجيل حركة رأس مال: إيداع +50,000 ج.م للشريك الثاني (إجمالي رأس ماله: 350,000 ج.م).`);
 
     // 2. Create Import Supplier & Shipment / Container
@@ -325,8 +385,8 @@ async function runMultiModuleMasterSimulation() {
     const shipmentRes = await importSalesService.createShipment(auth.tenantId!, {
       containerNumber: shipmentCode,
       supplierId: String(chinaSupplierId),
-      exchangeRateAtArrival: 48.50,
-      pricingExchangeRate: 48.50,
+      exchangeRateAtArrival: 48.5,
+      pricingExchangeRate: 48.5,
       status: 'Pending',
     } as any);
 
@@ -361,14 +421,16 @@ async function runMultiModuleMasterSimulation() {
       factoryUnitPriceUsd: 65, // $65 USD
     });
 
-    console.log(`   ✅ تم إدراج الأصناف: 100 شاشة @ $120 ($12,000) + 200 كارت شاشة @ $65 ($13,000) = إجمالي $25,000 USD.`);
+    console.log(
+      `   ✅ تم إدراج الأصناف: 100 شاشة @ $120 ($12,000) + 200 كارت شاشة @ $65 ($13,000) = إجمالي $25,000 USD.`,
+    );
 
     // 4. Update Shipping & Clearance Costs (المصروفات والجمارك المحملة Landed Costs)
     await importSalesService.updateShipmentCosts(auth.tenantId!, auth.userId!, shipmentId, {
       shippingCostUsd: 1300, // شحن بحري بالدولار
       customsCostEgp: 120000, // جمارك وضرائب
       internalTransportCostEgp: 15000, // تخليص ونولون محلي
-      exchangeRateAtArrival: 48.50,
+      exchangeRateAtArrival: 48.5,
       status: 'Arrived', // Arrived: ترحيل المخزون والتكلفة المحملة Landed Cost
     });
     console.log(`   ✅ تم استلام الحاوية وترحيل البضائع للمخزن وحساب التكلفة الفعلية المحملة (Landed Cost) لكل صنف.`);
@@ -377,28 +439,26 @@ async function runMultiModuleMasterSimulation() {
     await importSalesService.recordForeignTransfer(auth.tenantId!, auth.userId!, {
       supplierId: String(chinaSupplierId),
       amountForeign: 15000,
-      amountEgp: 15000 * 48.50,
+      amountEgp: 15000 * 48.5,
       notes: 'دفعة سويفت بنكي للمورد الصيني لتغطية تكاليف الشحن وتوريد البضاعة',
     });
     console.log(`   ✅ تم تسجيل تحويل خارجي للمورد الصيني: $15,000 USD وتحديث مديونية الصين.`);
 
     // 6. Profit Report & Partner Payout
-    const profitReport = await importSalesService.generatePeriodProfitReport(auth.tenantId!, '2026-08-01', '2026-08-31');
+    const profitReport = await importSalesService.generatePeriodProfitReport(
+      auth.tenantId!,
+      '2026-08-01',
+      '2026-08-31',
+    );
     console.log(`   📊 تقرير أرباح فترة الاستيراد:`, profitReport);
 
     // Record Partner Payout
-    await importSalesService.recordPartnerPayout(
-      auth.tenantId!,
-      auth.userId!,
-      partner1Id,
-      30000
-    );
+    await importSalesService.recordPartnerPayout(auth.tenantId!, auth.userId!, partner1Id, 30000);
     console.log(`   ✅ تم صرف وتوثيق دفعة أرباح للشريك الأول بمبلغ 30,000 ج.م.\n`);
 
     console.log('================================================================');
     console.log('🎉 نجاح باهر: تم اختبار ومحاكاة الموديولات الثلاثة بالكامل 100%!');
     console.log('================================================================\n');
-
   } catch (err: any) {
     console.error('❌ MULTI-MODULE SIMULATION FAILED WITH ERROR:', err.message || err);
     console.error(err.stack);

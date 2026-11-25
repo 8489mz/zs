@@ -11,7 +11,11 @@
  * held-sale draft snapshot (2dp storage), and computeInvoiceTotals
  * (3dp ceiling, shared with purchases). */
 import assert from 'node:assert/strict';
-import { calculateRemainingDebt, calculateStoreCreditBalance, roundSaleResidual } from '../../src/modules/sales/helpers/sales-write.helper';
+import {
+  calculateRemainingDebt,
+  calculateStoreCreditBalance,
+  roundSaleResidual,
+} from '../../src/modules/sales/helpers/sales-write.helper';
 
 // 3-decimal tenant (KWD): store-credit use keeps the third decimal.
 // Balance 12.345, used 0.120 -> 12.225. toFixed(2) would store 12.23.

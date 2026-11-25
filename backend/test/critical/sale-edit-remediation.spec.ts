@@ -9,9 +9,7 @@ import {
   classifySaleEditCandidate,
   SaleEditCandidate,
 } from '../../src/modules/accounting/remediation/sale-edit-remediation.engine';
-import {
-  repairSaleEditCandidates,
-} from '../../src/modules/accounting/remediation/sale-edit-remediation-repair.engine';
+import { repairSaleEditCandidates } from '../../src/modules/accounting/remediation/sale-edit-remediation-repair.engine';
 
 async function testPureClassification() {
   const baseSale = {
@@ -196,22 +194,22 @@ async function testPureClassification() {
   // Case 9: 3-decimal currencies (1 fil difference passes, 2 fils difference fails)
   const kwdSale = {
     ...baseSale,
-    subtotal: 10.000,
-    discount: 1.000,
-    taxAmount: 0.500,
-    total: 9.500,
-    cogs: 6.000,
+    subtotal: 10.0,
+    discount: 1.0,
+    taxAmount: 0.5,
+    total: 9.5,
+    cogs: 6.0,
   };
   const kwd1FilDiff = {
     ...matchingJournal,
     totals: {
       ...matchingJournal.totals,
-      revenueCredit: 10.000,
-      discountDebit: 1.000,
-      taxCredit: 0.500,
+      revenueCredit: 10.0,
+      discountDebit: 1.0,
+      taxCredit: 0.5,
       cashDebit: 9.501, // exactly 1 fil difference
-      cogsDebit: 6.000,
-      inventoryCredit: 6.000,
+      cogsDebit: 6.0,
+      inventoryCredit: 6.0,
     },
     totalDebit: 16.501,
     totalCredit: 16.501,
@@ -232,12 +230,12 @@ async function testPureClassification() {
     ...matchingJournal,
     totals: {
       ...matchingJournal.totals,
-      revenueCredit: 10.000,
-      discountDebit: 1.000,
-      taxCredit: 0.500,
+      revenueCredit: 10.0,
+      discountDebit: 1.0,
+      taxCredit: 0.5,
       cashDebit: 9.502, // 2 fils difference
-      cogsDebit: 6.000,
-      inventoryCredit: 6.000,
+      cogsDebit: 6.0,
+      inventoryCredit: 6.0,
     },
     totalDebit: 16.502,
     totalCredit: 16.502,
@@ -355,37 +353,31 @@ async function testDiscoveryIntegration() {
     };
 
     // 1. Dry run: 0 reversals executed, item marked would_reverse
-    const dryRunReport = await repairSaleEditCandidates(
-      db,
-      stubGateway,
-      mockAuth,
-      candidates,
-      { tenantId: 't1', bookDigits: 2, mode: 'dry_run' },
-    );
+    const dryRunReport = await repairSaleEditCandidates(db, stubGateway, mockAuth, candidates, {
+      tenantId: 't1',
+      bookDigits: 2,
+      mode: 'dry_run',
+    });
     assert.equal(dryRunReport.counts.wouldReverse, 1);
     assert.equal(dryRunReport.items[0].status, 'would_reverse');
     assert.equal(reversalCallCount, 0, 'dry-run must not invoke gateway');
 
     // 2. Apply: exactly 1 reversal executed, item marked reversed
-    const applyReport = await repairSaleEditCandidates(
-      db,
-      stubGateway,
-      mockAuth,
-      candidates,
-      { tenantId: 't1', bookDigits: 2, mode: 'apply' },
-    );
+    const applyReport = await repairSaleEditCandidates(db, stubGateway, mockAuth, candidates, {
+      tenantId: 't1',
+      bookDigits: 2,
+      mode: 'apply',
+    });
     assert.equal(applyReport.counts.reversed, 1);
     assert.equal(applyReport.items[0].status, 'reversed');
     assert.equal(reversalCallCount, 1, 'apply must invoke gateway exactly once');
 
     // 3. Re-run Apply on same candidate: idempotency asserts already_repaired
-    const secondApplyReport = await repairSaleEditCandidates(
-      db,
-      stubGateway,
-      mockAuth,
-      candidates,
-      { tenantId: 't1', bookDigits: 2, mode: 'apply' },
-    );
+    const secondApplyReport = await repairSaleEditCandidates(db, stubGateway, mockAuth, candidates, {
+      tenantId: 't1',
+      bookDigits: 2,
+      mode: 'apply',
+    });
     assert.equal(secondApplyReport.counts.alreadyRepaired, 1);
     assert.equal(secondApplyReport.items[0].status, 'already_repaired');
     assert.equal(reversalCallCount, 1, 'already_repaired must not call gateway again');
@@ -401,7 +393,7 @@ async function main() {
   console.log('sale-edit remediation: discovery & repair integration suite passed');
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err);
   process.exitCode = 1;
 });

@@ -81,12 +81,20 @@ const REP_LINKED_USER_ID = 7;
 const FIRST_USER_ID = 1;
 
 const DRIVER_REP1 = {
-  repId: 1, tenantId: TENANT, accountId: ACCOUNT,
-  name: 'Rep 1', phone: '5550001', tenantSuspended: false,
+  repId: 1,
+  tenantId: TENANT,
+  accountId: ACCOUNT,
+  name: 'Rep 1',
+  phone: '5550001',
+  tenantSuspended: false,
 };
 const DRIVER_REP3 = {
-  repId: 3, tenantId: TENANT, accountId: ACCOUNT,
-  name: 'Rep 3', phone: null, tenantSuspended: false,
+  repId: 3,
+  tenantId: TENANT,
+  accountId: ACCOUNT,
+  name: 'Rep 3',
+  phone: null,
+  tenantSuspended: false,
 };
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -140,55 +148,262 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(SUPERVISOR_PIN)) }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(SUPERVISOR_PIN)) })
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
   // User 1: the tenant's first active user (the old false attribution).
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', display_name: 'Admin', phone: '5550000', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      username: 'admin',
+      display_name: 'Admin',
+      phone: '5550000',
+      role: 'admin',
+      is_active: true,
+    })
+    .execute();
   // User 2: the account-mode supervisor (a different admin).
   const supPassword = await createPasswordRecord(SUPERVISOR_PASSWORD);
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'sup', display_name: 'Supervisor', phone: '5550002', role: 'admin', password_hash: supPassword.hash, password_salt: supPassword.salt, is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      username: 'sup',
+      display_name: 'Supervisor',
+      phone: '5550002',
+      role: 'admin',
+      password_hash: supPassword.hash,
+      password_salt: supPassword.salt,
+      is_active: true,
+    })
+    .execute();
   // User 7: rep 1's own login, linked by phone.
   const repPassword = await createPasswordRecord(REP_PASSWORD);
-  await anyDb.insertInto('users').values({ id: 7, tenant_id: TENANT, username: '5550001', display_name: 'Rep 1', phone: '5550001', role: 'admin', password_hash: repPassword.hash, password_salt: repPassword.salt, is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      username: '5550001',
+      display_name: 'Rep 1',
+      phone: '5550001',
+      role: 'admin',
+      password_hash: repPassword.hash,
+      password_salt: repPassword.salt,
+      is_active: true,
+    })
+    .execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van 1', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 21, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van 2', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', phone: '5550001', van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 2', phone: '5550002', van_location_id: 21, is_van_rep: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 20,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van 1',
+      location_type: 'van',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 21,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van 2',
+      location_type: 'van',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 1',
+      phone: '5550001',
+      van_location_id: 20,
+      is_van_rep: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 2',
+      phone: '5550002',
+      van_location_id: 21,
+      is_van_rep: true,
+    })
+    .execute();
   // Rep 3 has NO phone, so no linked login: his rows must stay
   // honestly actorless (created_by null), never borrowed from user 1.
-  await anyDb.insertInto('delivery_representatives').values({ id: 3, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 3', phone: null, van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('products').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Item 1', stock_qty: 10, cost_price: 5, retail_price: 10, credit_price: 10, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, location_id: 20, qty: 10 }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, location_id: 21, qty: 0 }).execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 3,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 3',
+      phone: null,
+      van_location_id: 20,
+      is_van_rep: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Item 1',
+      stock_qty: 10,
+      cost_price: 5,
+      retail_price: 10,
+      credit_price: 10,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, location_id: 20, qty: 10 })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, location_id: 21, qty: 0 })
+    .execute();
   // Customer 41 is the cash walk-in for the field sale.
-  await anyDb.insertInto('customers').values({ id: 41, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 41', balance: 0, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 41,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 41',
+      balance: 0,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
   // Customer 42 is rep 3's first-sale walk-in: no serving history
   // anywhere, so the F3 route gate lets the first sale through
   // (it CREATES the association). Sharing customer 41 would put
   // rep 1 in the serving set and refuse rep 3 with
   // CUSTOMER_NOT_ON_REP_ROUTE.
-  await anyDb.insertInto('customers').values({ id: 42, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 42', balance: 0, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 42,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 42',
+      balance: 0,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
   for (let tripId = 1; tripId <= 10; tripId++) {
-    await anyDb.insertInto('van_sales_trips').values({ id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, source_warehouse_id: 10, status: 'open', settlement_status: 'open' }).execute();
+    await anyDb
+      .insertInto('van_sales_trips')
+      .values({
+        id: tripId,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        rep_id: 1,
+        van_location_id: 20,
+        source_warehouse_id: 10,
+        status: 'open',
+        settlement_status: 'open',
+      })
+      .execute();
   }
   // Trip 11 belongs to rep 3 (unlinked): his sale runs from his own trip.
-  await anyDb.insertInto('van_sales_trips').values({ id: 11, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 3, van_location_id: 20, source_warehouse_id: 10, status: 'open', settlement_status: 'open' }).execute();
-  await anyDb.insertInto('cashier_shifts').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, location_id: null, status: 'open', opened_by: 1 }).execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({
+      id: 11,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: 3,
+      van_location_id: 20,
+      source_warehouse_id: 10,
+      status: 'open',
+      settlement_status: 'open',
+    })
+    .execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      location_id: null,
+      status: 'open',
+      opened_by: 1,
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -198,12 +413,33 @@ function buildService(db: Kysely<Database>): VanSalesService {
   } as never);
   const audit = new AuditService(db);
   const radar = new VanFraudRadarService(db);
-  const service = new VanSalesService(db, audit as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, radar as never);
+  const service = new VanSalesService(
+    db,
+    audit as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    radar as never,
+  );
   return service;
 }
 
-function buildDriverController(service: VanSalesService, driver: { repId: number; tenantId: string; accountId: string; name: string; phone: string | null; tenantSuspended: boolean }): VanSalesController {
+function buildDriverController(
+  service: VanSalesService,
+  driver: {
+    repId: number;
+    tenantId: string;
+    accountId: string;
+    name: string;
+    phone: string | null;
+    tenantSuspended: boolean;
+  },
+): VanSalesController {
   return new VanSalesController(
     service,
     {
@@ -211,7 +447,10 @@ function buildDriverController(service: VanSalesService, driver: { repId: number
       verifyDriverTokenForSettlement: async () => ({ ...driver }),
       assertDriverPinChanged: async () => undefined,
     } as never,
-    {} as never, {} as never, {} as never, {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
   );
 }
 
@@ -225,11 +464,22 @@ async function saleRow(db: Kysely<Database>, saleId: number): Promise<any> {
 }
 
 async function journalsForSale(db: Kysely<Database>, saleId: number): Promise<any[]> {
-  return (db as any).selectFrom('journal_entries').selectAll().where('source_id', '=', saleId).where('tenant_id', '=', TENANT).orderBy('id', 'asc').execute();
+  return (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .orderBy('id', 'asc')
+    .execute();
 }
 
 async function adminSaleCount(db: Kysely<Database>): Promise<number> {
-  const row: any = await (db as any).selectFrom('sales').select((eb: any) => eb.fn.countAll().as('count')).where('tenant_id', '=', TENANT).where('created_by', '=', FIRST_USER_ID).executeTakeFirst();
+  const row: any = await (db as any)
+    .selectFrom('sales')
+    .select((eb: any) => eb.fn.countAll().as('count'))
+    .where('tenant_id', '=', TENANT)
+    .where('created_by', '=', FIRST_USER_ID)
+    .executeTakeFirst();
   return Number(row?.count || 0);
 }
 
@@ -240,7 +490,7 @@ async function main(): Promise<void> {
     const service = buildService(db);
     const controllerRep1 = buildDriverController(service, DRIVER_REP1);
     const controllerRep3 = buildDriverController(service, DRIVER_REP3);
-    const authAndPin = new AuthAndPinService(db as any, () => ({} as never));
+    const authAndPin = new AuthAndPinService(db as any, () => ({}) as never);
 
     // S1. The resolver itself, driven directly: a linked rep
     // resolves to his own login; an unlinked rep resolves to 0
@@ -267,8 +517,11 @@ async function main(): Promise<void> {
     {
       clearSaleCaches();
       const res: any = await controllerRep1.executeSale('Bearer <redacted>', {
-        tripId: 1, customerId: 41, customerName: 'Shop Customer 41',
-        paymentMethod: 'cash', paidAmount: 20,
+        tripId: 1,
+        customerId: 41,
+        customerName: 'Shop Customer 41',
+        paymentMethod: 'cash',
+        paidAmount: 20,
         items: [{ productId: 1, qty: 2, unitPrice: 10 }],
         clientTxId: 'f20-sale-linked-1',
       });
@@ -284,7 +537,11 @@ async function main(): Promise<void> {
       const journals = await journalsForSale(db, saleId);
       assert.ok(journals.length > 0, 'the sale posted at least one journal');
       for (const journal of journals) {
-        assert.equal(Number(journal.created_by), REP_LINKED_USER_ID, `journal ${journal.source_type} names the rep linked login`);
+        assert.equal(
+          Number(journal.created_by),
+          REP_LINKED_USER_ID,
+          `journal ${journal.source_type} names the rep linked login`,
+        );
       }
       assert.equal(await adminSaleCount(db), 0, 'the admin carries zero sales after the linked sale');
       console.log('  (S2) linked rep portal sale names his login passed');
@@ -299,8 +556,11 @@ async function main(): Promise<void> {
     {
       clearSaleCaches();
       const res: any = await controllerRep3.executeSale('Bearer <redacted>', {
-        tripId: 11, customerId: 42, customerName: 'Shop Customer 42',
-        paymentMethod: 'cash', paidAmount: 20,
+        tripId: 11,
+        customerId: 42,
+        customerName: 'Shop Customer 42',
+        paymentMethod: 'cash',
+        paidAmount: 20,
         items: [{ productId: 1, qty: 2, unitPrice: 10 }],
         clientTxId: 'f20-sale-unlinked-1',
       });
@@ -316,8 +576,16 @@ async function main(): Promise<void> {
       const journals = await journalsForSale(db, saleId);
       assert.ok(journals.length > 0, 'the unlinked sale posted at least one journal');
       for (const journal of journals) {
-        assert.equal(journal.created_by, null, `journal ${journal.source_type} records created_by NULL, never the first user or 0`);
-        assert.equal(journal.posted_by, null, `journal ${journal.source_type} records posted_by NULL, never the first user or 0`);
+        assert.equal(
+          journal.created_by,
+          null,
+          `journal ${journal.source_type} records created_by NULL, never the first user or 0`,
+        );
+        assert.equal(
+          journal.posted_by,
+          null,
+          `journal ${journal.source_type} records posted_by NULL, never the first user or 0`,
+        );
       }
       assert.equal(await adminSaleCount(db), 0, 'the admin carries zero sales after the unlinked sale');
       console.log('  (S3) unlinked rep portal sale is honestly NULL passed');
@@ -327,7 +595,13 @@ async function main(): Promise<void> {
     // action, trip locked by rep) passes repId like the sale and
     // the collection do, so its journal follows the same rule.
     {
-      const swapSource = fs.readFileSync(path.join(__dirname, '../../src/modules/delivery-reps/services/van-collections-and-swaps/execute-damaged-swap.slice.ts'), 'utf8');
+      const swapSource = fs.readFileSync(
+        path.join(
+          __dirname,
+          '../../src/modules/delivery-reps/services/van-collections-and-swaps/execute-damaged-swap.slice.ts',
+        ),
+        'utf8',
+      );
       assert.ok(
         swapSource.includes('resolveSystemAuthContext(tenantId, accountId, repId)'),
         'the damaged swap passes repId into resolveSystemAuthContext',
@@ -338,7 +612,8 @@ async function main(): Promise<void> {
     // S5. F20 spec wired into both critical lists (309 specs,
     // identical order) and green (proven by its standalone run).
     {
-      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+        .specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));

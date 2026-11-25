@@ -12,7 +12,10 @@ import { CustomerInstallmentsService } from '../../src/modules/sales/services/cu
 import { SalesFinanceService } from '../../src/modules/sales/services/sales-finance.service';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
-import { splitInstallmentSchedule, allocateInstallmentInterest } from '../../src/modules/accounting/engines/installment-interest.engine';
+import {
+  splitInstallmentSchedule,
+  allocateInstallmentInterest,
+} from '../../src/modules/accounting/engines/installment-interest.engine';
 import { toMinorUnits } from '../../src/modules/accounting/engines/money-minor-units.engine';
 import { todayTenantDate } from '../../src/common/utils/tenant-timezone.util';
 
@@ -80,17 +83,22 @@ const START = todayTenantDate('Africa/Cairo', new Date(Date.now() - 3 * 24 * 60 
  * columns are NUMERIC(15,4), which already stores a third decimal).
  */
 
-const minorOf = (amounts: number[], digits: 2 | 3): number[] =>
-  amounts.map((amount) => toMinorUnits(amount, digits));
+const minorOf = (amounts: number[], digits: 2 | 3): number[] => amounts.map((amount) => toMinorUnits(amount, digits));
 
 async function main(): Promise<void> {
   // Pure helper: 3-decimal worked examples.
   const kwdSchedule = splitInstallmentSchedule(107.125, 3, 3);
   assert.deepEqual(minorOf(kwdSchedule, 3), [35708, 35708, 35709]);
-  assert.equal(minorOf(kwdSchedule, 3).reduce((sum, minor) => sum + minor, 0), 107125);
+  assert.equal(
+    minorOf(kwdSchedule, 3).reduce((sum, minor) => sum + minor, 0),
+    107125,
+  );
   const kwdUneven = splitInstallmentSchedule(100.126, 3, 3);
   assert.deepEqual(minorOf(kwdUneven, 3), [33375, 33375, 33376]);
-  assert.equal(minorOf(kwdUneven, 3).reduce((sum, minor) => sum + minor, 0), 100126);
+  assert.equal(
+    minorOf(kwdUneven, 3).reduce((sum, minor) => sum + minor, 0),
+    100126,
+  );
 
   // Pure helper: 2-decimal case pins the NEW last-row shape.
   const egpSchedule = splitInstallmentSchedule(100, 3, 2);
@@ -110,7 +118,10 @@ async function main(): Promise<void> {
   const planSchedule = splitInstallmentSchedule(107.125, 2, 3);
   assert.deepEqual(minorOf(planSchedule, 3), [53562, 53563]);
   const allocations = allocateInstallmentInterest(100, planSchedule, 7.125, 3);
-  assert.equal(allocations.reduce((sum, amount) => sum + amount, 0), 7.125);
+  assert.equal(
+    allocations.reduce((sum, amount) => sum + amount, 0),
+    7.125,
+  );
   const egpAllocations = allocateInstallmentInterest(900, splitInstallmentSchedule(1000, 3, 2), 100, 2);
   assert.equal(Math.round(egpAllocations.reduce((sum, amount) => sum + amount, 0) * 100), 10000);
 
@@ -130,47 +141,114 @@ async function main(): Promise<void> {
       INSERT INTO currency_exchange_rates VALUES ('t-kwd', 'KWD', true, 1), ('t-egp', 'EGP', true, 1);
       INSERT INTO customers VALUES (1, 't-kwd', 'KWD Customer', '0100', 0), (2, 't-egp', 'EGP Customer', '0101', 0);
     `);
-    const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+    const foundation = {
+      ensureForAuth: async () => undefined,
+      ensureForScope: async () => undefined,
+    } as unknown as AccountingTenantFoundationService;
     const posting = new AccountingPostingService(foundation);
-    const service = new CustomerInstallmentsService(db, new TransactionHelper(), new SalesFinanceService(db), posting as any);
-    const kwdAuth = { tenantId: 't-kwd', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
-    const egpAuth = { tenantId: 't-egp', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+    const service = new CustomerInstallmentsService(
+      db,
+      new TransactionHelper(),
+      new SalesFinanceService(db),
+      posting as any,
+    );
+    const kwdAuth = {
+      tenantId: 't-kwd',
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      permissions: [],
+    } as unknown as AuthContext;
+    const egpAuth = {
+      tenantId: 't-egp',
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      permissions: [],
+    } as unknown as AuthContext;
 
     // KWD: uneven 3dp total splits in fils, last row absorbs remainder.
     const kwd = await service.createPlan(
-      { customerId: 1, totalAmount: 100.126, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: START },
+      {
+        customerId: 1,
+        totalAmount: 100.126,
+        downPayment: 0,
+        interestRatePercent: 0,
+        installmentCount: 3,
+        startDate: START,
+      },
       kwdAuth,
     );
     assert.equal(toMinorUnits(Number(kwd.plan.total_amount), 3), 100126);
     assert.equal(toMinorUnits(Number(kwd.plan.financed_amount), 3), 100126);
     assert.equal(toMinorUnits(Number(kwd.plan.total_with_interest), 3), 100126);
     assert.equal(toMinorUnits(Number(kwd.plan.monthly_amount), 3), 33375);
-    assert.deepEqual(minorOf(kwd.installments.map((row: any) => Number(row.amount)), 3), [33375, 33375, 33376]);
+    assert.deepEqual(
+      minorOf(
+        kwd.installments.map((row: any) => Number(row.amount)),
+        3,
+      ),
+      [33375, 33375, 33376],
+    );
 
     // KWD: sub-minor input rounds leniently at book digits, no throw.
     const kwdRounded = await service.createPlan(
-      { customerId: 1, totalAmount: 100.1254, downPayment: 0, interestRatePercent: 0, installmentCount: 1, startDate: START },
+      {
+        customerId: 1,
+        totalAmount: 100.1254,
+        downPayment: 0,
+        interestRatePercent: 0,
+        installmentCount: 1,
+        startDate: START,
+      },
       kwdAuth,
     );
     assert.equal(toMinorUnits(Number(kwdRounded.plan.total_amount), 3), 100125);
-    assert.deepEqual(minorOf(kwdRounded.installments.map((row: any) => Number(row.amount)), 3), [100125]);
+    assert.deepEqual(
+      minorOf(
+        kwdRounded.installments.map((row: any) => Number(row.amount)),
+        3,
+      ),
+      [100125],
+    );
 
     // EGP: the new last-row shape at 2dp through the real service.
     const egp = await service.createPlan(
-      { customerId: 2, totalAmount: 100, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: START },
+      {
+        customerId: 2,
+        totalAmount: 100,
+        downPayment: 0,
+        interestRatePercent: 0,
+        installmentCount: 3,
+        startDate: START,
+      },
       egpAuth,
     );
     assert.equal(toMinorUnits(Number(egp.plan.total_with_interest), 2), 10000);
     assert.equal(toMinorUnits(Number(egp.plan.monthly_amount), 2), 3333);
-    assert.deepEqual(minorOf(egp.installments.map((row: any) => Number(row.amount)), 2), [3333, 3333, 3334]);
+    assert.deepEqual(
+      minorOf(
+        egp.installments.map((row: any) => Number(row.amount)),
+        2,
+      ),
+      [3333, 3333, 3334],
+    );
 
     // Guard: more installments than minor units fails closed with the
     // same error code as before (message wording updated to minor units).
     await assert.rejects(
-      () => service.createPlan(
-        { customerId: 2, totalAmount: 0.01, downPayment: 0, interestRatePercent: 0, installmentCount: 2, startDate: START },
-        egpAuth,
-      ),
+      () =>
+        service.createPlan(
+          {
+            customerId: 2,
+            totalAmount: 0.01,
+            downPayment: 0,
+            interestRatePercent: 0,
+            installmentCount: 2,
+            startDate: START,
+          },
+          egpAuth,
+        ),
       (error: unknown) => (error as { code?: string }).code === 'INVALID_INSTALLMENT_COUNT',
     );
   } finally {
@@ -179,13 +257,25 @@ async function main(): Promise<void> {
 
   // Source pin: the cents split is gone from the service and the pure
   // helper is the single schedule computation.
-  const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/customer-installments.service.ts'), 'utf8');
+  const serviceSource = readFileSync(
+    resolve(__dirname, '../../src/modules/sales/services/customer-installments.service.ts'),
+    'utf8',
+  );
   assert.ok(!serviceSource.includes('roundCurrency'), 'the 2dp roundCurrency helper must be gone');
   assert.ok(!serviceSource.includes('toFixed(2)'), 'no 2dp shaping may remain in the service');
   assert.ok(!serviceSource.includes('baseCents'), 'the cents split must be gone');
-  assert.ok(serviceSource.includes('splitInstallmentSchedule(totalWithInterest, installmentCount, bookDigits)'), 'createPlan must split through the pure helper at book digits');
-  const engineSource = readFileSync(resolve(__dirname, '../../src/modules/accounting/engines/installment-interest.engine.ts'), 'utf8');
-  assert.ok(engineSource.includes('export function splitInstallmentSchedule('), 'the split must live in the canonical installment engine');
+  assert.ok(
+    serviceSource.includes('splitInstallmentSchedule(totalWithInterest, installmentCount, bookDigits)'),
+    'createPlan must split through the pure helper at book digits',
+  );
+  const engineSource = readFileSync(
+    resolve(__dirname, '../../src/modules/accounting/engines/installment-interest.engine.ts'),
+    'utf8',
+  );
+  assert.ok(
+    engineSource.includes('export function splitInstallmentSchedule('),
+    'the split must live in the canonical installment engine',
+  );
 
   console.log('customer-installments-minor-units: all cases passed');
 }

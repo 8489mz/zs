@@ -80,18 +80,40 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 async function seedWarehouse(db: Kysely<Database>): Promise<void> {
-  await (db as any).insertInto('stock_locations').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1,
-    name: 'Warehouse', code: 'WH', is_active: true, location_type: 'branch_stock',
-  }).execute();
+  await (db as any)
+    .insertInto('stock_locations')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Warehouse',
+      code: 'WH',
+      is_active: true,
+      location_type: 'branch_stock',
+    })
+    .execute();
 }
 
 async function seedPendingRequisition(db: Kysely<Database>, repId: number): Promise<number> {
-  const [inserted] = await (db as any).insertInto('van_load_requisitions').values({
-    tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'REQ-260101-0001', rep_id: repId,
-    source_warehouse_id: 1, status: 'pending', requested_items: '[]', approved_items: '[]',
-    notes: null, rejection_reason: null, trip_id: null, reviewed_by: null,
-  }).returning(['id']).execute();
+  const [inserted] = await (db as any)
+    .insertInto('van_load_requisitions')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'REQ-260101-0001',
+      rep_id: repId,
+      source_warehouse_id: 1,
+      status: 'pending',
+      requested_items: '[]',
+      approved_items: '[]',
+      notes: null,
+      rejection_reason: null,
+      trip_id: null,
+      reviewed_by: null,
+    })
+    .returning(['id'])
+    .execute();
   return Number(inserted.id);
 }
 
@@ -113,10 +135,7 @@ function buildReqService(db: Kysely<Database>): any {
 }
 
 function isValidationError(err: unknown): boolean {
-  return (
-    err instanceof BadRequestException &&
-    (err.getResponse() as { code?: string }).code === 'VALIDATION_ERROR'
-  );
+  return err instanceof BadRequestException && (err.getResponse() as { code?: string }).code === 'VALIDATION_ERROR';
 }
 
 function isPendingExists(err: unknown): boolean {
@@ -248,7 +267,9 @@ async function main(): Promise<void> {
       const vanService = Object.create(VanSalesService.prototype);
       vanService.vanRequisitionsService = reqService;
       vanService.approveAndDispatchRequisition = async () => ({
-        ok: true, tripId: 50, isSupplementary: true,
+        ok: true,
+        tripId: 50,
+        isSupplementary: true,
       });
       const res = await vanService.createLoadRequisitionByAdmin(TENANT, ACCOUNT, 1, {
         repId: REP_ID,
@@ -314,8 +335,14 @@ async function main(): Promise<void> {
         items: [
           { productId: 5, qty: 1, unitName: 'قطعة', isWeight: false, packingText: '1 قطعة' },
           {
-            productId: 7, qty: 24, cartons: 2, pieces: 0, cartonMultiplier: 12,
-            packagingUnitName: 'كرتونة', unitName: 'قطعة', isWeight: false,
+            productId: 7,
+            qty: 24,
+            cartons: 2,
+            pieces: 0,
+            cartonMultiplier: 12,
+            packagingUnitName: 'كرتونة',
+            unitName: 'قطعة',
+            isWeight: false,
             packingText: '2 كرتونة',
           },
           { productId: 8, qty: 2.5, unitName: 'كجم', isWeight: true, packingText: '2.5 كجم' },
@@ -365,10 +392,7 @@ async function main(): Promise<void> {
       controllerSource.includes('allowMultiplePending: false'),
       'the driver controller forces allowMultiplePending false',
     );
-    assert.ok(
-      controllerSource.includes('SubmitLoadRequisitionDto'),
-      'the driver route takes the DTO class',
-    );
+    assert.ok(controllerSource.includes('SubmitLoadRequisitionDto'), 'the driver route takes the DTO class');
     const dtoSource = readFileSync(
       resolve(here, '../../src/modules/delivery-reps/dto/submit-load-requisition.dto.ts'),
       'utf8',
@@ -378,10 +402,7 @@ async function main(): Promise<void> {
       false,
       'the DTO declares no allowMultiplePending property to whitelist (the name appears only in the header comment)',
     );
-    assert.ok(
-      dtoSource.includes('INV-DRIVER-REQUISITION-DTO-WHITELIST'),
-      'the DTO names the invariant',
-    );
+    assert.ok(dtoSource.includes('INV-DRIVER-REQUISITION-DTO-WHITELIST'), 'the DTO names the invariant');
     console.log('  source pins passed');
   }
 

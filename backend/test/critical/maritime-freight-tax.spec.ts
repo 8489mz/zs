@@ -65,19 +65,38 @@ const mismatch = (err: unknown): boolean =>
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const authT1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
-  const authT2 = { tenantId: 't2', accountId: 'a2', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+  const authT1 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 1,
+    permissions: [],
+  } as unknown as AuthContext;
+  const authT2 = {
+    tenantId: 't2',
+    accountId: 'a2',
+    role: 'admin',
+    userId: 1,
+    permissions: [],
+  } as unknown as AuthContext;
   const service = new MaritimeFreightService(db, {} as never, {} as never, {} as never);
 
   const quoteCharges = async (quotationId: number): Promise<any[]> =>
-    (db as any).selectFrom('maritime_quotation_charges').selectAll()
-      .where('quotation_id', '=', String(quotationId)).orderBy('id', 'asc').execute();
+    (db as any)
+      .selectFrom('maritime_quotation_charges')
+      .selectAll()
+      .where('quotation_id', '=', String(quotationId))
+      .orderBy('id', 'asc')
+      .execute();
   const jobCharges = async (jobId: number): Promise<any[]> =>
-    (db as any).selectFrom('maritime_job_charges').selectAll()
-      .where('job_id', '=', String(jobId)).orderBy('id', 'asc').execute();
+    (db as any)
+      .selectFrom('maritime_job_charges')
+      .selectAll()
+      .where('job_id', '=', String(jobId))
+      .orderBy('id', 'asc')
+      .execute();
   const count = async (table: string, tenantId: string): Promise<number> => {
-    const rows: any[] = await (db as any).selectFrom(table).selectAll()
-      .where('tenant_id', '=', tenantId).execute();
+    const rows: any[] = await (db as any).selectFrom(table).selectAll().where('tenant_id', '=', tenantId).execute();
     return rows.length;
   };
 
@@ -106,20 +125,41 @@ async function main(): Promise<void> {
     `);
 
     const quoteDto = (charges: any[]): any => ({
-      customerName: 'Acme', currency: 'EGP', baseCost: 0, charges,
+      customerName: 'Acme',
+      currency: 'EGP',
+      baseCost: 0,
+      charges,
     });
     const jobDto = (charges: any[]): any => ({
-      customerName: 'Acme', direction: 'export', transportMode: 'sea',
-      polCode: 'EGALY', polName: 'Alexandria', podCode: 'JED', podName: 'Jeddah',
+      customerName: 'Acme',
+      direction: 'export',
+      transportMode: 'sea',
+      polCode: 'EGALY',
+      polName: 'Alexandria',
+      podCode: 'JED',
+      podName: 'Jeddah',
       charges,
     });
     const qCharge = (totalAmount: number, taxRatePercent: number, extra: any = {}): any => ({
-      chargeCode: 'O/F', chargeNameAr: 'O/F', chargeNameEn: 'O/F', currency: 'EGP',
-      quantity: 1, unitRate: totalAmount, totalAmount, taxRatePercent, ...extra,
+      chargeCode: 'O/F',
+      chargeNameAr: 'O/F',
+      chargeNameEn: 'O/F',
+      currency: 'EGP',
+      quantity: 1,
+      unitRate: totalAmount,
+      totalAmount,
+      taxRatePercent,
+      ...extra,
     });
     const jCharge = (sellAmount: number, taxRatePercent: number, extra: any = {}): any => ({
-      chargeCode: 'O/F', chargeNameAr: 'O/F', chargeNameEn: 'O/F', currency: 'EGP',
-      costAmount: 100, sellAmount, taxRatePercent, ...extra,
+      chargeCode: 'O/F',
+      chargeNameAr: 'O/F',
+      chargeNameEn: 'O/F',
+      currency: 'EGP',
+      costAmount: 100,
+      sellAmount,
+      taxRatePercent,
+      ...extra,
     });
 
     // 1. createQuotation, cost basis: configured rate 15 on tot 100 stores 15 / 15.
@@ -179,9 +219,12 @@ async function main(): Promise<void> {
     assert.equal(Number(upd1[0].tax_amount), 30);
 
     // 10. updateJobCharges: rate 7 throws and the stored row is byte-untouched.
-    await assert.rejects(service.updateJobCharges(authT1, 2, {
-      charges: [{ id: 2, ...jCharge(200, 7) }],
-    } as never), mismatch);
+    await assert.rejects(
+      service.updateJobCharges(authT1, 2, {
+        charges: [{ id: 2, ...jCharge(200, 7) }],
+      } as never),
+      mismatch,
+    );
     const jc2 = await jobCharges(2);
     assert.equal(Number(jc2[0].sell_amount), 100, 'rejected edit leaves sell untouched');
     assert.equal(Number(jc2[0].tax_rate_percent), 0, 'rejected edit leaves rate untouched');

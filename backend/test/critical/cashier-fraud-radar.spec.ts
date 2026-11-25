@@ -38,16 +38,29 @@ async function setup() {
   const pg = new PGlite();
   const db = new Kysely<any>({ dialect: new PGliteDialect(pg) });
 
-  await sql`CREATE TABLE users (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, username TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'cashier', is_active BOOLEAN NOT NULL DEFAULT true)`.execute(db);
-  await sql`CREATE TABLE audit_logs (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, account_id VARCHAR(50) NOT NULL DEFAULT 'a1', action TEXT NOT NULL, event_code TEXT, details TEXT NOT NULL DEFAULT '', created_by INTEGER, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`.execute(db);
-  await sql`CREATE TABLE sales (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, account_id VARCHAR(50) NOT NULL DEFAULT 'a1', doc_no TEXT, status TEXT NOT NULL DEFAULT 'posted', total NUMERIC(14,2) NOT NULL DEFAULT 0, created_by INTEGER, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`.execute(db);
+  await sql`CREATE TABLE users (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, username TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'cashier', is_active BOOLEAN NOT NULL DEFAULT true)`.execute(
+    db,
+  );
+  await sql`CREATE TABLE audit_logs (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, account_id VARCHAR(50) NOT NULL DEFAULT 'a1', action TEXT NOT NULL, event_code TEXT, details TEXT NOT NULL DEFAULT '', created_by INTEGER, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`.execute(
+    db,
+  );
+  await sql`CREATE TABLE sales (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, account_id VARCHAR(50) NOT NULL DEFAULT 'a1', doc_no TEXT, status TEXT NOT NULL DEFAULT 'posted', total NUMERIC(14,2) NOT NULL DEFAULT 0, created_by INTEGER, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`.execute(
+    db,
+  );
   // Currency lookup tables for tenantBaseCurrency (no rows seeded:
   // the tenant defaults to EGP / 2dp, so the assertions below are
   // unaffected). getSummary resolves book digits from these.
-  await sql`CREATE TABLE settings (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL DEFAULT '')`.execute(db);
-  await sql`CREATE TABLE currency_exchange_rates (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, currency_code TEXT NOT NULL, exchange_rate NUMERIC(14,6) NOT NULL DEFAULT 1, is_base BOOLEAN NOT NULL DEFAULT false)`.execute(db);
+  await sql`CREATE TABLE settings (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL DEFAULT '')`.execute(
+    db,
+  );
+  await sql`CREATE TABLE currency_exchange_rates (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, currency_code TEXT NOT NULL, exchange_rate NUMERIC(14,6) NOT NULL DEFAULT 1, is_base BOOLEAN NOT NULL DEFAULT false)`.execute(
+    db,
+  );
 
-  await db.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'muse', role: 'cashier', is_active: true }).execute();
+  await db
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'muse', role: 'cashier', is_active: true })
+    .execute();
   const service = new CashierFraudRadarService(db as any);
   return { db, service };
 }
@@ -127,7 +140,11 @@ async function main() {
     assert.equal(profile.cancelledSalesCount, 1, `cancelled sales must be 1, got ${profile.cancelledSalesCount}`);
     const events = await service.getEvents(50, ACTOR, 'today');
     assert.equal(events.length, 1, `strip must list 1 event, got ${events.length}`);
-    assert.equal(events[0].eventType, 'sale_cancelled', `cancelled sale must be 'sale_cancelled', got ${events[0].eventType}`);
+    assert.equal(
+      events[0].eventType,
+      'sale_cancelled',
+      `cancelled sale must be 'sale_cancelled', got ${events[0].eventType}`,
+    );
     assert.equal(events[0].amount, 150, `cancelled sale amount must be 150, got ${events[0].amount}`);
     await db.destroy();
   }
@@ -142,11 +159,19 @@ async function main() {
       { code: VOID, by: 1, at: yesterday },
     ]);
     const todaySummary = await service.getSummary('today', ACTOR);
-    assert.equal(todaySummary.totalSuspiciousEvents, 1, `today header must be 1, got ${todaySummary.totalSuspiciousEvents}`);
+    assert.equal(
+      todaySummary.totalSuspiciousEvents,
+      1,
+      `today header must be 1, got ${todaySummary.totalSuspiciousEvents}`,
+    );
     const todayEvents = await service.getEvents(50, ACTOR, 'today');
     assert.equal(todayEvents.length, 1, `today strip must list 1 event, got ${todayEvents.length}`);
     const weekSummary = await service.getSummary('7days', ACTOR);
-    assert.equal(weekSummary.totalSuspiciousEvents, 2, `7days header must be 2, got ${weekSummary.totalSuspiciousEvents}`);
+    assert.equal(
+      weekSummary.totalSuspiciousEvents,
+      2,
+      `7days header must be 2, got ${weekSummary.totalSuspiciousEvents}`,
+    );
     const weekEvents = await service.getEvents(50, ACTOR, '7days');
     assert.equal(weekEvents.length, 2, `7days strip must list 2 events, got ${weekEvents.length}`);
     await db.destroy();

@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
-import { toMoney, sumMoney, buildAggregatedBalances, buildTrendMap } from '../../src/modules/reports/helpers/reports-math.helper';
-import { buildCommercialSummary, buildReportSummaryPayload, splitReturnRowsByType } from '../../src/modules/reports/helpers/reports-summary.helper';
+import {
+  toMoney,
+  sumMoney,
+  buildAggregatedBalances,
+  buildTrendMap,
+} from '../../src/modules/reports/helpers/reports-math.helper';
+import {
+  buildCommercialSummary,
+  buildReportSummaryPayload,
+  splitReturnRowsByType,
+} from '../../src/modules/reports/helpers/reports-summary.helper';
 
 (function testSplitReturnRowsByType() {
   const rows = [
@@ -23,10 +32,7 @@ import { buildCommercialSummary, buildReportSummaryPayload, splitReturnRowsByTyp
       { return_type: 'sale', total: 20 },
       { return_type: 'purchase', total: 10 },
     ],
-    treasuryRows: [
-      { amount: 100 },
-      { amount: -40 },
-    ],
+    treasuryRows: [{ amount: 100 }, { amount: -40 }],
     saleItemsRows: [
       { product_id: 1, product_name: 'Milk', qty: 2, cost_price: 25, line_total: 80 },
       { product_id: 1, product_name: 'Milk', qty: 1, cost_price: 25, line_total: 40 },
@@ -138,19 +144,51 @@ console.log('reports-summary.helper specs passed');
 // KWD/OMR receivable aging and book amounts cannot silently drop one fil.
 assert.equal(toMoney(0.001, 3), 0.001);
 assert.equal(toMoney(0.001, 2), 0);
-assert.equal(sumMoney([{amount:0.001},{amount:0.002}], row => row.amount, 3), 0.003);
-assert.equal(sumMoney([{amount:1.255},{amount:0.001}], row => row.amount, 3), 1.256);
+assert.equal(
+  sumMoney([{ amount: 0.001 }, { amount: 0.002 }], (row) => row.amount, 3),
+  0.003,
+);
+assert.equal(
+  sumMoney([{ amount: 1.255 }, { amount: 0.001 }], (row) => row.amount, 3),
+  1.256,
+);
 
 // Existing signed supplier ledger balances must not change at half-cent boundaries.
 assert.equal(toMoney(-10.505), -10.51);
 assert.equal(toMoney(15.255), 15.26);
-assert.equal(toMoney(0.001,3),0.001);
+assert.equal(toMoney(0.001, 3), 0.001);
 
-assert.deepEqual(buildTrendMap([{k:'day',v:0.001},{k:'day',v:0.002}],['day'],r=>r.k,r=>r.v,3),[{key:'day',value:0.003}]);
-assert.deepEqual(buildTrendMap([{k:'day',v:0.004},{k:'day',v:0.004}],['day'],r=>r.k,r=>r.v),[{key:'day',value:0.01}]);
+assert.deepEqual(
+  buildTrendMap(
+    [
+      { k: 'day', v: 0.001 },
+      { k: 'day', v: 0.002 },
+    ],
+    ['day'],
+    (r) => r.k,
+    (r) => r.v,
+    3,
+  ),
+  [{ key: 'day', value: 0.003 }],
+);
+assert.deepEqual(
+  buildTrendMap(
+    [
+      { k: 'day', v: 0.004 },
+      { k: 'day', v: 0.004 },
+    ],
+    ['day'],
+    (r) => r.k,
+    (r) => r.v,
+  ),
+  [{ key: 'day', value: 0.01 }],
+);
 
 // A report helper must not silently discard one-fil ledger balances.
-const tinyBalances=[{id:1,balance:'0.001'},{id:2,balance:'0.002'}];
-assert.equal(buildAggregatedBalances(tinyBalances,new Map(),3).get('1'),0.001);
-assert.equal(buildAggregatedBalances(tinyBalances,new Map([['2',0.003]]),3).get('2'),0.003);
-assert.equal(buildAggregatedBalances(tinyBalances,new Map()).get('1'),0);
+const tinyBalances = [
+  { id: 1, balance: '0.001' },
+  { id: 2, balance: '0.002' },
+];
+assert.equal(buildAggregatedBalances(tinyBalances, new Map(), 3).get('1'), 0.001);
+assert.equal(buildAggregatedBalances(tinyBalances, new Map([['2', 0.003]]), 3).get('2'), 0.003);
+assert.equal(buildAggregatedBalances(tinyBalances, new Map()).get('1'), 0);

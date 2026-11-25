@@ -107,27 +107,75 @@ assert.equal(raw.total, 7.626);
 
 // Rate validation: tax rate always, service percent only when enabled.
 assert.throws(
-  () => computeTableBillTotals({ subtotal: 10, discount: 0, serviceChargeEnabled: true, serviceChargePercent: 12, taxRate: 'abc', digits: 2 }),
+  () =>
+    computeTableBillTotals({
+      subtotal: 10,
+      discount: 0,
+      serviceChargeEnabled: true,
+      serviceChargePercent: 12,
+      taxRate: 'abc',
+      digits: 2,
+    }),
   isRateError,
 );
 assert.throws(
-  () => computeTableBillTotals({ subtotal: 10, discount: 0, serviceChargeEnabled: true, serviceChargePercent: 12, taxRate: -5, digits: 2 }),
+  () =>
+    computeTableBillTotals({
+      subtotal: 10,
+      discount: 0,
+      serviceChargeEnabled: true,
+      serviceChargePercent: 12,
+      taxRate: -5,
+      digits: 2,
+    }),
   isRateError,
 );
 assert.throws(
-  () => computeTableBillTotals({ subtotal: 10, discount: 0, serviceChargeEnabled: true, serviceChargePercent: 12, taxRate: 150, digits: 2 }),
+  () =>
+    computeTableBillTotals({
+      subtotal: 10,
+      discount: 0,
+      serviceChargeEnabled: true,
+      serviceChargePercent: 12,
+      taxRate: 150,
+      digits: 2,
+    }),
   isRateError,
 );
 assert.throws(
-  () => computeTableBillTotals({ subtotal: 10, discount: 0, serviceChargeEnabled: true, serviceChargePercent: 12, taxRate: Infinity, digits: 2 }),
+  () =>
+    computeTableBillTotals({
+      subtotal: 10,
+      discount: 0,
+      serviceChargeEnabled: true,
+      serviceChargePercent: 12,
+      taxRate: Infinity,
+      digits: 2,
+    }),
   isRateError,
 );
 assert.throws(
-  () => computeTableBillTotals({ subtotal: 10, discount: 0, serviceChargeEnabled: true, serviceChargePercent: 'abc', taxRate: 15, digits: 2 }),
+  () =>
+    computeTableBillTotals({
+      subtotal: 10,
+      discount: 0,
+      serviceChargeEnabled: true,
+      serviceChargePercent: 'abc',
+      taxRate: 15,
+      digits: 2,
+    }),
   isRateError,
 );
 assert.throws(
-  () => computeTableBillTotals({ subtotal: 10, discount: 0, serviceChargeEnabled: true, serviceChargePercent: 150, taxRate: 15, digits: 2 }),
+  () =>
+    computeTableBillTotals({
+      subtotal: 10,
+      discount: 0,
+      serviceChargeEnabled: true,
+      serviceChargePercent: 150,
+      taxRate: 15,
+      digits: 2,
+    }),
   isRateError,
 );
 const disabledStale = computeTableBillTotals({
@@ -166,7 +214,14 @@ assert.equal(stringRates.serviceCharge, 12);
 assert.equal(stringRates.tax, 16.8);
 assert.equal(stringRates.total, 128.8);
 assert.equal(
-  computeTableBillTotals({ subtotal: 10, discount: 0, serviceChargeEnabled: true, serviceChargePercent: 12, taxRate: 100, digits: 2 }).tax,
+  computeTableBillTotals({
+    subtotal: 10,
+    discount: 0,
+    serviceChargeEnabled: true,
+    serviceChargePercent: 12,
+    taxRate: 100,
+    digits: 2,
+  }).tax,
   11.2,
 );
 
@@ -177,7 +232,15 @@ assert.equal(computeTableBillPaymentTotal(100, 0.005, 2), 100.01);
 
 // Non-finite money fails closed.
 assert.throws(
-  () => computeTableBillTotals({ subtotal: Infinity, discount: 0, serviceChargeEnabled: true, serviceChargePercent: 12, taxRate: 15, digits: 2 }),
+  () =>
+    computeTableBillTotals({
+      subtotal: Infinity,
+      discount: 0,
+      serviceChargeEnabled: true,
+      serviceChargePercent: 12,
+      taxRate: 15,
+      digits: 2,
+    }),
   /Non-finite monetary amount/,
 );
 

@@ -25,15 +25,9 @@ import { buildManagerActionInsights } from '../../src/modules/manager-actions/he
         created_at: '2026-01-01T00:00:00.000Z',
       },
     ],
-    productLastSales: [
-      { product_id: 1, last_sold_at: '2026-01-10T00:00:00.000Z' },
-    ],
-    sales: [
-      { id: 10, doc_no: 'S-10', subtotal: 1000, discount: 250, total: 750 },
-    ],
-    saleMargins: [
-      { sale_id: 10, doc_no: 'S-10', revenue: 750, cost: 780, below_cost_lines: 1 },
-    ],
+    productLastSales: [{ product_id: 1, last_sold_at: '2026-01-10T00:00:00.000Z' }],
+    sales: [{ id: 10, doc_no: 'S-10', subtotal: 1000, discount: 250, total: 750 }],
+    saleMargins: [{ sale_id: 10, doc_no: 'S-10', revenue: 750, cost: 780, below_cost_lines: 1 }],
     customers: [
       { id: 20, name: 'عميل نقدي', balance: 900, credit_limit: 800 },
       { id: 21, name: 'عميل قريب', balance: 820, credit_limit: 1000 },
@@ -78,7 +72,10 @@ import { buildManagerActionInsights } from '../../src/modules/manager-actions/he
   });
 
   const customIds = customInsights.map((i) => i.id);
-  assert.ok(customIds.includes('product-near-expiry-3'), 'Should alert on near-expiry product within custom 60-day threshold');
+  assert.ok(
+    customIds.includes('product-near-expiry-3'),
+    'Should alert on near-expiry product within custom 60-day threshold',
+  );
   assert.ok(!customIds.includes('product-stagnant-warning-3'), 'Should not alert on stagnant if under 120 days');
 
   // Test new domains: pharmacy batches, installments, online orders
@@ -95,7 +92,14 @@ import { buildManagerActionInsights } from '../../src/modules/manager-actions/he
       { id: 101, product_name: 'بانادول', batch_number: 'B-2026', expiry_date: '2026-05-10', quantity: 50 },
     ],
     installments: [
-      { id: 201, customer_name: 'أحمد محمود', customer_id: 5, amount: 500, due_date: '2026-04-20', installment_number: 2 },
+      {
+        id: 201,
+        customer_name: 'أحمد محمود',
+        customer_id: 5,
+        amount: 500,
+        due_date: '2026-04-20',
+        installment_number: 2,
+      },
     ],
     onlineOrders: [
       { id: 301, order_number: 'ORD-301', customer_name: 'سارة', total: 350, created_at: '2026-04-27T11:00:00.000Z' },

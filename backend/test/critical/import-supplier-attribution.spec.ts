@@ -114,43 +114,85 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function seedShipment(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', container_number: 'C1', supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: 'proj-1',
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'sh-1-item', tenant_id: 't1', shipment_id: 'sh-1', product_id: 1,
-    quantity: 10, factory_unit_price_usd: 50, shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      container_number: 'C1',
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'sh-1-item',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 1,
+      quantity: 10,
+      factory_unit_price_usd: 50,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function postReceipt(db: Kysely<Database>, service: any, extra: Record<string, unknown> = {}): Promise<void> {
   await service.updateShipmentCosts('t1', 1, 'sh-1', {
-    status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
-    shippingCostUsd: 100, customsCostEgp: 2000, internalTransportCostEgp: 1000,
-    freightSupplierId: 2, customsSupplierId: 3, transportSupplierId: 4,
+    status: 'Arrived',
+    exchangeRateAtArrival: 50,
+    receiptLocationId: 10,
+    shippingCostUsd: 100,
+    customsCostEgp: 2000,
+    internalTransportCostEgp: 1000,
+    freightSupplierId: 2,
+    customsSupplierId: 3,
+    transportSupplierId: 4,
     ...extra,
   });
-  const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+  const receipt: any = await (db as any)
+    .selectFrom('import_inventory_receipts')
+    .selectAll()
+    .where('shipment_id', '=', 'sh-1')
+    .executeTakeFirstOrThrow();
   assert.equal(receipt.state, 'posted');
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select(sql`count(*)`.as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select(sql`count(*)`.as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
 async function receiptJournalLines(db: Kysely<Database>): Promise<any[]> {
-  const entry: any = await (db as any).selectFrom('journal_entries').selectAll()
-    .where('source_type', '=', 'import_inventory_receipt').executeTakeFirstOrThrow();
-  return (db as any).selectFrom('journal_entry_lines').selectAll()
-    .where('journal_entry_id', '=', entry.id).orderBy('id').execute();
+  const entry: any = await (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', 'import_inventory_receipt')
+    .executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('journal_entry_lines')
+    .selectAll()
+    .where('journal_entry_id', '=', entry.id)
+    .orderBy('id')
+    .execute();
 }
 
 async function supplierLedgerTotal(db: Kysely<Database>, supplierId: number): Promise<number> {
-  const rows: any[] = await (db as any).selectFrom('supplier_ledger').select('amount')
-    .where('supplier_id', '=', supplierId).execute();
+  const rows: any[] = await (db as any)
+    .selectFrom('supplier_ledger')
+    .select('amount')
+    .where('supplier_id', '=', supplierId)
+    .execute();
   return rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
 }
 
@@ -169,7 +211,11 @@ async function main(): Promise<void> {
       assert.equal(debit, 33000, 'Goods 25000 + freight 5000 + customs 2000 + transport 1000');
       const creditsByPartner = new Map<number, number>();
       for (const line of lines) {
-        if (Number(line.credit) > 0) creditsByPartner.set(Number(line.partner_id), (creditsByPartner.get(Number(line.partner_id)) || 0) + Number(line.credit));
+        if (Number(line.credit) > 0)
+          creditsByPartner.set(
+            Number(line.partner_id),
+            (creditsByPartner.get(Number(line.partner_id)) || 0) + Number(line.credit),
+          );
       }
       assert.equal(creditsByPartner.get(1), 25000, 'Goods supplier carries only the goods value');
       assert.equal(creditsByPartner.get(2), 5000, 'Carrier carries the freight');
@@ -194,16 +240,25 @@ async function main(): Promise<void> {
       await seedShipment(db);
       await assert.rejects(
         service.updateShipmentCosts('t1', 1, 'sh-1', {
-          status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
-          shippingCostUsd: 100, customsCostEgp: 2000, internalTransportCostEgp: 1000,
-          freightSupplierId: 2, transportSupplierId: 4,
+          status: 'Arrived',
+          exchangeRateAtArrival: 50,
+          receiptLocationId: 10,
+          shippingCostUsd: 100,
+          customsCostEgp: 2000,
+          internalTransportCostEgp: 1000,
+          freightSupplierId: 2,
+          transportSupplierId: 4,
         }),
         /IMPORT_COMPONENT_PAYEE_REQUIRED/,
       );
       assert.equal(await countRows(db, 'import_inventory_receipts'), 0, 'No receipt may exist after a refused posting');
       assert.equal(await countRows(db, 'journal_entries'), 0, 'No journal may exist after a refused posting');
       assert.equal(await countRows(db, 'stock_movements'), 0, 'No stock movement may exist after a refused posting');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.stock_qty), 0, 'Stock stays zero after a refused posting');
       console.log('Case B passed: unattributed customs component fails closed with zero writes');
     } finally {
@@ -217,14 +272,21 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db);
-      await postReceipt(db, service, { customsSupplierId: undefined, unallocableCostReason: 'رسوم ميناء بلا فاتورة مورد محدد' });
+      await postReceipt(db, service, {
+        customsSupplierId: undefined,
+        unallocableCostReason: 'رسوم ميناء بلا فاتورة مورد محدد',
+      });
       const lines = await receiptJournalLines(db);
       const clearingLines = lines.filter((l) => Number(l.account_id) === 27);
       assert.equal(clearingLines.length, 1, 'Exactly one clearing line');
       assert.equal(Number(clearingLines[0].credit), 2000, 'Clearing carries the customs amount');
       assert.equal(clearingLines[0].partner_type, 'none', 'Clearing line has no partner');
       assert.equal(clearingLines[0].partner_id, null, 'Clearing line has no partner id');
-      assert.match(String(clearingLines[0].description), /رسوم ميناء بلا فاتورة مورد محدد/, 'Clearing line is labelled with the recorded reason');
+      assert.match(
+        String(clearingLines[0].description),
+        /رسوم ميناء بلا فاتورة مورد محدد/,
+        'Clearing line is labelled with the recorded reason',
+      );
       assert.equal(await supplierLedgerTotal(db, 1), 25000, 'Goods supplier carries only goods');
       assert.equal(await supplierLedgerTotal(db, 3), 0, 'No supplier subledger carries the unallocable customs fee');
       console.log('Case C passed: unallocable component posts to clearing, labelled with its reason');
@@ -245,24 +307,47 @@ async function main(): Promise<void> {
         /IMPORT_LATE_EXPENSE_PAYEE_REQUIRED/,
         'A late expense with no payee must not default to the goods supplier',
       );
-      assert.equal(await countRows(db, 'journal_entries'), 1, 'Only the receipt journal exists after the refused late expense');
+      assert.equal(
+        await countRows(db, 'journal_entries'),
+        1,
+        'Only the receipt journal exists after the refused late expense',
+      );
       const first = await service.processLateShipmentExpense('t1', 1, 'sh-1', {
-        lateExpenseAmount: 1000, title: 'Demurrage', supplierId: 2, idempotencyKey: 'late-payee-1',
+        lateExpenseAmount: 1000,
+        title: 'Demurrage',
+        supplierId: 2,
+        idempotencyKey: 'late-payee-1',
       });
       assert.equal(first.success, true);
       const second = await service.processLateShipmentExpense('t1', 1, 'sh-1', {
-        lateExpenseAmount: 500, title: 'Port storage', unallocableReason: 'إيصال ميناء نقدي بلا مورد', idempotencyKey: 'late-clearing-1',
+        lateExpenseAmount: 500,
+        title: 'Port storage',
+        unallocableReason: 'إيصال ميناء نقدي بلا مورد',
+        idempotencyKey: 'late-clearing-1',
       });
       assert.equal(second.success, true);
-      const lateLines: any[] = await (db as any).selectFrom('journal_entry_lines').selectAll()
-        .where('journal_entry_id', 'in', (eb: any) => eb.selectFrom('journal_entries').select('id').where('source_type', '=', 'import_late_expense'))
-        .orderBy('id').execute();
+      const lateLines: any[] = await (db as any)
+        .selectFrom('journal_entry_lines')
+        .selectAll()
+        .where('journal_entry_id', 'in', (eb: any) =>
+          eb.selectFrom('journal_entries').select('id').where('source_type', '=', 'import_late_expense'),
+        )
+        .orderBy('id')
+        .execute();
       const carrierCredit = lateLines.find((l) => Number(l.partner_id) === 2);
       assert.equal(Number(carrierCredit.credit), 1000, 'Explicit-payee late expense credits the named supplier');
       const clearingCredit = lateLines.find((l) => Number(l.account_id) === 27);
       assert.equal(Number(clearingCredit.credit), 500, 'Unallocable late expense credits clearing');
-      assert.match(String(clearingCredit.description), /إيصال ميناء نقدي بلا مورد/, 'Clearing late-expense line carries its reason');
-      const events: any[] = await (db as any).selectFrom('import_late_expense_events').selectAll().orderBy('id').execute();
+      assert.match(
+        String(clearingCredit.description),
+        /إيصال ميناء نقدي بلا مورد/,
+        'Clearing late-expense line carries its reason',
+      );
+      const events: any[] = await (db as any)
+        .selectFrom('import_late_expense_events')
+        .selectAll()
+        .orderBy('id')
+        .execute();
       assert.equal(events.length, 2);
       assert.equal(Number(events[0].supplier_id), 2, 'First event records its payee');
       assert.equal(events[0].unallocable_reason, null);
@@ -270,7 +355,11 @@ async function main(): Promise<void> {
       assert.equal(events[1].unallocable_reason, 'إيصال ميناء نقدي بلا مورد', 'Clearing event records its reason');
       assert.equal(await supplierLedgerTotal(db, 2), 6000, 'Carrier subledger: freight 5000 + late expense 1000');
       assert.equal(await supplierLedgerTotal(db, 1), 25000, 'Goods supplier subledger untouched by late expenses');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.cost_price), 3450, 'WAC: 3300 full landed cost + (1000 + 500) / 10 on hand');
       console.log('Case D passed: late expenses carry explicit payees or recorded clearing reasons');
     } finally {
@@ -284,12 +373,21 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db);
-      await (db as any).updateTable('accounting_settings').set({ clearing_account_id: 22 }).where('tenant_id', '=', 't1').execute();
+      await (db as any)
+        .updateTable('accounting_settings')
+        .set({ clearing_account_id: 22 })
+        .where('tenant_id', '=', 't1')
+        .execute();
       await assert.rejects(
         service.updateShipmentCosts('t1', 1, 'sh-1', {
-          status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
-          shippingCostUsd: 100, customsCostEgp: 2000, internalTransportCostEgp: 1000,
-          freightSupplierId: 2, transportSupplierId: 4,
+          status: 'Arrived',
+          exchangeRateAtArrival: 50,
+          receiptLocationId: 10,
+          shippingCostUsd: 100,
+          customsCostEgp: 2000,
+          internalTransportCostEgp: 1000,
+          freightSupplierId: 2,
+          transportSupplierId: 4,
           unallocableCostReason: 'رسوم بلا مورد',
         }),
         /clearing/,

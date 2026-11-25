@@ -50,7 +50,14 @@ async function main() {
       );
       return Number(r.rows[0].id);
     };
-    const line = async (entryId: number, tenant: string, accountId: number, debit: number, credit: number, branch: number | null) => {
+    const line = async (
+      entryId: number,
+      tenant: string,
+      accountId: number,
+      debit: number,
+      credit: number,
+      branch: number | null,
+    ) => {
       await pg.query(
         `INSERT INTO journal_entry_lines (journal_entry_id, tenant_id, account_id, debit, credit, branch_id) VALUES ($1, $2, $3, $4, $5, $6)`,
         [entryId, tenant, accountId, debit, credit, branch],
@@ -81,7 +88,10 @@ async function main() {
     const tb = await service.getTrialBalance(auth, { asOfDate: '2026-09-30' });
     assert.equal(tb.asOfDate, '2026-09-30');
     assert.equal(tb.rows.length, 5, 'every t1 account appears, including zero-balance ones');
-    assert.deepEqual(tb.rows.map((r) => r.code), ['1010', '1020', '2110', '4100', '5100']);
+    assert.deepEqual(
+      tb.rows.map((r) => r.code),
+      ['1010', '1020', '2110', '4100', '5100'],
+    );
     const byCode = new Map(tb.rows.map((r) => [r.code, r]));
     assert.deepEqual([byCode.get('1010')!.debit, byCode.get('1010')!.credit], [600, 0]);
     assert.deepEqual([byCode.get('1020')!.debit, byCode.get('1020')!.credit], [0, 0]);
@@ -152,7 +162,7 @@ async function main() {
       path.resolve(__dirname, '../../src/modules/accounting/accounting.controller.ts'),
       'utf8',
     );
-    assert.ok(controller.includes("reports/trial-balance"));
+    assert.ok(controller.includes('reports/trial-balance'));
     assert.ok(controller.includes('TrialBalanceService'));
     const moduleSrc = fs.readFileSync(
       path.resolve(__dirname, '../../src/modules/accounting/accounting.module.ts'),

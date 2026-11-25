@@ -3,7 +3,7 @@ import { tenantScopedReferences } from '../../src/database/migrations/2040000000
 
 function run(): void {
   assert.deepEqual(
-    tenantScopedReferences.map(r => [r.child, r.column, r.parent, r.onDelete]),
+    tenantScopedReferences.map((r) => [r.child, r.column, r.parent, r.onDelete]),
     [
       ['user_mfa', 'user_id', 'users', 'CASCADE'],
       ['maritime_rfq_bids', 'rfq_id', 'maritime_rfqs', 'CASCADE'],

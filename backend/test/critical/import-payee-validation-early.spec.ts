@@ -114,24 +114,43 @@ function makeService(db: Kysely<Database>): any {
   return new (ImportSalesService as any)(db, posting);
 }
 
-async function seedShipment(
-  db: Kysely<Database>,
-  overrides: Record<string, unknown> = {},
-): Promise<void> {
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', container_number: 'C1', supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: 'proj-1',
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-    ...overrides,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'sh-1-item', tenant_id: 't1', shipment_id: 'sh-1', product_id: 1,
-    quantity: 10, factory_unit_price_usd: 50, shortage_handling_method: 'capitalize',
-  } as never).execute();
+async function seedShipment(db: Kysely<Database>, overrides: Record<string, unknown> = {}): Promise<void> {
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      container_number: 'C1',
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+      ...overrides,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'sh-1-item',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 1,
+      quantity: 10,
+      factory_unit_price_usd: 50,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select(sql`count(*)`.as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select(sql`count(*)`.as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -157,7 +176,9 @@ async function main(): Promise<void> {
       await seedShipment(db);
       await assert.rejects(
         service.updateShipmentCosts('t1', 1, 'sh-1', {
-          shippingCostUsd: 100, customsCostEgp: 2000, internalTransportCostEgp: 1000,
+          shippingCostUsd: 100,
+          customsCostEgp: 2000,
+          internalTransportCostEgp: 1000,
         }),
         rejectsWithPayeeFor('شحن بحري'),
         'The trial defect: costs saved fine with "غير محدد" payees',
@@ -165,21 +186,30 @@ async function main(): Promise<void> {
       const stored = await readShipment(db);
       assert.equal(Number(stored.shipping_cost_usd), 0, 'The rejected save leaves the freight cost untouched');
       assert.equal(Number(stored.customs_cost_egp), 0, 'The rejected save leaves the customs cost untouched');
-      assert.equal(Number(stored.internal_transport_cost_egp), 0, 'The rejected save leaves the transport cost untouched');
+      assert.equal(
+        Number(stored.internal_transport_cost_egp),
+        0,
+        'The rejected save leaves the transport cost untouched',
+      );
       assert.equal(await countRows(db, 'journal_entries'), 0, 'No journal may exist after a refused save');
       assert.equal(await countRows(db, 'import_inventory_receipts'), 0, 'No receipt may exist after a refused save');
       // A payee id that is not a tenant supplier fails the same way.
       await assert.rejects(
         service.updateShipmentCosts('t1', 1, 'sh-1', {
-          shippingCostUsd: 100, freightSupplierId: 999,
+          shippingCostUsd: 100,
+          freightSupplierId: 999,
         }),
         /IMPORT_COMPONENT_PAYEE_REQUIRED/,
         'A nonexistent payee is not a payee',
       );
       // Clearing the payee of a nonzero component is blocked too.
       await service.updateShipmentCosts('t1', 1, 'sh-1', {
-        shippingCostUsd: 100, customsCostEgp: 2000, internalTransportCostEgp: 1000,
-        freightSupplierId: 2, customsSupplierId: 3, transportSupplierId: 4,
+        shippingCostUsd: 100,
+        customsCostEgp: 2000,
+        internalTransportCostEgp: 1000,
+        freightSupplierId: 2,
+        customsSupplierId: 3,
+        transportSupplierId: 4,
       });
       await assert.rejects(
         service.updateShipmentCosts('t1', 1, 'sh-1', { freightSupplierId: null as any }),
@@ -201,8 +231,12 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db);
       const updated = await service.updateShipmentCosts('t1', 1, 'sh-1', {
-        shippingCostUsd: 100, customsCostEgp: 2000, internalTransportCostEgp: 1000,
-        freightSupplierId: 2, customsSupplierId: 3, transportSupplierId: 4,
+        shippingCostUsd: 100,
+        customsCostEgp: 2000,
+        internalTransportCostEgp: 1000,
+        freightSupplierId: 2,
+        customsSupplierId: 3,
+        transportSupplierId: 4,
       });
       assert.equal(Number(updated.shipping_cost_usd), 100, 'Freight cost stored');
       assert.equal(Number(updated.customs_cost_egp), 2000, 'Customs cost stored');
@@ -223,12 +257,17 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, {
-        shipping_cost_usd: 100, customs_cost_egp: 2000, internal_transport_cost_egp: 1000,
+        shipping_cost_usd: 100,
+        customs_cost_egp: 2000,
+        internal_transport_cost_egp: 1000,
       });
       await assert.rejects(
         service.updateShipmentCosts('t1', 1, 'sh-1', {
-          status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
-          freightSupplierId: 2, transportSupplierId: 4,
+          status: 'Arrived',
+          exchangeRateAtArrival: 50,
+          receiptLocationId: 10,
+          freightSupplierId: 2,
+          transportSupplierId: 4,
         }),
         rejectsWithPayeeFor('جمارك وتخليص'),
         'The confirm must name the missing customs payee before posting anything',
@@ -236,7 +275,11 @@ async function main(): Promise<void> {
       assert.equal(await countRows(db, 'import_inventory_receipts'), 0, 'No receipt may exist after a refused confirm');
       assert.equal(await countRows(db, 'journal_entries'), 0, 'No journal may exist after a refused confirm');
       assert.equal(await countRows(db, 'stock_movements'), 0, 'No stock movement may exist after a refused confirm');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.stock_qty), 0, 'Stock stays zero after a refused confirm');
       const stored = await readShipment(db);
       assert.equal(stored.status, 'Pending', 'The refused confirm leaves the status unchanged');
@@ -255,13 +298,27 @@ async function main(): Promise<void> {
       await seedShipment(db);
       // A rate change triggers validation while every cost is zero.
       const updated = await service.updateShipmentCosts('t1', 1, 'sh-1', { exchangeRateAtArrival: 51 });
-      assert.equal(Number(updated.exchange_rate_at_arrival), 51, 'The rate save succeeds with zero costs and no payees');
+      assert.equal(
+        Number(updated.exchange_rate_at_arrival),
+        51,
+        'The rate save succeeds with zero costs and no payees',
+      );
       await service.updateShipmentCosts('t1', 1, 'sh-1', {
-        status: 'Arrived', exchangeRateAtArrival: 51, receiptLocationId: 10,
+        status: 'Arrived',
+        exchangeRateAtArrival: 51,
+        receiptLocationId: 10,
       });
-      const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+      const receipt: any = await (db as any)
+        .selectFrom('import_inventory_receipts')
+        .selectAll()
+        .where('shipment_id', '=', 'sh-1')
+        .executeTakeFirstOrThrow();
       assert.equal(receipt.state, 'posted', 'Goods-only receipt posts with no payees to attribute');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.stock_qty), 10, 'Stock increases on the posted receipt');
       console.log('Case D passed: zero-amount components save and post without payees');
     } finally {
@@ -277,25 +334,44 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db);
       const updated = await service.updateShipmentCosts('t1', 1, 'sh-1', {
-        shippingCostUsd: 100, customsCostEgp: 2000, internalTransportCostEgp: 1000,
-        freightSupplierId: 2, transportSupplierId: 4,
+        shippingCostUsd: 100,
+        customsCostEgp: 2000,
+        internalTransportCostEgp: 1000,
+        freightSupplierId: 2,
+        transportSupplierId: 4,
         unallocableCostReason: 'رسوم ميناء بلا فاتورة مورد محدد',
       });
       assert.equal(Number(updated.customs_cost_egp), 2000, 'The customs cost saves under the recorded reason');
       assert.equal(updated.unallocable_cost_reason, 'رسوم ميناء بلا فاتورة مورد محدد', 'The reason is stored');
       await service.updateShipmentCosts('t1', 1, 'sh-1', {
-        status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
+        status: 'Arrived',
+        exchangeRateAtArrival: 50,
+        receiptLocationId: 10,
       });
-      const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+      const receipt: any = await (db as any)
+        .selectFrom('import_inventory_receipts')
+        .selectAll()
+        .where('shipment_id', '=', 'sh-1')
+        .executeTakeFirstOrThrow();
       assert.equal(receipt.state, 'posted');
-      const entry: any = await (db as any).selectFrom('journal_entries').selectAll()
-        .where('source_type', '=', 'import_inventory_receipt').executeTakeFirstOrThrow();
-      const lines: any[] = await (db as any).selectFrom('journal_entry_lines').selectAll()
-        .where('journal_entry_id', '=', entry.id).execute();
+      const entry: any = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('source_type', '=', 'import_inventory_receipt')
+        .executeTakeFirstOrThrow();
+      const lines: any[] = await (db as any)
+        .selectFrom('journal_entry_lines')
+        .selectAll()
+        .where('journal_entry_id', '=', entry.id)
+        .execute();
       const clearingLines = lines.filter((l) => Number(l.account_id) === 27);
       assert.equal(clearingLines.length, 1, 'Exactly one clearing line');
       assert.equal(Number(clearingLines[0].credit), 2000, 'Clearing carries the customs amount');
-      assert.match(String(clearingLines[0].description), /رسوم ميناء بلا فاتورة مورد محدد/, 'Clearing line is labelled with the recorded reason');
+      assert.match(
+        String(clearingLines[0].description),
+        /رسوم ميناء بلا فاتورة مورد محدد/,
+        'Clearing line is labelled with the recorded reason',
+      );
       console.log('Case E passed: unallocable reason covers the save and routes the arrival to clearing');
     } finally {
       await db.destroy();
@@ -310,10 +386,17 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, { customs_cost_egp: 4000 });
-      await db.insertInto('import_broker_capitalizations' as never).values({
-        tenant_id: 't1', broker_expense_id: 'br-exp-1', shipment_id: 'sh-1',
-        cost_bucket: 'customs_cost_egp', amount_egp: 5000, state: 'folded',
-      } as never).execute();
+      await db
+        .insertInto('import_broker_capitalizations' as never)
+        .values({
+          tenant_id: 't1',
+          broker_expense_id: 'br-exp-1',
+          shipment_id: 'sh-1',
+          cost_bucket: 'customs_cost_egp',
+          amount_egp: 5000,
+          state: 'folded',
+        } as never)
+        .execute();
       const updated = await service.updateShipmentCosts('t1', 1, 'sh-1', { customsCostEgp: 5000 });
       assert.equal(Number(updated.customs_cost_egp), 5000, 'Raising the bucket to the folded sum saves with no payee');
       await assert.rejects(
@@ -321,7 +404,11 @@ async function main(): Promise<void> {
         /IMPORT_BROKER_CAPITALIZATION_FLOOR/,
         'Lowering below the folded sum must still fail on the floor, not the payee',
       );
-      assert.equal(Number((await readShipment(db)).customs_cost_egp), 5000, 'The rejected floor write leaves the bucket untouched');
+      assert.equal(
+        Number((await readShipment(db)).customs_cost_egp),
+        5000,
+        'The rejected floor write leaves the bucket untouched',
+      );
       console.log('Case F passed: broker-folded component needs no payee; floor keeps precedence');
     } finally {
       await db.destroy();
@@ -335,14 +422,20 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db, {
         exchange_rate_at_arrival: null,
-        shipping_cost_usd: 100, customs_cost_egp: 2000, internal_transport_cost_egp: 1000,
+        shipping_cost_usd: 100,
+        customs_cost_egp: 2000,
+        internal_transport_cost_egp: 1000,
       });
       await assert.rejects(
         service.updateShipmentCosts('t1', 1, 'sh-1', { status: 'Arrived', receiptLocationId: 10 }),
         /IMPORT_ARRIVAL_RATE_REQUIRED/,
         'An Arrived call without a rate must fail on the rate even when payees are also missing',
       );
-      assert.equal(await countRows(db, 'import_inventory_receipts'), 0, 'No receipt may exist after the refused confirm');
+      assert.equal(
+        await countRows(db, 'import_inventory_receipts'),
+        0,
+        'No receipt may exist after the refused confirm',
+      );
       console.log('Case G passed: arrival rate error keeps precedence over the payee check');
     } finally {
       await db.destroy();

@@ -21,23 +21,53 @@ type RowMap = Record<string, unknown[]>;
 
 class FakeQuery {
   constructor(private readonly rows: unknown[]) {}
-  select(): this { return this; }
-  where(): this { return this; }
-  innerJoin(): this { return this; }
-  leftJoin(): this { return this; }
-  orderBy(): this { return this; }
-  groupBy(): this { return this; }
-  limit(): this { return this; }
+  select(): this {
+    return this;
+  }
+  where(): this {
+    return this;
+  }
+  innerJoin(): this {
+    return this;
+  }
+  leftJoin(): this {
+    return this;
+  }
+  orderBy(): this {
+    return this;
+  }
+  groupBy(): this {
+    return this;
+  }
+  limit(): this {
+    return this;
+  }
   $if(condition: boolean, callback: (qb: this) => this): this {
     return condition ? callback(this) : this;
   }
-  execute(): Promise<unknown[]> { return Promise.resolve(this.rows); }
-  executeTakeFirst(): Promise<unknown> { return Promise.resolve(this.rows[0]); }
+  execute(): Promise<unknown[]> {
+    return Promise.resolve(this.rows);
+  }
+  executeTakeFirst(): Promise<unknown> {
+    return Promise.resolve(this.rows[0]);
+  }
   executeTakeFirstOrThrow(): Promise<unknown> {
     // The real aggregate queries always return exactly one row (COUNT/SUM with no GROUP BY never
     // return zero rows, even over an empty table) — a canned row with sane zero defaults keeps the
     // service's Number(...) calls from producing NaN, without pretending to fake the real arithmetic.
-    return Promise.resolve(this.rows[0] ?? { n: 0, total: 0, near: 0, above: 0, products_count: 0, low_stock_count: 0, out_of_stock_count: 0, inventory_cost: 0, inventory_sale_value: 0 });
+    return Promise.resolve(
+      this.rows[0] ?? {
+        n: 0,
+        total: 0,
+        near: 0,
+        above: 0,
+        products_count: 0,
+        low_stock_count: 0,
+        out_of_stock_count: 0,
+        inventory_cost: 0,
+        inventory_sale_value: 0,
+      },
+    );
   }
 }
 
@@ -69,30 +99,39 @@ class FakeDb {
   const thirtyFiveDaysAgo = new Date(today);
   thirtyFiveDaysAgo.setUTCDate(thirtyFiveDaysAgo.getUTCDate() - 35);
 
-  const service = new ReportsService(new FakeDb({
-    sales: [
-      { id: 1, total: 100, branch_id: 1, location_id: 1, created_at: today.toISOString() },
-      { id: 2, total: 50, branch_id: 1, location_id: 1, created_at: oneDayAgo.toISOString() },
-      { id: 3, total: 999, branch_id: 1, location_id: 1, created_at: thirtyFiveDaysAgo.toISOString() },
-    ],
-    purchases: [
-      { id: 1, total: 80, branch_id: 1, location_id: 1, created_at: today.toISOString() },
-    ],
-    expenses: [],
-    return_documents: [],
-    treasury_transactions: [],
-    product_offers: [
-      { id: 1, start_date: null, end_date: null },
-    ],
-    'sale_items as si': [
-      { product_id: 1, product_name: 'A', qty: 2, line_total: 20, cost_price: 4, qty_total: 2, sales_total: 20, branch_id: 1, location_id: 1, created_at: today.toISOString() },
-    ],
-  }) as never);
-
-  const result = await service.dashboardOverview(
-    { branchId: 1, locationId: 1 },
-    { tenantId: 'tenant-a', accountId: 'account-a' } as never,
+  const service = new ReportsService(
+    new FakeDb({
+      sales: [
+        { id: 1, total: 100, branch_id: 1, location_id: 1, created_at: today.toISOString() },
+        { id: 2, total: 50, branch_id: 1, location_id: 1, created_at: oneDayAgo.toISOString() },
+        { id: 3, total: 999, branch_id: 1, location_id: 1, created_at: thirtyFiveDaysAgo.toISOString() },
+      ],
+      purchases: [{ id: 1, total: 80, branch_id: 1, location_id: 1, created_at: today.toISOString() }],
+      expenses: [],
+      return_documents: [],
+      treasury_transactions: [],
+      product_offers: [{ id: 1, start_date: null, end_date: null }],
+      'sale_items as si': [
+        {
+          product_id: 1,
+          product_name: 'A',
+          qty: 2,
+          line_total: 20,
+          cost_price: 4,
+          qty_total: 2,
+          sales_total: 20,
+          branch_id: 1,
+          location_id: 1,
+          created_at: today.toISOString(),
+        },
+      ],
+    }) as never,
   );
+
+  const result = await service.dashboardOverview({ branchId: 1, locationId: 1 }, {
+    tenantId: 'tenant-a',
+    accountId: 'account-a',
+  } as never);
   const trends = (result.trends as any).sales as Array<{ key: string; value: number }>;
   const todayKey = dateKey(today, businessTimezone);
   const oneDayAgoKey = dateKey(oneDayAgo, businessTimezone);
@@ -100,16 +139,34 @@ class FakeDb {
 
   assert.equal(trends.find((item) => item.key === todayKey)?.value, 100);
   assert.equal(trends.find((item) => item.key === oneDayAgoKey)?.value, 50);
-  assert.equal(trends.some((item) => item.key === thirtyFiveDaysAgoKey), false);
+  assert.equal(
+    trends.some((item) => item.key === thirtyFiveDaysAgoKey),
+    false,
+  );
   assert.equal((result.stats as any).todaySalesAmount, 100);
   assert.equal((result.summary as any).activeOffers, 1);
   assert.equal(((result.topToday as any[]) || [])[0]?.total, 20);
 
   // Not a crash, and every PO-2 aggregate field is at least present as a finite number — the exact
   // arithmetic is verified in test/e2e/dashboard-overview-aggregates.e2e.ts, not here (see file header).
-  for (const field of ['productsCount', 'customersCount', 'suppliersCount', 'inventoryCost', 'inventorySaleValue', 'customerDebt', 'supplierDebt', 'nearCreditLimit', 'aboveCreditLimit', 'highSupplierBalances']) {
+  for (const field of [
+    'productsCount',
+    'customersCount',
+    'suppliersCount',
+    'inventoryCost',
+    'inventorySaleValue',
+    'customerDebt',
+    'supplierDebt',
+    'nearCreditLimit',
+    'aboveCreditLimit',
+    'highSupplierBalances',
+  ]) {
     const value = (result.stats as Record<string, unknown>)[field];
-    assert.equal(Number.isFinite(Number(value)), true, `stats.${field} must be a finite number, got ${JSON.stringify(value)}`);
+    assert.equal(
+      Number.isFinite(Number(value)),
+      true,
+      `stats.${field} must be a finite number, got ${JSON.stringify(value)}`,
+    );
   }
   assert.ok(Array.isArray(result.lowStock), 'lowStock must be an array');
   assert.ok(Array.isArray(result.topCustomers), 'topCustomers must be an array');

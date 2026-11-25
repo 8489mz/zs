@@ -90,8 +90,13 @@ async function main(): Promise<void> {
     return (db as any).selectFrom('maritime_containers').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
   }
   async function demCharges(jobId: string): Promise<any[]> {
-    return (db as any).selectFrom('maritime_job_charges').selectAll()
-      .where('job_id', '=', jobId).where('charge_code', '=', 'DEM').orderBy('id', 'asc').execute();
+    return (db as any)
+      .selectFrom('maritime_job_charges')
+      .selectAll()
+      .where('job_id', '=', jobId)
+      .where('charge_code', '=', 'DEM')
+      .orderBy('id', 'asc')
+      .execute();
   }
 
   try {
@@ -141,7 +146,10 @@ async function main(): Promise<void> {
     // 2. Zero rate: exposure 0, no charge, nothing invented.
     const c2 = await container(2);
     assert.equal(Number(c2.demurrage_amount), 0);
-    assert.equal((await demCharges('1')).filter((r: any) => String(r.charge_name_en).includes('TGHU7654321')).length, 0);
+    assert.equal(
+      (await demCharges('1')).filter((r: any) => String(r.charge_name_en).includes('TGHU7654321')).length,
+      0,
+    );
 
     // 3. Completed job: exposure updated, no charge.
     const c3 = await container(3);
@@ -177,13 +185,19 @@ async function main(): Promise<void> {
     assert.equal(await freightService.syncDemurrageChargeForContainer('t1', 2, 'MSKU9999999', 60), 'skipped');
 
     // 8. Source pins.
-    const schedulerSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-automation-scheduler.service.ts'), 'utf8');
+    const schedulerSource = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-automation-scheduler.service.ts'),
+      'utf8',
+    );
     assert.ok(!schedulerSource.includes('|| 50'), 'no invented rate may remain in the scan');
     assert.ok(schedulerSource.includes('demurrage_rate_per_day || 0'), 'an unset rate is zero, never invented');
     assert.ok(schedulerSource.includes('syncDemurrageChargeForContainer'), 'the scan must call the sync helper');
     // Maritime split: the demurrage sync + updateContainer both live in
     // the jobs-containers slice.
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-jobs-containers.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-jobs-containers.service.ts'),
+      'utf8',
+    );
     const syncStart = serviceSource.indexOf('async syncDemurrageChargeForContainer(');
     const updateStart = serviceSource.indexOf('async updateContainer(');
     const syncBody = serviceSource.slice(syncStart, updateStart);

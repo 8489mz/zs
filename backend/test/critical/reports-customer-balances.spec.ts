@@ -5,15 +5,33 @@ type RowMap = Record<string, unknown[]>;
 
 class FakeQuery {
   constructor(private readonly rows: unknown[]) {}
-  select(): this { return this; }
-  where(): this { return this; }
-  innerJoin(): this { return this; }
-  leftJoin(): this { return this; }
-  orderBy(): this { return this; }
-  groupBy(): this { return this; }
-  limit(): this { return this; }
-  execute(): Promise<unknown[]> { return Promise.resolve(this.rows); }
-  executeTakeFirst(): Promise<unknown> { return Promise.resolve(this.rows[0]); }
+  select(): this {
+    return this;
+  }
+  where(): this {
+    return this;
+  }
+  innerJoin(): this {
+    return this;
+  }
+  leftJoin(): this {
+    return this;
+  }
+  orderBy(): this {
+    return this;
+  }
+  groupBy(): this {
+    return this;
+  }
+  limit(): this {
+    return this;
+  }
+  execute(): Promise<unknown[]> {
+    return Promise.resolve(this.rows);
+  }
+  executeTakeFirst(): Promise<unknown> {
+    return Promise.resolve(this.rows[0]);
+  }
 }
 
 class FakeDb {
@@ -24,16 +42,18 @@ class FakeDb {
 }
 
 (async () => {
-  const service = new ReportsService(new FakeDb({
-    customers: [
-      { id: 1, name: 'A', phone: '1', balance: 0, credit_limit: 500 },
-      { id: 2, name: 'B', phone: '2', balance: 200, credit_limit: 300 },
-    ],
-    customer_ledger: [
-      { customer_id: 1, balance_total: 150 },
-      { customer_id: 2, balance_total: -50 },
-    ],
-  }) as never);
+  const service = new ReportsService(
+    new FakeDb({
+      customers: [
+        { id: 1, name: 'A', phone: '1', balance: 0, credit_limit: 500 },
+        { id: 2, name: 'B', phone: '2', balance: 200, credit_limit: 300 },
+      ],
+      customer_ledger: [
+        { customer_id: 1, balance_total: 150 },
+        { customer_id: 2, balance_total: -50 },
+      ],
+    }) as never,
+  );
 
   const result = await service.customerBalances({}, { tenantId: 'tenant-a', accountId: 'account-a' } as never);
   const customers = (result.customers as any[]) || [];

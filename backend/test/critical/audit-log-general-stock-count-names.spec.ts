@@ -29,12 +29,22 @@ import { AccountingTenantFoundationService } from '../../src/modules/accounting/
 import { InventoryCountService } from '../../src/modules/inventory/services/inventory-count.service';
 import { migration as auditKeyMigration } from '../../src/database/migrations/2040000000293_audit_logs_idempotency_key';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new InventoryCountService(
     db as never,
@@ -83,20 +93,33 @@ async function main(): Promise<void> {
     `);
     await auditKeyMigration.up(db as never);
 
-    await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (1, 't1', 'a1', 'Product 1', 100, 0, 10, true, false)`.execute(db);
-    await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', 1, 1, 1, 100, 0)`.execute(db);
+    await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (1, 't1', 'a1', 'Product 1', 100, 0, 10, true, false)`.execute(
+      db,
+    );
+    await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', 1, 1, 1, 100, 0)`.execute(
+      db,
+    );
 
-    const result = await service.createStockCountSession(
-      { locationId: 1, branchId: 1, items: [{ productId: 1, countedQty: 100, reason: 'count', note: '' }], note: '' } as never,
+    const result = (await service.createStockCountSession(
+      {
+        locationId: 1,
+        branchId: 1,
+        items: [{ productId: 1, countedQty: 100, reason: 'count', note: '' }],
+        note: '',
+      } as never,
       AUTH,
-    ) as unknown as { ok: boolean; sessionId: string };
+    )) as unknown as { ok: boolean; sessionId: string };
     assert.equal(result.ok, true);
     const sessionId = Number(result.sessionId);
     assert.ok(sessionId > 0, 'a session was created');
-    const session = await sql<{ status: string }>`SELECT status FROM stock_count_sessions WHERE id = ${sessionId}`.execute(db);
+    const session = await sql<{
+      status: string;
+    }>`SELECT status FROM stock_count_sessions WHERE id = ${sessionId}`.execute(db);
     assert.equal(session.rows[0].status, 'draft');
 
-    const audit = await sql<{ details: string }>`SELECT details FROM audit_logs WHERE action = 'جلسة جرد مخزون' ORDER BY id DESC LIMIT 1`.execute(db);
+    const audit = await sql<{
+      details: string;
+    }>`SELECT details FROM audit_logs WHERE action = 'جلسة جرد مخزون' ORDER BY id DESC LIMIT 1`.execute(db);
     assert.equal(audit.rows.length, 1, 'one audit row for the session');
     const stored = JSON.parse(audit.rows[0].details) as { after?: Record<string, unknown> };
     assert.equal(stored.after?.sessionId, sessionId);

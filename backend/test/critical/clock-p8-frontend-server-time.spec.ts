@@ -52,7 +52,11 @@ import { PdcChequesService } from '../../src/modules/accounting/services/pdc-che
 import { HrService } from '../../src/modules/hr/hr.service';
 
 const AUTH = {
-  tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['accounting', 'hrAttendance', 'hrPayrollView'],
 } as unknown as AuthContext;
 
@@ -64,7 +68,10 @@ function assertServerClock(res: Record<string, unknown>, label: string) {
   assert.equal(typeof res.serverTime, 'string', `${label}: serverTime must be present`);
   const instant = new Date(String(res.serverTime));
   assert.ok(!Number.isNaN(instant.getTime()), `${label}: serverTime must parse as an instant`);
-  assert.ok(Math.abs(Date.now() - instant.getTime()) < 120_000, `${label}: serverTime must be fresh (within 120s of now)`);
+  assert.ok(
+    Math.abs(Date.now() - instant.getTime()) < 120_000,
+    `${label}: serverTime must be fresh (within 120s of now)`,
+  );
   assert.equal(res.serverTimezone, 'Asia/Kuwait', `${label}: serverTimezone must be the tenant zone`);
 }
 
@@ -73,7 +80,10 @@ async function main() {
   {
     const pg = new PGlite();
     const db = makeDb(pg);
-    const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+    const foundation = {
+      ensureForAuth: async () => {},
+      ensureForScope: async () => {},
+    } as unknown as AccountingTenantFoundationService;
     const posting = new AccountingPostingService(foundation);
     const service = new AccountingService(db, foundation, posting);
     try {
@@ -179,35 +189,65 @@ async function main() {
     const read = (rel: string) => readFileSync(join(feRoot, rel), 'utf8');
 
     const table = read('features/hr/components/attendance/DailyAttendanceTable.tsx');
-    assert.ok(table.includes('serverClock.timeHHmm()'), 'DailyAttendanceTable: the "now" button must fill the server time');
+    assert.ok(
+      table.includes('serverClock.timeHHmm()'),
+      'DailyAttendanceTable: the "now" button must fill the server time',
+    );
     assert.ok(table.includes('serverTime?: string'), 'DailyAttendanceTable: the serverTime prop must exist');
 
     const manual = read('features/hr/components/attendance/ManualAttendanceModal.tsx');
-    assert.ok(manual.includes('serverClock.timeHHmm()'), 'ManualAttendanceModal: the "current time" button must fill the server time');
+    assert.ok(
+      manual.includes('serverClock.timeHHmm()'),
+      'ManualAttendanceModal: the "current time" button must fill the server time',
+    );
 
     const je = read('features/accounting/components/ManualJournalEntryDialog.tsx');
-    assert.ok(je.includes('serverClock.todayKey()'), 'ManualJournalEntryDialog: the entry date must default from the server day');
+    assert.ok(
+      je.includes('serverClock.todayKey()'),
+      'ManualJournalEntryDialog: the entry date must default from the server day',
+    );
 
     const pdc = read('features/accounting/components/PdcChequeActionModal.tsx');
-    assert.ok(pdc.includes('serverClock.todayKey()'), 'PdcChequeActionModal: the action date must default from the server day');
+    assert.ok(
+      pdc.includes('serverClock.todayKey()'),
+      'PdcChequeActionModal: the action date must default from the server day',
+    );
 
     const payroll = read('features/hr/components/payroll/CreatePayrollRunModal.tsx');
-    assert.ok(payroll.includes('serverClock.todayKey()'), 'CreatePayrollRunModal: the daily presets must default from the server day');
+    assert.ok(
+      payroll.includes('serverClock.todayKey()'),
+      'CreatePayrollRunModal: the daily presets must default from the server day',
+    );
 
     const attPage = read('features/hr/pages/HrAttendancePage.tsx');
-    assert.ok(attPage.includes('serverTime={attendance.data?.serverTime}'), 'HrAttendancePage: the table/modal must receive the list serverTime');
-    assert.ok(attPage.includes('calculatePeriodRange(mode, date, serverToday)'), 'HrAttendancePage: period ranges must be bounded by the server day');
+    assert.ok(
+      attPage.includes('serverTime={attendance.data?.serverTime}'),
+      'HrAttendancePage: the table/modal must receive the list serverTime',
+    );
+    assert.ok(
+      attPage.includes('calculatePeriodRange(mode, date, serverToday)'),
+      'HrAttendancePage: period ranges must be bounded by the server day',
+    );
 
     const payPage = read('features/hr/pages/HrPayrollPage.tsx');
     const payCreateModal = read('features/hr/pages/hr-payroll-page/hr-payroll-create-run-modal.tsx');
-    assert.ok(payCreateModal.includes('serverTime={workspace.payrollRuns.data?.serverTime}'), 'HrPayrollPage: the create modal must receive the list serverTime');
+    assert.ok(
+      payCreateModal.includes('serverTime={workspace.payrollRuns.data?.serverTime}'),
+      'HrPayrollPage: the create modal must receive the list serverTime',
+    );
     assert.ok(payPage.includes('serverMonth'), 'HrPayrollPage: the month filter must adopt the server month');
 
     const jePage = read('features/accounting/pages/AccountingJournalEntriesPage.tsx');
-    assert.ok(jePage.includes('serverTime={query.data?.serverTime}'), 'AccountingJournalEntriesPage: the JE dialog must receive the list serverTime');
+    assert.ok(
+      jePage.includes('serverTime={query.data?.serverTime}'),
+      'AccountingJournalEntriesPage: the JE dialog must receive the list serverTime',
+    );
 
     const pdcPage = read('features/accounting/pages/PdcChequesPage.tsx');
-    assert.ok(pdcPage.includes('serverTime={chequesQuery.data?.serverTime}'), 'PdcChequesPage: the action modal must receive the list serverTime');
+    assert.ok(
+      pdcPage.includes('serverTime={chequesQuery.data?.serverTime}'),
+      'PdcChequesPage: the action modal must receive the list serverTime',
+    );
 
     console.log('§E frontend wiring source pins: ok');
   }

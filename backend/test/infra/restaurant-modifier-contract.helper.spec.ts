@@ -50,25 +50,45 @@ const truth: ModifierPriceTruth = {
 };
 
 const mandatoryGroup: ModifierGroupRule = {
-  id: 1, name: 'Sauces', selectionType: 'multiple',
-  isMandatory: true, minSelections: 1, maxSelections: 2, isActive: true,
+  id: 1,
+  name: 'Sauces',
+  selectionType: 'multiple',
+  isMandatory: true,
+  minSelections: 1,
+  maxSelections: 2,
+  isActive: true,
 };
 const minTwoGroup: ModifierGroupRule = {
-  id: 2, name: 'Toppings', selectionType: 'multiple',
-  isMandatory: false, minSelections: 2, maxSelections: 10, isActive: true,
+  id: 2,
+  name: 'Toppings',
+  selectionType: 'multiple',
+  isMandatory: false,
+  minSelections: 2,
+  maxSelections: 10,
+  isActive: true,
 };
 const singleGroup: ModifierGroupRule = {
-  id: 3, name: 'Cooking', selectionType: 'single',
-  isMandatory: false, minSelections: 0, maxSelections: 10, isActive: true,
+  id: 3,
+  name: 'Cooking',
+  selectionType: 'single',
+  isMandatory: false,
+  minSelections: 0,
+  maxSelections: 10,
+  isActive: true,
 };
 
 (function restaurantModifierContractHelperSpec() {
   // I47: option mods are re-priced to the configured price.
   const repriced = rewriteModifierPrices(
-    [{ productId: 100, modifiers: [
-      { optionId: 11, productId: 0, name: 'Extra cheese', qty: 1, price: 0 },
-      { optionId: 11, productId: 0, name: 'Extra cheese', qty: 1, price: -5 },
-    ] }],
+    [
+      {
+        productId: 100,
+        modifiers: [
+          { optionId: 11, productId: 0, name: 'Extra cheese', qty: 1, price: 0 },
+          { optionId: 11, productId: 0, name: 'Extra cheese', qty: 1, price: -5 },
+        ],
+      },
+    ],
     truth,
   );
   assert.equal(repriced[0].modifiers![0].price, 10);
@@ -87,28 +107,44 @@ const singleGroup: ModifierGroupRule = {
 
   // I52: combo components price from the product retail price.
   const combo = rewriteModifierPrices(
-    [{ productId: 100, modifiers: [
-      { productId: 101, name: 'Fries', qty: 1, price: 0, isComboComponent: true },
-      { productId: 101, name: 'Fries', qty: 1, price: 999, isComboComponent: true },
-    ] }],
+    [
+      {
+        productId: 100,
+        modifiers: [
+          { productId: 101, name: 'Fries', qty: 1, price: 0, isComboComponent: true },
+          { productId: 101, name: 'Fries', qty: 1, price: 999, isComboComponent: true },
+        ],
+      },
+    ],
     truth,
   );
   assert.equal(combo[0].modifiers![0].price, 25);
   assert.equal(combo[0].modifiers![1].price, 25);
   assert.throws(
-    () => rewriteModifierPrices(
-      [{ productId: 100, modifiers: [{ productId: 404, name: 'Ghost side', qty: 1, price: 5, isComboComponent: true }] }],
-      truth,
-    ),
+    () =>
+      rewriteModifierPrices(
+        [
+          {
+            productId: 100,
+            modifiers: [{ productId: 404, name: 'Ghost side', qty: 1, price: 5, isComboComponent: true }],
+          },
+        ],
+        truth,
+      ),
     (e: any) => e.code === 'RESTAURANT_MODIFIER_PRICE_UNVERIFIED' && e.statusCode === 422,
   );
 
   // Flat legacy addon: productId is an addon id; products win on collision.
   const addon = rewriteModifierPrices(
-    [{ productId: 100, modifiers: [
-      { productId: 500, name: 'Dip', qty: 1, price: 0 },
-      { productId: 100, name: 'Cheese portion', qty: 0.2, price: 0 },
-    ] }],
+    [
+      {
+        productId: 100,
+        modifiers: [
+          { productId: 500, name: 'Dip', qty: 1, price: 0 },
+          { productId: 100, name: 'Cheese portion', qty: 0.2, price: 0 },
+        ],
+      },
+    ],
     truth,
   );
   assert.equal(addon[0].modifiers![0].price, 15);
@@ -118,10 +154,11 @@ const singleGroup: ModifierGroupRule = {
   // Negative client price on a bare product mod: no configured modifier
   // price to fall back to, so it is rejected, not re-priced to retail.
   assert.throws(
-    () => rewriteModifierPrices(
-      [{ productId: 100, modifiers: [{ productId: 101, name: 'Side', qty: 1, price: -5 }] }],
-      truth,
-    ),
+    () =>
+      rewriteModifierPrices(
+        [{ productId: 100, modifiers: [{ productId: 101, name: 'Side', qty: 1, price: -5 }] }],
+        truth,
+      ),
     (e: any) => e.code === 'RESTAURANT_MODIFIER_PRICE_UNVERIFIED' && e.statusCode === 422,
   );
   // Name-only mod (old hardcoded combo delta shape): no truth at all.
@@ -132,71 +169,74 @@ const singleGroup: ModifierGroupRule = {
 
   // I48: mandatory group with zero selections is 422.
   assert.throws(
-    () => validateModifierGroupRules(
-      [{ productId: 100, modifiers: [] }],
-      new Map([[100, [mandatoryGroup]]]),
-      truth,
-    ),
+    () => validateModifierGroupRules([{ productId: 100, modifiers: [] }], new Map([[100, [mandatoryGroup]]]), truth),
     (e: any) => e.code === 'RESTAURANT_MODIFIER_RULE_VIOLATED' && String(e.message).includes('Sauces'),
   );
   // One selection satisfies the mandatory group.
-  assert.doesNotThrow(() => validateModifierGroupRules(
-    [{ productId: 100, modifiers: [{ optionId: 11, price: 10 }] }],
-    new Map([[100, [mandatoryGroup]]]),
-    truth,
-  ));
-  // 3 selections with max 2 is 422.
-  assert.throws(
-    () => validateModifierGroupRules(
-      [{ productId: 100, modifiers: [{ optionId: 11 }, { optionId: 12 }, { optionId: 13 }] }],
+  assert.doesNotThrow(() =>
+    validateModifierGroupRules(
+      [{ productId: 100, modifiers: [{ optionId: 11, price: 10 }] }],
       new Map([[100, [mandatoryGroup]]]),
       truth,
     ),
+  );
+  // 3 selections with max 2 is 422.
+  assert.throws(
+    () =>
+      validateModifierGroupRules(
+        [{ productId: 100, modifiers: [{ optionId: 11 }, { optionId: 12 }, { optionId: 13 }] }],
+        new Map([[100, [mandatoryGroup]]]),
+        truth,
+      ),
     (e: any) => e.code === 'RESTAURANT_MODIFIER_RULE_VIOLATED',
   );
   // Min 2 with 1 selection is 422; 2 selections pass.
   assert.throws(
-    () => validateModifierGroupRules(
-      [{ productId: 100, modifiers: [{ optionId: 21 }] }],
+    () =>
+      validateModifierGroupRules(
+        [{ productId: 100, modifiers: [{ optionId: 21 }] }],
+        new Map([[100, [minTwoGroup]]]),
+        truth,
+      ),
+    (e: any) => e.code === 'RESTAURANT_MODIFIER_RULE_VIOLATED',
+  );
+  assert.doesNotThrow(() =>
+    validateModifierGroupRules(
+      [{ productId: 100, modifiers: [{ optionId: 21 }, { optionId: 14 }] }],
       new Map([[100, [minTwoGroup]]]),
       truth,
     ),
-    (e: any) => e.code === 'RESTAURANT_MODIFIER_RULE_VIOLATED',
   );
-  assert.doesNotThrow(() => validateModifierGroupRules(
-    [{ productId: 100, modifiers: [{ optionId: 21 }, { optionId: 14 }] }],
-    new Map([[100, [minTwoGroup]]]),
-    truth,
-  ));
   // An optional (non-mandatory) group may be skipped entirely: zero
   // selections pass even when minSelections is 2. (The minimum binds
   // only once the cashier picks at least one option from the group.)
-  assert.doesNotThrow(() => validateModifierGroupRules(
-    [{ productId: 100, modifiers: [] }],
-    new Map([[100, [minTwoGroup]]]),
-    truth,
-  ));
+  assert.doesNotThrow(() =>
+    validateModifierGroupRules([{ productId: 100, modifiers: [] }], new Map([[100, [minTwoGroup]]]), truth),
+  );
   // Single-select groups cap at 1 even when maxSelections says 10.
   assert.equal(effectiveMaxSelections(singleGroup), 1);
   assert.equal(effectiveMaxSelections(mandatoryGroup), 2);
   // A client-sent groupId pointing at the mandatory group does not
   // satisfy it when the DB option belongs to another group.
   assert.throws(
-    () => validateModifierGroupRules(
-      [{ productId: 100, modifiers: [{ optionId: 21, groupId: 1 }] }],
-      new Map([[100, [mandatoryGroup]]]),
-      truth,
-    ),
+    () =>
+      validateModifierGroupRules(
+        [{ productId: 100, modifiers: [{ optionId: 21, groupId: 1 }] }],
+        new Map([[100, [mandatoryGroup]]]),
+        truth,
+      ),
     (e: any) => e.code === 'RESTAURANT_MODIFIER_RULE_VIOLATED',
   );
   // An option from an unlinked group does not count toward a linked
   // group and is not rejected here (the cost resolver's component
   // check still guards it).
-  assert.doesNotThrow(() => validateModifierGroupRules(
-    [{ productId: 100, modifiers: [{ optionId: 21 }] }],
-    new Map([[100, [singleGroup]]]),
-    truth,
-  ));
+  assert.doesNotThrow(() =>
+    validateModifierGroupRules(
+      [{ productId: 100, modifiers: [{ optionId: 21 }] }],
+      new Map([[100, [singleGroup]]]),
+      truth,
+    ),
+  );
   // The combined contract re-prices first, then enforces rules.
   const combined = enforceRestaurantModifierContract(
     [{ productId: 100, modifiers: [{ optionId: 11, price: 0 }] }],
@@ -205,11 +245,8 @@ const singleGroup: ModifierGroupRule = {
   );
   assert.equal(combined[0].modifiers![0].price, 10);
   assert.throws(
-    () => enforceRestaurantModifierContract(
-      [{ productId: 100, modifiers: [] }],
-      truth,
-      new Map([[100, [mandatoryGroup]]]),
-    ),
+    () =>
+      enforceRestaurantModifierContract([{ productId: 100, modifiers: [] }], truth, new Map([[100, [mandatoryGroup]]])),
     (e: any) => e.code === 'RESTAURANT_MODIFIER_RULE_VIOLATED',
   );
   // Items without modifiers pass through untouched.

@@ -12,26 +12,41 @@
  */
 
 import { strict as assert } from 'node:assert';
-import { calculateHrPayrollRunLine, type HrPayrollRunLineInput } from '../../src/modules/hr/engines/hr-payroll-run.engine';
+import {
+  calculateHrPayrollRunLine,
+  type HrPayrollRunLineInput,
+} from '../../src/modules/hr/engines/hr-payroll-run.engine';
 
 const base: HrPayrollRunLineInput = {
   minorUnits: 2,
   policy: {
-    hrSocialInsuranceEnabled: false, hrIncomeTaxEnabled: true,
-    statutoryCountry: 'EG', statutoryEffectiveFrom: '2026-01-01',
-    statutoryLegalReference: 'test', statutoryReviewed: true,
-    taxPersonalExemption: 0, taxableEarningsBasis: 'gross',
+    hrSocialInsuranceEnabled: false,
+    hrIncomeTaxEnabled: true,
+    statutoryCountry: 'EG',
+    statutoryEffectiveFrom: '2026-01-01',
+    statutoryLegalReference: 'test',
+    statutoryReviewed: true,
+    taxPersonalExemption: 0,
+    taxableEarningsBasis: 'gross',
     taxDeductEmployeeInsurance: false,
     taxBrackets: [{ max: null, rate: 10 }],
   },
   period: { from: '2026-03-01', to: '2026-03-31' },
   line: {
-    employeeId: 1, baseSalary: 5000, allowanceAmount: 0, overtimeAmount: 0,
-    commissionAmount: 0, scheduledLoanDeduction: 0, attendanceDeduction: 0,
-    leaveDeduction: 0, assetRecoveryDeduction: 0, otherDeductions: 0,
+    employeeId: 1,
+    baseSalary: 5000,
+    allowanceAmount: 0,
+    overtimeAmount: 0,
+    commissionAmount: 0,
+    scheduledLoanDeduction: 0,
+    attendanceDeduction: 0,
+    leaveDeduction: 0,
+    assetRecoveryDeduction: 0,
+    otherDeductions: 0,
   },
   eligibility: { insured: false, taxable: true },
-  configuredInsuranceSalary: 0, employmentMonthFraction: 0.5,
+  configuredInsuranceSalary: 0,
+  employmentMonthFraction: 0.5,
 };
 
 function main(): void {

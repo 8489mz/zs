@@ -58,7 +58,10 @@ import {
   findSoldSerialSaleId,
   isFinancialTicketChange,
 } from '../../src/modules/maintenance/maintenance.service';
-import { up as warrantyUp, down as warrantyDown } from '../../src/database/migrations/2040000000301_maintenance_ticket_warranty_end';
+import {
+  up as warrantyUp,
+  down as warrantyDown,
+} from '../../src/database/migrations/2040000000301_maintenance_ticket_warranty_end';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -68,8 +71,16 @@ function testPureHelpers(): void {
   assert.equal(computeWarrantyEnd(repairedAt, 30).getTime() - repairedAt.getTime(), 30 * DAY_MS);
   assert.equal(computeWarrantyEnd(repairedAt, 45).toISOString(), '2026-12-23T10:00:00.000Z');
   assert.equal(computeWarrantyEnd(repairedAt, 0).getTime(), repairedAt.getTime());
-  assert.equal(computeWarrantyEnd(repairedAt, -5).getTime(), repairedAt.getTime(), 'negative days clamp to repair time');
-  assert.equal(computeWarrantyEnd(repairedAt, 45.9).getTime() - repairedAt.getTime(), 45 * DAY_MS, 'fractional days floor');
+  assert.equal(
+    computeWarrantyEnd(repairedAt, -5).getTime(),
+    repairedAt.getTime(),
+    'negative days clamp to repair time',
+  );
+  assert.equal(
+    computeWarrantyEnd(repairedAt, 45.9).getTime() - repairedAt.getTime(),
+    45 * DAY_MS,
+    'fractional days floor',
+  );
 
   // Financial-change detection: each financial field, changed vs same.
   const existing = { advance_payment: 20, final_cost: 100, expected_cost: 100, status: 'received' };
@@ -267,7 +278,16 @@ async function main(): Promise<void> {
     await insertTicket(pg, 'ZM-260108-0007', 'unrepairable', 100, 100, 0);
     await insertTicket(pg, 'ZM-260108-0008', 'cancelled', 100, 100, 50);
     await insertTicket(pg, 'ZM-260108-0009', 'received', 999, 999, 0, 't2');
-    const refundedId = await insertTicket(pg, 'ZM-260108-0010', 'cancelled', 20, 20, 12, 't1', '2026-12-01T10:00:00.000Z');
+    const refundedId = await insertTicket(
+      pg,
+      'ZM-260108-0010',
+      'cancelled',
+      20,
+      20,
+      12,
+      't1',
+      '2026-12-01T10:00:00.000Z',
+    );
     const plainId = await insertTicket(pg, 'ZM-260108-0011', 'received', 40, 40, 0);
     await pg.query(
       `INSERT INTO treasury_transactions (tenant_id, account_id, reference_type, reference_id)

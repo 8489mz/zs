@@ -98,7 +98,14 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
  *   and the removal-value basis is the receipt-cost engine itself.
  */
 
-const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'tester', permissions: [] } as unknown as AuthContext;
+const auth = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'tester',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -184,19 +191,32 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 4100, 5100, 5190, 7290]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-      [code, 't1', String(code), code === 1150 || code === 2120]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      String(code),
+      code === 1150 || code === 2120,
+    ]);
   }
   return { pg, db };
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: code } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: code } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): PurchasesWriteService {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auditStub = { log: async () => undefined };
   const idempotencyStub = {};
@@ -205,8 +225,13 @@ function makeServices(db: Kysely<Database>): PurchasesWriteService {
     listPurchases: async () => ({ purchases: [] }),
   };
   return new PurchasesWriteService(
-    db as any, new TransactionHelper(), auditStub as any,
-    new PurchasesFinanceService(), queryStub as any, posting as any, idempotencyStub as any,
+    db as any,
+    new TransactionHelper(),
+    auditStub as any,
+    new PurchasesFinanceService(),
+    queryStub as any,
+    posting as any,
+    idempotencyStub as any,
   );
 }
 
@@ -214,63 +239,159 @@ type CancelFixture = {
   stockQty: number;
   wac: number;
   locationBalances: Array<{ branchId: number | null; locationId: number | null; qty: number }>;
-  purchase: { total: number; taxAmount: number; taxRate: number; pricesIncludeTax: boolean; locationId: number | null; supplierBalance: number };
+  purchase: {
+    total: number;
+    taxAmount: number;
+    taxRate: number;
+    pricesIncludeTax: boolean;
+    locationId: number | null;
+    supplierBalance: number;
+  };
   line: { qty: number; unitCost: number; unitMultiplier: number; locationId: number | null };
   journalLegs: Array<{ accountId: number; debit: number; credit: number }>;
 };
 
 async function seedCancelFixture(db: Kysely<Database>, opts: CancelFixture): Promise<void> {
-  await db.insertInto('products' as never).values({
-    id: 10, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: opts.stockQty,
-    reserved_qty: 0, cost_price: opts.wac, track_serials: false,
-  } as never).execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 10,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Widget',
+      stock_qty: opts.stockQty,
+      reserved_qty: 0,
+      cost_price: opts.wac,
+      track_serials: false,
+    } as never)
+    .execute();
   for (const balance of opts.locationBalances) {
-    await db.insertInto('product_location_stock' as never).values({
-      tenant_id: 't1', account_id: 'a1', product_id: 10, branch_id: balance.branchId, location_id: balance.locationId,
-      qty: balance.qty, reserved_qty: 0,
-    } as never).execute();
+    await db
+      .insertInto('product_location_stock' as never)
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: 10,
+        branch_id: balance.branchId,
+        location_id: balance.locationId,
+        qty: balance.qty,
+        reserved_qty: 0,
+      } as never)
+      .execute();
   }
-  await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', balance: opts.purchase.supplierBalance } as never).execute();
-  await db.insertInto('purchases' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', doc_no: 'P1', supplier_id: 9, payment_type: 'credit',
-    subtotal: opts.purchase.total - opts.purchase.taxAmount, discount: 0, tax_amount: opts.purchase.taxAmount,
-    total: opts.purchase.total, paid_amount: 0,
-    branch_id: null, location_id: opts.purchase.locationId, status: 'posted',
-    prices_include_tax: opts.purchase.pricesIncludeTax, tax_rate: opts.purchase.taxRate,
-    landed_cost_applied_at: null, landed_cost_total: 0,
-  } as never).execute();
-  await db.insertInto('purchase_items' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', purchase_id: 1, product_id: 10,
-    qty: opts.line.qty, unit_cost: opts.line.unitCost, unit_multiplier: opts.line.unitMultiplier,
-    line_total: opts.line.qty * opts.line.unitCost,
-    location_id: opts.line.locationId, batch_number: null,
-  } as never).execute();
-  await db.insertInto('journal_entries' as never).values({
-    tenant_id: 't1', account_id: 'a1', entry_no: 'JE-00000001', entry_date: '2026-10-01',
-    description: 'purchase', source_type: 'purchase', source_id: 1, status: 'posted',
-    branch_id: null, location_id: null, created_by: 1,
-  } as never).execute();
-  const entry = await (db as any).selectFrom('journal_entries').select('id').where('entry_no', '=', 'JE-00000001').executeTakeFirstOrThrow() as unknown as { id: number };
+  await db
+    .insertInto('suppliers' as never)
+    .values({ id: 9, tenant_id: 't1', balance: opts.purchase.supplierBalance } as never)
+    .execute();
+  await db
+    .insertInto('purchases' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      doc_no: 'P1',
+      supplier_id: 9,
+      payment_type: 'credit',
+      subtotal: opts.purchase.total - opts.purchase.taxAmount,
+      discount: 0,
+      tax_amount: opts.purchase.taxAmount,
+      total: opts.purchase.total,
+      paid_amount: 0,
+      branch_id: null,
+      location_id: opts.purchase.locationId,
+      status: 'posted',
+      prices_include_tax: opts.purchase.pricesIncludeTax,
+      tax_rate: opts.purchase.taxRate,
+      landed_cost_applied_at: null,
+      landed_cost_total: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('purchase_items' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      purchase_id: 1,
+      product_id: 10,
+      qty: opts.line.qty,
+      unit_cost: opts.line.unitCost,
+      unit_multiplier: opts.line.unitMultiplier,
+      line_total: opts.line.qty * opts.line.unitCost,
+      location_id: opts.line.locationId,
+      batch_number: null,
+    } as never)
+    .execute();
+  await db
+    .insertInto('journal_entries' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 'a1',
+      entry_no: 'JE-00000001',
+      entry_date: '2026-10-01',
+      description: 'purchase',
+      source_type: 'purchase',
+      source_id: 1,
+      status: 'posted',
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+    } as never)
+    .execute();
+  const entry = (await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('entry_no', '=', 'JE-00000001')
+    .executeTakeFirstOrThrow()) as unknown as { id: number };
   for (const leg of opts.journalLegs) {
-    await db.insertInto('journal_entry_lines' as never).values({
-      journal_entry_id: Number(entry.id), tenant_id: 't1', account_id: leg.accountId,
-      description: 'purchase', debit: leg.debit, credit: leg.credit,
-      partner_type: 'supplier', partner_id: 9, branch_id: null, location_id: null,
-    } as never).execute();
+    await db
+      .insertInto('journal_entry_lines' as never)
+      .values({
+        journal_entry_id: Number(entry.id),
+        tenant_id: 't1',
+        account_id: leg.accountId,
+        description: 'purchase',
+        debit: leg.debit,
+        credit: leg.credit,
+        partner_type: 'supplier',
+        partner_id: 9,
+        branch_id: null,
+        location_id: null,
+      } as never)
+      .execute();
   }
 }
 
 async function readProduct(db: Kysely<Database>): Promise<{ stockQty: number; costPrice: number }> {
-  const row = await (db as any).selectFrom('products').select(['stock_qty', 'cost_price']).where('id', '=', 10).executeTakeFirstOrThrow() as unknown as { stock_qty: string; cost_price: string };
+  const row = (await (db as any)
+    .selectFrom('products')
+    .select(['stock_qty', 'cost_price'])
+    .where('id', '=', 10)
+    .executeTakeFirstOrThrow()) as unknown as { stock_qty: string; cost_price: string };
   return { stockQty: Number(row.stock_qty), costPrice: Number(row.cost_price) };
 }
 
-async function journalLines(db: Kysely<Database>, sourceType: string): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
-  const entry = await (db as any).selectFrom('journal_entries').select(['id']).where('source_type', '=', sourceType).executeTakeFirst() as unknown as { id: number } | undefined;
+async function journalLines(
+  db: Kysely<Database>,
+  sourceType: string,
+): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
+  const entry = (await (db as any)
+    .selectFrom('journal_entries')
+    .select(['id'])
+    .where('source_type', '=', sourceType)
+    .executeTakeFirst()) as unknown as { id: number } | undefined;
   if (!entry) return [];
-  const rows = await (db as any).selectFrom('journal_entry_lines').select(['account_id', 'debit', 'credit'])
-    .where('journal_entry_id', '=', Number(entry.id)).orderBy('id').execute() as unknown as Array<{ account_id: number; debit: string; credit: string }>;
-  return rows.map((row) => ({ accountId: Number(row.account_id), debit: Number(row.debit), credit: Number(row.credit) }));
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['account_id', 'debit', 'credit'])
+    .where('journal_entry_id', '=', Number(entry.id))
+    .orderBy('id')
+    .execute()) as unknown as Array<{ account_id: number; debit: string; credit: string }>;
+  return rows.map((row) => ({
+    accountId: Number(row.account_id),
+    debit: Number(row.debit),
+    credit: Number(row.credit),
+  }));
 }
 
 async function main(): Promise<void> {
@@ -280,9 +401,17 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       await seedCancelFixture(db, {
-        stockQty: 30, wac: 17,
+        stockQty: 30,
+        wac: 17,
         locationBalances: [{ branchId: null, locationId: null, qty: 30 }],
-        purchase: { total: 110, taxAmount: 0, taxRate: 0, pricesIncludeTax: false, locationId: null, supplierBalance: 110 },
+        purchase: {
+          total: 110,
+          taxAmount: 0,
+          taxRate: 0,
+          pricesIncludeTax: false,
+          locationId: null,
+          supplierBalance: 110,
+        },
         line: { qty: 10, unitCost: 11, unitMultiplier: 1, locationId: null },
         journalLegs: [
           { accountId: 1140, debit: 110, credit: 0 },
@@ -294,18 +423,33 @@ async function main(): Promise<void> {
       const product = await readProduct(db);
       assert.equal(product.stockQty, 20);
       assert.equal(product.costPrice, 20);
-      const purchase = await (db as any).selectFrom('purchases').select('status').where('id', '=', 1).executeTakeFirstOrThrow() as unknown as { status: string };
+      const purchase = (await (db as any)
+        .selectFrom('purchases')
+        .select('status')
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow()) as unknown as { status: string };
       assert.equal(purchase.status, 'cancelled');
       assert.deepEqual(await journalLines(db, 'purchase_reversal'), [
         { accountId: 1140, debit: 0, credit: 110 },
         { accountId: 2110, debit: 110, credit: 0 },
       ]);
-      const supplier = await (db as any).selectFrom('suppliers').select('balance').where('id', '=', 9).executeTakeFirstOrThrow() as unknown as { balance: string };
+      const supplier = (await (db as any)
+        .selectFrom('suppliers')
+        .select('balance')
+        .where('id', '=', 9)
+        .executeTakeFirstOrThrow()) as unknown as { balance: string };
       assert.equal(Number(supplier.balance), 0);
-      const ledger = await (db as any).selectFrom('supplier_ledger').select(['entry_type', 'amount']).executeTakeFirstOrThrow() as unknown as { entry_type: string; amount: string };
+      const ledger = (await (db as any)
+        .selectFrom('supplier_ledger')
+        .select(['entry_type', 'amount'])
+        .executeTakeFirstOrThrow()) as unknown as { entry_type: string; amount: string };
       assert.equal(ledger.entry_type, 'purchase_cancel');
       assert.equal(Number(ledger.amount), -110);
-      const movement = await (db as any).selectFrom('stock_movements').select(['movement_type', 'qty']).where('movement_type', '=', 'purchase_cancel').executeTakeFirstOrThrow() as unknown as { movement_type: string; qty: string };
+      const movement = (await (db as any)
+        .selectFrom('stock_movements')
+        .select(['movement_type', 'qty'])
+        .where('movement_type', '=', 'purchase_cancel')
+        .executeTakeFirstOrThrow()) as unknown as { movement_type: string; qty: string };
       assert.equal(Number(movement.qty), -10);
     } finally {
       await db.destroy();
@@ -319,9 +463,17 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'KWD');
       await seedCancelFixture(db, {
-        stockQty: 20, wac: 12.5,
+        stockQty: 20,
+        wac: 12.5,
         locationBalances: [{ branchId: null, locationId: null, qty: 20 }],
-        purchase: { total: 165, taxAmount: 15, taxRate: 10, pricesIncludeTax: true, locationId: null, supplierBalance: 165 },
+        purchase: {
+          total: 165,
+          taxAmount: 15,
+          taxRate: 10,
+          pricesIncludeTax: true,
+          locationId: null,
+          supplierBalance: 165,
+        },
         line: { qty: 5, unitCost: 33, unitMultiplier: 2, locationId: null },
         journalLegs: [
           { accountId: 1140, debit: 150, credit: 0 },
@@ -339,7 +491,11 @@ async function main(): Promise<void> {
         { accountId: 1150, debit: 0, credit: 15 },
         { accountId: 2110, debit: 165, credit: 0 },
       ]);
-      const supplier = await (db as any).selectFrom('suppliers').select('balance').where('id', '=', 9).executeTakeFirstOrThrow() as unknown as { balance: string };
+      const supplier = (await (db as any)
+        .selectFrom('suppliers')
+        .select('balance')
+        .where('id', '=', 9)
+        .executeTakeFirstOrThrow()) as unknown as { balance: string };
       assert.equal(Number(supplier.balance), 0);
     } finally {
       await db.destroy();
@@ -354,12 +510,20 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       await seedCancelFixture(db, {
-        stockQty: 30, wac: 17,
+        stockQty: 30,
+        wac: 17,
         locationBalances: [
           { branchId: null, locationId: 7, qty: 5 },
           { branchId: null, locationId: 8, qty: 25 },
         ],
-        purchase: { total: 110, taxAmount: 0, taxRate: 0, pricesIncludeTax: false, locationId: 7, supplierBalance: 110 },
+        purchase: {
+          total: 110,
+          taxAmount: 0,
+          taxRate: 0,
+          pricesIncludeTax: false,
+          locationId: 7,
+          supplierBalance: 110,
+        },
         line: { qty: 10, unitCost: 11, unitMultiplier: 1, locationId: 7 },
         journalLegs: [
           { accountId: 1140, debit: 110, credit: 0 },
@@ -371,10 +535,18 @@ async function main(): Promise<void> {
       const product = await readProduct(db);
       assert.equal(product.stockQty, 30);
       assert.equal(product.costPrice, 17);
-      const purchase = await (db as any).selectFrom('purchases').select('status').where('id', '=', 1).executeTakeFirstOrThrow() as unknown as { status: string };
+      const purchase = (await (db as any)
+        .selectFrom('purchases')
+        .select('status')
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow()) as unknown as { status: string };
       assert.equal(purchase.status, 'posted');
       assert.deepEqual(await journalLines(db, 'purchase_reversal'), []);
-      const movements = await (db as any).selectFrom('stock_movements').select('id').where('movement_type', '=', 'purchase_cancel').execute() as unknown as Array<unknown>;
+      const movements = (await (db as any)
+        .selectFrom('stock_movements')
+        .select('id')
+        .where('movement_type', '=', 'purchase_cancel')
+        .execute()) as unknown as Array<unknown>;
       assert.equal(movements.length, 0);
     } finally {
       await db.destroy();
@@ -388,9 +560,17 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       await seedCancelFixture(db, {
-        stockQty: 10, wac: 11,
+        stockQty: 10,
+        wac: 11,
         locationBalances: [{ branchId: null, locationId: null, qty: 10 }],
-        purchase: { total: 110, taxAmount: 0, taxRate: 0, pricesIncludeTax: false, locationId: null, supplierBalance: 110 },
+        purchase: {
+          total: 110,
+          taxAmount: 0,
+          taxRate: 0,
+          pricesIncludeTax: false,
+          locationId: null,
+          supplierBalance: 110,
+        },
         line: { qty: 10, unitCost: 11, unitMultiplier: 1, locationId: null },
         journalLegs: [
           { accountId: 1140, debit: 110, credit: 0 },
@@ -417,28 +597,48 @@ async function main(): Promise<void> {
     // to 6dp, so the basis pin compares at that precision.
     assert.equal(Number(purchaseReceiptBaseUnitCost(33, 2, 10, true).toFixed(6)), 15);
     assert.equal(purchaseReceiptBaseUnitCost(33, 2, 10, false), 16.5);
-    const cancelSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-cancel.service.ts'), 'utf8');
+    const cancelSource = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/purchases-write-cancel.service.ts'),
+      'utf8',
+    );
     const cancelStart = cancelSource.indexOf('async cancelPurchase(');
     assert.ok(cancelStart > 0, 'cancelPurchase exists');
     const cancelEnd = cancelSource.indexOf('\n  async ', cancelStart + 1);
     const cancelBody = cancelSource.slice(cancelStart, cancelEnd === -1 ? undefined : cancelEnd);
-    assert.ok(cancelBody.includes('await revalueStockReturn(trx, scope.tenantId, Number(item.product_id), stockChange.globalAfter, removeQty'),
-      'cancel must re-blend WAC from the corrected globalAfter in the same transaction');
-    assert.ok(cancelBody.includes('purchaseReceiptBaseUnitCost('), 'cancel must derive the removed value from the receipt-cost engine');
+    assert.ok(
+      cancelBody.includes(
+        'await revalueStockReturn(trx, scope.tenantId, Number(item.product_id), stockChange.globalAfter, removeQty',
+      ),
+      'cancel must re-blend WAC from the corrected globalAfter in the same transaction',
+    );
+    assert.ok(
+      cancelBody.includes('purchaseReceiptBaseUnitCost('),
+      'cancel must derive the removed value from the receipt-cost engine',
+    );
     assert.ok(cancelBody.includes('PURCHASE_CANCEL_COST_INVALID'), 'cancel must fail closed on a corrupt stored cost');
-    const updateSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-update.service.ts'), 'utf8');
+    const updateSource = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/purchases-write-update.service.ts'),
+      'utf8',
+    );
     const updateStart = updateSource.indexOf('async updatePurchase(');
     assert.ok(updateStart > 0, 'updatePurchase exists');
     const updateEnd = updateSource.indexOf('\n  async ', updateStart + 1);
     const updateBody = updateSource.slice(updateStart, updateEnd === -1 ? undefined : updateEnd);
     assert.ok(!updateBody.includes('revalueStockReturn'), 'the edit path stays untouched (unreachable reversal)');
-    const postingSource = readFileSync(resolve(__dirname, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+    const postingSource = readFileSync(
+      resolve(__dirname, '../../src/modules/accounting/accounting-posting.service.ts'),
+      'utf8',
+    );
     const reverseStart = postingSource.indexOf('async reversePurchaseJournal(');
     assert.ok(reverseStart > 0, 'reversePurchaseJournal exists');
     const reverseBody = postingSource.slice(reverseStart, postingSource.indexOf('\n  async ', reverseStart + 1));
     assert.ok(!reverseBody.includes('revalueStockReturn'), 'the posting reversal must never reprice stock');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-PURCHASE-CANCEL-WAC-RECOMPUTE').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-PURCHASE-CANCEL-WAC-RECOMPUTE').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
   }
 
   console.log('purchase-cancel-wac-recompute: all cases passed');

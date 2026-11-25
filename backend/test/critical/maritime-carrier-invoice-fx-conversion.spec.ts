@@ -38,7 +38,10 @@ async function main(): Promise<void> {
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const calls: Array<{ sourceType: string; lines: Array<{ debit: number; credit: number }> }> = [];
   const postingStub = {
-    postDomainJournal: async (_trx: unknown, input: { sourceType: string; lines: Array<{ debit: number; credit: number }> }) => {
+    postDomainJournal: async (
+      _trx: unknown,
+      input: { sourceType: string; lines: Array<{ debit: number; credit: number }> },
+    ) => {
       calls.push({ sourceType: input.sourceType, lines: input.lines });
       return 900;
     },
@@ -78,7 +81,11 @@ async function main(): Promise<void> {
     assert.equal(calls[0].sourceType, 'maritime_carrier_invoice');
     assert.equal(Number(calls[0].lines[0].debit), 4856.063);
     assert.equal(Number(calls[0].lines[1].credit), 4856.063);
-    const jobAfterUsd = await db.selectFrom('maritime_jobs' as any).selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+    const jobAfterUsd = await db
+      .selectFrom('maritime_jobs' as any)
+      .selectAll()
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow();
     assert.equal(Number((jobAfterUsd as any).carrier_cost_total), 4856.063);
     assert.equal(Number((jobAfterUsd as any).net_profit), 5143.937);
 
@@ -110,7 +117,11 @@ async function main(): Promise<void> {
       /غير متاح/,
     );
     assert.equal(calls.length, 2);
-    const jobAfterFail = await db.selectFrom('maritime_jobs' as any).selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+    const jobAfterFail = await db
+      .selectFrom('maritime_jobs' as any)
+      .selectAll()
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow();
     assert.equal(Number((jobAfterFail as any).carrier_cost_total), 4956.188);
 
     console.log('maritime carrier invoice fx conversion checks passed');

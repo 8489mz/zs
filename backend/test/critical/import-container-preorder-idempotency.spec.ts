@@ -193,7 +193,11 @@ async function main(): Promise<void> {
         .selectFrom('import_container_preorders')
         .select(['serial_id', 'idempotency_key'] as never)
         .execute();
-      assert.equal((legacy[0] as any).idempotency_key, `legacy:${(legacy[0] as any).serial_id}`, 'Legacy rows are backfilled with a stable legacy:<serial_id> key');
+      assert.equal(
+        (legacy[0] as any).idempotency_key,
+        `legacy:${(legacy[0] as any).serial_id}`,
+        'Legacy rows are backfilled with a stable legacy:<serial_id> key',
+      );
       const index = await sql<{ indexname: string }>`
         SELECT indexname FROM pg_indexes
         WHERE tablename = 'import_container_preorders'
@@ -243,9 +247,17 @@ async function main(): Promise<void> {
       const service = makeService(db);
       const dto = trialDto({ depositAmountEgp: 9, depositTreasuryAccountId: '12' });
       const first = await service.createContainerPreorder('t1', 1, dto);
-      const replayed = await service.createContainerPreorder('t1', 1, trialDto({ depositAmountEgp: 9, depositTreasuryAccountId: '12' }));
+      const replayed = await service.createContainerPreorder(
+        't1',
+        1,
+        trialDto({ depositAmountEgp: 9, depositTreasuryAccountId: '12' }),
+      );
       assert.equal(replayed.id, first.id, 'A same-payload retry returns the existing reservation, not a new one');
-      assert.equal(replayed.preorder_no, first.preorder_no, 'The replayed reservation carries the same preorder number');
+      assert.equal(
+        replayed.preorder_no,
+        first.preorder_no,
+        'The replayed reservation carries the same preorder number',
+      );
       assert.equal(await preorderCount(db), 1, 'The retry records no second reservation');
       assert.equal(await journalEntryCount(db), 1, 'The retry posts no second JE');
       assert.equal(await treasuryCount(db), 1, 'The retry records no second treasury row');
@@ -285,7 +297,12 @@ async function main(): Promise<void> {
         service.createContainerPreorder(
           't1',
           1,
-          trialDto({ idempotencyKey: 'pre-retry-002', reservedQuantity: 2, depositAmountEgp: 18, depositTreasuryAccountId: '12' }),
+          trialDto({
+            idempotencyKey: 'pre-retry-002',
+            reservedQuantity: 2,
+            depositAmountEgp: 18,
+            depositTreasuryAccountId: '12',
+          }),
         ),
         /IMPORT_CONTAINER_PREORDER_DUPLICATE_KEY/,
         'Same key with a different qty fails with the named duplicate-key error',
@@ -309,7 +326,11 @@ async function main(): Promise<void> {
       assert.notEqual(second.id, first.id, 'A distinct reservation records a new row');
       assert.equal(await preorderCount(db), 2, 'Two distinct reservations coexist');
       const over = service.createContainerPreorder('t1', 1, trialDto({ reservedQuantity: 8 }));
-      await expectReject(over, /لا يمكن تجاوز كمية البوليصة/, '1 + 2 + 8 exceeds capacity 10 and still fails naming the B/L rule');
+      await expectReject(
+        over,
+        /لا يمكن تجاوز كمية البوليصة/,
+        '1 + 2 + 8 exceeds capacity 10 and still fails naming the B/L rule',
+      );
       assert.equal(await preorderCount(db), 2, 'The over-capacity reservation records nothing');
     } finally {
       await db.destroy();

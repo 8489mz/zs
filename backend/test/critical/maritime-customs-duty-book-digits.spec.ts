@@ -119,7 +119,11 @@ async function main(): Promise<void> {
   }
 
   async function declarationRow(id: number): Promise<any> {
-    return (db as any).selectFrom('maritime_customs_declarations').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+    return (db as any)
+      .selectFrom('maritime_customs_declarations')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
   }
 
   try {
@@ -159,7 +163,11 @@ async function main(): Promise<void> {
 
     // 2. Added items accumulate at book digits.
     const added: any = await service.addCustomsDeclarationItem(auth, String(dec1Id), {
-      hsCode: '8708', commodityDescription: 'Parts', quantity: 1, customsValue: 33.33, dutyRatePercent: 10,
+      hsCode: '8708',
+      commodityDescription: 'Parts',
+      quantity: 1,
+      customsValue: 33.33,
+      dutyRatePercent: 10,
     } as never);
     const addedDuty = Number(added.dutyAmount);
     assert.ok(addedDuty > 3.33 && addedDuty < 3.34, `added duty must keep the third decimal, got ${addedDuty}`);
@@ -167,7 +175,9 @@ async function main(): Promise<void> {
 
     // 3. Status machine: illegal moves rejected, legal moves pass.
     // A pre-cleared declaration can never move again.
-    await pg.exec(`INSERT INTO maritime_customs_declarations (id, tenant_id, job_id, declaration_number, declaration_type, status, total_customs_value, total_duty_amount, currency) VALUES (900,'t1',1,'DEC-0','import','cleared',0,0,'USD')`);
+    await pg.exec(
+      `INSERT INTO maritime_customs_declarations (id, tenant_id, job_id, declaration_number, declaration_type, status, total_customs_value, total_duty_amount, currency) VALUES (900,'t1',1,'DEC-0','import','cleared',0,0,'USD')`,
+    );
     await assert.rejects(
       service.updateCustomsDeclarationStatus(auth, '900', { status: 'pending' } as never),
       /لا يمكن نقل/,
@@ -175,7 +185,8 @@ async function main(): Promise<void> {
     assert.equal((await declarationRow(900)).status, 'cleared', 'the failed move leaves the cleared status intact');
     assert.equal((await journalLines(900)).length, 0, 'no journal from a rejected move');
     const created2: any = await service.createCustomsDeclaration(auth, '1', {
-      declarationNumber: 'DEC-2', currency: 'USD',
+      declarationNumber: 'DEC-2',
+      currency: 'USD',
       items: [{ hsCode: '8708', commodityDescription: 'Parts', quantity: 1, customsValue: 10, dutyRatePercent: 10 }],
     } as never);
     const dec2Id = Number(created2.declaration.id);
@@ -188,23 +199,32 @@ async function main(): Promise<void> {
     assert.equal((await declarationRow(dec2Id)).status, 'submitted');
     const held: any = await service.updateCustomsDeclarationStatus(auth, String(dec2Id), { status: 'held' } as never);
     assert.equal(held.status, 'held');
-    const resubmitted: any = await service.updateCustomsDeclarationStatus(auth, String(dec2Id), { status: 'submitted' } as never);
+    const resubmitted: any = await service.updateCustomsDeclarationStatus(auth, String(dec2Id), {
+      status: 'submitted',
+    } as never);
     assert.equal(resubmitted.status, 'submitted');
 
     // 4. Clearing posts the converted duty and rolls the job totals;
     // a second clear is impossible (cleared is terminal).
     const created3: any = await service.createCustomsDeclaration(auth, '1', {
-      declarationNumber: 'DEC-3', currency: 'USD',
+      declarationNumber: 'DEC-3',
+      currency: 'USD',
       items: [{ hsCode: '8708', commodityDescription: 'Parts', quantity: 1, customsValue: 1000, dutyRatePercent: 10 }],
     } as never);
     const dec3Id = Number(created3.declaration.id);
-    const cleared: any = await service.updateCustomsDeclarationStatus(auth, String(dec3Id), { status: 'cleared' } as never);
+    const cleared: any = await service.updateCustomsDeclarationStatus(auth, String(dec3Id), {
+      status: 'cleared',
+    } as never);
     assert.equal(cleared.status, 'cleared');
     assert.deepEqual(await journalLines(dec3Id), [
       { code: '6400', debit: 5600, credit: 0 },
       { code: '2110', debit: 0, credit: 5600 },
     ]);
-    const job = await (db as any).selectFrom('maritime_jobs').select(['other_costs_total', 'net_profit']).where('id', '=', 1).executeTakeFirstOrThrow();
+    const job = await (db as any)
+      .selectFrom('maritime_jobs')
+      .select(['other_costs_total', 'net_profit'])
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(job.other_costs_total), 6100);
     assert.equal(Number(job.net_profit), 1900);
     await assert.rejects(
@@ -215,7 +235,8 @@ async function main(): Promise<void> {
 
     // 5. A currency with no registered rate fails closed on clear.
     const created4: any = await service.createCustomsDeclaration(auth, '1', {
-      declarationNumber: 'DEC-4', currency: 'EUR',
+      declarationNumber: 'DEC-4',
+      currency: 'EUR',
       items: [{ hsCode: '8708', commodityDescription: 'Parts', quantity: 1, customsValue: 100, dutyRatePercent: 10 }],
     } as never);
     const dec4Id = Number(created4.declaration.id);
@@ -229,7 +250,8 @@ async function main(): Promise<void> {
     // 6. Missing accounts fail closed on clear.
     await pg.exec(`DELETE FROM accounting_accounts WHERE code IN ('6400','2110')`);
     const created5: any = await service.createCustomsDeclaration(auth, '1', {
-      declarationNumber: 'DEC-5', currency: 'USD',
+      declarationNumber: 'DEC-5',
+      currency: 'USD',
       items: [{ hsCode: '8708', commodityDescription: 'Parts', quantity: 1, customsValue: 100, dutyRatePercent: 10 }],
     } as never);
     const dec5Id = Number(created5.declaration.id);
@@ -243,7 +265,10 @@ async function main(): Promise<void> {
     // 7. Source pins.
     // Maritime split: the customs methods live in the customs slice; the
     // `// Freight Audit` banner travelled with them.
-    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-customs.service.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-customs.service.ts'),
+      'utf8',
+    );
     const createStart = source.indexOf('async createCustomsDeclaration(');
     const addStart = source.indexOf('async addCustomsDeclarationItem(');
     const statusStart = source.indexOf('async updateCustomsDeclarationStatus(');
@@ -256,7 +281,7 @@ async function main(): Promise<void> {
     const statusEnd = source.indexOf('// Freight Audit', statusStart);
     const statusBody = source.slice(statusStart, statusEnd);
     assert.ok(statusBody.includes('postCustomsDutyAtClearance'), 'clearing must post the duty');
-    assert.ok(statusBody.includes("cleared: []"), 'cleared must be terminal in the machine');
+    assert.ok(statusBody.includes('cleared: []'), 'cleared must be terminal in the machine');
 
     console.log('maritime customs duty book digits checks passed');
   } finally {

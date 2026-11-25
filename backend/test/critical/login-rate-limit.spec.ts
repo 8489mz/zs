@@ -63,10 +63,7 @@ async function runBurstLimit(): Promise<void> {
 }
 
 async function runProductionRateLimitStoreGuard(): Promise<void> {
-  const service = new InMemoryRateLimitService(
-    undefined,
-    new FakeConfigService({ NODE_ENV: 'production' }) as any,
-  );
+  const service = new InMemoryRateLimitService(undefined, new FakeConfigService({ NODE_ENV: 'production' }) as any);
 
   await assert.rejects(
     async () => service.hit('auth:login:ip:127.0.0.1', 5, 60),
@@ -96,77 +93,85 @@ function runEnvGuards(): void {
     /ALLOW_SESSION_ID_HEADER must remain disabled in production/,
   );
   assert.throws(
-    () => validateEnv({
-      ...base,
-      SESSION_CSRF_SECRET: '1234567890123456',
-      SESSION_COOKIE_SECURE: 'false',
-      SESSION_COOKIE_SAME_SITE: 'none',
-    }),
+    () =>
+      validateEnv({
+        ...base,
+        SESSION_CSRF_SECRET: '1234567890123456',
+        SESSION_COOKIE_SECURE: 'false',
+        SESSION_COOKIE_SAME_SITE: 'none',
+      }),
     /SESSION_COOKIE_SECURE must be true when SESSION_COOKIE_SAME_SITE is none/,
   );
 
   assert.throws(
-    () => validateEnv({
-      ...base,
-      APP_MODE: 'SELF_CONTAINED',
-      DATABASE_HOST: 'db.example.com',
-      SESSION_CSRF_SECRET: '1234567890123456',
-    }),
+    () =>
+      validateEnv({
+        ...base,
+        APP_MODE: 'SELF_CONTAINED',
+        DATABASE_HOST: 'db.example.com',
+        SESSION_CSRF_SECRET: '1234567890123456',
+      }),
     /DATABASE_HOST must be local-only when APP_MODE is LOCAL_PILOT or SELF_CONTAINED/,
   );
 
   assert.throws(
-    () => validateEnv({
-      ...base,
-      DATABASE_SSL: 'false',
-      TENANT_ID: 'tenant-a',
-      ACCOUNT_ID: 'account-a',
-      SESSION_CSRF_SECRET: '1234567890123456',
-    }),
+    () =>
+      validateEnv({
+        ...base,
+        DATABASE_SSL: 'false',
+        TENANT_ID: 'tenant-a',
+        ACCOUNT_ID: 'account-a',
+        SESSION_CSRF_SECRET: '1234567890123456',
+      }),
     /DATABASE_SSL and DATABASE_SSL_REJECT_UNAUTHORIZED must be true for CLOUD_SAAS production mode/,
   );
 
   assert.throws(
-    () => validateEnv({
+    () =>
+      validateEnv({
+        ...base,
+        CORS_ORIGINS: 'http://localhost:5173,https://app.example.com',
+        TENANT_ID: 'tenant-a',
+        ACCOUNT_ID: 'account-a',
+        SESSION_CSRF_SECRET: '1234567890123456',
+      }),
+    /CORS_ORIGINS cannot include localhost, 127.0.0.1, or "\*" in CLOUD_SAAS production mode/,
+  );
+
+  assert.doesNotThrow(() =>
+    validateEnv({
       ...base,
-      CORS_ORIGINS: 'http://localhost:5173,https://app.example.com',
+      APP_MODE: 'CLOUD_SAAS',
+      DATABASE_HOST: 'db.example.com',
       TENANT_ID: 'tenant-a',
       ACCOUNT_ID: 'account-a',
       SESSION_CSRF_SECRET: '1234567890123456',
     }),
-    /CORS_ORIGINS cannot include localhost, 127.0.0.1, or "\*" in CLOUD_SAAS production mode/,
   );
 
-  assert.doesNotThrow(() => validateEnv({
-    ...base,
-    APP_MODE: 'CLOUD_SAAS',
-    DATABASE_HOST: 'db.example.com',
-    TENANT_ID: 'tenant-a',
-    ACCOUNT_ID: 'account-a',
-    SESSION_CSRF_SECRET: '1234567890123456',
-  }));
-
   assert.throws(
-    () => validateEnv({
-      ...base,
-      APP_MODE: 'CLOUD_SAAS',
-      DATABASE_HOST: 'db.example.com',
-      TENANT_ID: 'default',
-      ACCOUNT_ID: 'account-a',
-      SESSION_CSRF_SECRET: '1234567890123456',
-    }),
+    () =>
+      validateEnv({
+        ...base,
+        APP_MODE: 'CLOUD_SAAS',
+        DATABASE_HOST: 'db.example.com',
+        TENANT_ID: 'default',
+        ACCOUNT_ID: 'account-a',
+        SESSION_CSRF_SECRET: '1234567890123456',
+      }),
     /TENANT_ID must be explicitly configured for CLOUD_SAAS production mode/,
   );
 
   assert.throws(
-    () => validateEnv({
-      ...base,
-      APP_MODE: 'CLOUD_SAAS',
-      DATABASE_HOST: 'db.example.com',
-      TENANT_ID: 'tenant-a',
-      ACCOUNT_ID: 'replace-me-account-id',
-      SESSION_CSRF_SECRET: '1234567890123456',
-    }),
+    () =>
+      validateEnv({
+        ...base,
+        APP_MODE: 'CLOUD_SAAS',
+        DATABASE_HOST: 'db.example.com',
+        TENANT_ID: 'tenant-a',
+        ACCOUNT_ID: 'replace-me-account-id',
+        SESSION_CSRF_SECRET: '1234567890123456',
+      }),
     /ACCOUNT_ID must be explicitly configured for CLOUD_SAAS production mode/,
   );
 }
@@ -184,11 +189,12 @@ async function runProxyAwareLoginBuckets(): Promise<void> {
     service,
   );
   const next = () => undefined;
-  const behindProxy = (realIp: string, username: string) => ({
-    ip: '127.0.0.1',
-    headers: { 'x-real-ip': realIp },
-    body: { username },
-  }) as any;
+  const behindProxy = (realIp: string, username: string) =>
+    ({
+      ip: '127.0.0.1',
+      headers: { 'x-real-ip': realIp },
+      body: { username },
+    }) as any;
 
   // الزائر الأول يستهلك حصته كاملة.
   await middleware.use(behindProxy('41.0.0.1', 'first'), createResponse(), next);
@@ -207,7 +213,8 @@ async function runProxyAwareLoginBuckets(): Promise<void> {
     new FakeConfigService({ LOGIN_RATE_LIMIT_MAX: 1, LOGIN_RATE_LIMIT_WINDOW_SECONDS: 60 }) as any,
     forgedService,
   );
-  const forged = (realIp: string) => ({ ip: '203.0.113.9', headers: { 'x-real-ip': realIp }, body: { username: 'victim' } }) as any;
+  const forged = (realIp: string) =>
+    ({ ip: '203.0.113.9', headers: { 'x-real-ip': realIp }, body: { username: 'victim' } }) as any;
   await forgedMiddleware.use(forged('8.8.8.1'), createResponse(), next);
   await expectTooManyRequests(async () => {
     await forgedMiddleware.use(forged('8.8.8.2'), createResponse(), next);

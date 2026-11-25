@@ -89,46 +89,117 @@ function makeService(db: Kysely<Database>): any {
 
 async function seedShipment(
   db: Kysely<Database>,
-  opts: { shipmentId: string; method: string; items: Array<{ id: string; productId: number; qty: number; priceUsd: number; weight: number; cbm: number; onHand: number }> },
+  opts: {
+    shipmentId: string;
+    method: string;
+    items: Array<{
+      id: string;
+      productId: number;
+      qty: number;
+      priceUsd: number;
+      weight: number;
+      cbm: number;
+      onHand: number;
+    }>;
+  },
 ): Promise<void> {
   for (const it of opts.items) {
-    await db.insertInto('products' as never).values({
-      id: it.productId, tenant_id: 't1', account_id: 't1', name: `P${it.productId}`,
-      stock_qty: it.qty, reserved_qty: 0, cost_price: 500, updated_at: new Date(),
-    } as never).execute();
-    await db.insertInto('product_location_stock' as never).values({
-      tenant_id: 't1', account_id: 't1', product_id: it.productId, branch_id: 2,
-      location_id: 10, qty: it.qty, reserved_qty: 0,
-    } as never).execute();
+    await db
+      .insertInto('products' as never)
+      .values({
+        id: it.productId,
+        tenant_id: 't1',
+        account_id: 't1',
+        name: `P${it.productId}`,
+        stock_qty: it.qty,
+        reserved_qty: 0,
+        cost_price: 500,
+        updated_at: new Date(),
+      } as never)
+      .execute();
+    await db
+      .insertInto('product_location_stock' as never)
+      .values({
+        tenant_id: 't1',
+        account_id: 't1',
+        product_id: it.productId,
+        branch_id: 2,
+        location_id: 10,
+        qty: it.qty,
+        reserved_qty: 0,
+      } as never)
+      .execute();
   }
-  await db.insertInto('import_shipments' as never).values({
-    id: opts.shipmentId, tenant_id: 't1', supplier_id: 9, project_id: null,
-    container_number: `MSCU-${opts.shipmentId}`, status: 'Arrived',
-    cost_allocation_method: opts.method,
-    late_expenses_total_egp: 0, late_cogs_adjustment_egp: 0, late_inventory_adjustment_egp: 0,
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: opts.shipmentId,
+      tenant_id: 't1',
+      supplier_id: 9,
+      project_id: null,
+      container_number: `MSCU-${opts.shipmentId}`,
+      status: 'Arrived',
+      cost_allocation_method: opts.method,
+      late_expenses_total_egp: 0,
+      late_cogs_adjustment_egp: 0,
+      late_inventory_adjustment_egp: 0,
+    } as never)
+    .execute();
   for (const it of opts.items) {
-    await db.insertInto('import_shipment_items' as never).values({
-      id: it.id, tenant_id: 't1', shipment_id: opts.shipmentId, product_id: it.productId,
-      quantity: it.qty, received_quantity: it.qty, factory_unit_price_usd: it.priceUsd,
-      landed_cost_egp: 500, shortage_handling_method: 'capitalize',
-      gross_weight_kg_unit: it.weight, cbm_unit: it.cbm,
-    } as never).execute();
-    await db.insertInto('import_inventory_lots' as never).values({
-      tenant_id: 't1', lot_number: `LOT-${it.id}`, project_id: null, shipment_id: opts.shipmentId,
-      shipment_item_id: it.id, product_id: it.productId, location_id: 10,
-      initial_quantity: it.qty, remaining_quantity: it.onHand, unit_landed_cost_egp: 500,
-      status: 'active', receipt_date: '2026-11-02', updated_at: new Date(),
-    } as never).execute();
+    await db
+      .insertInto('import_shipment_items' as never)
+      .values({
+        id: it.id,
+        tenant_id: 't1',
+        shipment_id: opts.shipmentId,
+        product_id: it.productId,
+        quantity: it.qty,
+        received_quantity: it.qty,
+        factory_unit_price_usd: it.priceUsd,
+        landed_cost_egp: 500,
+        shortage_handling_method: 'capitalize',
+        gross_weight_kg_unit: it.weight,
+        cbm_unit: it.cbm,
+      } as never)
+      .execute();
+    await db
+      .insertInto('import_inventory_lots' as never)
+      .values({
+        tenant_id: 't1',
+        lot_number: `LOT-${it.id}`,
+        project_id: null,
+        shipment_id: opts.shipmentId,
+        shipment_item_id: it.id,
+        product_id: it.productId,
+        location_id: 10,
+        initial_quantity: it.qty,
+        remaining_quantity: it.onHand,
+        unit_landed_cost_egp: 500,
+        status: 'active',
+        receipt_date: '2026-11-02',
+        updated_at: new Date(),
+      } as never)
+      .execute();
   }
-  await db.insertInto('import_inventory_receipts' as never).values({
-    tenant_id: 't1', shipment_id: opts.shipmentId, state: 'posted', review_reason: null,
-    posted_at: new Date(), created_by: 1, journal_entry_id: null,
-  } as never).execute();
+  await db
+    .insertInto('import_inventory_receipts' as never)
+    .values({
+      tenant_id: 't1',
+      shipment_id: opts.shipmentId,
+      state: 'posted',
+      review_reason: null,
+      posted_at: new Date(),
+      created_by: 1,
+      journal_entry_id: null,
+    } as never)
+    .execute();
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -139,7 +210,8 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, {
-        shipmentId: 'sh-1', method: 'value',
+        shipmentId: 'sh-1',
+        method: 'value',
         items: [
           { id: 'item-1', productId: 5, qty: 10, priceUsd: 10, weight: 1, cbm: 0.1, onHand: 6 },
           { id: 'item-2', productId: 6, qty: 10, priceUsd: 10, weight: 1, cbm: 0.1, onHand: 10 },
@@ -156,7 +228,11 @@ async function main(): Promise<void> {
       );
       assert.equal(await countRows(db, 'journal_entries'), 1, 'Exactly one journal may be posted');
       assert.equal(await countRows(db, 'import_late_expense_events'), 1, 'Exactly one event row may exist');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 5).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 5)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.cost_price), 530, 'WAC moves once: 500 + 300 inventory adj / 10 on hand');
     } finally {
       await db.destroy();
@@ -169,28 +245,45 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, {
-        shipmentId: 'sh-2', method: 'weight',
+        shipmentId: 'sh-2',
+        method: 'weight',
         items: [
           { id: 'item-a', productId: 7, qty: 10, priceUsd: 10, weight: 1, cbm: 0.1, onHand: 10 },
           { id: 'item-b', productId: 8, qty: 10, priceUsd: 10, weight: 3, cbm: 0.1, onHand: 10 },
         ],
       });
-      await service.processLateShipmentExpense('t1', 1, 'sh-2', { lateExpenseAmount: 1000, title: 'Freight top-up', supplierId: 9 });
+      await service.processLateShipmentExpense('t1', 1, 'sh-2', {
+        lateExpenseAmount: 1000,
+        title: 'Freight top-up',
+        supplierId: 9,
+      });
       // All on hand: the whole expense capitalises to inventory.
       // Weight shares: 10kg vs 30kg -> 250 vs 750.
-      const light: any = await (db as any).selectFrom('import_shipment_items').selectAll().where('id', '=', 'item-a').executeTakeFirstOrThrow();
-      const heavy: any = await (db as any).selectFrom('import_shipment_items').selectAll().where('id', '=', 'item-b').executeTakeFirstOrThrow();
+      const light: any = await (db as any)
+        .selectFrom('import_shipment_items')
+        .selectAll()
+        .where('id', '=', 'item-a')
+        .executeTakeFirstOrThrow();
+      const heavy: any = await (db as any)
+        .selectFrom('import_shipment_items')
+        .selectAll()
+        .where('id', '=', 'item-b')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(light.landed_cost_egp), 525, 'Light item: 500 + 250/10');
       assert.equal(Number(heavy.landed_cost_egp), 575, 'Heavy item: 500 + 750/10');
       // A weight-method shipment with a missing unit weight fails closed.
       await seedShipment(db, {
-        shipmentId: 'sh-2b', method: 'weight',
-        items: [
-          { id: 'item-c', productId: 11, qty: 10, priceUsd: 10, weight: 0, cbm: 0.1, onHand: 10 },
-        ],
+        shipmentId: 'sh-2b',
+        method: 'weight',
+        items: [{ id: 'item-c', productId: 11, qty: 10, priceUsd: 10, weight: 0, cbm: 0.1, onHand: 10 }],
       });
       await assert.rejects(
-        async () => service.processLateShipmentExpense('t1', 1, 'sh-2b', { lateExpenseAmount: 100, title: 'No weight', supplierId: 9 }),
+        async () =>
+          service.processLateShipmentExpense('t1', 1, 'sh-2b', {
+            lateExpenseAmount: 100,
+            title: 'No weight',
+            supplierId: 9,
+          }),
         /وزن الوحدة/,
         'Weight allocation without a unit weight must fail closed',
       );
@@ -205,7 +298,8 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, {
-        shipmentId: 'sh-3', method: 'value',
+        shipmentId: 'sh-3',
+        method: 'value',
         items: [
           { id: 'item-x', productId: 12, qty: 3, priceUsd: 10, weight: 1, cbm: 0.1, onHand: 1 },
           { id: 'item-y', productId: 13, qty: 3, priceUsd: 10, weight: 1, cbm: 0.1, onHand: 2 },
@@ -215,28 +309,51 @@ async function main(): Promise<void> {
       // 100.01 split three ways with mixed sold/on-hand: raw parts
       // carry repeating decimals; the rounded parts must still sum
       // exactly to the journal.
-      const result = await service.processLateShipmentExpense('t1', 1, 'sh-3', { lateExpenseAmount: 100.01, title: 'Rounding probe', supplierId: 9 });
+      const result = await service.processLateShipmentExpense('t1', 1, 'sh-3', {
+        lateExpenseAmount: 100.01,
+        title: 'Rounding probe',
+        supplierId: 9,
+      });
       assert.equal(result.allocation.lateExpenseAmount, 100.01);
       const lines: any[] = await (db as any).selectFrom('journal_entry_lines').selectAll().execute();
       const debits = lines.reduce((s, l) => s + Number(l.debit), 0);
       const credits = lines.reduce((s, l) => s + Number(l.credit), 0);
       assert.equal(debits, credits, 'Journal must balance');
       assert.equal(credits, 100.01, 'Credit equals the rounded expense total');
-      const event: any = await (db as any).selectFrom('import_late_expense_events').selectAll().executeTakeFirstOrThrow();
+      const event: any = await (db as any)
+        .selectFrom('import_late_expense_events')
+        .selectAll()
+        .executeTakeFirstOrThrow();
       assert.equal(
         Number(event.inventory_amount_egp) + Number(event.cogs_amount_egp),
         100.01,
         'Event split sums exactly to the total',
       );
-      const shipment: any = await (db as any).selectFrom('import_shipments').selectAll().where('id', '=', 'sh-3').executeTakeFirstOrThrow();
+      const shipment: any = await (db as any)
+        .selectFrom('import_shipments')
+        .selectAll()
+        .where('id', '=', 'sh-3')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(shipment.late_expenses_total_egp), 100.01, 'Shipment header total matches');
       // Per-item applied increments use the ROUNDED shares (the last
       // item absorbs the remainder): item-x 33.33/3, item-z 33.35/3.
       // Unrounded application would give 511.112222 for both.
-      const itemX: any = await (db as any).selectFrom('import_shipment_items').selectAll().where('id', '=', 'item-x').executeTakeFirstOrThrow();
-      const itemZ: any = await (db as any).selectFrom('import_shipment_items').selectAll().where('id', '=', 'item-z').executeTakeFirstOrThrow();
+      const itemX: any = await (db as any)
+        .selectFrom('import_shipment_items')
+        .selectAll()
+        .where('id', '=', 'item-x')
+        .executeTakeFirstOrThrow();
+      const itemZ: any = await (db as any)
+        .selectFrom('import_shipment_items')
+        .selectAll()
+        .where('id', '=', 'item-z')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(itemX.landed_cost_egp), 511.11, 'Item-x increment uses its rounded share');
-      assert.equal(Number(itemZ.landed_cost_egp), 511.116667, 'Item-z increment uses its rounded share plus the remainder');
+      assert.equal(
+        Number(itemZ.landed_cost_egp),
+        511.116667,
+        'Item-z increment uses its rounded share plus the remainder',
+      );
     } finally {
       await db.destroy();
     }
@@ -249,18 +366,38 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, {
-        shipmentId: 'sh-4', method: 'value',
+        shipmentId: 'sh-4',
+        method: 'value',
         items: [{ id: 'item-k', productId: 15, qty: 10, priceUsd: 10, weight: 1, cbm: 0.1, onHand: 10 }],
       });
       await seedShipment(db, {
-        shipmentId: 'sh-5', method: 'value',
+        shipmentId: 'sh-5',
+        method: 'value',
         items: [{ id: 'item-m', productId: 16, qty: 10, priceUsd: 10, weight: 1, cbm: 0.1, onHand: 10 }],
       });
-      await service.processLateShipmentExpense('t1', 1, 'sh-4', { lateExpenseAmount: 100, title: 'Keyless', supplierId: 9 });
-      await service.processLateShipmentExpense('t1', 1, 'sh-4', { lateExpenseAmount: 50, title: 'Keyless again', supplierId: 9 });
+      await service.processLateShipmentExpense('t1', 1, 'sh-4', {
+        lateExpenseAmount: 100,
+        title: 'Keyless',
+        supplierId: 9,
+      });
+      await service.processLateShipmentExpense('t1', 1, 'sh-4', {
+        lateExpenseAmount: 50,
+        title: 'Keyless again',
+        supplierId: 9,
+      });
       assert.equal(await countRows(db, 'journal_entries'), 2, 'Keyless calls post independently');
-      await service.processLateShipmentExpense('t1', 1, 'sh-5', { lateExpenseAmount: 100, title: 'Shared key', idempotencyKey: 'shared-key', supplierId: 9 });
-      const other = await service.processLateShipmentExpense('t1', 1, 'sh-4', { lateExpenseAmount: 100, title: 'Shared key', idempotencyKey: 'shared-key', supplierId: 9 });
+      await service.processLateShipmentExpense('t1', 1, 'sh-5', {
+        lateExpenseAmount: 100,
+        title: 'Shared key',
+        idempotencyKey: 'shared-key',
+        supplierId: 9,
+      });
+      const other = await service.processLateShipmentExpense('t1', 1, 'sh-4', {
+        lateExpenseAmount: 100,
+        title: 'Shared key',
+        idempotencyKey: 'shared-key',
+        supplierId: 9,
+      });
       assert.equal(other.success, true, 'The same key on another shipment is a different dedup scope');
     } finally {
       await db.destroy();
@@ -282,25 +419,44 @@ async function main(): Promise<void> {
       `);
       await migrate0280Up(db as any);
       const cols: any[] = await (db as any)
-        .selectFrom('information_schema.columns' as never).selectAll()
+        .selectFrom('information_schema.columns' as never)
+        .selectAll()
         .where('table_name', '=', 'import_late_expense_events')
         .where('column_name', '=', 'idempotency_key')
         .execute();
       assert.equal(cols.length, 1, 'Migration up() must add the idempotency_key column');
       const indexes: any[] = await (db as any)
-        .selectFrom('pg_indexes' as never).selectAll()
+        .selectFrom('pg_indexes' as never)
+        .selectAll()
         .where('indexname', '=', 'uq_late_expense_events_tenant_shipment_key')
         .execute();
       assert.equal(indexes.length, 1, 'Migration up() must create the partial unique index');
-      await db.insertInto('import_late_expense_events' as never).values({
-        tenant_id: 't1', shipment_id: 'sh-9', title: 'A', total_amount_egp: 10,
-        inventory_amount_egp: 10, cogs_amount_egp: 0, idempotency_key: 'k1',
-      } as never).execute();
+      await db
+        .insertInto('import_late_expense_events' as never)
+        .values({
+          tenant_id: 't1',
+          shipment_id: 'sh-9',
+          title: 'A',
+          total_amount_egp: 10,
+          inventory_amount_egp: 10,
+          cogs_amount_egp: 0,
+          idempotency_key: 'k1',
+        } as never)
+        .execute();
       await assert.rejects(
-        async () => db.insertInto('import_late_expense_events' as never).values({
-          tenant_id: 't1', shipment_id: 'sh-9', title: 'B', total_amount_egp: 10,
-          inventory_amount_egp: 10, cogs_amount_egp: 0, idempotency_key: 'k1',
-        } as never).execute(),
+        async () =>
+          db
+            .insertInto('import_late_expense_events' as never)
+            .values({
+              tenant_id: 't1',
+              shipment_id: 'sh-9',
+              title: 'B',
+              total_amount_egp: 10,
+              inventory_amount_egp: 10,
+              cogs_amount_egp: 0,
+              idempotency_key: 'k1',
+            } as never)
+            .execute(),
         (err: any) => err?.code === '23505',
         'The index must reject a duplicate key for the same shipment',
       );
@@ -312,4 +468,7 @@ async function main(): Promise<void> {
   console.log('Import late expense idempotency tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

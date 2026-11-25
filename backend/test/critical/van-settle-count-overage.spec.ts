@@ -68,8 +68,13 @@ const ACCOUNT = 'a1';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['deliveryReps', 'accounting'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -138,53 +143,145 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 4, tenant_id: TENANT, username: 'rep-user', role: 'driver', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 4, tenant_id: TENANT, username: 'rep-user', role: 'driver', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [1160, '1160'], [2120, '2120'], [4100, '4100'], [4300, '4300'],
-    [5100, '5100'], [6400, '6400'], [7100, '7100'], [7200, '7200'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [1160, '1160'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
+    [6400, '6400'],
+    [7100, '7100'],
+    [7200, '7200'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 4, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', phone: null, van_location_id: 10 }).execute();
-  await anyDb.insertInto('cashier_shifts').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-1',
-    opened_by: 1, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van',
+      location_type: 'van',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 4, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', phone: null, van_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'SHIFT-1',
+      opened_by: 1,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
   // Products: 1 = overage case (cost 10), 2 = refusal case B (cost 5),
   // 3 = shortage case (cost 5), 4 = clean case (cost 5), 5 = KWD case (cost 10.125).
   const products: Array<[number, string, number]> = [
-    [1, 'Item A', 10], [2, 'Item B', 5], [3, 'Item C', 5], [4, 'Item D', 5], [5, 'Item E', 10.125],
+    [1, 'Item A', 10],
+    [2, 'Item B', 5],
+    [3, 'Item C', 5],
+    [4, 'Item D', 5],
+    [5, 'Item E', 10.125],
   ];
   for (const [id, name, cost] of products) {
-    await anyDb.insertInto('products').values({
-      id, tenant_id: TENANT, account_id: ACCOUNT, name, name_en: name,
-      barcode: String(id), cost_price: cost, retail_price: cost * 1.5, stock_qty: 0, reserved_qty: 0,
-      is_active: true, default_location_id: 1,
-    }).execute();
+    await anyDb
+      .insertInto('products')
+      .values({
+        id,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name,
+        name_en: name,
+        barcode: String(id),
+        cost_price: cost,
+        retail_price: cost * 1.5,
+        stock_qty: 0,
+        reserved_qty: 0,
+        is_active: true,
+        default_location_id: 1,
+      })
+      .execute();
   }
 }
 
 async function seedTrip(db: Kysely<Database>, tripId: number): Promise<void> {
-  await (db as any).insertInto('van_sales_trips').values({
-    id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 4, vehicle_id: null,
-    start_odometer: 100, end_odometer: null, van_location_id: 10, source_warehouse_id: 10,
-    status: 'open', settlement_status: 'open', sales_amount: 0, cash_collected: 0,
-    credit_sales: 0, returns_amount: 0, cash_refunds: 0,
-  }).execute();
+  await (db as any)
+    .insertInto('van_sales_trips')
+    .values({
+      id: tripId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: 4,
+      vehicle_id: null,
+      start_odometer: 100,
+      end_odometer: null,
+      van_location_id: 10,
+      source_warehouse_id: 10,
+      status: 'open',
+      settlement_status: 'open',
+      sales_amount: 0,
+      cash_collected: 0,
+      credit_sales: 0,
+      returns_amount: 0,
+      cash_refunds: 0,
+    })
+    .execute();
 }
 
 /** Replace the whole van stock with exactly these rows (system qtys). */
@@ -192,10 +289,18 @@ async function setVanStock(db: Kysely<Database>, rows: Array<{ productId: number
   const anyDb = db as any;
   await anyDb.deleteFrom('product_location_stock').execute();
   for (const row of rows) {
-    await anyDb.insertInto('product_location_stock').values({
-      tenant_id: TENANT, account_id: ACCOUNT, product_id: row.productId, branch_id: 1,
-      location_id: 10, qty: row.qty, reserved_qty: 0,
-    }).execute();
+    await anyDb
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        product_id: row.productId,
+        branch_id: 1,
+        location_id: 10,
+        qty: row.qty,
+        reserved_qty: 0,
+      })
+      .execute();
     await anyDb.updateTable('products').set({ stock_qty: row.qty }).where('id', '=', row.productId).execute();
   }
 }
@@ -211,12 +316,22 @@ function buildServices(db: Kysely<Database>): { van: VanSalesService } {
 }
 
 async function journalEntries(db: Kysely<Database>, tripId: number): Promise<Array<Record<string, any>>> {
-  return (db as any).selectFrom('journal_entries').selectAll()
-    .where('source_type', '=', 'van_trip_settlement').where('source_id', '=', tripId).execute();
+  return (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', 'van_trip_settlement')
+    .where('source_id', '=', tripId)
+    .execute();
 }
 
-async function journalLeg(db: Kysely<Database>, entryId: number, accountId: number, side: 'debit' | 'credit'): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+async function journalLeg(
+  db: Kysely<Database>,
+  entryId: number,
+  accountId: number,
+  side: 'debit' | 'credit',
+): Promise<number> {
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
     .select([side])
     .where('journal_entry_id', '=', entryId)
     .where('account_id', '=', accountId)
@@ -224,24 +339,42 @@ async function journalLeg(db: Kysely<Database>, entryId: number, accountId: numb
   return rows.reduce((sum: number, row: any) => sum + Number(row[side] || 0), 0);
 }
 
-async function journalTotals(db: Kysely<Database>, entryId: number, digits: number): Promise<{ debit: number; credit: number }> {
-  const rows = await (db as any).selectFrom('journal_entry_lines').select(['debit', 'credit'])
-    .where('journal_entry_id', '=', entryId).execute();
-  const summed = rows.reduce((acc: { debit: number; credit: number }, row: any) => ({
-    debit: acc.debit + Number(row.debit || 0),
-    credit: acc.credit + Number(row.credit || 0),
-  }), { debit: 0, credit: 0 });
+async function journalTotals(
+  db: Kysely<Database>,
+  entryId: number,
+  digits: number,
+): Promise<{ debit: number; credit: number }> {
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['debit', 'credit'])
+    .where('journal_entry_id', '=', entryId)
+    .execute();
+  const summed = rows.reduce(
+    (acc: { debit: number; credit: number }, row: any) => ({
+      debit: acc.debit + Number(row.debit || 0),
+      credit: acc.credit + Number(row.credit || 0),
+    }),
+    { debit: 0, credit: 0 },
+  );
   return { debit: Number(summed.debit.toFixed(digits)), credit: Number(summed.credit.toFixed(digits)) };
 }
 
 async function tripStatus(db: Kysely<Database>, tripId: number): Promise<string> {
-  const row = await (db as any).selectFrom('van_sales_trips').select(['status']).where('id', '=', tripId).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('van_sales_trips')
+    .select(['status'])
+    .where('id', '=', tripId)
+    .executeTakeFirst();
   return String(row?.status || '');
 }
 
 async function vanQty(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await (db as any).selectFrom('product_location_stock').select(['qty'])
-    .where('product_id', '=', productId).where('location_id', '=', 10).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('product_location_stock')
+    .select(['qty'])
+    .where('product_id', '=', productId)
+    .where('location_id', '=', 10)
+    .executeTakeFirst();
   return Number(row?.qty ?? 0);
 }
 
@@ -250,20 +383,27 @@ async function ledgerRows(db: Kysely<Database>, tripId: number): Promise<Array<R
 }
 
 async function movementRows(db: Kysely<Database>, tripId: number, type: string): Promise<Array<Record<string, any>>> {
-  return (db as any).selectFrom('stock_movements').selectAll()
-    .where('reference_type', '=', 'van_sales_trip').where('reference_id', '=', tripId)
-    .where('movement_type', '=', type).execute();
+  return (db as any)
+    .selectFrom('stock_movements')
+    .selectAll()
+    .where('reference_type', '=', 'van_sales_trip')
+    .where('reference_id', '=', tripId)
+    .where('movement_type', '=', type)
+    .execute();
 }
 
 async function main(): Promise<void> {
   // 1. Engine: a partial count flags the uncounted item while the
   // counted overage item still computes its overage cost.
   {
-    const audit = reconcileVanStockAudit([
-      { productId: 1, productName: 'Item A', systemQty: 10, countedQty: 10, costPrice: 10, retailPrice: 15 },
-      { productId: 2, productName: 'Item B', systemQty: 5, costPrice: 5, retailPrice: 10 },
-      { productId: 3, productName: 'Item C', systemQty: 5, countedQty: 6, costPrice: 30, retailPrice: 45 },
-    ], 2);
+    const audit = reconcileVanStockAudit(
+      [
+        { productId: 1, productName: 'Item A', systemQty: 10, countedQty: 10, costPrice: 10, retailPrice: 15 },
+        { productId: 2, productName: 'Item B', systemQty: 5, costPrice: 5, retailPrice: 10 },
+        { productId: 3, productName: 'Item C', systemQty: 5, countedQty: 6, costPrice: 30, retailPrice: 45 },
+      ],
+      2,
+    );
     assert.equal(audit.totalSystemItems, 3);
     assert.equal(audit.auditedItemsCount, 2, 'only the counted items are audited');
     assert.equal(audit.hasUncountedItems, true, 'the partial count is flagged, not certified');
@@ -288,15 +428,26 @@ async function main(): Promise<void> {
     // The trip stays open and nothing is written anywhere.
     {
       await seedTrip(db, 11);
-      await setVanStock(db, [{ productId: 1, qty: 10 }, { productId: 2, qty: 5 }]);
+      await setVanStock(db, [
+        { productId: 1, qty: 10 },
+        { productId: 2, qty: 5 },
+      ]);
       await assert.rejects(
-        () => van.settleTrip(4, TENANT, ACCOUNT, {
-          tripId: 11, countedCash: 0, unloadRemainingToWarehouse: true, endOdometer: 120,
-          countedStock: [{ productId: 1, countedQty: 10 }],
-        }, adminAuth),
-        (err: any) =>
-          err.code === 'VAN_STOCK_AUDIT_INCOMPLETE' &&
-          String(err.message).includes('Item B'),
+        () =>
+          van.settleTrip(
+            4,
+            TENANT,
+            ACCOUNT,
+            {
+              tripId: 11,
+              countedCash: 0,
+              unloadRemainingToWarehouse: true,
+              endOdometer: 120,
+              countedStock: [{ productId: 1, countedQty: 10 }],
+            },
+            adminAuth,
+          ),
+        (err: any) => err.code === 'VAN_STOCK_AUDIT_INCOMPLETE' && String(err.message).includes('Item B'),
         'the refusal names the uncounted product',
       );
       assert.equal(await tripStatus(db, 11), 'open', 'the refused settle leaves the trip open');
@@ -314,11 +465,20 @@ async function main(): Promise<void> {
     {
       await seedTrip(db, 12);
       await setVanStock(db, [{ productId: 1, qty: 5 }]);
-      const result = await van.settleTrip(4, TENANT, ACCOUNT, {
-        tripId: 12, countedCash: 0, unloadRemainingToWarehouse: false, endOdometer: 120,
-        countedStock: [{ productId: 1, countedQty: 7 }],
-        nightStockApproved: true,
-      }, adminAuth);
+      const result = await van.settleTrip(
+        4,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 12,
+          countedCash: 0,
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
+          countedStock: [{ productId: 1, countedQty: 7 }],
+          nightStockApproved: true,
+        },
+        adminAuth,
+      );
       assert.equal(result.status, 'settled');
       assert.equal(result.stockOverageAmount, 20, 'the overage cost reaches the caller');
       assert.equal(result.stockVarianceAmount, 0, 'no shortage on an overage settle');
@@ -326,7 +486,11 @@ async function main(): Promise<void> {
       assert.equal(entries.length, 1, 'exactly one settlement journal');
       const entryId = Number(entries[0].id);
       assert.equal(await journalLeg(db, entryId, 1140, 'debit'), 20, 'the found stock raises inventory');
-      assert.equal(await journalLeg(db, entryId, 7100, 'credit'), 20, 'the overage gain is credited, not silently kept');
+      assert.equal(
+        await journalLeg(db, entryId, 7100, 'credit'),
+        20,
+        'the overage gain is credited, not silently kept',
+      );
       assert.equal(await journalLeg(db, entryId, 1140, 'credit'), 0, 'no shortage credit on an overage');
       assert.equal(await journalLeg(db, entryId, 7100, 'debit'), 0);
       const totals = await journalTotals(db, entryId, 2);
@@ -351,13 +515,22 @@ async function main(): Promise<void> {
     {
       await seedTrip(db, 13);
       await setVanStock(db, [{ productId: 3, qty: 10 }]);
-      const result = await van.settleTrip(4, TENANT, ACCOUNT, {
-        tripId: 13, countedCash: 0, unloadRemainingToWarehouse: false, endOdometer: 120,
-        countedStock: [{ productId: 3, countedQty: 8 }],
-        chargeStockVarianceToRep: true,
-        chargeStockVarianceDecidedBySupervisor: true,
-        nightStockApproved: true,
-      }, adminAuth);
+      const result = await van.settleTrip(
+        4,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 13,
+          countedCash: 0,
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
+          countedStock: [{ productId: 3, countedQty: 8 }],
+          chargeStockVarianceToRep: true,
+          chargeStockVarianceDecidedBySupervisor: true,
+          nightStockApproved: true,
+        },
+        adminAuth,
+      );
       assert.equal(result.status, 'settled');
       assert.equal(result.stockVarianceAmount, 10, 'the shortage is 2 units at cost 5');
       assert.equal(result.stockOverageAmount, 0, 'no overage on a shortage settle');
@@ -383,11 +556,20 @@ async function main(): Promise<void> {
     {
       await seedTrip(db, 14);
       await setVanStock(db, [{ productId: 4, qty: 10 }]);
-      const result = await van.settleTrip(4, TENANT, ACCOUNT, {
-        tripId: 14, countedCash: 0, unloadRemainingToWarehouse: false, endOdometer: 120,
-        countedStock: [{ productId: 4, countedQty: 10 }],
-        nightStockApproved: true,
-      }, adminAuth);
+      const result = await van.settleTrip(
+        4,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 14,
+          countedCash: 0,
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
+          countedStock: [{ productId: 4, countedQty: 10 }],
+          nightStockApproved: true,
+        },
+        adminAuth,
+      );
       assert.equal(result.status, 'settled');
       assert.equal(result.stockVarianceAmount, 0);
       assert.equal(result.stockOverageAmount, 0);
@@ -400,19 +582,37 @@ async function main(): Promise<void> {
     // 6. KWD, 3 book digits: system 10, counted 11 at cost 10.125 —
     // the overage journals at 10.125, not at 2dp.
     {
-      await (db as any).updateTable('settings').set({ value: 'KWD' })
-        .where('tenant_id', '=', TENANT).where('key', '=', 'currency').execute();
-      await (db as any).updateTable('currency_exchange_rates').set({ is_base: false })
-        .where('tenant_id', '=', TENANT).execute();
-      await (db as any).insertInto('currency_exchange_rates')
-        .values({ tenant_id: TENANT, currency_code: 'KWD', exchange_rate: 1, is_base: true }).execute();
+      await (db as any)
+        .updateTable('settings')
+        .set({ value: 'KWD' })
+        .where('tenant_id', '=', TENANT)
+        .where('key', '=', 'currency')
+        .execute();
+      await (db as any)
+        .updateTable('currency_exchange_rates')
+        .set({ is_base: false })
+        .where('tenant_id', '=', TENANT)
+        .execute();
+      await (db as any)
+        .insertInto('currency_exchange_rates')
+        .values({ tenant_id: TENANT, currency_code: 'KWD', exchange_rate: 1, is_base: true })
+        .execute();
       await seedTrip(db, 21);
       await setVanStock(db, [{ productId: 5, qty: 10 }]);
-      const result = await van.settleTrip(4, TENANT, ACCOUNT, {
-        tripId: 21, countedCash: 0, unloadRemainingToWarehouse: false, endOdometer: 120,
-        countedStock: [{ productId: 5, countedQty: 11 }],
-        nightStockApproved: true,
-      }, adminAuth);
+      const result = await van.settleTrip(
+        4,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 21,
+          countedCash: 0,
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
+          countedStock: [{ productId: 5, countedQty: 11 }],
+          nightStockApproved: true,
+        },
+        adminAuth,
+      );
       assert.equal(result.status, 'settled');
       assert.equal(result.stockOverageAmount, 10.125, 'the overage rounds at 3 book digits');
       const entries = await journalEntries(db, 21);
@@ -435,14 +635,23 @@ async function main(): Promise<void> {
       const { readFileSync } = await import('node:fs');
       const { resolve } = await import('node:path');
       const here = __dirname;
-      const engineSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-trip-reconciliation/van-trip-reconciliation.types.ts'), 'utf8');
+      const engineSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/van-trip-reconciliation/van-trip-reconciliation.types.ts'),
+        'utf8',
+      );
       assert.ok(engineSource.includes('hasUncountedItems'), 'the engine surfaces uncounted items');
       assert.ok(engineSource.includes('uncountedItems'), 'the engine lists the uncounted items');
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
+      const vanSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'),
+        'utf8',
+      );
       assert.ok(vanSource.includes('VAN_STOCK_AUDIT_INCOMPLETE'), 'settleTrip refuses an incomplete audit');
       assert.ok(vanSource.includes('van_stock_overage'), 'settleTrip adds overage units through a named movement');
       assert.ok(vanSource.includes("entry_type: 'stock_overage'"), 'settleTrip records the overage in the rep ledger');
-      const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+      const postingSource = readFileSync(
+        resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'),
+        'utf8',
+      );
       assert.ok(postingSource.includes('stockOverageAmount'), 'postVanTripSettlement takes the overage amount');
       console.log('  source pins passed');
     }

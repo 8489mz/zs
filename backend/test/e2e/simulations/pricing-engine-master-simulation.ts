@@ -99,19 +99,22 @@ async function runPricingEngineSimulation() {
 
     // ═══ 2. Pricing Preview: Percent Increase ═══
     console.log('\n--- 2. معاينة موجة التسعير: زيادة نسبية 10% (Preview: +10%) ---');
-    const previewResult = await pricingService.preview({
-      filters: { productIds: createdProductIds, activeOnly: true },
-      operation: { type: 'percent_increase', value: 10 },
-      targets: ['retail'],
-      rounding: { mode: 'none' },
-      options: {
-        applyToWholeStyleCode: false,
-        applyToPricingGroup: false,
-        skipActiveOffers: false,
-        skipCustomerPrices: false,
-        skipManualExceptions: false,
+    const previewResult = (await pricingService.preview(
+      {
+        filters: { productIds: createdProductIds, activeOnly: true },
+        operation: { type: 'percent_increase', value: 10 },
+        targets: ['retail'],
+        rounding: { mode: 'none' },
+        options: {
+          applyToWholeStyleCode: false,
+          applyToPricingGroup: false,
+          skipActiveOffers: false,
+          skipCustomerPrices: false,
+          skipManualExceptions: false,
+        },
       },
-    }, auth) as any;
+      auth,
+    )) as any;
 
     const previewRows = previewResult.rows || [];
     if (previewRows.length !== 4) {
@@ -128,13 +131,22 @@ async function runPricingEngineSimulation() {
 
     // ═══ 3. Preview with Nearest Rounding ═══
     console.log('\n--- 3. التقريب لأقرب 0.50 (Nearest Rounding) ---');
-    const roundedPreview = await pricingService.preview({
-      filters: { productIds: [createdProductIds[2]] }, // Mouse: 55 * 1.10 = 60.5
-      operation: { type: 'percent_increase', value: 10 },
-      targets: ['retail'],
-      rounding: { mode: 'nearest', nearestStep: 1 }, // round to nearest 1
-      options: { applyToWholeStyleCode: false, applyToPricingGroup: false, skipActiveOffers: false, skipCustomerPrices: false, skipManualExceptions: false },
-    }, auth) as any;
+    const roundedPreview = (await pricingService.preview(
+      {
+        filters: { productIds: [createdProductIds[2]] }, // Mouse: 55 * 1.10 = 60.5
+        operation: { type: 'percent_increase', value: 10 },
+        targets: ['retail'],
+        rounding: { mode: 'nearest', nearestStep: 1 }, // round to nearest 1
+        options: {
+          applyToWholeStyleCode: false,
+          applyToPricingGroup: false,
+          skipActiveOffers: false,
+          skipCustomerPrices: false,
+          skipManualExceptions: false,
+        },
+      },
+      auth,
+    )) as any;
 
     const mouseRounded = roundedPreview.rows[0];
     // 55 * 1.10 = 60.5, nearest 1 = 61 or 60 depending on rounding
@@ -145,27 +157,47 @@ async function runPricingEngineSimulation() {
 
     // ═══ 4. Preview with Ending Digit Rounding ═══
     console.log('\n--- 4. التقريب بالخانة الأخيرة .95 (Ending Rounding) ---');
-    const endingPreview = await pricingService.preview({
-      filters: { productIds: [createdProductIds[1]] }, // Screen: 750 * 1.10 = 825
-      operation: { type: 'percent_increase', value: 10 },
-      targets: ['retail'],
-      rounding: { mode: 'ending', ending: 95 },
-      options: { applyToWholeStyleCode: false, applyToPricingGroup: false, skipActiveOffers: false, skipCustomerPrices: false, skipManualExceptions: false },
-    }, auth) as any;
+    const endingPreview = (await pricingService.preview(
+      {
+        filters: { productIds: [createdProductIds[1]] }, // Screen: 750 * 1.10 = 825
+        operation: { type: 'percent_increase', value: 10 },
+        targets: ['retail'],
+        rounding: { mode: 'ending', ending: 95 },
+        options: {
+          applyToWholeStyleCode: false,
+          applyToPricingGroup: false,
+          skipActiveOffers: false,
+          skipCustomerPrices: false,
+          skipManualExceptions: false,
+        },
+      },
+      auth,
+    )) as any;
 
     const screenEnding = endingPreview.rows[0];
     // 750 * 1.10 = 825, ending .95 => 825.95
-    console.log(`✅ التقريب بالخانة الأخيرة: شاشة ${screenEnding.retailPriceBefore} → ${screenEnding.retailPriceAfter}`);
+    console.log(
+      `✅ التقريب بالخانة الأخيرة: شاشة ${screenEnding.retailPriceBefore} → ${screenEnding.retailPriceAfter}`,
+    );
 
     // ═══ 5. Preview: margin_from_cost ═══
     console.log('\n--- 5. التسعير بناءً على هامش التكلفة 50% (Margin From Cost) ---');
-    const marginPreview = await pricingService.preview({
-      filters: { productIds: [createdProductIds[3]] }, // Keyboard: cost=60, 60*1.50=90
-      operation: { type: 'margin_from_cost', value: 50 },
-      targets: ['retail', 'wholesale'],
-      rounding: { mode: 'none' },
-      options: { applyToWholeStyleCode: false, applyToPricingGroup: false, skipActiveOffers: false, skipCustomerPrices: false, skipManualExceptions: false },
-    }, auth) as any;
+    const marginPreview = (await pricingService.preview(
+      {
+        filters: { productIds: [createdProductIds[3]] }, // Keyboard: cost=60, 60*1.50=90
+        operation: { type: 'margin_from_cost', value: 50 },
+        targets: ['retail', 'wholesale'],
+        rounding: { mode: 'none' },
+        options: {
+          applyToWholeStyleCode: false,
+          applyToPricingGroup: false,
+          skipActiveOffers: false,
+          skipCustomerPrices: false,
+          skipManualExceptions: false,
+        },
+      },
+      auth,
+    )) as any;
 
     const kbMargin = marginPreview.rows[0];
     if (Math.abs(kbMargin.retailPriceAfter - 90) > 0.01) {
@@ -175,29 +207,49 @@ async function runPricingEngineSimulation() {
 
     // ═══ 6. Below-Cost Detection ═══
     console.log('\n--- 6. اكتشاف السعر أقل من التكلفة (Below-Cost Detection) ---');
-    const belowCostPreview = await pricingService.preview({
-      filters: { productIds: [createdProductIds[2]] }, // Mouse: cost=20, 55 * 0.50 = 27.5 (above cost, fine)
-      operation: { type: 'percent_decrease', value: 70 }, // 55 * 0.30 = 16.5 < 20 cost
-      targets: ['retail'],
-      rounding: { mode: 'none' },
-      options: { applyToWholeStyleCode: false, applyToPricingGroup: false, skipActiveOffers: false, skipCustomerPrices: false, skipManualExceptions: false },
-    }, auth) as any;
+    const belowCostPreview = (await pricingService.preview(
+      {
+        filters: { productIds: [createdProductIds[2]] }, // Mouse: cost=20, 55 * 0.50 = 27.5 (above cost, fine)
+        operation: { type: 'percent_decrease', value: 70 }, // 55 * 0.30 = 16.5 < 20 cost
+        targets: ['retail'],
+        rounding: { mode: 'none' },
+        options: {
+          applyToWholeStyleCode: false,
+          applyToPricingGroup: false,
+          skipActiveOffers: false,
+          skipCustomerPrices: false,
+          skipManualExceptions: false,
+        },
+      },
+      auth,
+    )) as any;
 
     const mouseBelowCost = belowCostPreview.rows[0];
     if (!mouseBelowCost.belowCostAfter) {
       throw new Error('Expected below-cost flag to be true for mouse at 70% decrease');
     }
-    console.log(`✅ اكتشاف أقل من التكلفة: ماوس ${mouseBelowCost.retailPriceBefore} → ${mouseBelowCost.retailPriceAfter} (تكلفة: ${mouseBelowCost.costPrice}) belowCost=true`);
+    console.log(
+      `✅ اكتشاف أقل من التكلفة: ماوس ${mouseBelowCost.retailPriceBefore} → ${mouseBelowCost.retailPriceAfter} (تكلفة: ${mouseBelowCost.costPrice}) belowCost=true`,
+    );
 
     // ═══ 7. Apply Pricing Wave ═══
     console.log('\n--- 7. تطبيق موجة التسعير: زيادة قطاعي 10% (Apply Wave) ---');
-    const applyResult = await pricingService.apply({
-      filters: { productIds: createdProductIds },
-      operation: { type: 'percent_increase', value: 10 },
-      targets: ['retail'],
-      rounding: { mode: 'none' },
-      options: { applyToWholeStyleCode: false, applyToPricingGroup: false, skipActiveOffers: false, skipCustomerPrices: false, skipManualExceptions: false },
-    }, auth) as any;
+    const applyResult = (await pricingService.apply(
+      {
+        filters: { productIds: createdProductIds },
+        operation: { type: 'percent_increase', value: 10 },
+        targets: ['retail'],
+        rounding: { mode: 'none' },
+        options: {
+          applyToWholeStyleCode: false,
+          applyToPricingGroup: false,
+          skipActiveOffers: false,
+          skipCustomerPrices: false,
+          skipManualExceptions: false,
+        },
+      },
+      auth,
+    )) as any;
 
     if (!applyResult.ok || !applyResult.runId) {
       throw new Error('Pricing wave apply failed');
@@ -205,7 +257,8 @@ async function runPricingEngineSimulation() {
     const runId = Number(applyResult.runId);
 
     // Verify prices actually updated in DB
-    const updatedLaptop = await db.selectFrom('products')
+    const updatedLaptop = await db
+      .selectFrom('products')
       .select(['retail_price'])
       .where('id', '=', createdProductIds[0])
       .where('tenant_id', '=', auth.tenantId as any)
@@ -219,21 +272,25 @@ async function runPricingEngineSimulation() {
 
     // ═══ 8. List Runs ═══
     console.log('\n--- 8. قائمة موجات التسعير (List Runs) ---');
-    const runsResult = await pricingService.listRuns(auth) as any;
+    const runsResult = (await pricingService.listRuns(auth)) as any;
     const runs = runsResult.runs || [];
     if (runs.length === 0) throw new Error('No pricing runs found');
     const latestRun = runs.find((r: any) => r.id === runId);
     if (!latestRun) throw new Error(`Run #${runId} not in list`);
-    if (latestRun.status !== 'applied') throw new Error(`Run #${runId} status = ${latestRun.status}, expected 'applied'`);
-    console.log(`✅ موجة التسعير #${runId} في القائمة بحالة '${latestRun.status}' وعدد ${latestRun.affectedCount} صنف متأثر.`);
+    if (latestRun.status !== 'applied')
+      throw new Error(`Run #${runId} status = ${latestRun.status}, expected 'applied'`);
+    console.log(
+      `✅ موجة التسعير #${runId} في القائمة بحالة '${latestRun.status}' وعدد ${latestRun.affectedCount} صنف متأثر.`,
+    );
 
     // ═══ 9. Undo Pricing Wave ═══
     console.log('\n--- 9. التراجع عن موجة التسعير (Undo Wave) ---');
-    const undoResult = await pricingService.undo(runId, auth) as any;
+    const undoResult = (await pricingService.undo(runId, auth)) as any;
     if (!undoResult.ok) throw new Error('Undo failed');
 
     // Verify price reverted
-    const revertedLaptop = await db.selectFrom('products')
+    const revertedLaptop = await db
+      .selectFrom('products')
       .select(['retail_price'])
       .where('id', '=', createdProductIds[0])
       .where('tenant_id', '=', auth.tenantId as any)
@@ -249,54 +306,79 @@ async function runPricingEngineSimulation() {
     console.log('\n--- 10. قواعد التسعير الآلية (Pricing Rules) ---');
 
     // Create a rule
-    const ruleResult = await pricingService.upsertRule({
-      name: `قاعدة تسعير تجريبية ${simUid}`,
-      filters: {},
-      operation: { type: 'percent_increase', value: 15 },
-      targets: ['retail', 'wholesale'],
-      rounding: { mode: 'nearest', nearestStep: 0.5 },
-      options: { applyToWholeStyleCode: false, applyToPricingGroup: false, skipActiveOffers: true, skipCustomerPrices: false, skipManualExceptions: false },
-      notes: 'قاعدة تجريبية للمحاكاة',
-      isActive: true,
-    }, auth) as any;
+    const ruleResult = (await pricingService.upsertRule(
+      {
+        name: `قاعدة تسعير تجريبية ${simUid}`,
+        filters: {},
+        operation: { type: 'percent_increase', value: 15 },
+        targets: ['retail', 'wholesale'],
+        rounding: { mode: 'nearest', nearestStep: 0.5 },
+        options: {
+          applyToWholeStyleCode: false,
+          applyToPricingGroup: false,
+          skipActiveOffers: true,
+          skipCustomerPrices: false,
+          skipManualExceptions: false,
+        },
+        notes: 'قاعدة تجريبية للمحاكاة',
+        isActive: true,
+      },
+      auth,
+    )) as any;
 
     if (!ruleResult.ok || !ruleResult.rule?.id) throw new Error('Rule creation failed');
     createdRuleIds.push(Number(ruleResult.rule.id));
     console.log(`✅ تم إنشاء قاعدة تسعير #${ruleResult.rule.id} بنجاح.`);
 
     // List rules
-    const listRulesResult = await pricingService.listRules({}, auth) as any;
+    const listRulesResult = (await pricingService.listRules({}, auth)) as any;
     const rules = listRulesResult.rules || [];
     const foundRule = rules.find((r: any) => r.id === ruleResult.rule.id);
     if (!foundRule) throw new Error('Created rule not in list');
     console.log(`✅ قائمة القواعد: ${rules.length} قاعدة، القاعدة التجريبية موجودة.`);
 
     // Match rule
-    const matchResult = await pricingService.matchRule({}, auth) as any;
-    console.log(`✅ مطابقة القواعد: ${matchResult.rule ? `تطابق مع قاعدة #${matchResult.rule.id}` : 'لا توجد قاعدة مطابقة'}`);
+    const matchResult = (await pricingService.matchRule({}, auth)) as any;
+    console.log(
+      `✅ مطابقة القواعد: ${matchResult.rule ? `تطابق مع قاعدة #${matchResult.rule.id}` : 'لا توجد قاعدة مطابقة'}`,
+    );
 
     // ═══ 11. Pricing Profiles: bulk set ═══
     console.log('\n--- 11. ملفات التسعير (Pricing Profiles) ---');
-    const profileResult = await pricingService.bulkSetProfiles({
-      productIds: [createdProductIds[0], createdProductIds[1]],
-      profile: {
-        pricingMode: 'manual',
+    const profileResult = (await pricingService.bulkSetProfiles(
+      {
+        productIds: [createdProductIds[0], createdProductIds[1]],
+        profile: {
+          pricingMode: 'manual',
+        },
       },
-    }, auth) as any;
+      auth,
+    )) as any;
     if (!profileResult.ok) throw new Error('Bulk profile set failed');
     console.log(`✅ تم تعيين ${profileResult.updatedCount} صنف لوضع الاستثناء اليدوي (manual).`);
 
     // ═══ 12. Skip Manual Exceptions ═══
     console.log('\n--- 12. تخطي الاستثناءات اليدوية (Skip Manual Exceptions) ---');
-    const skipPreview = await pricingService.preview({
-      filters: { productIds: createdProductIds },
-      operation: { type: 'percent_increase', value: 5 },
-      targets: ['retail'],
-      rounding: { mode: 'none' },
-      options: { applyToWholeStyleCode: false, applyToPricingGroup: false, skipActiveOffers: false, skipCustomerPrices: false, skipManualExceptions: true },
-    }, auth) as any;
+    const skipPreview = (await pricingService.preview(
+      {
+        filters: { productIds: createdProductIds },
+        operation: { type: 'percent_increase', value: 5 },
+        targets: ['retail'],
+        rounding: { mode: 'none' },
+        options: {
+          applyToWholeStyleCode: false,
+          applyToPricingGroup: false,
+          skipActiveOffers: false,
+          skipCustomerPrices: false,
+          skipManualExceptions: true,
+        },
+      },
+      auth,
+    )) as any;
 
-    const skippedRows = (skipPreview.rows || []).filter((r: any) => r.skipped && r.skipReasons.includes('manual_exception'));
+    const skippedRows = (skipPreview.rows || []).filter(
+      (r: any) => r.skipped && r.skipReasons.includes('manual_exception'),
+    );
     if (skippedRows.length !== 2) {
       throw new Error(`Expected 2 manual-skipped rows, got ${skippedRows.length}`);
     }
@@ -311,7 +393,6 @@ async function runPricingEngineSimulation() {
     console.log(`  أقل من التكلفة: ${summary.belowCostCount}`);
 
     console.log('\n✅ محاكاة محرك التسعير تمت بنجاح بالكامل!');
-
   } finally {
     // ═══ Cleanup ═══
     console.log('\n--- التنظيف (Cleanup) ---');
@@ -334,7 +415,7 @@ async function runPricingEngineSimulation() {
   }
 }
 
-runPricingEngineSimulation().catch(err => {
+runPricingEngineSimulation().catch((err) => {
   console.error('❌ فشل محاكاة التسعير:');
   console.error(err);
   process.exit(1);

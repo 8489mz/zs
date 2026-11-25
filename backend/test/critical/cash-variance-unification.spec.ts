@@ -166,7 +166,6 @@ function tripFixture(): Record<string, unknown> {
   };
 }
 
-
 async function main(): Promise<void> {
   // Shared-helper identity: the 3-decimal case the old toFixed(2) form
   // mis-rounded (100.005 - 100 became 0.01, not 0.005).
@@ -218,10 +217,20 @@ async function main(): Promise<void> {
   // methods live in separate slices (S4 submit-settlement, S5
   // settle-trip), each importing the helper on its own re-rooted path.
   {
-    const s4Source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle/submit-settlement.service.ts'), 'utf8');
-    const s5Source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
-    assert.ok(s4Source.includes("import { computeCashDrawerVariance } from '../../../cash-drawer/helpers/cash-drawer.helper';"));
-    assert.ok(s5Source.includes("import { computeCashDrawerVariance } from '../../../cash-drawer/helpers/cash-drawer.helper';"));
+    const s4Source = readFileSync(
+      resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle/submit-settlement.service.ts'),
+      'utf8',
+    );
+    const s5Source = readFileSync(
+      resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'),
+      'utf8',
+    );
+    assert.ok(
+      s4Source.includes("import { computeCashDrawerVariance } from '../../../cash-drawer/helpers/cash-drawer.helper';"),
+    );
+    assert.ok(
+      s5Source.includes("import { computeCashDrawerVariance } from '../../../cash-drawer/helpers/cash-drawer.helper';"),
+    );
     const submitStart = s4Source.indexOf('async submitTripSettlement(');
     const settleStart = s5Source.indexOf('async settleTrip(');
     assert.ok(submitStart > 0 && settleStart > 0);

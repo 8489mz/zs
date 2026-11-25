@@ -89,15 +89,37 @@ async function main(): Promise<void> {
       INSERT INTO currency_exchange_rates VALUES ('t-egp', 'EGP', true, 1);
       INSERT INTO customers VALUES (2, 't-egp', 'EGP Customer', '0101', 0);
     `);
-    const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+    const foundation = {
+      ensureForAuth: async () => undefined,
+      ensureForScope: async () => undefined,
+    } as unknown as AccountingTenantFoundationService;
     const posting = new AccountingPostingService(foundation);
-    const service = new CustomerInstallmentsService(db, new TransactionHelper(), new SalesFinanceService(db), posting as any);
-    const auth = { tenantId: 't-egp', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+    const service = new CustomerInstallmentsService(
+      db,
+      new TransactionHelper(),
+      new SalesFinanceService(db),
+      posting as any,
+    );
+    const auth = {
+      tenantId: 't-egp',
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      permissions: [],
+    } as unknown as AuthContext;
 
     // The reported contract: entered first due on the plan start, 3 x 100.
     // Before the fix the schedule started one month after the start.
     const withFirstDue = await service.createPlan(
-      { customerId: 2, totalAmount: 300, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: START, firstDueDate: START },
+      {
+        customerId: 2,
+        totalAmount: 300,
+        downPayment: 0,
+        interestRatePercent: 0,
+        installmentCount: 3,
+        startDate: START,
+        firstDueDate: START,
+      },
       auth,
     );
     assert.deepEqual(
@@ -115,7 +137,14 @@ async function main(): Promise<void> {
     // Without an entered first due date the old shape is preserved:
     // first due one month after the plan start, amounts unchanged.
     const withoutFirstDue = await service.createPlan(
-      { customerId: 2, totalAmount: 300, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: START },
+      {
+        customerId: 2,
+        totalAmount: 300,
+        downPayment: 0,
+        interestRatePercent: 0,
+        installmentCount: 3,
+        startDate: START,
+      },
       auth,
     );
     assert.deepEqual(
@@ -130,10 +159,19 @@ async function main(): Promise<void> {
     // An invalid entered first due date fails closed with a named
     // error instead of storing an invalid schedule.
     await assert.rejects(
-      () => service.createPlan(
-        { customerId: 2, totalAmount: 300, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: START, firstDueDate: 'not-a-date' },
-        auth,
-      ),
+      () =>
+        service.createPlan(
+          {
+            customerId: 2,
+            totalAmount: 300,
+            downPayment: 0,
+            interestRatePercent: 0,
+            installmentCount: 3,
+            startDate: START,
+            firstDueDate: 'not-a-date',
+          },
+          auth,
+        ),
       (error: unknown) => (error as { code?: string }).code === 'INVALID_FIRST_DUE_DATE',
     );
   } finally {
@@ -142,15 +180,30 @@ async function main(): Promise<void> {
 
   // Source pins: the service anchors the schedule on the entered
   // first due date, and the field is declared and sent end to end.
-  const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/customer-installments.service.ts'), 'utf8');
+  const serviceSource = readFileSync(
+    resolve(__dirname, '../../src/modules/sales/services/customer-installments.service.ts'),
+    'utf8',
+  );
   assert.ok(serviceSource.includes('firstDueDate'), 'createPlan must read firstDueDate');
-  assert.ok(serviceSource.includes('INVALID_FIRST_DUE_DATE'), 'an invalid first due date must fail closed with a named error');
-  assert.ok(serviceSource.includes('firstDueDate ? i - 1 : i'), 'an entered first due date anchors the first row, otherwise the old one-month offset stays');
+  assert.ok(
+    serviceSource.includes('INVALID_FIRST_DUE_DATE'),
+    'an invalid first due date must fail closed with a named error',
+  );
+  assert.ok(
+    serviceSource.includes('firstDueDate ? i - 1 : i'),
+    'an entered first due date anchors the first row, otherwise the old one-month offset stays',
+  );
   const dtoSource = readFileSync(resolve(__dirname, '../../src/modules/sales/dto/customer-installment.dto.ts'), 'utf8');
   assert.ok(dtoSource.includes('firstDueDate?: string'), 'the create-plan DTO must declare firstDueDate');
-  const modalSource = readFileSync(resolve(__dirname, '../../../frontend/src/features/sales/components/CreateInstallmentPlanModal.tsx'), 'utf8');
+  const modalSource = readFileSync(
+    resolve(__dirname, '../../../frontend/src/features/sales/components/CreateInstallmentPlanModal.tsx'),
+    'utf8',
+  );
   assert.ok(modalSource.includes('firstDueDate: newPlan.startDate'), 'the modal must send the entered first due date');
-  const apiSource = readFileSync(resolve(__dirname, '../../../frontend/src/features/sales/api/installments.api.ts'), 'utf8');
+  const apiSource = readFileSync(
+    resolve(__dirname, '../../../frontend/src/features/sales/api/installments.api.ts'),
+    'utf8',
+  );
   assert.ok(apiSource.includes('firstDueDate?: string'), 'the frontend payload type must declare firstDueDate');
 
   console.log('installment-first-due-date: all cases passed');

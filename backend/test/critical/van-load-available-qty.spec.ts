@@ -77,8 +77,13 @@ const ON_HAND = 19;
 const CARTON = 12;
 
 const adminAuth: any = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['deliveryReps', 'accounting'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 };
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -109,25 +114,88 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: WAREHOUSE, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Warehouse', code: 'WH', is_active: true, location_type: 'branch_stock' }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: VAN_LOC, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van', code: 'VAN_4', is_active: true, location_type: 'van_stock' }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: REP, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 4',
-    phone: null, vehicle_plate: null, van_location_id: VAN_LOC, employee_id: null, national_id: null,
-  }).execute();
-  await anyDb.insertInto('products').values({
-    id: PRODUCT, tenant_id: TENANT, account_id: ACCOUNT, name: 'صنف التحميل',
-    barcode: '6220000000019', supplier_id: null, category_id: null,
-    cost_price: 10, retail_price: 20, stock_qty: ON_HAND, reserved_qty: 0, is_active: true,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: PRODUCT,
-    branch_id: null, location_id: WAREHOUSE, qty: ON_HAND, reserved_qty: 0,
-  }).execute();
-  await anyDb.insertInto('product_units').values({ tenant_id: TENANT, product_id: PRODUCT, name: 'قطعة', multiplier: 1, is_base_unit: true }).execute();
-  await anyDb.insertInto('product_units').values({ tenant_id: TENANT, product_id: PRODUCT, name: 'كرتون', multiplier: CARTON, is_base_unit: false }).execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: WAREHOUSE,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Warehouse',
+      code: 'WH',
+      is_active: true,
+      location_type: 'branch_stock',
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: VAN_LOC,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van',
+      code: 'VAN_4',
+      is_active: true,
+      location_type: 'van_stock',
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: REP,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 4',
+      phone: null,
+      vehicle_plate: null,
+      van_location_id: VAN_LOC,
+      employee_id: null,
+      national_id: null,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: PRODUCT,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'صنف التحميل',
+      barcode: '6220000000019',
+      supplier_id: null,
+      category_id: null,
+      cost_price: 10,
+      retail_price: 20,
+      stock_qty: ON_HAND,
+      reserved_qty: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: PRODUCT,
+      branch_id: null,
+      location_id: WAREHOUSE,
+      qty: ON_HAND,
+      reserved_qty: 0,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_units')
+    .values({ tenant_id: TENANT, product_id: PRODUCT, name: 'قطعة', multiplier: 1, is_base_unit: true })
+    .execute();
+  await anyDb
+    .insertInto('product_units')
+    .values({ tenant_id: TENANT, product_id: PRODUCT, name: 'كرتون', multiplier: CARTON, is_base_unit: false })
+    .execute();
 }
 
 async function locationQty(db: Kysely<Database>, locationId: number): Promise<number> {
@@ -216,7 +284,9 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await reserveLocationStock(db as any, {
-        tenantId: TENANT, accountId: ACCOUNT, locationId: WAREHOUSE,
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        locationId: WAREHOUSE,
         items: [{ productId: PRODUCT, qty: 7 }],
       });
       const reqService = buildReqService(db);
@@ -226,18 +296,24 @@ async function main(): Promise<void> {
       assert.equal(form.onHandQty, ON_HAND, 'form on-hand still shows 19');
       assert.equal(form.reservedQty, 7, 'form reserved shows the 7 held pcs');
       await assert.rejects(
-        () => tripService.openTripAndLoad(REP, TENANT, ACCOUNT, {
-          sourceWarehouseId: WAREHOUSE,
-          items: [{ productId: PRODUCT, qty: ON_HAND }],
-        }),
+        () =>
+          tripService.openTripAndLoad(REP, TENANT, ACCOUNT, {
+            sourceWarehouseId: WAREHOUSE,
+            items: [{ productId: PRODUCT, qty: ON_HAND }],
+          }),
         (e: any) => {
           assertPreCheckRefusal(e, 12);
           return true;
         },
       );
       assert.equal(
-        await (db as any).selectFrom('van_sales_trips').selectAll().execute().then((r: any[]) => r.length),
-        0, 'no trip was created by the refused load',
+        await (db as any)
+          .selectFrom('van_sales_trips')
+          .selectAll()
+          .execute()
+          .then((r: any[]) => r.length),
+        0,
+        'no trip was created by the refused load',
       );
       assert.equal(await locationQty(db, WAREHOUSE), ON_HAND, 'the source stock is untouched');
     } finally {
@@ -252,7 +328,9 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await reserveLocationStock(db as any, {
-        tenantId: TENANT, accountId: ACCOUNT, locationId: WAREHOUSE,
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        locationId: WAREHOUSE,
         items: [{ productId: PRODUCT, qty: 7 }],
       });
       const reqService = buildReqService(db);
@@ -262,10 +340,11 @@ async function main(): Promise<void> {
 
       let preCheckAvailable: number | null = null;
       await assert.rejects(
-        () => tripService.openTripAndLoad(REP, TENANT, ACCOUNT, {
-          sourceWarehouseId: WAREHOUSE,
-          items: [{ productId: PRODUCT, qty: 13 }],
-        }),
+        () =>
+          tripService.openTripAndLoad(REP, TENANT, ACCOUNT, {
+            sourceWarehouseId: WAREHOUSE,
+            items: [{ productId: PRODUCT, qty: 13 }],
+          }),
         (e: any) => {
           const m = String(e?.message || '').match(/المتوفر للتحميل: (\d+(?:\.\d+)?)/);
           preCheckAvailable = m ? Number(m[1]) : null;
@@ -276,7 +355,10 @@ async function main(): Promise<void> {
       assert.equal(preCheckAvailable, 12, 'pre-check available is 12');
 
       const gateAvailability = await getLocationAvailability(db as any, {
-        tenantId: TENANT, accountId: ACCOUNT, productId: PRODUCT, locationId: WAREHOUSE,
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        productId: PRODUCT,
+        locationId: WAREHOUSE,
       });
       const gateAvailable = computeVanLoadAvailableQty(gateAvailability);
       assert.equal(gateAvailable, 12, 'gate available is 12');
@@ -285,22 +367,39 @@ async function main(): Promise<void> {
 
       // The real gate enforces the same number: -13 refuses, -12 moves.
       await assert.rejects(
-        () => (db as any).transaction().execute(async (trx: any) => {
-          await moveVanStock(trx, {
-            productId: PRODUCT, delta: -13, locationId: WAREHOUSE,
-            tenantId: TENANT, accountId: ACCOUNT, userId: null,
-            movementType: 'van_load_out', note: 'spec probe', referenceType: 'van_sales_trip',
-            referenceId: 0, skipGlobalUpdate: false, unitCost: 10,
-          });
-        }),
+        () =>
+          (db as any).transaction().execute(async (trx: any) => {
+            await moveVanStock(trx, {
+              productId: PRODUCT,
+              delta: -13,
+              locationId: WAREHOUSE,
+              tenantId: TENANT,
+              accountId: ACCOUNT,
+              userId: null,
+              movementType: 'van_load_out',
+              note: 'spec probe',
+              referenceType: 'van_sales_trip',
+              referenceId: 0,
+              skipGlobalUpdate: false,
+              unitCost: 10,
+            });
+          }),
         (e: any) => e?.code === 'INSUFFICIENT_VAN_STOCK',
       );
       await (db as any).transaction().execute(async (trx: any) => {
         await moveVanStock(trx, {
-          productId: PRODUCT, delta: -12, locationId: WAREHOUSE,
-          tenantId: TENANT, accountId: ACCOUNT, userId: null,
-          movementType: 'van_load_out', note: 'spec probe', referenceType: 'van_sales_trip',
-          referenceId: 0, skipGlobalUpdate: false, unitCost: 10,
+          productId: PRODUCT,
+          delta: -12,
+          locationId: WAREHOUSE,
+          tenantId: TENANT,
+          accountId: ACCOUNT,
+          userId: null,
+          movementType: 'van_load_out',
+          note: 'spec probe',
+          referenceType: 'van_sales_trip',
+          referenceId: 0,
+          skipGlobalUpdate: false,
+          unitCost: 10,
         });
       });
       assert.equal(await locationQty(db, WAREHOUSE), 7, 'exactly the 7 reserved pcs stay behind');
@@ -317,16 +416,25 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await reserveLocationStock(db as any, {
-        tenantId: TENANT, accountId: ACCOUNT, locationId: WAREHOUSE,
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        locationId: WAREHOUSE,
         items: [{ productId: PRODUCT, qty: 7 }],
       });
-      await (db as any).insertInto('van_load_requisitions').values({
-        tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'REQ-261121-0002', rep_id: REP,
-        source_warehouse_id: WAREHOUSE, status: 'pending',
-        requested_items: JSON.stringify([{ productId: PRODUCT, qty: 25, sourceWarehouseId: WAREHOUSE }]),
-        approved_items: JSON.stringify([{ productId: PRODUCT, qty: 25, sourceWarehouseId: WAREHOUSE }]),
-        notes: 'trial permit',
-      }).execute();
+      await (db as any)
+        .insertInto('van_load_requisitions')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          doc_no: 'REQ-261121-0002',
+          rep_id: REP,
+          source_warehouse_id: WAREHOUSE,
+          status: 'pending',
+          requested_items: JSON.stringify([{ productId: PRODUCT, qty: 25, sourceWarehouseId: WAREHOUSE }]),
+          approved_items: JSON.stringify([{ productId: PRODUCT, qty: 25, sourceWarehouseId: WAREHOUSE }]),
+          notes: 'trial permit',
+        })
+        .execute();
       const reqService = buildReqService(db);
       const tripService = buildTripService(db);
       const form = await formProduct(reqService, WAREHOUSE, REP);
@@ -335,10 +443,11 @@ async function main(): Promise<void> {
       assert.equal(form.pendingHolds[0].docNo, 'REQ-261121-0002', 'the hold names the permit');
       assert.equal(form.pendingHolds[0].qty, 25, 'the hold shows the permit qty');
       await assert.rejects(
-        () => tripService.openTripAndLoad(REP, TENANT, ACCOUNT, {
-          sourceWarehouseId: WAREHOUSE,
-          items: [{ productId: PRODUCT, qty: ON_HAND }],
-        }),
+        () =>
+          tripService.openTripAndLoad(REP, TENANT, ACCOUNT, {
+            sourceWarehouseId: WAREHOUSE,
+            items: [{ productId: PRODUCT, qty: ON_HAND }],
+          }),
         (e: any) => {
           assertPreCheckRefusal(e, 12);
           assert.match(String(e?.message || ''), /REQ-261121-0002/, 'the refusal names the pending permit');
@@ -358,7 +467,9 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await reserveLocationStock(db as any, {
-        tenantId: TENANT, accountId: ACCOUNT, locationId: WAREHOUSE,
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        locationId: WAREHOUSE,
         items: [{ productId: PRODUCT, qty: ON_HAND }],
       });
       const reqService = buildReqService(db);
@@ -367,10 +478,11 @@ async function main(): Promise<void> {
       assert.equal(form.availableQty, 0, 'fully reserved stock shows available 0');
       assert.equal(form.onHandQty, ON_HAND, 'on-hand still shows 19');
       await assert.rejects(
-        () => tripService.openTripAndLoad(REP, TENANT, ACCOUNT, {
-          sourceWarehouseId: WAREHOUSE,
-          items: [{ productId: PRODUCT, qty: 1 }],
-        }),
+        () =>
+          tripService.openTripAndLoad(REP, TENANT, ACCOUNT, {
+            sourceWarehouseId: WAREHOUSE,
+            items: [{ productId: PRODUCT, qty: 1 }],
+          }),
         (e: any) => {
           assertPreCheckRefusal(e, 0);
           return true;
@@ -389,23 +501,44 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await reserveLocationStock(db as any, {
-        tenantId: TENANT, accountId: ACCOUNT, locationId: WAREHOUSE,
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        locationId: WAREHOUSE,
         items: [{ productId: PRODUCT, qty: 7 }],
       });
-      await (db as any).insertInto('van_sales_trips').values({
-        tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP, vehicle_id: null,
-        start_odometer: 100, van_location_id: VAN_LOC, source_warehouse_id: WAREHOUSE,
-        status: 'open', settlement_status: 'open', loaded_amount: 0, sales_amount: 0,
-        cash_collected: 0, credit_sales: 0, returns_amount: 0, variance: 0,
-      }).execute();
-      const tripRow = await (db as any).selectFrom('van_sales_trips').select('id').where('rep_id', '=', REP).executeTakeFirst();
+      await (db as any)
+        .insertInto('van_sales_trips')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: REP,
+          vehicle_id: null,
+          start_odometer: 100,
+          van_location_id: VAN_LOC,
+          source_warehouse_id: WAREHOUSE,
+          status: 'open',
+          settlement_status: 'open',
+          loaded_amount: 0,
+          sales_amount: 0,
+          cash_collected: 0,
+          credit_sales: 0,
+          returns_amount: 0,
+          variance: 0,
+        })
+        .execute();
+      const tripRow = await (db as any)
+        .selectFrom('van_sales_trips')
+        .select('id')
+        .where('rep_id', '=', REP)
+        .executeTakeFirst();
       const tripId = Number(tripRow.id);
       const tripService = buildTripService(db);
       await assert.rejects(
-        () => tripService.loadSupplementaryStockToActiveTrip(REP, TENANT, ACCOUNT, tripId, {
-          sourceWarehouseId: WAREHOUSE,
-          items: [{ productId: PRODUCT, qty: ON_HAND }],
-        }),
+        () =>
+          tripService.loadSupplementaryStockToActiveTrip(REP, TENANT, ACCOUNT, tripId, {
+            sourceWarehouseId: WAREHOUSE,
+            items: [{ productId: PRODUCT, qty: ON_HAND }],
+          }),
         (e: any) => {
           assertPreCheckRefusal(e, 12);
           return true;
@@ -430,12 +563,21 @@ async function main(): Promise<void> {
   {
     const here = __dirname;
     const ledger = readFileSync(resolve(here, '../../src/common/utils/location-stock-ledger.ts'), 'utf8');
-    assert.ok(ledger.includes('export function computeVanLoadAvailableQty'), 'the ledger defines the canonical function');
+    assert.ok(
+      ledger.includes('export function computeVanLoadAvailableQty'),
+      'the ledger defines the canonical function',
+    );
     assert.ok(ledger.includes('INV-VAN-LOAD-AVAILABLE-QTY'), 'the ledger names the invariant');
-    const reqSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-requisitions.service.ts'), 'utf8');
+    const reqSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-requisitions.service.ts'),
+      'utf8',
+    );
     assert.ok(reqSource.includes('computeVanLoadAvailableQty'), 'the form reader uses the canonical function');
     assert.ok(reqSource.includes('pendingHolds'), 'the form surfaces pending holds');
-    const tripSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/trip-open-load.service.ts'), 'utf8');
+    const tripSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/trip-open-load.service.ts'),
+      'utf8',
+    );
     assert.ok(tripSource.includes('computeVanLoadAvailableQty'), 'the trip-open pre-check uses the canonical function');
     assert.ok(tripSource.includes('getLocationAvailability'), 'the pre-check reads through the ledger');
     console.log('  source pins passed');

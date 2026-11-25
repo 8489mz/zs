@@ -3,7 +3,10 @@ import {
   classifyStorefrontPublicRequest,
   resolveClientIp,
 } from '../../src/common/middleware/storefront-public-rate-limit.middleware';
-import { maskGatewaySecret, isMaskedGatewaySecret } from '../../src/modules/storefront/engines/gateway-secret-mask.engine';
+import {
+  maskGatewaySecret,
+  isMaskedGatewaySecret,
+} from '../../src/modules/storefront/engines/gateway-secret-mask.engine';
 
 // Regression coverage for O60 (public storefront rate limits) and SF-7 / O59 (gateway secrets never
 // leave the server in full). See ARCHITECTURE_INVARIANTS.md.
@@ -12,13 +15,29 @@ function testClassification(): void {
   const create = classifyStorefrontPublicRequest('POST', '/api/storefront/MyShop/orders');
   assert.equal(create?.rule.bucket, 'order-create');
   assert.equal(create?.slug, 'myshop', 'slug is normalised so casing cannot split buckets');
-  assert.equal(classifyStorefrontPublicRequest('POST', '/api/storefront/s/orders?x=1')?.rule.bucket, 'order-create', 'query string ignored');
-  assert.equal(classifyStorefrontPublicRequest('POST', '/api/storefront/s/coupons/validate')?.rule.bucket, 'coupon-validate');
+  assert.equal(
+    classifyStorefrontPublicRequest('POST', '/api/storefront/s/orders?x=1')?.rule.bucket,
+    'order-create',
+    'query string ignored',
+  );
+  assert.equal(
+    classifyStorefrontPublicRequest('POST', '/api/storefront/s/coupons/validate')?.rule.bucket,
+    'coupon-validate',
+  );
   assert.equal(classifyStorefrontPublicRequest('POST', '/api/storefront/s/products/5/reviews')?.rule.bucket, 'review');
-  assert.equal(classifyStorefrontPublicRequest('POST', '/api/storefront/s/abandoned-cart')?.rule.bucket, 'abandoned-cart');
+  assert.equal(
+    classifyStorefrontPublicRequest('POST', '/api/storefront/s/abandoned-cart')?.rule.bucket,
+    'abandoned-cart',
+  );
   assert.equal(classifyStorefrontPublicRequest('POST', '/api/storefront/s/orders/lookup')?.rule.bucket, 'order-access');
-  assert.equal(classifyStorefrontPublicRequest('POST', '/api/storefront/s/orders/ON-1/cancel')?.rule.bucket, 'order-access');
-  assert.equal(classifyStorefrontPublicRequest('POST', '/api/storefront/s/orders/ON-1/mock-pay')?.rule.bucket, 'order-access');
+  assert.equal(
+    classifyStorefrontPublicRequest('POST', '/api/storefront/s/orders/ON-1/cancel')?.rule.bucket,
+    'order-access',
+  );
+  assert.equal(
+    classifyStorefrontPublicRequest('POST', '/api/storefront/s/orders/ON-1/mock-pay')?.rule.bucket,
+    'order-access',
+  );
   assert.equal(classifyStorefrontPublicRequest('PUT', '/api/storefront/s/orders/ON-1')?.rule.bucket, 'order-access');
 
   // Never limited here: reads, payment webhooks (gateways retry), merchant routes.

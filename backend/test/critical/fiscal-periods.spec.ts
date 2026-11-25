@@ -70,11 +70,7 @@ function testClosingAndReopeningInvariants() {
     status: 'open' | 'closed';
   };
 
-  function validateClosePeriod(params: {
-    period: MockPeriod;
-    allPeriods: MockPeriod[];
-    draftEntriesCount: number;
-  }) {
+  function validateClosePeriod(params: { period: MockPeriod; allPeriods: MockPeriod[]; draftEntriesCount: number }) {
     if (params.period.status === 'closed') {
       throw new Error('الفترة المحاسبية مقفلة بالفعل.');
     }
@@ -94,11 +90,7 @@ function testClosingAndReopeningInvariants() {
     return true;
   }
 
-  function validateReopenPeriod(params: {
-    period: MockPeriod;
-    allPeriods: MockPeriod[];
-    reason: string;
-  }) {
+  function validateReopenPeriod(params: { period: MockPeriod; allPeriods: MockPeriod[]; reason: string }) {
     if (!params.reason.trim()) {
       throw new Error('يجب ذكر سبب إعادة فتح الفترة المحاسبية للرقابة والتدقيق.');
     }
@@ -111,7 +103,9 @@ function testClosingAndReopeningInvariants() {
       .sort((a, b) => b.periodNumber - a.periodNumber)[0];
 
     if (nextClosed) {
-      throw new Error(`لا يمكن إعادة فتح الفترة [${params.period.name}] لأن الفترة اللاحقة [${nextClosed.name}] مقفلة.`);
+      throw new Error(
+        `لا يمكن إعادة فتح الفترة [${params.period.name}] لأن الفترة اللاحقة [${nextClosed.name}] مقفلة.`,
+      );
     }
 
     return true;
@@ -140,18 +134,12 @@ function testClosingAndReopeningInvariants() {
   console.log('✔ حظر إقفال الشهر عند وجود قيود معلقة في المسودة (نجاح)');
 
   // 2.3 إقفال يناير بنجاح (صفر مسودات)
-  assert.equal(
-    validateClosePeriod({ period: periods[0], allPeriods: periods, draftEntriesCount: 0 }),
-    true,
-  );
+  assert.equal(validateClosePeriod({ period: periods[0], allPeriods: periods, draftEntriesCount: 0 }), true);
   periods[0].status = 'closed';
   console.log('✔ إقفال يناير بنجاح بعد استيفاء الشروط (نجاح)');
 
   // 2.4 الآن يمكن إقفال فبراير
-  assert.equal(
-    validateClosePeriod({ period: periods[1], allPeriods: periods, draftEntriesCount: 0 }),
-    true,
-  );
+  assert.equal(validateClosePeriod({ period: periods[1], allPeriods: periods, draftEntriesCount: 0 }), true);
   periods[1].status = 'closed';
   console.log('✔ إقفال فبراير بنجاح بالتتابع الزمني (نجاح)');
 
@@ -164,18 +152,12 @@ function testClosingAndReopeningInvariants() {
   console.log('✔ حظر إعادة فتح شهر قديم طالما الشهر اللاحق مقفل (نجاح)');
 
   // 2.6 إعادة فتح فبراير أولاً تنجح
-  assert.equal(
-    validateReopenPeriod({ period: periods[1], allPeriods: periods, reason: 'إدخال فاتورة متأخرة' }),
-    true,
-  );
+  assert.equal(validateReopenPeriod({ period: periods[1], allPeriods: periods, reason: 'إدخال فاتورة متأخرة' }), true);
   periods[1].status = 'open';
   console.log('✔ إعادة فتح فبراير بنجاح بترتيب زمني عكسي (نجاح)');
 
   // 2.7 الآن يمكن إعادة فتح يناير
-  assert.equal(
-    validateReopenPeriod({ period: periods[0], allPeriods: periods, reason: 'تسوية رصيد' }),
-    true,
-  );
+  assert.equal(validateReopenPeriod({ period: periods[0], allPeriods: periods, reason: 'تسوية رصيد' }), true);
   periods[0].status = 'open';
   console.log('✔ إعادة فتح يناير بنجاح بعد فتح فبراير (نجاح)');
 }
@@ -213,7 +195,14 @@ function testJournalPostingPeriodLockGuard() {
 
   const closedPeriods: MockPeriodRow[] = [
     { id: 1, name: 'يناير 2025', period_number: 1, start_date: '2025-01-01', end_date: '2025-01-31', status: 'closed' },
-    { id: 2, name: 'فبراير 2025', period_number: 2, start_date: '2025-02-01', end_date: '2025-02-28', status: 'closed' },
+    {
+      id: 2,
+      name: 'فبراير 2025',
+      period_number: 2,
+      start_date: '2025-02-01',
+      end_date: '2025-02-28',
+      status: 'closed',
+    },
   ];
 
   // 3.1 محاولة ترحيل قيد في 15 يناير 2025 (فترة مقفلة)
@@ -274,7 +263,10 @@ function testFiscalPeriodHardeningGuards() {
   assert.ok(closeBody.length > 0 && reopenBody.length > 0, 'closeFiscalPeriod/reopenFiscalPeriod must exist');
 
   // FP-7: الفحص والكتابة في معاملة واحدة تحت قفل الصف.
-  for (const [label, body] of [['close', closeBody], ['reopen', reopenBody]] as const) {
+  for (const [label, body] of [
+    ['close', closeBody],
+    ['reopen', reopenBody],
+  ] as const) {
     const txIndex = body.indexOf('this.db.transaction()');
     assert.ok(txIndex > 0, `${label}FiscalPeriod must run inside a transaction`);
     const beforeTx = body.slice(0, txIndex);
@@ -282,7 +274,10 @@ function testFiscalPeriodHardeningGuards() {
       !/this\.db\s*\n?\s*\.selectFrom\('accounting_fiscal_periods'\)[\s\S]{0,400}?status'?,\s*'='/.test(beforeTx),
       `${label}FiscalPeriod must not decide on period status before the transaction opens`,
     );
-    assert.ok(body.slice(txIndex).includes('.forUpdate()'), `${label}FiscalPeriod must lock the period row it decides on`);
+    assert.ok(
+      body.slice(txIndex).includes('.forUpdate()'),
+      `${label}FiscalPeriod must lock the period row it decides on`,
+    );
   }
 
   assert.ok(
@@ -299,7 +294,10 @@ function testFiscalPeriodHardeningGuards() {
   );
 
   // FP-8: اللقطة تُحفظ عند الإقفال وتُستعاد عند إعادة الفتح، والقفل لا يتراجع.
-  assert.ok(/previous_lock_date_all: previousLock/.test(closeBody), 'closing must snapshot the lock date before raising it');
+  assert.ok(
+    /previous_lock_date_all: previousLock/.test(closeBody),
+    'closing must snapshot the lock date before raising it',
+  );
   assert.ok(
     /previous_lock_date_all/.test(reopenBody) && /candidates/.test(reopenBody),
     'reopening must restore the snapshot, not recompute the lock from closed periods alone',
@@ -337,7 +335,9 @@ function testFiscalPeriodHardeningGuards() {
 
   // عزل المستأجر مفروض من القاعدة (نمط O45).
   assert.ok(
-    /FOREIGN KEY \(tenant_id, fiscal_year_id\)[\s\S]{0,80}REFERENCES accounting_fiscal_years \(tenant_id, id\)/.test(migration),
+    /FOREIGN KEY \(tenant_id, fiscal_year_id\)[\s\S]{0,80}REFERENCES accounting_fiscal_years \(tenant_id, id\)/.test(
+      migration,
+    ),
     'the period -> fiscal year link must be a composite (tenant_id, id) foreign key',
   );
   assert.ok(

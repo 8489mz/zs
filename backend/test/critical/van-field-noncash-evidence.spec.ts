@@ -120,41 +120,124 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
   // The shared manager PIN (bcrypt) is what the real verifier checks;
   // the supervisor user carries no plaintext PIN anymore.
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(SUPERVISOR_PIN)) }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'supervisor', display_name: 'Supervisor', role: 'supervisor', pin: null, is_active: true }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(SUPERVISOR_PIN)) })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      username: 'supervisor',
+      display_name: 'Supervisor',
+      role: 'supervisor',
+      pin: null,
+      is_active: true,
+    })
+    .execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true })
+    .execute();
   // One open trip per sale case (1-7) and per collection case (8-13),
   // one product per sale case (101-107), one 500-balance customer per
   // collection case (7-12) — this is the per-case isolation on the
   // single shared database.
   for (let tripId = 1; tripId <= 13; tripId++) {
-    await anyDb.insertInto('van_sales_trips').values({ id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' }).execute();
+    await anyDb
+      .insertInto('van_sales_trips')
+      .values({ id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' })
+      .execute();
   }
   for (let productId = 101; productId <= 107; productId++) {
-    await anyDb.insertInto('products').values({ id: productId, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${productId}`, stock_qty: 10, cost_price: 50, retail_price: 100, credit_price: 0, is_active: true }).execute();
-    await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: productId, location_id: 20, qty: 10 }).execute();
+    await anyDb
+      .insertInto('products')
+      .values({
+        id: productId,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: `Product ${productId}`,
+        stock_qty: 10,
+        cost_price: 50,
+        retail_price: 100,
+        credit_price: 0,
+        is_active: true,
+      })
+      .execute();
+    await anyDb
+      .insertInto('product_location_stock')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: productId, location_id: 20, qty: 10 })
+      .execute();
   }
   for (let customerId = 7; customerId <= 12; customerId++) {
-    await anyDb.insertInto('customers').values({ id: customerId, tenant_id: TENANT, account_id: ACCOUNT, name: `Shop Customer ${customerId}`, balance: 500, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
+    await anyDb
+      .insertInto('customers')
+      .values({
+        id: customerId,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: `Shop Customer ${customerId}`,
+        balance: 500,
+        credit_limit: 0,
+        customer_type: 'cash',
+        metadata: '{}',
+        is_active: true,
+      })
+      .execute();
   }
 }
 
@@ -164,11 +247,27 @@ function buildService(db: Kysely<Database>): VanSalesService {
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   return service;
 }
@@ -182,11 +281,21 @@ function clearCollectionCaches(): void {
 }
 
 async function saleRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll().where('id', '=', id).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', id)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function tripSalesCount(db: Kysely<Database>, tripId: number): Promise<number> {
-  const rows = await (db as any).selectFrom('sales').selectAll().where('tenant_id', '=', TENANT).where('van_trip_id', '=', tripId).execute();
+  const rows = await (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('tenant_id', '=', TENANT)
+    .where('van_trip_id', '=', tripId)
+    .execute();
   return rows.length;
 }
 
@@ -194,28 +303,47 @@ async function tripRow(db: Kysely<Database>, tripId: number): Promise<any> {
   return (db as any).selectFrom('van_sales_trips').selectAll().where('id', '=', tripId).executeTakeFirstOrThrow();
 }
 
-async function journalLines(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+async function journalLines(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('journal_entries', 'journal_entries.id', 'journal_entry_lines.journal_entry_id')
     .select(['journal_entry_lines.account_id', 'journal_entry_lines.debit', 'journal_entry_lines.credit'])
     .where('journal_entries.source_type', '=', sourceType)
     .where('journal_entries.source_id', '=', sourceId)
     .where('journal_entries.tenant_id', '=', TENANT)
-    .execute() as unknown as Array<Record<string, unknown>>;
+    .execute()) as unknown as Array<Record<string, unknown>>;
   return rows.map((r) => ({ accountId: Number(r.account_id), debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
-function lineFor(lines: Array<{ accountId: number; debit: number; credit: number }>, accountId: number): { debit: number; credit: number } {
-  return lines.filter((l) => l.accountId === accountId).reduce((acc, l) => ({ debit: acc.debit + l.debit, credit: acc.credit + l.credit }), { debit: 0, credit: 0 });
+function lineFor(
+  lines: Array<{ accountId: number; debit: number; credit: number }>,
+  accountId: number,
+): { debit: number; credit: number } {
+  return lines
+    .filter((l) => l.accountId === accountId)
+    .reduce((acc, l) => ({ debit: acc.debit + l.debit, credit: acc.credit + l.credit }), { debit: 0, credit: 0 });
 }
 
 async function journalCount(db: Kysely<Database>, sourceType: string): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', sourceType).where('tenant_id', '=', TENANT).execute();
+  const rows = await (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', sourceType)
+    .where('tenant_id', '=', TENANT)
+    .execute();
   return rows.length;
 }
 
 async function customerBalance(db: Kysely<Database>, customerId: number): Promise<number> {
-  const row = await (db as any).selectFrom('customers').select('balance').where('id', '=', customerId).executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('customers')
+    .select('balance')
+    .where('id', '=', customerId)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.balance);
 }
 
@@ -234,10 +362,12 @@ async function main(): Promise<void> {
     // with the card gate's reason code, and nothing is written.
     {
       await assert.rejects(
-        () => service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'instapay',
-          items: [{ productId: 101, qty: 2 }],
-        }),
+        () =>
+          service.executeFieldSale(1, TENANT, ACCOUNT, {
+            tripId: 1,
+            paymentMethod: 'instapay',
+            items: [{ productId: 101, qty: 2 }],
+          }),
         (err: any) => err.code === 'CARD_PAYMENT_REQUIRES_SUPERVISOR_PIN',
         'an unevidenced instapay sale must be refused',
       );
@@ -253,11 +383,13 @@ async function main(): Promise<void> {
     // refused with the reference code.
     {
       await assert.rejects(
-        () => service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 2, paymentMethod: 'instapay',
-          supervisorOverridePin: SUPERVISOR_PIN,
-          items: [{ productId: 102, qty: 2 }],
-        }),
+        () =>
+          service.executeFieldSale(1, TENANT, ACCOUNT, {
+            tripId: 2,
+            paymentMethod: 'instapay',
+            supervisorOverridePin: SUPERVISOR_PIN,
+            items: [{ productId: 102, qty: 2 }],
+          }),
         (err: any) => err.code === 'CARD_PAYMENT_REFERENCE_REQUIRED',
         'an instapay sale with PIN but no reference must be refused',
       );
@@ -272,14 +404,20 @@ async function main(): Promise<void> {
     // credits revenue 4100.
     {
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 3, paymentMethod: 'instapay',
-        supervisorOverridePin: SUPERVISOR_PIN, transferReference: 'IP-9988221',
+        tripId: 3,
+        paymentMethod: 'instapay',
+        supervisorOverridePin: SUPERVISOR_PIN,
+        transferReference: 'IP-9988221',
         items: [{ productId: 103, qty: 2 }],
       });
       assert.equal(res.total, 200);
       const sale = await saleRow(db, res.saleId);
       assert.equal(sale.collection_status, 'settled_to_bank');
-      const payment = await (db as any).selectFrom('sale_payments').select(['amount', 'payment_channel', 'card_rrn']).where('sale_id', '=', res.saleId).executeTakeFirstOrThrow() as any;
+      const payment = (await (db as any)
+        .selectFrom('sale_payments')
+        .select(['amount', 'payment_channel', 'card_rrn'])
+        .where('sale_id', '=', res.saleId)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(payment.amount), 200);
       assert.equal(payment.payment_channel, 'bank_transfer');
       assert.equal(payment.card_rrn, 'IP-9988221');
@@ -296,10 +434,12 @@ async function main(): Promise<void> {
     // 4. Vodafone Cash sale, zero evidence: refused exactly like InstaPay.
     {
       await assert.rejects(
-        () => service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 4, paymentMethod: 'vodafone_cash',
-          items: [{ productId: 104, qty: 2 }],
-        }),
+        () =>
+          service.executeFieldSale(1, TENANT, ACCOUNT, {
+            tripId: 4,
+            paymentMethod: 'vodafone_cash',
+            items: [{ productId: 104, qty: 2 }],
+          }),
         (err: any) => err.code === 'CARD_PAYMENT_REQUIRES_SUPERVISOR_PIN',
         'an unevidenced vodafone_cash sale must be refused',
       );
@@ -311,10 +451,12 @@ async function main(): Promise<void> {
     // refuses it (unchanged behaviour).
     {
       await assert.rejects(
-        () => service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 5, paymentMethod: 'card',
-          items: [{ productId: 105, qty: 2 }],
-        }),
+        () =>
+          service.executeFieldSale(1, TENANT, ACCOUNT, {
+            tripId: 5,
+            paymentMethod: 'card',
+            items: [{ productId: 105, qty: 2 }],
+          }),
         (err: any) => err.code === 'CARD_PAYMENT_REQUIRES_SUPERVISOR_PIN',
         'an unevidenced card sale must still be refused',
       );
@@ -327,14 +469,20 @@ async function main(): Promise<void> {
     // on the card leg).
     {
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 6, paymentMethod: 'card',
-        supervisorOverridePin: SUPERVISOR_PIN, supervisorOverrideReason: 'RRN-123456',
+        tripId: 6,
+        paymentMethod: 'card',
+        supervisorOverridePin: SUPERVISOR_PIN,
+        supervisorOverrideReason: 'RRN-123456',
         items: [{ productId: 106, qty: 2 }],
       });
       assert.equal(res.total, 200);
       const sale = await saleRow(db, res.saleId);
       assert.equal(sale.collection_status, 'settled_to_bank');
-      const payment = await (db as any).selectFrom('sale_payments').select(['amount', 'payment_channel']).where('sale_id', '=', res.saleId).executeTakeFirstOrThrow() as any;
+      const payment = (await (db as any)
+        .selectFrom('sale_payments')
+        .select(['amount', 'payment_channel'])
+        .where('sale_id', '=', res.saleId)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(payment.amount), 200);
       assert.equal(payment.payment_channel, 'card');
       console.log('  (6) card sale with PIN + reason still posts passed');
@@ -343,7 +491,8 @@ async function main(): Promise<void> {
     // 7. Cash sale, no evidence at all: untouched by the gate.
     {
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 7, paymentMethod: 'cash',
+        tripId: 7,
+        paymentMethod: 'cash',
         items: [{ productId: 107, qty: 2 }],
       });
       assert.equal(res.total, 200);
@@ -360,9 +509,13 @@ async function main(): Promise<void> {
       const journalsBefore = await journalCount(db, 'van_field_collection');
       const paymentsBefore = await paymentsCount(db);
       await assert.rejects(
-        () => service.recordFieldCollection(1, TENANT, ACCOUNT, {
-          tripId: 8, customerId: 7, amount: 150, paymentMethod: 'instapay',
-        }),
+        () =>
+          service.recordFieldCollection(1, TENANT, ACCOUNT, {
+            tripId: 8,
+            customerId: 7,
+            amount: 150,
+            paymentMethod: 'instapay',
+          }),
         (err: any) => err.code === 'CARD_PAYMENT_REQUIRES_SUPERVISOR_PIN',
         'an unevidenced instapay collection must be refused',
       );
@@ -382,10 +535,14 @@ async function main(): Promise<void> {
       clearCollectionCaches();
       const paymentsBefore = await paymentsCount(db);
       await assert.rejects(
-        () => service.recordFieldCollection(1, TENANT, ACCOUNT, {
-          tripId: 9, customerId: 8, amount: 150, paymentMethod: 'instapay',
-          supervisorOverridePin: SUPERVISOR_PIN,
-        }),
+        () =>
+          service.recordFieldCollection(1, TENANT, ACCOUNT, {
+            tripId: 9,
+            customerId: 8,
+            amount: 150,
+            paymentMethod: 'instapay',
+            supervisorOverridePin: SUPERVISOR_PIN,
+          }),
         (err: any) => err.code === 'CARD_PAYMENT_REFERENCE_REQUIRED',
         'an instapay collection with PIN but no reference must be refused',
       );
@@ -399,10 +556,15 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       await assert.rejects(
-        () => service.recordFieldCollection(1, TENANT, ACCOUNT, {
-          tripId: 10, customerId: 9, amount: 150, paymentMethod: 'instapay',
-          supervisorOverridePin: '9999', transferReference: 'IP-7788',
-        }),
+        () =>
+          service.recordFieldCollection(1, TENANT, ACCOUNT, {
+            tripId: 10,
+            customerId: 9,
+            amount: 150,
+            paymentMethod: 'instapay',
+            supervisorOverridePin: '9999',
+            transferReference: 'IP-7788',
+          }),
         (err: any) => err.code === 'INVALID_SUPERVISOR_PIN',
         'a wrong supervisor PIN must fail closed',
       );
@@ -418,23 +580,39 @@ async function main(): Promise<void> {
       clearCollectionCaches();
       const journalsBefore = await journalCount(db, 'van_field_collection');
       const res = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 11, customerId: 10, amount: 150, paymentMethod: 'instapay',
-        supervisorOverridePin: SUPERVISOR_PIN, transferReference: 'IP-7788',
+        tripId: 11,
+        customerId: 10,
+        amount: 150,
+        paymentMethod: 'instapay',
+        supervisorOverridePin: SUPERVISOR_PIN,
+        transferReference: 'IP-7788',
       });
       assert.equal(res.ok, true);
       assert.equal(res.amount, 150);
       assert.equal(await customerBalance(db, 10), 350, '150 collected off the 500 balance');
-      const payment = await (db as any).selectFrom('customer_payments').select(['amount', 'transfer_reference', 'payment_channel']).where('customer_id', '=', 10).executeTakeFirstOrThrow() as any;
+      const payment = (await (db as any)
+        .selectFrom('customer_payments')
+        .select(['amount', 'transfer_reference', 'payment_channel'])
+        .where('customer_id', '=', 10)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(payment.amount), 150);
       assert.equal(payment.transfer_reference, 'IP-7788');
       assert.equal(payment.payment_channel, 'instapay');
       const trip = await tripRow(db, 11);
       assert.equal(Number(trip.total_instapay_collections), 150);
       assert.equal(Number(trip.cash_collected), 0, 'an electronic collection never lands in cash_collected');
-      assert.equal(await journalCount(db, 'van_field_collection'), journalsBefore + 1, 'exactly one collection journal posted');
+      assert.equal(
+        await journalCount(db, 'van_field_collection'),
+        journalsBefore + 1,
+        'exactly one collection journal posted',
+      );
       // source_id on the collection journal is the payment id, not
       // the journal entry id — look the payment up first.
-      const paymentRow = await (db as any).selectFrom('customer_payments').select(['id']).where('customer_id', '=', 10).executeTakeFirstOrThrow() as any;
+      const paymentRow = (await (db as any)
+        .selectFrom('customer_payments')
+        .select(['id'])
+        .where('customer_id', '=', 10)
+        .executeTakeFirstOrThrow()) as any;
       const lines = await journalLines(db, 'van_field_collection', Number(paymentRow.id));
       assert.equal(lineFor(lines, 1120).debit, 150, 'bank 1120 debited for the evidenced collection');
       assert.equal(lineFor(lines, 1130).credit, 150, 'receivable 1130 credited');
@@ -446,13 +624,25 @@ async function main(): Promise<void> {
       clearCollectionCaches();
       const journalsBefore = await journalCount(db, 'van_field_collection');
       const res = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 12, customerId: 11, amount: 100, paymentMethod: 'vodafone_cash',
-        supervisorOverridePin: SUPERVISOR_PIN, transferReference: 'VF-12345',
+        tripId: 12,
+        customerId: 11,
+        amount: 100,
+        paymentMethod: 'vodafone_cash',
+        supervisorOverridePin: SUPERVISOR_PIN,
+        transferReference: 'VF-12345',
       });
       assert.equal(res.ok, true);
       assert.equal(await customerBalance(db, 11), 400, '100 collected off the 500 balance');
-      assert.equal(await journalCount(db, 'van_field_collection'), journalsBefore + 1, 'exactly one collection journal posted');
-      const paymentRow = await (db as any).selectFrom('customer_payments').select(['id']).where('customer_id', '=', 11).executeTakeFirstOrThrow() as any;
+      assert.equal(
+        await journalCount(db, 'van_field_collection'),
+        journalsBefore + 1,
+        'exactly one collection journal posted',
+      );
+      const paymentRow = (await (db as any)
+        .selectFrom('customer_payments')
+        .select(['id'])
+        .where('customer_id', '=', 11)
+        .executeTakeFirstOrThrow()) as any;
       const lines = await journalLines(db, 'van_field_collection', Number(paymentRow.id));
       assert.equal(lineFor(lines, 1120).debit, 100, 'bank 1120 debited for the evidenced vodafone collection');
       assert.equal(lineFor(lines, 1130).credit, 100, 'receivable 1130 credited');
@@ -465,12 +655,22 @@ async function main(): Promise<void> {
       clearCollectionCaches();
       const journalsBefore = await journalCount(db, 'van_field_collection');
       const res = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 13, customerId: 12, amount: 100,
+        tripId: 13,
+        customerId: 12,
+        amount: 100,
       });
       assert.equal(res.ok, true);
       assert.equal(await customerBalance(db, 12), 400, '100 collected off the 500 balance');
-      assert.equal(await journalCount(db, 'van_field_collection'), journalsBefore + 1, 'exactly one collection journal posted');
-      const paymentRow = await (db as any).selectFrom('customer_payments').select(['id']).where('customer_id', '=', 12).executeTakeFirstOrThrow() as any;
+      assert.equal(
+        await journalCount(db, 'van_field_collection'),
+        journalsBefore + 1,
+        'exactly one collection journal posted',
+      );
+      const paymentRow = (await (db as any)
+        .selectFrom('customer_payments')
+        .select(['id'])
+        .where('customer_id', '=', 12)
+        .executeTakeFirstOrThrow()) as any;
       const lines = await journalLines(db, 'van_field_collection', Number(paymentRow.id));
       assert.equal(lineFor(lines, 1130).debit, 100, 'cash collection debits the pooled receivable, not the bank');
       assert.equal(lineFor(lines, 1130).credit, 100, 'receivable 1130 credited');
@@ -487,23 +687,50 @@ async function main(): Promise<void> {
       // of 5 moved the collection gate to the collections service. The facade
       // no longer names the invariant. File #52 split: the sale gate now
       // lives in the S1 slice — read it directly.
-      const fieldSalesSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'), 'utf8');
+      const fieldSalesSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'),
+        'utf8',
+      );
       // File #67 split: the collection gate moved into the S1 slice — read it directly.
-      const collectionsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-collections-and-swaps/record-field-collection.slice.ts'), 'utf8');
+      const collectionsSource = readFileSync(
+        resolve(
+          here,
+          '../../src/modules/delivery-reps/services/van-collections-and-swaps/record-field-collection.slice.ts',
+        ),
+        'utf8',
+      );
       assert.ok(collectionsSource.includes('INV-VAN-FIELD-NONCASH-EVIDENCE-GATE'), 'van-sales names the invariant');
       assert.ok(fieldSalesSource.includes('(isCard || isInstapay) && totalSale > 0'), 'the sale gate covers instapay');
       assert.ok(collectionsSource.includes('isNonCashCollection'), 'the collection gate exists');
-      assert.ok(collectionsSource.includes('transferReference: payload.transferReference'), 'the posting call hands the reference over');
+      assert.ok(
+        collectionsSource.includes('transferReference: payload.transferReference'),
+        'the posting call hands the reference over',
+      );
       // File #63 split: the invariant moved to the S7 slice; the transfer
       // reference stays via the S7 delegate signature on the facade.
-      const s7Source = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-field-collection.slice.ts'), 'utf8');
+      const s7Source = readFileSync(
+        resolve(
+          here,
+          '../../src/modules/accounting/services/van-and-delivery-posting/post-van-field-collection.slice.ts',
+        ),
+        'utf8',
+      );
       assert.ok(s7Source.includes('INV-VAN-FIELD-NONCASH-EVIDENCE-GATE'), 'the posting service names the invariant');
-      const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
+      const postingSource = readFileSync(
+        resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'),
+        'utf8',
+      );
       assert.ok(postingSource.includes('transferReference?: string'), 'the posting takes a transfer reference');
-      const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'), 'utf8');
+      const controllerSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'),
+        'utf8',
+      );
       const collectionsAt = controllerSource.indexOf("@Post('collections')");
       assert.ok(collectionsAt > 0, 'the collections endpoint exists');
-      assert.ok(controllerSource.slice(collectionsAt, collectionsAt + 900).includes('supervisorOverridePin?: string'), 'the collections DTO carries the supervisor PIN');
+      assert.ok(
+        controllerSource.slice(collectionsAt, collectionsAt + 900).includes('supervisorOverridePin?: string'),
+        'the collections DTO carries the supervisor PIN',
+      );
       console.log('  source pins passed');
     }
 

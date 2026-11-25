@@ -105,14 +105,42 @@ function scanWrites(): WriteSite[] {
 
 async function main(): Promise<void> {
   // 0. Classifier self-checks (fail-first: synthetic samples).
-  assert.equal(classify(["  await trx.insertInto('stock_movements').values({"], 0), 'WRITE-insert', 'insertInto on the line is a write');
-  assert.equal(classify(["  await trx.deleteFrom('stock_movements').where('id', '=', 1).execute();"], 0), 'WRITE-delete', 'deleteFrom on the line is a write');
-  assert.equal(classify(["  const rows = await trx.selectFrom('stock_movements').selectAll().execute();"], 0), 'READ', 'selectFrom is a read, not a write');
-  assert.equal(classify(["  // stock_movements rows whose before/after balances were hardcoded 0"], 0), 'OTHER', 'a comment mentioning the table is not a write');
-  assert.equal(classify(["  stock_movements: StockMovementTable;"], 0), 'OTHER', 'a type declaration is not a write');
-  assert.equal(classify(["    .insertInto(", "      'stock_movements')"], 0), 'WRITE-insert', 'insertInto split across two lines is a write');
-  assert.equal(classify(["    .from('stock_movements')", "      .update({ qty: 0 })"], 0), 'WRITE-update', '.from().update is a write');
-  assert.equal(classify(["    .from('stock_movements')", "      .select('id')"], 0), 'READ', '.from().select is a read');
+  assert.equal(
+    classify(["  await trx.insertInto('stock_movements').values({"], 0),
+    'WRITE-insert',
+    'insertInto on the line is a write',
+  );
+  assert.equal(
+    classify(["  await trx.deleteFrom('stock_movements').where('id', '=', 1).execute();"], 0),
+    'WRITE-delete',
+    'deleteFrom on the line is a write',
+  );
+  assert.equal(
+    classify(["  const rows = await trx.selectFrom('stock_movements').selectAll().execute();"], 0),
+    'READ',
+    'selectFrom is a read, not a write',
+  );
+  assert.equal(
+    classify(['  // stock_movements rows whose before/after balances were hardcoded 0'], 0),
+    'OTHER',
+    'a comment mentioning the table is not a write',
+  );
+  assert.equal(classify(['  stock_movements: StockMovementTable;'], 0), 'OTHER', 'a type declaration is not a write');
+  assert.equal(
+    classify(['    .insertInto(', "      'stock_movements')"], 0),
+    'WRITE-insert',
+    'insertInto split across two lines is a write',
+  );
+  assert.equal(
+    classify(["    .from('stock_movements')", '      .update({ qty: 0 })'], 0),
+    'WRITE-update',
+    '.from().update is a write',
+  );
+  assert.equal(
+    classify(["    .from('stock_movements')", "      .select('id')"], 0),
+    'READ',
+    '.from().select is a read',
+  );
 
   // 1. The scanned write count must equal the pinned inventory.
   const sites = scanWrites();
@@ -125,7 +153,10 @@ async function main(): Promise<void> {
   // 2. Every scanned write must be listed in the document by file:line.
   assert.ok(fs.existsSync(DOC_PATH), 'docs/STOCK_MOVEMENTS_WRITES.md must exist');
   const doc = fs.readFileSync(DOC_PATH, 'utf8');
-  assert.ok(doc.includes('Total business writes: **70**'), 'docs/STOCK_MOVEMENTS_WRITES.md must state the pinned total of 70');
+  assert.ok(
+    doc.includes('Total business writes: **70**'),
+    'docs/STOCK_MOVEMENTS_WRITES.md must state the pinned total of 70',
+  );
   for (const site of sites) {
     assert.ok(
       doc.includes(`${site.file}:${site.line}`),
@@ -139,13 +170,22 @@ async function main(): Promise<void> {
     .split('\n')
     .filter((line) => line.startsWith('| backend/src/'))
     .map((line) => line.split('|')[1].trim());
-  assert.equal(docRows.length, PINNED_WRITE_COUNT, `docs/STOCK_MOVEMENTS_WRITES.md lists ${docRows.length} rows, pinned ${PINNED_WRITE_COUNT}`);
+  assert.equal(
+    docRows.length,
+    PINNED_WRITE_COUNT,
+    `docs/STOCK_MOVEMENTS_WRITES.md lists ${docRows.length} rows, pinned ${PINNED_WRITE_COUNT}`,
+  );
   const scannedKeys = new Set(sites.map((s) => `${s.file}:${s.line}`));
   for (const row of docRows) {
-    assert.ok(scannedKeys.has(row), `docs/STOCK_MOVEMENTS_WRITES.md lists ${row}, which the scan no longer finds as a write`);
+    assert.ok(
+      scannedKeys.has(row),
+      `docs/STOCK_MOVEMENTS_WRITES.md lists ${row}, which the scan no longer finds as a write`,
+    );
   }
 
-  console.log(`stock movements writes checks passed (${sites.length} direct writes, all listed in docs/STOCK_MOVEMENTS_WRITES.md)`);
+  console.log(
+    `stock movements writes checks passed (${sites.length} direct writes, all listed in docs/STOCK_MOVEMENTS_WRITES.md)`,
+  );
 }
 
 main().catch((error) => {

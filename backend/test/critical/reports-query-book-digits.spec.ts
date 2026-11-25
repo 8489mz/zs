@@ -68,7 +68,11 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 const TENANT = 't1';
 
 const auth = {
-  tenantId: TENANT, accountId: 'a1', role: 'admin', userId: 1, permissions: ['sales', 'reports'],
+  tenantId: TENANT,
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  permissions: ['sales', 'reports'],
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<Database> }> {
@@ -99,20 +103,54 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await (db as any).insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: `"${code}"` }).execute();
-  await (db as any).insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: code, exchange_rate: 1, is_base: true }).execute();
+  await (db as any)
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'currency', value: `"${code}"` })
+    .execute();
+  await (db as any)
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: code, exchange_rate: 1, is_base: true })
+    .execute();
 }
 
 async function seedSales(db: Kysely<Database>): Promise<void> {
   const now = new Date();
-  await (db as any).insertInto('sales').values({
-    id: 1, tenant_id: TENANT, doc_no: 'Z-1', customer_id: null, payment_type: 'cash', payment_channel: 'cash',
-    subtotal: 33.375, total: 33.375, status: 'posted', branch_id: 1, location_id: 1, created_by: 1, created_at: now,
-  }).execute();
-  await (db as any).insertInto('sales').values({
-    id: 2, tenant_id: TENANT, doc_no: 'Z-2', customer_id: null, payment_type: 'credit', payment_channel: 'credit',
-    subtotal: 66.75, total: 66.75, status: 'posted', branch_id: 1, location_id: 1, created_by: 1, created_at: now,
-  }).execute();
+  await (db as any)
+    .insertInto('sales')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      doc_no: 'Z-1',
+      customer_id: null,
+      payment_type: 'cash',
+      payment_channel: 'cash',
+      subtotal: 33.375,
+      total: 33.375,
+      status: 'posted',
+      branch_id: 1,
+      location_id: 1,
+      created_by: 1,
+      created_at: now,
+    })
+    .execute();
+  await (db as any)
+    .insertInto('sales')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      doc_no: 'Z-2',
+      customer_id: null,
+      payment_type: 'credit',
+      payment_channel: 'credit',
+      subtotal: 66.75,
+      total: 66.75,
+      status: 'posted',
+      branch_id: 1,
+      location_id: 1,
+      created_by: 1,
+      created_at: now,
+    })
+    .execute();
   await (db as any).insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main' }).execute();
   await (db as any).insertInto('stock_locations').values({ id: 1, tenant_id: TENANT, name: 'Warehouse' }).execute();
   await (db as any).insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin' }).execute();
@@ -148,7 +186,8 @@ async function main(): Promise<void> {
 
     const rfm3 = buildCustomerRfmPayload(
       [{ customerId: 1, customerName: 'A', frequency: 2, monetary: 100.125, lastSaleDate: nowIso }],
-      undefined, 3,
+      undefined,
+      3,
     );
     assert.equal(rfm3.summary.totalRevenue, 100.125);
     assert.equal(rfm3.summary.averageAov, 50.063);
@@ -156,7 +195,8 @@ async function main(): Promise<void> {
     assert.equal(rfm3.items[0].aov, 50.063);
     const rfm2 = buildCustomerRfmPayload(
       [{ customerId: 1, customerName: 'A', frequency: 2, monetary: 100.125, lastSaleDate: nowIso }],
-      undefined, 2,
+      undefined,
+      2,
     );
     assert.equal(rfm2.summary.totalRevenue, 100.13);
     assert.equal(rfm2.summary.averageAov, 50.07);
@@ -167,7 +207,9 @@ async function main(): Promise<void> {
         { branch: 'B', total_amount: 33.375 },
         { branch: 'B', total_amount: 66.75 },
       ],
-      rowDimension: 'branch', metric: 'total_amount', digits: 3,
+      rowDimension: 'branch',
+      metric: 'total_amount',
+      digits: 3,
     });
     assert.equal(pivot3.grandTotal.value, 100.125);
     assert.equal(pivot3.matrix.B.total.value, 100.125);
@@ -176,18 +218,23 @@ async function main(): Promise<void> {
         { branch: 'B', total_amount: 33.375 },
         { branch: 'B', total_amount: 66.75 },
       ],
-      rowDimension: 'branch', metric: 'total_amount', digits: 2,
+      rowDimension: 'branch',
+      metric: 'total_amount',
+      digits: 2,
     });
     assert.equal(pivot2.grandTotal.value, 100.13);
     const pivotDefault = buildDynamicPivotMatrix({
       records: [{ branch: 'B', total_amount: 100.125 }],
-      rowDimension: 'branch', metric: 'total_amount',
+      rowDimension: 'branch',
+      metric: 'total_amount',
     });
     assert.equal(pivotDefault.grandTotal.value, 100.13, 'default digits stay 2');
     // Quantity/count keep the legacy 2dp shaping even at 3dp book digits.
     const pivotQty = buildDynamicPivotMatrix({
       records: [{ branch: 'B', quantity: 100.125 }],
-      rowDimension: 'branch', metric: 'quantity', digits: 3,
+      rowDimension: 'branch',
+      metric: 'quantity',
+      digits: 3,
     });
     assert.equal(pivotQty.grandTotal.value, 100.13);
   }
@@ -199,7 +246,7 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'KWD');
       await seedSales(db);
       const query = new SalesQueryService(db as never, new SalesAuthorizationService(db as never));
-      const result = await query.listSales({}, auth) as any;
+      const result = (await query.listSales({}, auth)) as any;
       assert.equal(result.summary.totalSales, 100.125);
       assert.equal(result.summary.cashTotal, 33.375);
       assert.equal(result.summary.creditTotal, 66.75);
@@ -216,7 +263,7 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'EGP');
       await seedSales(db);
       const query = new SalesQueryService(db as never, new SalesAuthorizationService(db as never));
-      const result = await query.listSales({}, auth) as any;
+      const result = (await query.listSales({}, auth)) as any;
       assert.equal(result.summary.totalSales, 100.13);
       assert.equal(result.summary.cashTotal, 33.38);
       assert.equal(result.summary.creditTotal, 66.75);
@@ -230,12 +277,21 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'KWD');
-      await (db as any).insertInto('products').values({
-        id: 7, tenant_id: TENANT, name: 'Widget', stock_qty: 3, min_stock_qty: 0,
-        cost_price: 33.375, retail_price: 40, is_active: true,
-      }).execute();
+      await (db as any)
+        .insertInto('products')
+        .values({
+          id: 7,
+          tenant_id: TENANT,
+          name: 'Widget',
+          stock_qty: 3,
+          min_stock_qty: 0,
+          cost_price: 33.375,
+          retail_price: 40,
+          is_active: true,
+        })
+        .execute();
       const service = new ReportsSummaryService(db as never);
-      const result = await service.deadStockReport({} as never, auth) as any;
+      const result = (await service.deadStockReport({} as never, auth)) as any;
       assert.equal(result.items.length, 1);
       assert.equal(result.items[0].tiedCapital, 100.125);
       assert.equal(result.summary.totalTiedCapital, 100.125);
@@ -251,12 +307,21 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await (db as any).insertInto('products').values({
-        id: 7, tenant_id: TENANT, name: 'Widget', stock_qty: 3, min_stock_qty: 0,
-        cost_price: 33.375, retail_price: 40, is_active: true,
-      }).execute();
+      await (db as any)
+        .insertInto('products')
+        .values({
+          id: 7,
+          tenant_id: TENANT,
+          name: 'Widget',
+          stock_qty: 3,
+          min_stock_qty: 0,
+          cost_price: 33.375,
+          retail_price: 40,
+          is_active: true,
+        })
+        .execute();
       const service = new ReportsSummaryService(db as never);
-      const result = await service.deadStockReport({} as never, auth) as any;
+      const result = (await service.deadStockReport({} as never, auth)) as any;
       assert.equal(result.items[0].tiedCapital, 100.13);
       assert.equal(result.summary.totalTiedCapital, 100.13);
     } finally {
@@ -270,16 +335,42 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'KWD');
       const now = new Date();
-      await (db as any).insertInto('products').values({
-        id: 7, tenant_id: TENANT, name: 'Component', cost_price: 33.375, retail_price: 40, is_active: true,
-      }).execute();
-      await (db as any).insertInto('sales').values({
-        id: 1, tenant_id: TENANT, doc_no: 'Z-1', payment_type: 'cash', total: 100.125, status: 'posted', created_at: now,
-      }).execute();
-      await (db as any).insertInto('sale_items').values({
-        tenant_id: TENANT, sale_id: 1, product_id: 7, product_name: 'Component', qty: 3, unit_price: 33.375, line_total: 100.125,
-      }).execute();
-      const result = await buildFoodCostVarianceReport(db as never, {} as never, auth) as any;
+      await (db as any)
+        .insertInto('products')
+        .values({
+          id: 7,
+          tenant_id: TENANT,
+          name: 'Component',
+          cost_price: 33.375,
+          retail_price: 40,
+          is_active: true,
+        })
+        .execute();
+      await (db as any)
+        .insertInto('sales')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          doc_no: 'Z-1',
+          payment_type: 'cash',
+          total: 100.125,
+          status: 'posted',
+          created_at: now,
+        })
+        .execute();
+      await (db as any)
+        .insertInto('sale_items')
+        .values({
+          tenant_id: TENANT,
+          sale_id: 1,
+          product_id: 7,
+          product_name: 'Component',
+          qty: 3,
+          unit_price: 33.375,
+          line_total: 100.125,
+        })
+        .execute();
+      const result = (await buildFoodCostVarianceReport(db as never, {} as never, auth)) as any;
       assert.equal(result.items.length, 1);
       assert.equal(result.items[0].theoreticalCost, 100.125);
       assert.equal(result.items[0].actualCost, 100.125);
@@ -297,16 +388,42 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       const now = new Date();
-      await (db as any).insertInto('products').values({
-        id: 7, tenant_id: TENANT, name: 'Component', cost_price: 33.375, retail_price: 40, is_active: true,
-      }).execute();
-      await (db as any).insertInto('sales').values({
-        id: 1, tenant_id: TENANT, doc_no: 'Z-1', payment_type: 'cash', total: 100.125, status: 'posted', created_at: now,
-      }).execute();
-      await (db as any).insertInto('sale_items').values({
-        tenant_id: TENANT, sale_id: 1, product_id: 7, product_name: 'Component', qty: 3, unit_price: 33.375, line_total: 100.125,
-      }).execute();
-      const result = await buildFoodCostVarianceReport(db as never, {} as never, auth) as any;
+      await (db as any)
+        .insertInto('products')
+        .values({
+          id: 7,
+          tenant_id: TENANT,
+          name: 'Component',
+          cost_price: 33.375,
+          retail_price: 40,
+          is_active: true,
+        })
+        .execute();
+      await (db as any)
+        .insertInto('sales')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          doc_no: 'Z-1',
+          payment_type: 'cash',
+          total: 100.125,
+          status: 'posted',
+          created_at: now,
+        })
+        .execute();
+      await (db as any)
+        .insertInto('sale_items')
+        .values({
+          tenant_id: TENANT,
+          sale_id: 1,
+          product_id: 7,
+          product_name: 'Component',
+          qty: 3,
+          unit_price: 33.375,
+          line_total: 100.125,
+        })
+        .execute();
+      const result = (await buildFoodCostVarianceReport(db as never, {} as never, auth)) as any;
       assert.equal(result.items[0].theoreticalCost, 100.13);
       assert.equal(result.summary.totalTheoreticalCost, 100.13);
     } finally {
@@ -319,7 +436,10 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await (db as any).insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: '"KWD"' }).execute();
-      await (db as any).insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+      await (db as any)
+        .insertInto('currency_exchange_rates')
+        .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+        .execute();
       await seedSales(db);
       const query = new SalesQueryService(db as never, new SalesAuthorizationService(db as never));
       await assert.rejects(query.listSales({}, auth));

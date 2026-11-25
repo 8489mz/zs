@@ -72,15 +72,33 @@ function buildService(saleRow: Record<string, any>): any {
   const db = guardMockDb(saleRow);
   const tx = { runInTransaction: async (_db: any, cb: any) => cb(db) };
   const authz = { authorizeDiscountOverride: async () => undefined };
-  return new (SalesWriteService as any)(db, tx, undefined, authz, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+  return new (SalesWriteService as any)(
+    db,
+    tx,
+    undefined,
+    authz,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  );
 }
 
 const adminAuth: any = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] };
 
 function signedSale(status: string): Record<string, any> {
   return {
-    id: 7, tenant_id: 't1', status: 'posted', exchange_return_id: null,
-    zatca_status: status, created_by: 1, created_at: new Date(), branch_id: null,
+    id: 7,
+    tenant_id: 't1',
+    status: 'posted',
+    exchange_return_id: null,
+    zatca_status: status,
+    created_by: 1,
+    created_at: new Date(),
+    branch_id: null,
   };
 }
 
@@ -127,7 +145,9 @@ async function testServiceWiring(): Promise<void> {
     /unexpected query on table return_documents/,
   );
 
-  console.log('  -> ZATCA: signed/accepted invoices immutable in updateSale and cancelSale; unsigned ones pass the guard.');
+  console.log(
+    '  -> ZATCA: signed/accepted invoices immutable in updateSale and cancelSale; unsigned ones pass the guard.',
+  );
 }
 
 async function main() {
@@ -136,4 +156,7 @@ async function main() {
   console.log('ZATCA signed invoice immutability tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

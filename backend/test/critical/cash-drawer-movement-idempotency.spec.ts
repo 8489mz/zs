@@ -54,13 +54,24 @@ import { CashDrawerService } from '../../src/modules/cash-drawer/cash-drawer.ser
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 import { migration as drawerKeyMigration } from '../../src/database/migrations/2040000000274_cash_drawer_movement_request_key';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 const PASSWORD = 'user-password-1';
 const KEY1 = 'drawer-key-0001';
 const KEY2 = 'drawer-key-0002';
 
 async function countMovements(db: Kysely<Database>, shiftId: number): Promise<number> {
-  const rows = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM treasury_transactions WHERE reference_type = 'cashier_shift' AND reference_id = ${shiftId}`.execute(db);
+  const rows = await sql<{
+    n: string;
+  }>`SELECT COUNT(*) AS n FROM treasury_transactions WHERE reference_type = 'cashier_shift' AND reference_id = ${shiftId}`.execute(
+    db,
+  );
   return Number(rows.rows[0].n);
 }
 
@@ -76,9 +87,15 @@ async function main() {
     await drawerKeyMigration.up(db as never);
 
     const record = await createPasswordRecord(PASSWORD);
-    await sql`INSERT INTO users (id, tenant_id, is_active, password_hash, password_salt) VALUES (1, 't1', true, ${record.hash}, ${record.salt})`.execute(db);
-    await sql`INSERT INTO cashier_shifts (id, tenant_id, account_id, doc_no, status, opened_by, opening_cash, expected_cash) VALUES (1, 't1', 'a1', 'SH-1', 'open', 1, 0, 0)`.execute(db);
-    await sql`INSERT INTO cashier_shifts (id, tenant_id, account_id, doc_no, status, opened_by, opening_cash, expected_cash) VALUES (2, 't1', 'a1', 'SH-2', 'open', 1, 0, 0)`.execute(db);
+    await sql`INSERT INTO users (id, tenant_id, is_active, password_hash, password_salt) VALUES (1, 't1', true, ${record.hash}, ${record.salt})`.execute(
+      db,
+    );
+    await sql`INSERT INTO cashier_shifts (id, tenant_id, account_id, doc_no, status, opened_by, opening_cash, expected_cash) VALUES (1, 't1', 'a1', 'SH-1', 'open', 1, 0, 0)`.execute(
+      db,
+    );
+    await sql`INSERT INTO cashier_shifts (id, tenant_id, account_id, doc_no, status, opened_by, opening_cash, expected_cash) VALUES (2, 't1', 'a1', 'SH-2', 'open', 1, 0, 0)`.execute(
+      db,
+    );
 
     let postingCalls = 0;
     const postingStub = {
@@ -87,11 +104,7 @@ async function main() {
         return { posted: true, journalEntryId: 1 };
       },
     };
-    const service = new CashDrawerService(
-      db,
-      new TransactionHelper(),
-      postingStub as never,
-    );
+    const service = new CashDrawerService(db, new TransactionHelper(), postingStub as never);
     // Stubbed collaborators (see header): the expected-cash
     // recomputation and the shift listing, both proven elsewhere.
     // NOTE (file #15 split): recordCashMovement now lives in the write
@@ -165,16 +178,26 @@ async function main() {
     await pg2.exec(`
       CREATE TABLE treasury_transactions (id bigserial PRIMARY KEY, tenant_id text, account_id text, txn_type text, amount numeric, note text, reference_type text, reference_id bigint);
     `);
-    await sql`INSERT INTO treasury_transactions (tenant_id, account_id, txn_type, amount, note, reference_type, reference_id) VALUES ('t1', 'a1', 'cash_in', 1, 'legacy', 'cashier_shift', 1), ('t1', 'a1', 'cash_in', 2, 'legacy', 'cashier_shift', 1)`.execute(db2);
+    await sql`INSERT INTO treasury_transactions (tenant_id, account_id, txn_type, amount, note, reference_type, reference_id) VALUES ('t1', 'a1', 'cash_in', 1, 'legacy', 'cashier_shift', 1), ('t1', 'a1', 'cash_in', 2, 'legacy', 'cashier_shift', 1)`.execute(
+      db2,
+    );
     await drawerKeyMigration.up(db2 as never);
-    await sql`INSERT INTO treasury_transactions (tenant_id, account_id, txn_type, amount, note, reference_type, reference_id, request_key) VALUES ('t1', 'a1', 'cash_in', 3, 'keyed', 'cashier_shift', 1, 'dup-key-001')`.execute(db2);
+    await sql`INSERT INTO treasury_transactions (tenant_id, account_id, txn_type, amount, note, reference_type, reference_id, request_key) VALUES ('t1', 'a1', 'cash_in', 3, 'keyed', 'cashier_shift', 1, 'dup-key-001')`.execute(
+      db2,
+    );
     await assert.rejects(
-      sql`INSERT INTO treasury_transactions (tenant_id, account_id, txn_type, amount, note, reference_type, reference_id, request_key) VALUES ('t1', 'a1', 'cash_in', 4, 'keyed-again', 'cashier_shift', 1, 'dup-key-001')`.execute(db2),
+      sql`INSERT INTO treasury_transactions (tenant_id, account_id, txn_type, amount, note, reference_type, reference_id, request_key) VALUES ('t1', 'a1', 'cash_in', 4, 'keyed-again', 'cashier_shift', 1, 'dup-key-001')`.execute(
+        db2,
+      ),
     );
     // Same key on a non-drawer row is allowed (index is scoped).
-    await sql`INSERT INTO treasury_transactions (tenant_id, account_id, txn_type, amount, note, reference_type, reference_id, request_key) VALUES ('t1', 'a1', 'cash_in', 5, 'other-kind', 'expense', 9, 'dup-key-001')`.execute(db2);
+    await sql`INSERT INTO treasury_transactions (tenant_id, account_id, txn_type, amount, note, reference_type, reference_id, request_key) VALUES ('t1', 'a1', 'cash_in', 5, 'other-kind', 'expense', 9, 'dup-key-001')`.execute(
+      db2,
+    );
     // Same key under a different tenant is allowed.
-    await sql`INSERT INTO treasury_transactions (tenant_id, account_id, txn_type, amount, note, reference_type, reference_id, request_key) VALUES ('t2', 'a1', 'cash_in', 6, 'other-tenant', 'cashier_shift', 1, 'dup-key-001')`.execute(db2);
+    await sql`INSERT INTO treasury_transactions (tenant_id, account_id, txn_type, amount, note, reference_type, reference_id, request_key) VALUES ('t2', 'a1', 'cash_in', 6, 'other-tenant', 'cashier_shift', 1, 'dup-key-001')`.execute(
+      db2,
+    );
     // Re-running the migration is a no-op.
     await drawerKeyMigration.up(db2 as never);
   } finally {

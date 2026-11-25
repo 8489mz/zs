@@ -121,11 +121,14 @@ async function runSaasPlatformMasterSimulation() {
     // Super Admin on a NON-platform tenant must ALSO be rejected!
     let fakeSuperAdminBlocked = false;
     try {
-      await saasAdminService.listTenants({}, {
-        ...rogueTenantAuth,
-        role: 'super_admin',
-        tenantId: 'external_tenant_123',
-      });
+      await saasAdminService.listTenants(
+        {},
+        {
+          ...rogueTenantAuth,
+          role: 'super_admin',
+          tenantId: 'external_tenant_123',
+        },
+      );
     } catch (err: any) {
       fakeSuperAdminBlocked = true;
       console.log(`  -> Non-Platform Super Admin correctly rejected: ${err.message}`);
@@ -135,7 +138,9 @@ async function runSaasPlatformMasterSimulation() {
     // Platform Super Admin on 'zs' must succeed
     const tenantsList = await saasAdminService.listTenants({}, platformAdminAuth);
     assert(Array.isArray(tenantsList.tenants), 'Platform super admin must access tenants list');
-    console.log(`  -> Platform Super Admin successfully verified (Active Tenants Count: ${(tenantsList.tenants as any[]).length})`);
+    console.log(
+      `  -> Platform Super Admin successfully verified (Active Tenants Count: ${(tenantsList.tenants as any[]).length})`,
+    );
     console.log('  [PASS] STEP 1 PASSED: Dual-check platform security barrier strictly enforced.\n');
 
     // -------------------------------------------------------------------------
@@ -167,16 +172,19 @@ async function runSaasPlatformMasterSimulation() {
     console.log('[STEP 3] Testing Slug Sanitization & Reserved Names Defense...');
     let reservedSlugBlocked = false;
     try {
-      await saasAdminService.createTrialTenant({
-        businessName: 'شركة تجريبية',
-        slug: 'admin', // reserved
-        ownerName: 'مدير تجريبي',
-        ownerEmail: `reserved.${uniqueSuffix}@test.local`,
-        ownerPhone: '01011112222',
-        username: `user_${uniqueSuffix}`,
-        password: `StrongPass@${uniqueSuffix}`,
-        activityType: 'retail',
-      }, platformAdminAuth);
+      await saasAdminService.createTrialTenant(
+        {
+          businessName: 'شركة تجريبية',
+          slug: 'admin', // reserved
+          ownerName: 'مدير تجريبي',
+          ownerEmail: `reserved.${uniqueSuffix}@test.local`,
+          ownerPhone: '01011112222',
+          username: `user_${uniqueSuffix}`,
+          password: `StrongPass@${uniqueSuffix}`,
+          activityType: 'retail',
+        },
+        platformAdminAuth,
+      );
     } catch (err: any) {
       reservedSlugBlocked = true;
       console.log(`  -> Reserved slug "admin" correctly blocked: ${err.message}`);
@@ -192,21 +200,26 @@ async function runSaasPlatformMasterSimulation() {
     const ownerUsername = `nile_owner_${uniqueSuffix.slice(-6)}`;
     const plainPassword = `NileTech@${uniqueSuffix.slice(-6)}`;
 
-    const createRes = await saasAdminService.createTrialTenant({
-      businessName: 'شركة النيل للتقنية والتوزيع الشامل',
-      slug: testSlug,
-      ownerName: 'م. مصطفى كامل الباجوري',
-      ownerEmail: `mostafa.${uniqueSuffix}@nile-tech.local`,
-      ownerPhone: '01099887766',
-      activityType: 'retail',
-      username: ownerUsername,
-      password: plainPassword,
-      days: 14,
-    }, platformAdminAuth);
+    const createRes = await saasAdminService.createTrialTenant(
+      {
+        businessName: 'شركة النيل للتقنية والتوزيع الشامل',
+        slug: testSlug,
+        ownerName: 'م. مصطفى كامل الباجوري',
+        ownerEmail: `mostafa.${uniqueSuffix}@nile-tech.local`,
+        ownerPhone: '01099887766',
+        activityType: 'retail',
+        username: ownerUsername,
+        password: plainPassword,
+        days: 14,
+      },
+      platformAdminAuth,
+    );
 
     assert(Boolean(createRes.tenant && (createRes.tenant as any).id), 'Tenant creation must return tenant payload');
     createdTenantId = (createRes.tenant as any).id;
-    console.log(`  -> Created Trial Tenant: [ID: ${createdTenantId}] Slug: "${testSlug}" Status: "${(createRes.tenant as any).status}"`);
+    console.log(
+      `  -> Created Trial Tenant: [ID: ${createdTenantId}] Slug: "${testSlug}" Status: "${(createRes.tenant as any).status}"`,
+    );
 
     // Verify Owner User in DB
     const ownerUser = await (db as any)
@@ -217,11 +230,16 @@ async function runSaasPlatformMasterSimulation() {
       .executeTakeFirst();
 
     assert(Boolean(ownerUser), 'Owner user must exist in DB');
-    assert(ownerUser.role === 'admin', `Owner role must strictly be 'admin' (never super_admin), got: ${ownerUser.role}`);
+    assert(
+      ownerUser.role === 'admin',
+      `Owner role must strictly be 'admin' (never super_admin), got: ${ownerUser.role}`,
+    );
     assert(ownerUser.password_hash !== plainPassword, 'Password must NEVER be stored in plaintext');
     const isPassValid = await verifyPassword(plainPassword, ownerUser.password_hash, ownerUser.password_salt || '');
     assert(isPassValid.valid === true, 'Hashed password must verify with bcrypt');
-    console.log(`  -> Verified Owner User: [ID: ${ownerUser.id}] Role: [${ownerUser.role}] Password Hash: Bcrypt verified.`);
+    console.log(
+      `  -> Verified Owner User: [ID: ${ownerUser.id}] Role: [${ownerUser.role}] Password Hash: Bcrypt verified.`,
+    );
 
     // Verify Audit Event
     const trialAudit = await (db as any)
@@ -253,7 +271,10 @@ async function runSaasPlatformMasterSimulation() {
       .where('id', '=', createdTenantId)
       .executeTakeFirst();
 
-    const diffDays = Math.round((new Date(tenantAfterExtend.trial_ends_at).getTime() - new Date(tenantBeforeExtend.trial_ends_at).getTime()) / (86400000));
+    const diffDays = Math.round(
+      (new Date(tenantAfterExtend.trial_ends_at).getTime() - new Date(tenantBeforeExtend.trial_ends_at).getTime()) /
+        86400000,
+    );
     assert(diffDays === 7, `Trial must be extended by 7 days, got: ${diffDays} days`);
     console.log(`  -> Trial Ends At pushed forward by +7 days: ${tenantAfterExtend.trial_ends_at}`);
 
@@ -270,9 +291,13 @@ async function runSaasPlatformMasterSimulation() {
     // STEP 6: Administrative Tenant Suspension & Lockdown
     // -------------------------------------------------------------------------
     console.log('[STEP 6] Suspending Tenant (administrative lockdown)...');
-    const suspendRes = await saasAdminService.suspendTenant(createdTenantId, {
-      reason: 'فحص إداري مؤقت للامتثال المؤسسي',
-    }, platformAdminAuth);
+    const suspendRes = await saasAdminService.suspendTenant(
+      createdTenantId,
+      {
+        reason: 'فحص إداري مؤقت للامتثال المؤسسي',
+      },
+      platformAdminAuth,
+    );
     assert(suspendRes.ok === true, 'Suspend tenant must succeed');
 
     const suspendedTenant = await (db as any)
@@ -297,10 +322,7 @@ async function runSaasPlatformMasterSimulation() {
     // -------------------------------------------------------------------------
     console.log('[STEP 7] Activating Tenant with Paid Enterprise Plan...');
     // Fetch or seed a plan in saas_plans
-    let plan = await (db as any)
-      .selectFrom('saas_plans')
-      .selectAll()
-      .executeTakeFirst();
+    let plan = await (db as any).selectFrom('saas_plans').selectAll().executeTakeFirst();
 
     if (!plan) {
       plan = await (db as any)
@@ -318,13 +340,17 @@ async function runSaasPlatformMasterSimulation() {
     const planId = Number(plan.id);
     console.log(`  -> Selected Plan: [ID: ${planId}] "${plan.name}"`);
 
-    const activateRes = await saasAdminService.activateTenant(createdTenantId, {
-      planId,
-      durationMonths: 12,
-      paymentAmount: 18000,
-      paymentMethod: 'bank_transfer',
-      paymentReference: `TRF-${uniqueSuffix.slice(-6)}`,
-    }, platformAdminAuth);
+    const activateRes = await saasAdminService.activateTenant(
+      createdTenantId,
+      {
+        planId,
+        durationMonths: 12,
+        paymentAmount: 18000,
+        paymentMethod: 'bank_transfer',
+        paymentReference: `TRF-${uniqueSuffix.slice(-6)}`,
+      },
+      platformAdminAuth,
+    );
     assert(activateRes.ok === true, 'Activation must succeed');
 
     const activeTenant = await (db as any)
@@ -345,7 +371,9 @@ async function runSaasPlatformMasterSimulation() {
       .executeTakeFirst();
     assert(Boolean(subRecord), 'Subscription record must exist in tenant_subscriptions');
     assert(subRecord.status === 'active', `Subscription status must be active, got: ${subRecord.status}`);
-    console.log(`  -> Subscription Provisioned: [ID: ${subRecord.id}] Plan ID: ${subRecord.plan_id} Ends At: ${subRecord.ends_at}`);
+    console.log(
+      `  -> Subscription Provisioned: [ID: ${subRecord.id}] Plan ID: ${subRecord.plan_id} Ends At: ${subRecord.ends_at}`,
+    );
 
     const activateAudit = await (db as any)
       .selectFrom('audit_logs')
@@ -360,13 +388,17 @@ async function runSaasPlatformMasterSimulation() {
     // STEP 8: Billing Payment Recording & Subscription Renewal
     // -------------------------------------------------------------------------
     console.log('[STEP 8] Recording Billing Payment & Renewing Subscription...');
-    const payRes = await saasAdminService.recordPayment(createdTenantId, {
-      amount: 18000,
-      currency: 'EGP',
-      method: 'bank_transfer',
-      reference: `TRF-RENEW-${uniqueSuffix.slice(-6)}`,
-      notes: 'سداد تجديد مبكر لمدة 6 أشهر إضافية',
-    }, platformAdminAuth);
+    const payRes = await saasAdminService.recordPayment(
+      createdTenantId,
+      {
+        amount: 18000,
+        currency: 'EGP',
+        method: 'bank_transfer',
+        reference: `TRF-RENEW-${uniqueSuffix.slice(-6)}`,
+        notes: 'سداد تجديد مبكر لمدة 6 أشهر إضافية',
+      },
+      platformAdminAuth,
+    );
     assert(payRes.ok === true, 'Record payment must succeed');
 
     const paymentRow = await (db as any)
@@ -377,7 +409,9 @@ async function runSaasPlatformMasterSimulation() {
       .executeTakeFirst();
     assert(Boolean(paymentRow), 'Payment record must exist in tenant_subscription_payments');
     assert(Number(paymentRow.amount) === 18000, `Payment amount must be 18000, got: ${paymentRow.amount}`);
-    console.log(`  -> Recorded Payment: [ID: ${paymentRow.id}] Amount: ${paymentRow.amount} EGP (Ref: ${paymentRow.reference})`);
+    console.log(
+      `  -> Recorded Payment: [ID: ${paymentRow.id}] Amount: ${paymentRow.amount} EGP (Ref: ${paymentRow.reference})`,
+    );
 
     // Renew for 6 months
     const subBeforeRenew = await (db as any)
@@ -387,10 +421,14 @@ async function runSaasPlatformMasterSimulation() {
       .orderBy('id', 'desc')
       .executeTakeFirst();
 
-    const renewRes = await saasAdminService.renewTenant(createdTenantId, {
-      planId,
-      durationMonths: 6,
-    }, platformAdminAuth);
+    const renewRes = await saasAdminService.renewTenant(
+      createdTenantId,
+      {
+        planId,
+        durationMonths: 6,
+      },
+      platformAdminAuth,
+    );
     assert(renewRes.ok === true, 'Renew tenant must succeed');
 
     const subAfterRenew = await (db as any)
@@ -400,7 +438,10 @@ async function runSaasPlatformMasterSimulation() {
       .orderBy('id', 'desc')
       .executeTakeFirst();
 
-    assert(new Date(subAfterRenew.ends_at) > new Date(subBeforeRenew.ends_at), 'Subscription ends_at must be extended after renewal');
+    assert(
+      new Date(subAfterRenew.ends_at) > new Date(subBeforeRenew.ends_at),
+      'Subscription ends_at must be extended after renewal',
+    );
     console.log(`  -> Subscription Extended: ${subBeforeRenew.ends_at} -> ${subAfterRenew.ends_at}`);
 
     const renewAudit = await (db as any)
@@ -419,8 +460,13 @@ async function runSaasPlatformMasterSimulation() {
     const impRes = await saasAdminService.impersonateTenant(createdTenantId, platformAdminAuth);
     assert(Boolean(impRes.sessionId), 'Impersonation session ID must exist');
     assert(impRes.auth.tenantId === createdTenantId, 'Session must be switched to target tenant');
-    assert(Number(impRes.auth.impersonatedBy) === Number(platformAdminAuth.userId), 'O34 Invariant: impersonatedBy must record operator user ID');
-    console.log(`  -> Impersonation Session Active: Operator #${platformAdminAuth.userId} acting as Target User #${impRes.auth.userId} (${impRes.auth.username})`);
+    assert(
+      Number(impRes.auth.impersonatedBy) === Number(platformAdminAuth.userId),
+      'O34 Invariant: impersonatedBy must record operator user ID',
+    );
+    console.log(
+      `  -> Impersonation Session Active: Operator #${platformAdminAuth.userId} acting as Target User #${impRes.auth.userId} (${impRes.auth.username})`,
+    );
 
     const impStartAudit = await (db as any)
       .selectFrom('audit_logs')
@@ -461,9 +507,10 @@ async function runSaasPlatformMasterSimulation() {
       .where('id', '=', createdTenantId)
       .executeTakeFirst();
 
-    const featuresList = typeof tenantWithFeatures.extra_features === 'string'
-      ? JSON.parse(tenantWithFeatures.extra_features)
-      : tenantWithFeatures.extra_features;
+    const featuresList =
+      typeof tenantWithFeatures.extra_features === 'string'
+        ? JSON.parse(tenantWithFeatures.extra_features)
+        : tenantWithFeatures.extra_features;
 
     assert(Array.isArray(featuresList), 'extra_features must be an array');
     assert(featuresList.includes('manufacturing'), 'Must include manufacturing feature');
@@ -510,9 +557,13 @@ async function runSaasPlatformMasterSimulation() {
 
     // Reset password
     const newPassword = `NewSecuredPass@${uniqueSuffix.slice(-6)}`;
-    const resetRes = await saasAdminService.resetOwnerPassword(createdTenantId, {
-      newPassword,
-    }, platformAdminAuth);
+    const resetRes = await saasAdminService.resetOwnerPassword(
+      createdTenantId,
+      {
+        newPassword,
+      },
+      platformAdminAuth,
+    );
     assert(resetRes.ok === true, 'Password reset must succeed');
 
     const ownerAfterReset = await (db as any)
@@ -521,7 +572,11 @@ async function runSaasPlatformMasterSimulation() {
       .where('tenant_id', '=', createdTenantId)
       .where('username', '=', ownerUsername)
       .executeTakeFirst();
-    const isNewPassValid = await verifyPassword(newPassword, ownerAfterReset.password_hash, ownerAfterReset.password_salt || '');
+    const isNewPassValid = await verifyPassword(
+      newPassword,
+      ownerAfterReset.password_hash,
+      ownerAfterReset.password_salt || '',
+    );
     assert(isNewPassValid.valid === true, 'New password must verify with bcrypt');
     console.log(`  -> Owner Password Reset & Bcrypt verified successfully.`);
     console.log('  [PASS] STEP 11 PASSED: Account security and recovery validated.\n');
@@ -530,9 +585,13 @@ async function runSaasPlatformMasterSimulation() {
     // STEP 12: Subscription Expiration Enforcement
     // -------------------------------------------------------------------------
     console.log('[STEP 12] Testing Subscription Expiration Lifecycle...');
-    const expireRes = await saasAdminService.expireTenant(createdTenantId, {
-      reason: 'محاكاة انتهاء مهلة الاشتراك',
-    }, platformAdminAuth);
+    const expireRes = await saasAdminService.expireTenant(
+      createdTenantId,
+      {
+        reason: 'محاكاة انتهاء مهلة الاشتراك',
+      },
+      platformAdminAuth,
+    );
     assert(expireRes.ok === true, 'Expire tenant must succeed');
 
     const expiredTenant = await (db as any)

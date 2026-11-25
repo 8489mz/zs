@@ -45,7 +45,10 @@ assert.equal(allocated[1].effectiveLineTotal, 50, 'stocked line nets 60 - 10 of 
 // 3. The journal split keeps the service share out of inventory.
 assert.deepEqual(
   partitionPurchaseLineTotals(
-    [{ lineTotal: 250, isService: true }, { lineTotal: 50, isService: false }],
+    [
+      { lineTotal: 250, isService: true },
+      { lineTotal: 50, isService: false },
+    ],
     14,
     false,
     2,
@@ -65,7 +68,10 @@ assert.deepEqual(
 );
 assert.deepEqual(
   partitionPurchaseLineTotals(
-    [{ lineTotal: 114, isService: true }, { lineTotal: 228, isService: false }],
+    [
+      { lineTotal: 114, isService: true },
+      { lineTotal: 228, isService: false },
+    ],
     14,
     true,
     2,
@@ -75,7 +81,10 @@ assert.deepEqual(
 );
 assert.deepEqual(
   partitionPurchaseLineTotals(
-    [{ lineTotal: 0.005, isService: true }, { lineTotal: 0.01, isService: false }],
+    [
+      { lineTotal: 0.005, isService: true },
+      { lineTotal: 0.01, isService: false },
+    ],
     0,
     false,
     3,

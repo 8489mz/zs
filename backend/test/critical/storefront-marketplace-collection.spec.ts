@@ -27,24 +27,65 @@ import { resolveOnlineOrderCollection } from '../../src/modules/storefront/engin
 
 function testResolver(): void {
   for (const provider of ['amazon', 'noon', 'jumia', 'trendyol']) {
-    const resolved = resolveOnlineOrderCollection({ payment_status: 'paid', payment_method: 'marketplace_prepaid', gateway_provider: provider });
+    const resolved = resolveOnlineOrderCollection({
+      payment_status: 'paid',
+      payment_method: 'marketplace_prepaid',
+      gateway_provider: provider,
+    });
     assert.equal(resolved.collected, true, `${provider} prepaid orders must be collected`);
     assert.equal(resolved.paymentChannel, 'card');
     assert.equal(resolved.provider, provider);
   }
   // Provider name alone is enough; the method label alone is enough too.
   assert.equal(resolveOnlineOrderCollection({ payment_status: 'paid', gateway_provider: 'Amazon' }).collected, true);
-  assert.equal(resolveOnlineOrderCollection({ payment_status: 'paid', gateway_provider: ' amazon ', payment_method: 'marketplace_prepaid' }).provider, 'amazon');
-  assert.equal(resolveOnlineOrderCollection({ payment_status: 'paid', payment_method: 'marketplace_prepaid', gateway_provider: '' }).collected, true);
-  assert.equal(resolveOnlineOrderCollection({ payment_status: 'paid', payment_method: 'marketplace_prepaid', gateway_provider: '' }).provider, 'marketplace');
+  assert.equal(
+    resolveOnlineOrderCollection({
+      payment_status: 'paid',
+      gateway_provider: ' amazon ',
+      payment_method: 'marketplace_prepaid',
+    }).provider,
+    'amazon',
+  );
+  assert.equal(
+    resolveOnlineOrderCollection({
+      payment_status: 'paid',
+      payment_method: 'marketplace_prepaid',
+      gateway_provider: '',
+    }).collected,
+    true,
+  );
+  assert.equal(
+    resolveOnlineOrderCollection({
+      payment_status: 'paid',
+      payment_method: 'marketplace_prepaid',
+      gateway_provider: '',
+    }).provider,
+    'marketplace',
+  );
   // Not yet paid: the courier still collects.
-  assert.deepEqual(resolveOnlineOrderCollection({ payment_status: 'pending', payment_method: 'marketplace_prepaid', gateway_provider: 'amazon' }), { collected: false, paymentChannel: 'cash', provider: null });
+  assert.deepEqual(
+    resolveOnlineOrderCollection({
+      payment_status: 'pending',
+      payment_method: 'marketplace_prepaid',
+      gateway_provider: 'amazon',
+    }),
+    { collected: false, paymentChannel: 'cash', provider: null },
+  );
   // Boundaries unchanged.
   assert.equal(resolveOnlineOrderCollection({ payment_status: 'paid', gateway_provider: 'paymob' }).collected, true);
-  assert.equal(resolveOnlineOrderCollection({ payment_status: 'paid', gateway_provider: 'paymob' }).paymentChannel, 'card');
-  assert.equal(resolveOnlineOrderCollection({ payment_status: 'paid', gateway_provider: 'manual' }).paymentChannel, 'instapay');
+  assert.equal(
+    resolveOnlineOrderCollection({ payment_status: 'paid', gateway_provider: 'paymob' }).paymentChannel,
+    'card',
+  );
+  assert.equal(
+    resolveOnlineOrderCollection({ payment_status: 'paid', gateway_provider: 'manual' }).paymentChannel,
+    'instapay',
+  );
   assert.equal(resolveOnlineOrderCollection({ payment_status: 'paid', gateway_provider: 'mock' }).collected, false);
-  assert.equal(resolveOnlineOrderCollection({ payment_status: 'pending', gateway_provider: 'stripe' }).collected, false);
+  assert.equal(
+    resolveOnlineOrderCollection({ payment_status: 'pending', gateway_provider: 'stripe' }).collected,
+    false,
+  );
   console.log('Marketplace collection resolution tests passed');
 }
 
@@ -118,13 +159,20 @@ function runConversion(orderRow: Record<string, any>): Promise<{ payload: any; r
         // orders (updateTable -> set -> where x3 -> executeTakeFirst).
         // The lock is not taken here (numUpdatedRows 0); the conversion
         // still proceeds and the failure path restores nothing.
-        const builder: any = { where: () => builder, execute: async () => undefined, executeTakeFirst: async () => ({ numUpdatedRows: 0 }) };
+        const builder: any = {
+          where: () => builder,
+          execute: async () => undefined,
+          executeTakeFirst: async () => ({ numUpdatedRows: 0 }),
+        };
         return builder;
       },
     }),
   };
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- load-bearing: this spec constructs StorefrontService with only (db, salesService), but the typed constructor requires 4-6 args (kdsService + media are unused by the convertToSale path); a static import cannot express this 2-arg construction, so the untyped require is the only way to build it.
-  const storefrontService = new (require('../../src/modules/storefront/storefront.service').StorefrontService)(db, mockSalesService);
+  const storefrontService = new (require('../../src/modules/storefront/storefront.service').StorefrontService)(
+    db,
+    mockSalesService,
+  );
   const actor: any = { userId: 1, username: 'admin', role: 'admin', tenantId: 'tenant-1', accountId: 'tenant-1:main' };
   return storefrontService.convertToSale(10, actor).then((result: any) => ({ payload: capturedSalePayload, result }));
 }
@@ -133,9 +181,16 @@ async function testConversion(): Promise<void> {
   // 1. A synced Amazon prepaid order: collected, fully paid, card channel — never COD.
   {
     const { payload, result } = await runConversion({
-      id: 10, tenant_id: 'tenant-1', order_number: 'ON-260920-0010', total_amount: 500,
-      payment_status: 'paid', status: 'confirmed', gateway_provider: 'amazon',
-      payment_method: 'marketplace_prepaid', customer_name: 'Amazon Customer', customer_phone: '01012345678',
+      id: 10,
+      tenant_id: 'tenant-1',
+      order_number: 'ON-260920-0010',
+      total_amount: 500,
+      payment_status: 'paid',
+      status: 'confirmed',
+      gateway_provider: 'amazon',
+      payment_method: 'marketplace_prepaid',
+      customer_name: 'Amazon Customer',
+      customer_phone: '01012345678',
     });
     assert.equal(result.ok, true);
     assert.equal(payload.collectionStatus, 'prepaid_online', 'Marketplace-prepaid orders must not convert as COD');
@@ -150,9 +205,16 @@ async function testConversion(): Promise<void> {
   // 2. A synced Noon prepaid order converts the same way.
   {
     const { payload } = await runConversion({
-      id: 10, tenant_id: 'tenant-1', order_number: 'ON-260920-0011', total_amount: 500,
-      payment_status: 'paid', status: 'confirmed', gateway_provider: 'noon',
-      payment_method: 'marketplace_prepaid', customer_name: 'Noon Customer', customer_phone: '01012345678',
+      id: 10,
+      tenant_id: 'tenant-1',
+      order_number: 'ON-260920-0011',
+      total_amount: 500,
+      payment_status: 'paid',
+      status: 'confirmed',
+      gateway_provider: 'noon',
+      payment_method: 'marketplace_prepaid',
+      customer_name: 'Noon Customer',
+      customer_phone: '01012345678',
     });
     assert.equal(payload.collectionStatus, 'prepaid_online');
     assert.equal(payload.paidAmount, 500);
@@ -162,9 +224,16 @@ async function testConversion(): Promise<void> {
   // 3. A marketplace order that is not yet paid stays cash-on-delivery.
   {
     const { payload } = await runConversion({
-      id: 10, tenant_id: 'tenant-1', order_number: 'ON-260920-0012', total_amount: 500,
-      payment_status: 'pending', status: 'pending', gateway_provider: 'amazon',
-      payment_method: 'marketplace_prepaid', customer_name: 'Amazon Customer', customer_phone: '01012345678',
+      id: 10,
+      tenant_id: 'tenant-1',
+      order_number: 'ON-260920-0012',
+      total_amount: 500,
+      payment_status: 'pending',
+      status: 'pending',
+      gateway_provider: 'amazon',
+      payment_method: 'marketplace_prepaid',
+      customer_name: 'Amazon Customer',
+      customer_phone: '01012345678',
     });
     assert.equal(payload.collectionStatus, 'cod');
     assert.equal(payload.paidAmount, 0);
@@ -180,4 +249,7 @@ async function main() {
   console.log('Marketplace collection tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

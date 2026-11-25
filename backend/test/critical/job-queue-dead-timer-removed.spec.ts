@@ -49,13 +49,7 @@ const APP_MODULE = path.join(BACKEND_SRC, 'app.module.ts');
 const AUDIT_SPEC = path.join(REPO_ROOT, 'backend', 'test', 'new-features-audit.spec.ts');
 const INVARIANTS = path.join(REPO_ROOT, 'ARCHITECTURE_INVARIANTS.md');
 
-const FORBIDDEN_STRINGS = [
-  'JobQueueService',
-  'JobQueueModule',
-  'job-queue',
-  'processNextBatch',
-  'registerHandler',
-];
+const FORBIDDEN_STRINGS = ['JobQueueService', 'JobQueueModule', 'job-queue', 'processNextBatch', 'registerHandler'];
 
 function walkTsFiles(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -94,10 +88,7 @@ async function main(): Promise<void> {
 
   // 2. No dead-queue string remains anywhere under backend/src.
   for (const needle of FORBIDDEN_STRINGS) {
-    assert.ok(
-      !allSrcText.includes(needle),
-      `backend/src must not reference '${needle}' anywhere`,
-    );
+    assert.ok(!allSrcText.includes(needle), `backend/src must not reference '${needle}' anywhere`);
   }
   assert.ok(!appModuleText.includes('JobQueueModule'), 'app.module.ts must not import JobQueueModule');
 

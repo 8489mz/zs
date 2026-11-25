@@ -123,11 +123,43 @@ async function runZatcaSimulation() {
 
     // Initial Capital
     await accountingPosting.postDomainJournal(db, {
-      sourceType: 'manual_journal', sourceId: 99990, tenantId: auth.tenantId!, accountId: auth.accountId!,
-      entryDate: new Date(), description: 'رأس المال الافتتاحي', branchId, createdBy: auth.userId,
+      sourceType: 'manual_journal',
+      sourceId: 99990,
+      tenantId: auth.tenantId!,
+      accountId: auth.accountId!,
+      entryDate: new Date(),
+      description: 'رأس المال الافتتاحي',
+      branchId,
+      createdBy: auth.userId,
       lines: [
-        { accountId: cashAccountId, debit: 100000, credit: 0, description: 'إيداع نقدي', partnerType: 'none', partnerId: null, branchId, locationId },
-        { accountId: Number((await sql<{ id: number }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${auth.tenantId} AND code = '3100' LIMIT 1`.execute(db)).rows[0].id), debit: 0, credit: 100000, description: 'رأس المال', partnerType: 'none', partnerId: null, branchId, locationId },
+        {
+          accountId: cashAccountId,
+          debit: 100000,
+          credit: 0,
+          description: 'إيداع نقدي',
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        {
+          accountId: Number(
+            (
+              await sql<{
+                id: number;
+              }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${auth.tenantId} AND code = '3100' LIMIT 1`.execute(
+                db,
+              )
+            ).rows[0].id,
+          ),
+          debit: 0,
+          credit: 100000,
+          description: 'رأس المال',
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
       ],
     });
     console.log('✅ التهيئة: شجرة حسابات + فرع + مستودع + رأس مال.');
@@ -153,7 +185,8 @@ async function runZatcaSimulation() {
       totalWithVat: -1,
     });
     if (invalidCompliance.valid) throw new Error('Expected compliance validation to fail for invalid data');
-    if (invalidCompliance.errors.length < 3) throw new Error(`Expected at least 3 errors, got ${invalidCompliance.errors.length}`);
+    if (invalidCompliance.errors.length < 3)
+      throw new Error(`Expected at least 3 errors, got ${invalidCompliance.errors.length}`);
     console.log(`✅ رفض بيانات غير صالحة: ${invalidCompliance.errors.length} أخطاء مكتشفة.`);
 
     // ═══ 2. Direct ZatcaPhase2 Package Generation ═══
@@ -166,11 +199,35 @@ async function runZatcaSimulation() {
       invoiceType: 'simplified' as const,
       sellerName: 'مؤسسة التجارة السحابية',
       sellerVatNumber: '300000000000003',
-      sellerAddress: { street: 'شارع الملك فهد', buildingNumber: '1234', city: 'الرياض', postalCode: '12211', district: 'العليا' },
+      sellerAddress: {
+        street: 'شارع الملك فهد',
+        buildingNumber: '1234',
+        city: 'الرياض',
+        postalCode: '12211',
+        district: 'العليا',
+      },
       customerName: 'عميل نقدي',
       lineItems: [
-        { id: 1, name: 'لابتوب ديل', quantity: 1, unitPrice: 5000, subtotal: 5000, vatAmount: 750, vatRate: 15, total: 5750 },
-        { id: 2, name: 'ماوس لاسلكي', quantity: 2, unitPrice: 150, subtotal: 300, vatAmount: 45, vatRate: 15, total: 345 },
+        {
+          id: 1,
+          name: 'لابتوب ديل',
+          quantity: 1,
+          unitPrice: 5000,
+          subtotal: 5000,
+          vatAmount: 750,
+          vatRate: 15,
+          total: 5750,
+        },
+        {
+          id: 2,
+          name: 'ماوس لاسلكي',
+          quantity: 2,
+          unitPrice: 150,
+          subtotal: 300,
+          vatAmount: 45,
+          vatRate: 15,
+          total: 345,
+        },
       ],
       subtotal: 5300,
       vatTotal: 795,
@@ -238,13 +295,25 @@ async function runZatcaSimulation() {
     // ═══ 3. PIH Chain Integrity ═══
     console.log('\n--- 3. سلامة سلسلة الهاش PIH (Hash Chain Integrity) ---');
 
-    const invoice2 = { ...testInvoiceData, invoiceNumber: `ZATCA-INV-${simUid}-002`, uuid: crypto.randomUUID(), previousInvoiceHash: pkg.invoiceHash, invoiceCounterValue: 2 };
+    const invoice2 = {
+      ...testInvoiceData,
+      invoiceNumber: `ZATCA-INV-${simUid}-002`,
+      uuid: crypto.randomUUID(),
+      previousInvoiceHash: pkg.invoiceHash,
+      invoiceCounterValue: 2,
+    };
     const pkg2 = zatcaPhase2.generateZatcaPackage(invoice2);
     if (!pkg2.ublXml.includes(pkg.invoiceHash)) {
       throw new Error('Second invoice XML does not reference first invoice hash');
     }
 
-    const invoice3 = { ...testInvoiceData, invoiceNumber: `ZATCA-INV-${simUid}-003`, uuid: crypto.randomUUID(), previousInvoiceHash: pkg2.invoiceHash, invoiceCounterValue: 3 };
+    const invoice3 = {
+      ...testInvoiceData,
+      invoiceNumber: `ZATCA-INV-${simUid}-003`,
+      uuid: crypto.randomUUID(),
+      previousInvoiceHash: pkg2.invoiceHash,
+      invoiceCounterValue: 3,
+    };
     const pkg3 = zatcaPhase2.generateZatcaPackage(invoice3);
     if (!pkg3.ublXml.includes(pkg2.invoiceHash)) {
       throw new Error('Third invoice XML does not reference second invoice hash');
@@ -319,7 +388,8 @@ async function runZatcaSimulation() {
       console.log(`✅ بناء فاتورة ZATCA من قاعدة البيانات: UUID=${zatcaResult.uuid}, ICV=${zatcaResult.icv}`);
 
       // Verify sale record updated with ZATCA data
-      const updatedSale = await db.selectFrom('sales')
+      const updatedSale = await db
+        .selectFrom('sales')
         .select(['zatca_uuid', 'zatca_hash', 'zatca_icv', 'zatca_status', 'zatca_qr'])
         .where('id', '=', saleId)
         .where('tenant_id', '=', auth.tenantId as any)
@@ -327,14 +397,17 @@ async function runZatcaSimulation() {
 
       if (!updatedSale?.zatca_uuid) throw new Error('Sale record missing zatca_uuid after build');
       if (!updatedSale?.zatca_hash) throw new Error('Sale record missing zatca_hash after build');
-      if (updatedSale?.zatca_status !== 'generated') throw new Error(`Expected zatca_status='generated', got '${updatedSale?.zatca_status}'`);
+      if (updatedSale?.zatca_status !== 'generated')
+        throw new Error(`Expected zatca_status='generated', got '${updatedSale?.zatca_status}'`);
       console.log('✅ سجل المبيعات محدث: UUID + Hash + QR + Status=generated.');
 
       // ═══ 7. Submission (Sandbox) ═══
       console.log('\n--- 7. إبلاغ الفاتورة لهيئة الزكاة (Submission to ZATCA Sandbox) ---');
       try {
         const submitResult = await zatcaSubmission.submitInvoice(auth.tenantId!, saleId);
-        console.log(`✅ الإبلاغ: حالة=${submitResult.status}, نوع=${submitResult.invoiceType}, إجراء=${submitResult.action}`);
+        console.log(
+          `✅ الإبلاغ: حالة=${submitResult.status}, نوع=${submitResult.invoiceType}, إجراء=${submitResult.action}`,
+        );
         console.log(`  رسالة: ${submitResult.message}`);
 
         // Verify transmission log created
@@ -350,7 +423,6 @@ async function runZatcaSimulation() {
       console.log('\n--- 8. الفواتير المعلقة (Pending Invoices) ---');
       const pendingInvoices = await zatcaSubmission.getPendingInvoices(auth.tenantId!);
       console.log(`✅ عدد الفواتير المعلقة: ${pendingInvoices.length}`);
-
     } catch (buildErr: any) {
       console.log(`⚠️ بناء الفاتورة من DB فشل:`, buildErr);
     }
@@ -387,7 +459,6 @@ async function runZatcaSimulation() {
     }
 
     console.log('\n✅ محاكاة الفاتورة الإلكترونية ZATCA تمت بنجاح!');
-
   } finally {
     // ═══ Cleanup ═══
     console.log('\n--- التنظيف (Cleanup) ---');
@@ -411,7 +482,7 @@ async function runZatcaSimulation() {
   }
 }
 
-runZatcaSimulation().catch(err => {
+runZatcaSimulation().catch((err) => {
   console.error('❌ فشل محاكاة ZATCA:');
   console.error(err);
   process.exit(1);

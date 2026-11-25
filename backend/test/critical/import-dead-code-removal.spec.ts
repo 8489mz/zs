@@ -30,16 +30,29 @@ async function main(): Promise<void> {
   );
 
   // Live neighbours unchanged: grouping + WAC math.
-  const groups = engine.groupImportReceipts([
-    {
-      id: 'a', productId: 1, quantity: 10, receivedQuantity: 10,
-      factoryUnitPriceUsd: 50, shortageHandlingMethod: 'capitalize', landedCost: 100,
-    },
-    {
-      id: 'b', productId: 1, quantity: 5, receivedQuantity: 5,
-      factoryUnitPriceUsd: 50, shortageHandlingMethod: 'capitalize', landedCost: 100,
-    },
-  ], 2);
+  const groups = engine.groupImportReceipts(
+    [
+      {
+        id: 'a',
+        productId: 1,
+        quantity: 10,
+        receivedQuantity: 10,
+        factoryUnitPriceUsd: 50,
+        shortageHandlingMethod: 'capitalize',
+        landedCost: 100,
+      },
+      {
+        id: 'b',
+        productId: 1,
+        quantity: 5,
+        receivedQuantity: 5,
+        factoryUnitPriceUsd: 50,
+        shortageHandlingMethod: 'capitalize',
+        landedCost: 100,
+      },
+    ],
+    2,
+  );
   assert.ok(Array.isArray(groups) && groups.length > 0, 'groupImportReceipts still groups receipts');
   assert.equal(groups[0].value, 1500, 'group value rounds at the passed book digits');
   assert.equal(engine.importWeightedAverageCost(-10, 5, 20, 120), 7, 'WAC math unchanged');

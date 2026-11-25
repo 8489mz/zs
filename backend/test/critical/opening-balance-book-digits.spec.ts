@@ -123,8 +123,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): AccountingService {
@@ -136,14 +142,21 @@ function makeServices(db: Kysely<Database>): AccountingService {
   return new AccountingService(db as any, fakeFoundation, posting as any);
 }
 
-async function postedLines(db: Kysely<Database>, entryId: number): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
-  const rows = await (db as any)
+async function postedLines(
+  db: Kysely<Database>,
+  entryId: number,
+): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
+  const rows = (await (db as any)
     .selectFrom('journal_entry_lines')
     .select(['account_id', 'debit', 'credit'])
     .where('journal_entry_id', '=', entryId)
     .orderBy('id')
-    .execute() as unknown as Array<{ account_id: number; debit: string; credit: string }>;
-  return rows.map((row) => ({ accountId: Number(row.account_id), debit: Number(row.debit), credit: Number(row.credit) }));
+    .execute()) as unknown as Array<{ account_id: number; debit: string; credit: string }>;
+  return rows.map((row) => ({
+    accountId: Number(row.account_id),
+    debit: Number(row.debit),
+    credit: Number(row.credit),
+  }));
 }
 
 async function main(): Promise<void> {
@@ -154,7 +167,7 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'KWD');
       const svc = makeServices(db);
       const body = { system_start_date: '2026-01-01', cash_opening: 100.125, bank_opening: 0 } as any;
-      const preview = await svc.previewOpeningBalances(body, auth) as unknown as {
+      const preview = (await svc.previewOpeningBalances(body, auth)) as unknown as {
         totals: { cashOpening: number; bankOpening: number; balancingCapital: number };
         linesPreview: Array<{ accountCode: string; debit: number; credit: number }>;
       };
@@ -166,8 +179,9 @@ async function main(): Promise<void> {
       assert.equal(preview.linesPreview[1].accountCode, '3100');
       assert.equal(preview.linesPreview[1].credit, 100.125);
 
-      const result = await svc.postOpeningBalances(body, auth) as unknown as {
-        posted: boolean; journalEntryId: string;
+      const result = (await svc.postOpeningBalances(body, auth)) as unknown as {
+        posted: boolean;
+        journalEntryId: string;
         preview: { totals: { cashOpening: number; balancingCapital: number } };
       };
       assert.equal(result.posted, true);
@@ -176,8 +190,15 @@ async function main(): Promise<void> {
       assert.equal(result.preview.totals.cashOpening, 100.125);
       assert.equal(result.preview.totals.balancingCapital, 100.125);
 
-      const entry = await (db as any).selectFrom('journal_entries').selectAll().where('id', '=', entryId).executeTakeFirst() as unknown as {
-        source_type: string; source_id: number | null; status: string; entry_no: string;
+      const entry = (await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('id', '=', entryId)
+        .executeTakeFirst()) as unknown as {
+        source_type: string;
+        source_id: number | null;
+        status: string;
+        entry_no: string;
       };
       assert.equal(entry.source_type, 'opening_balance');
       assert.equal(entry.source_id, 0);
@@ -190,7 +211,11 @@ async function main(): Promise<void> {
       assert.deepEqual(lines[1], { accountId: 60, debit: 0, credit: 100.125 });
       assert.ok(!lines.some((line) => line.accountId === 70), 'no 7290 rounding plug line');
 
-      const again = await svc.postOpeningBalances(body, auth) as unknown as { posted: boolean; alreadyPosted: boolean; journalEntryId: string };
+      const again = (await svc.postOpeningBalances(body, auth)) as unknown as {
+        posted: boolean;
+        alreadyPosted: boolean;
+        journalEntryId: string;
+      };
       assert.equal(again.posted, false);
       assert.equal(again.alreadyPosted, true);
       assert.equal(again.journalEntryId, String(entryId));
@@ -206,13 +231,16 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'EGP');
       const svc = makeServices(db);
       const body = { system_start_date: '2026-01-01', cash_opening: 100.125, bank_opening: 50.125 } as any;
-      const preview = await svc.previewOpeningBalances(body, auth) as unknown as {
+      const preview = (await svc.previewOpeningBalances(body, auth)) as unknown as {
         totals: { cashOpening: number; bankOpening: number; balancingCapital: number };
       };
       assert.equal(preview.totals.cashOpening, 100.13);
       assert.equal(preview.totals.bankOpening, 50.13);
       assert.equal(preview.totals.balancingCapital, 150.26);
-      const result = await svc.postOpeningBalances(body, auth) as unknown as { posted: boolean; journalEntryId: string };
+      const result = (await svc.postOpeningBalances(body, auth)) as unknown as {
+        posted: boolean;
+        journalEntryId: string;
+      };
       assert.equal(result.posted, true);
       const lines = await postedLines(db, Number(result.journalEntryId));
       assert.equal(lines.length, 3);
@@ -228,13 +256,22 @@ async function main(): Promise<void> {
   {
     const { pg, db } = await makeDb();
     try {
-      await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: '"KWD"' } as never).execute();
-      await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never).execute();
+      await db
+        .insertInto('settings' as never)
+        .values({ tenant_id: 't1', key: 'currency', value: '"KWD"' } as never)
+        .execute();
+      await db
+        .insertInto('currency_exchange_rates' as never)
+        .values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never)
+        .execute();
       const svc = makeServices(db);
       const body = { system_start_date: '2026-01-01', cash_opening: 100.125 } as any;
       await assert.rejects(() => svc.previewOpeningBalances(body, auth));
       await assert.rejects(() => svc.postOpeningBalances(body, auth));
-      const entries = await db.selectFrom('journal_entries' as never).selectAll().execute();
+      const entries = await db
+        .selectFrom('journal_entries' as never)
+        .selectAll()
+        .execute();
       assert.equal(entries.length, 0);
     } finally {
       await db.destroy();
@@ -248,12 +285,24 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'KWD');
       const svc = makeServices(db);
       const body = { system_start_date: '2026-01-01', cash_opening: 100.125 } as any;
-      const preview = await svc.previewOpeningBalances(body, auth) as unknown as { totals: { cashOpening: number } };
+      const preview = (await svc.previewOpeningBalances(body, auth)) as unknown as { totals: { cashOpening: number } };
       assert.equal(preview.totals.cashOpening, 100.125);
       // Currency changes between preview and post: settings + rates move to EGP.
-      await (db as any).updateTable('settings').set({ value: '"EGP"' }).where('tenant_id', '=', 't1').where('key', '=', 'currency').execute();
-      await (db as any).updateTable('currency_exchange_rates').set({ currency_code: 'EGP' }).where('tenant_id', '=', 't1').execute();
-      const result = await svc.postOpeningBalances(body, auth) as unknown as { posted: boolean; journalEntryId: string };
+      await (db as any)
+        .updateTable('settings')
+        .set({ value: '"EGP"' })
+        .where('tenant_id', '=', 't1')
+        .where('key', '=', 'currency')
+        .execute();
+      await (db as any)
+        .updateTable('currency_exchange_rates')
+        .set({ currency_code: 'EGP' })
+        .where('tenant_id', '=', 't1')
+        .execute();
+      const result = (await svc.postOpeningBalances(body, auth)) as unknown as {
+        posted: boolean;
+        journalEntryId: string;
+      };
       assert.equal(result.posted, true);
       const lines = await postedLines(db, Number(result.journalEntryId));
       assert.equal(lines.length, 2);
@@ -269,11 +318,21 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await (db as any).updateTable('accounting_settings').set({ lock_date_non_adviser: '2026-06-30' }).where('tenant_id', '=', 't1').execute();
+      await (db as any)
+        .updateTable('accounting_settings')
+        .set({ lock_date_non_adviser: '2026-06-30' })
+        .where('tenant_id', '=', 't1')
+        .execute();
       const svc = makeServices(db);
       const body = { system_start_date: '2026-01-01', cash_opening: 50 } as any;
-      await assert.rejects(() => svc.postOpeningBalances(body, auth), (err: any) => err?.code === 'ACCOUNTING_PERIOD_LOCKED_OPERATIONAL');
-      const entries = await db.selectFrom('journal_entries' as never).selectAll().execute();
+      await assert.rejects(
+        () => svc.postOpeningBalances(body, auth),
+        (err: any) => err?.code === 'ACCOUNTING_PERIOD_LOCKED_OPERATIONAL',
+      );
+      const entries = await db
+        .selectFrom('journal_entries' as never)
+        .selectAll()
+        .execute();
       assert.equal(entries.length, 0);
     } finally {
       await db.destroy();
@@ -287,7 +346,10 @@ async function main(): Promise<void> {
     // lives in the S4 slice now, and the end marker createDraftJournalEntry
     // moved to the S2 slice — the range runs from previewOpeningBalances to
     // end-of-file (postOpeningBalances is the slice's last method).
-    const source = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/accounting-opening-balances.service.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/accounting/services/accounting-opening-balances.service.ts'),
+      'utf8',
+    );
     const start = source.indexOf('async previewOpeningBalances(');
     assert.ok(start > 0);
     const body = source.slice(start);
@@ -296,8 +358,14 @@ async function main(): Promise<void> {
     assert.ok(body.includes('tenantBaseCurrency(trx,'), 'post resolves digits on the transaction handle');
     assert.ok(body.includes('buildOpeningBalancesPreview('), 'preview and post share one computation');
     assert.ok(body.includes('toBookMoney('), 'opening-balance computation rounds at book digits');
-    assert.ok(!body.includes("insertInto('journal_entries')"), 'no direct journal header insert in the opening-balance path');
-    assert.ok(!body.includes("insertInto('journal_entry_lines')"), 'no direct journal line insert in the opening-balance path');
+    assert.ok(
+      !body.includes("insertInto('journal_entries')"),
+      'no direct journal header insert in the opening-balance path',
+    );
+    assert.ok(
+      !body.includes("insertInto('journal_entry_lines')"),
+      'no direct journal line insert in the opening-balance path',
+    );
     assert.ok(!body.includes('this.toMoney('), 'opening-balance path must not use the 2dp helper');
     assert.ok(!body.includes('.toFixed(2)'), 'opening-balance path must not hardcode 2dp formatting');
     assert.ok(!body.includes('> 0.0001'), 'the old 0.0001 balance tolerance is removed');

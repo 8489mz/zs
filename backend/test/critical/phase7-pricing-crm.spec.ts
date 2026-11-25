@@ -107,11 +107,13 @@ export function computeNextPrice(
 }
 
 // --- 3. Pure CRM Pipeline Summary Engine ---
-export function calculatePipelineSummary(deals: Array<{
-  stage: string;
-  expectedAmount: number;
-  probability: number;
-}>) {
+export function calculatePipelineSummary(
+  deals: Array<{
+    stage: string;
+    expectedAmount: number;
+    probability: number;
+  }>,
+) {
   let totalActiveCount = 0;
   let totalActiveAmount = 0;
   let weightedAmount = 0;
@@ -132,7 +134,7 @@ export function calculatePipelineSummary(deals: Array<{
     } else {
       totalActiveCount += 1;
       totalActiveAmount += amount;
-      weightedAmount += (amount * (prob / 100));
+      weightedAmount += amount * (prob / 100);
     }
   }
 
@@ -201,18 +203,15 @@ async function runPhase7CriticalTests() {
 
   // Test 3: Down payment validation and rejection of non-positive financed amount
   {
-    assert.throws(
-      () => {
-        calculateInstallmentSchedule({
-          totalAmount: 500,
-          downPayment: 500, // No financed amount left!
-          interestRatePercent: 0,
-          installmentCount: 3,
-          startDate: new Date('2026-01-01'),
-        });
-      },
-      /Financed amount must be greater than 0/,
-    );
+    assert.throws(() => {
+      calculateInstallmentSchedule({
+        totalAmount: 500,
+        downPayment: 500, // No financed amount left!
+        interestRatePercent: 0,
+        installmentCount: 3,
+        startDate: new Date('2026-01-01'),
+      });
+    }, /Financed amount must be greater than 0/);
     console.log('✓ Test 3 Passed: Down payment equal to or exceeding total is rejected');
   }
 
@@ -281,13 +280,13 @@ async function runPhase7CriticalTests() {
   {
     // Nearest 0.5: 10.23 -> 10.00, 10.35 -> 10.50, 10.80 -> 11.00
     const r1 = computeNextPrice(10.23, 5, { type: 'set_price', value: 10.23 }, { mode: 'nearest', nearestStep: 0.5 });
-    assert.equal(r1, 10.00);
+    assert.equal(r1, 10.0);
 
     const r2 = computeNextPrice(10.35, 5, { type: 'set_price', value: 10.35 }, { mode: 'nearest', nearestStep: 0.5 });
-    assert.equal(r2, 10.50);
+    assert.equal(r2, 10.5);
 
     // Ending .95: 14.20 -> 14.95, 14.96 -> 15.95
-    const r3 = computeNextPrice(14.20, 5, { type: 'set_price', value: 14.20 }, { mode: 'ending', ending: 95 });
+    const r3 = computeNextPrice(14.2, 5, { type: 'set_price', value: 14.2 }, { mode: 'ending', ending: 95 });
     assert.equal(r3, 14.95);
 
     const r4 = computeNextPrice(14.96, 5, { type: 'set_price', value: 14.96 }, { mode: 'ending', ending: 95 });
@@ -313,10 +312,10 @@ async function runPhase7CriticalTests() {
   // Test 8: CRM Pipeline Summary & Weighted Probability Math
   {
     const deals = [
-      { stage: 'new', expectedAmount: 10000, probability: 20 },         // weighted: 2000
+      { stage: 'new', expectedAmount: 10000, probability: 20 }, // weighted: 2000
       { stage: 'negotiation', expectedAmount: 50000, probability: 80 }, // weighted: 40000
-      { stage: 'won', expectedAmount: 30000, probability: 100 },       // won
-      { stage: 'lost', expectedAmount: 20000, probability: 0 },         // lost
+      { stage: 'won', expectedAmount: 30000, probability: 100 }, // won
+      { stage: 'lost', expectedAmount: 20000, probability: 0 }, // lost
     ];
 
     const summary = calculatePipelineSummary(deals);

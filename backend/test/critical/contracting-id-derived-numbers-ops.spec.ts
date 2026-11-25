@@ -87,16 +87,29 @@ async function main(): Promise<void> {
     const service = new ContractingService(db as never, {} as never);
 
     // 1. Supplier returns: id-derived, no reuse, credit note follows, supplied kept.
-    const rtn1: any = await service.createSupplierReturn(AUTH, '1', { supplierName: 'S1', items: [{ quantity: 2, unitCost: 10 }] } as any);
-    const rtn2: any = await service.createSupplierReturn(AUTH, '1', { supplierName: 'S1', items: [{ quantity: 1, unitCost: 5 }] } as any);
+    const rtn1: any = await service.createSupplierReturn(AUTH, '1', {
+      supplierName: 'S1',
+      items: [{ quantity: 2, unitCost: 10 }],
+    } as any);
+    const rtn2: any = await service.createSupplierReturn(AUTH, '1', {
+      supplierName: 'S1',
+      items: [{ quantity: 1, unitCost: 5 }],
+    } as any);
     assert.match(rtn1.return_number, /^RTN-\d{6}-\d{4,}$/);
     assert.notEqual(rtn1.return_number, rtn2.return_number);
     assert.ok(suffixOf(rtn1.return_number, rtn1.id));
     assert.equal(rtn1.credit_note_number, `CN-${rtn1.return_number}`);
     await (db as any).deleteFrom('contracting_supplier_returns').where('id', '=', rtn1.id).execute();
-    const rtn3: any = await service.createSupplierReturn(AUTH, '1', { supplierName: 'S1', items: [{ quantity: 1, unitCost: 5 }] } as any);
+    const rtn3: any = await service.createSupplierReturn(AUTH, '1', {
+      supplierName: 'S1',
+      items: [{ quantity: 1, unitCost: 5 }],
+    } as any);
     assert.notEqual(rtn3.return_number, rtn1.return_number, 'a deleted return number must never be reused');
-    const rtnSupplied: any = await service.createSupplierReturn(AUTH, '1', { supplierName: 'S1', returnNumber: 'RTN-CUSTOM-7', items: [{ quantity: 1, unitCost: 5 }] } as any);
+    const rtnSupplied: any = await service.createSupplierReturn(AUTH, '1', {
+      supplierName: 'S1',
+      returnNumber: 'RTN-CUSTOM-7',
+      items: [{ quantity: 1, unitCost: 5 }],
+    } as any);
     assert.equal(rtnSupplied.return_number, 'RTN-CUSTOM-7');
     assert.equal(rtnSupplied.credit_note_number, 'CN-RTN-CUSTOM-7');
 
@@ -104,16 +117,33 @@ async function main(): Promise<void> {
     const csh1: any = await service.createPettyCash(AUTH, '1', { custodianName: 'Eng A', amountGiven: 500 } as any);
     assert.match(csh1.disbursement_number, /^CSH-\d{6}-\d{4,}$/);
     assert.ok(suffixOf(csh1.disbursement_number, csh1.id));
-    const cshSupplied: any = await service.createPettyCash(AUTH, '1', { custodianName: 'Eng B', amountGiven: 100, disbursementNumber: 'CSH-CUSTOM-2' } as any);
+    const cshSupplied: any = await service.createPettyCash(AUTH, '1', {
+      custodianName: 'Eng B',
+      amountGiven: 100,
+      disbursementNumber: 'CSH-CUSTOM-2',
+    } as any);
     assert.equal(cshSupplied.disbursement_number, 'CSH-CUSTOM-2');
 
     // 3. Inspection requests: id-derived, supplied kept.
-    const wir1: any = await service.createInspectionRequest(AUTH, '1', { locationGrid: 'A1', tradeCategory: 'civil', scheduledDate: '2026-11-01' } as any);
-    const wir2: any = await service.createInspectionRequest(AUTH, '1', { locationGrid: 'A2', tradeCategory: 'civil', scheduledDate: '2026-11-01' } as any);
+    const wir1: any = await service.createInspectionRequest(AUTH, '1', {
+      locationGrid: 'A1',
+      tradeCategory: 'civil',
+      scheduledDate: '2026-11-01',
+    } as any);
+    const wir2: any = await service.createInspectionRequest(AUTH, '1', {
+      locationGrid: 'A2',
+      tradeCategory: 'civil',
+      scheduledDate: '2026-11-01',
+    } as any);
     assert.match(wir1.wirNumber, /^WIR-\d{6}-\d{4,}$/);
     assert.notEqual(wir1.wirNumber, wir2.wirNumber);
     assert.ok(suffixOf(wir1.wirNumber, wir1.id));
-    const wirSupplied: any = await service.createInspectionRequest(AUTH, '1', { locationGrid: 'A3', tradeCategory: 'civil', scheduledDate: '2026-11-01', wirNumber: 'wir-custom-5' } as any);
+    const wirSupplied: any = await service.createInspectionRequest(AUTH, '1', {
+      locationGrid: 'A3',
+      tradeCategory: 'civil',
+      scheduledDate: '2026-11-01',
+      wirNumber: 'wir-custom-5',
+    } as any);
     assert.equal(wirSupplied.wirNumber, 'WIR-CUSTOM-5');
 
     // 4. Submittals: both prefixes id-derived.
@@ -125,22 +155,52 @@ async function main(): Promise<void> {
     assert.ok(suffixOf(sub2.submittalNumber, sub2.id));
 
     // 5. Material escalations: id-derived.
-    const esc1: any = await service.createMaterialEscalation(AUTH, '1', { materialType: 'steel', materialName: 'Rebar', basePriceContract: 100, currentMarketPrice: 120, executedQuantity: 10, unit: 'ton' } as any);
-    const esc2: any = await service.createMaterialEscalation(AUTH, '1', { materialType: 'cement', materialName: 'Cement', basePriceContract: 50, currentMarketPrice: 55, executedQuantity: 20, unit: 'bag' } as any);
+    const esc1: any = await service.createMaterialEscalation(AUTH, '1', {
+      materialType: 'steel',
+      materialName: 'Rebar',
+      basePriceContract: 100,
+      currentMarketPrice: 120,
+      executedQuantity: 10,
+      unit: 'ton',
+    } as any);
+    const esc2: any = await service.createMaterialEscalation(AUTH, '1', {
+      materialType: 'cement',
+      materialName: 'Cement',
+      basePriceContract: 50,
+      currentMarketPrice: 55,
+      executedQuantity: 20,
+      unit: 'bag',
+    } as any);
     assert.match(esc1.claimNumber, /^ESC-\d{6}-\d{4,}$/);
     assert.notEqual(esc1.claimNumber, esc2.claimNumber);
     assert.ok(suffixOf(esc1.claimNumber, esc1.id));
 
     // 6. Backcharges: id-derived.
-    const bch1: any = await service.createSubcontractorBackcharge(AUTH, '1', { subcontractId: 1, backchargeCategory: 'damage', amount: 100, description: 'D1' } as any);
-    const bch2: any = await service.createSubcontractorBackcharge(AUTH, '1', { subcontractId: 1, backchargeCategory: 'delay', amount: 50, description: 'D2' } as any);
+    const bch1: any = await service.createSubcontractorBackcharge(AUTH, '1', {
+      subcontractId: 1,
+      backchargeCategory: 'damage',
+      amount: 100,
+      description: 'D1',
+    } as any);
+    const bch2: any = await service.createSubcontractorBackcharge(AUTH, '1', {
+      subcontractId: 1,
+      backchargeCategory: 'delay',
+      amount: 50,
+      description: 'D2',
+    } as any);
     assert.match(bch1.voucherNumber, /^BCH-\d{6}-\d{4,}$/);
     assert.notEqual(bch1.voucherNumber, bch2.voucherNumber);
     assert.ok(suffixOf(bch1.voucherNumber, bch1.id));
 
     // 7. Allocation batches: id-derived over an empty period.
-    const alloc1: any = await service.postBatchAllocation(AUTH, '1', { periodStart: '2026-10-01', periodEnd: '2026-10-31' } as any);
-    const alloc2: any = await service.postBatchAllocation(AUTH, '1', { periodStart: '2026-10-01', periodEnd: '2026-10-31' } as any);
+    const alloc1: any = await service.postBatchAllocation(AUTH, '1', {
+      periodStart: '2026-10-01',
+      periodEnd: '2026-10-31',
+    } as any);
+    const alloc2: any = await service.postBatchAllocation(AUTH, '1', {
+      periodStart: '2026-10-01',
+      periodEnd: '2026-10-31',
+    } as any);
     assert.match(alloc1.batch.batchNumber, /^ALLOC-\d{6}-\d{4,}$/);
     assert.notEqual(alloc1.batch.batchNumber, alloc2.batch.batchNumber);
     assert.ok(suffixOf(alloc1.batch.batchNumber, alloc1.batch.id));
@@ -172,7 +232,10 @@ async function main(): Promise<void> {
       const end = source.indexOf(endMarker);
       assert.ok(start > -1 && end > start, `${name} body must be locatable`);
       const body = source.slice(start, end);
-      assert.ok(!body.includes('count(*)::int') && !body.includes('fn.count'), `${name} must not count rows for its number`);
+      assert.ok(
+        !body.includes('count(*)::int') && !body.includes('fn.count'),
+        `${name} must not count rows for its number`,
+      );
     }
 
     console.log('contracting id-derived numbers (ops) checks passed');

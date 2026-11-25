@@ -49,27 +49,76 @@ async function makeDb(): Promise<{ db: Kysely<Database> }> {
 }
 
 async function seedOrder(db: Kysely<Database>, repId: number, fullName: string | null): Promise<number> {
-  await db.insertInto('delivery_representatives' as never).values({
-    id: repId, tenant_id: 't1', name: `مندوب ${repId}`, full_name: fullName, phone: '01000000000',
-  } as never).execute();
-  await db.insertInto('stock_locations' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', name: 'المستودع الرئيسي', branch_id: null, location_type: 'internal_warehouse', is_active: true,
-  } as never).execute();
-  const inserted = await db.insertInto('sales_orders' as never).values({
-    tenant_id: 't1', account_id: 'a1', order_number: 'SO-261122-0002',
-    customer_id: null, customer_name: 'عميل اختبار', customer_phone: null, customer_address: null,
-    rep_id: repId, warehouse_location_id: 1, order_source: 'pre_sales_rep', payment_terms: 'cash',
-    subtotal: 125.5, discount_amount: 0, total_amount: 125.5, status: 'approved',
-    supervisor_approved_at: null, supervisor_approved_by: null, supervisor_rejection_reason: null,
-    notes: '', delivery_date: null,
-  } as never).returning(['id'] as never).executeTakeFirst() as any;
+  await db
+    .insertInto('delivery_representatives' as never)
+    .values({
+      id: repId,
+      tenant_id: 't1',
+      name: `مندوب ${repId}`,
+      full_name: fullName,
+      phone: '01000000000',
+    } as never)
+    .execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'المستودع الرئيسي',
+      branch_id: null,
+      location_type: 'internal_warehouse',
+      is_active: true,
+    } as never)
+    .execute();
+  const inserted = (await db
+    .insertInto('sales_orders' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 'a1',
+      order_number: 'SO-261122-0002',
+      customer_id: null,
+      customer_name: 'عميل اختبار',
+      customer_phone: null,
+      customer_address: null,
+      rep_id: repId,
+      warehouse_location_id: 1,
+      order_source: 'pre_sales_rep',
+      payment_terms: 'cash',
+      subtotal: 125.5,
+      discount_amount: 0,
+      total_amount: 125.5,
+      status: 'approved',
+      supervisor_approved_at: null,
+      supervisor_approved_by: null,
+      supervisor_rejection_reason: null,
+      notes: '',
+      delivery_date: null,
+    } as never)
+    .returning(['id'] as never)
+    .executeTakeFirst()) as any;
   const orderId = Number(inserted.id);
-  await db.insertInto('sales_order_items' as never).values({
-    tenant_id: 't1', account_id: 'a1', sales_order_id: orderId, product_id: 1, product_name: 'صنف اختبار',
-    unit_name: 'قطعة', unit_multiplier: 1, quantity: 1, reserved_quantity: 0, delivered_quantity: 0,
-    unit_price: 125.5, consumer_price: 125.5, pricing_tier_type: 'cash', unit_offer_savings: 0,
-    discount: 0, total: 125.5,
-  } as never).execute();
+  await db
+    .insertInto('sales_order_items' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 'a1',
+      sales_order_id: orderId,
+      product_id: 1,
+      product_name: 'صنف اختبار',
+      unit_name: 'قطعة',
+      unit_multiplier: 1,
+      quantity: 1,
+      reserved_quantity: 0,
+      delivered_quantity: 0,
+      unit_price: 125.5,
+      consumer_price: 125.5,
+      pricing_tier_type: 'cash',
+      unit_offer_savings: 0,
+      discount: 0,
+      total: 125.5,
+    } as never)
+    .execute();
   return orderId;
 }
 
@@ -90,7 +139,9 @@ async function main(): Promise<void> {
       assert.equal(item.total, 125.5, 'total still present alongside lineTotal');
       assert.equal((details as any).repName, 'مندوب #9', 'repName falls back to مندوب #id when full_name is NULL');
       console.log('case 1 passed: lineTotal 125.50 (not NaN), repName مندوب #9');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 2: full_name present -> the name is kept, lineTotal still numeric.
@@ -103,7 +154,9 @@ async function main(): Promise<void> {
       assert.equal((details as any).repName, 'أحمد المندوب', 'named rep keeps his name');
       assert.equal((details.items[0] as any).lineTotal, 125.5, 'lineTotal numeric for the named rep too');
       console.log('case 2 passed: repName أحمد المندوب kept, lineTotal numeric');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. This spec is wired into both critical lists, in identical order
@@ -111,7 +164,8 @@ async function main(): Promise<void> {
   // and van-presales-order-details-line-total; F20 followed it, so this
   // spec is no longer the last entry).
   {
-    const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+    const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+      .specs as string[];
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));

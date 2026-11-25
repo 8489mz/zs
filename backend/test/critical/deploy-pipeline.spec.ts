@@ -40,17 +40,35 @@ function testNoBuildOnServer(): void {
     assert.ok(!forbidden.test(remote), `the server step must not build (found ${forbidden}) — build on the runner`);
   }
   const runnerPart = workflow.replace(remote, '');
-  assert.ok(/working-directory: backend[\s\S]*?npm run build/.test(runnerPart), 'backend must be built on the GitHub runner');
-  assert.ok(/working-directory: frontend[\s\S]*?npm run build/.test(runnerPart), 'frontend must be built on the GitHub runner');
-  assert.ok(/tar -czf release\.tgz backend\/dist frontend\/dist/.test(runnerPart), 'the prebuilt dist folders are shipped as release.tgz');
+  assert.ok(
+    /working-directory: backend[\s\S]*?npm run build/.test(runnerPart),
+    'backend must be built on the GitHub runner',
+  );
+  assert.ok(
+    /working-directory: frontend[\s\S]*?npm run build/.test(runnerPart),
+    'frontend must be built on the GitHub runner',
+  );
+  assert.ok(
+    /tar -czf release\.tgz backend\/dist frontend\/dist/.test(runnerPart),
+    'the prebuilt dist folders are shipped as release.tgz',
+  );
 }
 
 // DEPLOY-2: the live dist folders are never deleted before the new build is in place.
 function testNoLiveDistDeletion(): void {
   const remote = remoteScript();
-  assert.ok(!/rm -rf ("?\$TARGET_DIR\/)?(backend\/|frontend\/)?dist"?\s*$/m.test(remote), 'never rm -rf a live dist folder');
-  assert.ok(/swap_in "\$TARGET_DIR\/backend\/dist"/.test(remote), 'backend/dist is replaced by swap_in (mv), not rebuilt in place');
-  assert.ok(/swap_in "\$TARGET_DIR\/frontend\/dist"/.test(remote), 'frontend/dist is replaced by swap_in (mv), not rebuilt in place');
+  assert.ok(
+    !/rm -rf ("?\$TARGET_DIR\/)?(backend\/|frontend\/)?dist"?\s*$/m.test(remote),
+    'never rm -rf a live dist folder',
+  );
+  assert.ok(
+    /swap_in "\$TARGET_DIR\/backend\/dist"/.test(remote),
+    'backend/dist is replaced by swap_in (mv), not rebuilt in place',
+  );
+  assert.ok(
+    /swap_in "\$TARGET_DIR\/frontend\/dist"/.test(remote),
+    'frontend/dist is replaced by swap_in (mv), not rebuilt in place',
+  );
 }
 
 // DEPLOY-3: migrations run before the new code goes live; a failed health check rolls back.
@@ -60,10 +78,18 @@ function testMigrationOrderAndRollback(): void {
   const backupAt = remote.indexOf('zsystems-backup.sh" hourly');
   const swapAt = remote.indexOf('swap_in "$TARGET_DIR/backend/dist"');
   const reloadAt = remote.indexOf('pm2 reload zsystems-backend');
-  assert.ok(backupAt > -1 && migrateAt > -1 && swapAt > -1 && reloadAt > -1, 'backup, migrate, swap and reload must all be present');
-  assert.ok(backupAt < migrateAt && migrateAt < swapAt && swapAt < reloadAt, 'order must be: encrypted backup -> migrate -> swap -> reload');
-  assert.ok(/if ! check_health; then[\s\S]*?swap_back "\$TARGET_DIR\/backend\/dist"[\s\S]*?exit 1/.test(remote),
-    'an unhealthy deploy must swap the previous build back and fail the job');
+  assert.ok(
+    backupAt > -1 && migrateAt > -1 && swapAt > -1 && reloadAt > -1,
+    'backup, migrate, swap and reload must all be present',
+  );
+  assert.ok(
+    backupAt < migrateAt && migrateAt < swapAt && swapAt < reloadAt,
+    'order must be: encrypted backup -> migrate -> swap -> reload',
+  );
+  assert.ok(
+    /if ! check_health; then[\s\S]*?swap_back "\$TARGET_DIR\/backend\/dist"[\s\S]*?exit 1/.test(remote),
+    'an unhealthy deploy must swap the previous build back and fail the job',
+  );
   assert.ok(/set -euo pipefail/.test(remote), 'the server step must stop on the first error');
 }
 
@@ -76,77 +102,124 @@ function testMigrationAutoRevert(): void {
   // The pre-deploy schema is recorded BEFORE the migrate step, fail-closed.
   const listAt = remote.indexOf('npm run --silent migration:list');
   const migrateAt = remote.indexOf('npm run migration:run');
-  assert.ok(listAt > -1 && migrateAt > -1 && listAt < migrateAt,
-    'the pre-deploy migration list must be captured before migration:run');
-  assert.ok(/PRE_MIGRATION_COUNT/.test(remote) && /refusing to deploy/.test(remote),
-    'a missing or empty pre-deploy migration list must refuse the deploy, not migrate blind');
+  assert.ok(
+    listAt > -1 && migrateAt > -1 && listAt < migrateAt,
+    'the pre-deploy migration list must be captured before migration:run',
+  );
+  assert.ok(
+    /PRE_MIGRATION_COUNT/.test(remote) && /refusing to deploy/.test(remote),
+    'a missing or empty pre-deploy migration list must refuse the deploy, not migrate blind',
+  );
   // Migration failure traps into the DB decision instead of aborting with the schema half-applied.
-  assert.ok(/if ! npm run migration:run; then[\s\S]*?restore_db_to_pre_deploy[\s\S]*?exit 1/.test(remote),
-    'a failed migration:run must restore the database to the pre-deploy schema and fail the job');
+  assert.ok(
+    /if ! npm run migration:run; then[\s\S]*?restore_db_to_pre_deploy[\s\S]*?exit 1/.test(remote),
+    'a failed migration:run must restore the database to the pre-deploy schema and fail the job',
+  );
   // The revert loop uses one `down` per migration and verifies the count drops:
   // Kysely's migrateDown silently skips a migration with no `down` and still
   // exits 0, so an exit code alone proves nothing.
   assert.ok(/npm run migration:revert/.test(remote), 'the revert loop must call migration:revert');
-  assert.ok(/did not reduce the applied count/.test(remote),
-    'a revert that does not reduce the applied count must fall through to the backup restore');
+  assert.ok(
+    /did not reduce the applied count/.test(remote),
+    'a revert that does not reduce the applied count must fall through to the backup restore',
+  );
   // Last resort: the step-4 hourly backup. zsystems-restore.sh cannot do this
   // (daily bundles only, and `full` refuses a non-empty database), so the
   // script restores the encrypted hourly pg_dump itself, with the drill's recipe.
   assert.ok(/zsystems_hourly_\*\.sql\.gz\.enc/.test(remote), 'the restore source must be the step-4 hourly backup');
-  assert.ok(/openssl enc -d -aes-256-cbc -pbkdf2/.test(remote), 'the hourly backup must be decrypted with the drill recipe');
-  assert.ok(/DROP DATABASE IF EXISTS zsystems_db WITH \(FORCE\)/.test(remote), 'the live database must be dropped before the dump is restored into it');
-  assert.ok(/CREATE DATABASE zsystems_db/.test(remote), 'the live database must be recreated before the dump is restored into it');
+  assert.ok(
+    /openssl enc -d -aes-256-cbc -pbkdf2/.test(remote),
+    'the hourly backup must be decrypted with the drill recipe',
+  );
+  assert.ok(
+    /DROP DATABASE IF EXISTS zsystems_db WITH \(FORCE\)/.test(remote),
+    'the live database must be dropped before the dump is restored into it',
+  );
+  assert.ok(
+    /CREATE DATABASE zsystems_db/.test(remote),
+    'the live database must be recreated before the dump is restored into it',
+  );
   assert.ok(/grep -c "\^ERROR"/.test(remote), 'errors during the restore must be counted, not ignored');
   // Health-check failure applies the same DB decision instead of folder-only rollback, then re-checks.
-  assert.ok(/if ! check_health; then[\s\S]*?swap_back "\$TARGET_DIR\/backend\/dist"[\s\S]*?restore_db_to_pre_deploy[\s\S]*?check_health[\s\S]*?exit 1/.test(remote),
-    'an unhealthy deploy must restore the database to the pre-deploy schema, re-check health, and fail the job');
+  assert.ok(
+    /if ! check_health; then[\s\S]*?swap_back "\$TARGET_DIR\/backend\/dist"[\s\S]*?restore_db_to_pre_deploy[\s\S]*?check_health[\s\S]*?exit 1/.test(
+      remote,
+    ),
+    'an unhealthy deploy must restore the database to the pre-deploy schema, re-check health, and fail the job',
+  );
   // The failure alert still fires: the Telegram step runs on job failure.
-  assert.ok(/if: failure\(\)/.test(workflow) && /TELEGRAM_BOT_TOKEN/.test(workflow),
-    'a failed or rolled-back deploy must still send the Telegram failure alert');
+  assert.ok(
+    /if: failure\(\)/.test(workflow) && /TELEGRAM_BOT_TOKEN/.test(workflow),
+    'a failed or rolled-back deploy must still send the Telegram failure alert',
+  );
 }
 
 // DEPLOY-4: the commit that passed CI is the one deployed.
 function testDeploysTestedCommit(): void {
   // A production deploy requires a verified green main SHA (workflow_run on successful CI or workflow_dispatch).
-  assert.ok(/workflow_run:[\s\S]*?workflows:\s*\["ci-full"\][\s\S]*?branches:[\s\S]*?-\s*main/.test(workflow),
-    'production deployment must automatically trigger on ci-full completion for main');
-  assert.ok(/workflow_dispatch:/.test(workflow),
-    'production deployment must support workflow_dispatch');
-  assert.ok(/github\.ref == 'refs\/heads\/main'/.test(workflow) || /github\.event\.workflow_run\.head_branch == 'main'/.test(workflow),
-    'deployment must be authorized from main');
-  assert.ok(/DEPLOY_SHA:/.test(workflow),
-    'deployment must lock an exact main SHA');
-  assert.ok(/actions: read/.test(workflow)
-    && /actions\/workflows\/ci-full\.yml\/runs\?head_sha=\$DEPLOY_SHA&per_page=100/.test(workflow)
-    && !/actions\/workflows\/ci-full\.yml\/runs\?head_sha=\$DEPLOY_SHA&event=/.test(workflow)
-    && /\(\.event == \\?"workflow_dispatch\\?" or \.event == \\?"push\\?"\)/.test(workflow)
-    && /test "\$PASSED" -ge 1/.test(workflow)
-    && /CURRENT_MAIN/.test(workflow),
-    'current main SHA must already have a successful full-CI (push or workflow_dispatch) run verified before deploy');
-  assert.ok(/git reset --hard "\$DEPLOY_SHA"/.test(remoteScript()),
-    'server must reset to the exact CI-verified SHA');
-  assert.ok(/cancel-in-progress: false/.test(workflow),
-    'an active deployment must not be cancelled mid-swap');
-  assert.ok(/secrets\.ORACLE_SSH_KNOWN_HOSTS/.test(workflow) && !/StrictHostKeyChecking=no/.test(workflow)
-    && (workflow.match(/StrictHostKeyChecking=yes/g) || []).length === 2,
-    'both SSH operations must verify the pinned production host key');
+  assert.ok(
+    /workflow_run:[\s\S]*?workflows:\s*\["ci-full"\][\s\S]*?branches:[\s\S]*?-\s*main/.test(workflow),
+    'production deployment must automatically trigger on ci-full completion for main',
+  );
+  assert.ok(/workflow_dispatch:/.test(workflow), 'production deployment must support workflow_dispatch');
+  assert.ok(
+    /github\.ref == 'refs\/heads\/main'/.test(workflow) ||
+      /github\.event\.workflow_run\.head_branch == 'main'/.test(workflow),
+    'deployment must be authorized from main',
+  );
+  assert.ok(/DEPLOY_SHA:/.test(workflow), 'deployment must lock an exact main SHA');
+  assert.ok(
+    /actions: read/.test(workflow) &&
+      /actions\/workflows\/ci-full\.yml\/runs\?head_sha=\$DEPLOY_SHA&per_page=100/.test(workflow) &&
+      !/actions\/workflows\/ci-full\.yml\/runs\?head_sha=\$DEPLOY_SHA&event=/.test(workflow) &&
+      /\(\.event == \\?"workflow_dispatch\\?" or \.event == \\?"push\\?"\)/.test(workflow) &&
+      /test "\$PASSED" -ge 1/.test(workflow) &&
+      /CURRENT_MAIN/.test(workflow),
+    'current main SHA must already have a successful full-CI (push or workflow_dispatch) run verified before deploy',
+  );
+  assert.ok(/git reset --hard "\$DEPLOY_SHA"/.test(remoteScript()), 'server must reset to the exact CI-verified SHA');
+  assert.ok(/cancel-in-progress: false/.test(workflow), 'an active deployment must not be cancelled mid-swap');
+  assert.ok(
+    /secrets\.ORACLE_SSH_KNOWN_HOSTS/.test(workflow) &&
+      !/StrictHostKeyChecking=no/.test(workflow) &&
+      (workflow.match(/StrictHostKeyChecking=yes/g) || []).length === 2,
+    'both SSH operations must verify the pinned production host key',
+  );
 }
 
 // DEPLOY-5: the backup produces a valid dump.
 function testBackupScript(): void {
   assert.ok(!/docker exec[^\n|]*\s-t\b/.test(backupScript), 'docker exec -t injects \\r into the SQL dump');
   assert.ok(/set -euo pipefail/.test(backupScript), 'a failed pg_dump must fail the backup, not write an empty file');
-  assert.ok(/PostgreSQL database dump complete/.test(backupScript), 'the dump must be verified complete before it is kept');
-  assert.ok(/\/etc\/zsystems\/backup-par-url/.test(backupScript), 'the off-site upload URL is read from the server, not the repo');
-  assert.ok(/refusing to create or upload an unencrypted backup/.test(backupScript), 'backups must fail closed when the encryption passphrase is missing');
-  assert.ok(/encrypted full-database fallback/.test(backupScript), 'a failed bundle must fall back to an encrypted dump, never a raw dump');
-  assert.ok(!/uploading the plain database dump instead/.test(backupScript), 'raw database dumps must never be uploaded');
+  assert.ok(
+    /PostgreSQL database dump complete/.test(backupScript),
+    'the dump must be verified complete before it is kept',
+  );
+  assert.ok(
+    /\/etc\/zsystems\/backup-par-url/.test(backupScript),
+    'the off-site upload URL is read from the server, not the repo',
+  );
+  assert.ok(
+    /refusing to create or upload an unencrypted backup/.test(backupScript),
+    'backups must fail closed when the encryption passphrase is missing',
+  );
+  assert.ok(
+    /encrypted full-database fallback/.test(backupScript),
+    'a failed bundle must fall back to an encrypted dump, never a raw dump',
+  );
+  assert.ok(
+    !/uploading the plain database dump instead/.test(backupScript),
+    'raw database dumps must never be uploaded',
+  );
 }
 
 // DEPLOY-6: no Object Storage pre-authenticated URL is ever committed (the repo is public).
 function testNoCommittedParUrl(): void {
   const par = /objectstorage\.[a-z0-9-]+\.oraclecloud\.com\/p\//;
-  for (const [name, text] of [['deploy-oracle.yml', workflow], ['zsystems-backup.sh', backupScript]] as const) {
+  for (const [name, text] of [
+    ['deploy-oracle.yml', workflow],
+    ['zsystems-backup.sh', backupScript],
+  ] as const) {
     assert.ok(!par.test(text), `${name} must not contain a pre-authenticated request URL`);
   }
 }
@@ -159,7 +232,10 @@ function testNoCommittedParUrl(): void {
 function testHourlyBackupMode(): void {
   assert.ok(/MODE="\$\{1:-daily\}"/.test(backupScript), 'the backup script must take a daily|hourly mode');
   assert.ok(/daily\|hourly\)/.test(backupScript), 'an unknown mode must be rejected, not silently treated as daily');
-  assert.ok(/zsystems_hourly_/.test(backupScript), 'the hourly copy needs its own filename prefix so retention can target it');
+  assert.ok(
+    /zsystems_hourly_/.test(backupScript),
+    'the hourly copy needs its own filename prefix so retention can target it',
+  );
   assert.ok(
     /openssl enc -aes-256-cbc -pbkdf2[^\n]*-pass "file:\$PASSPHRASE_FILE"/.test(backupScript),
     'the hourly copy must be encrypted with the same scheme as the bundle before it is uploaded',
@@ -200,13 +276,22 @@ function testRestoreDrill(): void {
   const liveQueries = drillScript.match(/live_q "[^"]+"/g) || [];
   assert.ok(liveQueries.length > 0, 'the drill must compare the restored copy against production');
   for (const query of liveQueries) {
-    assert.ok(/^live_q "select /i.test(query), `every production query in the drill must be read-only (found ${query})`);
+    assert.ok(
+      /^live_q "select /i.test(query),
+      `every production query in the drill must be read-only (found ${query})`,
+    );
   }
 
   // What it actually verifies: a restore that "succeeds" into an empty database proves nothing.
-  assert.ok(/PostgreSQL database dump complete/.test(drillScript), 'the drill must reject a truncated dump before restoring it');
+  assert.ok(
+    /PostgreSQL database dump complete/.test(drillScript),
+    'the drill must reject a truncated dump before restoring it',
+  );
   assert.ok(/grep -c "\^ERROR"/.test(drillScript), 'errors during the restore must be counted, not ignored');
-  assert.ok(/pg_constraint where contype='f'/.test(drillScript), 'the drill must compare foreign keys (the O65 failure mode)');
+  assert.ok(
+    /pg_constraint where contype='f'/.test(drillScript),
+    'the drill must compare foreign keys (the O65 failure mode)',
+  );
   // The first real run reported "a constraint was dropped" with no name, and identifying it took a
   // full manual diagnosis. An alert that cannot be acted on without a second investigation is half
   // an alert, so the drill must name the constraint and quote the error.
@@ -309,10 +394,7 @@ function testTelegramAlertsCheck(): void {
   assert.equal(noEnv.status, 1, 'the Telegram check must fail closed with no secrets set');
   assert.ok(/TELEGRAM_BOT_TOKEN/.test(noEnv.stderr), 'the failure must name the missing TELEGRAM_BOT_TOKEN');
   // Token only: exit 1, naming the missing chat id.
-  const tokenOnly = runScript(
-    [],
-    { ...scrubbedEnv, TELEGRAM_BOT_TOKEN: 'dummy-token-for-test' },
-  );
+  const tokenOnly = runScript([], { ...scrubbedEnv, TELEGRAM_BOT_TOKEN: 'dummy-token-for-test' });
   assert.equal(tokenOnly.status, 1, 'the Telegram check must fail closed with only the token set');
   assert.ok(/TELEGRAM_CHAT_ID/.test(tokenOnly.stderr), 'the failure must name the missing TELEGRAM_CHAT_ID');
   assert.ok(
@@ -320,10 +402,11 @@ function testTelegramAlertsCheck(): void {
     'the Telegram check must never echo a secret value',
   );
   // Both set, presence only: exit 0 with no network involved.
-  const checkOnly = runScript(
-    ['--check-only'],
-    { ...scrubbedEnv, TELEGRAM_BOT_TOKEN: 'dummy-token-for-test', TELEGRAM_CHAT_ID: 'dummy-chat-for-test' },
-  );
+  const checkOnly = runScript(['--check-only'], {
+    ...scrubbedEnv,
+    TELEGRAM_BOT_TOKEN: 'dummy-token-for-test',
+    TELEGRAM_CHAT_ID: 'dummy-chat-for-test',
+  });
   assert.equal(checkOnly.status, 0, 'the Telegram check --check-only must pass when both vars are set');
   assert.ok(
     !/dummy-token-for-test|dummy-chat-for-test/.test(checkOnly.stdout + checkOnly.stderr),
@@ -332,10 +415,11 @@ function testTelegramAlertsCheck(): void {
   // Both dummy, live verification: exit 1 — a dummy token is rejected by
   // Telegram, and a machine with no route to api.telegram.org fails the
   // same way. Either way the script must fail closed and leak nothing.
-  const live = runScript(
-    [],
-    { ...scrubbedEnv, TELEGRAM_BOT_TOKEN: 'dummy-token-for-test', TELEGRAM_CHAT_ID: 'dummy-chat-for-test' },
-  );
+  const live = runScript([], {
+    ...scrubbedEnv,
+    TELEGRAM_BOT_TOKEN: 'dummy-token-for-test',
+    TELEGRAM_CHAT_ID: 'dummy-chat-for-test',
+  });
   assert.equal(live.status, 1, 'the Telegram check must fail closed for an invalid token');
   assert.ok(
     !/dummy-token-for-test|dummy-chat-for-test/.test(live.stdout + live.stderr),
@@ -353,44 +437,57 @@ function testTelegramAlertsCheck(): void {
 // live on main; this number follows them.
 function testAutoDeploy(): void {
   // ci-full triggers on push to main — and still on dispatch and PRs.
-  assert.ok(/on:\n\s+push:\n\s+branches:\n\s+-\s*main/.test(ciFull),
-    'ci-full must run on every push to main');
+  assert.ok(/on:\n\s+push:\n\s+branches:\n\s+-\s*main/.test(ciFull), 'ci-full must run on every push to main');
   assert.ok(/workflow_dispatch:/.test(ciFull), 'ci-full must keep its manual dispatch trigger');
   assert.ok(/pull_request:/.test(ciFull), 'ci-full must keep its pull-request trigger');
   // The fast stage's header must no longer claim the full suite is dispatch-only.
-  assert.ok(!/runs only on workflow_dispatch/.test(ciFast),
-    'ci.yml must not claim ci-full runs only on workflow_dispatch');
-  assert.ok(/runs on every push to main/.test(ciFast),
-    'ci.yml must say the full suite runs on every push to main');
+  assert.ok(
+    !/runs only on workflow_dispatch/.test(ciFast),
+    'ci.yml must not claim ci-full runs only on workflow_dispatch',
+  );
+  assert.ok(/runs on every push to main/.test(ciFast), 'ci.yml must say the full suite runs on every push to main');
 
   // The deploy gate accepts a push-triggered green ci-full run — and still
   // requires success, main, this repo, and the exact SHA.
-  assert.ok(/workflows:\s*\["ci-full"\]/.test(workflow),
-    'deploy must watch ci-full only, never ci-fast');
-  assert.ok(/github\.event\.workflow_run\.event == 'push'/.test(workflow),
-    'the deploy gate must accept push-triggered ci-full runs');
-  assert.ok(/github\.event\.workflow_run\.event == 'workflow_dispatch'/.test(workflow),
-    'the deploy gate must keep accepting dispatch-triggered ci-full runs');
-  assert.ok(/github\.event\.workflow_run\.conclusion == 'success'/.test(workflow),
-    'a red ci-full must still block deploy');
-  assert.ok(/github\.event\.workflow_run\.head_branch == 'main'/.test(workflow),
-    'deploy must still require the run to be on main');
-  assert.ok(/github\.event\.workflow_run\.head_repository\.full_name == github\.repository/.test(workflow),
-    'deploy must still require the run to be in this repo');
-  assert.ok(/DEPLOY_SHA:/.test(workflow) && /github\.event\.workflow_run\.head_sha/.test(workflow),
-    'deploy must still lock the exact SHA of the green run');
+  assert.ok(/workflows:\s*\["ci-full"\]/.test(workflow), 'deploy must watch ci-full only, never ci-fast');
+  assert.ok(
+    /github\.event\.workflow_run\.event == 'push'/.test(workflow),
+    'the deploy gate must accept push-triggered ci-full runs',
+  );
+  assert.ok(
+    /github\.event\.workflow_run\.event == 'workflow_dispatch'/.test(workflow),
+    'the deploy gate must keep accepting dispatch-triggered ci-full runs',
+  );
+  assert.ok(
+    /github\.event\.workflow_run\.conclusion == 'success'/.test(workflow),
+    'a red ci-full must still block deploy',
+  );
+  assert.ok(
+    /github\.event\.workflow_run\.head_branch == 'main'/.test(workflow),
+    'deploy must still require the run to be on main',
+  );
+  assert.ok(
+    /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/.test(workflow),
+    'deploy must still require the run to be in this repo',
+  );
+  assert.ok(
+    /DEPLOY_SHA:/.test(workflow) && /github\.event\.workflow_run\.head_sha/.test(workflow),
+    'deploy must still lock the exact SHA of the green run',
+  );
 
   // The pipeline doc describes the real pipeline: push -> ci-fast + ci-full
   // -> auto-deploy on green ci-full. The old claim (push -> ci -> deploy)
   // must be gone from both places it appeared.
-  assert.ok(/تُطلق `ci\.yml` \(الفحص السريع\) و`ci-full\.yml` \(المجموعة الكاملة\)/.test(deployDoc),
-    'the pipeline doc must say a push triggers ci-fast and ci-full');
-  assert.ok(/بعد اكتمال `ci-full` بنجاح/.test(deployDoc),
-    'the pipeline doc must say deploy follows a green ci-full');
-  assert.ok(/نجاح `ci\.yml` وحده لا ينشر شيئاً/.test(deployDoc),
-    'the pipeline doc must say a fast-green push alone never deploys');
-  assert.ok(!/بعد اكتمال `ci` بنجاح/.test(deployDoc),
-    'the pipeline doc must not claim deploy follows a green ci run');
+  assert.ok(
+    /تُطلق `ci\.yml` \(الفحص السريع\) و`ci-full\.yml` \(المجموعة الكاملة\)/.test(deployDoc),
+    'the pipeline doc must say a push triggers ci-fast and ci-full',
+  );
+  assert.ok(/بعد اكتمال `ci-full` بنجاح/.test(deployDoc), 'the pipeline doc must say deploy follows a green ci-full');
+  assert.ok(
+    /نجاح `ci\.yml` وحده لا ينشر شيئاً/.test(deployDoc),
+    'the pipeline doc must say a fast-green push alone never deploys',
+  );
+  assert.ok(!/بعد اكتمال `ci` بنجاح/.test(deployDoc), 'the pipeline doc must not claim deploy follows a green ci run');
 
   // The invariant entry exists exactly once (presence-pinned; the guard spec
   // owns the last-line order assertion).

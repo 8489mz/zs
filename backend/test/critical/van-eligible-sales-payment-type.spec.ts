@@ -68,8 +68,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): { returns: VanReturnsService } {
@@ -86,18 +92,54 @@ async function seedSale(
   db: Kysely<Database>,
   opts: { id: number; docNo: string; paymentType: string | null; total: number },
 ): Promise<void> {
-  await db.insertInto('sales' as never).values({
-    id: opts.id, tenant_id: 't1', doc_no: opts.docNo, customer_id: 5, subtotal: opts.total,
-    discount: 0, tax_amount: 0, total: opts.total, paid_amount: 0, store_credit_used: 0,
-    exchange_return_id: null, branch_id: null, location_id: null, created_by: 1, created_at: new Date(),
-    delivery_fee: 0, delivery_fee_mode: null, service_charge: 0, tip_amount: 0, prices_include_tax: false,
-    sale_origin: 'van', payment_type: opts.paymentType, collection_status: 'paid', status: 'posted',
-    delivery_rep_id: null, van_trip_id: null,
-  } as never).execute();
-  await db.insertInto('sale_items' as never).values({
-    id: 10 + opts.id, sale_id: opts.id, tenant_id: 't1', product_id: 100, product_name: 'Widget', qty: 2,
-    unit_price: opts.total / 2, line_total: opts.total, cost_price: 96, unit_multiplier: 12, unit_name: 'كرتونة', modifiers: JSON.stringify([]),
-  } as never).execute();
+  await db
+    .insertInto('sales' as never)
+    .values({
+      id: opts.id,
+      tenant_id: 't1',
+      doc_no: opts.docNo,
+      customer_id: 5,
+      subtotal: opts.total,
+      discount: 0,
+      tax_amount: 0,
+      total: opts.total,
+      paid_amount: 0,
+      store_credit_used: 0,
+      exchange_return_id: null,
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+      created_at: new Date(),
+      delivery_fee: 0,
+      delivery_fee_mode: null,
+      service_charge: 0,
+      tip_amount: 0,
+      prices_include_tax: false,
+      sale_origin: 'van',
+      payment_type: opts.paymentType,
+      collection_status: 'paid',
+      status: 'posted',
+      delivery_rep_id: null,
+      van_trip_id: null,
+    } as never)
+    .execute();
+  await db
+    .insertInto('sale_items' as never)
+    .values({
+      id: 10 + opts.id,
+      sale_id: opts.id,
+      tenant_id: 't1',
+      product_id: 100,
+      product_name: 'Widget',
+      qty: 2,
+      unit_price: opts.total / 2,
+      line_total: opts.total,
+      cost_price: 96,
+      unit_multiplier: 12,
+      unit_name: 'كرتونة',
+      modifiers: JSON.stringify([]),
+    } as never)
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -107,12 +149,28 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedCurrency(db, 'EGP');
-      await db.insertInto('products' as never).values({
-        id: 100, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: 46, reserved_qty: 0, cost_price: 8,
-      } as never).execute();
-      await db.insertInto('customers' as never).values({
-        id: 5, tenant_id: 't1', account_id: 'a1', name: 'Shop', balance: 0,
-      } as never).execute();
+      await db
+        .insertInto('products' as never)
+        .values({
+          id: 100,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'Widget',
+          stock_qty: 46,
+          reserved_qty: 0,
+          cost_price: 8,
+        } as never)
+        .execute();
+      await db
+        .insertInto('customers' as never)
+        .values({
+          id: 5,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'Shop',
+          balance: 0,
+        } as never)
+        .execute();
       await seedSale(db, { id: 1, docNo: 'VAN-261113-0002', paymentType: 'cash', total: 288 });
       await seedSale(db, { id: 2, docNo: 'VAN-261113-0003', paymentType: 'credit', total: 288 });
 
@@ -134,12 +192,28 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedCurrency(db, 'EGP');
-      await db.insertInto('products' as never).values({
-        id: 100, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: 46, reserved_qty: 0, cost_price: 8,
-      } as never).execute();
-      await db.insertInto('customers' as never).values({
-        id: 5, tenant_id: 't1', account_id: 'a1', name: 'Shop', balance: 0,
-      } as never).execute();
+      await db
+        .insertInto('products' as never)
+        .values({
+          id: 100,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'Widget',
+          stock_qty: 46,
+          reserved_qty: 0,
+          cost_price: 8,
+        } as never)
+        .execute();
+      await db
+        .insertInto('customers' as never)
+        .values({
+          id: 5,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'Shop',
+          balance: 0,
+        } as never)
+        .execute();
       await seedSale(db, { id: 1, docNo: 'VAN-261113-0004', paymentType: null, total: 72 });
 
       const sales = await returns.getCustomerEligibleSales('t1', 5);

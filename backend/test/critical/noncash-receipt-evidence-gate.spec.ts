@@ -67,8 +67,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const ADMIN = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['purchases'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['purchases'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -102,24 +107,69 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   for (const [id, code] of [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [2110, '2110'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [2110, '2110'],
   ] as Array<[number, string]>) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, supplier_payable_account_id: 2110,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'عميل اختبار', phone: '010',
-    balance: 500, credit_limit: 0, is_credit_blocked: false, store_credit_balance: 0,
-    loyalty_points: 0, is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      supplier_payable_account_id: 2110,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'عميل اختبار',
+      phone: '010',
+      balance: 500,
+      credit_limit: 0,
+      is_credit_blocked: false,
+      store_credit_balance: 0,
+      loyalty_points: 0,
+      is_active: true,
+    })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): {
@@ -158,14 +208,10 @@ async function main(): Promise<void> {
   assert.doesNotThrow(() => assertNonCashTransferReference('cash', undefined));
   assert.doesNotThrow(() => assertNonCashTransferReference(undefined, undefined));
   assert.doesNotThrow(() => assertNonCashTransferReference('instapay', 'TRX-987654'));
-  assert.throws(
-    () => assertNonCashTransferReference('instapay', undefined),
-    { code: 'NONCASH_RECEIPT_REFERENCE_REQUIRED' },
-  );
-  assert.throws(
-    () => assertNonCashTransferReference('bank', 'ab'),
-    { code: 'NONCASH_RECEIPT_REFERENCE_REQUIRED' },
-  );
+  assert.throws(() => assertNonCashTransferReference('instapay', undefined), {
+    code: 'NONCASH_RECEIPT_REFERENCE_REQUIRED',
+  });
+  assert.throws(() => assertNonCashTransferReference('bank', 'ab'), { code: 'NONCASH_RECEIPT_REFERENCE_REQUIRED' });
   console.log('  transfer reference helper checks passed');
 
   // 1. InstaPay receipt without a reference is refused with nothing posted.
@@ -176,17 +222,22 @@ async function main(): Promise<void> {
       const anyDb = db as any;
       const { write } = buildServices(db);
       await assert.rejects(
-        () => write.createCustomerPayment(
-          { customerId: 1, amount: 150, paymentChannel: 'instapay', instapayAddress: 'sara@instapay' } as any,
-          ADMIN,
-        ),
-        (err: any) => err.code === 'NONCASH_RECEIPT_REFERENCE_REQUIRED'
-          && String(err.message || '').includes('transfer reference'),
+        () =>
+          write.createCustomerPayment(
+            { customerId: 1, amount: 150, paymentChannel: 'instapay', instapayAddress: 'sara@instapay' } as any,
+            ADMIN,
+          ),
+        (err: any) =>
+          err.code === 'NONCASH_RECEIPT_REFERENCE_REQUIRED' && String(err.message || '').includes('transfer reference'),
       );
       assert.equal(await countRows(db, 'customer_payments'), 0);
       assert.equal(await countRows(db, 'journal_entries'), 0);
       assert.equal(await countRows(db, 'customer_ledger'), 0);
-      const customer = await anyDb.selectFrom('customers').select('balance').where('id', '=', 1).executeTakeFirstOrThrow();
+      const customer = await anyDb
+        .selectFrom('customers')
+        .select('balance')
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(customer.balance), 500);
     } finally {
       await db.destroy();
@@ -203,16 +254,21 @@ async function main(): Promise<void> {
       const { write } = buildServices(db);
       for (const channel of ['bank', 'card'] as const) {
         await assert.rejects(
-          () => write.createCustomerPayment(
-            { customerId: 1, amount: 100, paymentChannel: channel, note: 'paid by transfer, see WhatsApp' } as any,
-            ADMIN,
-          ),
+          () =>
+            write.createCustomerPayment(
+              { customerId: 1, amount: 100, paymentChannel: channel, note: 'paid by transfer, see WhatsApp' } as any,
+              ADMIN,
+            ),
           (err: any) => err.code === 'NONCASH_RECEIPT_REFERENCE_REQUIRED',
         );
       }
       assert.equal(await countRows(db, 'customer_payments'), 0);
       assert.equal(await countRows(db, 'journal_entries'), 0);
-      const customer = await anyDb.selectFrom('customers').select('balance').where('id', '=', 1).executeTakeFirstOrThrow();
+      const customer = await anyDb
+        .selectFrom('customers')
+        .select('balance')
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(customer.balance), 500);
     } finally {
       await db.destroy();
@@ -232,11 +288,18 @@ async function main(): Promise<void> {
         ADMIN,
       );
       assert.equal((result as any).ok, true);
-      const row = await anyDb.selectFrom('customer_payments').select(['payment_channel', 'transfer_reference', 'amount']).executeTakeFirstOrThrow();
+      const row = await anyDb
+        .selectFrom('customer_payments')
+        .select(['payment_channel', 'transfer_reference', 'amount'])
+        .executeTakeFirstOrThrow();
       assert.equal(row.payment_channel, 'cash');
       assert.equal(row.transfer_reference, null);
       assert.equal(Number(row.amount), 150);
-      const customer = await anyDb.selectFrom('customers').select('balance').where('id', '=', 1).executeTakeFirstOrThrow();
+      const customer = await anyDb
+        .selectFrom('customers')
+        .select('balance')
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(customer.balance), 350);
       const lines = await anyDb.selectFrom('journal_entry_lines').select(['account_id', 'debit', 'credit']).execute();
       assert.equal(lines.length, 2);
@@ -260,16 +323,29 @@ async function main(): Promise<void> {
       const anyDb = db as any;
       const { write } = buildServices(db);
       const result = await write.createCustomerPayment(
-        { customerId: 1, amount: 200, paymentChannel: 'instapay', instapayAddress: 'sara@instapay', transferReference: '  TRX-987654  ' } as any,
+        {
+          customerId: 1,
+          amount: 200,
+          paymentChannel: 'instapay',
+          instapayAddress: 'sara@instapay',
+          transferReference: '  TRX-987654  ',
+        } as any,
         ADMIN,
       );
       assert.equal((result as any).ok, true);
-      const row = await anyDb.selectFrom('customer_payments').select(['payment_channel', 'transfer_reference', 'instapay_address', 'amount']).executeTakeFirstOrThrow();
+      const row = await anyDb
+        .selectFrom('customer_payments')
+        .select(['payment_channel', 'transfer_reference', 'instapay_address', 'amount'])
+        .executeTakeFirstOrThrow();
       assert.equal(row.payment_channel, 'instapay');
       assert.equal(row.transfer_reference, 'TRX-987654');
       assert.equal(row.instapay_address, 'sara@instapay');
       assert.equal(Number(row.amount), 200);
-      const customer = await anyDb.selectFrom('customers').select('balance').where('id', '=', 1).executeTakeFirstOrThrow();
+      const customer = await anyDb
+        .selectFrom('customers')
+        .select('balance')
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(customer.balance), 300);
       const lines = await anyDb.selectFrom('journal_entry_lines').select(['account_id', 'debit', 'credit']).execute();
       assert.equal(lines.length, 2);
@@ -292,14 +368,23 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       const anyDb = db as any;
       const { posting } = buildServices(db);
-      const inserted = await anyDb.insertInto('customer_payments').values({
-        tenant_id: TENANT, account_id: ACCOUNT, customer_id: 1, amount: 120,
-        payment_channel: 'bank', note: 'legacy row, no reference', created_by: 1,
-      }).returning('id').executeTakeFirstOrThrow();
+      const inserted = await anyDb
+        .insertInto('customer_payments')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          customer_id: 1,
+          amount: 120,
+          payment_channel: 'bank',
+          note: 'legacy row, no reference',
+          created_by: 1,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
       await assert.rejects(
         () => posting.postCustomerPayment(db, Number(inserted.id), ADMIN),
-        (err: any) => String(err.message || '').includes('transfer reference')
-          && String(err.message || '').includes('1120'),
+        (err: any) =>
+          String(err.message || '').includes('transfer reference') && String(err.message || '').includes('1120'),
       );
       assert.equal(await countRows(db, 'journal_entries'), 0);
     } finally {

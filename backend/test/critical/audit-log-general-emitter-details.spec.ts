@@ -40,19 +40,38 @@ import { ReturnsService } from '../../src/modules/returns/returns.service';
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 import { migration as auditKeyMigration } from '../../src/database/migrations/2040000000293_audit_logs_idempotency_key';
 
-const ADMIN = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
-const CASHIER = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 2, username: 'cashier', permissions: [] } as unknown as AuthContext;
+const ADMIN = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
+const CASHIER = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'cashier',
+  userId: 2,
+  username: 'cashier',
+  permissions: [],
+} as unknown as AuthContext;
 // Relative to the tenant day (clock P6 bounds expense dates to the last
 // 7 days): three days ago, inside the window, never a fixed old date.
 const DATE = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
 function realPosting(): AccountingPostingService {
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   return new AccountingPostingService(foundation);
 }
 
 async function auditDetails(db: Kysely<Database>, action: string): Promise<string> {
-  const rows = await sql<{ details: string }>`SELECT details FROM audit_logs WHERE action = ${action} ORDER BY id DESC LIMIT 1`.execute(db);
+  const rows = await sql<{
+    details: string;
+  }>`SELECT details FROM audit_logs WHERE action = ${action} ORDER BY id DESC LIMIT 1`.execute(db);
   assert.equal(rows.rows.length, 1, `one audit row for ${action}`);
   return rows.rows[0].details;
 }
@@ -91,8 +110,16 @@ async function main(): Promise<void> {
         CREATE TABLE audit_logs (id bigserial PRIMARY KEY, action text, details text, event_code text, target_tenant_id text, created_by bigint, impersonated_by bigint, tenant_id text, account_id text, created_at timestamptz DEFAULT NOW());
       `);
       await auditKeyMigration.up(db as never);
-      const service = new TreasuryService(db as never, new TransactionHelper(), new AuditService(db as never), realPosting());
-      const result = await service.createExpense({ title: 'كهرباء المكتب', amount: 75, note: '', date: DATE, requestKey: 'expense-key-001' } as never, ADMIN);
+      const service = new TreasuryService(
+        db as never,
+        new TransactionHelper(),
+        new AuditService(db as never),
+        realPosting(),
+      );
+      const result = await service.createExpense(
+        { title: 'كهرباء المكتب', amount: 75, note: '', date: DATE, requestKey: 'expense-key-001' } as never,
+        ADMIN,
+      );
       assert.equal(result.ok, true);
       const expense = await sql<{ id: number }>`SELECT id FROM expenses ORDER BY id DESC LIMIT 1`.execute(db);
       const expenseId = Number(expense.rows[0].id);
@@ -138,7 +165,13 @@ async function main(): Promise<void> {
         CREATE TABLE audit_logs (id bigserial PRIMARY KEY, action text, details text, event_code text, target_tenant_id text, created_by bigint, impersonated_by bigint, tenant_id text, account_id text, created_at timestamptz DEFAULT NOW());
       `);
       await auditKeyMigration.up(db as never);
-      const service = new ServicesService(db as never, new TransactionHelper(), new AuditService(db as never), {} as never, realPosting());
+      const service = new ServicesService(
+        db as never,
+        new TransactionHelper(),
+        new AuditService(db as never),
+        {} as never,
+        realPosting(),
+      );
       const result = await service.createService(
         { service: { name: 'توصيل طلبات', amount: 75, notes: '', date: DATE, paymentChannel: 'cash' } } as never,
         ADMIN,
@@ -146,10 +179,14 @@ async function main(): Promise<void> {
       assert.equal(result.ok, true);
       const svc = await sql<{ id: number }>`SELECT id FROM services ORDER BY id DESC LIMIT 1`.execute(db);
       const serviceId = Number(svc.rows[0].id);
-      const journal = await sql<{ id: number }>`SELECT id FROM journal_entries WHERE source_type = 'service' ORDER BY id DESC LIMIT 1`.execute(db);
+      const journal = await sql<{
+        id: number;
+      }>`SELECT id FROM journal_entries WHERE source_type = 'service' ORDER BY id DESC LIMIT 1`.execute(db);
       const journalEntryId = Number(journal.rows[0].id);
       assert.ok(journalEntryId > 0, 'a service journal entry was posted');
-      const txn = await sql<{ id: number }>`SELECT id FROM treasury_transactions WHERE reference_type = 'service' ORDER BY id DESC LIMIT 1`.execute(db);
+      const txn = await sql<{
+        id: number;
+      }>`SELECT id FROM treasury_transactions WHERE reference_type = 'service' ORDER BY id DESC LIMIT 1`.execute(db);
       const treasuryTransactionId = Number(txn.rows[0].id);
       assert.ok(treasuryTransactionId > 0, 'a cash treasury transaction was created');
       const details = await auditDetails(db, 'إضافة خدمة');
@@ -289,31 +326,63 @@ async function main(): Promise<void> {
           (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
       `);
       for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 4100, 4300, 5100, 5190, 5200, 5300, 7100]) {
-        await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-          [code, 't1', String(code), code === 1150 || code === 2120]);
+        await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+          code,
+          't1',
+          String(code),
+          code === 1150 || code === 2120,
+        ]);
       }
       await auditKeyMigration.up(db as never);
       await sql`INSERT INTO settings VALUES ('t1', 'currency', 'EGP')`.execute(db);
       await sql`INSERT INTO settings VALUES ('t1', 'managerPin', '"2468"')`.execute(db);
       const adminRecord = await createPasswordRecord('admin-pass');
-      await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${adminRecord.hash}, ${adminRecord.salt}, true)`.execute(db);
+      await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${adminRecord.hash}, ${adminRecord.salt}, true)`.execute(
+        db,
+      );
       await sql`INSERT INTO users VALUES (2, 't1', 'cashier', 1, 'cashier', '', '', true)`.execute(db);
       await sql`INSERT INTO cashier_shifts VALUES (1, 't1', 'a1', 'SHIFT-1', 2, 'open', 1, 0, NOW())`.execute(db);
-      await sql`INSERT INTO products VALUES (10, 't1', 'a1', 'Widget', '', '', '', 100, 0, 10, true, false, NOW())`.execute(db);
-      await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty, updated_at) VALUES ('t1', 'a1', 10, 1, 1, 100, 0, NOW())`.execute(db);
-      await sql`INSERT INTO sales VALUES (1, 't1', 'a1', 'S-1', NULL, 'posted', 1000, 1000, 0, 0, 0, 1000, false, 'cash', 'cash', 1, 1, 1, NOW())`.execute(db);
-      await sql`INSERT INTO sale_items VALUES (1, 't1', 'a1', 1, 10, 'Widget', 10, 100, 1000, 100, 1000, 0, 0, 10, 1, NULL)`.execute(db);
-      await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount, created_at) VALUES ('t1', 'a1', 1, 'cash', 1000, NOW())`.execute(db);
+      await sql`INSERT INTO products VALUES (10, 't1', 'a1', 'Widget', '', '', '', 100, 0, 10, true, false, NOW())`.execute(
+        db,
+      );
+      await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty, updated_at) VALUES ('t1', 'a1', 10, 1, 1, 100, 0, NOW())`.execute(
+        db,
+      );
+      await sql`INSERT INTO sales VALUES (1, 't1', 'a1', 'S-1', NULL, 'posted', 1000, 1000, 0, 0, 0, 1000, false, 'cash', 'cash', 1, 1, 1, NOW())`.execute(
+        db,
+      );
+      await sql`INSERT INTO sale_items VALUES (1, 't1', 'a1', 1, 10, 'Widget', 10, 100, 1000, 100, 1000, 0, 0, 10, 1, NULL)`.execute(
+        db,
+      );
+      await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount, created_at) VALUES ('t1', 'a1', 1, 'cash', 1000, NOW())`.execute(
+        db,
+      );
 
       const idempotencyStub = { check: async () => null, commitOperation: async () => undefined };
-      const service = new ReturnsService(db as any, new TransactionHelper(), new AuditService(db as never), realPosting() as any, idempotencyStub as any);
-      const result = await service.createReturn({
-        type: 'sale', invoiceId: 1, note: 'customer changed mind',
-        items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 1 }],
-        settlementMode: 'refund', refundMethod: 'cash',
-      } as never, CASHIER) as unknown as { ok: boolean };
+      const service = new ReturnsService(
+        db as any,
+        new TransactionHelper(),
+        new AuditService(db as never),
+        realPosting() as any,
+        idempotencyStub as any,
+      );
+      const result = (await service.createReturn(
+        {
+          type: 'sale',
+          invoiceId: 1,
+          note: 'customer changed mind',
+          items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 1 }],
+          settlementMode: 'refund',
+          refundMethod: 'cash',
+        } as never,
+        CASHIER,
+      )) as unknown as { ok: boolean };
       assert.equal(result.ok, true);
-      const doc = await sql<{ id: number; doc_no: string; total: string }>`SELECT id, doc_no, total FROM return_documents ORDER BY id DESC LIMIT 1`.execute(db);
+      const doc = await sql<{
+        id: number;
+        doc_no: string;
+        total: string;
+      }>`SELECT id, doc_no, total FROM return_documents ORDER BY id DESC LIMIT 1`.execute(db);
       const returnId = Number(doc.rows[0].id);
       const docNo = String(doc.rows[0].doc_no || '');
       assert.equal(Number(doc.rows[0].total), 100, 'return total is 100');

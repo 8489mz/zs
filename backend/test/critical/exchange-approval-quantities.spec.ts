@@ -65,7 +65,14 @@ WHAT THIS PINS, driving the REAL global pipe
   in validation.
 */
 
-const ADMIN = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const ADMIN = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 /* The exact PosInstantExchangeDialog submit payload shape: the new
    cart items first, then the negative return lines (qty: -qty,
@@ -88,7 +95,17 @@ function exchangePayload(): Record<string, unknown> {
     managerPin: '2468',
     note: 'استبدال فاتورة 101',
     items: [
-      { productId: 10, qty: 1, price: 40, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail', notes: '', modifiers: {}, serials: [] },
+      {
+        productId: 10,
+        qty: 1,
+        price: 40,
+        unitName: 'قطعة',
+        unitMultiplier: 1,
+        priceType: 'retail',
+        notes: '',
+        modifiers: {},
+        serials: [],
+      },
       { productId: 10, originalSaleItemId: 77, qty: -1, price: 0, serials: [] },
       { productId: 11, originalSaleItemId: 78, qty: -0.5, price: 0, serials: [] },
     ],
@@ -102,7 +119,9 @@ function normalPayload(): Record<string, unknown> {
     source: 'pos',
     paymentType: 'cash',
     paymentChannel: 'cash',
-    items: [{ productId: 10, qty: 1, price: 40, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail', serials: [] }],
+    items: [
+      { productId: 10, qty: 1, price: 40, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail', serials: [] },
+    ],
   };
 }
 
@@ -213,7 +232,12 @@ async function main(): Promise<void> {
   {
     const service = buildBareService();
     const payload = normalPayload() as unknown as UpsertSaleDto;
-    (payload.items as unknown as Array<Record<string, unknown>>).push({ productId: 10, qty: -1, price: 0, serials: [] });
+    (payload.items as unknown as Array<Record<string, unknown>>).push({
+      productId: 10,
+      qty: -1,
+      price: 0,
+      serials: [],
+    });
     await expectServiceCode(service.createSale(payload, ADMIN), 'EXCHANGE_SOURCE_REQUIRED', 'case E');
     console.log('  (E) service refuses negative lines without an exchange source passed');
   }
@@ -255,7 +279,11 @@ async function main(): Promise<void> {
       caught = err;
     }
     assert.ok(caught instanceof Error, 'case H: createSale must reach the transaction');
-    assert.equal((caught as Error).message, 'REACHED_SERVICE', `case H: expected the sentinel, got ${(caught as Error).message}`);
+    assert.equal(
+      (caught as Error).message,
+      'REACHED_SERVICE',
+      `case H: expected the sentinel, got ${(caught as Error).message}`,
+    );
     console.log('  (H) exchange approval reaches the service past both guards passed');
   }
 

@@ -70,24 +70,48 @@ import { TransactionHelper } from '../../src/database/helpers/transaction.helper
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const AUTH_T1 = {
-  userId: 1, sessionId: 'sess-spec', username: 'actor-1', role: 'admin',
-  permissions: [], tenantId: 't1', accountId: 'a1',
+  userId: 1,
+  sessionId: 'sess-spec',
+  username: 'actor-1',
+  role: 'admin',
+  permissions: [],
+  tenantId: 't1',
+  accountId: 'a1',
 } as unknown as AuthContext;
 const AUTH_T2 = {
-  userId: 1, sessionId: 'sess-spec', username: 'actor-1', role: 'admin',
-  permissions: [], tenantId: 't2', accountId: 'a1',
+  userId: 1,
+  sessionId: 'sess-spec',
+  username: 'actor-1',
+  role: 'admin',
+  permissions: [],
+  tenantId: 't2',
+  accountId: 'a1',
 } as unknown as AuthContext;
 const AUTH_T3 = {
-  userId: 1, sessionId: 'sess-spec', username: 'actor-1', role: 'admin',
-  permissions: [], tenantId: 't3', accountId: 'a1',
+  userId: 1,
+  sessionId: 'sess-spec',
+  username: 'actor-1',
+  role: 'admin',
+  permissions: [],
+  tenantId: 't3',
+  accountId: 'a1',
 } as unknown as AuthContext;
 
 type ExceptionRow = {
-  id: string; employeeId: string; employeeNo: string; employeeName: string;
-  workDate: string; exceptionType: string; durationMinutes: number;
-  approvedDurationMinutes: number | null; status: string;
-  estimatedAmount: number; hourlyRate: number; dailyRate: number;
-  policyDescription: string; delayPolicy: string;
+  id: string;
+  employeeId: string;
+  employeeNo: string;
+  employeeName: string;
+  workDate: string;
+  exceptionType: string;
+  durationMinutes: number;
+  approvedDurationMinutes: number | null;
+  status: string;
+  estimatedAmount: number;
+  hourlyRate: number;
+  dailyRate: number;
+  policyDescription: string;
+  delayPolicy: string;
 };
 type ExceptionsResult = {
   rows: ExceptionRow[];
@@ -96,37 +120,75 @@ type ExceptionsResult = {
 };
 
 type AttendanceRow = {
-  id: string; employeeId: string; employeeNo: string; employeeName: string;
-  departmentName: string; jobTitleName: string; compensationType: string;
-  hourlyRate: number; workDate: string; status: string;
-  checkInAt: string; checkOutAt: string; source: string; notes: string;
-  scheduledCheckInTime: string; scheduledCheckOutTime: string;
-  graceMinutes: number; departmentId: string;
-  expectedDailyHours: number | null; overtimePolicy: string;
-  approvedOvertimeMinutes: number; pendingOvertimeMinutes: number;
+  id: string;
+  employeeId: string;
+  employeeNo: string;
+  employeeName: string;
+  departmentName: string;
+  jobTitleName: string;
+  compensationType: string;
+  hourlyRate: number;
+  workDate: string;
+  status: string;
+  checkInAt: string;
+  checkOutAt: string;
+  source: string;
+  notes: string;
+  scheduledCheckInTime: string;
+  scheduledCheckOutTime: string;
+  graceMinutes: number;
+  departmentId: string;
+  expectedDailyHours: number | null;
+  overtimePolicy: string;
+  approvedOvertimeMinutes: number;
+  pendingOvertimeMinutes: number;
 };
 type AttendanceResult = {
   rows: AttendanceRow[];
   pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
   summary: {
-    totalItems: number; presentCount: number; absentCount: number; lateCount: number;
-    leaveCount?: number; unmarkedCount?: number; workedMinutes: number; payableMinutes: number;
+    totalItems: number;
+    presentCount: number;
+    absentCount: number;
+    lateCount: number;
+    leaveCount?: number;
+    unmarkedCount?: number;
+    workedMinutes: number;
+    payableMinutes: number;
   };
-  serverTime: string; serverTimezone: string; workDate: string;
-  from?: string; to?: string;
+  serverTime: string;
+  serverTimezone: string;
+  workDate: string;
+  from?: string;
+  to?: string;
 };
 
-async function listExceptions(hr: HrService, query: Record<string, unknown>, auth: AuthContext): Promise<ExceptionsResult> {
+async function listExceptions(
+  hr: HrService,
+  query: Record<string, unknown>,
+  auth: AuthContext,
+): Promise<ExceptionsResult> {
   return (await hr.listAttendanceExceptions(query, auth)) as unknown as ExceptionsResult;
 }
-async function listAttendance(hr: HrService, query: Record<string, unknown>, auth: AuthContext): Promise<AttendanceResult> {
+async function listAttendance(
+  hr: HrService,
+  query: Record<string, unknown>,
+  auth: AuthContext,
+): Promise<AttendanceResult> {
   return (await hr.listAttendance(query, auth)) as unknown as AttendanceResult;
 }
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const hr = new HrService(db, new TransactionHelper(), { log: async () => {} } as never, {} as never, {} as never, undefined);
+  const hr = new HrService(
+    db,
+    new TransactionHelper(),
+    { log: async () => {} } as never,
+    {} as never,
+    {} as never,
+    undefined,
+  );
 
   try {
     await pg.exec(`SET TIME ZONE 'UTC'`);
@@ -251,7 +313,11 @@ async function main(): Promise<void> {
     // 8. Date / month / employee / department filters.
     const exDate = await listExceptions(hr, { date: '2026-11-10' }, AUTH_T1);
     assert.equal(exDate.pagination.totalItems, 2, 'date 2026-11-10 must hold 2 rows');
-    assert.deepEqual(exDate.rows.map((r) => r.id), ['1', '5'], 'date rows must be id 1 then id 5 (name order)');
+    assert.deepEqual(
+      exDate.rows.map((r) => r.id),
+      ['1', '5'],
+      'date rows must be id 1 then id 5 (name order)',
+    );
     const exMonthEmpty = await listExceptions(hr, { month: '2026-10' }, AUTH_T1);
     assert.equal(exMonthEmpty.pagination.totalItems, 0, 'month 2026-10 must hold 0 rows');
     assert.equal(exMonthEmpty.pagination.totalPages, 1, 'empty month totalPages must be 1');
@@ -416,7 +482,11 @@ async function main(): Promise<void> {
     // fallback, so Karim (scheduled 08:00-08:00 -> 1440 expected in the
     // single-day engine, payable 720) is capped at 480 there — a 240
     // difference that predates this package and is out of its scope.
-    assert.equal(atRange.summary.payableMinutes, 4230, 'range payableMinutes must be 4230 (range approximation, Karim capped at 480)');
+    assert.equal(
+      atRange.summary.payableMinutes,
+      4230,
+      'range payableMinutes must be 4230 (range approximation, Karim capped at 480)',
+    );
     assert.equal(atRange.summary.presentCount, 9, 'range presentCount must be 9');
     assert.equal(atRange.summary.absentCount, 1, 'range absentCount must be 1');
     assert.equal(atRange.from, '2026-11-24', 'range from must echo');

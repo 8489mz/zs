@@ -54,20 +54,38 @@ async function main() {
 
     // 1. Sequential, tenant-scoped numbers inside transactions.
     const first = await db.transaction().execute(async (trx) => {
-      const docNo = await generateDailySequenceNumber(trx as any, db, 'van_load_requisitions', 'doc_no', 'REQ', 't1', FIXED_DATE);
+      const docNo = await generateDailySequenceNumber(
+        trx as any,
+        db,
+        'van_load_requisitions',
+        'doc_no',
+        'REQ',
+        't1',
+        FIXED_DATE,
+      );
       await (trx as any).insertInto('van_load_requisitions').values({ tenant_id: 't1', doc_no: docNo }).execute();
       return docNo;
     });
     assert.equal(first, 'REQ-261101-0001');
     const second = await db.transaction().execute(async (trx) => {
-      const docNo = await generateDailySequenceNumber(trx as any, db, 'van_load_requisitions', 'doc_no', 'REQ', 't1', FIXED_DATE);
+      const docNo = await generateDailySequenceNumber(
+        trx as any,
+        db,
+        'van_load_requisitions',
+        'doc_no',
+        'REQ',
+        't1',
+        FIXED_DATE,
+      );
       await (trx as any).insertInto('van_load_requisitions').values({ tenant_id: 't1', doc_no: docNo }).execute();
       return docNo;
     });
     assert.equal(second, 'REQ-261101-0002');
-    const otherTenant = await db.transaction().execute(async (trx) =>
-      generateDailySequenceNumber(trx as any, db, 'van_load_requisitions', 'doc_no', 'REQ', 't2', FIXED_DATE),
-    );
+    const otherTenant = await db
+      .transaction()
+      .execute(async (trx) =>
+        generateDailySequenceNumber(trx as any, db, 'van_load_requisitions', 'doc_no', 'REQ', 't2', FIXED_DATE),
+      );
     assert.equal(otherTenant, 'REQ-261101-0001');
     assert.equal(await countRequisitions(db), 2);
 
@@ -98,7 +116,15 @@ async function main() {
           .values({ tenant_id: 't1', doc_no: tempDocNo })
           .returning(['id'])
           .execute();
-        const docNo = await generateDailySequenceNumber(trx as any, db, 'van_load_requisitions', 'doc_no', 'REQ', 't1', FIXED_DATE);
+        const docNo = await generateDailySequenceNumber(
+          trx as any,
+          db,
+          'van_load_requisitions',
+          'doc_no',
+          'REQ',
+          't1',
+          FIXED_DATE,
+        );
         await (trx as any)
           .updateTable('van_load_requisitions')
           .set({ doc_no: docNo })

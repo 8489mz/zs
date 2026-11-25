@@ -1,5 +1,8 @@
 import { strict as assert } from 'node:assert';
-import { SettingsBackupService, isTenantBackupDataTable } from '../../src/modules/settings/services/settings-backup.service';
+import {
+  SettingsBackupService,
+  isTenantBackupDataTable,
+} from '../../src/modules/settings/services/settings-backup.service';
 import { PLATFORM_TENANT_TABLES } from '../../src/core/tenant-transfer/tenant-package';
 
 function run(): void {

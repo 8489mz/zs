@@ -113,8 +113,7 @@ function makeGuard(): PermissionsGuard {
     {
       /* Models the plan matrix: only plan_ultimate / plan_omnichannel carry
        * the deliveryReps feature; plan_basic (and plan_pro) do not. */
-      hasFeature: (planId: string | undefined) =>
-        planId === 'plan_ultimate' || planId === 'plan_omnichannel',
+      hasFeature: (planId: string | undefined) => planId === 'plan_ultimate' || planId === 'plan_omnichannel',
     } as never,
     {} as never,
   );
@@ -158,7 +157,7 @@ async function run(): Promise<void> {
     assert.equal(
       Reflect.getMetadata(REQUIRED_FEATURE_KEY, VanSalesAdminController),
       'deliveryReps',
-      'VanSalesAdminController must carry @RequireFeature(\'deliveryReps\') at class level',
+      "VanSalesAdminController must carry @RequireFeature('deliveryReps') at class level",
     );
   }
 
@@ -224,7 +223,11 @@ async function run(): Promise<void> {
   /* Phase 4: a deliveryRepsAdmin holder passes the 63 supervisor routes
    * (payroll push still needs its HR gate). */
   {
-    const supervisor = authContext({ permissions: ['deliveryReps', 'deliveryRepsAdmin'], role: 'admin', username: 'supervisor' });
+    const supervisor = authContext({
+      permissions: ['deliveryReps', 'deliveryRepsAdmin'],
+      role: 'admin',
+      username: 'supervisor',
+    });
     for (const method of SUPERVISOR_METHODS) {
       assert.equal(
         guard.canActivate(guardContext(supervisor, method)),

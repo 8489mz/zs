@@ -162,7 +162,11 @@ async function main(): Promise<void> {
       ('t-cairo', 1, 5, 1, '2026-01-14', 1000, 0, 'pending', ''),
       ('t-cairo', 1, 5, 2, '2026-01-16', 1000, 0, 'pending', '')`.execute(db);
     const schedulesService = new SupplierPaymentSchedulesService(
-      db, {} as never, {} as never, {} as never, {} as never,
+      db,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
     invalidateTenantTimezoneCache();
     freezeAt(FROZEN_ISO);
@@ -237,7 +241,9 @@ async function main(): Promise<void> {
     } finally {
       unfreeze();
     }
-    console.log('✓ B2 rate card valid until 2026-01-14 reads expired at 00:30 Cairo on 15 Jan; the 20 Jan card stays active');
+    console.log(
+      '✓ B2 rate card valid until 2026-01-14 reads expired at 00:30 Cairo on 15 Jan; the 20 Jan card stays active',
+    );
 
     // ---- Part C: pure helpers (no DB) ----
     assert.equal(normalizeDateOnly(new Date('2026-01-15T00:00:00.000Z')), '2026-01-15');
@@ -263,14 +269,34 @@ async function main(): Promise<void> {
 
     const recent = detectDuplicateBills(
       { supplierId: 7, supplierInvoiceNo: 'INV-100', total: 500, date: '2026-01-15' },
-      [{ id: 1, docNo: 'P-1', supplierId: 7, supplierInvoiceNo: 'INV-999', total: 500, createdAt: '2026-01-10T12:00:00Z', status: 'posted' }],
+      [
+        {
+          id: 1,
+          docNo: 'P-1',
+          supplierId: 7,
+          supplierInvoiceNo: 'INV-999',
+          total: 500,
+          createdAt: '2026-01-10T12:00:00Z',
+          status: 'posted',
+        },
+      ],
     );
     assert.equal(recent.hasDuplicates, true);
     assert.equal(recent.matches[0]?.reason, 'identical_amount_recent');
     assert.equal(recent.matches[0]?.severity, 'warning');
     const stale = detectDuplicateBills(
       { supplierId: 7, supplierInvoiceNo: 'INV-100', total: 500, date: '2026-01-15' },
-      [{ id: 1, docNo: 'P-1', supplierId: 7, supplierInvoiceNo: 'INV-999', total: 500, createdAt: '2025-12-01T12:00:00Z', status: 'posted' }],
+      [
+        {
+          id: 1,
+          docNo: 'P-1',
+          supplierId: 7,
+          supplierInvoiceNo: 'INV-999',
+          total: 500,
+          createdAt: '2025-12-01T12:00:00Z',
+          status: 'posted',
+        },
+      ],
     );
     assert.equal(stale.hasDuplicates, false);
     console.log('✓ C4 detectDuplicateBills decides on instants inside the 30-day window, not on day keys');

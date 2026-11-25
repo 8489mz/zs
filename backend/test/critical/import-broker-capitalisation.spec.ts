@@ -142,42 +142,83 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function seedShipment(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', container_number: 'C1', supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: 'proj-1',
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'sh-1-item', tenant_id: 't1', shipment_id: 'sh-1', product_id: 1,
-    quantity: 10, factory_unit_price_usd: 50, shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      container_number: 'C1',
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'sh-1-item',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 1,
+      quantity: 10,
+      factory_unit_price_usd: 50,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function postReceipt(db: Kysely<Database>, service: any): Promise<number> {
-  await service.updateShipmentCosts('t1', 1, 'sh-1', { status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10 });
-  const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+  await service.updateShipmentCosts('t1', 1, 'sh-1', {
+    status: 'Arrived',
+    exchangeRateAtArrival: 50,
+    receiptLocationId: 10,
+  });
+  const receipt: any = await (db as any)
+    .selectFrom('import_inventory_receipts')
+    .selectAll()
+    .where('shipment_id', '=', 'sh-1')
+    .executeTakeFirstOrThrow();
   return Number(receipt.id);
 }
 
 async function disburse(db: Kysely<Database>, service: any, amount: number, shipmentId?: string): Promise<any> {
   const advance = await service.disburseBrokerAdvance('t1', 1, {
-    brokerId: 'br-1', advanceNo: `ADV-${Math.random().toString(36).slice(2, 8)}`, amountEgp: amount,
-    projectId: 'proj-1', shipmentId: shipmentId || undefined, paymentMethod: 'bank_transfer', treasuryAccountId: 24,
+    brokerId: 'br-1',
+    advanceNo: `ADV-${Math.random().toString(36).slice(2, 8)}`,
+    amountEgp: amount,
+    projectId: 'proj-1',
+    shipmentId: shipmentId || undefined,
+    paymentMethod: 'bank_transfer',
+    treasuryAccountId: 24,
   });
   return advance;
 }
 
 async function liquidate(service: any, advanceId: string, dto: any): Promise<any> {
   return service.liquidateBrokerExpenses('t1', 1, {
-    brokerId: 'br-1', advanceId, projectId: 'proj-1', receiptNo: dto.receiptNo,
-    category: dto.category, amountEgp: dto.amountEgp,
-    shipmentId: dto.shipmentId, isCapitalized: dto.isCapitalized, isRefundableVat: dto.isRefundableVat,
+    brokerId: 'br-1',
+    advanceId,
+    projectId: 'proj-1',
+    receiptNo: dto.receiptNo,
+    category: dto.category,
+    amountEgp: dto.amountEgp,
+    shipmentId: dto.shipmentId,
+    isCapitalized: dto.isCapitalized,
+    isRefundableVat: dto.isRefundableVat,
     notes: dto.notes,
   });
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -193,16 +234,35 @@ async function readProduct(db: Kysely<Database>): Promise<any> {
   return (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
 }
 
-async function insertApproval(db: Kysely<Database>, id: string, actionType: string, referenceId: string, payload: any): Promise<void> {
-  await db.insertInto('import_approval_requests' as never).values({
-    id, tenant_id: 't1', module: 'import', action_type: actionType,
-    reference_id: referenceId, requested_by: 99, created_by: 99, status: 'approved',
-    request_payload: JSON.stringify(payload),
-  } as never).execute();
+async function insertApproval(
+  db: Kysely<Database>,
+  id: string,
+  actionType: string,
+  referenceId: string,
+  payload: any,
+): Promise<void> {
+  await db
+    .insertInto('import_approval_requests' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      module: 'import',
+      action_type: actionType,
+      reference_id: referenceId,
+      requested_by: 99,
+      created_by: 99,
+      status: 'approved',
+      request_payload: JSON.stringify(payload),
+    } as never)
+    .execute();
 }
 
 async function approvalStatus(db: Kysely<Database>, id: string): Promise<string> {
-  const row: any = await (db as any).selectFrom('import_approval_requests').select('status').where('id', '=', id).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom('import_approval_requests')
+    .select('status')
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
   return row.status;
 }
 
@@ -221,20 +281,31 @@ async function main(): Promise<void> {
       const advance = await disburse(db, service, 10000, 'sh-1');
       const journalsBefore = await countRows(db, 'journal_entries');
       const expensesBefore = await countRows(db, 'expenses');
-      const expense = await liquidate(service, advance.id, { receiptNo: 'RC-1', category: 'customs_duty', amountEgp: 5000 });
+      const expense = await liquidate(service, advance.id, {
+        receiptNo: 'RC-1',
+        category: 'customs_duty',
+        amountEgp: 5000,
+      });
       assert.equal(expense.is_verified, false, 'Liquidation never self-verifies');
       assert.equal(Number(expense.created_by), 1, 'The liquidator is recorded for maker-checker');
       assert.equal(expense.capitalization_state, 'folded', 'Pre-receipt capitalisation folds');
       const shipment = await readShipment(db);
       assert.equal(Number(shipment.customs_cost_egp), 5000, 'The fold increments the customs bucket');
-      const link: any = await (db as any).selectFrom('import_broker_capitalizations').selectAll().executeTakeFirstOrThrow();
+      const link: any = await (db as any)
+        .selectFrom('import_broker_capitalizations')
+        .selectAll()
+        .executeTakeFirstOrThrow();
       assert.equal(link.state, 'folded');
       assert.equal(link.cost_bucket, 'customs_cost_egp');
       assert.equal(Number(link.amount_egp), 5000);
       assert.equal(link.broker_expense_id, expense.id);
       assert.equal(await countRows(db, 'journal_entries'), journalsBefore, 'The fold posts no journal');
       assert.equal(await countRows(db, 'expenses'), expensesBefore, 'The fold creates no expenses row');
-      const settled: any = await (db as any).selectFrom('import_broker_advances').selectAll().where('id', '=', advance.id).executeTakeFirstOrThrow();
+      const settled: any = await (db as any)
+        .selectFrom('import_broker_advances')
+        .selectAll()
+        .where('id', '=', advance.id)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(settled.settled_amount_egp), 5000, 'Advance bookkeeping still settles');
       assert.equal(Number(settled.remaining_amount_egp), 5000);
     } finally {
@@ -250,18 +321,34 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db);
       const advance = await disburse(db, service, 10000, 'sh-1');
-      const expense = await liquidate(service, advance.id, { receiptNo: 'RC-1', category: 'customs_duty', amountEgp: 5000 });
+      const expense = await liquidate(service, advance.id, {
+        receiptNo: 'RC-1',
+        category: 'customs_duty',
+        amountEgp: 5000,
+      });
       await expectReject(
         service.updateShipmentCosts('t1', 1, 'sh-1', { customsCostEgp: 4000 }),
         /IMPORT_BROKER_CAPITALIZATION_FLOOR/,
         'Lowering the bucket below the folded sum must fail closed',
       );
-      assert.equal(Number((await readShipment(db)).customs_cost_egp), 5000, 'The rejected floor write leaves the bucket untouched');
+      assert.equal(
+        Number((await readShipment(db)).customs_cost_egp),
+        5000,
+        'The rejected floor write leaves the bucket untouched',
+      );
       await service.updateShipmentCosts('t1', 1, 'sh-1', { customsCostEgp: 5000 });
-      assert.equal(Number((await readShipment(db)).customs_cost_egp), 5000, 'Setting the bucket at the folded sum is allowed');
+      assert.equal(
+        Number((await readShipment(db)).customs_cost_egp),
+        5000,
+        'Setting the bucket at the folded sum is allowed',
+      );
 
       const receiptId = await postReceipt(db, service);
-      const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('id', '=', receiptId).executeTakeFirstOrThrow();
+      const receipt: any = await (db as any)
+        .selectFrom('import_inventory_receipts')
+        .selectAll()
+        .where('id', '=', receiptId)
+        .executeTakeFirstOrThrow();
       const lines = await journalLines(db, Number(receipt.journal_entry_id));
       assert.equal(lines.length, 3, 'Receipt journal: inventory debit + payable credit + advance credit');
       const inventoryLine = lines.find((l) => Number(l.account_id) === 21);
@@ -276,9 +363,16 @@ async function main(): Promise<void> {
       assert.equal(ledger.length, 1, 'One subledger movement for the receipt');
       assert.equal(Number(ledger[0].amount), 25000, 'The subledger rises by the payable only: profit equals GL');
       assert.equal(Number(ledger[0].balance_after), 25000);
-      const link: any = await (db as any).selectFrom('import_broker_capitalizations').selectAll().executeTakeFirstOrThrow();
+      const link: any = await (db as any)
+        .selectFrom('import_broker_capitalizations')
+        .selectAll()
+        .executeTakeFirstOrThrow();
       assert.equal(link.state, 'consumed', 'The fold is consumed by the receipt posting');
-      const expenseAfter: any = await (db as any).selectFrom('import_broker_expenses').selectAll().where('id', '=', expense.id).executeTakeFirstOrThrow();
+      const expenseAfter: any = await (db as any)
+        .selectFrom('import_broker_expenses')
+        .selectAll()
+        .where('id', '=', expense.id)
+        .executeTakeFirstOrThrow();
       assert.equal(expenseAfter.capitalization_state, 'consumed', 'The expense row agrees with the link row');
       assert.equal(Number((await readProduct(db)).cost_price), 2500, 'WAC blends 10 @ 2000 with 10 @ 3000 landed');
       const lot: any = await (db as any).selectFrom('import_inventory_lots').selectAll().executeTakeFirstOrThrow();
@@ -300,7 +394,11 @@ async function main(): Promise<void> {
       assert.equal(Number((await readProduct(db)).cost_price), 2250, 'Baseline WAC before revaluation');
       const advance = await disburse(db, service, 10000, 'sh-1');
       const journalsBefore = await countRows(db, 'journal_entries');
-      const expense = await liquidate(service, advance.id, { receiptNo: 'RC-2', category: 'customs_duty', amountEgp: 4000 });
+      const expense = await liquidate(service, advance.id, {
+        receiptNo: 'RC-2',
+        category: 'customs_duty',
+        amountEgp: 4000,
+      });
       assert.equal(expense.capitalization_state, 'revalued');
       assert.equal(Number((await readProduct(db)).cost_price), 2450, 'WAC spreads 4000 over the 20-unit company pool');
       const lot: any = await (db as any).selectFrom('import_inventory_lots').selectAll().executeTakeFirstOrThrow();
@@ -310,24 +408,50 @@ async function main(): Promise<void> {
       const shipment = await readShipment(db);
       assert.equal(Number(shipment.late_expenses_total_egp), 4000, 'Shipment late totals record the revaluation');
       assert.equal(Number(shipment.late_inventory_adjustment_egp), 4000);
-      const event: any = await (db as any).selectFrom('import_late_expense_events').selectAll().executeTakeFirstOrThrow();
+      const event: any = await (db as any)
+        .selectFrom('import_late_expense_events')
+        .selectAll()
+        .executeTakeFirstOrThrow();
       assert.equal(Number(event.total_amount_egp), 4000);
       assert.equal(Number(event.inventory_amount_egp), 4000);
       assert.equal(Number(event.cogs_amount_egp), 0);
       assert.equal(event.broker_expense_id, expense.id, 'The event links back to the broker expense');
       assert.equal(await countRows(db, 'journal_entries'), journalsBefore + 1, 'Exactly one revaluation journal');
-      const entry: any = await (db as any).selectFrom('journal_entries').selectAll().orderBy('id', 'desc').executeTakeFirstOrThrow();
-      assert.equal(entry.source_type, 'import_broker_capitalization', 'The revaluation journal is not a broker-expense journal');
+      const entry: any = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .orderBy('id', 'desc')
+        .executeTakeFirstOrThrow();
+      assert.equal(
+        entry.source_type,
+        'import_broker_capitalization',
+        'The revaluation journal is not a broker-expense journal',
+      );
       const lines = await journalLines(db, Number(entry.id));
       assert.equal(lines.length, 2);
       assert.equal(Number(lines.find((l) => Number(l.account_id) === 21).debit), 4000);
-      assert.equal(Number(lines.find((l) => Number(l.account_id) === 25).credit), 4000, 'The revaluation relieves the advance asset');
-      const brokerJournals: any[] = await (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', 'import_broker_expense').execute();
+      assert.equal(
+        Number(lines.find((l) => Number(l.account_id) === 25).credit),
+        4000,
+        'The revaluation relieves the advance asset',
+      );
+      const brokerJournals: any[] = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('source_type', '=', 'import_broker_expense')
+        .execute();
       assert.equal(brokerJournals.length, 0, 'No separate lump-sum broker journal exists for the capitalised portion');
-      const link: any = await (db as any).selectFrom('import_broker_capitalizations').selectAll().executeTakeFirstOrThrow();
+      const link: any = await (db as any)
+        .selectFrom('import_broker_capitalizations')
+        .selectAll()
+        .executeTakeFirstOrThrow();
       assert.equal(link.state, 'revalued');
       assert.equal(Number(link.late_expense_event_id), Number(event.id));
-      const expenseAfter: any = await (db as any).selectFrom('import_broker_expenses').selectAll().where('id', '=', expense.id).executeTakeFirstOrThrow();
+      const expenseAfter: any = await (db as any)
+        .selectFrom('import_broker_expenses')
+        .selectAll()
+        .where('id', '=', expense.id)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(expenseAfter.late_expense_event_id), Number(event.id), 'The expense row links to its event');
     } finally {
       await db.destroy();
@@ -341,11 +465,20 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db);
       const advance = await disburse(db, service, 5000, 'sh-1');
-      const expense = await liquidate(service, advance.id, { receiptNo: 'RC-VAT', category: 'vat', amountEgp: 1000, isRefundableVat: true });
+      const expense = await liquidate(service, advance.id, {
+        receiptNo: 'RC-VAT',
+        category: 'vat',
+        amountEgp: 1000,
+        isRefundableVat: true,
+      });
       assert.equal(expense.capitalization_state, 'vat_asset');
       assert.equal(Number((await readShipment(db)).customs_cost_egp), 0, 'VAT never folds into a cost bucket');
       assert.equal(await countRows(db, 'import_broker_capitalizations'), 0, 'No capitalisation link for a tax asset');
-      const entries: any[] = await (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', 'import_broker_expense').execute();
+      const entries: any[] = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('source_type', '=', 'import_broker_expense')
+        .execute();
       assert.equal(entries.length, 1);
       const lines = await journalLines(db, Number(entries[0].id));
       assert.equal(Number(lines.find((l) => Number(l.account_id) === 26).debit), 1000, 'VAT-receivable debited');
@@ -362,10 +495,23 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db);
       const advance = await disburse(db, service, 5000, 'sh-1');
-      const expense = await liquidate(service, advance.id, { receiptNo: 'RC-EXP', category: 'broker_fee', amountEgp: 800, isCapitalized: false });
+      const expense = await liquidate(service, advance.id, {
+        receiptNo: 'RC-EXP',
+        category: 'broker_fee',
+        amountEgp: 800,
+        isCapitalized: false,
+      });
       assert.equal(expense.capitalization_state, 'expensed');
-      assert.equal(await countRows(db, 'import_broker_capitalizations'), 0, 'No capitalisation link for a period expense');
-      const entries: any[] = await (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', 'import_broker_expense').execute();
+      assert.equal(
+        await countRows(db, 'import_broker_capitalizations'),
+        0,
+        'No capitalisation link for a period expense',
+      );
+      const entries: any[] = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('source_type', '=', 'import_broker_expense')
+        .execute();
       assert.equal(entries.length, 1);
       const lines = await journalLines(db, Number(entries[0].id));
       assert.equal(Number(lines.find((l) => Number(l.account_id) === 23).debit), 800, 'COGS debited');
@@ -389,7 +535,11 @@ async function main(): Promise<void> {
         'A capitalised expense with no shipment must fail closed',
       );
       assert.equal(await countRows(db, 'import_broker_expenses'), 0, 'No expense row is written');
-      const after: any = await (db as any).selectFrom('import_broker_advances').selectAll().where('id', '=', advance.id).executeTakeFirstOrThrow();
+      const after: any = await (db as any)
+        .selectFrom('import_broker_advances')
+        .selectAll()
+        .where('id', '=', advance.id)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(after.remaining_amount_egp), 10000, 'The advance is untouched by a rejected liquidation');
     } finally {
       await db.destroy();
@@ -410,7 +560,12 @@ async function main(): Promise<void> {
         "'other' has no cost bucket before receipt",
       );
       await expectReject(
-        liquidate(service, advance.id, { receiptNo: 'RC-VATNR', category: 'vat', amountEgp: 1000, isRefundableVat: false }),
+        liquidate(service, advance.id, {
+          receiptNo: 'RC-VATNR',
+          category: 'vat',
+          amountEgp: 1000,
+          isRefundableVat: false,
+        }),
         /IMPORT_BROKER_EXPENSE_NO_BUCKET/,
         'Non-refundable VAT has no bucket before receipt',
       );
@@ -432,23 +587,49 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      await db.insertInto('users').values([
-        { id: 1, tenant_id: 't1', role: 'admin', is_active: true },
-        { id: 2, tenant_id: 't1', role: 'admin', is_active: true },
-      ] as any).execute();
+      await db
+        .insertInto('users')
+        .values([
+          { id: 1, tenant_id: 't1', role: 'admin', is_active: true },
+          { id: 2, tenant_id: 't1', role: 'admin', is_active: true },
+        ] as any)
+        .execute();
       await seedShipment(db);
       const advance = await disburse(db, service, 10000, 'sh-1');
-      const expenseA = await liquidate(service, advance.id, { receiptNo: 'RC-V1', category: 'broker_fee', amountEgp: 1000, isCapitalized: false });
-      const expenseB = await liquidate(service, advance.id, { receiptNo: 'RC-V2', category: 'broker_fee', amountEgp: 2000, isCapitalized: false });
-      await insertApproval(db, 'tok-1', 'broker_expense_verification', expenseA.id, { brokerExpenseId: expenseA.id, amount: 1000 });
-      await insertApproval(db, 'tok-2', 'broker_expense_verification', expenseA.id, { brokerExpenseId: expenseA.id, amount: 1000 });
-      await insertApproval(db, 'tok-3', 'broker_expense_verification', expenseB.id, { brokerExpenseId: expenseB.id, amount: 2000 });
+      const expenseA = await liquidate(service, advance.id, {
+        receiptNo: 'RC-V1',
+        category: 'broker_fee',
+        amountEgp: 1000,
+        isCapitalized: false,
+      });
+      const expenseB = await liquidate(service, advance.id, {
+        receiptNo: 'RC-V2',
+        category: 'broker_fee',
+        amountEgp: 2000,
+        isCapitalized: false,
+      });
+      await insertApproval(db, 'tok-1', 'broker_expense_verification', expenseA.id, {
+        brokerExpenseId: expenseA.id,
+        amount: 1000,
+      });
+      await insertApproval(db, 'tok-2', 'broker_expense_verification', expenseA.id, {
+        brokerExpenseId: expenseA.id,
+        amount: 1000,
+      });
+      await insertApproval(db, 'tok-3', 'broker_expense_verification', expenseB.id, {
+        brokerExpenseId: expenseB.id,
+        amount: 2000,
+      });
       await expectReject(
         service.verifyBrokerExpense('t1', 1, expenseA.id, { approvalRequestId: 'tok-1' }),
         /Maker-Checker/,
         'The liquidator must not verify their own expense',
       );
-      assert.equal(await approvalStatus(db, 'tok-1'), 'approved', 'The rejected self-verification does not consume the token');
+      assert.equal(
+        await approvalStatus(db, 'tok-1'),
+        'approved',
+        'The rejected self-verification does not consume the token',
+      );
       await expectReject(
         service.verifyBrokerExpense('t1', 2, expenseB.id, { approvalRequestId: 'tok-2' }),
         /مرتبط بمرجع/,
@@ -480,14 +661,21 @@ async function main(): Promise<void> {
       await seedShipment(db);
       await postReceipt(db, service);
       const advance = await disburse(db, service, 3000, 'sh-1');
-      const expense = await liquidate(service, advance.id, { receiptNo: 'RC-CL', category: 'customs_duty', amountEgp: 3000 });
+      const expense = await liquidate(service, advance.id, {
+        receiptNo: 'RC-CL',
+        category: 'customs_duty',
+        amountEgp: 3000,
+      });
       await insertApproval(db, 'tok-close', 'project_closure', 'proj-1', {});
       await expectReject(
         service.closeProject('t1', 1, 'proj-1', 'tok-close'),
         /غير متحقق/,
         'An unverified broker expense blocks project closure',
       );
-      await insertApproval(db, 'tok-verify', 'broker_expense_verification', expense.id, { brokerExpenseId: expense.id, amount: 3000 });
+      await insertApproval(db, 'tok-verify', 'broker_expense_verification', expense.id, {
+        brokerExpenseId: expense.id,
+        amount: 3000,
+      });
       await service.verifyBrokerExpense('t1', 2, expense.id, { approvalRequestId: 'tok-verify' });
       await insertApproval(db, 'tok-close-2', 'project_closure', 'proj-1', {});
       await expectReject(

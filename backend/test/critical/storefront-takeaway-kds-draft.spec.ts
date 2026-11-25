@@ -52,18 +52,36 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('tenants').values({
-    id: TENANT, slug: SLUG, activity_type: 'restaurant', plan_id: 'plan_basic',
-    extra_features: '["storefront"]', owner_phone: null,
-  }).execute();
+  await anyDb
+    .insertInto('tenants')
+    .values({
+      id: TENANT,
+      slug: SLUG,
+      activity_type: 'restaurant',
+      plan_id: 'plan_basic',
+      extra_features: '["storefront"]',
+      owner_phone: null,
+    })
+    .execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' }).execute();
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: `${TENANT}:main`, name: 'Product 101',
-    stock_qty: 100, cost_price: 10, retail_price: 50,
-    wholesale_price: 50, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      name: 'Product 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 50,
+      wholesale_price: 50,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): StorefrontService {
@@ -72,24 +90,30 @@ function buildService(db: Kysely<Database>): StorefrontService {
 }
 
 async function readOrder(db: Kysely<Database>, orderId: number): Promise<any> {
-  return (db as any).selectFrom('online_orders').selectAll()
-    .where('id', '=', orderId).executeTakeFirstOrThrow();
+  return (db as any).selectFrom('online_orders').selectAll().where('id', '=', orderId).executeTakeFirstOrThrow();
 }
 
 async function readDraftSale(db: Kysely<Database>, saleId: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll()
-    .where('id', '=', saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function countSales(db: Kysely<Database>): Promise<number> {
-  const rows = await (db as any).selectFrom('sales').select('id')
-    .where('tenant_id', '=', TENANT).execute();
+  const rows = await (db as any).selectFrom('sales').select('id').where('tenant_id', '=', TENANT).execute();
   return rows.length;
 }
 
 async function readDraftItems(db: Kysely<Database>, saleId: number): Promise<any[]> {
-  return (db as any).selectFrom('sale_items').selectAll()
-    .where('sale_id', '=', saleId).where('tenant_id', '=', TENANT).execute();
+  return (db as any)
+    .selectFrom('sale_items')
+    .selectAll()
+    .where('sale_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .execute();
 }
 
 async function main(): Promise<void> {

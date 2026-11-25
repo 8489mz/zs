@@ -80,8 +80,12 @@ async function main(): Promise<void> {
     await anyDb
       .insertInto('tenants')
       .values({
-        id: TENANT, plan_id: 'plan_basic', extra_features: '[]',
-        activity_type: 'ecommerce', status: 'active', trial_ends_at: null,
+        id: TENANT,
+        plan_id: 'plan_basic',
+        extra_features: '[]',
+        activity_type: 'ecommerce',
+        status: 'active',
+        trial_ends_at: null,
       })
       .execute();
 
@@ -94,9 +98,14 @@ async function main(): Promise<void> {
       const inserted = await anyDb
         .insertInto('products')
         .values({
-          name: 'Spec Product', barcode: 'SPEC-1', retail_price: 150,
-          stock_qty: stock, reserved_qty: 0,
-          tenant_id: TENANT, account_id: ACCOUNT, is_active: true,
+          name: 'Spec Product',
+          barcode: 'SPEC-1',
+          retail_price: 150,
+          stock_qty: stock,
+          reserved_qty: 0,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          is_active: true,
         })
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -104,15 +113,24 @@ async function main(): Promise<void> {
       await anyDb
         .insertInto('product_location_stock')
         .values({
-          product_id: productId, branch_id: null, location_id: null,
-          qty: stock, reserved_qty: 0, tenant_id: TENANT, account_id: ACCOUNT,
+          product_id: productId,
+          branch_id: null,
+          location_id: null,
+          qty: stock,
+          reserved_qty: 0,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
         })
         .execute();
       return productId;
     }
 
     async function readStock(productId: number): Promise<{ global: number; balance: number }> {
-      const product = await anyDb.selectFrom('products').select(['stock_qty']).where('id', '=', productId).executeTakeFirstOrThrow();
+      const product = await anyDb
+        .selectFrom('products')
+        .select(['stock_qty'])
+        .where('id', '=', productId)
+        .executeTakeFirstOrThrow();
       const balance = await anyDb
         .selectFrom('product_location_stock')
         .select(['qty'])

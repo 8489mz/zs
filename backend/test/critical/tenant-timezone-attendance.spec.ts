@@ -1,9 +1,5 @@
 import { strict as assert } from 'node:assert';
-import {
-  isValidTimezone,
-  todayTenantDate,
-  formatTimeInTimezone,
-} from '../../src/common/utils/tenant-timezone.util';
+import { isValidTimezone, todayTenantDate, formatTimeInTimezone } from '../../src/common/utils/tenant-timezone.util';
 import {
   AttendancePunchError,
   isServerAnchoredPunch,
@@ -59,7 +55,7 @@ function run(): void {
       useServerTime: true,
       punchAction: 'check_in',
       checkInAt: '2026-09-20T08:00:00.000Z', // ساعة جهاز مزوَّرة
-      workDate: '2026-09-19',                // يوم عمل مزوَّر
+      workDate: '2026-09-19', // يوم عمل مزوَّر
     },
     tz,
     normalizeDateOnly,

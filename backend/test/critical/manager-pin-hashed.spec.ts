@@ -60,11 +60,22 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 async function seedTenant(db: Kysely<Database>): Promise<void> {
-  await (db as any).insertInto('tenants').values({
-    id: TENANT, slug: 'test-shop', activity_type: 'restaurant', plan_id: null,
-    extra_features: '[]', business_name: 'متجر الاختبار', owner_phone: null,
-    owner_name: null, owner_email: null, country_code: 'EG', status: 'active',
-  }).execute();
+  await (db as any)
+    .insertInto('tenants')
+    .values({
+      id: TENANT,
+      slug: 'test-shop',
+      activity_type: 'restaurant',
+      plan_id: null,
+      extra_features: '[]',
+      business_name: 'متجر الاختبار',
+      owner_phone: null,
+      owner_name: null,
+      owner_email: null,
+      country_code: 'EG',
+      status: 'active',
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): SettingsService {
@@ -154,9 +165,15 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedTenant(db);
-      await (db as any).insertInto('settings').values({
-        key: 'managerPin', value: JSON.stringify('1234'), tenant_id: TENANT, account_id: ACCOUNT,
-      }).execute();
+      await (db as any)
+        .insertInto('settings')
+        .values({
+          key: 'managerPin',
+          value: JSON.stringify('1234'),
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+        })
+        .execute();
       const ok = await authorizeManagerSecret(db, actor, '1234');
       assert.equal(ok.mode, 'pin', 'the legacy plaintext PIN must still authorize');
       const afterFirst = JSON.parse((await readPinRow(db)) as string) as string;
@@ -192,10 +209,17 @@ async function main(): Promise<void> {
     try {
       await seedTenant(db);
       const record = await createPasswordRecord('adminpass');
-      await (db as any).insertInto('users').values({
-        username: 'manager', role: 'admin', password_hash: record.hash,
-        password_salt: record.salt, is_active: true, tenant_id: TENANT,
-      }).execute();
+      await (db as any)
+        .insertInto('users')
+        .values({
+          username: 'manager',
+          role: 'admin',
+          password_hash: record.hash,
+          password_salt: record.salt,
+          is_active: true,
+          tenant_id: TENANT,
+        })
+        .execute();
       const ok = await authorizeManagerSecret(db, actor, 'adminpass');
       assert.equal(ok.mode, 'account', 'an admin login password authorizes in account mode');
       assert.equal(ok.authorizedByName, 'manager', 'the account mode names the admin user');

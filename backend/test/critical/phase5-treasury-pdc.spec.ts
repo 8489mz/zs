@@ -16,7 +16,14 @@ function testBankReconciliationInvariants() {
   // Helper matching validator mirroring production logic in accounting.service.ts
   function validateBankReconciliationMatch(params: {
     statementLine: { id: number; amount: number; is_reconciled: boolean; account_id: number };
-    journalLine: { id: number; debit: number; credit: number; is_reconciled: boolean; account_id: number; journal_status: string };
+    journalLine: {
+      id: number;
+      debit: number;
+      credit: number;
+      is_reconciled: boolean;
+      account_id: number;
+      journal_status: string;
+    };
   }): { valid: boolean; error?: string } {
     if (params.statementLine.is_reconciled) {
       return { valid: false, error: 'سطر كشف الحساب البنكي مطابق بالفعل.' };
@@ -135,7 +142,11 @@ function testPdcChequesAccountingInvariants() {
   function assertBalancedJournal(lines: JournalLine[], contextName: string) {
     const totalDebit = Number(lines.reduce((s, l) => s + l.debit, 0).toFixed(2));
     const totalCredit = Number(lines.reduce((s, l) => s + l.credit, 0).toFixed(2));
-    assert.equal(totalDebit, totalCredit, `${contextName}: القيد المحاسبي غير متوازن! مدين=${totalDebit} دائن=${totalCredit}`);
+    assert.equal(
+      totalDebit,
+      totalCredit,
+      `${contextName}: القيد المحاسبي غير متوازن! مدين=${totalDebit} دائن=${totalCredit}`,
+    );
     assert.ok(totalDebit > 0, `${contextName}: إجمالي القيد يجب أن يكون أكبر من الصفر`);
   }
 
@@ -144,8 +155,22 @@ function testPdcChequesAccountingInvariants() {
     const chequeAmount = 15000;
     const customerId = 42;
     const lines: JournalLine[] = [
-      { accountCode: '1122', description: 'ورقة قبض في الخزينة', debit: chequeAmount, credit: 0, partnerType: 'none', partnerId: null },
-      { accountCode: '1130', description: 'استلام شيك قبض من عميل', debit: 0, credit: chequeAmount, partnerType: 'customer', partnerId: customerId },
+      {
+        accountCode: '1122',
+        description: 'ورقة قبض في الخزينة',
+        debit: chequeAmount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+      },
+      {
+        accountCode: '1130',
+        description: 'استلام شيك قبض من عميل',
+        debit: 0,
+        credit: chequeAmount,
+        partnerType: 'customer',
+        partnerId: customerId,
+      },
     ];
     assertBalancedJournal(lines, 'استلام شيك قبض في الخزينة');
     assert.equal(lines[0].debit, 15000);
@@ -157,21 +182,51 @@ function testPdcChequesAccountingInvariants() {
   {
     const chequeAmount = 15000;
     const lines: JournalLine[] = [
-      { accountCode: '1121', description: 'ورقة قبض برسم التحصيل', debit: chequeAmount, credit: 0, partnerType: 'none', partnerId: null },
-      { accountCode: '1122', description: 'إيداع شيك قبض للتحصيل', debit: 0, credit: chequeAmount, partnerType: 'none', partnerId: null },
+      {
+        accountCode: '1121',
+        description: 'ورقة قبض برسم التحصيل',
+        debit: chequeAmount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+      },
+      {
+        accountCode: '1122',
+        description: 'إيداع شيك قبض للتحصيل',
+        debit: 0,
+        credit: chequeAmount,
+        partnerType: 'none',
+        partnerId: null,
+      },
     ];
     assertBalancedJournal(lines, 'إيداع شيك قبض للتحصيل');
     assert.equal(lines[0].accountCode, '1121');
     assert.equal(lines[1].accountCode, '1122');
-    console.log('✔ قيد إيداع ورقة قبض برسم التحصيل: من حـ/ أوراق قبض برسم التحصيل (1121) إلى حـ/ أوراق قبض في الخزينة (1122)');
+    console.log(
+      '✔ قيد إيداع ورقة قبض برسم التحصيل: من حـ/ أوراق قبض برسم التحصيل (1121) إلى حـ/ أوراق قبض في الخزينة (1122)',
+    );
   }
 
   // 2.3 Cheque Collection: Dr. 1120 (Bank) / Cr. 1121 (Under Collection)
   {
     const chequeAmount = 15000;
     const lines: JournalLine[] = [
-      { accountCode: '1120', description: 'تحصيل ورقة قبض في البنك', debit: chequeAmount, credit: 0, partnerType: 'none', partnerId: null },
-      { accountCode: '1121', description: 'إقفال ورقة قبض بعد التحصيل', debit: 0, credit: chequeAmount, partnerType: 'none', partnerId: null },
+      {
+        accountCode: '1120',
+        description: 'تحصيل ورقة قبض في البنك',
+        debit: chequeAmount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+      },
+      {
+        accountCode: '1121',
+        description: 'إقفال ورقة قبض بعد التحصيل',
+        debit: 0,
+        credit: chequeAmount,
+        partnerType: 'none',
+        partnerId: null,
+      },
     ];
     assertBalancedJournal(lines, 'تحصيل ورقة قبض بنكياً');
     assert.equal(lines[0].accountCode, '1120');
@@ -185,10 +240,38 @@ function testPdcChequesAccountingInvariants() {
     const bankFee = 150;
     const customerId = 42;
     const lines: JournalLine[] = [
-      { accountCode: '1130', description: 'إعادة المديونية للعميل لارتداد الشيك', debit: chequeAmount, credit: 0, partnerType: 'customer', partnerId: customerId },
-      { accountCode: '1121', description: 'إلغاء ورقة قبض مرتدة', debit: 0, credit: chequeAmount, partnerType: 'none', partnerId: null },
-      { accountCode: '6800', description: 'عمولة ومصاريف ارتداد شيك', debit: bankFee, credit: 0, partnerType: 'none', partnerId: null },
-      { accountCode: '1120', description: 'خصم مصاريف بنكية لشيك مرتد', debit: 0, credit: bankFee, partnerType: 'none', partnerId: null },
+      {
+        accountCode: '1130',
+        description: 'إعادة المديونية للعميل لارتداد الشيك',
+        debit: chequeAmount,
+        credit: 0,
+        partnerType: 'customer',
+        partnerId: customerId,
+      },
+      {
+        accountCode: '1121',
+        description: 'إلغاء ورقة قبض مرتدة',
+        debit: 0,
+        credit: chequeAmount,
+        partnerType: 'none',
+        partnerId: null,
+      },
+      {
+        accountCode: '6800',
+        description: 'عمولة ومصاريف ارتداد شيك',
+        debit: bankFee,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+      },
+      {
+        accountCode: '1120',
+        description: 'خصم مصاريف بنكية لشيك مرتد',
+        debit: 0,
+        credit: bankFee,
+        partnerType: 'none',
+        partnerId: null,
+      },
     ];
     assertBalancedJournal(lines, 'ارتداد ورقة قبض مع مصاريف بنكية');
     assert.equal(lines[0].debit, 15000);
@@ -201,8 +284,22 @@ function testPdcChequesAccountingInvariants() {
     const chequeAmount = 15000;
     const supplierId = 88;
     const lines: JournalLine[] = [
-      { accountCode: '2110', description: 'تظهير ورقة قبض سداداً للمورد', debit: chequeAmount, credit: 0, partnerType: 'supplier', partnerId: supplierId },
-      { accountCode: '1122', description: 'خروج ورقة قبض بالتظهير', debit: 0, credit: chequeAmount, partnerType: 'none', partnerId: null },
+      {
+        accountCode: '2110',
+        description: 'تظهير ورقة قبض سداداً للمورد',
+        debit: chequeAmount,
+        credit: 0,
+        partnerType: 'supplier',
+        partnerId: supplierId,
+      },
+      {
+        accountCode: '1122',
+        description: 'خروج ورقة قبض بالتظهير',
+        debit: 0,
+        credit: chequeAmount,
+        partnerType: 'none',
+        partnerId: null,
+      },
     ];
     assertBalancedJournal(lines, 'تظهير ورقة قبض لمورد');
     assert.equal(lines[0].partnerId, 88);
@@ -215,8 +312,22 @@ function testPdcChequesAccountingInvariants() {
     const chequeAmount = 25000;
     const supplierId = 88;
     const lines: JournalLine[] = [
-      { accountCode: '2110', description: 'إصدار ورقة دفع للمورد', debit: chequeAmount, credit: 0, partnerType: 'supplier', partnerId: supplierId },
-      { accountCode: '2135', description: 'ورقة دفع مصدرة', debit: 0, credit: chequeAmount, partnerType: 'none', partnerId: null },
+      {
+        accountCode: '2110',
+        description: 'إصدار ورقة دفع للمورد',
+        debit: chequeAmount,
+        credit: 0,
+        partnerType: 'supplier',
+        partnerId: supplierId,
+      },
+      {
+        accountCode: '2135',
+        description: 'ورقة دفع مصدرة',
+        debit: 0,
+        credit: chequeAmount,
+        partnerType: 'none',
+        partnerId: null,
+      },
     ];
     assertBalancedJournal(lines, 'إصدار ورقة دفع لمورد');
     assert.equal(lines[0].accountCode, '2110');
@@ -228,8 +339,22 @@ function testPdcChequesAccountingInvariants() {
   {
     const chequeAmount = 25000;
     const lines: JournalLine[] = [
-      { accountCode: '2135', description: 'صرف وإقفال ورقة دفع', debit: chequeAmount, credit: 0, partnerType: 'none', partnerId: null },
-      { accountCode: '1120', description: 'خصم ورقة دفع من البنك', debit: 0, credit: chequeAmount, partnerType: 'none', partnerId: null },
+      {
+        accountCode: '2135',
+        description: 'صرف وإقفال ورقة دفع',
+        debit: chequeAmount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+      },
+      {
+        accountCode: '1120',
+        description: 'خصم ورقة دفع من البنك',
+        debit: 0,
+        credit: chequeAmount,
+        partnerType: 'none',
+        partnerId: null,
+      },
     ];
     assertBalancedJournal(lines, 'صرف ورقة دفع من البنك');
     assert.equal(lines[0].accountCode, '2135');
@@ -260,7 +385,7 @@ function testWithholdingTaxInvariants() {
 
   // 3.1 WHT Payable Remittance to ETA: Dr. 2125 (WHT Payable) / Cr. 1120 (Bank)
   {
-    const taxAmount = 1450.50;
+    const taxAmount = 1450.5;
     const lines: JournalLine[] = [
       { accountCode: '2125', description: 'سداد ضريبة خصم وإضافة نموذج 41', debit: taxAmount, credit: 0 },
       { accountCode: '1120', description: 'سداد بنكي لمصلحة الضرائب', debit: 0, credit: taxAmount },
@@ -268,7 +393,9 @@ function testWithholdingTaxInvariants() {
     assertBalancedJournal(lines, 'سداد ضريبة الخصم والإضافة للضرائب');
     assert.equal(lines[0].accountCode, '2125');
     assert.equal(lines[1].accountCode, '1120');
-    console.log('✔ قيد سداد وتوريد ضريبة الخصم والإضافة: من حـ/ أمانات ضريبة الخصم والإضافة (2125) إلى حـ/ البنك (1120)');
+    console.log(
+      '✔ قيد سداد وتوريد ضريبة الخصم والإضافة: من حـ/ أمانات ضريبة الخصم والإضافة (2125) إلى حـ/ البنك (1120)',
+    );
   }
 
   // 3.2 WHT Receivable Clearance against Sales VAT: Dr. 2120 (VAT Payable) / Cr. 1155 (WHT Receivable)
@@ -281,7 +408,9 @@ function testWithholdingTaxInvariants() {
     assertBalancedJournal(lines, 'مقاصة ضريبة الخصم والإضافة مع المبيعات');
     assert.equal(lines[0].accountCode, '2120');
     assert.equal(lines[1].accountCode, '1155');
-    console.log('✔ قيد مقاصة ضريبة الخصم والإضافة المخصومة لدى الغير: من حـ/ ضريبة مبيعات مستحقة (2120) إلى حـ/ ضرائب مخصومة لدى الغير (1155)');
+    console.log(
+      '✔ قيد مقاصة ضريبة الخصم والإضافة المخصومة لدى الغير: من حـ/ ضريبة مبيعات مستحقة (2120) إلى حـ/ ضرائب مخصومة لدى الغير (1155)',
+    );
   }
 }
 

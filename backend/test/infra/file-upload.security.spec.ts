@@ -6,9 +6,9 @@ import { BadRequestException } from '@nestjs/common';
 
 async function run(): Promise<void> {
   const service = {
-    getPurchaseAttachment: async () => ({ attachment: { file_url: 'safe.pdf' } })
+    getPurchaseAttachment: async () => ({ attachment: { file_url: 'safe.pdf' } }),
   } as unknown as PurchasesService;
-  
+
   const controller = new PurchasesController(service, {} as unknown as SupplierPaymentSchedulesService);
 
   // 1. Double extension check
@@ -16,7 +16,7 @@ async function run(): Promise<void> {
     originalname: 'invoice.pdf.exe',
     size: 1024,
     mimetype: 'application/x-msdownload',
-    filename: 'random-uuid.exe'
+    filename: 'random-uuid.exe',
   } as any;
   assert.throws(() => controller.uploadAttachment(file1), BadRequestException);
 
@@ -27,7 +27,7 @@ async function run(): Promise<void> {
       originalname: `malicious${ext}`,
       size: 1024,
       mimetype: 'text/plain',
-      filename: `random-uuid${ext}`
+      filename: `random-uuid${ext}`,
     } as any;
     assert.throws(() => controller.uploadAttachment(file2), BadRequestException);
   }
@@ -37,7 +37,7 @@ async function run(): Promise<void> {
     originalname: 'invoice.pdf',
     size: 1024,
     mimetype: 'application/pdf',
-    filename: 'random-uuid.pdf'
+    filename: 'random-uuid.pdf',
   } as any;
   const result = controller.uploadAttachment(file3);
   assert.strictEqual(result.fileName, 'invoice.pdf');
@@ -45,22 +45,27 @@ async function run(): Promise<void> {
 
   // 4. Download path traversal check
   const maliciousService = {
-    getPurchaseAttachment: async () => ({ attachment: { file_url: '../../etc/passwd' } })
+    getPurchaseAttachment: async () => ({ attachment: { file_url: '../../etc/passwd' } }),
   } as unknown as PurchasesService;
-  const maliciousController = new PurchasesController(maliciousService, {} as unknown as SupplierPaymentSchedulesService);
+  const maliciousController = new PurchasesController(
+    maliciousService,
+    {} as unknown as SupplierPaymentSchedulesService,
+  );
   const res = {
-    sendFile: () => {}
+    sendFile: () => {},
   } as any;
-  
+
   await assert.rejects(
     maliciousController.downloadPurchaseAttachment(1, 1, { authContext: {} } as any, res),
-    BadRequestException
+    BadRequestException,
   );
 }
 
-run().then(() => {
-  process.stdout.write('file-upload.security.spec.ts passed\n');
-}).catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+run()
+  .then(() => {
+    process.stdout.write('file-upload.security.spec.ts passed\n');
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

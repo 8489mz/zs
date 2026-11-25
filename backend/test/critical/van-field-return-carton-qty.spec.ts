@@ -105,8 +105,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): { posting: AccountingPostingService; returns: VanReturnsService } {
@@ -140,37 +146,126 @@ async function seedWorld(
   },
 ): Promise<void> {
   await seedCurrency(db, opts.currency);
-  await db.insertInto('stock_locations' as never).values([
-    { id: 900, tenant_id: 't1', account_id: 'a1', name: 'Van', branch_id: null, location_type: 'van_stock', is_active: true },
-    { id: 901, tenant_id: 't1', account_id: 'a1', name: 'Damaged', branch_id: null, location_type: 'damaged', is_active: true },
-  ] as never).execute();
-  await db.insertInto('products' as never).values({
-    id: 100, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: opts.postSaleStock, reserved_qty: 0, cost_price: opts.currentCost,
-  } as never).execute();
-  await db.insertInto('product_location_stock' as never).values({
-    tenant_id: 't1', account_id: 'a1', product_id: 100, branch_id: null, location_id: 900, qty: opts.postSaleStock, reserved_qty: 0,
-  } as never).execute();
-  await db.insertInto('customers' as never).values({
-    id: 5, tenant_id: 't1', account_id: 'a1', name: 'Shop', balance: opts.saleTotal,
-  } as never).execute();
-  await db.insertInto('van_sales_trips' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', status: 'open', van_location_id: 900,
-    source_warehouse_id: null, rep_id: 7, cash_collected: 1000, cash_refunds: 0, returns_amount: 0,
-  } as never).execute();
-  await db.insertInto('sales' as never).values({
-    id: 1, tenant_id: 't1', doc_no: 'S-1', customer_id: 5, subtotal: opts.saleTotal,
-    discount: 0, tax_amount: 0, total: opts.saleTotal, paid_amount: 0, store_credit_used: 0,
-    exchange_return_id: null, branch_id: null, location_id: null, created_by: 1, created_at: new Date(),
-    delivery_fee: 0, delivery_fee_mode: null, service_charge: 0, tip_amount: 0, prices_include_tax: false,
-    sale_origin: 'van', payment_type: 'credit', collection_status: 'paid', status: 'posted',
-    delivery_rep_id: null, van_trip_id: 1,
-  } as never).execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values([
+      {
+        id: 900,
+        tenant_id: 't1',
+        account_id: 'a1',
+        name: 'Van',
+        branch_id: null,
+        location_type: 'van_stock',
+        is_active: true,
+      },
+      {
+        id: 901,
+        tenant_id: 't1',
+        account_id: 'a1',
+        name: 'Damaged',
+        branch_id: null,
+        location_type: 'damaged',
+        is_active: true,
+      },
+    ] as never)
+    .execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 100,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Widget',
+      stock_qty: opts.postSaleStock,
+      reserved_qty: 0,
+      cost_price: opts.currentCost,
+    } as never)
+    .execute();
+  await db
+    .insertInto('product_location_stock' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 'a1',
+      product_id: 100,
+      branch_id: null,
+      location_id: 900,
+      qty: opts.postSaleStock,
+      reserved_qty: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('customers' as never)
+    .values({
+      id: 5,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Shop',
+      balance: opts.saleTotal,
+    } as never)
+    .execute();
+  await db
+    .insertInto('van_sales_trips' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      status: 'open',
+      van_location_id: 900,
+      source_warehouse_id: null,
+      rep_id: 7,
+      cash_collected: 1000,
+      cash_refunds: 0,
+      returns_amount: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('sales' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      doc_no: 'S-1',
+      customer_id: 5,
+      subtotal: opts.saleTotal,
+      discount: 0,
+      tax_amount: 0,
+      total: opts.saleTotal,
+      paid_amount: 0,
+      store_credit_used: 0,
+      exchange_return_id: null,
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+      created_at: new Date(),
+      delivery_fee: 0,
+      delivery_fee_mode: null,
+      service_charge: 0,
+      tip_amount: 0,
+      prices_include_tax: false,
+      sale_origin: 'van',
+      payment_type: 'credit',
+      collection_status: 'paid',
+      status: 'posted',
+      delivery_rep_id: null,
+      van_trip_id: 1,
+    } as never)
+    .execute();
   for (const line of opts.saleLines) {
-    await db.insertInto('sale_items' as never).values({
-      id: line.id, sale_id: 1, tenant_id: 't1', product_id: line.productId, product_name: 'Widget', qty: line.qty,
-      line_total: line.lineTotal, cost_price: line.costPrice,
-      unit_multiplier: line.unitMultiplier ?? 1, unit_name: line.unitName ?? 'قطعة', modifiers: JSON.stringify([]),
-    } as never).execute();
+    await db
+      .insertInto('sale_items' as never)
+      .values({
+        id: line.id,
+        sale_id: 1,
+        tenant_id: 't1',
+        product_id: line.productId,
+        product_name: 'Widget',
+        qty: line.qty,
+        line_total: line.lineTotal,
+        cost_price: line.costPrice,
+        unit_multiplier: line.unitMultiplier ?? 1,
+        unit_name: line.unitName ?? 'قطعة',
+        modifiers: JSON.stringify([]),
+      } as never)
+      .execute();
   }
 }
 
@@ -184,12 +279,28 @@ async function seedReturn(
     items: Array<{ productId: number; qty: number; unitPrice: number; saleItemId?: number }>;
   },
 ): Promise<void> {
-  await db.insertInto('van_field_returns' as never).values({
-    id: returnId, tenant_id: 't1', account_id: 'a1', doc_no: `FR-${returnId}`, trip_id: 1, rep_id: 7,
-    customer_id: 5, sale_id: opts.saleId, status: 'pending_approval', return_reason: opts.reason,
-    refund_method: 'credit', total_amount: opts.totalAmount, items_json: JSON.stringify(opts.items),
-    notes: null, rejection_reason: null, approved_by: null, approved_at: null,
-  } as never).execute();
+  await db
+    .insertInto('van_field_returns' as never)
+    .values({
+      id: returnId,
+      tenant_id: 't1',
+      account_id: 'a1',
+      doc_no: `FR-${returnId}`,
+      trip_id: 1,
+      rep_id: 7,
+      customer_id: 5,
+      sale_id: opts.saleId,
+      status: 'pending_approval',
+      return_reason: opts.reason,
+      refund_method: 'credit',
+      total_amount: opts.totalAmount,
+      items_json: JSON.stringify(opts.items),
+      notes: null,
+      rejection_reason: null,
+      approved_by: null,
+      approved_at: null,
+    } as never)
+    .execute();
 }
 
 async function postSaleOn(db: Kysely<Database>, posting: AccountingPostingService, saleId: number): Promise<void> {
@@ -203,14 +314,23 @@ async function journalByCode(
   sourceType: string,
   sourceId: number,
 ): Promise<Map<string, { debit: number; credit: number }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select(['id'])
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute() as Array<{ id: number }>;
+  const entries = (await (db as any)
+    .selectFrom('journal_entries')
+    .select(['id'])
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute()) as Array<{ id: number }>;
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('accounting_accounts', 'accounting_accounts.id', 'journal_entry_lines.account_id')
-    .select(['accounting_accounts.code as code', 'journal_entry_lines.debit as debit', 'journal_entry_lines.credit as credit'])
+    .select([
+      'accounting_accounts.code as code',
+      'journal_entry_lines.debit as debit',
+      'journal_entry_lines.credit as credit',
+    ])
     .where('journal_entry_id', '=', entries[0].id)
-    .execute() as Array<{ code: string; debit: string; credit: string }>;
+    .execute()) as Array<{ code: string; debit: string; credit: string }>;
   const byCode = new Map<string, { debit: number; credit: number }>();
   for (const row of rows) {
     byCode.set(row.code, { debit: Number(row.debit), credit: Number(row.credit) });
@@ -222,18 +342,29 @@ async function journalByCode(
 }
 
 async function locationQty(db: Kysely<Database>, locationId: number): Promise<number> {
-  const rows = await (db as any).selectFrom('product_location_stock')
-    .select(['qty']).where('tenant_id', '=', 't1').where('product_id', '=', 100)
-    .where('location_id', '=', locationId).execute() as Array<{ qty: string }>;
+  const rows = (await (db as any)
+    .selectFrom('product_location_stock')
+    .select(['qty'])
+    .where('tenant_id', '=', 't1')
+    .where('product_id', '=', 100)
+    .where('location_id', '=', locationId)
+    .execute()) as Array<{ qty: string }>;
   return rows.reduce((sum, row) => sum + Number(row.qty || 0), 0);
 }
 
-async function returnMovement(db: Kysely<Database>, returnId: number): Promise<{ qty: number; unitCost: number; totalCost: number }> {
-  const rows = await (db as any).selectFrom('stock_movements')
+async function returnMovement(
+  db: Kysely<Database>,
+  returnId: number,
+): Promise<{ qty: number; unitCost: number; totalCost: number }> {
+  const rows = (await (db as any)
+    .selectFrom('stock_movements')
     .select(['qty', 'unit_cost as unitCost', 'total_cost as totalCost'])
-    .where('reference_type', '=', 'van_field_return').where('reference_id', '=', returnId)
+    .where('reference_type', '=', 'van_field_return')
+    .where('reference_id', '=', returnId)
     .where('movement_type', '=', 'van_sale_return')
-    .orderBy('id', 'desc').limit(1).execute() as Array<{ qty: string; unitCost: string; totalCost: string }>;
+    .orderBy('id', 'desc')
+    .limit(1)
+    .execute()) as Array<{ qty: string; unitCost: string; totalCost: string }>;
   assert.equal(rows.length, 1, `expected exactly one van_sale_return movement for return ${returnId}`);
   return { qty: Number(rows[0].qty), unitCost: Number(rows[0].unitCost), totalCost: Number(rows[0].totalCost) };
 }
@@ -246,17 +377,23 @@ async function main(): Promise<void> {
     try {
       const { posting, returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 8, saleTotal: 288,
+        currency: 'EGP',
+        currentCost: 8,
+        saleTotal: 288,
         // Frozen sale-line cost is PER SALE UNIT (the writer stores
         // prod.cost_price x multiplier): 8/piece x 12 = 96/carton.
-        saleLines: [{ id: 10, productId: 100, qty: 2, lineTotal: 288, costPrice: 96, unitMultiplier: 12, unitName: 'كرتونة' }],
+        saleLines: [
+          { id: 10, productId: 100, qty: 2, lineTotal: 288, costPrice: 96, unitMultiplier: 12, unitName: 'كرتونة' },
+        ],
         postSaleStock: 46,
       });
       await postSaleOn(db, posting, 1);
       const saleJournal = await journalByCode(db, 'sale', 1);
       assert.equal(saleJournal.get('5100')?.debit, 192, 'sale COGS is 24 pieces x 8');
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 144,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 144,
         items: [{ productId: 100, qty: 1, unitPrice: 144, saleItemId: 10 }],
       });
       const approved = await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -281,26 +418,31 @@ async function main(): Promise<void> {
     try {
       const { posting, returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 8, saleTotal: 288,
-        saleLines: [{ id: 10, productId: 100, qty: 2, lineTotal: 288, costPrice: 96, unitMultiplier: 12, unitName: 'كرتونة' }],
+        currency: 'EGP',
+        currentCost: 8,
+        saleTotal: 288,
+        saleLines: [
+          { id: 10, productId: 100, qty: 2, lineTotal: 288, costPrice: 96, unitMultiplier: 12, unitName: 'كرتونة' },
+        ],
         postSaleStock: 46,
       });
       await postSaleOn(db, posting, 1);
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 288,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 288,
         items: [{ productId: 100, qty: 2, unitPrice: 144, saleItemId: 10 }],
       });
       const approved = await returns.approveFieldReturn('t1', 'a1', 1, 1);
       assert.equal(approved.status, 'approved');
       assert.equal(await locationQty(db, 900), 70, 'van stock gains 24 pieces for 2 cartons');
       await seedReturn(db, 2, {
-        saleId: 1, reason: 'customer_request', totalAmount: 144,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 144,
         items: [{ productId: 100, qty: 1, unitPrice: 144, saleItemId: 10 }],
       });
-      await assert.rejects(
-        async () => returns.approveFieldReturn('t1', 'a1', 2, 1),
-        /RETURN_QTY_EXCEEDS_SOLD/,
-      );
+      await assert.rejects(async () => returns.approveFieldReturn('t1', 'a1', 2, 1), /RETURN_QTY_EXCEEDS_SOLD/);
       assert.equal(await locationQty(db, 900), 70, 'rejected return moves no stock');
     } finally {
       await db.destroy();
@@ -313,13 +455,19 @@ async function main(): Promise<void> {
     try {
       const { posting, returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 8, saleTotal: 144,
-        saleLines: [{ id: 10, productId: 100, qty: 12, lineTotal: 144, costPrice: 8, unitMultiplier: 1, unitName: 'قطعة' }],
+        currency: 'EGP',
+        currentCost: 8,
+        saleTotal: 144,
+        saleLines: [
+          { id: 10, productId: 100, qty: 12, lineTotal: 144, costPrice: 8, unitMultiplier: 1, unitName: 'قطعة' },
+        ],
         postSaleStock: 34,
       });
       await postSaleOn(db, posting, 1);
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 36,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 36,
         items: [{ productId: 100, qty: 3, unitPrice: 12, saleItemId: 10 }],
       });
       const approved = await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -337,19 +485,41 @@ async function main(): Promise<void> {
   // Case 4: source + invariant pins.
   {
     const here = __dirname;
-    const eligibleSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/get-customer-eligible-sales.slice.ts'), 'utf8');
+    const eligibleSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-returns/get-customer-eligible-sales.slice.ts'),
+      'utf8',
+    );
     assert.ok(eligibleSource.includes('unitMultiplier'), 'eligible-sales items must carry the multiplier');
-    const approveSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'), 'utf8');
+    const approveSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'),
+      'utf8',
+    );
     assert.ok(approveSource.includes('unit_multiplier'), 'approval must read the sale-line multiplier');
-    const apiSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/api/van-sales/van-sales-types-b.ts'), 'utf8');
+    const apiSource = readFileSync(
+      resolve(here, '../../../frontend/src/features/delivery-reps/api/van-sales/van-sales-types-b.ts'),
+      'utf8',
+    );
     const itemStart = apiSource.indexOf('export interface CustomerEligibleSaleItem {');
     const itemEnd = apiSource.indexOf('}', itemStart);
     assert.ok(itemStart > 0 && itemEnd > itemStart, 'CustomerEligibleSaleItem must exist in van-sales-types-b');
-    assert.ok(apiSource.slice(itemStart, itemEnd).includes('unitMultiplier'), 'CustomerEligibleSaleItem must carry unitMultiplier');
-    const barrelSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/api/van-sales.api.ts'), 'utf8');
-    assert.ok(barrelSource.includes('CustomerEligibleSaleItem'), 'the van-sales barrel must still re-export CustomerEligibleSaleItem');
+    assert.ok(
+      apiSource.slice(itemStart, itemEnd).includes('unitMultiplier'),
+      'CustomerEligibleSaleItem must carry unitMultiplier',
+    );
+    const barrelSource = readFileSync(
+      resolve(here, '../../../frontend/src/features/delivery-reps/api/van-sales.api.ts'),
+      'utf8',
+    );
+    assert.ok(
+      barrelSource.includes('CustomerEligibleSaleItem'),
+      'the van-sales barrel must still re-export CustomerEligibleSaleItem',
+    );
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-VAN-FIELD-RETURN-CARTON-QTY').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-VAN-FIELD-RETURN-CARTON-QTY').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
   }
 
   console.log('Van field-return carton quantity tests passed');

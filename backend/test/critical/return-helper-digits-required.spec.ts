@@ -50,7 +50,15 @@ async function main(): Promise<void> {
 
   // Explicit 3-digit behavior, unchanged (KWD cases).
   const kwdSale = buildSaleReturnLine(
-    { product_id: 11, product_name: 'KWD', qty: 1, line_total: 0.001, net_line_total: 0.001, allocated_tax: 0, unit_multiplier: 1 },
+    {
+      product_id: 11,
+      product_name: 'KWD',
+      qty: 1,
+      line_total: 0.001,
+      net_line_total: 0.001,
+      allocated_tax: 0,
+      unit_multiplier: 1,
+    },
     { id: 11, stock_qty: 0 },
     { productId: 11, productName: 'KWD', qty: 1 },
     { qty: 0, amount: 0, tax: 0 },
@@ -70,33 +78,29 @@ async function main(): Promise<void> {
 
   // Omitted digits must fail closed, not fall back to 2 decimals.
   assert.throws(
-    () => buildSaleReturnLine(
-      { product_id: 2, product_name: 'Tea', qty: 4, line_total: 50, unit_multiplier: 1.5 },
-      { id: 2, stock_qty: 10 },
-      { productId: 2, productName: 'Tea', qty: 2 },
-      { qty: 0, amount: 0, tax: 0 },
-      NO_DIGITS,
-    ),
+    () =>
+      buildSaleReturnLine(
+        { product_id: 2, product_name: 'Tea', qty: 4, line_total: 50, unit_multiplier: 1.5 },
+        { id: 2, stock_qty: 10 },
+        { productId: 2, productName: 'Tea', qty: 2 },
+        { qty: 0, amount: 0, tax: 0 },
+        NO_DIGITS,
+      ),
     /Invalid monetary minor units/,
   );
   assert.throws(
-    () => buildPurchaseReturnLine(
-      { product_id: 5, product_name: 'Sugar', qty: 5, line_total: 40, unit_multiplier: 2 },
-      { id: 5, stock_qty: 12 },
-      { productId: 5, productName: 'Sugar', qty: 3 },
-      { qty: 0, amount: 0 },
-      NO_DIGITS,
-    ),
+    () =>
+      buildPurchaseReturnLine(
+        { product_id: 5, product_name: 'Sugar', qty: 5, line_total: 40, unit_multiplier: 2 },
+        { id: 5, stock_qty: 12 },
+        { productId: 5, productName: 'Sugar', qty: 3 },
+        { qty: 0, amount: 0 },
+        NO_DIGITS,
+      ),
     /Invalid monetary minor units/,
   );
-  assert.throws(
-    () => calculateReturnDocumentTotal([{ lineTotal: 10.005 }], NO_DIGITS),
-    /Invalid monetary minor units/,
-  );
-  assert.throws(
-    () => calculateNextLedgerBalance('12.50', -2.245, NO_DIGITS),
-    /Invalid monetary minor units/,
-  );
+  assert.throws(() => calculateReturnDocumentTotal([{ lineTotal: 10.005 }], NO_DIGITS), /Invalid monetary minor units/);
+  assert.throws(() => calculateNextLedgerBalance('12.50', -2.245, NO_DIGITS), /Invalid monetary minor units/);
 
   console.log('Return helper digits-required tests passed.');
 }

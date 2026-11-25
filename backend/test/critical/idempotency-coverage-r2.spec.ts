@@ -341,8 +341,7 @@ async function main(): Promise<void> {
     console.log('Case 6 (control): handler without the interceptor, twice => two rows (the gap)');
     {
       const rowsBefore = await receiptRowCount(db);
-      const direct = async (): Promise<any> =>
-        lastValueFrom(receiveGoodsHandler.handle() as any);
+      const direct = async (): Promise<any> => lastValueFrom(receiveGoodsHandler.handle() as any);
       await direct();
       await direct();
       assert.equal(await receiptRowCount(db), rowsBefore + 2, '6: without the interceptor the retry double-applies');
@@ -384,7 +383,9 @@ async function main(): Promise<void> {
       }
       const importSales = readFileSync(IMPORT_SALES_CONTROLLER, 'utf8');
       assert.ok(
-        importSales.includes("import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';"),
+        importSales.includes(
+          "import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';",
+        ),
         '7b: import-sales controller imports the interceptor',
       );
       assert.equal(

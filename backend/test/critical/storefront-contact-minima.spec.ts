@@ -32,10 +32,10 @@ import { CreateOnlineOrderDto } from '../../src/modules/storefront/dto/create-on
  */
 
 function makeFakeDb(rowsByTable: Record<string, any[]>): any {
-  const eb: any = Object.assign(
-    (..._args: any[]) => true,
-    { or: (..._args: any[]) => true, and: (..._args: any[]) => true },
-  );
+  const eb: any = Object.assign((..._args: any[]) => true, {
+    or: (..._args: any[]) => true,
+    and: (..._args: any[]) => true,
+  });
   const makeQuery = (table: string): any => {
     const q: any = new Proxy(function () {}, {
       get(_target, prop) {
@@ -45,13 +45,19 @@ function makeFakeDb(rowsByTable: Record<string, any[]>): any {
         return (...args: any[]) => {
           for (const arg of args) {
             if (typeof arg === 'function') {
-              try { arg(eb); } catch { /* expression-builder shapes only */ }
+              try {
+                arg(eb);
+              } catch {
+                /* expression-builder shapes only */
+              }
             }
           }
           return q;
         };
       },
-      apply() { return q; },
+      apply() {
+        return q;
+      },
     });
     return q;
   };
@@ -59,8 +65,15 @@ function makeFakeDb(rowsByTable: Record<string, any[]>): any {
 }
 
 const PRODUCT = {
-  id: 1, name: 'منتج', barcode: '', retail_price: 10, metadata: null,
-  is_active: true, item_type: 'product', stock_qty: 100, reserved_qty: 0,
+  id: 1,
+  name: 'منتج',
+  barcode: '',
+  retail_price: 10,
+  metadata: null,
+  is_active: true,
+  item_type: 'product',
+  stock_qty: 100,
+  reserved_qty: 0,
 };
 
 // The gates live in the T2 (create) and T3 (edit) slices now (storefront split
@@ -74,25 +87,31 @@ function makeService(): any {
   const fakeDb = makeFakeDb({
     products: [PRODUCT],
     product_offers: [],
-    online_orders: [{
-      id: 1,
-      tenant_id: 'tenant-1',
-      order_number: 'ORD-1',
-      status: 'pending',
-      kitchen_draft_sale_id: null,
-      sale_id: null,
-      payment_status: 'unpaid',
-      fulfillment_type: 'delivery',
-      order_type: 'delivery',
-      country_code: 'EG',
-      access_token_hash: hashOrderAccessToken(ORDER_TOKEN),
-    }],
+    online_orders: [
+      {
+        id: 1,
+        tenant_id: 'tenant-1',
+        order_number: 'ORD-1',
+        status: 'pending',
+        kitchen_draft_sale_id: null,
+        sale_id: null,
+        payment_status: 'unpaid',
+        fulfillment_type: 'delivery',
+        order_type: 'delivery',
+        country_code: 'EG',
+        access_token_hash: hashOrderAccessToken(ORDER_TOKEN),
+      },
+    ],
   });
   const tenant = { id: 'tenant-1', currency: 'EGP', slug: 'shop', activity_type: null };
   const settings = new Map<string, string>([['currency', 'EGP']]);
   const charges = {
-    deliveryFee: 0, deliveryZoneId: null, deliveryZoneName: null,
-    discountAmount: 0, appliedCouponCode: null, couponId: null,
+    deliveryFee: 0,
+    deliveryZoneId: null,
+    deliveryZoneName: null,
+    discountAmount: 0,
+    appliedCouponCode: null,
+    couponId: null,
   };
   const orderCreate = new StorefrontOrderCreateService({
     db: fakeDb,
@@ -129,7 +148,11 @@ const GATE_WORDS = /اسم|عنوان|هاتف/;
 
 async function expectGateError(promise: Promise<unknown>, word: string): Promise<void> {
   let caught: unknown;
-  try { await promise; } catch (error) { caught = error; }
+  try {
+    await promise;
+  } catch (error) {
+    caught = error;
+  }
   assert.ok(caught, `expected a rejection mentioning ${word}`);
   assert.match(String((caught as Error).message || ''), new RegExp(word), 'gate error message');
 }
@@ -157,25 +180,24 @@ async function main(): Promise<void> {
   await expectPastGates(svc.createOnlineOrder('shop', { ...baseDto }));
 
   // A one-letter name is still rejected at create and at edit.
+  await expectGateError(svc.createOnlineOrder('shop', { ...baseDto, customerName: 'ل' }), 'حرفين');
   await expectGateError(
-    svc.createOnlineOrder('shop', { ...baseDto, customerName: 'ل' }), 'حرفين');
-  await expectGateError(
-    svc.updateCustomerOrder('shop', 'ORD-1', ORDER_TOKEN, { ...baseDto, customerName: 'A' }), 'حرفين');
+    svc.updateCustomerOrder('shop', 'ORD-1', ORDER_TOKEN, { ...baseDto, customerName: 'A' }),
+    'حرفين',
+  );
 
   // A blank (whitespace-only) address is rejected; a short real address passes.
-  await expectGateError(
-    svc.createOnlineOrder('shop', { ...baseDto, customerAddress: '   ' }), 'عنوان');
+  await expectGateError(svc.createOnlineOrder('shop', { ...baseDto, customerAddress: '   ' }), 'عنوان');
   await expectPastGates(svc.createOnlineOrder('shop', { ...baseDto, customerAddress: 'ab' }));
   await expectGateError(
-    svc.updateCustomerOrder('shop', 'ORD-1', ORDER_TOKEN, { ...baseDto, customerAddress: '   ' }), 'عنوان');
+    svc.updateCustomerOrder('shop', 'ORD-1', ORDER_TOKEN, { ...baseDto, customerAddress: '   ' }),
+    'عنوان',
+  );
 
   // PHONE REGRESSION — the Egyptian rule is unchanged.
-  await expectGateError(
-    svc.createOnlineOrder('shop', { ...baseDto, customerPhone: '0101234567' }), 'هاتف');
-  await expectGateError(
-    svc.createOnlineOrder('shop', { ...baseDto, customerPhone: '01912345678' }), 'هاتف');
-  await expectGateError(
-    svc.createOnlineOrder('shop', { ...baseDto, customerPhone: '011123456' }), 'هاتف');
+  await expectGateError(svc.createOnlineOrder('shop', { ...baseDto, customerPhone: '0101234567' }), 'هاتف');
+  await expectGateError(svc.createOnlineOrder('shop', { ...baseDto, customerPhone: '01912345678' }), 'هاتف');
+  await expectGateError(svc.createOnlineOrder('shop', { ...baseDto, customerPhone: '011123456' }), 'هاتف');
   await expectPastGates(svc.createOnlineOrder('shop', { ...baseDto, customerPhone: '01512345678' }));
   // A non-Egyptian number keeps the generic 7-16 digit rule.
   await expectPastGates(svc.createOnlineOrder('shop', { ...baseDto, countryCode: 'SA', customerPhone: '555123456' }));
@@ -183,10 +205,7 @@ async function main(): Promise<void> {
   // DTO pins: two letters pass, one letter fails, bad Egyptian phone fails.
   const dtoOk = Object.assign(new CreateOnlineOrderDto(), baseDto);
   const okViolations = await validate(dtoOk);
-  assert.equal(
-    okViolations.filter((v) => v.property === 'customerName').length, 0,
-    'DTO accepts a two-letter name',
-  );
+  assert.equal(okViolations.filter((v) => v.property === 'customerName').length, 0, 'DTO accepts a two-letter name');
   const dtoShort = Object.assign(new CreateOnlineOrderDto(), { ...baseDto, customerName: 'ل' });
   const shortViolations = await validate(dtoShort);
   assert.ok(
@@ -202,7 +221,8 @@ async function main(): Promise<void> {
   const dtoPhoneGeneric = Object.assign(new CreateOnlineOrderDto(), { ...baseDto, customerPhone: '0101234567' });
   const genericViolations = await validate(dtoPhoneGeneric);
   assert.equal(
-    genericViolations.filter((v) => v.property === 'customerPhone').length, 0,
+    genericViolations.filter((v) => v.property === 'customerPhone').length,
+    0,
     'DTO keeps the generic 7-16 rule; the Egyptian 11-digit rule is enforced by the service (pinned above)',
   );
 

@@ -39,16 +39,31 @@ function testGuardRule(): void {
 
   // مسموح: نفس من كانت الخدمة تسمح لهم — فلا يُمنع أحد كان يعمل.
   assert.equal(guard.canActivate(contextFor({ role: 'super_admin', permissions: [] })), true);
-  assert.equal(guard.canActivate(contextFor({ role: 'admin', permissions: [] })), true,
-    'an admin passed the service check by role, so the door must not be stricter than the room');
+  assert.equal(
+    guard.canActivate(contextFor({ role: 'admin', permissions: [] })),
+    true,
+    'an admin passed the service check by role, so the door must not be stricter than the room',
+  );
   assert.equal(guard.canActivate(contextFor({ role: 'cashier', permissions: ['accounting'] })), true);
 
   // ممنوع: الكاشير بقالب المنشأة — وهذه هي الثغرة نفسها.
   assert.throws(
-    () => guard.canActivate(contextFor({
-      role: 'cashier',
-      permissions: ['sales', 'cashDrawer', 'customers', 'suppliers', 'accounts', 'purchases', 'products', 'returns'],
-    })),
+    () =>
+      guard.canActivate(
+        contextFor({
+          role: 'cashier',
+          permissions: [
+            'sales',
+            'cashDrawer',
+            'customers',
+            'suppliers',
+            'accounts',
+            'purchases',
+            'products',
+            'returns',
+          ],
+        }),
+      ),
     ForbiddenException,
     '"accounts" must NOT open the books: every cashier created from the template has it',
   );
@@ -63,10 +78,7 @@ function testGuardIsMounted(): void {
     /@UseGuards\([^)]*AccountingAccessGuard[^)]*\)/.test(controller),
     'the accounting controller must mount AccountingAccessGuard: 82 routes cannot each be remembered',
   );
-  assert.ok(
-    /import \{ AccountingAccessGuard \}/.test(controller),
-    'the guard must be imported, not merely named',
-  );
+  assert.ok(/import \{ AccountingAccessGuard \}/.test(controller), 'the guard must be imported, not merely named');
 
   // الفحص داخل الخدمة يبقى طبقة ثانية، فلا يُحذف بحجة وجود الحارس.
   const service = read('modules/accounting/accounting.service.ts');
@@ -89,12 +101,11 @@ function testFinancialControllersAreGuarded(): void {
 
   for (const name of controllers) {
     const source = readFileSync(join(accountingDir, name), 'utf8');
-    const guarded = /AccountingAccessGuard/.test(source)
-      || /@RequirePermissions\('accounting'\)/.test(source);
+    const guarded = /AccountingAccessGuard/.test(source) || /@RequirePermissions\('accounting'\)/.test(source);
     assert.ok(
       guarded,
-      `${name} serves financial data but neither mounts AccountingAccessGuard nor requires the `
-      + '"accounting" permission outright. A cashier holds "accounts", and that is not the same thing.',
+      `${name} serves financial data but neither mounts AccountingAccessGuard nor requires the ` +
+        '"accounting" permission outright. A cashier holds "accounts", and that is not the same thing.',
     );
   }
 }
@@ -109,7 +120,18 @@ function testFinancialControllersAreGuarded(): void {
  */
 function testPermissionLabelsAreDistinguishable(): void {
   const labels = readFileSync(
-    join(__dirname, '..', '..', '..', 'frontend', 'src', 'features', 'settings', 'components', 'user-management.shared.ts'),
+    join(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      'frontend',
+      'src',
+      'features',
+      'settings',
+      'components',
+      'user-management.shared.ts',
+    ),
     'utf8',
   ).replace(/\r\n/g, '\n');
 
@@ -125,8 +147,8 @@ function testPermissionLabelsAreDistinguishable(): void {
   assert.notEqual(accounts, accounting, 'two different permissions cannot share one label');
   assert.ok(
     accounts.includes('العملاء') && accounts.includes('الموردين'),
-    `"accounts" must say whose accounts it means; it currently reads "${accounts}". `
-    + 'An owner granting it to a cashier must not think it is the company books.',
+    `"accounts" must say whose accounts it means; it currently reads "${accounts}". ` +
+      'An owner granting it to a cashier must not think it is the company books.',
   );
   assert.ok(
     /دفاتر|ميزانية|قيود/.test(accounting),
@@ -149,24 +171,38 @@ function testPermissionLabelsAreDistinguishable(): void {
  */
 function testCashierTemplateOpensNoMoney(): void {
   const sharedPath = join(
-    __dirname, '..', '..', '..', 'frontend', 'src', 'features', 'settings', 'components', 'user-management.shared.ts',
+    __dirname,
+    '..',
+    '..',
+    '..',
+    'frontend',
+    'src',
+    'features',
+    'settings',
+    'components',
+    'user-management.shared.ts',
   );
   const shared = readFileSync(sharedPath, 'utf8').replace(/\r\n/g, '\n');
   const listed = /DEFAULT_CASHIER_PERMS\s*=\s*\[([\s\S]*?)\]/.exec(shared);
   assert.ok(listed, 'DEFAULT_CASHIER_PERMS not found');
   const cashier = new Set(
-    listed[1].split(',').map((entry) => entry.trim().replace(/['"]/g, '')).filter(Boolean),
+    listed[1]
+      .split(',')
+      .map((entry) => entry.trim().replace(/['"]/g, ''))
+      .filter(Boolean),
   );
 
-  const parse = (raw?: string): string[] | null => (
-    raw ? raw.split(',').map((item) => item.trim().replace(/['"]/g, '')) : null
-  );
+  const parse = (raw?: string): string[] | null =>
+    raw ? raw.split(',').map((item) => item.trim().replace(/['"]/g, '')) : null;
 
   const opened: string[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
-      if (entry.isDirectory()) { walk(full); continue; }
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
       if (!entry.name.endsWith('.controller.ts')) continue;
 
       const source = readFileSync(full, 'utf8').replace(/\r\n/g, '\n');
@@ -217,13 +253,14 @@ function testCashierTemplateOpensNoMoney(): void {
   assert.ok(opened.length > 50, `the scan found only ${opened.length} routes — the parser broke, not the permissions`);
 
   // ما لا يجوز أن يفتحه الكاشير: أرقام المال، وأجور الناس، ومفاتيح المنصة.
-  const forbidden = /balance-sheet|cash-flow|trial-balance|profit|equity|payroll|salar|billing|subscription|impersonat|backup|restore/i;
+  const forbidden =
+    /balance-sheet|cash-flow|trial-balance|profit|equity|payroll|salar|billing|subscription|impersonat|backup|restore/i;
   const violations = opened.filter((route) => forbidden.test(route));
   assert.deepEqual(
     violations,
     [],
-    `the cashier template opens routes it must not:\n  ${violations.join('\n  ')}\n`
-    + 'A cashier sees the till, not the books, the payroll or the platform.',
+    `the cashier template opens routes it must not:\n  ${violations.join('\n  ')}\n` +
+      'A cashier sees the till, not the books, the payroll or the platform.',
   );
 }
 

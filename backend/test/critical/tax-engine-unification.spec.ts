@@ -86,10 +86,7 @@ async function main(): Promise<void> {
   }
 
   // ---- ETA driver (mock DB, same shape as eta-document-tax.spec.ts) ----
-  function driveEta(
-    sale: Record<string, unknown>,
-    items: Array<Record<string, unknown>>,
-  ) {
+  function driveEta(sale: Record<string, unknown>, items: Array<Record<string, unknown>>) {
     function chainable(result: unknown) {
       const q: any = {
         select: () => q,
@@ -176,7 +173,17 @@ async function main(): Promise<void> {
       rate: 5,
       pricesIncludeTax: false,
       saleTaxAmount: 10,
-      items: [{ ...baseItem, qty: 2, unit_price: 100, line_total: 200, net_line_total: 200, allocated_discount: 0, allocated_tax: 10 }],
+      items: [
+        {
+          ...baseItem,
+          qty: 2,
+          unit_price: 100,
+          line_total: 200,
+          net_line_total: 200,
+          allocated_discount: 0,
+          allocated_tax: 10,
+        },
+      ],
       expectedBase: 200,
       expectedTax: 10,
       expectedTotal: 210,
@@ -196,7 +203,16 @@ async function main(): Promise<void> {
       rate: 14,
       pricesIncludeTax: true,
       saleTaxAmount: 14,
-      items: [{ ...baseItem, unit_price: 114, line_total: 114, net_line_total: null, allocated_discount: null, allocated_tax: null }],
+      items: [
+        {
+          ...baseItem,
+          unit_price: 114,
+          line_total: 114,
+          net_line_total: null,
+          allocated_discount: null,
+          allocated_tax: null,
+        },
+      ],
       expectedBase: 100,
       expectedTax: 14,
       expectedTotal: 114,
@@ -250,7 +266,15 @@ async function main(): Promise<void> {
   const multiSale = { ...baseSale, tax_rate: 15, tax_amount: 12, prices_include_tax: false };
   const multiItems = [
     { ...baseItem, line_total: 50, net_line_total: 50, allocated_discount: 0, allocated_tax: 7.5 },
-    { ...baseItem, qty: 1, unit_price: 30, line_total: 30, net_line_total: 30, allocated_discount: 0, allocated_tax: 4.5 },
+    {
+      ...baseItem,
+      qty: 1,
+      unit_price: 30,
+      line_total: 30,
+      net_line_total: 30,
+      allocated_discount: 0,
+      allocated_tax: 4.5,
+    },
   ];
   const multiZatca = await driveZatca(multiSale, multiItems);
   const multiEta = await driveEta(multiSale, multiItems);
@@ -273,7 +297,9 @@ async function main(): Promise<void> {
     sellerVatNumber: '300000000000003',
     sellerAddress: { street: 'S', buildingNumber: '1', city: 'Riyadh', postalCode: '12211', district: 'D' },
     customerName: 'Cash',
-    lineItems: [{ id: 1, name: 'Widget', quantity: 1, unitPrice: 100, subtotal: 100, vatAmount: 15, vatRate: 15, total: 115 }],
+    lineItems: [
+      { id: 1, name: 'Widget', quantity: 1, unitPrice: 100, subtotal: 100, vatAmount: 15, vatRate: 15, total: 115 },
+    ],
     subtotal: 100,
     vatTotal: 15,
     totalWithVat: 115,
@@ -282,9 +308,9 @@ async function main(): Promise<void> {
   // The document-level TaxTotal comes before the lines in the UBL
   // template, so the first TaxTotal Percent is the document rate.
   // (Line percents keep their own line rate, 15.00, by design.)
-  const docPercent = [...inconsistent.ublXml.matchAll(/<cac:TaxTotal>[\s\S]*?<cbc:Percent>([^<]+)<\/cbc:Percent>/g)].map(
-    (m) => m[1],
-  );
+  const docPercent = [
+    ...inconsistent.ublXml.matchAll(/<cac:TaxTotal>[\s\S]*?<cbc:Percent>([^<]+)<\/cbc:Percent>/g),
+  ].map((m) => m[1]);
   assert.equal(docPercent[0], '14.00', 'document-level Percent is the stated rate 14.00');
 
   console.log('Tax engine unification tests passed.');

@@ -61,31 +61,81 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 async function seedWorld(db: Kysely<Database>): Promise<void> {
   await seedCurrency(db, 'EGP');
-  await db.insertInto('stock_locations' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', name: 'المستودع الرئيسي', branch_id: null, location_type: 'internal_warehouse', is_active: true,
-  } as never).execute();
-  await db.insertInto('customers' as never).values({
-    id: 3060, tenant_id: 't1', account_id: 'a1', name: 'محل اختبار جملة 1', phone: '01122220001', address: 'مدينة نصر', is_active: true, balance: 18,
-  } as never).execute();
-  await db.insertInto('products' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', name: 'صنف اختبار جملة أ', cost_price: 8, retail_price: 12, wholesale_price: 10, credit_price: 11, consumer_price: 15, stock_qty: 120, reserved_qty: 0,
-  } as never).execute();
-  await db.insertInto('product_location_stock' as never).values([
-    { tenant_id: 't1', account_id: 'a1', product_id: 1, branch_id: null, location_id: 1, qty: 120, reserved_qty: 0 },
-    { tenant_id: 't1', account_id: 'a1', product_id: 1, branch_id: null, location_id: null, qty: 0, reserved_qty: 0 },
-  ] as never).execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'المستودع الرئيسي',
+      branch_id: null,
+      location_type: 'internal_warehouse',
+      is_active: true,
+    } as never)
+    .execute();
+  await db
+    .insertInto('customers' as never)
+    .values({
+      id: 3060,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'محل اختبار جملة 1',
+      phone: '01122220001',
+      address: 'مدينة نصر',
+      is_active: true,
+      balance: 18,
+    } as never)
+    .execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'صنف اختبار جملة أ',
+      cost_price: 8,
+      retail_price: 12,
+      wholesale_price: 10,
+      credit_price: 11,
+      consumer_price: 15,
+      stock_qty: 120,
+      reserved_qty: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('product_location_stock' as never)
+    .values([
+      { tenant_id: 't1', account_id: 'a1', product_id: 1, branch_id: null, location_id: 1, qty: 120, reserved_qty: 0 },
+      { tenant_id: 't1', account_id: 'a1', product_id: 1, branch_id: null, location_id: null, qty: 0, reserved_qty: 0 },
+    ] as never)
+    .execute();
 }
 
 async function orderRow(db: Kysely<Database>, orderId: number): Promise<any> {
-  const rows = await (db as any).selectFrom('sales_orders')
-    .select(['customer_id as customerId', 'customer_name as customerName', 'customer_phone as customerPhone', 'customer_address as customerAddress', 'status'])
-    .where('id', '=', orderId).where('tenant_id', '=', 't1').execute() as any[];
+  const rows = (await (db as any)
+    .selectFrom('sales_orders')
+    .select([
+      'customer_id as customerId',
+      'customer_name as customerName',
+      'customer_phone as customerPhone',
+      'customer_address as customerAddress',
+      'status',
+    ])
+    .where('id', '=', orderId)
+    .where('tenant_id', '=', 't1')
+    .execute()) as any[];
   assert.equal(rows.length, 1, `expected exactly one order ${orderId}`);
   return rows[0];
 }
@@ -107,7 +157,11 @@ async function main(): Promise<void> {
       assert.equal(created.ok, true, 'order created');
       const row = await orderRow(db, created.orderId);
       assert.equal(Number(row.customerId), 3060, 'customer_id stored');
-      assert.equal(row.customerName, 'محل اختبار جملة 1', 'customer_name resolved from the customer row, not the generic default');
+      assert.equal(
+        row.customerName,
+        'محل اختبار جملة 1',
+        'customer_name resolved from the customer row, not the generic default',
+      );
       assert.equal(row.customerPhone, '01122220001', 'phone filled from the customer row');
       assert.equal(row.customerAddress, 'مدينة نصر', 'address filled from the customer row');
       console.log('case 1 passed: customerId 3060 -> name/phone/address from the row');

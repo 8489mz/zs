@@ -112,13 +112,22 @@ import { daysInCalendarMonth } from '../../src/modules/hr/engines/hourly-attenda
 import { evaluateFmcgCartPromotions } from '../../src/modules/delivery-reps/fmcg-promotions.engine';
 import { ContractingService } from '../../src/modules/contracting/contracting.service';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', userId: 1, username: 'tester', role: 'admin', permissions: [] } as never;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  userId: 1,
+  username: 'tester',
+  role: 'admin',
+  permissions: [],
+} as never;
 const SRC = path.resolve(__dirname, '../../src');
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_resolve, reject) => setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms)),
+    new Promise<T>((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms),
+    ),
   ]);
 }
 
@@ -139,42 +148,148 @@ async function main(): Promise<void> {
     // 2026-11-07. The UTC slice keys the previous day; the gateway keys
     // the tenant-local day. Same instant in Dubai (+04) is 02:30 on the 8th.
     const cairoInstant = new Date('2026-11-07T22:30:00.000Z');
-    assert.equal(await resolveBusinessDateKey(db, 't1', cairoInstant), '2026-11-08', 'Cairo 00:30 instant keys 2026-11-08');
-    assert.equal(await resolveBusinessDateKey(db, 't2', cairoInstant), '2026-11-08', 'Dubai 02:30 instant keys 2026-11-08');
-    assert.equal(await resolveBusinessDateKey(db, 't1', '2026-11-08'), '2026-11-08', 'calendar-day string passes through untouched');
-    assert.equal(await resolveBusinessDateKey(db, 't1', new Date('2026-11-08T22:30:00.000Z')), '2026-11-09', 'Cairo 00:30 on the 9th keys 2026-11-09, not the UTC 8th');
-    assert.equal(todayTenantDate('Africa/Cairo', cairoInstant), '2026-11-08', 'todayTenantDate agrees with the gateway');
+    assert.equal(
+      await resolveBusinessDateKey(db, 't1', cairoInstant),
+      '2026-11-08',
+      'Cairo 00:30 instant keys 2026-11-08',
+    );
+    assert.equal(
+      await resolveBusinessDateKey(db, 't2', cairoInstant),
+      '2026-11-08',
+      'Dubai 02:30 instant keys 2026-11-08',
+    );
+    assert.equal(
+      await resolveBusinessDateKey(db, 't1', '2026-11-08'),
+      '2026-11-08',
+      'calendar-day string passes through untouched',
+    );
+    assert.equal(
+      await resolveBusinessDateKey(db, 't1', new Date('2026-11-08T22:30:00.000Z')),
+      '2026-11-09',
+      'Cairo 00:30 on the 9th keys 2026-11-09, not the UTC 8th',
+    );
+    assert.equal(
+      todayTenantDate('Africa/Cairo', cairoInstant),
+      '2026-11-08',
+      'todayTenantDate agrees with the gateway',
+    );
     // FEFO month: 00:30 Cairo on 2026-11-01 is 22:30 UTC on 2026-10-31;
     // the UTC month is October, the tenant month is November.
-    assert.equal((await resolveBusinessDateKey(db, 't1', new Date('2026-10-31T22:30:00.000Z'))).slice(0, 7), '2026-11', 'tenant-local month at the Nov 1 boundary is 2026-11');
+    assert.equal(
+      (await resolveBusinessDateKey(db, 't1', new Date('2026-10-31T22:30:00.000Z'))).slice(0, 7),
+      '2026-11',
+      'tenant-local month at the Nov 1 boundary is 2026-11',
+    );
 
     // 2. Returns helper: a return recorded at 00:30 Cairo belongs to
     // the Cairo business day, not the UTC day -- once the tenant zone
     // is passed. Legacy behaviour (no zone) is unchanged.
     const returnRows = [
-      { id: 'r1', rowId: 'r1', docNo: 'RT-1', returnType: 'sale', type: 'sale', invoiceId: '1', productId: 'p1', productName: 'Item', qty: 1, total: 100, note: '', settlementMode: '', refundMethod: '', createdAt: cairoInstant, date: cairoInstant },
-      { id: 'r2', rowId: 'r2', docNo: 'RT-2', returnType: 'sale', type: 'sale', invoiceId: '1', productId: 'p1', productName: 'Item', qty: 1, total: 50, note: '', settlementMode: '', refundMethod: '', createdAt: new Date('2026-11-07T10:00:00.000Z'), date: new Date('2026-11-07T10:00:00.000Z') },
+      {
+        id: 'r1',
+        rowId: 'r1',
+        docNo: 'RT-1',
+        returnType: 'sale',
+        type: 'sale',
+        invoiceId: '1',
+        productId: 'p1',
+        productName: 'Item',
+        qty: 1,
+        total: 100,
+        note: '',
+        settlementMode: '',
+        refundMethod: '',
+        createdAt: cairoInstant,
+        date: cairoInstant,
+      },
+      {
+        id: 'r2',
+        rowId: 'r2',
+        docNo: 'RT-2',
+        returnType: 'sale',
+        type: 'sale',
+        invoiceId: '1',
+        productId: 'p1',
+        productName: 'Item',
+        qty: 1,
+        total: 50,
+        note: '',
+        settlementMode: '',
+        refundMethod: '',
+        createdAt: new Date('2026-11-07T10:00:00.000Z'),
+        date: new Date('2026-11-07T10:00:00.000Z'),
+      },
     ] as never;
-    assert.equal(filterReturnRows(returnRows, { filter: 'today' }, '2026-11-08', 'Africa/Cairo').length, 1, 'zoned today filter matches the Cairo-day return');
-    assert.equal(filterReturnRows(returnRows, { filter: 'today' }, '2026-11-07', 'Africa/Cairo').length, 1, 'zoned today filter does not pull the Cairo-day return into the UTC day');
-    assert.equal(filterReturnRows(returnRows, { filter: 'today' }, '2026-11-07').length, 2, 'legacy (no zone) today filter keeps the UTC day');
-    assert.equal(summarizeReturnRows(returnRows, '2026-11-08', 2, 'Africa/Cairo').todayCount, 1, 'zoned todayCount counts the Cairo-day return');
+    assert.equal(
+      filterReturnRows(returnRows, { filter: 'today' }, '2026-11-08', 'Africa/Cairo').length,
+      1,
+      'zoned today filter matches the Cairo-day return',
+    );
+    assert.equal(
+      filterReturnRows(returnRows, { filter: 'today' }, '2026-11-07', 'Africa/Cairo').length,
+      1,
+      'zoned today filter does not pull the Cairo-day return into the UTC day',
+    );
+    assert.equal(
+      filterReturnRows(returnRows, { filter: 'today' }, '2026-11-07').length,
+      2,
+      'legacy (no zone) today filter keeps the UTC day',
+    );
+    assert.equal(
+      summarizeReturnRows(returnRows, '2026-11-08', 2, 'Africa/Cairo').todayCount,
+      1,
+      'zoned todayCount counts the Cairo-day return',
+    );
     assert.equal(summarizeReturnRows(returnRows, '2026-11-07', 2).todayCount, 2, 'legacy todayCount keeps the UTC day');
 
     // 3. Cash-drawer helper: a shift opened at 00:30 Cairo belongs to
     // the Cairo business day once the tenant day/zone is passed.
     const drawerRows = [
       { status: 'open', variance: 0, openedAt: cairoInstant, createdAt: cairoInstant, docNo: 'SH-1' },
-      { status: 'open', variance: 0, openedAt: new Date('2026-11-07T10:00:00.000Z'), createdAt: new Date('2026-11-07T10:00:00.000Z'), docNo: 'SH-2' },
+      {
+        status: 'open',
+        variance: 0,
+        openedAt: new Date('2026-11-07T10:00:00.000Z'),
+        createdAt: new Date('2026-11-07T10:00:00.000Z'),
+        docNo: 'SH-2',
+      },
     ] as never;
-    assert.equal(filterCashDrawerRows(drawerRows, { filter: 'today' }, '2026-11-08', 'Africa/Cairo').length, 1, 'zoned today filter matches the Cairo-day shift');
-    assert.equal(filterCashDrawerRows(drawerRows, { filter: 'today' }, '2026-11-07', 'Africa/Cairo').length, 1, 'zoned today filter does not pull the Cairo-day shift into the UTC day');
-    assert.equal(filterCashDrawerRows(drawerRows, { filter: 'today' }, '2026-11-07').length, 2, 'explicit day without zone keeps the UTC slice');
+    assert.equal(
+      filterCashDrawerRows(drawerRows, { filter: 'today' }, '2026-11-08', 'Africa/Cairo').length,
+      1,
+      'zoned today filter matches the Cairo-day shift',
+    );
+    assert.equal(
+      filterCashDrawerRows(drawerRows, { filter: 'today' }, '2026-11-07', 'Africa/Cairo').length,
+      1,
+      'zoned today filter does not pull the Cairo-day shift into the UTC day',
+    );
+    assert.equal(
+      filterCashDrawerRows(drawerRows, { filter: 'today' }, '2026-11-07').length,
+      2,
+      'explicit day without zone keeps the UTC slice',
+    );
 
     // 4. Sales summary: an explicit tenant day drives todaySalesCount/Total.
     const saleRows = [
-      { date: '2026-11-08', total: 100, createdBy: 'A', customerId: 'c1', customerName: 'C1', paymentType: 'cash', status: 'posted' },
-      { date: '2026-11-07', total: 50, createdBy: 'A', customerId: 'c1', customerName: 'C1', paymentType: 'cash', status: 'posted' },
+      {
+        date: '2026-11-08',
+        total: 100,
+        createdBy: 'A',
+        customerId: 'c1',
+        customerName: 'C1',
+        paymentType: 'cash',
+        status: 'posted',
+      },
+      {
+        date: '2026-11-07',
+        total: 50,
+        createdBy: 'A',
+        customerId: 'c1',
+        customerName: 'C1',
+        paymentType: 'cash',
+        status: 'posted',
+      },
     ] as never;
     const summary = summarizeSales(saleRows, 2, '2026-11-08');
     assert.equal(summary.todaySalesCount, 1, 'tenant-day todaySalesCount counts the tenant-day sale');
@@ -189,15 +304,30 @@ async function main(): Promise<void> {
     // 6. FMCG engine: an explicit referenceDate string drives the
     // promotion window (the caller must pass the tenant-local day).
     const promo = {
-      id: 1, name: 'Mix 10%', code: 'MIX10', promoType: 'mix_and_match', applyType: 'discount_percent',
-      buyConditions: [{ productId: 1, minQty: 1 }], reward: { discountPercent: 10 },
-      startDate: '2026-11-01', endDate: '2026-11-30', isActive: true,
+      id: 1,
+      name: 'Mix 10%',
+      code: 'MIX10',
+      promoType: 'mix_and_match',
+      applyType: 'discount_percent',
+      buyConditions: [{ productId: 1, minQty: 1 }],
+      reward: { discountPercent: 10 },
+      startDate: '2026-11-01',
+      endDate: '2026-11-30',
+      isActive: true,
     };
     const cart = [{ productId: 1, qty: 2, unitPrice: 100 }];
-    const inWindow = evaluateFmcgCartPromotions({ cartItems: cart, activePromotions: [promo as never], referenceDate: '2026-11-08' });
+    const inWindow = evaluateFmcgCartPromotions({
+      cartItems: cart,
+      activePromotions: [promo as never],
+      referenceDate: '2026-11-08',
+    });
     assert.equal(inWindow.appliedPromotions.length, 1, 'promotion applies inside its window on the reference date');
     assert.equal(inWindow.totalPromotionalDiscount, 20, 'discount is 10% of the 200 subtotal');
-    const outWindow = evaluateFmcgCartPromotions({ cartItems: cart, activePromotions: [promo as never], referenceDate: '2026-12-01' });
+    const outWindow = evaluateFmcgCartPromotions({
+      cartItems: cart,
+      activePromotions: [promo as never],
+      referenceDate: '2026-12-01',
+    });
     assert.equal(outWindow.appliedPromotions.length, 0, 'promotion does not apply outside its window');
 
     // 7. Meeting minute end to end (window-limited: distinguishes
@@ -205,18 +335,35 @@ async function main(): Promise<void> {
     // 00:00-02:59 Cairo; the deterministic proofs are (1)-(6), (8)-(9)).
     const expectedDay = await resolveBusinessDateKey(db, 't1', new Date());
     const minute = await withTimeout(
-      contracting.createMeetingMinute(AUTH, 'p1', { meetingType: 'site_progress', location: 'Site', attendees: [], agenda: 'a', summary: 's' } as never),
+      contracting.createMeetingMinute(AUTH, 'p1', {
+        meetingType: 'site_progress',
+        location: 'Site',
+        attendees: [],
+        agenda: 'a',
+        summary: 's',
+      } as never),
       25000,
       'createMeetingMinute',
     );
-    const stored = await sql<{ meeting_date: string }>`SELECT meeting_date FROM contracting_meeting_minutes WHERE id = ${Number((minute as any).id)}`.execute(db);
+    const stored = await sql<{
+      meeting_date: string;
+    }>`SELECT meeting_date FROM contracting_meeting_minutes WHERE id = ${Number((minute as any).id)}`.execute(db);
     assert.equal(stored.rows[0].meeting_date, expectedDay, 'meeting_date defaults to the tenant-local day');
     const explicit = await withTimeout(
-      contracting.createMeetingMinute(AUTH, 'p1', { meetingType: 'site_progress', meetingDate: '2026-11-05', location: 'Site', attendees: [], agenda: 'a', summary: 's' } as never),
+      contracting.createMeetingMinute(AUTH, 'p1', {
+        meetingType: 'site_progress',
+        meetingDate: '2026-11-05',
+        location: 'Site',
+        attendees: [],
+        agenda: 'a',
+        summary: 's',
+      } as never),
       25000,
       'createMeetingMinute explicit date',
     );
-    const storedExplicit = await sql<{ meeting_date: string }>`SELECT meeting_date FROM contracting_meeting_minutes WHERE id = ${Number((explicit as any).id)}`.execute(db);
+    const storedExplicit = await sql<{
+      meeting_date: string;
+    }>`SELECT meeting_date FROM contracting_meeting_minutes WHERE id = ${Number((explicit as any).id)}`.execute(db);
     assert.equal(storedExplicit.rows[0].meeting_date, '2026-11-05', 'explicit meetingDate passes through untouched');
 
     // 7b. EVM planned value end to end (window-limited like (7): it
@@ -239,7 +386,11 @@ async function main(): Promise<void> {
     `);
     await sql.raw(`INSERT INTO settings VALUES ('t1', 'currency', 'EGP')`).execute(db);
     await sql.raw(`INSERT INTO currency_exchange_rates VALUES ('t1', 'EGP', true, 1)`).execute(db);
-    await sql.raw(`INSERT INTO contracting_projects (id, tenant_id, code, name, status, contract_value, revised_contract_value, down_payment_amount, down_payment_recovered, retention_percent, retention_total_held, retention_released) VALUES (1, 't1', 'PRJ-1', 'Tower A', 'active', 1000, 1000, 0, 0, 5, 0, 0)`).execute(db);
+    await sql
+      .raw(
+        `INSERT INTO contracting_projects (id, tenant_id, code, name, status, contract_value, revised_contract_value, down_payment_amount, down_payment_recovered, retention_percent, retention_total_held, retention_released) VALUES (1, 't1', 'PRJ-1', 'Tower A', 'active', 1000, 1000, 0, 0, 5, 0, 0)`,
+      )
+      .execute(db);
     await sql.raw(`INSERT INTO contracting_invoices VALUES (1, 't1', 1, 'client', 'approved', 100.125, 0)`).execute(db);
     await sql.raw(`INSERT INTO contracting_material_requisitions VALUES (1, 't1', 1, 33.374)`).execute(db);
     const dayKey = (base: string, delta: number): string => {
@@ -247,11 +398,18 @@ async function main(): Promise<void> {
       d.setUTCDate(d.getUTCDate() + delta);
       return d.toISOString().slice(0, 10);
     };
-    await sql.raw(`INSERT INTO contracting_schedule_tasks (tenant_id, project_id, start_date, end_date, planned_manpower_count, planned_equipment_count, resource_trade) VALUES ('t1', '1', '${dayKey(expectedDay, -1)}', '${dayKey(expectedDay, -1)}', 0, 0, 'test'), ('t1', '1', '${expectedDay}', '${expectedDay}', 0, 0, 'test'), ('t1', '1', '${dayKey(expectedDay, 1)}', '${dayKey(expectedDay, 1)}', 0, 0, 'test')`).execute(db);
-    const evm = await withTimeout(contracting.getProjectEvmMetrics(AUTH, '1'), 25000, 'getProjectEvmMetrics') as any;
+    await sql
+      .raw(
+        `INSERT INTO contracting_schedule_tasks (tenant_id, project_id, start_date, end_date, planned_manpower_count, planned_equipment_count, resource_trade) VALUES ('t1', '1', '${dayKey(expectedDay, -1)}', '${dayKey(expectedDay, -1)}', 0, 0, 'test'), ('t1', '1', '${expectedDay}', '${expectedDay}', 0, 0, 'test'), ('t1', '1', '${dayKey(expectedDay, 1)}', '${dayKey(expectedDay, 1)}', 0, 0, 'test')`,
+      )
+      .execute(db);
+    const evm = (await withTimeout(contracting.getProjectEvmMetrics(AUTH, '1'), 25000, 'getProjectEvmMetrics')) as any;
     assert.equal(evm.earnedValue, 100.13, 'EVM earned value is the billed total at book digits');
     assert.equal(evm.actualCost, 33.37, 'EVM actual cost comes from the cost breakdown');
-    assert.ok(Math.abs(evm.plannedValue - 666.67) < 0.01, `EVM planned value counts the task starting on the tenant-local today (got ${evm.plannedValue})`);
+    assert.ok(
+      Math.abs(evm.plannedValue - 666.67) < 0.01,
+      `EVM planned value counts the task starting on the tenant-local today (got ${evm.plannedValue})`,
+    );
 
     // 8. Histogram week buckets under a Cairo-TZ child process: a task
     // starting 2026-11-08 (a stored DATE) must open the week on
@@ -265,7 +423,9 @@ async function main(): Promise<void> {
     const histDir = fs.mkdtempSync(path.join(__dirname, '.tmp-r3c-'));
     const histTmp = path.join(histDir, 'histogram-check.ts');
     try {
-      fs.writeFileSync(histTmp, `import 'reflect-metadata';
+      fs.writeFileSync(
+        histTmp,
+        `import 'reflect-metadata';
 import { PGlite } from '@electric-sql/pglite';
 import { Kysely, sql } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
@@ -286,41 +446,72 @@ async function main(): Promise<void> {
   } finally { await db.destroy(); }
 }
 main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
-`);
+`,
+      );
       const histOut = execFileSync('npx', ['ts-node', histTmp], {
         cwd: path.resolve(__dirname, '../..'),
         env: { ...process.env, TZ: 'Africa/Cairo' },
         timeout: 180000,
         encoding: 'utf8',
       });
-      assert.ok(histOut.includes('WEEK_START=2026-11-08'), `histogram week opens on the task's DATE under Cairo TZ (got: ${histOut.trim()})`);
+      assert.ok(
+        histOut.includes('WEEK_START=2026-11-08'),
+        `histogram week opens on the task's DATE under Cairo TZ (got: ${histOut.trim()})`,
+      );
       assert.ok(histOut.includes('WEEK_END=2026-11-14'), `histogram week ends 6 days later (got: ${histOut.trim()})`);
     } finally {
-      try { fs.unlinkSync(histTmp); } catch { /* already gone */ }
-      try { fs.rmSync(histDir, { recursive: true, force: true }); } catch { /* already gone */ }
+      try {
+        fs.unlinkSync(histTmp);
+      } catch {
+        /* already gone */
+      }
+      try {
+        fs.rmSync(histDir, { recursive: true, force: true });
+      } catch {
+        /* already gone */
+      }
     }
 
     // 9. Payroll month-end under a Cairo-TZ child process: the local
     // constructor returns Nov 29 for a November run on a Cairo host;
     // Date.UTC returns Nov 30. Plus the source assertions that the
     // fixed expression is what hr.service.ts actually contains.
-    const monthOut = execFileSync('node', ['-e', "console.log(new Date(2026, 11, 0).toISOString().slice(0, 10)); console.log(new Date(Date.UTC(2026, 11, 0)).toISOString().slice(0, 10));"], {
-      env: { ...process.env, TZ: 'Africa/Cairo' },
-      encoding: 'utf8',
-    }).trim().split('\n');
+    const monthOut = execFileSync(
+      'node',
+      [
+        '-e',
+        'console.log(new Date(2026, 11, 0).toISOString().slice(0, 10)); console.log(new Date(Date.UTC(2026, 11, 0)).toISOString().slice(0, 10));',
+      ],
+      {
+        env: { ...process.env, TZ: 'Africa/Cairo' },
+        encoding: 'utf8',
+      },
+    )
+      .trim()
+      .split('\n');
     assert.equal(monthOut[0], '2026-11-29', 'old local-Date month-end is Nov 29 under Cairo TZ (the bug)');
     assert.equal(monthOut[1], '2026-11-30', 'Date.UTC month-end is Nov 30 under Cairo TZ (the fix)');
     const hrText = fs.readFileSync(path.join(SRC, 'modules/hr/services/hr-payroll-runs.service.ts'), 'utf8');
     assert.ok(hrText.includes('Date.UTC(Number(periodMonth.split'), 'payroll month-end uses Date.UTC');
-    assert.ok(!hrText.includes('new Date(Number(periodMonth.split'), 'payroll month-end no longer uses the local Date constructor');
-    const contractingText = fs.readFileSync(path.join(SRC, 'modules/contracting/services/contracting-site-operations.service.ts'), 'utf8');
+    assert.ok(
+      !hrText.includes('new Date(Number(periodMonth.split'),
+      'payroll month-end no longer uses the local Date constructor',
+    );
+    const contractingText = fs.readFileSync(
+      path.join(SRC, 'modules/contracting/services/contracting-site-operations.service.ts'),
+      'utf8',
+    );
     assert.ok(contractingText.includes('weekStart.setUTCHours(0, 0, 0, 0)'), 'histogram snaps with setUTCHours');
-    assert.ok(!contractingText.includes('weekStart.setHours(0, 0, 0, 0)'), 'histogram no longer snaps with local setHours');
+    assert.ok(
+      !contractingText.includes('weekStart.setHours(0, 0, 0, 0)'),
+      'histogram no longer snaps with local setHours',
+    );
 
     // 10. Wiring pin: no live-instant UTC date slice remains in the
     // owned files except the two documented exceptions (two legacy-default
     // branches kept for existing callers).
-    const countDefect = (text: string): number => (text.match(/new Date\(\)\.toISOString\(\)\.(slice\(0, 10\)|split\('T'\)\[0\])/g) || []).length;
+    const countDefect = (text: string): number =>
+      (text.match(/new Date\(\)\.toISOString\(\)\.(slice\(0, 10\)|split\('T'\)\[0\])/g) || []).length;
     const pinZero = [
       'modules/returns/helpers/returns-listing.helper.ts',
       'modules/hr/payroll-loan-allocation.engine.ts',
@@ -362,7 +553,9 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
       assert.ok(text.includes(marker), `${file} legacy slice is the documented ${marker} case`);
     }
 
-    console.log('business-date-display.spec: ok (gateway Cairo/Dubai, returns/cash-drawer zoned filters, sales tenant day, DATE round-trips, fmcg window, meeting minute tenant-local, EVM planned value)');
+    console.log(
+      'business-date-display.spec: ok (gateway Cairo/Dubai, returns/cash-drawer zoned filters, sales tenant day, DATE round-trips, fmcg window, meeting minute tenant-local, EVM planned value)',
+    );
   } finally {
     await db.destroy();
   }
@@ -370,5 +563,8 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
 
 main().then(
   () => process.exit(0),
-  (error) => { console.error(error); process.exit(1); },
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
 );

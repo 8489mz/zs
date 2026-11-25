@@ -151,7 +151,9 @@ async function preorderCount(db: Kysely<Database>): Promise<number> {
   return rows.length;
 }
 
-async function journalLines(db: Kysely<Database>): Promise<Array<{ account_id: number; debit: number; credit: number }>> {
+async function journalLines(
+  db: Kysely<Database>,
+): Promise<Array<{ account_id: number; debit: number; credit: number }>> {
   const rows = await sql<{ account_id: string; debit: string; credit: string }>`
     SELECT l.account_id, l.debit, l.credit FROM journal_entry_lines l
     JOIN journal_entries e ON e.id = l.journal_entry_id
@@ -169,8 +171,16 @@ async function main(): Promise<void> {
       const service = makeService(db);
       const preorder = await service.createContainerPreorder('t1', 1, trialDto());
       assert.equal(preorder.status, 'reserved', 'Reservation records with status reserved');
-      assert.equal(Number(preorder.reserved_quantity), 1, 'Reservation records qty 1 (the sane default, <= capacity 10)');
-      assert.equal(Number(preorder.total_price_egp), 90, 'Reservation totals 1 x 90 landed cost, not the old 150,000 default deal');
+      assert.equal(
+        Number(preorder.reserved_quantity),
+        1,
+        'Reservation records qty 1 (the sane default, <= capacity 10)',
+      );
+      assert.equal(
+        Number(preorder.total_price_egp),
+        90,
+        'Reservation totals 1 x 90 landed cost, not the old 150,000 default deal',
+      );
       assert.equal(Number(preorder.deposit_amount_egp), 0, 'No deposit is asserted when none was paid');
       assert.equal(await journalLines(db).then((l) => l.length), 0, 'A deposit-free reservation posts no journal');
     } finally {
@@ -310,8 +320,14 @@ async function main(): Promise<void> {
     );
     const api = readSource('frontend/src/features/import-sales/api/shipments.api.ts');
     assert.ok(api.includes('unitPriceEgp:'), 'Create mutation sends the DTO field unitPriceEgp');
-    assert.ok(api.includes('depositTreasuryAccountId:'), 'Create mutation sends the DTO field depositTreasuryAccountId');
-    assert.ok(!api.includes('agreedUnitPriceEgp:'), 'Create mutation no longer sends the undeclared agreedUnitPriceEgp');
+    assert.ok(
+      api.includes('depositTreasuryAccountId:'),
+      'Create mutation sends the DTO field depositTreasuryAccountId',
+    );
+    assert.ok(
+      !api.includes('agreedUnitPriceEgp:'),
+      'Create mutation no longer sends the undeclared agreedUnitPriceEgp',
+    );
     assert.ok(!api.includes('idempotencyKey:'), 'Create mutation no longer sends the undeclared idempotencyKey');
   }
 

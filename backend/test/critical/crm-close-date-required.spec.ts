@@ -55,8 +55,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const auth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['crm'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['crm'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -105,7 +110,7 @@ function namesCloseDate(err: unknown): boolean {
   return Boolean(
     err &&
     typeof (err as { message?: unknown }).message === 'string' &&
-    ((err as { message: string }).message.includes('تاريخ الإغلاق')),
+    (err as { message: string }).message.includes('تاريخ الإغلاق'),
   );
 }
 
@@ -117,8 +122,7 @@ async function main(): Promise<void> {
       const service = new CrmService(db);
       await assert.rejects(
         service.createDeal({ title: 'توريد معدات' } as any, auth),
-        (err: unknown) =>
-          err instanceof BadRequestException && namesCloseDate(err),
+        (err: unknown) => err instanceof BadRequestException && namesCloseDate(err),
       );
     } finally {
       await db.destroy();
@@ -134,8 +138,7 @@ async function main(): Promise<void> {
       const service = new CrmService(db);
       await assert.rejects(
         service.createDeal({ title: 'توريد معدات', expectedCloseDate: '' } as any, auth),
-        (err: unknown) =>
-          err instanceof BadRequestException && namesCloseDate(err),
+        (err: unknown) => err instanceof BadRequestException && namesCloseDate(err),
       );
     } finally {
       await db.destroy();
@@ -148,10 +151,7 @@ async function main(): Promise<void> {
     const { db } = await makeDb();
     try {
       const service = new CrmService(db);
-      const result = await service.createDeal(
-        { title: 'توريد معدات', expectedCloseDate: '2026-12-01' } as any,
-        auth,
-      );
+      const result = await service.createDeal({ title: 'توريد معدات', expectedCloseDate: '2026-12-01' } as any, auth);
       assert.equal(result.ok, true, 'the deal is created');
       assert.ok(Number(result.deal.id) > 0, 'the deal has an id');
       const row = await (db as any)
@@ -203,16 +203,11 @@ async function main(): Promise<void> {
         { title: 'توريد معدات', expectedCloseDate: '' },
         { type: 'body', metatype: CreateDealDto },
       )) as CreateDealDto;
-      assert.equal(
-        transformed.expectedCloseDate,
-        undefined,
-        "the pipe normalises the modal's empty string to missing",
-      );
+      assert.equal(transformed.expectedCloseDate, undefined, "the pipe normalises the modal's empty string to missing");
       const service = new CrmService(db);
       await assert.rejects(
         service.createDeal(transformed as any, auth),
-        (err: unknown) =>
-          err instanceof BadRequestException && namesCloseDate(err),
+        (err: unknown) => err instanceof BadRequestException && namesCloseDate(err),
       );
     } finally {
       await db.destroy();
@@ -226,11 +221,7 @@ async function main(): Promise<void> {
       { title: 'توريد معدات', expectedCloseDate: '2026-12-01' },
       { type: 'body', metatype: CreateDealDto },
     )) as CreateDealDto;
-    assert.equal(
-      transformed.expectedCloseDate,
-      '2026-12-01',
-      'a valid close date survives the pipe',
-    );
+    assert.equal(transformed.expectedCloseDate, '2026-12-01', 'a valid close date survives the pipe');
     console.log('  pipe passes a valid close date passed');
   }
 

@@ -19,8 +19,8 @@ const mockDb: any = {
           throw err;
         }
         existingRecord = data;
-      }
-    })
+      },
+    }),
   }),
   selectFrom: () => {
     const filters: [string, string, any][] = [];
@@ -65,23 +65,23 @@ const mockDb: any = {
                   execute: async () => {
                     updates.push(data);
                     if (existingRecord) existingRecord.status = data.status;
-                  }
+                  },
                 }),
                 execute: async () => {
                   updates.push(data);
                   if (existingRecord) existingRecord.status = data.status;
-                }
+                },
               }),
               execute: async () => {
                 updates.push(data);
                 if (existingRecord) existingRecord.status = data.status;
-              }
-            })
-          })
-        })
-      })
-    })
-  })
+              },
+            }),
+          }),
+        }),
+      }),
+    }),
+  }),
 };
 
 const service = new IdempotencyService(mockDb);
@@ -97,7 +97,11 @@ async function runTests() {
   // 2. Successful reservation
   insertSuccess = true;
   let result = await service.reserveOperation({
-    tenantId: 't1', accountId: 'a1', idempotencyKey: 'k1', operationType: 'test', requestHash: hash1
+    tenantId: 't1',
+    accountId: 'a1',
+    idempotencyKey: 'k1',
+    operationType: 'test',
+    requestHash: hash1,
   });
   assert.equal(result, null, 'Expected reservation to succeed (return null)');
 
@@ -105,7 +109,11 @@ async function runTests() {
   insertSuccess = false;
   existingRecord = { status: 'processing', request_hash: hash1, operation_type: 'test' };
   result = await service.reserveOperation({
-    tenantId: 't1', accountId: 'a1', idempotencyKey: 'k1', operationType: 'test', requestHash: hash1
+    tenantId: 't1',
+    accountId: 'a1',
+    idempotencyKey: 'k1',
+    operationType: 'test',
+    requestHash: hash1,
   });
   assert.equal(result?.status, 'processing');
 
@@ -114,7 +122,11 @@ async function runTests() {
   existingRecord = { status: 'processing', request_hash: 'different_hash', operation_type: 'test' };
   try {
     await service.reserveOperation({
-      tenantId: 't1', accountId: 'a1', idempotencyKey: 'k1', operationType: 'test', requestHash: hash1
+      tenantId: 't1',
+      accountId: 'a1',
+      idempotencyKey: 'k1',
+      operationType: 'test',
+      requestHash: hash1,
     });
     assert.fail('Expected error for different payload');
   } catch (error: any) {
@@ -167,7 +179,11 @@ async function runTests() {
   }
 
   // 9. Check respects operationType scoping and prevents cross-contamination
-  const checkMatching = await service.check('k_multi_op', { tenantId: 't1', accountId: 'a1' }, 'POST:/api/orders/cancel');
+  const checkMatching = await service.check(
+    'k_multi_op',
+    { tenantId: 't1', accountId: 'a1' },
+    'POST:/api/orders/cancel',
+  );
   assert.deepEqual(checkMatching, { response: { cancelled: true } });
 
   const checkDifferentOp = await service.check('k_multi_op', { tenantId: 't1', accountId: 'a1' }, 'POST:/api/returns');

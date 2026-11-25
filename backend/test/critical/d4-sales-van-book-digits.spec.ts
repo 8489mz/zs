@@ -39,17 +39,29 @@ import {
 } from '../../src/modules/delivery-reps/van-trip-reconciliation.engine';
 
 const KWD_AUTH = {
-  tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['sales'],
 } as unknown as AuthContext;
 
 const KWD_AUTH_2 = {
-  tenantId: 't2', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't2',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['sales'],
 } as unknown as AuthContext;
 
 const EGP_AUTH = {
-  tenantId: 't3', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't3',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['sales'],
 } as unknown as AuthContext;
 
@@ -136,7 +148,9 @@ async function main(): Promise<void> {
       linkedSale: {
         saleId: 55,
         customerId: 9,
-        items: [{ saleItemId: 1, productId: 10, soldQty: 2, unitPrice: 100.125, lineTotal: 200.25, alreadyReturnedQty: 0 }],
+        items: [
+          { saleItemId: 1, productId: 10, soldQty: 2, unitPrice: 100.125, lineTotal: 200.25, alreadyReturnedQty: 0 },
+        ],
       },
     });
     assert.equal(return3.allowed, true);
@@ -149,7 +163,9 @@ async function main(): Promise<void> {
       linkedSale: {
         saleId: 55,
         customerId: 9,
-        items: [{ saleItemId: 1, productId: 10, soldQty: 2, unitPrice: 100.125, lineTotal: 200.25, alreadyReturnedQty: 0 }],
+        items: [
+          { saleItemId: 1, productId: 10, soldQty: 2, unitPrice: 100.125, lineTotal: 200.25, alreadyReturnedQty: 0 },
+        ],
       },
     });
     assert.equal(return2.allowed, true);
@@ -206,4 +222,7 @@ async function main(): Promise<void> {
   console.log('d4-sales-van-book-digits: OK (22 assertions)');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

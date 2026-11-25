@@ -37,7 +37,14 @@ import { HrService } from '../../src/modules/hr/hr.service';
 import { migration as auditKeyMigration } from '../../src/database/migrations/2040000000293_audit_logs_idempotency_key';
 import { todayTenantDate } from '../../src/common/utils/tenant-timezone.util';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 // The tenant day itself (clock P6 bounds manual work dates to the open
 // payroll month): today is always in-month, never a fixed old date.
 // The tenant timezone is Africa/Cairo, the same zone the fixture uses.
@@ -58,7 +65,9 @@ const PAYLOAD = {
 };
 
 async function countAuditRows(db: Kysely<Database>): Promise<number> {
-  const rows = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'Save HR attendance day'`.execute(db);
+  const rows = await sql<{
+    n: string;
+  }>`SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'Save HR attendance day'`.execute(db);
   return Number(rows.rows[0].n);
 }
 
@@ -123,16 +132,28 @@ async function main(): Promise<void> {
       CREATE TABLE audit_logs (id bigserial PRIMARY KEY, action text, details text, event_code text, target_tenant_id text, created_by bigint, impersonated_by bigint, tenant_id text, account_id text, created_at timestamptz DEFAULT NOW());
     `);
     await auditKeyMigration.up(db2 as never);
-    const cols = await sql<{ column_name: string }>`SELECT column_name FROM information_schema.columns WHERE table_name = 'audit_logs' AND column_name = 'idempotency_key'`.execute(db2);
+    const cols = await sql<{
+      column_name: string;
+    }>`SELECT column_name FROM information_schema.columns WHERE table_name = 'audit_logs' AND column_name = 'idempotency_key'`.execute(
+      db2,
+    );
     assert.equal(cols.rows.length, 1);
     // Legacy rows without a key keep working: duplicate NULLs allowed.
-    await sql`INSERT INTO audit_logs (action, details, tenant_id, account_id) VALUES ('a', 'x', 't1', 'a1'), ('a', 'y', 't1', 'a1')`.execute(db2);
-    await sql`INSERT INTO audit_logs (action, details, tenant_id, account_id, idempotency_key) VALUES ('a', 'z', 't1', 'a1', 'key-001')`.execute(db2);
+    await sql`INSERT INTO audit_logs (action, details, tenant_id, account_id) VALUES ('a', 'x', 't1', 'a1'), ('a', 'y', 't1', 'a1')`.execute(
+      db2,
+    );
+    await sql`INSERT INTO audit_logs (action, details, tenant_id, account_id, idempotency_key) VALUES ('a', 'z', 't1', 'a1', 'key-001')`.execute(
+      db2,
+    );
     await assert.rejects(
-      sql`INSERT INTO audit_logs (action, details, tenant_id, account_id, idempotency_key) VALUES ('a', 'z2', 't1', 'a1', 'key-001')`.execute(db2),
+      sql`INSERT INTO audit_logs (action, details, tenant_id, account_id, idempotency_key) VALUES ('a', 'z2', 't1', 'a1', 'key-001')`.execute(
+        db2,
+      ),
     );
     // Same key under a different tenant is allowed.
-    await sql`INSERT INTO audit_logs (action, details, tenant_id, account_id, idempotency_key) VALUES ('a', 'z3', 't2', 'a1', 'key-001')`.execute(db2);
+    await sql`INSERT INTO audit_logs (action, details, tenant_id, account_id, idempotency_key) VALUES ('a', 'z3', 't2', 'a1', 'key-001')`.execute(
+      db2,
+    );
     // Re-running the migration is a no-op.
     await auditKeyMigration.up(db2 as never);
     console.log('audit_logs idempotency migration checks passed');

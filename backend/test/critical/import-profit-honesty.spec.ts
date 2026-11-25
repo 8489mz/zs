@@ -133,23 +133,39 @@ function makePosting(db: Kysely<Database>): any {
 }
 
 async function seedShipment(db: Kysely<Database>, rate: number | null): Promise<void> {
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', container_number: 'C1', supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: rate, pricing_exchange_rate: null, cost_allocation_method: 'value',
-    project_id: 'proj-1', shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'sh-1-item', tenant_id: 't1', shipment_id: 'sh-1', product_id: 1,
-    quantity: 10, factory_unit_price_usd: 50, shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      container_number: 'C1',
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: rate,
+      pricing_exchange_rate: null,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'sh-1-item',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 1,
+      quantity: 10,
+      factory_unit_price_usd: 50,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 /** Independent GL read: signed sum of posted lines on the given accounts. */
-async function glSum(
-  db: Kysely<Database>,
-  entryIds: number[],
-  accountIds: number[],
-): Promise<number> {
+async function glSum(db: Kysely<Database>, entryIds: number[], accountIds: number[]): Promise<number> {
   if (entryIds.length === 0) return 0;
   const rows: any[] = await (db as any)
     .selectFrom('journal_entry_lines')
@@ -160,11 +176,7 @@ async function glSum(
   return rows.reduce((s, r) => s + Number(r.debit || 0) - Number(r.credit || 0), 0);
 }
 
-async function entriesBySource(
-  db: Kysely<Database>,
-  sourceType: string,
-  sourceIds: number[],
-): Promise<number[]> {
+async function entriesBySource(db: Kysely<Database>, sourceType: string, sourceIds: number[]): Promise<number[]> {
   if (sourceIds.length === 0) return [];
   const rows: any[] = await (db as any)
     .selectFrom('journal_entries')
@@ -194,7 +206,9 @@ async function main(): Promise<void> {
         .where('id', '=', 'sh-1-item')
         .execute();
       await service.updateShipmentCosts('t1', 1, 'sh-1', {
-        status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
+        status: 'Arrived',
+        exchangeRateAtArrival: 50,
+        receiptLocationId: 10,
       });
       const receipt: any = await (db as any)
         .selectFrom('import_inventory_receipts')
@@ -206,69 +220,198 @@ async function main(): Promise<void> {
 
       // Non-capitalised broker expense: Dr COGS / Cr advance.
       const advance = await service.disburseBrokerAdvance('t1', 1, {
-        brokerId: 'br-1', advanceNo: 'ADV-1', amountEgp: 5000,
-        projectId: 'proj-1', shipmentId: 'sh-1', paymentMethod: 'bank_transfer', treasuryAccountId: 24,
+        brokerId: 'br-1',
+        advanceNo: 'ADV-1',
+        amountEgp: 5000,
+        projectId: 'proj-1',
+        shipmentId: 'sh-1',
+        paymentMethod: 'bank_transfer',
+        treasuryAccountId: 24,
       });
       await service.liquidateBrokerExpenses('t1', 1, {
-        brokerId: 'br-1', advanceId: advance.id, projectId: 'proj-1', shipmentId: 'sh-1',
-        receiptNo: 'RC-1', category: 'customs_duty', amountEgp: 1200,
-        isCapitalized: false, isRefundableVat: false,
+        brokerId: 'br-1',
+        advanceId: advance.id,
+        projectId: 'proj-1',
+        shipmentId: 'sh-1',
+        receiptNo: 'RC-1',
+        category: 'customs_duty',
+        amountEgp: 1200,
+        isCapitalized: false,
+        isRefundableVat: false,
       });
 
       // Two PI-linked transfers: a 2000 loss and a 500 gain.
-      await db.insertInto('import_proforma_invoices' as never).values([
-        { id: 'pi-1', tenant_id: 't1', pi_number: 'PI-1', supplier_id: 1, project_id: 'proj-1', currency: 'USD', total_amount_foreign: 5000, paid_amount_foreign: 0, exchange_rate_contract: 50, payment_status: 'open', pi_date: '2026-03-01', status: 'draft' },
-        { id: 'pi-2', tenant_id: 't1', pi_number: 'PI-2', supplier_id: 1, project_id: 'proj-1', currency: 'USD', total_amount_foreign: 5000, paid_amount_foreign: 0, exchange_rate_contract: 50, payment_status: 'open', pi_date: '2026-03-01', status: 'draft' },
-      ] as never).execute();
+      await db
+        .insertInto('import_proforma_invoices' as never)
+        .values([
+          {
+            id: 'pi-1',
+            tenant_id: 't1',
+            pi_number: 'PI-1',
+            supplier_id: 1,
+            project_id: 'proj-1',
+            currency: 'USD',
+            total_amount_foreign: 5000,
+            paid_amount_foreign: 0,
+            exchange_rate_contract: 50,
+            payment_status: 'open',
+            pi_date: '2026-03-01',
+            status: 'draft',
+          },
+          {
+            id: 'pi-2',
+            tenant_id: 't1',
+            pi_number: 'PI-2',
+            supplier_id: 1,
+            project_id: 'proj-1',
+            currency: 'USD',
+            total_amount_foreign: 5000,
+            paid_amount_foreign: 0,
+            exchange_rate_contract: 50,
+            payment_status: 'open',
+            pi_date: '2026-03-01',
+            status: 'draft',
+          },
+        ] as never)
+        .execute();
       const t1: any = await service.recordForeignTransfer('t1', 1, {
-        supplierId: 1, amountEgp: 52000, amountForeign: 1000, currency: 'USD',
-        bankAccountId: 24, idempotencyKey: 'fx-loss-1', proformaInvoiceId: 'pi-1', projectId: 'proj-1',
+        supplierId: 1,
+        amountEgp: 52000,
+        amountForeign: 1000,
+        currency: 'USD',
+        bankAccountId: 24,
+        idempotencyKey: 'fx-loss-1',
+        proformaInvoiceId: 'pi-1',
+        projectId: 'proj-1',
       });
       assert.equal(t1.forexVarianceEgp, 2000, 'Loss transfer posts a 2000 variance');
       const t2: any = await service.recordForeignTransfer('t1', 1, {
-        supplierId: 1, amountEgp: 49500, amountForeign: 1000, currency: 'USD',
-        bankAccountId: 24, idempotencyKey: 'fx-gain-1', proformaInvoiceId: 'pi-2', projectId: 'proj-1',
+        supplierId: 1,
+        amountEgp: 49500,
+        amountForeign: 1000,
+        currency: 'USD',
+        bankAccountId: 24,
+        idempotencyKey: 'fx-gain-1',
+        proformaInvoiceId: 'pi-2',
+        projectId: 'proj-1',
       });
       assert.equal(t2.forexVarianceEgp, -500, 'Gain transfer posts a -500 variance');
 
       // Container deposit refund with a 1500 deduction: Dr COGS.
-      await db.insertInto('import_container_deposits' as never).values({
-        id: 'dep-1', tenant_id: 't1', project_id: 'proj-1', shipment_id: 'sh-1',
-        container_no: 'C1', shipping_line: 'Maersk', deposit_amount_egp: 10000,
-        payment_date: '2026-03-01', refund_status: 'pending',
-        refunded_amount_egp: 0, deductions_amount_egp: 0,
-      } as never).execute();
+      await db
+        .insertInto('import_container_deposits' as never)
+        .values({
+          id: 'dep-1',
+          tenant_id: 't1',
+          project_id: 'proj-1',
+          shipment_id: 'sh-1',
+          container_no: 'C1',
+          shipping_line: 'Maersk',
+          deposit_amount_egp: 10000,
+          payment_date: '2026-03-01',
+          refund_status: 'pending',
+          refunded_amount_egp: 0,
+          deductions_amount_egp: 0,
+        } as never)
+        .execute();
       await service.recordContainerReturnAndRefund('t1', 1, 'dep-1', {
-        refundedAmountEgp: 8000, deductionsAmountEgp: 1500,
-        idempotencyKey: 'refund-1', actualReturnDate: '2026-03-10', treasuryAccountId: 24,
+        refundedAmountEgp: 8000,
+        deductionsAmountEgp: 1500,
+        idempotencyKey: 'refund-1',
+        actualReturnDate: '2026-03-10',
+        treasuryAccountId: 24,
       });
 
       // Posted trip (journal link set) counts; unposted trip does not.
-      await db.insertInto('import_sourcing_trips' as never).values([
-        { id: 'trip-posted', tenant_id: 't1', project_id: 'proj-1', actual_cost_egp: 700, start_date: '2026-03-05', journal_entry_id: receiptJournalId },
-        { id: 'trip-memo', tenant_id: 't1', project_id: 'proj-1', actual_cost_egp: 900, start_date: '2026-03-05', journal_entry_id: null },
-      ] as never).execute();
+      await db
+        .insertInto('import_sourcing_trips' as never)
+        .values([
+          {
+            id: 'trip-posted',
+            tenant_id: 't1',
+            project_id: 'proj-1',
+            actual_cost_egp: 700,
+            start_date: '2026-03-05',
+            journal_entry_id: receiptJournalId,
+          },
+          {
+            id: 'trip-memo',
+            tenant_id: 't1',
+            project_id: 'proj-1',
+            actual_cost_egp: 900,
+            start_date: '2026-03-05',
+            journal_entry_id: null,
+          },
+        ] as never)
+        .execute();
 
       // Late-expense COGS: one posted event counts, one provisional
       // memo (no journal link) is reported as excluded only.
-      await db.insertInto('import_late_expense_events' as never).values([
-        { tenant_id: 't1', shipment_id: 'sh-1', title: 'Posted late cost', total_amount_egp: 400, inventory_amount_egp: 0, cogs_amount_egp: 400, journal_entry_id: receiptJournalId, created_by: 1, created_at: '2026-03-05' },
-        { tenant_id: 't1', shipment_id: 'sh-1', title: 'Provisional memo', total_amount_egp: 250, inventory_amount_egp: 250, cogs_amount_egp: 0, journal_entry_id: null, created_by: 1, created_at: '2026-03-05' },
-      ] as never).execute();
+      await db
+        .insertInto('import_late_expense_events' as never)
+        .values([
+          {
+            tenant_id: 't1',
+            shipment_id: 'sh-1',
+            title: 'Posted late cost',
+            total_amount_egp: 400,
+            inventory_amount_egp: 0,
+            cogs_amount_egp: 400,
+            journal_entry_id: receiptJournalId,
+            created_by: 1,
+            created_at: '2026-03-05',
+          },
+          {
+            tenant_id: 't1',
+            shipment_id: 'sh-1',
+            title: 'Provisional memo',
+            total_amount_egp: 250,
+            inventory_amount_egp: 250,
+            cogs_amount_egp: 0,
+            journal_entry_id: null,
+            created_by: 1,
+            created_at: '2026-03-05',
+          },
+        ] as never)
+        .execute();
 
       // One sale, fully lot-allocated: revenue 20000, COGS 6000.
-      await db.insertInto('sales' as never).values({ id: 1, tenant_id: 't1', status: 'confirmed', created_at: '2026-03-05' } as never).execute();
-      await db.insertInto('sale_items' as never).values({
-        id: 1, sale_id: 1, product_id: 1, qty: 4, line_total: 20000, allocated_discount: 0, cost_price: 1500,
-      } as never).execute();
-      await db.insertInto('import_sale_allocations' as never).values({
-        tenant_id: 't1', project_id: 'proj-1', shipment_id: 'sh-1', sale_item_id: 1,
-        quantity: 4, unit_sale_price_egp: 5000, unit_cost_egp: 1500,
-        allocation_type: 'sale', created_at: '2026-03-05',
-      } as never).execute();
+      await db
+        .insertInto('sales' as never)
+        .values({ id: 1, tenant_id: 't1', status: 'confirmed', created_at: '2026-03-05' } as never)
+        .execute();
+      await db
+        .insertInto('sale_items' as never)
+        .values({
+          id: 1,
+          sale_id: 1,
+          product_id: 1,
+          qty: 4,
+          line_total: 20000,
+          allocated_discount: 0,
+          cost_price: 1500,
+        } as never)
+        .execute();
+      await db
+        .insertInto('import_sale_allocations' as never)
+        .values({
+          tenant_id: 't1',
+          project_id: 'proj-1',
+          shipment_id: 'sh-1',
+          sale_item_id: 1,
+          quantity: 4,
+          unit_sale_price_egp: 5000,
+          unit_cost_egp: 1500,
+          allocation_type: 'sale',
+          created_at: '2026-03-05',
+        } as never)
+        .execute();
 
       const report: any = await service.generatePeriodProfitReport(
-        't1', new Date('2026-01-01'), new Date('2027-12-31'), 'proj-1',
+        't1',
+        new Date('2026-01-01'),
+        new Date('2027-12-31'),
+        'proj-1',
       );
       const d = report.data;
       assert.equal(d.profitAttributionVerified, true, 'Fully allocated sales verify attribution');
@@ -283,7 +426,9 @@ async function main(): Promise<void> {
       assert.ok(receiptLines > 0, 'Receipt journal carries a COGS shortage line');
       assert.equal(d.postedCostComponents.shortageExpenseEgp, receiptLines, 'Shortage equals the receipt COGS line');
       const brokerExpense: any = await (db as any)
-        .selectFrom('import_broker_expenses').select('serial_id').executeTakeFirstOrThrow();
+        .selectFrom('import_broker_expenses')
+        .select('serial_id')
+        .executeTakeFirstOrThrow();
       const brokerEntries = await entriesBySource(db, 'import_broker_expense', [Number(brokerExpense.serial_id)]);
       assert.equal(d.postedCostComponents.brokerExpensedEgp, 1200, 'Expensed broker cost counted once');
       assert.equal(d.postedCostComponents.brokerExpensedEgp, await glSum(db, brokerEntries, [23]));
@@ -291,7 +436,9 @@ async function main(): Promise<void> {
       assert.equal(d.postedCostComponents.fxVarianceEgp, 1500, 'Signed FX variance: 2000 loss - 500 gain');
       assert.equal(d.postedCostComponents.fxVarianceEgp, await glSum(db, fxEntries, [27, 28]));
       const refundEvent: any = await (db as any)
-        .selectFrom('import_container_refund_events').select('serial_id').executeTakeFirstOrThrow();
+        .selectFrom('import_container_refund_events')
+        .select('serial_id')
+        .executeTakeFirstOrThrow();
       const refundEntries = await entriesBySource(db, 'import_container_refund', [Number(refundEvent.serial_id)]);
       assert.equal(d.postedCostComponents.depositDeductionsEgp, 1500, 'Deposit deduction counted once');
       assert.equal(d.postedCostComponents.depositDeductionsEgp, await glSum(db, refundEntries, [23]));
@@ -300,10 +447,7 @@ async function main(): Promise<void> {
       const expectedExpenses = 700 + 400 + receiptLines + 1200 + 1500 + 1500;
       assert.equal(d.totalExpenses, expectedExpenses, 'Total expenses include every posted component');
       assert.equal(d.netProfitPool, 14000 - expectedExpenses, 'Net pool reconciles to the GL components');
-      assert.equal(
-        d.postedCostComponents.totalPostedCostComponentsEgp,
-        receiptLines + 1200 + 1500 + 1500,
-      );
+      assert.equal(d.postedCostComponents.totalPostedCostComponentsEgp, receiptLines + 1200 + 1500 + 1500);
 
       // Unposted estimates are labelled and excluded.
       assert.equal(d.unpostedEstimatesExcluded.unpostedTripEstimatesEgp, 900);
@@ -318,12 +462,19 @@ async function main(): Promise<void> {
       assert.equal('realizedNetProfitEgp' in autopsy.profitability, false, 'The net-profit field is gone');
       assert.ok(autopsy.profitability.realizedGrossTradingMarginEgp !== undefined);
       assert.ok(String(autopsy.profitability.marginBasis).includes('gross_trading_margin'));
-      assert.ok(autopsy.landedCosts.factoryTotalReceivedEgp < autopsy.landedCosts.factoryTotalEgp, 'Received basis is below B/L basis by the shortage');
+      assert.ok(
+        autopsy.landedCosts.factoryTotalReceivedEgp < autopsy.landedCosts.factoryTotalEgp,
+        'Received basis is below B/L basis by the shortage',
+      );
       assert.equal(autopsy.landedCosts.factoryTotalBasis, 'bill_of_lading_quantity');
       assert.equal(autopsy.landedCosts.landedCostBasis, 'posted_receipt_journal');
       assert.ok(autopsy.landedCosts.postedLandedValueEgp !== null && autopsy.landedCosts.postedLandedValueEgp > 0);
       const invLine = await glSum(db, [receiptJournalId], [21]);
-      assert.equal(autopsy.landedCosts.postedLandedValueEgp, invLine, 'Posted landed value equals the receipt inventory line');
+      assert.equal(
+        autopsy.landedCosts.postedLandedValueEgp,
+        invLine,
+        'Posted landed value equals the receipt inventory line',
+      );
       assert.equal(autopsy.liabilities.brokerExpensedEgp, 1200);
       assert.equal(autopsy.liabilities.brokerCapitalisedInLandedEgp, 0, 'Nothing capitalised in this scenario');
       assert.equal(autopsy.liabilities.brokerExpensesByState.expensed.amountEgp, 1200);
@@ -347,7 +498,9 @@ async function main(): Promise<void> {
         .where('id', '=', 'sh-1-item')
         .execute();
       await service.updateShipmentCosts('t1', 1, 'sh-1', {
-        status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
+        status: 'Arrived',
+        exchangeRateAtArrival: 50,
+        receiptLocationId: 10,
       });
       const receipt: any = await (db as any)
         .selectFrom('import_inventory_receipts')
@@ -356,7 +509,10 @@ async function main(): Promise<void> {
         .executeTakeFirstOrThrow();
       const receiptJournalId = Number(receipt.journal_entry_id);
       const before: any = await service.generatePeriodProfitReport(
-        't1', new Date('2026-01-01'), new Date('2027-12-31'), 'proj-1',
+        't1',
+        new Date('2026-01-01'),
+        new Date('2027-12-31'),
+        'proj-1',
       );
       assert.ok(before.data.postedCostComponents.shortageExpenseEgp > 0, 'Shortage counts before reversal');
 
@@ -394,7 +550,10 @@ async function main(): Promise<void> {
       });
 
       const after: any = await service.generatePeriodProfitReport(
-        't1', new Date('2026-01-01'), new Date('2027-12-31'), 'proj-1',
+        't1',
+        new Date('2026-01-01'),
+        new Date('2027-12-31'),
+        'proj-1',
       );
       assert.equal(
         after.data.postedCostComponents.shortageExpenseEgp,
@@ -422,11 +581,12 @@ async function main(): Promise<void> {
       assert.equal(autopsy.landedCosts.exchangeRateAssumed, false);
       assert.equal(autopsy.landedCosts.postedLandedValueEgp, null, 'No posted receipt, no frozen value');
       assert.equal(autopsy.landedCosts.landedCostBasis, 'shipment_field_estimates');
-      await (db as any).deleteFrom('currency_exchange_rates').where('tenant_id', '=', 't1').where('currency_code', '=', 'USD').execute();
-      await assert.rejects(
-        () => service.getContainerAutopsySheet('t1', 'sh-1'),
-        /سعر صرف USD غير متاح/,
-      );
+      await (db as any)
+        .deleteFrom('currency_exchange_rates')
+        .where('tenant_id', '=', 't1')
+        .where('currency_code', '=', 'USD')
+        .execute();
+      await assert.rejects(() => service.getContainerAutopsySheet('t1', 'sh-1'), /سعر صرف USD غير متاح/);
     } finally {
       await db.destroy();
     }

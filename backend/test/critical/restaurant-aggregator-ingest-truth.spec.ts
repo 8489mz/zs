@@ -62,14 +62,29 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: '"EGP"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({
-    tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1,
-  }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({
+      tenant_id: TENANT,
+      currency_code: 'EGP',
+      is_base: true,
+      exchange_rate: 1,
+    })
+    .execute();
   // Talabat Egypt: the channel's configured rate is 18%.
-  await anyDb.insertInto('pos_delivery_aggregators').values({
-    tenant_id: TENANT, account_id: ACCOUNT, code: 'talabat', name: 'Talabat',
-    name_en: 'Talabat', commission_rate: 18, is_active: true, auto_accept_orders: true,
-  }).execute();
+  await anyDb
+    .insertInto('pos_delivery_aggregators')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      code: 'talabat',
+      name: 'Talabat',
+      name_en: 'Talabat',
+      commission_rate: 18,
+      is_active: true,
+      auto_accept_orders: true,
+    })
+    .execute();
   return { pg, db };
 }
 
@@ -91,8 +106,11 @@ function ingestDto(externalOrderId: string, commissionRate?: number) {
 }
 
 async function storedOrder(db: Kysely<Database>, externalOrderId: string): Promise<any> {
-  return (db as any).selectFrom('pos_aggregator_orders').selectAll()
-    .where('external_order_id', '=', externalOrderId).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('pos_aggregator_orders')
+    .selectAll()
+    .where('external_order_id', '=', externalOrderId)
+    .executeTakeFirstOrThrow();
 }
 
 function statusOf(error: unknown): number | undefined {
@@ -107,46 +125,46 @@ async function main() {
   const { pg, db } = await makeDb();
   const service = buildService(db);
   try {
-  // 1. A caller rate of 0 must NOT zero the commission: the stored 18%
-  // applies, and the delivery fee joins the payout.
-  {
+    // 1. A caller rate of 0 must NOT zero the commission: the stored 18%
+    // applies, and the delivery fee joins the payout.
+    {
       const result = await service.ingestOrder(auth, ingestDto('EXT-1', 0));
       assert.equal(Number(result.commissionAmount), 180);
       assert.equal(Number(result.netPayout), 870);
       const row = await storedOrder(db, 'EXT-1');
       assert.equal(Number(row.aggregator_commission), 180);
       assert.equal(Number(row.net_payout), 870);
-  }
+    }
 
-  // 2. A different caller rate (5%) is likewise ignored.
-  {
+    // 2. A different caller rate (5%) is likewise ignored.
+    {
       const result = await service.ingestOrder(auth, ingestDto('EXT-2', 5));
       assert.equal(Number(result.commissionAmount), 180);
       assert.equal(Number(result.netPayout), 870);
       const row = await storedOrder(db, 'EXT-2');
       assert.equal(Number(row.aggregator_commission), 180);
       assert.equal(Number(row.net_payout), 870);
-  }
+    }
 
-  // 3. No caller rate at all: same stored-rate result (the honest path
-  // already worked; it must not regress).
-  {
+    // 3. No caller rate at all: same stored-rate result (the honest path
+    // already worked; it must not regress).
+    {
       const result = await service.ingestOrder(auth, ingestDto('EXT-3'));
       assert.equal(Number(result.commissionAmount), 180);
       assert.equal(Number(result.netPayout), 870);
-  }
+    }
 
-  // 4. updateOrderStatus on a nonexistent id -> 404.
-  {
+    // 4. updateOrderStatus on a nonexistent id -> 404.
+    {
       await assert.rejects(
         async () => service.updateOrderStatus(auth, 999999, 'delivered'),
         (err: unknown) => statusOf(err) === 404,
       );
-  }
+    }
 
-  // 5. updateOrderStatus with a nonsense status -> 400, and the row is
-  // untouched; a real status then succeeds and lands on the row.
-  {
+    // 5. updateOrderStatus with a nonsense status -> 400, and the row is
+    // untouched; a real status then succeeds and lands on the row.
+    {
       const created = await service.ingestOrder(auth, ingestDto('EXT-5'));
       await assert.rejects(
         async () => service.updateOrderStatus(auth, Number(created.orderId), 'teleported'),
@@ -158,10 +176,15 @@ async function main() {
       assert.equal(ok.success, true);
       const row = await storedOrder(db, 'EXT-5');
       assert.equal(String(row.status), 'delivered');
+    }
+  } finally {
+    await db.destroy();
   }
-  } finally { await db.destroy(); }
 
   console.log('Aggregator ingest truth tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -67,16 +67,25 @@ async function main(): Promise<void> {
       CREATE TABLE customers (id bigserial PRIMARY KEY, tenant_id text, account_id text, name text, phone text, company_name text, address text, balance numeric DEFAULT 0, credit_limit numeric DEFAULT 0, is_active boolean DEFAULT true, metadata text, portal_access_pin text, portal_pin_hash text, portal_pin_salt text, portal_token text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
       CREATE TABLE audit_logs (id bigserial PRIMARY KEY, action text, details text, event_code text, target_tenant_id text, created_by bigint, impersonated_by bigint, tenant_id text, account_id text, created_at timestamptz DEFAULT NOW());
     `);
-    await anyDb.insertInto('tenants').values({ id: TENANT, business_name: 'Test Freight Co', status: 'active' }).execute();
-    await anyDb.insertInto('tenants').values({ id: OTHER_TENANT, business_name: 'Other Freight Co', status: 'active' }).execute();
+    await anyDb
+      .insertInto('tenants')
+      .values({ id: TENANT, business_name: 'Test Freight Co', status: 'active' })
+      .execute();
+    await anyDb
+      .insertInto('tenants')
+      .values({ id: OTHER_TENANT, business_name: 'Other Freight Co', status: 'active' })
+      .execute();
     // INV-PORTAL-TENANT-STATUS-ENFORCED: the shared portal tenant check
     // reads status + the live subscription for 'active' tenants, so the
     // fixture carries both; the PIN assertions below are unaffected.
     const subEndsAt = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
-    await anyDb.insertInto('tenant_subscriptions').values([
-      { tenant_id: TENANT, status: 'active', ends_at: subEndsAt },
-      { tenant_id: OTHER_TENANT, status: 'active', ends_at: subEndsAt },
-    ]).execute();
+    await anyDb
+      .insertInto('tenant_subscriptions')
+      .values([
+        { tenant_id: TENANT, status: 'active', ends_at: subEndsAt },
+        { tenant_id: OTHER_TENANT, status: 'active', ends_at: subEndsAt },
+      ])
+      .execute();
 
     const auditStub = { log: async () => undefined };
     const service = new MaritimeCustomerPortalService(db, auditStub as never, {} as never);
@@ -142,7 +151,15 @@ async function main(): Promise<void> {
     );
 
     // Case 4: staff set/rotate through the real method.
-    const staff = { userId: 7, sessionId: 'spec', username: 'staff', role: 'admin', permissions: ['*'], tenantId: TENANT, accountId: ACCOUNT };
+    const staff = {
+      userId: 7,
+      sessionId: 'spec',
+      username: 'staff',
+      role: 'admin',
+      permissions: ['*'],
+      tenantId: TENANT,
+      accountId: ACCOUNT,
+    };
     const setRes = await service.setCustomerPortalPin(staff as never, 2, '5621');
     assert.deepEqual(setRes, { ok: true, customerId: 2 });
     const afterSet = await service.customerLogin({ phone: '01007654321', pinCode: '5621' });
@@ -176,10 +193,38 @@ async function main(): Promise<void> {
       CREATE INDEX idx_customers_tenant_phone_pin ON customers (tenant_id, phone, portal_access_pin);
     `);
     const anyDb2 = db2 as any;
-    await anyDb2.insertInto('customers').values({ id: 11, tenant_id: TENANT, account_id: ACCOUNT, name: 'Legacy A', phone: '01001112222', is_active: true, portal_access_pin: '1234', portal_token: 'magic-11' }).execute();
-    await anyDb2.insertInto('customers').values({ id: 12, tenant_id: TENANT, account_id: ACCOUNT, name: 'Legacy B', phone: '01003334444', is_active: true, portal_access_pin: '9876', portal_token: 'magic-12' }).execute();
+    await anyDb2
+      .insertInto('customers')
+      .values({
+        id: 11,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Legacy A',
+        phone: '01001112222',
+        is_active: true,
+        portal_access_pin: '1234',
+        portal_token: 'magic-11',
+      })
+      .execute();
+    await anyDb2
+      .insertInto('customers')
+      .values({
+        id: 12,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Legacy B',
+        phone: '01003334444',
+        is_active: true,
+        portal_access_pin: '9876',
+        portal_token: 'magic-12',
+      })
+      .execute();
     await pinHashMigration.up(db2 as never);
-    const cols = await sql<{ column_name: string }>`SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'customers'`.execute(db2);
+    const cols = await sql<{
+      column_name: string;
+    }>`SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'customers'`.execute(
+      db2,
+    );
     const colNames = new Set(cols.rows.map((row) => row.column_name));
     assert.equal(colNames.has('portal_access_pin'), false);
     assert.equal(colNames.has('portal_pin_hash'), true);
@@ -188,8 +233,13 @@ async function main(): Promise<void> {
     assert.equal(kept.length, 2);
     assert.equal(kept[0].portal_token, 'magic-11');
     assert.equal(kept[1].portal_token, 'magic-12');
-    const idx = await sql<{ indexname: string }>`SELECT indexname FROM pg_indexes WHERE tablename = 'customers'`.execute(db2);
-    assert.equal(idx.rows.some((row) => row.indexname === 'idx_customers_tenant_phone_pin'), false);
+    const idx = await sql<{
+      indexname: string;
+    }>`SELECT indexname FROM pg_indexes WHERE tablename = 'customers'`.execute(db2);
+    assert.equal(
+      idx.rows.some((row) => row.indexname === 'idx_customers_tenant_phone_pin'),
+      false,
+    );
     // Re-running the migration is a no-op.
     await pinHashMigration.up(db2 as never);
     const kept2 = await anyDb2.selectFrom('customers').selectAll().execute();

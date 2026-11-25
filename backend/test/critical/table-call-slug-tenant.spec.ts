@@ -53,13 +53,25 @@ async function main(): Promise<void> {
       CREATE TABLE settings (id bigserial PRIMARY KEY, tenant_id text, key text, value text);
       CREATE TABLE restaurant_table_service_calls (id bigserial PRIMARY KEY, tenant_id text, branch_id bigint, table_number text, call_type text, status text, created_at timestamptz DEFAULT NOW(), resolved_at timestamptz);
     `);
-    await anyDb.insertInto('tenants').values([
-      { id: 't-slug', slug: 'myshop', custom_domain: null, business_name: 'Slug Shop', status: 'active' },
-      { id: 't-domain', slug: 'other', custom_domain: 'shop.example.com', business_name: 'Domain Shop', status: 'active' },
-      { id: 't-setting', slug: 'third', custom_domain: null, business_name: 'Setting Shop', status: 'active' },
-      { id: 'staff-tenant', slug: 'staff', custom_domain: null, business_name: 'Staff', status: 'active' },
-    ]).execute();
-    await anyDb.insertInto('settings').values({ tenant_id: 't-setting', key: 'storefront_slug', value: '"MySettingShop"' }).execute();
+    await anyDb
+      .insertInto('tenants')
+      .values([
+        { id: 't-slug', slug: 'myshop', custom_domain: null, business_name: 'Slug Shop', status: 'active' },
+        {
+          id: 't-domain',
+          slug: 'other',
+          custom_domain: 'shop.example.com',
+          business_name: 'Domain Shop',
+          status: 'active',
+        },
+        { id: 't-setting', slug: 'third', custom_domain: null, business_name: 'Setting Shop', status: 'active' },
+        { id: 'staff-tenant', slug: 'staff', custom_domain: null, business_name: 'Staff', status: 'active' },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('settings')
+      .values({ tenant_id: 't-setting', key: 'storefront_slug', value: '"MySettingShop"' })
+      .execute();
 
     const service = new TableServiceCallsService(db);
     const controller = new TableServiceCallsController(service);
@@ -67,7 +79,10 @@ async function main(): Promise<void> {
     // Nest HttpExceptions carry the status on `.status` / `.getStatus()`,
     // not on `.statusCode` (which only appears in the response body).
     const httpStatus = (code: number) => (err: any) =>
-      err && (err.status === code || err.statusCode === code || (typeof err.getStatus === 'function' && err.getStatus() === code));
+      err &&
+      (err.status === code ||
+        err.statusCode === code ||
+        (typeof err.getStatus === 'function' && err.getStatus() === code));
 
     async function callCount(): Promise<number> {
       const rows = await anyDb.selectFrom('restaurant_table_service_calls').select('id').execute();
@@ -79,19 +94,39 @@ async function main(): Promise<void> {
     assert.equal(viaSlug.tenant_id, 't-slug');
 
     // 2. Custom-domain match.
-    const viaDomain: any = await controller.createCall({} as never, { tableNumber: 'T2', callType: 'bill' }, 'shop.example.com');
+    const viaDomain: any = await controller.createCall(
+      {} as never,
+      { tableNumber: 'T2', callType: 'bill' },
+      'shop.example.com',
+    );
     assert.equal(viaDomain.tenant_id, 't-domain');
 
     // 3. Settings match (quoted, mixed-case stored value).
-    const viaSetting: any = await controller.createCall({} as never, { tableNumber: 'T3', callType: 'waiter' }, 'mysettingshop');
+    const viaSetting: any = await controller.createCall(
+      {} as never,
+      { tableNumber: 'T3', callType: 'waiter' },
+      'mysettingshop',
+    );
     assert.equal(viaSetting.tenant_id, 't-setting');
 
     // 4. Unknown / missing / reserved slugs fail closed with nothing inserted.
     const before = await callCount();
-    await assert.rejects(controller.createCall({} as never, { tableNumber: 'T4', callType: 'waiter' }, 'no-such-shop'), httpStatus(404));
-    await assert.rejects(controller.createCall({} as never, { tableNumber: 'T4', callType: 'waiter' }, undefined), httpStatus(404));
-    await assert.rejects(controller.createCall({} as never, { tableNumber: 'T4', callType: 'waiter' }, 'admin'), httpStatus(404));
-    await assert.rejects(controller.createCall({} as never, { tableNumber: 'T4', callType: 'waiter' }, 'default'), httpStatus(404));
+    await assert.rejects(
+      controller.createCall({} as never, { tableNumber: 'T4', callType: 'waiter' }, 'no-such-shop'),
+      httpStatus(404),
+    );
+    await assert.rejects(
+      controller.createCall({} as never, { tableNumber: 'T4', callType: 'waiter' }, undefined),
+      httpStatus(404),
+    );
+    await assert.rejects(
+      controller.createCall({} as never, { tableNumber: 'T4', callType: 'waiter' }, 'admin'),
+      httpStatus(404),
+    );
+    await assert.rejects(
+      controller.createCall({} as never, { tableNumber: 'T4', callType: 'waiter' }, 'default'),
+      httpStatus(404),
+    );
     assert.equal(await callCount(), before);
 
     // 5. Caller-supplied tenant signals are ignored: a hostile header

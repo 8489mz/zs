@@ -39,7 +39,10 @@ import { resolve } from 'node:path';
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const inTx = <T>(fn: (trx: any) => Promise<T>): Promise<T> => db.transaction().execute(fn);
@@ -90,25 +93,60 @@ async function main() {
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
       INSERT INTO settings VALUES ('t1','currency','KWD');
     `);
-    for (const [code, type] of [[1110, 'asset'], [1135, 'asset'], [7110, 'revenue'], [7210, 'expense']] as const) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), type]);
+    for (const [code, type] of [
+      [1110, 'asset'],
+      [1135, 'asset'],
+      [7110, 'revenue'],
+      [7210, 'expense'],
+    ] as const) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        type,
+      ]);
     }
 
     const linesOf = async (entryId: number) => {
-      const r = await pg.query<{ account_id: string; debit: string; credit: string; partner_type: string; partner_id: string }>(
-        'SELECT account_id, debit, credit, partner_type, partner_id FROM journal_entry_lines WHERE journal_entry_id=$1 ORDER BY account_id', [entryId]);
-      return r.rows.map((row) => [Number(row.account_id), Number(row.debit), Number(row.credit), row.partner_type, row.partner_id == null ? null : Number(row.partner_id)] as const);
+      const r = await pg.query<{
+        account_id: string;
+        debit: string;
+        credit: string;
+        partner_type: string;
+        partner_id: string;
+      }>(
+        'SELECT account_id, debit, credit, partner_type, partner_id FROM journal_entry_lines WHERE journal_entry_id=$1 ORDER BY account_id',
+        [entryId],
+      );
+      return r.rows.map(
+        (row) =>
+          [
+            Number(row.account_id),
+            Number(row.debit),
+            Number(row.credit),
+            row.partner_type,
+            row.partner_id == null ? null : Number(row.partner_id),
+          ] as const,
+      );
     };
     const seedShift = async (id: number, expected: number, counted: number) => {
-      await pg.query(`INSERT INTO cashier_shifts
+      await pg.query(
+        `INSERT INTO cashier_shifts
         (id, tenant_id, branch_id, location_id, opened_by, expected_cash, counted_cash,
          status, closed_at, closed_by, doc_no)
-        VALUES ($1,'t1',NULL,NULL,2,$2,$3,'closed','2026-10-20',1,$4)`, [id, expected, counted, `SHIFT-${id}`]);
+        VALUES ($1,'t1',NULL,NULL,2,$2,$3,'closed','2026-10-20',1,$4)`,
+        [id, expected, counted, `SHIFT-${id}`],
+      );
     };
     const resolutionOf = async (id: number) => {
       const r = await pg.query<{ variance_resolution: string; variance_charged_to_user_id: string }>(
-        'SELECT variance_resolution, variance_charged_to_user_id FROM cashier_shifts WHERE id=$1', [id]);
-      return { resolution: r.rows[0].variance_resolution, chargedTo: r.rows[0].variance_charged_to_user_id == null ? null : Number(r.rows[0].variance_charged_to_user_id) };
+        'SELECT variance_resolution, variance_charged_to_user_id FROM cashier_shifts WHERE id=$1',
+        [id],
+      );
+      return {
+        resolution: r.rows[0].variance_resolution,
+        chargedTo: r.rows[0].variance_charged_to_user_id == null ? null : Number(r.rows[0].variance_charged_to_user_id),
+      };
     };
     const setTolerance = async (value: string | null) => {
       await pg.query(`DELETE FROM settings WHERE tenant_id='t1' AND key='cashierShortageTolerance'`);
@@ -120,7 +158,10 @@ async function main() {
     await seedShift(1, 100, 99.999);
     const res1 = await inTx((trx) => posting.postCashierShiftVariance(trx, 1, auth));
     assert.equal(res1.posted, true);
-    assert.deepEqual(await linesOf(Number(res1.journalEntryId)), [[1110, 0, 0.001, 'none', null], [7210, 0.001, 0, 'none', null]]);
+    assert.deepEqual(await linesOf(Number(res1.journalEntryId)), [
+      [1110, 0, 0.001, 'none', null],
+      [7210, 0.001, 0, 'none', null],
+    ]);
     assert.deepEqual(await resolutionOf(1), { resolution: 'within_tolerance', chargedTo: null });
 
     // Case 2: tolerance UNSET — a 0.005 shortage exceeds one minor
@@ -128,7 +169,10 @@ async function main() {
     await seedShift(2, 100, 99.995);
     const res2 = await inTx((trx) => posting.postCashierShiftVariance(trx, 2, auth));
     assert.equal(res2.posted, true);
-    assert.deepEqual(await linesOf(Number(res2.journalEntryId)), [[1110, 0, 0.005, 'none', null], [1135, 0.005, 0, 'employee', 2]]);
+    assert.deepEqual(await linesOf(Number(res2.journalEntryId)), [
+      [1110, 0, 0.005, 'none', null],
+      [1135, 0.005, 0, 'employee', 2],
+    ]);
     assert.deepEqual(await resolutionOf(2), { resolution: 'charged_to_cashier', chargedTo: 2 });
 
     // Case 3: tolerance explicitly 0.01 — a 0.005 shortage is
@@ -136,11 +180,17 @@ async function main() {
     await setTolerance('0.01');
     await seedShift(3, 100, 99.995);
     const res3 = await inTx((trx) => posting.postCashierShiftVariance(trx, 3, auth));
-    assert.deepEqual(await linesOf(Number(res3.journalEntryId)), [[1110, 0, 0.005, 'none', null], [7210, 0.005, 0, 'none', null]]);
+    assert.deepEqual(await linesOf(Number(res3.journalEntryId)), [
+      [1110, 0, 0.005, 'none', null],
+      [7210, 0.005, 0, 'none', null],
+    ]);
     assert.deepEqual(await resolutionOf(3), { resolution: 'within_tolerance', chargedTo: null });
     await seedShift(4, 100, 99.98);
     const res4 = await inTx((trx) => posting.postCashierShiftVariance(trx, 4, auth));
-    assert.deepEqual(await linesOf(Number(res4.journalEntryId)), [[1110, 0, 0.02, 'none', null], [1135, 0.02, 0, 'employee', 2]]);
+    assert.deepEqual(await linesOf(Number(res4.journalEntryId)), [
+      [1110, 0, 0.02, 'none', null],
+      [1135, 0.02, 0, 'employee', 2],
+    ]);
     assert.deepEqual(await resolutionOf(4), { resolution: 'charged_to_cashier', chargedTo: 2 });
 
     // Case 4: tolerance explicitly 0 — zero tolerance is honoured,
@@ -148,19 +198,29 @@ async function main() {
     await setTolerance('0');
     await seedShift(5, 100, 99.999);
     const res5 = await inTx((trx) => posting.postCashierShiftVariance(trx, 5, auth));
-    assert.deepEqual(await linesOf(Number(res5.journalEntryId)), [[1110, 0, 0.001, 'none', null], [1135, 0.001, 0, 'employee', 2]]);
+    assert.deepEqual(await linesOf(Number(res5.journalEntryId)), [
+      [1110, 0, 0.001, 'none', null],
+      [1135, 0.001, 0, 'employee', 2],
+    ]);
     assert.deepEqual(await resolutionOf(5), { resolution: 'charged_to_cashier', chargedTo: 2 });
 
     // Case 5: overages are unchanged by the tolerance.
     await setTolerance(null);
     await seedShift(6, 100, 100.005);
     const res6 = await inTx((trx) => posting.postCashierShiftVariance(trx, 6, auth));
-    assert.deepEqual(await linesOf(Number(res6.journalEntryId)), [[1110, 0.005, 0, 'none', null], [7110, 0, 0.005, 'none', null]]);
+    assert.deepEqual(await linesOf(Number(res6.journalEntryId)), [
+      [1110, 0.005, 0, 'none', null],
+      [7110, 0, 0.005, 'none', null],
+    ]);
     assert.deepEqual(await resolutionOf(6), { resolution: 'surplus_recognized', chargedTo: null });
 
     // Invariant pin: the entry exists exactly once and is last.
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-CASHIER-SHORTAGE-TOLERANCE-DEFAULT').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-CASHIER-SHORTAGE-TOLERANCE-DEFAULT').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
 
     console.log('Cashier shortage tolerance tests passed');
   } finally {

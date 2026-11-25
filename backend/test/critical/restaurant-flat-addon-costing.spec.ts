@@ -80,8 +80,13 @@ const CHEESE_ID = 102;
 const ADDON_ID = 9001;
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-a', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-a',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -156,81 +161,235 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5110, '5110'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5110, '5110'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
   // The freelance-courier fee credits 2115 on postSale (same seed as
   // restaurant-paid-gates.spec.ts).
-  await anyDb.insertInto('accounting_accounts').values({ id: 2115, tenant_id: TENANT, code: '2115', name_ar: '2115', is_active: true, is_tax: false, account_type: 'liability', account_group: 'payable' }).execute();
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5110, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('accounting_accounts')
+    .values({
+      id: 2115,
+      tenant_id: TENANT,
+      code: '2115',
+      name_ar: '2115',
+      is_active: true,
+      is_tax: false,
+      account_type: 'liability',
+      account_group: 'payable',
+    })
+    .execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5110,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
   // Meal 101 (WAC 10, retail 100) + cheese component 102 (WAC 2, retail 5).
-  await anyDb.insertInto('products').values({
-    id: MEAL_ID, tenant_id: TENANT, account_id: ACCOUNT, name: 'Meal 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('products').values({
-    id: CHEESE_ID, tenant_id: TENANT, account_id: ACCOUNT, name: 'Cheese 102',
-    stock_qty: 100, cost_price: 2, retail_price: 5,
-    wholesale_price: 5, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: MEAL_ID, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: CHEESE_ID, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: MEAL_ID,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Meal 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: CHEESE_ID,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Cheese 102',
+      stock_qty: 100,
+      cost_price: 2,
+      retail_price: 5,
+      wholesale_price: 5,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: MEAL_ID,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: CHEESE_ID,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
   // Flat legacy addon 9001: selling price 5, purchase cost 2, no product row.
-  await anyDb.insertInto('addons').values({
-    id: ADDON_ID, tenant_id: TENANT, account_id: ACCOUNT, name: 'Extra sauce',
-    price: 5, cost_price: 2, is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('addons')
+    .values({
+      id: ADDON_ID,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Extra sauce',
+      price: 5,
+      cost_price: 2,
+      is_active: true,
+    })
+    .execute();
   // Optional Extras group + extra-cheese option (component 102, price 20).
-  await anyDb.insertInto('pos_modifier_groups').values({
-    id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Extras',
-    selection_type: 'multiple', is_mandatory: false, min_selections: 0,
-    max_selections: 10, display_order: 2, is_active: true,
-  }).execute();
-  await anyDb.insertInto('pos_modifier_options').values({
-    id: 13, tenant_id: TENANT, group_id: 2, name: 'Extra cheese',
-    price: 20, cost_price: 2, is_active: true, display_order: 1,
-    component_product_id: CHEESE_ID, consumption_qty: 1,
-  }).execute();
-  await anyDb.insertInto('product_pos_modifiers').values({
-    id: 2, tenant_id: TENANT, account_id: ACCOUNT, product_id: MEAL_ID, modifier_group_id: 2,
-  }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 7, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer Seven',
-    balance: 0, credit_limit: 0, is_credit_blocked: false, is_active: true,
-  }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('pos_modifier_groups')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Extras',
+      selection_type: 'multiple',
+      is_mandatory: false,
+      min_selections: 0,
+      max_selections: 10,
+      display_order: 2,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('pos_modifier_options')
+    .values({
+      id: 13,
+      tenant_id: TENANT,
+      group_id: 2,
+      name: 'Extra cheese',
+      price: 20,
+      cost_price: 2,
+      is_active: true,
+      display_order: 1,
+      component_product_id: CHEESE_ID,
+      consumption_qty: 1,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_pos_modifiers')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: MEAL_ID,
+      modifier_group_id: 2,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer Seven',
+      balance: 0,
+      credit_limit: 0,
+      is_credit_blocked: false,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep One',
+      is_active: true,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number, expectedCash = 0): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: expectedCash, expected_cash: expectedCash, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: expectedCash,
+      expected_cash: expectedCash,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>, restaurantOn: boolean): { sales: SalesWriteService } {
@@ -245,11 +404,21 @@ function buildServices(db: Kysely<Database>, restaurantOn: boolean): { sales: Sa
   const idempotency = new IdempotencyService(db);
   const tx = new TransactionHelper();
   const audit = new AuditService(db);
-  const planFeatures = { hasFeature: (_planId: any, _extra: any, feature: string) => restaurantOn && feature === 'restaurant' };
+  const planFeatures = {
+    hasFeature: (_planId: any, _extra: any, feature: string) => restaurantOn && feature === 'restaurant',
+  };
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   return { sales };
 }
@@ -257,17 +426,24 @@ function buildServices(db: Kysely<Database>, restaurantOn: boolean): { sales: Sa
 /** The POS shape for a flat addon: no optionId, productId = addons-row id. */
 function flatAddonMod(qty: number, overrides: Record<string, unknown> = {}): any {
   return {
-    productId: ADDON_ID, name: 'Extra sauce', qty,
+    productId: ADDON_ID,
+    name: 'Extra sauce',
+    qty,
     // Spoofed prices: the server must re-derive both from addons (5 / 2).
-    price: 999, costPrice: 999,
+    price: 999,
+    costPrice: 999,
     ...overrides,
   };
 }
 
 function cheeseOptionMod(qty: number): any {
   return {
-    optionId: 13, productId: CHEESE_ID, groupId: 2, name: 'Extra cheese',
-    qty, price: 999,
+    optionId: 13,
+    productId: CHEESE_ID,
+    groupId: 2,
+    name: 'Extra cheese',
+    qty,
+    price: 999,
   };
 }
 
@@ -275,9 +451,15 @@ function cheeseOptionMod(qty: number): any {
 function mealPayload(modifiers: any[], overrides: Record<string, unknown> = {}): any {
   return {
     items: [{ productId: MEAL_ID, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1, modifiers }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
     payments: [{ paymentChannel: 'cash', amount: 110 }],
-    tenderedAmount: 110, branchId: 1, locationId: 10, source: 'pos',
+    tenderedAmount: 110,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
     ...overrides,
   };
 }
@@ -295,37 +477,63 @@ function addonPayload(addonQty: number, overrides: Record<string, unknown> = {})
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
   const created: any = await service.createSale(payload, auth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
 function parseModifiers(raw: unknown): any[] {
   if (typeof raw === 'string') {
-    try { return JSON.parse(raw || '[]'); } catch { return []; }
+    try {
+      return JSON.parse(raw || '[]');
+    } catch {
+      return [];
+    }
   }
-  return Array.isArray(raw) ? raw as any[] : [];
+  return Array.isArray(raw) ? (raw as any[]) : [];
 }
 
 async function saleLine(db: Kysely<Database>, saleId: number): Promise<any> {
-  const row: any = await (db as any).selectFrom('sale_items')
+  const row: any = await (db as any)
+    .selectFrom('sale_items')
     .select(['cost_price', 'line_total', 'modifiers'])
-    .where('sale_id', '=', saleId).executeTakeFirstOrThrow();
-  return { costPrice: Number(row.cost_price), lineTotal: Number(row.line_total), modifiers: parseModifiers(row.modifiers) };
+    .where('sale_id', '=', saleId)
+    .executeTakeFirstOrThrow();
+  return {
+    costPrice: Number(row.cost_price),
+    lineTotal: Number(row.line_total),
+    modifiers: parseModifiers(row.modifiers),
+  };
 }
 
-async function journalByCode(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Map<string, { debit: number; credit: number }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute();
+async function journalByCode(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Map<string, { debit: number; credit: number }>> {
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute();
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines as l')
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines as l')
     .innerJoin('accounting_accounts as a', 'a.id', 'l.account_id')
     .select(['a.code as code', 'l.debit as debit', 'l.credit as credit'])
-    .where('l.journal_entry_id', '=', Number(entries[0].id)).execute();
+    .where('l.journal_entry_id', '=', Number(entries[0].id))
+    .execute();
   const byCode = new Map<string, { debit: number; credit: number }>();
   for (const row of rows) {
     const code = String((row as any).code);
     const prev = byCode.get(code) || { debit: 0, credit: 0 };
-    byCode.set(code, { debit: prev.debit + Number((row as any).debit || 0), credit: prev.credit + Number((row as any).credit || 0) });
+    byCode.set(code, {
+      debit: prev.debit + Number((row as any).debit || 0),
+      credit: prev.credit + Number((row as any).credit || 0),
+    });
   }
   return byCode;
 }
@@ -335,20 +543,29 @@ async function stockQty(db: Kysely<Database>, productId: number): Promise<number
   // unassigned (location null) pool row beside the sale location row,
   // so a bare takeFirst can return the pool's 0 instead of the
   // location balance.
-  const rows = await (db as any).selectFrom('product_location_stock').select('qty')
-    .where('product_id', '=', productId).execute();
+  const rows = await (db as any)
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('product_id', '=', productId)
+    .execute();
   return rows.reduce((sum: number, r: any) => sum + Number(r.qty || 0), 0);
 }
 
 async function movementProductIds(db: Kysely<Database>, saleId: number): Promise<number[]> {
-  const rows = await (db as any).selectFrom('stock_movements').select('product_id')
-    .where('reference_id', '=', saleId).execute();
+  const rows = await (db as any)
+    .selectFrom('stock_movements')
+    .select('product_id')
+    .where('reference_id', '=', saleId)
+    .execute();
   return rows.map((r: any) => Number(r.product_id));
 }
 
 async function allocationProductIds(db: Kysely<Database>, saleId: number): Promise<number[]> {
-  const rows = await (db as any).selectFrom('sale_line_stock_allocations').select('product_id')
-    .where('sale_id', '=', saleId).execute();
+  const rows = await (db as any)
+    .selectFrom('sale_line_stock_allocations')
+    .select('product_id')
+    .where('sale_id', '=', saleId)
+    .execute();
   return rows.map((r: any) => Number(r.product_id));
 }
 
@@ -357,8 +574,11 @@ async function treasuryRows(db: Kysely<Database>): Promise<any[]> {
 }
 
 async function shiftExpectedCash(db: Kysely<Database>, shiftId: number): Promise<number> {
-  const row: any = await (db as any).selectFrom('cashier_shifts').select('expected_cash')
-    .where('id', '=', shiftId).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom('cashier_shifts')
+    .select('expected_cash')
+    .where('id', '=', shiftId)
+    .executeTakeFirstOrThrow();
   return Number(row.expected_cash);
 }
 
@@ -390,8 +610,16 @@ async function main(): Promise<void> {
       assert.equal(line.costPrice, 14, 'line cost_price is meal WAC 10 + addon 2 x 2');
       assert.equal(line.lineTotal, 110, 'line total is meal 100 + addon 2 x 5');
       assert.equal(line.modifiers.length, 1, 'one modifier is stored');
-      assert.equal(Number(line.modifiers[0].costPrice), 2, 'the stored modifier costPrice is the server addons.cost_price');
-      assert.equal(Number(line.modifiers[0].price), 5, 'the stored modifier price is the server addons.price, not the spoofed 999');
+      assert.equal(
+        Number(line.modifiers[0].costPrice),
+        2,
+        'the stored modifier costPrice is the server addons.cost_price',
+      );
+      assert.equal(
+        Number(line.modifiers[0].price),
+        5,
+        'the stored modifier price is the server addons.price, not the spoofed 999',
+      );
     } finally {
       await db.destroy();
     }
@@ -426,8 +654,14 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db, true);
       const saleId = await createAndGetId(sales, addonPayload(2), cashierAuth);
-      assert.ok(!((await movementProductIds(db, saleId)).includes(ADDON_ID)), 'no stock_movement row exists for the addon id');
-      assert.ok(!((await allocationProductIds(db, saleId)).includes(ADDON_ID)), 'no stock allocation row exists for the addon id');
+      assert.ok(
+        !(await movementProductIds(db, saleId)).includes(ADDON_ID),
+        'no stock_movement row exists for the addon id',
+      );
+      assert.ok(
+        !(await allocationProductIds(db, saleId)).includes(ADDON_ID),
+        'no stock allocation row exists for the addon id',
+      );
       assert.ok((await movementProductIds(db, saleId)).includes(MEAL_ID), 'the meal still writes its stock movement');
       assert.equal(await stockQty(db, MEAL_ID), 99, 'meal stock drops 100 -> 99');
     } finally {
@@ -445,13 +679,17 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db, true);
       const saleId = await createAndGetId(sales, addonPayload(2), cashierAuth);
-      await sales.updateSale(saleId, addonPayload(2, {
-        discount: 5,
-        payments: [{ paymentChannel: 'cash', amount: 105 }],
-        tenderedAmount: 105,
-        editReason: 'خصم ولاء بعد المراجعة',
-        managerPin: MANAGER_PIN,
-      }), cashierAuth);
+      await sales.updateSale(
+        saleId,
+        addonPayload(2, {
+          discount: 5,
+          payments: [{ paymentChannel: 'cash', amount: 105 }],
+          tenderedAmount: 105,
+          editReason: 'خصم ولاء بعد المراجعة',
+          managerPin: MANAGER_PIN,
+        }),
+        cashierAuth,
+      );
       const line = await saleLine(db, saleId);
       assert.equal(line.costPrice, 14, 'the edited line keeps the frozen cost 14');
       assert.equal(Number(line.modifiers[0].costPrice), 2, 'the frozen modifier costPrice stays 2');
@@ -472,10 +710,14 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db, true);
       const saleId = await createAndGetId(sales, addonPayload(2), cashierAuth);
-      await sales.updateSale(saleId, addonPayload(3, {
-        editReason: 'زيادة الإضافة بطلب العميل',
-        managerPin: MANAGER_PIN,
-      }), cashierAuth);
+      await sales.updateSale(
+        saleId,
+        addonPayload(3, {
+          editReason: 'زيادة الإضافة بطلب العميل',
+          managerPin: MANAGER_PIN,
+        }),
+        cashierAuth,
+      );
       const line = await saleLine(db, saleId);
       assert.equal(line.costPrice, 16, 'line cost_price is meal WAC 10 + addon 3 x 2');
       assert.equal(line.lineTotal, 115, 'line total is meal 100 + addon 3 x 5');
@@ -498,12 +740,28 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db, true);
       await assert.rejects(
-        createAndGetId(sales, addonPayload(2, {
-          items: [{ productId: MEAL_ID, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1, modifiers: [flatAddonMod(2, { productId: 9999 })] }],
-        }), cashierAuth),
+        createAndGetId(
+          sales,
+          addonPayload(2, {
+            items: [
+              {
+                productId: MEAL_ID,
+                qty: 1,
+                price: 100,
+                priceType: 'retail',
+                unitMultiplier: 1,
+                modifiers: [flatAddonMod(2, { productId: 9999 })],
+              },
+            ],
+          }),
+          cashierAuth,
+        ),
         (err: any) => err && err.code === 'RESTAURANT_MODIFIER_PRICE_UNVERIFIED' && err.statusCode === 422,
       );
-      const count = await (db as any).selectFrom('sales').select(sql`count(*)`.as('n')).executeTakeFirst();
+      const count = await (db as any)
+        .selectFrom('sales')
+        .select(sql`count(*)`.as('n'))
+        .executeTakeFirst();
       assert.equal(Number((count as any).n), 0, 'no sale is written');
     } finally {
       await db.destroy();
@@ -521,13 +779,14 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db, true);
       const total = 100 + 2 * 5 + 1 * 20;
-      const saleId = await createAndGetId(sales, mealPayload(
-        [flatAddonMod(2), cheeseOptionMod(1)],
-        {
+      const saleId = await createAndGetId(
+        sales,
+        mealPayload([flatAddonMod(2), cheeseOptionMod(1)], {
           payments: [{ paymentChannel: 'cash', amount: total }],
           tenderedAmount: total,
-        },
-      ), cashierAuth);
+        }),
+        cashierAuth,
+      );
       const line = await saleLine(db, saleId);
       assert.equal(line.costPrice, 16, 'line cost is meal 10 + addon 4 + cheese 2');
       assert.equal(line.lineTotal, 130, 'line total is meal 100 + addon 10 + cheese 20');
@@ -535,7 +794,10 @@ async function main(): Promise<void> {
       assert.equal(journal.get('5110')?.debit, 16, 'COGS is the combined line cost 16');
       assert.equal(journal.get('4100')?.credit, 130, 'revenue is the combined 130');
       assert.equal(await stockQty(db, CHEESE_ID), 99, 'cheese stock drops 100 -> 99');
-      assert.ok((await movementProductIds(db, saleId)).includes(CHEESE_ID), 'the cheese component still writes its stock movement');
+      assert.ok(
+        (await movementProductIds(db, saleId)).includes(CHEESE_ID),
+        'the cheese component still writes its stock movement',
+      );
     } finally {
       await db.destroy();
     }
@@ -556,14 +818,27 @@ async function main(): Promise<void> {
       // off there is no server re-pricing, so a spoofed 999 would
       // inflate the total. The costPrice stays spoofed — the resolver
       // must still ignore it and return 0.
-      const saleId = await createAndGetId(sales, addonPayload(2, {
-        items: [{ productId: MEAL_ID, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1, modifiers: [flatAddonMod(2, { price: 5 })] }],
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        addonPayload(2, {
+          items: [
+            {
+              productId: MEAL_ID,
+              qty: 1,
+              price: 100,
+              priceType: 'retail',
+              unitMultiplier: 1,
+              modifiers: [flatAddonMod(2, { price: 5 })],
+            },
+          ],
+        }),
+        cashierAuth,
+      );
       const line = await saleLine(db, saleId);
       assert.equal(line.costPrice, 10, 'line cost_price is the parent WAC only');
       assert.equal(Number(line.modifiers[0].costPrice), 0, 'the modifier costPrice is 0 with the feature off');
       assert.equal(line.lineTotal, 110, 'revenue still charges the addon price as sent');
-      assert.ok(!((await movementProductIds(db, saleId)).includes(ADDON_ID)), 'no stock movement for the addon id');
+      assert.ok(!(await movementProductIds(db, saleId)).includes(ADDON_ID), 'no stock movement for the addon id');
       assert.equal(await stockQty(db, MEAL_ID), 99, 'meal stock still drops 100 -> 99');
     } finally {
       await db.destroy();
@@ -582,16 +857,34 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2, 500);
       const { sales } = buildServices(db, true);
-      const saleId = await createAndGetId(sales, {
-        items: [{ productId: MEAL_ID, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-        discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'wallet',
-        payments: [{ paymentChannel: 'wallet', amount: 130 }],
-        tenderedAmount: 0, branchId: 1, locationId: 10, source: 'pos',
-        customerId: 7, orderType: 'delivery', collectionStatus: 'prepaid_online',
-        deliveryRepId: 1, deliveryFee: 30, deliveryFeeMode: 'freelance_courier',
-      }, cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        {
+          items: [{ productId: MEAL_ID, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
+          discount: 0,
+          taxRate: 0,
+          paymentType: 'cash',
+          paymentChannel: 'wallet',
+          payments: [{ paymentChannel: 'wallet', amount: 130 }],
+          tenderedAmount: 0,
+          branchId: 1,
+          locationId: 10,
+          source: 'pos',
+          customerId: 7,
+          orderType: 'delivery',
+          collectionStatus: 'prepaid_online',
+          deliveryRepId: 1,
+          deliveryFee: 30,
+          deliveryFeeMode: 'freelance_courier',
+        },
+        cashierAuth,
+      );
       assert.ok(saleId > 0, 'the prepaid delivery sale posts');
-      assert.equal(await shiftExpectedCash(db, 1), 500, 'stored expected_cash is unchanged — the recompute nets the leg');
+      assert.equal(
+        await shiftExpectedCash(db, 1),
+        500,
+        'stored expected_cash is unchanged — the recompute nets the leg',
+      );
       const treasury = await treasuryRows(db);
       assert.equal(treasury.length, 1, 'exactly one treasury row exists');
       assert.equal(treasury[0].txn_type, 'cash_out', 'the courier fee is a cash_out leg');

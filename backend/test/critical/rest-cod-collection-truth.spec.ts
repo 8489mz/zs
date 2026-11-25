@@ -105,8 +105,13 @@ const ACCOUNT = 'a1';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-t11d', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-t11d',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -181,53 +186,159 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_accounts').values({ id: 2115, tenant_id: TENANT, code: '2115', name_ar: '2115', is_active: true, is_tax: false, account_type: 'liability', account_group: 'payable' }).execute();
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 7, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer Seven',
-    balance: 0, credit_limit: 0, is_credit_blocked: false, is_active: true,
-  }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_accounts')
+    .values({
+      id: 2115,
+      tenant_id: TENANT,
+      code: '2115',
+      name_ar: '2115',
+      is_active: true,
+      is_tax: false,
+      account_type: 'liability',
+      account_group: 'payable',
+    })
+    .execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer Seven',
+      balance: 0,
+      credit_limit: 0,
+      is_credit_blocked: false,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep One',
+      is_active: true,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
-function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer: CashDrawerService; posting: AccountingPostingService; reps: DeliveryRepsService } {
+function buildServices(db: Kysely<Database>): {
+  sales: SalesWriteService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+  reps: DeliveryRepsService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -242,8 +353,16 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const planFeatures = { hasFeature: (_planId: any, _extra: any, feature: string) => feature === 'pos' };
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const reps = new DeliveryRepsService(db, audit, posting, finance);
@@ -253,19 +372,37 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
   const created: any = await service.createSale(payload, auth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
 async function saleFullRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales')
-    .select(['payment_type', 'payment_channel', 'collection_status', 'paid_amount', 'total', 'delivery_rep_id', 'delivery_status', 'delivery_fee', 'delivery_fee_mode'])
-    .where('id', '=', id).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .select([
+      'payment_type',
+      'payment_channel',
+      'collection_status',
+      'paid_amount',
+      'total',
+      'delivery_rep_id',
+      'delivery_status',
+      'delivery_fee',
+      'delivery_fee_mode',
+    ])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
 }
 
 async function paymentRows(db: Kysely<Database>, saleId: number): Promise<any[]> {
-  return (db as any).selectFrom('sale_payments').select(['payment_channel', 'amount'])
-    .where('sale_id', '=', saleId).execute();
+  return (db as any)
+    .selectFrom('sale_payments')
+    .select(['payment_channel', 'amount'])
+    .where('sale_id', '=', saleId)
+    .execute();
 }
 
 async function treasuryRows(db: Kysely<Database>): Promise<any[]> {
@@ -273,23 +410,39 @@ async function treasuryRows(db: Kysely<Database>): Promise<any[]> {
 }
 
 async function ledgerRows(db: Kysely<Database>, customerId: number): Promise<any[]> {
-  return (db as any).selectFrom('customer_ledger').select(['amount', 'reference_id'])
-    .where('customer_id', '=', customerId).execute();
+  return (db as any)
+    .selectFrom('customer_ledger')
+    .select(['amount', 'reference_id'])
+    .where('customer_id', '=', customerId)
+    .execute();
 }
 
-async function journalByCode(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Map<string, { debit: number; credit: number }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute();
+async function journalByCode(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Map<string, { debit: number; credit: number }>> {
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute();
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines as l')
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines as l')
     .innerJoin('accounting_accounts as a', 'a.id', 'l.account_id')
     .select(['a.code as code', 'l.debit as debit', 'l.credit as credit'])
-    .where('l.journal_entry_id', '=', Number(entries[0].id)).execute();
+    .where('l.journal_entry_id', '=', Number(entries[0].id))
+    .execute();
   const byCode = new Map<string, { debit: number; credit: number }>();
   for (const row of rows) {
     const code = String((row as any).code);
     const prev = byCode.get(code) || { debit: 0, credit: 0 };
-    byCode.set(code, { debit: prev.debit + Number((row as any).debit || 0), credit: prev.credit + Number((row as any).credit || 0) });
+    byCode.set(code, {
+      debit: prev.debit + Number((row as any).debit || 0),
+      credit: prev.credit + Number((row as any).credit || 0),
+    });
   }
   return byCode;
 }
@@ -298,10 +451,18 @@ async function journalByCode(db: Kysely<Database>, sourceType: string, sourceId:
 function trialPayload(overrides: Record<string, unknown> = {}): any {
   return {
     items: [{ productId: 101, qty: 5, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: 530 }], tenderedAmount: 530,
-    branchId: 1, locationId: 10, source: 'pos',
-    customerId: 7, orderType: 'delivery', deliveryRepId: 1,
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: 530 }],
+    tenderedAmount: 530,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
+    customerId: 7,
+    orderType: 'delivery',
+    deliveryRepId: 1,
     deliveryFee: 30,
     ...overrides,
   };
@@ -386,7 +547,8 @@ async function main(): Promise<void> {
       assert.equal(settlement.get('2115')?.debit, 30, 'the courier fee payable is relieved');
       assert.equal(settlement.get('1130')?.credit, 530, 'the receivable is cleared in full');
       const legs = await ledgerRows(db, 7);
-      const net = legs.filter((leg) => Number(leg.reference_id) === saleId)
+      const net = legs
+        .filter((leg) => Number(leg.reference_id) === saleId)
         .reduce((sum, leg) => sum + Number(leg.amount || 0), 0);
       assert.equal(net, 0, 'the customer ledger nets to zero after settlement');
     } finally {
@@ -425,11 +587,15 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, trialPayload({
-        paymentChannel: 'wallet',
-        payments: [{ paymentChannel: 'wallet', amount: 530 }],
-        tenderedAmount: 0,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        trialPayload({
+          paymentChannel: 'wallet',
+          payments: [{ paymentChannel: 'wallet', amount: 530 }],
+          tenderedAmount: 0,
+        }),
+        cashierAuth,
+      );
       const row = await saleFullRow(db, saleId);
       assert.equal(row.collection_status, 'prepaid_online', 'the online channel proves prepayment');
       assert.equal(Number(row.paid_amount), 530, 'the wallet tender is fully paid');
@@ -450,13 +616,24 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, {
-        items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-        discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-        payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
-        branchId: 1, locationId: 10, source: 'pos',
-        customerId: 7, orderType: 'delivery',
-      }, cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        {
+          items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
+          discount: 0,
+          taxRate: 0,
+          paymentType: 'cash',
+          paymentChannel: 'cash',
+          payments: [{ paymentChannel: 'cash', amount: 100 }],
+          tenderedAmount: 100,
+          branchId: 1,
+          locationId: 10,
+          source: 'pos',
+          customerId: 7,
+          orderType: 'delivery',
+        },
+        cashierAuth,
+      );
       const row = await saleFullRow(db, saleId);
       assert.equal(row.collection_status, 'cod', 'cash in hand with no gateway receipt is COD, never prepaid_online');
       assert.equal(Number(row.paid_amount), 100, 'the non-courier delivery is fully paid');
@@ -477,9 +654,14 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, trialPayload({
-        payments: [{ paymentChannel: 'cash', amount: 200 }], tenderedAmount: 200,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        trialPayload({
+          payments: [{ paymentChannel: 'cash', amount: 200 }],
+          tenderedAmount: 200,
+        }),
+        cashierAuth,
+      );
       const row = await saleFullRow(db, saleId);
       assert.equal(row.collection_status, 'cod', 'the unstated status defaults to COD');
       assert.equal(Number(row.paid_amount), 0, 'the unstated partial cash leg is withheld');
@@ -499,20 +681,23 @@ async function main(): Promise<void> {
   // courier-collects at once. A partial cash leg still posts as
   // typed (restaurant-paid-gates.spec.ts test 19); only the
   // paid-in-full contradiction is refused.
-  await check("T12-H1 explicit 'cod' + full declared cash leg is refused with SALE_COD_CASH_LEG_CONTRADICTION", async () => {
-    const { pg, db } = await makeDb();
-    try {
-      await seedFoundation(db);
-      await seedShift(db, 1, 2);
-      const { sales } = buildServices(db);
-      await assert.rejects(
-        createAndGetId(sales, trialPayload({ collectionStatus: 'cod' }), cashierAuth),
-        (err: any) => err && err.code === 'SALE_COD_CASH_LEG_CONTRADICTION',
-      );
-    } finally {
-      await db.destroy();
-    }
-  });
+  await check(
+    "T12-H1 explicit 'cod' + full declared cash leg is refused with SALE_COD_CASH_LEG_CONTRADICTION",
+    async () => {
+      const { pg, db } = await makeDb();
+      try {
+        await seedFoundation(db);
+        await seedShift(db, 1, 2);
+        const { sales } = buildServices(db);
+        await assert.rejects(
+          createAndGetId(sales, trialPayload({ collectionStatus: 'cod' }), cashierAuth),
+          (err: any) => err && err.code === 'SALE_COD_CASH_LEG_CONTRADICTION',
+        );
+      } finally {
+        await db.destroy();
+      }
+    },
+  );
 
   // 8. T12-H1, the Trial 4 shape: COD + customer + cash + paid 0
   // posts unpaid — paid 0, cash type, 'cod', Dr 1130 for the full
@@ -525,9 +710,15 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, trialPayload({
-        collectionStatus: 'cod', payments: [], tenderedAmount: 0,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        trialPayload({
+          collectionStatus: 'cod',
+          payments: [],
+          tenderedAmount: 0,
+        }),
+        cashierAuth,
+      );
       const row = await saleFullRow(db, saleId);
       assert.equal(Number(row.total), 530, 'goods 500 + courier fee 30');
       assert.equal(Number(row.paid_amount), 0, 'nothing has been paid yet');
@@ -559,9 +750,15 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, trialPayload({
-        collectionStatus: 'cod', payments: [], tenderedAmount: 0,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        trialPayload({
+          collectionStatus: 'cod',
+          payments: [],
+          tenderedAmount: 0,
+        }),
+        cashierAuth,
+      );
       const authz = new SalesAuthorizationService(db);
       const query = new SalesQueryService(db, authz);
       const full: any = await query.getSaleById(saleId, cashierAuth);
@@ -586,13 +783,25 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, {
-        items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-        discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-        payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
-        branchId: 1, locationId: 10, source: 'pos',
-        customerId: 7, orderType: 'takeaway', collectionStatus: 'cod',
-      }, cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        {
+          items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
+          discount: 0,
+          taxRate: 0,
+          paymentType: 'cash',
+          paymentChannel: 'cash',
+          payments: [{ paymentChannel: 'cash', amount: 100 }],
+          tenderedAmount: 100,
+          branchId: 1,
+          locationId: 10,
+          source: 'pos',
+          customerId: 7,
+          orderType: 'takeaway',
+          collectionStatus: 'cod',
+        },
+        cashierAuth,
+      );
       const row = await saleFullRow(db, saleId);
       assert.equal(Number(row.total), 100, 'one Widget 101 at 100');
       assert.equal(Number(row.paid_amount), 100, 'the cash leg posts in full');
@@ -614,13 +823,26 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, {
-        items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-        discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-        payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
-        branchId: 1, locationId: 10, source: 'pos',
-        customerId: 7, orderType: 'dine_in', tableNumber: '5', collectionStatus: 'cod',
-      }, cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        {
+          items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
+          discount: 0,
+          taxRate: 0,
+          paymentType: 'cash',
+          paymentChannel: 'cash',
+          payments: [{ paymentChannel: 'cash', amount: 100 }],
+          tenderedAmount: 100,
+          branchId: 1,
+          locationId: 10,
+          source: 'pos',
+          customerId: 7,
+          orderType: 'dine_in',
+          tableNumber: '5',
+          collectionStatus: 'cod',
+        },
+        cashierAuth,
+      );
       const row = await saleFullRow(db, saleId);
       assert.equal(Number(row.total), 100, 'one Widget 101 at 100');
       assert.equal(Number(row.paid_amount), 100, 'the cash leg posts in full');

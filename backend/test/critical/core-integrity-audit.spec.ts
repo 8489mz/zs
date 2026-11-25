@@ -23,8 +23,12 @@ const DB_CONFIG = {
 };
 
 function createDb(maxConnections = 5): Kysely<Database> {
-  const pool = new Pool({ ...DB_CONFIG, max: maxConnections, idleTimeoutMillis: 1000,
-    connectionTimeoutMillis: 2000, statement_timeout: 5000,
+  const pool = new Pool({
+    ...DB_CONFIG,
+    max: maxConnections,
+    idleTimeoutMillis: 1000,
+    connectionTimeoutMillis: 2000,
+    statement_timeout: 5000,
     options: '-c idle_in_transaction_session_timeout=10000',
   });
   return new Kysely<Database>({
@@ -50,10 +54,14 @@ async function runCoreAuditSuite() {
   try {
     // Fresh migrations intentionally contain no administrator credentials.
     // Provision this disposable fixture through the real bootstrap service.
-    await new BootstrapAdminService(db, new ConfigService({
-      PLATFORM_TENANT_ID: 'zs', APP_MODE: 'CLOUD_SAAS',
-      PLATFORM_SUPERADMIN_PASSWORD: 'DisposableCoreAudit!2026#Only',
-    })).onApplicationBootstrap();
+    await new BootstrapAdminService(
+      db,
+      new ConfigService({
+        PLATFORM_TENANT_ID: 'zs',
+        APP_MODE: 'CLOUD_SAAS',
+        PLATFORM_SUPERADMIN_PASSWORD: 'DisposableCoreAudit!2026#Only',
+      }),
+    ).onApplicationBootstrap();
     // -------------------------------------------------------------------------
     // TEST 1: CORE-001 Platform Root Administrator Provisioning Safety
     // -------------------------------------------------------------------------
@@ -93,7 +101,10 @@ async function runCoreAuditSuite() {
 
       // 1. Missing PLATFORM_SUPERADMIN_PASSWORD: fail closed, do not create admin
       const mockDb1 = new MockFirstRunDb();
-      const bootstrapNoSecret = new BootstrapAdminService(mockDb1 as any, new ConfigService({ PLATFORM_TENANT_ID: 'zs', APP_MODE: 'CLOUD_SAAS' }));
+      const bootstrapNoSecret = new BootstrapAdminService(
+        mockDb1 as any,
+        new ConfigService({ PLATFORM_TENANT_ID: 'zs', APP_MODE: 'CLOUD_SAAS' }),
+      );
       await bootstrapNoSecret.onApplicationBootstrap();
       assert.equal(mockDb1.insertedUser, null, 'Superadmin must NOT be created when secret is missing');
 
@@ -101,11 +112,14 @@ async function runCoreAuditSuite() {
       const mockDb2 = new MockFirstRunDb();
       let rejectedDefault = false;
       try {
-        const bootstrapPublished = new BootstrapAdminService(mockDb2 as any, new ConfigService({
-          PLATFORM_TENANT_ID: 'zs',
-          APP_MODE: 'CLOUD_SAAS',
-          PLATFORM_SUPERADMIN_PASSWORD: 'ZsAdmin2026',
-        }));
+        const bootstrapPublished = new BootstrapAdminService(
+          mockDb2 as any,
+          new ConfigService({
+            PLATFORM_TENANT_ID: 'zs',
+            APP_MODE: 'CLOUD_SAAS',
+            PLATFORM_SUPERADMIN_PASSWORD: 'ZsAdmin2026',
+          }),
+        );
         await bootstrapPublished.onApplicationBootstrap();
       } catch (e: any) {
         rejectedDefault = true;
@@ -115,11 +129,14 @@ async function runCoreAuditSuite() {
       // 3. Published password 'ChangeMe123!': must be refused
       const mockDb3 = new MockFirstRunDb();
       try {
-        const bootstrapPublished2 = new BootstrapAdminService(mockDb3 as any, new ConfigService({
-          PLATFORM_TENANT_ID: 'zs',
-          APP_MODE: 'CLOUD_SAAS',
-          PLATFORM_SUPERADMIN_PASSWORD: 'ChangeMe123!',
-        }));
+        const bootstrapPublished2 = new BootstrapAdminService(
+          mockDb3 as any,
+          new ConfigService({
+            PLATFORM_TENANT_ID: 'zs',
+            APP_MODE: 'CLOUD_SAAS',
+            PLATFORM_SUPERADMIN_PASSWORD: 'ChangeMe123!',
+          }),
+        );
         await bootstrapPublished2.onApplicationBootstrap();
       } catch (e: any) {}
       assert.equal(mockDb3.insertedUser, null, 'Must reject published default password ChangeMe123!');
@@ -127,22 +144,28 @@ async function runCoreAuditSuite() {
       // 4. Weak password: must be refused
       const mockDb4 = new MockFirstRunDb();
       try {
-        const bootstrapWeak = new BootstrapAdminService(mockDb4 as any, new ConfigService({
-          PLATFORM_TENANT_ID: 'zs',
-          APP_MODE: 'CLOUD_SAAS',
-          PLATFORM_SUPERADMIN_PASSWORD: 'weak',
-        }));
+        const bootstrapWeak = new BootstrapAdminService(
+          mockDb4 as any,
+          new ConfigService({
+            PLATFORM_TENANT_ID: 'zs',
+            APP_MODE: 'CLOUD_SAAS',
+            PLATFORM_SUPERADMIN_PASSWORD: 'weak',
+          }),
+        );
         await bootstrapWeak.onApplicationBootstrap();
       } catch (e: any) {}
       assert.equal(mockDb4.insertedUser, null, 'Must reject weak password');
 
       // 5. Strong operator secret: provisions with must_change_password = true
       const mockDb5 = new MockFirstRunDb();
-      const bootstrapValid = new BootstrapAdminService(mockDb5 as any, new ConfigService({
-        PLATFORM_TENANT_ID: 'zs',
-        APP_MODE: 'CLOUD_SAAS',
-        PLATFORM_SUPERADMIN_PASSWORD: 'OperatorStrongSecret!2026#Secure',
-      }));
+      const bootstrapValid = new BootstrapAdminService(
+        mockDb5 as any,
+        new ConfigService({
+          PLATFORM_TENANT_ID: 'zs',
+          APP_MODE: 'CLOUD_SAAS',
+          PLATFORM_SUPERADMIN_PASSWORD: 'OperatorStrongSecret!2026#Secure',
+        }),
+      );
       await bootstrapValid.onApplicationBootstrap();
       assert.ok(mockDb5.insertedUser, 'Superadmin must be provisioned with valid operator secret');
       assert.equal(mockDb5.insertedUser.username, 'zs');
@@ -150,22 +173,40 @@ async function runCoreAuditSuite() {
 
       // 6. Real PostgreSQL Database Verification: detect 'ZsAdmin2026' on root 'zs' account and set must_change_password = true
       const compromisedPw = await createPasswordRecord('ZsAdmin2026');
-      await db.updateTable('users').set({
-        password_hash: compromisedPw.hash,
-        password_salt: compromisedPw.salt,
-        must_change_password: false,
-      } as any).where('username', '=', 'zs').where('tenant_id', '=', 'zs').execute();
+      await db
+        .updateTable('users')
+        .set({
+          password_hash: compromisedPw.hash,
+          password_salt: compromisedPw.salt,
+          must_change_password: false,
+        } as any)
+        .where('username', '=', 'zs')
+        .where('tenant_id', '=', 'zs')
+        .execute();
 
-      const bootstrapDetect = new BootstrapAdminService(db, new ConfigService({
-        PLATFORM_TENANT_ID: 'zs',
-        APP_MODE: 'CLOUD_SAAS',
-      }));
+      const bootstrapDetect = new BootstrapAdminService(
+        db,
+        new ConfigService({
+          PLATFORM_TENANT_ID: 'zs',
+          APP_MODE: 'CLOUD_SAAS',
+        }),
+      );
       await bootstrapDetect.onApplicationBootstrap();
-      const adminDetected = await db.selectFrom('users').selectAll()
-        .where('username', '=', 'zs').where('tenant_id', '=', 'zs').executeTakeFirst();
-      assert.equal(adminDetected?.must_change_password, true, 'Compromised ZsAdmin2026 password on real DB must be flagged with must_change_password = true');
+      const adminDetected = await db
+        .selectFrom('users')
+        .selectAll()
+        .where('username', '=', 'zs')
+        .where('tenant_id', '=', 'zs')
+        .executeTakeFirst();
+      assert.equal(
+        adminDetected?.must_change_password,
+        true,
+        'Compromised ZsAdmin2026 password on real DB must be flagged with must_change_password = true',
+      );
 
-      console.log('✓ CORE-001 passed: No default or published secret can provision platform super-admin; compromised credentials detected on real DB');
+      console.log(
+        '✓ CORE-001 passed: No default or published secret can provision platform super-admin; compromised credentials detected on real DB',
+      );
     }
 
     // -------------------------------------------------------------------------
@@ -187,17 +228,24 @@ async function runCoreAuditSuite() {
           VALUES ('t1', 1000.50, 750.25), ('t1', 500.00, 250.00);
         `);
 
-        const pre = await client.query(`SELECT COUNT(*)::int as cnt, COALESCE(SUM(total_amount), 0)::numeric as tot, COALESCE(SUM(collected_amount), 0)::numeric as col FROM test_legacy_settlements`);
+        const pre = await client.query(
+          `SELECT COUNT(*)::int as cnt, COALESCE(SUM(total_amount), 0)::numeric as tot, COALESCE(SUM(collected_amount), 0)::numeric as col FROM test_legacy_settlements`,
+        );
         assert.equal(pre.rows[0].cnt, 2);
-        assert.equal(Number(pre.rows[0].tot), 1500.50);
+        assert.equal(Number(pre.rows[0].tot), 1500.5);
         assert.equal(Number(pre.rows[0].col), 1000.25);
 
         // Discrepancy assertion test:
-        const simulatedPostDiscrepancy = { cnt: 1, tot: 1000.50, col: 750.25 };
+        const simulatedPostDiscrepancy = { cnt: 1, tot: 1000.5, col: 750.25 };
         let caughtDiscrepancy = false;
         try {
-          if (pre.rows[0].cnt !== simulatedPostDiscrepancy.cnt || Number(pre.rows[0].tot) !== simulatedPostDiscrepancy.tot) {
-            throw new Error(`PRE_POST_RECONCILIATION_MISMATCH: Count mismatch pre=${pre.rows[0].cnt} post=${simulatedPostDiscrepancy.cnt}`);
+          if (
+            pre.rows[0].cnt !== simulatedPostDiscrepancy.cnt ||
+            Number(pre.rows[0].tot) !== simulatedPostDiscrepancy.tot
+          ) {
+            throw new Error(
+              `PRE_POST_RECONCILIATION_MISMATCH: Count mismatch pre=${pre.rows[0].cnt} post=${simulatedPostDiscrepancy.cnt}`,
+            );
           }
         } catch (e: any) {
           caughtDiscrepancy = true;
@@ -295,7 +343,7 @@ async function runCoreAuditSuite() {
             trx,
             { tenantId, accountId: 'acc', idempotencyKey: key, operationType: 'sales_return' },
             { ok: true },
-            'RET-999'
+            'RET-999',
           );
           // Simulate failure before commit!
           throw new Error('SIMULATED_DB_FAILURE_DURING_RETURN');
@@ -305,7 +353,8 @@ async function runCoreAuditSuite() {
       }
 
       // Check record in DB: commitOperation must have been ROLLED BACK because it shared trx!
-      const opRecord = await db.selectFrom('operation_executions')
+      const opRecord = await db
+        .selectFrom('operation_executions')
         .select(['status'])
         .where('tenant_id', '=', tenantId)
         .where('idempotency_key', '=', key)
@@ -321,35 +370,76 @@ async function runCoreAuditSuite() {
     console.log('\n--- TEST 6: CORE-005 Session and Authorization Revocation ---');
     {
       const testTenant = 't_session_revocation';
-      const testUser = await db.insertInto('users').values({
-        username: `user_rev_${Date.now()}`,
-        role: 'cashier',
-        phone: '01099990001',
-        permissions_json: JSON.stringify(['pos']),
-        tenant_id: testTenant,
-        account_id: 'acc1',
-        password_hash: '$2b$10$abcdefghijklmnopqrstuu',
-        password_salt: 'salt',
-      } as any).returning('id').executeTakeFirstOrThrow();
+      const testUser = await db
+        .insertInto('users')
+        .values({
+          username: `user_rev_${Date.now()}`,
+          role: 'cashier',
+          phone: '01099990001',
+          permissions_json: JSON.stringify(['pos']),
+          tenant_id: testTenant,
+          account_id: 'acc1',
+          password_hash: '$2b$10$abcdefghijklmnopqrstuu',
+          password_salt: 'salt',
+        } as any)
+        .returning('id')
+        .executeTakeFirstOrThrow();
       const userId = Number(testUser.id);
 
       // Create 2 active sessions in DB
       const sess1 = `sess1_${Date.now()}`;
       const sess2 = `sess2_${Date.now()}`;
-      await db.insertInto('sessions').values([
-        { id: sess1, user_id: userId, tenant_id: testTenant, account_id: 'acc1', expires_at: new Date(Date.now() + 3600000) } as any,
-        { id: sess2, user_id: userId, tenant_id: testTenant, account_id: 'acc1', expires_at: new Date(Date.now() + 3600000) } as any,
-      ]).execute();
+      await db
+        .insertInto('sessions')
+        .values([
+          {
+            id: sess1,
+            user_id: userId,
+            tenant_id: testTenant,
+            account_id: 'acc1',
+            expires_at: new Date(Date.now() + 3600000),
+          } as any,
+          {
+            id: sess2,
+            user_id: userId,
+            tenant_id: testTenant,
+            account_id: 'acc1',
+            expires_at: new Date(Date.now() + 3600000),
+          } as any,
+        ])
+        .execute();
 
       // Cache session in AuthCache
-      authCache.setSession(sess1, { userId, sessionId: sess1, tenantId: testTenant, username: 'test', role: 'cashier', permissions: ['pos'] });
-      authCache.setSession(sess2, { userId, sessionId: sess2, tenantId: testTenant, username: 'test', role: 'cashier', permissions: ['pos'] });
+      authCache.setSession(sess1, {
+        userId,
+        sessionId: sess1,
+        tenantId: testTenant,
+        username: 'test',
+        role: 'cashier',
+        permissions: ['pos'],
+      });
+      authCache.setSession(sess2, {
+        userId,
+        sessionId: sess2,
+        tenantId: testTenant,
+        username: 'test',
+        role: 'cashier',
+        permissions: ['pos'],
+      });
       assert.ok(authCache.getSession(sess1) !== null);
 
       // Revoke sessions via UsersService bulk disable
       const usersService = new UsersService(db, tx, mockAudit, authCache);
-      const actor: AuthContext = { userId: 1, sessionId: 'actor_sess', tenantId: testTenant, accountId: 'acc1', username: 'admin', role: 'admin', permissions: ['users'] };
-      
+      const actor: AuthContext = {
+        userId: 1,
+        sessionId: 'actor_sess',
+        tenantId: testTenant,
+        accountId: 'acc1',
+        username: 'admin',
+        role: 'admin',
+        permissions: ['users'],
+      };
+
       await usersService.bulkDisableUsers([userId], actor);
 
       // Assert sessions removed from DB
@@ -361,29 +451,75 @@ async function runCoreAuditSuite() {
       assert.equal(authCache.getSession(sess2), null, 'Cached authorization must be invalidated immediately');
 
       // Test SessionService.changePassword: other sessions revoked, active preserved, cache cleared
-      const user2 = await db.insertInto('users').values({
-        username: `user_pw_${Date.now()}`,
-        role: 'cashier',
-        phone: '01099990002',
-        password_hash: '$2b$10$abcdefghijklmnopqrstuu',
-        password_salt: 'salt',
-        tenant_id: testTenant,
-        account_id: 'acc1',
-      } as any).returning('id').executeTakeFirstOrThrow();
+      const user2 = await db
+        .insertInto('users')
+        .values({
+          username: `user_pw_${Date.now()}`,
+          role: 'cashier',
+          phone: '01099990002',
+          password_hash: '$2b$10$abcdefghijklmnopqrstuu',
+          password_salt: 'salt',
+          tenant_id: testTenant,
+          account_id: 'acc1',
+        } as any)
+        .returning('id')
+        .executeTakeFirstOrThrow();
       const u2Id = Number(user2.id);
 
       const sessActive = `sess_act_${Date.now()}`;
       const sessOther = `sess_oth_${Date.now()}`;
-      await db.insertInto('sessions').values([
-        { id: sessActive, user_id: u2Id, tenant_id: testTenant, account_id: 'acc1', expires_at: new Date(Date.now() + 3600000) } as any,
-        { id: sessOther, user_id: u2Id, tenant_id: testTenant, account_id: 'acc1', expires_at: new Date(Date.now() + 3600000) } as any,
-      ]).execute();
+      await db
+        .insertInto('sessions')
+        .values([
+          {
+            id: sessActive,
+            user_id: u2Id,
+            tenant_id: testTenant,
+            account_id: 'acc1',
+            expires_at: new Date(Date.now() + 3600000),
+          } as any,
+          {
+            id: sessOther,
+            user_id: u2Id,
+            tenant_id: testTenant,
+            account_id: 'acc1',
+            expires_at: new Date(Date.now() + 3600000),
+          } as any,
+        ])
+        .execute();
 
-      authCache.setSession(sessActive, { userId: u2Id, sessionId: sessActive, tenantId: testTenant, username: 'user2', role: 'cashier', permissions: [] });
-      authCache.setSession(sessOther, { userId: u2Id, sessionId: sessOther, tenantId: testTenant, username: 'user2', role: 'cashier', permissions: [] });
+      authCache.setSession(sessActive, {
+        userId: u2Id,
+        sessionId: sessActive,
+        tenantId: testTenant,
+        username: 'user2',
+        role: 'cashier',
+        permissions: [],
+      });
+      authCache.setSession(sessOther, {
+        userId: u2Id,
+        sessionId: sessOther,
+        tenantId: testTenant,
+        username: 'user2',
+        role: 'cashier',
+        permissions: [],
+      });
 
-      const sessionService = new SessionService(db, new ConfigService({ PLATFORM_TENANT_ID: 'zs' }), mockAudit, authCache);
-      const u2Auth: AuthContext = { userId: u2Id, sessionId: sessActive, tenantId: testTenant, accountId: 'acc1', username: 'user2', role: 'cashier', permissions: [] };
+      const sessionService = new SessionService(
+        db,
+        new ConfigService({ PLATFORM_TENANT_ID: 'zs' }),
+        mockAudit,
+        authCache,
+      );
+      const u2Auth: AuthContext = {
+        userId: u2Id,
+        sessionId: sessActive,
+        tenantId: testTenant,
+        accountId: 'acc1',
+        username: 'user2',
+        role: 'cashier',
+        permissions: [],
+      };
       await sessionService.revokeOtherSessions(u2Auth, sessActive);
 
       const remainingSessions = await db.selectFrom('sessions').select('id').where('user_id', '=', u2Id).execute();
@@ -400,49 +536,86 @@ async function runCoreAuditSuite() {
     console.log('\n--- TEST 7: CORE-006 User Branch Updates & Optional Semantics ---');
     {
       const testTenant = `t_branch_atomic_${Date.now()}`;
-      const b1 = await db.insertInto('branches').values({ name: 'Branch 1', code: `B1_${Date.now()}`, tenant_id: testTenant, account_id: 'acc' } as any).returning('id').executeTakeFirstOrThrow();
-      const b2 = await db.insertInto('branches').values({ name: 'Branch 2', code: `B2_${Date.now()}`, tenant_id: testTenant, account_id: 'acc' } as any).returning('id').executeTakeFirstOrThrow();
+      const b1 = await db
+        .insertInto('branches')
+        .values({ name: 'Branch 1', code: `B1_${Date.now()}`, tenant_id: testTenant, account_id: 'acc' } as any)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const b2 = await db
+        .insertInto('branches')
+        .values({ name: 'Branch 2', code: `B2_${Date.now()}`, tenant_id: testTenant, account_id: 'acc' } as any)
+        .returning('id')
+        .executeTakeFirstOrThrow();
       const b1Id = Number(b1.id);
       const b2Id = Number(b2.id);
 
       const usersService = new UsersService(db, tx, mockAudit, authCache);
-      const actor: AuthContext = { userId: 1, sessionId: 'act', tenantId: testTenant, accountId: 'acc', username: 'admin', role: 'admin', permissions: ['users'] };
+      const actor: AuthContext = {
+        userId: 1,
+        sessionId: 'act',
+        tenantId: testTenant,
+        accountId: 'acc',
+        username: 'admin',
+        role: 'admin',
+        permissions: ['users'],
+      };
 
       // Create user with branch b1
-      const created = await usersService.createUser({
-        username: `user_br_${Date.now()}`,
-        phone: '01011112222',
-        password: 'Password123!',
-        role: 'cashier',
-        branchIds: [String(b1Id)],
-      }, actor);
+      const created = await usersService.createUser(
+        {
+          username: `user_br_${Date.now()}`,
+          phone: '01011112222',
+          password: 'Password123!',
+          role: 'cashier',
+          branchIds: [String(b1Id)],
+        },
+        actor,
+      );
       const uid = Number((created as any).user.id);
 
       // Check initial branches
-      let userBranches = await db.selectFrom('user_branches').selectAll().where('user_id', '=', uid).where('tenant_id', '=', testTenant).execute();
+      let userBranches = await db
+        .selectFrom('user_branches')
+        .selectAll()
+        .where('user_id', '=', uid)
+        .where('tenant_id', '=', testTenant)
+        .execute();
       assert.equal(userBranches.length, 1);
       assert.equal(Number((userBranches[0] as any).branch_id), b1Id);
 
       // Update user with branchIds: undefined (omitted) => MUST PRESERVE existing branch
-      await usersService.updateUser(uid, {
-        username: `user_br_upd_${Date.now()}`,
-        phone: '01011112222',
-        role: 'cashier',
-        // branchIds omitted!
-      }, actor);
-      userBranches = await db.selectFrom('user_branches').selectAll().where('user_id', '=', uid).where('tenant_id', '=', testTenant).execute();
+      await usersService.updateUser(
+        uid,
+        {
+          username: `user_br_upd_${Date.now()}`,
+          phone: '01011112222',
+          role: 'cashier',
+          // branchIds omitted!
+        },
+        actor,
+      );
+      userBranches = await db
+        .selectFrom('user_branches')
+        .selectAll()
+        .where('user_id', '=', uid)
+        .where('tenant_id', '=', testTenant)
+        .execute();
       assert.equal(userBranches.length, 1, 'Omitted branchIds must preserve existing associations');
       assert.equal(Number((userBranches[0] as any).branch_id), b1Id);
 
       // Update with invalid branch belonging to foreign tenant => MUST THROW AND ROLL BACK
       let caughtInvalidBranch = false;
       try {
-        await usersService.updateUser(uid, {
-          username: `user_br_upd_${Date.now()}`,
-          phone: '01011112222',
-          role: 'cashier',
-          branchIds: ['999999'], // Non-existent
-        }, actor);
+        await usersService.updateUser(
+          uid,
+          {
+            username: `user_br_upd_${Date.now()}`,
+            phone: '01011112222',
+            role: 'cashier',
+            branchIds: ['999999'], // Non-existent
+          },
+          actor,
+        );
       } catch (e: any) {
         caughtInvalidBranch = true;
         assert.equal(e.code, 'INVALID_BRANCH_ASSIGNMENT');
@@ -450,17 +623,31 @@ async function runCoreAuditSuite() {
       assert.ok(caughtInvalidBranch, 'Invalid branch must throw');
 
       // Verify existing branch was NOT deleted during the failed update
-      userBranches = await db.selectFrom('user_branches').selectAll().where('user_id', '=', uid).where('tenant_id', '=', testTenant).execute();
+      userBranches = await db
+        .selectFrom('user_branches')
+        .selectAll()
+        .where('user_id', '=', uid)
+        .where('tenant_id', '=', testTenant)
+        .execute();
       assert.equal(userBranches.length, 1, 'Failed update must roll back and not delete existing branches');
 
       // Update with explicit [] => MUST CLEAR branches
-      await usersService.updateUser(uid, {
-        username: `user_br_upd_${Date.now()}`,
-        phone: '01011112222',
-        role: 'cashier',
-        branchIds: [],
-      }, actor);
-      userBranches = await db.selectFrom('user_branches').selectAll().where('user_id', '=', uid).where('tenant_id', '=', testTenant).execute();
+      await usersService.updateUser(
+        uid,
+        {
+          username: `user_br_upd_${Date.now()}`,
+          phone: '01011112222',
+          role: 'cashier',
+          branchIds: [],
+        },
+        actor,
+      );
+      userBranches = await db
+        .selectFrom('user_branches')
+        .selectAll()
+        .where('user_id', '=', uid)
+        .where('tenant_id', '=', testTenant)
+        .execute();
       assert.equal(userBranches.length, 0, 'Explicit [] must clear branches');
 
       console.log('✓ CORE-006 passed: Optional branchIds preserves links, invalid branches roll back atomically');
@@ -475,22 +662,37 @@ async function runCoreAuditSuite() {
       const tenantB = `tenant_B_${Date.now()}`;
 
       // Create branch in Tenant B
-      const branchB = await db.insertInto('branches').values({ name: 'Branch B', code: `BB_${Date.now()}`, tenant_id: tenantB, account_id: 'acc' } as any).returning('id').executeTakeFirstOrThrow();
+      const branchB = await db
+        .insertInto('branches')
+        .values({ name: 'Branch B', code: `BB_${Date.now()}`, tenant_id: tenantB, account_id: 'acc' } as any)
+        .returning('id')
+        .executeTakeFirstOrThrow();
       const branchBId = Number(branchB.id);
 
       const usersService = new UsersService(db, tx, mockAudit, authCache);
-      const actorA: AuthContext = { userId: 1, sessionId: 'actA', tenantId: tenantA, accountId: 'acc', username: 'admin', role: 'admin', permissions: ['users'] };
+      const actorA: AuthContext = {
+        userId: 1,
+        sessionId: 'actA',
+        tenantId: tenantA,
+        accountId: 'acc',
+        username: 'admin',
+        role: 'admin',
+        permissions: ['users'],
+      };
 
       // Attempt to create user in Tenant A with defaultBranchId = branchBId
       let caughtCrossTenant = false;
       try {
-        await usersService.createUser({
-          username: `user_cross_${Date.now()}`,
-          phone: '01033334444',
-          password: 'Password123!',
-          role: 'cashier',
-          defaultBranchId: String(branchBId),
-        }, actorA);
+        await usersService.createUser(
+          {
+            username: `user_cross_${Date.now()}`,
+            phone: '01033334444',
+            password: 'Password123!',
+            role: 'cashier',
+            defaultBranchId: String(branchBId),
+          },
+          actorA,
+        );
       } catch (e: any) {
         caughtCrossTenant = true;
         assert.ok(e.message.includes('لا يتبع لهذه المنشأة') || e.code === 'DEFAULT_BRANCH_NOT_FOUND');
@@ -500,16 +702,19 @@ async function runCoreAuditSuite() {
       // Attempt direct SQL insert bypassing service: Database composite FK constraint must reject!
       let caughtDbConstraint = false;
       try {
-        await db.insertInto('users').values({
-          username: `raw_user_cross_${Date.now()}`,
-          role: 'cashier',
-          phone: '01033334445',
-          tenant_id: tenantA,
-          account_id: 'acc',
-          default_branch_id: branchBId, // Foreign tenant branch!
-          password_hash: 'hash',
-          password_salt: 'salt',
-        } as any).execute();
+        await db
+          .insertInto('users')
+          .values({
+            username: `raw_user_cross_${Date.now()}`,
+            role: 'cashier',
+            phone: '01033334445',
+            tenant_id: tenantA,
+            account_id: 'acc',
+            default_branch_id: branchBId, // Foreign tenant branch!
+            password_hash: 'hash',
+            password_salt: 'salt',
+          } as any)
+          .execute();
       } catch (e: any) {
         caughtDbConstraint = true;
         assert.ok(e.message?.includes('violates foreign key constraint') || e.code === '23503');
@@ -518,7 +723,15 @@ async function runCoreAuditSuite() {
 
       // Verify InventoryScopeService ignores foreign branch even if row somehow had it
       const scopeService = new InventoryScopeService(db);
-      const fakeAuth: AuthContext = { userId: 99999, sessionId: 's', tenantId: tenantA, accountId: 'acc', username: 'x', role: 'cashier', permissions: [] };
+      const fakeAuth: AuthContext = {
+        userId: 99999,
+        sessionId: 's',
+        tenantId: tenantA,
+        accountId: 'acc',
+        username: 'x',
+        role: 'cashier',
+        permissions: [],
+      };
       const branches = await scopeService.branchScope(fakeAuth);
       assert.ok(!branches.includes(branchBId), 'Scope service must never trust cross-tenant branch');
 
@@ -534,45 +747,67 @@ async function runCoreAuditSuite() {
       const transferTenant = `t_single_conn_${Date.now()}`;
 
       // Setup locations
-      const locFrom = await singleConnDb.insertInto('stock_locations').values({
-        name: 'المخزن الرئيسي',
-        code: `LOC_M_${Date.now()}`,
-        location_type: 'internal_warehouse' as any,
-        is_active: true,
-        tenant_id: transferTenant,
-        account_id: 'acc',
-      }).returning('id').executeTakeFirstOrThrow();
+      const locFrom = await singleConnDb
+        .insertInto('stock_locations')
+        .values({
+          name: 'المخزن الرئيسي',
+          code: `LOC_M_${Date.now()}`,
+          location_type: 'internal_warehouse' as any,
+          is_active: true,
+          tenant_id: transferTenant,
+          account_id: 'acc',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
 
-      const locTo = await singleConnDb.insertInto('stock_locations').values({
-        name: 'مخزن الفرع',
-        code: `LOC_T_${Date.now()}`,
-        location_type: 'branch_stock' as any,
-        is_active: true,
-        tenant_id: transferTenant,
-        account_id: 'acc',
-      }).returning('id').executeTakeFirstOrThrow();
+      const locTo = await singleConnDb
+        .insertInto('stock_locations')
+        .values({
+          name: 'مخزن الفرع',
+          code: `LOC_T_${Date.now()}`,
+          location_type: 'branch_stock' as any,
+          is_active: true,
+          tenant_id: transferTenant,
+          account_id: 'acc',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
 
       // Setup product with stock
-      const prod = await singleConnDb.insertInto('products').values({
-        name: 'منتج تجريبي',
-        barcode: `BAR_${Date.now()}`,
-        stock_qty: 50,
-        is_active: true,
-        tenant_id: transferTenant,
-        account_id: 'acc',
-      } as any).returning('id').executeTakeFirstOrThrow();
+      const prod = await singleConnDb
+        .insertInto('products')
+        .values({
+          name: 'منتج تجريبي',
+          barcode: `BAR_${Date.now()}`,
+          stock_qty: 50,
+          is_active: true,
+          tenant_id: transferTenant,
+          account_id: 'acc',
+        } as any)
+        .returning('id')
+        .executeTakeFirstOrThrow();
 
-      await singleConnDb.insertInto('product_location_stock').values({
-        product_id: Number(prod.id),
-        location_id: Number(locFrom.id),
-        qty: 50,
-        tenant_id: transferTenant,
-        account_id: 'acc',
-      }).execute();
+      await singleConnDb
+        .insertInto('product_location_stock')
+        .values({
+          product_id: Number(prod.id),
+          location_id: Number(locFrom.id),
+          qty: 50,
+          tenant_id: transferTenant,
+          account_id: 'acc',
+        })
+        .execute();
 
       const scopeService = new InventoryScopeService(singleConnDb);
       const idempotency = new IdempotencyService(singleConnDb as any);
-      const transferService = new InventoryTransferService(singleConnDb, tx, mockAudit, scopeService, idempotency, {} as any);
+      const transferService = new InventoryTransferService(
+        singleConnDb,
+        tx,
+        mockAudit,
+        scopeService,
+        idempotency,
+        {} as any,
+      );
 
       const auth: AuthContext = {
         userId: 1,
@@ -586,12 +821,15 @@ async function runCoreAuditSuite() {
 
       // 1. Create Stock Transfer on single-connection pool!
       console.log('  Testing createStockTransfer with pool max: 1...');
-      const createRes = await transferService.createStockTransfer({
-        fromLocationId: Number(locFrom.id),
-        toLocationId: Number(locTo.id),
-        items: [{ productId: Number(prod.id), qty: 10 }],
-        note: 'تحويل أحادي الاتصال',
-      }, auth);
+      const createRes = await transferService.createStockTransfer(
+        {
+          fromLocationId: Number(locFrom.id),
+          toLocationId: Number(locTo.id),
+          items: [{ productId: Number(prod.id), qty: 10 }],
+          note: 'تحويل أحادي الاتصال',
+        },
+        auth,
+      );
 
       assert.equal(createRes.ok, true);
       const transferId = Number(createRes.transferId);
@@ -604,7 +842,12 @@ async function runCoreAuditSuite() {
 
       // 2. Receive Stock Transfer on single-connection pool!
       console.log('  Testing receiveStockTransfer with pool max: 1...');
-      const receiveRes = await transferService.receiveStockTransfer(transferId, auth, { items: (createdItem.items as Array<{ id: string; qty: number }>).map((row) => ({ itemId: Number(row.id), receivedQty: Number(row.qty) })) });
+      const receiveRes = await transferService.receiveStockTransfer(transferId, auth, {
+        items: (createdItem.items as Array<{ id: string; qty: number }>).map((row) => ({
+          itemId: Number(row.id),
+          receivedQty: Number(row.qty),
+        })),
+      });
       assert.equal(receiveRes.ok, true);
       const transfersList2 = receiveRes.stockTransfers as Array<any>;
       const receivedItem = transfersList2.find((t) => Number(t.id) === transferId);
@@ -613,11 +856,14 @@ async function runCoreAuditSuite() {
       console.log('  ✓ receiveStockTransfer completed without deadlock; read-your-writes verified');
 
       // 3. Create second transfer and Cancel on single-connection pool!
-      const createRes2 = await transferService.createStockTransfer({
-        fromLocationId: Number(locFrom.id),
-        toLocationId: Number(locTo.id),
-        items: [{ productId: Number(prod.id), qty: 5 }],
-      }, auth);
+      const createRes2 = await transferService.createStockTransfer(
+        {
+          fromLocationId: Number(locFrom.id),
+          toLocationId: Number(locTo.id),
+          items: [{ productId: Number(prod.id), qty: 5 }],
+        },
+        auth,
+      );
       const transfer2Id = Number(createRes2.transferId);
 
       console.log('  Testing cancelStockTransfer with pool max: 1...');

@@ -49,7 +49,10 @@
  */
 
 import assert from 'node:assert/strict';
-import { currencyMoneyDigits as backendDigits, roundMoney as backendRoundMoney } from '../../src/modules/accounting/engines/money-minor-units.engine.ts';
+import {
+  currencyMoneyDigits as backendDigits,
+  roundMoney as backendRoundMoney,
+} from '../../src/modules/accounting/engines/money-minor-units.engine.ts';
 import { currencyMoneyDigits, roundMoneyValue } from '../../../frontend/src/shared/utils/money.ts';
 import { getCurrencyDecimals, isThreeDecimalCurrency } from '../../../frontend/src/lib/currencies.ts';
 

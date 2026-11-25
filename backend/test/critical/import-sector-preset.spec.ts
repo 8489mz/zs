@@ -81,12 +81,21 @@ function feasibilityItems(rate?: number): any {
 }
 
 async function seedShipment(db: Kysely<Database>, projectId: string, rate: number | null): Promise<void> {
-  await (db as any).insertInto('import_shipments').values({
-    id: 'sh-1', tenant_id: 't1', container_number: 'C1', status: 'Pending',
-    exchange_rate_at_arrival: rate, project_id: projectId,
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-    cost_allocation_method: 'value',
-  }).execute();
+  await (db as any)
+    .insertInto('import_shipments')
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      container_number: 'C1',
+      status: 'Pending',
+      exchange_rate_at_arrival: rate,
+      project_id: projectId,
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+      cost_allocation_method: 'value',
+    })
+    .execute();
 }
 
 async function expectReject(promise: Promise<any>, code: string): Promise<void> {
@@ -97,10 +106,7 @@ async function expectReject(promise: Promise<any>, code: string): Promise<void> 
     err = e;
   }
   assert.ok(err, `Expected rejection with ${code}`);
-  assert.ok(
-    String(err.message || '').includes(code),
-    `Expected error to include ${code}, got: ${err?.message}`,
-  );
+  assert.ok(String(err.message || '').includes(code), `Expected error to include ${code}, got: ${err?.message}`);
 }
 
 async function main(): Promise<void> {
@@ -110,7 +116,8 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const project: any = await service.createProject('t1', {
-        title: 'Generic import', feasibilityData: feasibilityItems(),
+        title: 'Generic import',
+        feasibilityData: feasibilityItems(),
       });
       assert.equal(project.sector_preset, null);
       await seedShipment(db, project.id, 50);
@@ -151,7 +158,9 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const project: any = await service.createProject('t1', {
-        title: 'Truck parts import', sectorPreset: 'truck_parts', feasibilityData: feasibilityItems(),
+        title: 'Truck parts import',
+        sectorPreset: 'truck_parts',
+        feasibilityData: feasibilityItems(),
       });
       assert.equal(project.sector_preset, 'truck_parts');
       await seedShipment(db, project.id, 50);
@@ -192,20 +201,22 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await expectReject(
-        service.createProject('t1', { title: 'Bad sector', sectorPreset: 'spaceships', feasibilityData: feasibilityItems() }),
+        service.createProject('t1', {
+          title: 'Bad sector',
+          sectorPreset: 'spaceships',
+          feasibilityData: feasibilityItems(),
+        }),
         'IMPORT_UNKNOWN_SECTOR_PRESET',
       );
       const rows: any[] = await (db as any).selectFrom('import_projects').select('id').execute();
       assert.equal(rows.length, 0, 'Failed creation writes nothing');
 
       const project: any = await service.createProject('t1', {
-        title: 'No rate', feasibilityData: feasibilityItems(),
+        title: 'No rate',
+        feasibilityData: feasibilityItems(),
       });
       await seedShipment(db, project.id, null);
-      await expectReject(
-        service.importProjectItemsToShipment('t1', 1, 'sh-1'),
-        'IMPORT_EXCHANGE_RATE_REQUIRED',
-      );
+      await expectReject(service.importProjectItemsToShipment('t1', 1, 'sh-1'), 'IMPORT_EXCHANGE_RATE_REQUIRED');
       const items: any[] = await (db as any).selectFrom('import_shipment_items').select('id').execute();
       assert.equal(items.length, 0, 'Failed import writes no items');
 
@@ -214,18 +225,25 @@ async function main(): Promise<void> {
       // arrival rate, so the whole import fails closed and the
       // transaction rolls back (no items, no products).
       const project2: any = await service.createProject('t1', {
-        title: 'Feasibility rate', feasibilityData: feasibilityItems(48),
+        title: 'Feasibility rate',
+        feasibilityData: feasibilityItems(48),
       });
-      await (db as any).insertInto('import_shipments').values({
-        id: 'sh-2', tenant_id: 't1', container_number: 'C2', status: 'Pending',
-        exchange_rate_at_arrival: null, project_id: project2.id,
-        shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-        cost_allocation_method: 'value',
-      }).execute();
-      await expectReject(
-        service.importProjectItemsToShipment('t1', 1, 'sh-2'),
-        'IMPORT_ARRIVAL_RATE_REQUIRED',
-      );
+      await (db as any)
+        .insertInto('import_shipments')
+        .values({
+          id: 'sh-2',
+          tenant_id: 't1',
+          container_number: 'C2',
+          status: 'Pending',
+          exchange_rate_at_arrival: null,
+          project_id: project2.id,
+          shipping_cost_usd: 0,
+          customs_cost_egp: 0,
+          internal_transport_cost_egp: 0,
+          cost_allocation_method: 'value',
+        })
+        .execute();
+      await expectReject(service.importProjectItemsToShipment('t1', 1, 'sh-2'), 'IMPORT_ARRIVAL_RATE_REQUIRED');
       const itemsAfter: any[] = await (db as any).selectFrom('import_shipment_items').select('id').execute();
       assert.equal(itemsAfter.length, 0, 'Rolled-back import leaves no items');
       const productsAfter: any[] = await (db as any).selectFrom('products').select('id').execute();
@@ -240,28 +258,55 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      await (db as any).insertInto('suppliers').values({ id: 7, tenant_id: 't1', account_id: 't1', name: 'Curated Supplier' }).execute();
-      await (db as any).insertInto('product_categories').values({ id: 9, tenant_id: 't1', account_id: 't1', name: 'Curated Category', is_active: true }).execute();
-      await (db as any).insertInto('products').values({
-        tenant_id: 't1', account_id: 't1', name: KNOWN_TRUCK_ITEM,
-        sku: 'CURATED-SKU', barcode: 'CURATED-BARCODE', supplier_id: 7, category_id: 9,
-        cost_price: 111, retail_price: 222, wholesale_price: 199,
-        stock_qty: 5, reserved_qty: 0, min_stock_qty: 0,
-        notes: 'Curated notes, do not touch',
-        metadata: JSON.stringify({ curated: true }),
-        is_active: true, item_kind: 'standard', item_type: 'product', track_serials: false,
-        catalog_updated_at: new Date('2026-01-01'),
-      }).execute();
+      await (db as any)
+        .insertInto('suppliers')
+        .values({ id: 7, tenant_id: 't1', account_id: 't1', name: 'Curated Supplier' })
+        .execute();
+      await (db as any)
+        .insertInto('product_categories')
+        .values({ id: 9, tenant_id: 't1', account_id: 't1', name: 'Curated Category', is_active: true })
+        .execute();
+      await (db as any)
+        .insertInto('products')
+        .values({
+          tenant_id: 't1',
+          account_id: 't1',
+          name: KNOWN_TRUCK_ITEM,
+          sku: 'CURATED-SKU',
+          barcode: 'CURATED-BARCODE',
+          supplier_id: 7,
+          category_id: 9,
+          cost_price: 111,
+          retail_price: 222,
+          wholesale_price: 199,
+          stock_qty: 5,
+          reserved_qty: 0,
+          min_stock_qty: 0,
+          notes: 'Curated notes, do not touch',
+          metadata: JSON.stringify({ curated: true }),
+          is_active: true,
+          item_kind: 'standard',
+          item_type: 'product',
+          track_serials: false,
+          catalog_updated_at: new Date('2026-01-01'),
+        })
+        .execute();
       const before: any = await (db as any).selectFrom('products').selectAll().executeTakeFirstOrThrow();
 
       const project: any = await service.createProject('t1', {
-        title: 'Truck parts import', sectorPreset: 'truck_parts', feasibilityData: feasibilityItems(),
+        title: 'Truck parts import',
+        sectorPreset: 'truck_parts',
+        feasibilityData: feasibilityItems(),
       });
       await seedShipment(db, project.id, 50);
       const res = await service.importProjectItemsToShipment('t1', 1, 'sh-1');
       assert.equal(res.importedCount, 2, 'Both items import, one linked to the curated product');
 
-      const after: any = await (db as any).selectFrom('products').selectAll().where('id', '=', before.id).executeTakeFirstOrThrow();
+      const after: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', before.id)
+        .executeTakeFirstOrThrow();
       assert.equal(after.sku, 'CURATED-SKU');
       assert.equal(after.barcode, 'CURATED-BARCODE');
       assert.equal(Number(after.supplier_id), 7);
@@ -282,7 +327,8 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const project: any = await service.createProject('t1', {
-        title: 'Generic first', feasibilityData: feasibilityItems(),
+        title: 'Generic first',
+        feasibilityData: feasibilityItems(),
       });
       const updated: any = await service.updateProject('t1', project.id, { sectorPreset: 'truck_parts' });
       assert.equal(updated.sector_preset, 'truck_parts', 'Preset change allowed before any items exist');
@@ -293,7 +339,11 @@ async function main(): Promise<void> {
         service.updateProject('t1', project.id, { sectorPreset: null }),
         'IMPORT_SECTOR_PRESET_LOCKED',
       );
-      const kept: any = await (db as any).selectFrom('import_projects').select('sector_preset').where('id', '=', project.id).executeTakeFirstOrThrow();
+      const kept: any = await (db as any)
+        .selectFrom('import_projects')
+        .select('sector_preset')
+        .where('id', '=', project.id)
+        .executeTakeFirstOrThrow();
       assert.equal(kept.sector_preset, 'truck_parts', 'Locked preset unchanged after rejection');
       await expectReject(
         service.updateProject('t1', project.id, { sectorPreset: 'spaceships' }),

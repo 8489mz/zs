@@ -55,7 +55,11 @@ const baseFlags: SandboxGatewayFlags = {
 };
 
 function testSandboxOnlyInTestMode(): void {
-  assert.equal(isSandboxPaymentAllowed({ ...baseFlags, enabled: false, provider: 'mock' }), false, 'disabled payment never allows sandbox');
+  assert.equal(
+    isSandboxPaymentAllowed({ ...baseFlags, enabled: false, provider: 'mock' }),
+    false,
+    'disabled payment never allows sandbox',
+  );
   assert.equal(isSandboxPaymentAllowed({ ...baseFlags, provider: 'mock' }), true);
   assert.equal(isSandboxPaymentAllowed(baseFlags), false, 'live paymob must not fall back to the simulator');
   assert.equal(isSandboxPaymentAllowed({ ...baseFlags, testMode: true }), true);
@@ -73,32 +77,60 @@ function testSandboxOnlyInTestMode(): void {
 function testCollectionRequiresVerifiedMoney(): void {
   // The exact bug: InstaPay chosen, nothing confirmed.
   assert.deepEqual(
-    resolveOnlineOrderCollection({ payment_status: 'pending', payment_method: 'instapay_wallet', gateway_provider: null }),
+    resolveOnlineOrderCollection({
+      payment_status: 'pending',
+      payment_method: 'instapay_wallet',
+      gateway_provider: null,
+    }),
     { collected: false, paymentChannel: 'cash', provider: null },
   );
   // Sandbox payment is never money.
   assert.equal(
-    resolveOnlineOrderCollection({ payment_status: 'paid', payment_method: 'credit_card', gateway_provider: 'mock' }).collected,
+    resolveOnlineOrderCollection({ payment_status: 'paid', payment_method: 'credit_card', gateway_provider: 'mock' })
+      .collected,
     false,
   );
   // "paid" with no provider (e.g. a hand-edited row) is not trusted either.
-  assert.equal(resolveOnlineOrderCollection({ payment_status: 'paid', payment_method: 'credit_card', gateway_provider: null }).collected, false);
+  assert.equal(
+    resolveOnlineOrderCollection({ payment_status: 'paid', payment_method: 'credit_card', gateway_provider: null })
+      .collected,
+    false,
+  );
   // Verified gateway payments are collected on the CARD channel. The sales engine maps any
   // unknown channel name to 'cash', so returning 'stripe' here booked card money into the drawer.
   for (const provider of ['paymob', 'xpay', 'tap', 'stripe']) {
     assert.deepEqual(
-      resolveOnlineOrderCollection({ payment_status: 'paid', payment_method: 'credit_card', gateway_provider: provider }),
+      resolveOnlineOrderCollection({
+        payment_status: 'paid',
+        payment_method: 'credit_card',
+        gateway_provider: provider,
+      }),
       { collected: true, paymentChannel: 'card', provider },
     );
   }
   // A webhook that reported failure does not count.
-  assert.equal(resolveOnlineOrderCollection({ payment_status: 'failed', payment_method: 'credit_card', gateway_provider: 'stripe' }).collected, false);
+  assert.equal(
+    resolveOnlineOrderCollection({
+      payment_status: 'failed',
+      payment_method: 'credit_card',
+      gateway_provider: 'stripe',
+    }).collected,
+    false,
+  );
   // Merchant-confirmed InstaPay transfer.
   assert.deepEqual(
-    resolveOnlineOrderCollection({ payment_status: 'paid', payment_method: 'instapay_wallet', gateway_provider: 'manual' }),
+    resolveOnlineOrderCollection({
+      payment_status: 'paid',
+      payment_method: 'instapay_wallet',
+      gateway_provider: 'manual',
+    }),
     { collected: true, paymentChannel: 'instapay', provider: 'manual' },
   );
-  assert.equal(resolveOnlineOrderCollection({ payment_status: 'pending', payment_method: 'cod', gateway_provider: null }).collected, false);
+  assert.equal(
+    resolveOnlineOrderCollection({ payment_status: 'pending', payment_method: 'cod', gateway_provider: null })
+      .collected,
+    false,
+  );
 }
 
 function testTrackingLink(): void {
@@ -112,7 +144,11 @@ function testTrackingLink(): void {
   assert.equal(verifyOrderAccessToken(t, hash), true, 'the fragment token opens exactly this order');
   assert.equal(buildOrderTrackingUrl('', 's', 'ON-1', token, {}), null, 'no origin, no link');
   assert.equal(buildOrderTrackingUrl('javascript:alert(1)', 's', 'ON-1', token, {}), null);
-  assert.equal(buildOrderTrackingUrl('https://evil.com/path', 's', 'ON-1', token, {}), null, 'origin only, no path smuggling');
+  assert.equal(
+    buildOrderTrackingUrl('https://evil.com/path', 's', 'ON-1', token, {}),
+    null,
+    'origin only, no path smuggling',
+  );
 
   // SF-10: with subdomain stores on, the link is the store's own host and ignores the request origin.
   const env = { STOREFRONT_ROOT_DOMAIN: 'zsystemai.com' } as NodeJS.ProcessEnv;
@@ -124,15 +160,31 @@ function testTrackingLink(): void {
 function testGatewayReturnAndWebhookUrls(): void {
   // O67: Tap/Stripe used to return shoppers to `<slug>.z-systems.cloud/storefront/orders` and post
   // Tap webhooks to `z-systems.cloud` — neither is ours, so card payments were never confirmed.
-  const on = { STOREFRONT_ROOT_DOMAIN: 'zsystemai.com', APP_PUBLIC_URL: 'https://app.zsystemai.com' } as NodeJS.ProcessEnv;
-  assert.equal(buildPaymentReturnUrl('https://evil.com', 'MyShop', 'ON-1', on), 'https://myshop.zsystemai.com/track/ON-1');
-  assert.equal(buildPaymentReturnUrl('https://zsystemai.com', 'myshop', 'ON-1', {}), 'https://zsystemai.com/st/myshop/track/ON-1');
+  const on = {
+    STOREFRONT_ROOT_DOMAIN: 'zsystemai.com',
+    APP_PUBLIC_URL: 'https://app.zsystemai.com',
+  } as NodeJS.ProcessEnv;
+  assert.equal(
+    buildPaymentReturnUrl('https://evil.com', 'MyShop', 'ON-1', on),
+    'https://myshop.zsystemai.com/track/ON-1',
+  );
+  assert.equal(
+    buildPaymentReturnUrl('https://zsystemai.com', 'myshop', 'ON-1', {}),
+    'https://zsystemai.com/st/myshop/track/ON-1',
+  );
   assert.equal(buildPaymentReturnUrl('', 'myshop', 'ON-1', {}), null);
   const returnUrl = String(buildPaymentReturnUrl('https://x.test', 'myshop', 'ON-1', {}));
   assert.ok(!returnUrl.includes('#') && !returnUrl.includes('t='), 'no order token is handed to the gateway (SF-1)');
 
-  assert.equal(buildGatewayWebhookUrl('https://evil.com', 'tap', on), 'https://app.zsystemai.com/api/storefront/webhooks/tap', 'configured URL wins over the request host');
-  assert.equal(buildGatewayWebhookUrl('https://app.zsystemai.com/', 'stripe', {}), 'https://app.zsystemai.com/api/storefront/webhooks/stripe');
+  assert.equal(
+    buildGatewayWebhookUrl('https://evil.com', 'tap', on),
+    'https://app.zsystemai.com/api/storefront/webhooks/tap',
+    'configured URL wins over the request host',
+  );
+  assert.equal(
+    buildGatewayWebhookUrl('https://app.zsystemai.com/', 'stripe', {}),
+    'https://app.zsystemai.com/api/storefront/webhooks/stripe',
+  );
   assert.equal(buildGatewayWebhookUrl('https://evil.com/path', 'tap', {}), null);
   assert.equal(buildGatewayWebhookUrl(undefined, 'tap', {}), null);
 }

@@ -68,15 +68,30 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { InventoryTransferService } from '../../src/modules/inventory/services/inventory-transfer.service';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 
 async function seedProduct(db: Kysely<Database>, id: number, qty: number, cost: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(db);
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(
+    db,
+  );
 }
 
 async function locationQty(db: Kysely<Database>, productId: number, locationId: number): Promise<number> {
-  const row = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = ${locationId}`.execute(db);
+  const row = await sql<{
+    qty: string;
+  }>`SELECT qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = ${locationId}`.execute(
+    db,
+  );
   return row.rows.length ? Number(row.rows[0].qty) : 0;
 }
 
@@ -90,8 +105,19 @@ async function transferStatus(db: Kysely<Database>, transferId: number): Promise
   return row.rows[0].status;
 }
 
-async function movements(db: Kysely<Database>, transferId: number, productId: number): Promise<Array<{ movement_type: string; qty: string; unit_cost: string | null; total_cost: string | null }>> {
-  const rows = await sql<{ movement_type: string; qty: string; unit_cost: string | null; total_cost: string | null }>`SELECT movement_type, qty, unit_cost, total_cost FROM stock_movements WHERE reference_type = 'transfer' AND reference_id = ${transferId} AND product_id = ${productId} ORDER BY id ASC`.execute(db);
+async function movements(
+  db: Kysely<Database>,
+  transferId: number,
+  productId: number,
+): Promise<Array<{ movement_type: string; qty: string; unit_cost: string | null; total_cost: string | null }>> {
+  const rows = await sql<{
+    movement_type: string;
+    qty: string;
+    unit_cost: string | null;
+    total_cost: string | null;
+  }>`SELECT movement_type, qty, unit_cost, total_cost FROM stock_movements WHERE reference_type = 'transfer' AND reference_id = ${transferId} AND product_id = ${productId} ORDER BY id ASC`.execute(
+    db,
+  );
   return rows.rows;
 }
 
@@ -100,20 +126,45 @@ async function journalCount(db: Kysely<Database>): Promise<number> {
   return Number(row.rows[0].n);
 }
 
-async function journalLinesForMovement(db: Kysely<Database>, movementId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
-  const rows = await sql<{ code: string; debit: string; credit: string }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'inventory_adjustment' AND e.source_id = ${movementId} ORDER BY a.code`.execute(db);
+async function journalLinesForMovement(
+  db: Kysely<Database>,
+  movementId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
+  const rows = await sql<{
+    code: string;
+    debit: string;
+    credit: string;
+  }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'inventory_adjustment' AND e.source_id = ${movementId} ORDER BY a.code`.execute(
+    db,
+  );
   return rows.rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
-async function journalForMovement(db: Kysely<Database>, movementId: number): Promise<{ id: number; reversal_of_entry_id: number | null; reversed_by_entry_id: number | null }> {
-  const row = await sql<{ id: number; reversal_of_entry_id: number | null; reversed_by_entry_id: number | null }>`SELECT id, reversal_of_entry_id, reversed_by_entry_id FROM journal_entries WHERE source_type = 'inventory_adjustment' AND source_id = ${movementId}`.execute(db);
-  return { id: Number(row.rows[0].id), reversal_of_entry_id: row.rows[0].reversal_of_entry_id ? Number(row.rows[0].reversal_of_entry_id) : null, reversed_by_entry_id: row.rows[0].reversed_by_entry_id ? Number(row.rows[0].reversed_by_entry_id) : null };
+async function journalForMovement(
+  db: Kysely<Database>,
+  movementId: number,
+): Promise<{ id: number; reversal_of_entry_id: number | null; reversed_by_entry_id: number | null }> {
+  const row = await sql<{
+    id: number;
+    reversal_of_entry_id: number | null;
+    reversed_by_entry_id: number | null;
+  }>`SELECT id, reversal_of_entry_id, reversed_by_entry_id FROM journal_entries WHERE source_type = 'inventory_adjustment' AND source_id = ${movementId}`.execute(
+    db,
+  );
+  return {
+    id: Number(row.rows[0].id),
+    reversal_of_entry_id: row.rows[0].reversal_of_entry_id ? Number(row.rows[0].reversal_of_entry_id) : null,
+    reversed_by_entry_id: row.rows[0].reversed_by_entry_id ? Number(row.rows[0].reversed_by_entry_id) : null,
+  };
 }
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new InventoryTransferService(
     db as never,
@@ -166,7 +217,10 @@ async function main(): Promise<void> {
     // named error and posts NOTHING.
     await seedProduct(db, 1, 100, 10);
     await assert.rejects(
-      service.createStockTransfer({ fromLocationId: 1, toLocationId: 3, issueMode: 'final_issue', items: [{ productId: 1, qty: 12 }] } as never, AUTH),
+      service.createStockTransfer(
+        { fromLocationId: 1, toLocationId: 3, issueMode: 'final_issue', items: [{ productId: 1, qty: 12 }] } as never,
+        AUTH,
+      ),
       /FINAL_ISSUE_TO_VAN_NOT_ALLOWED/,
     );
     assert.equal(await locationQty(db, 1, 1), 100);
@@ -180,7 +234,10 @@ async function main(): Promise<void> {
     // qty and cost; the company-wide total is unchanged and no journal
     // is posted -- the goods still exist, in another warehouse.
     await seedProduct(db, 2, 100, 10);
-    const resB = await service.createStockTransfer({ fromLocationId: 1, toLocationId: 2, issueMode: 'final_issue', items: [{ productId: 2, qty: 12 }] } as never, AUTH) as any;
+    const resB = (await service.createStockTransfer(
+      { fromLocationId: 1, toLocationId: 2, issueMode: 'final_issue', items: [{ productId: 2, qty: 12 }] } as never,
+      AUTH,
+    )) as any;
     const tB = Number(resB.transferId);
     assert.equal(await transferStatus(db, tB), 'received');
     assert.equal(await locationQty(db, 2, 1), 88);
@@ -202,7 +259,10 @@ async function main(): Promise<void> {
     // sink) keeps the old behaviour: OUT only, expense journal, and the
     // company-wide total falls.
     await seedProduct(db, 3, 100, 10);
-    const resD = await service.createStockTransfer({ fromLocationId: 1, toBranchId: 1, issueMode: 'final_issue', items: [{ productId: 3, qty: 12 }] } as never, AUTH) as any;
+    const resD = (await service.createStockTransfer(
+      { fromLocationId: 1, toBranchId: 1, issueMode: 'final_issue', items: [{ productId: 3, qty: 12 }] } as never,
+      AUTH,
+    )) as any;
     const tD = Number(resD.transferId);
     assert.equal(await transferStatus(db, tD), 'received');
     assert.equal(await locationQty(db, 3, 1), 88);
@@ -213,7 +273,11 @@ async function main(): Promise<void> {
     assert.equal(Number(movD[0].qty), -12);
     assert.equal(Number(movD[0].unit_cost), 10);
     assert.equal(Number(movD[0].total_cost), 120);
-    const outD = await sql<{ id: number }>`SELECT id FROM stock_movements WHERE reference_type = 'transfer' AND reference_id = ${tD} AND movement_type = 'transfer_final_issue'`.execute(db);
+    const outD = await sql<{
+      id: number;
+    }>`SELECT id FROM stock_movements WHERE reference_type = 'transfer' AND reference_id = ${tD} AND movement_type = 'transfer_final_issue'`.execute(
+      db,
+    );
     const outMovementId = Number(outD.rows[0].id);
     assert.deepEqual(await journalLinesForMovement(db, outMovementId), [
       { code: '1140', debit: 0, credit: 120 },
@@ -227,13 +291,13 @@ async function main(): Promise<void> {
     // and refuses a second reversal. A sent transfer cannot be
     // reversed at all.
     await seedProduct(db, 4, 100, 10);
-    const resSent = await service.createStockTransfer({ fromLocationId: 1, toLocationId: 2, items: [{ productId: 4, qty: 5 }] } as never, AUTH) as any;
+    const resSent = (await service.createStockTransfer(
+      { fromLocationId: 1, toLocationId: 2, items: [{ productId: 4, qty: 5 }] } as never,
+      AUTH,
+    )) as any;
     const tSent = Number(resSent.transferId);
     assert.equal(await transferStatus(db, tSent), 'sent');
-    await assert.rejects(
-      (service as any).reverseFinalIssue(tSent, AUTH),
-      /FINAL_ISSUE_REVERSAL_STATUS_INVALID/,
-    );
+    await assert.rejects((service as any).reverseFinalIssue(tSent, AUTH), /FINAL_ISSUE_REVERSAL_STATUS_INVALID/);
     await (service as any).reverseFinalIssue(tD, AUTH);
     assert.equal(await locationQty(db, 3, 1), 100);
     assert.equal(await globalQty(db, 3), 100);
@@ -243,7 +307,11 @@ async function main(): Promise<void> {
     assert.equal(Number(movR[1].qty), 12);
     assert.equal(Number(movR[1].unit_cost), 10);
     assert.equal(Number(movR[1].total_cost), 120);
-    const revD = await sql<{ id: number }>`SELECT id FROM stock_movements WHERE reference_type = 'transfer' AND reference_id = ${tD} AND movement_type = 'transfer_final_issue_reversal'`.execute(db);
+    const revD = await sql<{
+      id: number;
+    }>`SELECT id FROM stock_movements WHERE reference_type = 'transfer' AND reference_id = ${tD} AND movement_type = 'transfer_final_issue_reversal'`.execute(
+      db,
+    );
     const reversalMovementId = Number(revD.rows[0].id);
     assert.deepEqual(await journalLinesForMovement(db, reversalMovementId), [
       { code: '1140', debit: 120, credit: 0 },
@@ -258,10 +326,7 @@ async function main(): Promise<void> {
       { code: '6900', debit: 120, credit: 0 },
     ]);
     assert.equal(await transferStatus(db, tD), 'cancelled');
-    await assert.rejects(
-      (service as any).reverseFinalIssue(tD, AUTH),
-      /FINAL_ISSUE_ALREADY_REVERSED/,
-    );
+    await assert.rejects((service as any).reverseFinalIssue(tD, AUTH), /FINAL_ISSUE_ALREADY_REVERSED/);
 
     console.log('final issue paired movement checks passed');
   } finally {

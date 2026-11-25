@@ -33,38 +33,35 @@ async function main(): Promise<void> {
   const saudi = { provider: 'ZATCA_SAUDI', tax_id: '300000000000003', is_active: true };
   const egypt = { provider: 'ETA_EGYPT', tax_id: '123456789', is_active: true };
 
-  assert.deepEqual(
-    selectConfiguredTaxRow([saudi, egypt], { provider: 'ZATCA_SAUDI', allowFallback: false }),
-    { taxId: '300000000000003', isActive: true },
-  );
-  assert.deepEqual(
-    selectConfiguredTaxRow([egypt], { provider: 'ZATCA_SAUDI', allowFallback: false }),
-    null,
-  );
+  assert.deepEqual(selectConfiguredTaxRow([saudi, egypt], { provider: 'ZATCA_SAUDI', allowFallback: false }), {
+    taxId: '300000000000003',
+    isActive: true,
+  });
+  assert.deepEqual(selectConfiguredTaxRow([egypt], { provider: 'ZATCA_SAUDI', allowFallback: false }), null);
   // Blank matched row is returned as-is without fallback: the
   // consumer fails closed on it instead of borrowing Egypt's number.
   assert.deepEqual(
-    selectConfiguredTaxRow(
-      [{ provider: 'ZATCA_SAUDI', tax_id: '  ', is_active: true }, egypt],
-      { provider: 'ZATCA_SAUDI', allowFallback: false },
-    ),
+    selectConfiguredTaxRow([{ provider: 'ZATCA_SAUDI', tax_id: '  ', is_active: true }, egypt], {
+      provider: 'ZATCA_SAUDI',
+      allowFallback: false,
+    }),
     { taxId: '', isActive: true },
   );
   // Inactive is reported, never hidden.
   assert.deepEqual(
-    selectConfiguredTaxRow(
-      [{ provider: 'ZATCA_SAUDI', tax_id: '300000000000003', is_active: false }],
-      { provider: 'ZATCA_SAUDI', allowFallback: false },
-    ),
+    selectConfiguredTaxRow([{ provider: 'ZATCA_SAUDI', tax_id: '300000000000003', is_active: false }], {
+      provider: 'ZATCA_SAUDI',
+      allowFallback: false,
+    }),
     { taxId: '300000000000003', isActive: false },
   );
   // Fallback (declaration only): blank preferred loses to a
   // non-blank row; all blank means no row.
   assert.deepEqual(
-    selectConfiguredTaxRow(
-      [{ provider: 'ZATCA_SAUDI', tax_id: '', is_active: true }, egypt],
-      { provider: 'ZATCA_SAUDI', allowFallback: true },
-    ),
+    selectConfiguredTaxRow([{ provider: 'ZATCA_SAUDI', tax_id: '', is_active: true }, egypt], {
+      provider: 'ZATCA_SAUDI',
+      allowFallback: true,
+    }),
     { taxId: '123456789', isActive: true },
   );
   assert.deepEqual(
@@ -80,10 +77,10 @@ async function main(): Promise<void> {
   assert.equal(selectConfiguredTaxRow([], { provider: 'ZATCA_SAUDI', allowFallback: true }), null);
   assert.equal(selectConfiguredTaxRow(null, { provider: 'ZATCA_SAUDI', allowFallback: false }), null);
   assert.deepEqual(
-    selectConfiguredTaxRow(
-      [{ provider: 'ZATCA_SAUDI', tax_id: 300000000000003, is_active: true }],
-      { provider: 'ZATCA_SAUDI', allowFallback: false },
-    ),
+    selectConfiguredTaxRow([{ provider: 'ZATCA_SAUDI', tax_id: 300000000000003, is_active: true }], {
+      provider: 'ZATCA_SAUDI',
+      allowFallback: false,
+    }),
     { taxId: '', isActive: true },
   );
 
@@ -124,14 +121,34 @@ async function main(): Promise<void> {
       return q;
     }
     const sale = {
-      id: 7, doc_no: 'INV-7', status: 'posted', branch_id: null,
-      customer_id: null, customer_name: 'Cash',
+      id: 7,
+      doc_no: 'INV-7',
+      status: 'posted',
+      branch_id: null,
+      customer_id: null,
+      customer_name: 'Cash',
       created_at: new Date('2026-10-30T10:00:00.000Z'),
-      tax_rate: 15, tax_amount: 15, prices_include_tax: false,
-      zatca_icv: null, zatca_hash: null, zatca_uuid: null,
-      zatca_ubl_xml: null, zatca_qr: null, zatca_egs_id: null,
+      tax_rate: 15,
+      tax_amount: 15,
+      prices_include_tax: false,
+      zatca_icv: null,
+      zatca_hash: null,
+      zatca_uuid: null,
+      zatca_ubl_xml: null,
+      zatca_qr: null,
+      zatca_egs_id: null,
     };
-    const items = [{ qty: 1, unit_price: 100, line_total: 100, product_name: 'Widget', net_line_total: 100, allocated_discount: 0, allocated_tax: 15 }];
+    const items = [
+      {
+        qty: 1,
+        unit_price: 100,
+        line_total: 100,
+        product_name: 'Widget',
+        net_line_total: 100,
+        allocated_discount: 0,
+        allocated_tax: 15,
+      },
+    ];
     const trx: any = {
       selectFrom: (table: string) => {
         if (table === 'sales') return chainable(sale);
@@ -158,19 +175,13 @@ async function main(): Promise<void> {
 
   const leakUpdates = { count: 0 };
   await assert.rejects(
-    driveZatca(
-      [{ provider: 'ZATCA_SAUDI', tax_id: ' ', is_active: true }, egypt],
-      leakUpdates,
-    ),
+    driveZatca([{ provider: 'ZATCA_SAUDI', tax_id: ' ', is_active: true }, egypt], leakUpdates),
     /not configured/,
   );
   assert.equal(leakUpdates.count, 0);
 
   await assert.rejects(
-    driveZatca(
-      [{ provider: 'ZATCA_SAUDI', tax_id: '300000000000003', is_active: false }],
-      { count: 0 },
-    ),
+    driveZatca([{ provider: 'ZATCA_SAUDI', tax_id: '300000000000003', is_active: false }], { count: 0 }),
     /inactive/,
   );
   await assert.rejects(driveZatca([egypt], { count: 0 }), /not configured/);
@@ -192,11 +203,29 @@ async function main(): Promise<void> {
       return q;
     }
     const sale = {
-      id: 7, doc_no: 'INV-7', status: 'posted', customer_id: null,
-      customer_name: 'Cash', created_at: new Date('2026-10-30T10:00:00.000Z'),
-      tax_rate: 14, tax_amount: 14, prices_include_tax: false, discount: 0,
+      id: 7,
+      doc_no: 'INV-7',
+      status: 'posted',
+      customer_id: null,
+      customer_name: 'Cash',
+      created_at: new Date('2026-10-30T10:00:00.000Z'),
+      tax_rate: 14,
+      tax_amount: 14,
+      prices_include_tax: false,
+      discount: 0,
     };
-    const items = [{ qty: 1, unit_price: 100, product_id: 11, product_name: 'Widget', line_total: 100, net_line_total: 100, allocated_discount: 0, allocated_tax: 14 }];
+    const items = [
+      {
+        qty: 1,
+        unit_price: 100,
+        product_id: 11,
+        product_name: 'Widget',
+        line_total: 100,
+        net_line_total: 100,
+        allocated_discount: 0,
+        allocated_tax: 14,
+      },
+    ];
     const svc: any = Object.create(EtaSerializerService.prototype);
     svc.db = {
       selectFrom: (table: string) => {

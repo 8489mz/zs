@@ -133,9 +133,7 @@ import {
       { created_at: '2026-02-10T09:00:00.000Z', total: 60 },
       { created_at: '2026-02-08T09:00:00.000Z', total: 40 },
     ],
-    topTodayRows: [
-      { product_id: 1, product_name: 'Rice', qty_total: 4, sales_total: 100 },
-    ],
+    topTodayRows: [{ product_id: 1, product_name: 'Rice', qty_total: 4, sales_total: 100 }],
     businessTimezone: 'UTC',
     todayKey: '2026-02-10',
   });
@@ -150,9 +148,7 @@ import {
   // against a real Postgres instance (edge cases: zero stock, zero min-stock threshold, inactive
   // rows excluded, near/above credit limit boundaries) before the migration shipped.
   const inventorySnapshot = buildInventorySnapshot({
-    lowStockRows: [
-      { id: 1, name: 'Rice', stock_qty: 2, min_stock_qty: 5, retail_price: 20, cost_price: 12 },
-    ],
+    lowStockRows: [{ id: 1, name: 'Rice', stock_qty: 2, min_stock_qty: 5, retail_price: 20, cost_price: 12 }],
     lowStockCount: 1,
     outOfStockCount: 0,
     inventoryCost: 900,
@@ -182,11 +178,21 @@ import {
 
 // Three-decimal dashboard daily trends must not discard one-fil invoices.
 {
-  const day = new Date().toISOString().slice(0,10);
-  const args = {recentSalesRows:[{created_at:day+'T12:00:00.000Z',total:0.001},{created_at:day+'T13:00:00.000Z',total:0.002}],recentPurchasesRows:[{created_at:day+'T12:00:00.000Z',total:0.001}],topTodayRows:[],businessTimezone:'UTC',todayKey:day,moneyDigits:3 as const};
-  const result=buildDashboardComputedState(args);
-  const todaySales=result.trends.sales.find(r=>r.key===day);
-  const todayPurchases=result.trends.purchases.find(r=>r.key===day);
-  assert.equal(todaySales?.value,0.003);
-  assert.equal(todayPurchases?.value,0.001);
+  const day = new Date().toISOString().slice(0, 10);
+  const args = {
+    recentSalesRows: [
+      { created_at: day + 'T12:00:00.000Z', total: 0.001 },
+      { created_at: day + 'T13:00:00.000Z', total: 0.002 },
+    ],
+    recentPurchasesRows: [{ created_at: day + 'T12:00:00.000Z', total: 0.001 }],
+    topTodayRows: [],
+    businessTimezone: 'UTC',
+    todayKey: day,
+    moneyDigits: 3 as const,
+  };
+  const result = buildDashboardComputedState(args);
+  const todaySales = result.trends.sales.find((r) => r.key === day);
+  const todayPurchases = result.trends.purchases.find((r) => r.key === day);
+  assert.equal(todaySales?.value, 0.003);
+  assert.equal(todayPurchases?.value, 0.001);
 }

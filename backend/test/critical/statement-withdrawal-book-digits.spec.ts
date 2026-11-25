@@ -19,13 +19,25 @@ function main(): void {
   const stmt = buildEmployeeFinancialStatement({
     minorUnits: 3,
     employee: { id: 1, displayName: 'Test' },
-    payrollItems: [{
-      id: 1, runId: 1, periodMonth: '2026-03', runStatus: 'approved',
-      baseSalary: 100.125, allowanceAmount: 0, grossPay: 100.125,
-      deductionAmount: 0, penaltyDeduction: 0, loanDeductionAmount: 0,
-      netPay: 100.125, itemStatus: 'approved',
-    }],
-    loans: [], adjustments: [], ledger: [],
+    payrollItems: [
+      {
+        id: 1,
+        runId: 1,
+        periodMonth: '2026-03',
+        runStatus: 'approved',
+        baseSalary: 100.125,
+        allowanceAmount: 0,
+        grossPay: 100.125,
+        deductionAmount: 0,
+        penaltyDeduction: 0,
+        loanDeductionAmount: 0,
+        netPay: 100.125,
+        itemStatus: 'approved',
+      },
+    ],
+    loans: [],
+    adjustments: [],
+    ledger: [],
   });
   assert.equal(stmt.summary.totalGrossEarnings, 100.125, '3dp gross stays 100.125');
   assert.equal(stmt.transactions[0].credit, 100.125, '3dp entitlement credit stays 100.125');
@@ -34,66 +46,125 @@ function main(): void {
   const credit4 = buildEmployeeFinancialStatement({
     minorUnits: 3,
     employee: { id: 1, displayName: 'Test' },
-    payrollItems: [{
-      id: 1, runId: 1, periodMonth: '2026-03', runStatus: 'approved',
-      baseSalary: 0.004, allowanceAmount: 0, grossPay: 0.004,
-      deductionAmount: 0, penaltyDeduction: 0, loanDeductionAmount: 0,
-      netPay: 0.004, itemStatus: 'approved',
-    }],
-    loans: [], adjustments: [], ledger: [],
+    payrollItems: [
+      {
+        id: 1,
+        runId: 1,
+        periodMonth: '2026-03',
+        runStatus: 'approved',
+        baseSalary: 0.004,
+        allowanceAmount: 0,
+        grossPay: 0.004,
+        deductionAmount: 0,
+        penaltyDeduction: 0,
+        loanDeductionAmount: 0,
+        netPay: 0.004,
+        itemStatus: 'approved',
+      },
+    ],
+    loans: [],
+    adjustments: [],
+    ledger: [],
   });
   assert.equal(credit4.summary.netFinancialBalance, 0.004, '0.004 balance preserved at 3dp');
   assert.equal(credit4.summary.balanceStatus, 'credit', '0.004 is a credit at 3dp');
 
   // The entitlement guard follows book digits: 0.004 over gross throws at 3dp.
-  assert.throws(() => buildEmployeeFinancialStatement({
-    minorUnits: 3,
-    employee: { id: 1, displayName: 'Test' },
-    payrollItems: [{
-      id: 1, runId: 1, periodMonth: '2026-03', runStatus: 'approved',
-      baseSalary: 100.129, allowanceAmount: 0, grossPay: 100.125,
-      deductionAmount: 0, penaltyDeduction: 0, loanDeductionAmount: 0,
-      netPay: 100.129, itemStatus: 'approved',
-    }],
-    loans: [], adjustments: [], ledger: [],
-  }), /exceeds gross/, 'entitlement 0.004 over gross throws at 3dp');
+  assert.throws(
+    () =>
+      buildEmployeeFinancialStatement({
+        minorUnits: 3,
+        employee: { id: 1, displayName: 'Test' },
+        payrollItems: [
+          {
+            id: 1,
+            runId: 1,
+            periodMonth: '2026-03',
+            runStatus: 'approved',
+            baseSalary: 100.129,
+            allowanceAmount: 0,
+            grossPay: 100.125,
+            deductionAmount: 0,
+            penaltyDeduction: 0,
+            loanDeductionAmount: 0,
+            netPay: 100.129,
+            itemStatus: 'approved',
+          },
+        ],
+        loans: [],
+        adjustments: [],
+        ledger: [],
+      }),
+    /exceeds gross/,
+    'entitlement 0.004 over gross throws at 3dp',
+  );
 
   // At 2dp the old behaviour is unchanged: 100.125 rounds to 100.13, 0.004 settles.
   const stmt2 = buildEmployeeFinancialStatement({
     minorUnits: 2,
     employee: { id: 1, displayName: 'Test' },
-    payrollItems: [{
-      id: 1, runId: 1, periodMonth: '2026-03', runStatus: 'approved',
-      baseSalary: 100.125, allowanceAmount: 0, grossPay: 100.125,
-      deductionAmount: 0, penaltyDeduction: 0, loanDeductionAmount: 0,
-      netPay: 100.125, itemStatus: 'approved',
-    }],
-    loans: [], adjustments: [], ledger: [],
+    payrollItems: [
+      {
+        id: 1,
+        runId: 1,
+        periodMonth: '2026-03',
+        runStatus: 'approved',
+        baseSalary: 100.125,
+        allowanceAmount: 0,
+        grossPay: 100.125,
+        deductionAmount: 0,
+        penaltyDeduction: 0,
+        loanDeductionAmount: 0,
+        netPay: 100.125,
+        itemStatus: 'approved',
+      },
+    ],
+    loans: [],
+    adjustments: [],
+    ledger: [],
   });
   assert.equal(stmt2.summary.totalGrossEarnings, 100.13, '2dp gross rounds to 100.13 as before');
   const settled2 = buildEmployeeFinancialStatement({
     minorUnits: 2,
     employee: { id: 1, displayName: 'Test' },
-    payrollItems: [{
-      id: 1, runId: 1, periodMonth: '2026-03', runStatus: 'approved',
-      baseSalary: 0.004, allowanceAmount: 0, grossPay: 0.004,
-      deductionAmount: 0, penaltyDeduction: 0, loanDeductionAmount: 0,
-      netPay: 0.004, itemStatus: 'approved',
-    }],
-    loans: [], adjustments: [], ledger: [],
+    payrollItems: [
+      {
+        id: 1,
+        runId: 1,
+        periodMonth: '2026-03',
+        runStatus: 'approved',
+        baseSalary: 0.004,
+        allowanceAmount: 0,
+        grossPay: 0.004,
+        deductionAmount: 0,
+        penaltyDeduction: 0,
+        loanDeductionAmount: 0,
+        netPay: 0.004,
+        itemStatus: 'approved',
+      },
+    ],
+    loans: [],
+    adjustments: [],
+    ledger: [],
   });
   assert.equal(settled2.summary.balanceStatus, 'settled', '0.004 settles at 2dp as before');
 
   // --- Withdrawal preview at 3dp: contract path and daily path ---
   const baseCtx = {
     employee: {
-      id: 1, displayName: 'Test', compensationType: 'monthly' as const,
-      payFrequency: 'monthly' as const, hourlyRate: 0,
-      expectedDailyHours: 8, status: 'active',
+      id: 1,
+      displayName: 'Test',
+      compensationType: 'monthly' as const,
+      payFrequency: 'monthly' as const,
+      hourlyRate: 0,
+      expectedDailyHours: 8,
+      status: 'active',
     },
     contract: { baseSalary: 100.125, currency: 'KWD' },
     currentCycle: { cycleStart: '2026-03-01', cycleEnd: '2026-03-31', daysElapsed: 31 },
-    punches: [], priorLoans: [], unpaidApprovedPayrollItems: [],
+    punches: [],
+    priorLoans: [],
+    unpaidApprovedPayrollItems: [],
     todayDate: '2026-03-31',
   };
   const contractPath = calculateEmployeeWithdrawalBalance({ ...baseCtx, minorUnits: 3 });
@@ -123,16 +194,26 @@ function main(): void {
   // Hours stay 2dp even at 3dp book digits.
   const hourly = calculateEmployeeWithdrawalBalance({
     employee: {
-      id: 1, displayName: 'Test', compensationType: 'hourly' as const,
-      payFrequency: 'monthly' as const, hourlyRate: 10,
-      expectedDailyHours: 8, status: 'active',
+      id: 1,
+      displayName: 'Test',
+      compensationType: 'hourly' as const,
+      payFrequency: 'monthly' as const,
+      hourlyRate: 10,
+      expectedDailyHours: 8,
+      status: 'active',
     },
     currentCycle: { cycleStart: '2026-03-01', cycleEnd: '2026-03-31', daysElapsed: 1 },
-    punches: [{
-      status: 'present', check_in_at: '2026-03-01T08:00:00.000Z', check_out_at: '2026-03-01T11:20:00.000Z',
-    } as never],
-    priorLoans: [], unpaidApprovedPayrollItems: [],
-    todayDate: '2026-03-01', minorUnits: 3,
+    punches: [
+      {
+        status: 'present',
+        check_in_at: '2026-03-01T08:00:00.000Z',
+        check_out_at: '2026-03-01T11:20:00.000Z',
+      } as never,
+    ],
+    priorLoans: [],
+    unpaidApprovedPayrollItems: [],
+    todayDate: '2026-03-01',
+    minorUnits: 3,
   });
   assert.equal(hourly.accrual.workedHours, 3.33, 'worked hours stay 2dp (3.33h) at 3dp digits');
 

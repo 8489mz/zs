@@ -91,12 +91,21 @@ const FIRST_USER_ID = 1;
 const SUPERVISOR_USER_ID = 2;
 
 const adminAuth: any = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['deliveryReps', 'accounting'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 };
 const DRIVER = {
-  repId: 1, tenantId: TENANT, accountId: ACCOUNT,
-  name: 'Rep 1', phone: '5550001', tenantSuspended: false,
+  repId: 1,
+  tenantId: TENANT,
+  accountId: ACCOUNT,
+  name: 'Rep 1',
+  phone: '5550001',
+  tenantSuspended: false,
 };
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -151,54 +160,267 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(SUPERVISOR_PIN)) }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(SUPERVISOR_PIN)) })
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
   // User 1: the tenant's first active user (the old false attribution).
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', display_name: 'Admin', phone: '5550000', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      username: 'admin',
+      display_name: 'Admin',
+      phone: '5550000',
+      role: 'admin',
+      is_active: true,
+    })
+    .execute();
   // User 2: the account-mode supervisor (a different admin).
   const supPassword = await createPasswordRecord(SUPERVISOR_PASSWORD);
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'sup', display_name: 'Supervisor', phone: '5550002', role: 'admin', password_hash: supPassword.hash, password_salt: supPassword.salt, is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      username: 'sup',
+      display_name: 'Supervisor',
+      phone: '5550002',
+      role: 'admin',
+      password_hash: supPassword.hash,
+      password_salt: supPassword.salt,
+      is_active: true,
+    })
+    .execute();
   // User 7: rep 1's own login, linked by phone (his admin password
   // is his own credential — it must never approve his own actions).
   const repPassword = await createPasswordRecord(REP_PASSWORD);
-  await anyDb.insertInto('users').values({ id: 7, tenant_id: TENANT, username: '5550001', display_name: 'Rep 1', phone: '5550001', role: 'admin', password_hash: repPassword.hash, password_salt: repPassword.salt, is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      username: '5550001',
+      display_name: 'Rep 1',
+      phone: '5550001',
+      role: 'admin',
+      password_hash: repPassword.hash,
+      password_salt: repPassword.salt,
+      is_active: true,
+    })
+    .execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van 1', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 21, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van 2', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', phone: '5550001', van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 2', phone: '5550002', van_location_id: 21, is_van_rep: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 20,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van 1',
+      location_type: 'van',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 21,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van 2',
+      location_type: 'van',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 1',
+      phone: '5550001',
+      van_location_id: 20,
+      is_van_rep: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 2',
+      phone: '5550002',
+      van_location_id: 21,
+      is_van_rep: true,
+    })
+    .execute();
   // Rep 3 has NO phone, so no linked login: his rows must stay
   // honestly actorless (created_by null), never borrowed from user 1.
-  await anyDb.insertInto('delivery_representatives').values({ id: 3, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 3', phone: null, van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('products').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Item 1', stock_qty: 10, cost_price: 5, retail_price: 10, credit_price: 10, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, location_id: 20, qty: 10 }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, location_id: 21, qty: 0 }).execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 3,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 3',
+      phone: null,
+      van_location_id: 20,
+      is_van_rep: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Item 1',
+      stock_qty: 10,
+      cost_price: 5,
+      retail_price: 10,
+      credit_price: 10,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, location_id: 20, qty: 10 })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, location_id: 21, qty: 0 })
+    .execute();
   // Customer 31 owes 200, all of it rep 1's share (ledger +200 via trip 2).
-  await anyDb.insertInto('customers').values({ id: 31, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 31', balance: 200, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-  await anyDb.insertInto('customer_ledger').values({ customer_id: 31, entry_type: 'sale', amount: 200, balance_after: 200, reference_type: 'sale', reference_id: null, van_trip_id: 2, tenant_id: TENANT, account_id: ACCOUNT }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 31,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 31',
+      balance: 200,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_ledger')
+    .values({
+      customer_id: 31,
+      entry_type: 'sale',
+      amount: 200,
+      balance_after: 200,
+      reference_type: 'sale',
+      reference_id: null,
+      van_trip_id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
   // Customer 41 is the cash walk-in for the field sale / return.
-  await anyDb.insertInto('customers').values({ id: 41, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 41', balance: 0, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 41,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 41',
+      balance: 0,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
   for (let tripId = 1; tripId <= 10; tripId++) {
-    await anyDb.insertInto('van_sales_trips').values({ id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, source_warehouse_id: 10, status: 'open', settlement_status: 'open' }).execute();
+    await anyDb
+      .insertInto('van_sales_trips')
+      .values({
+        id: tripId,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        rep_id: 1,
+        van_location_id: 20,
+        source_warehouse_id: 10,
+        status: 'open',
+        settlement_status: 'open',
+      })
+      .execute();
   }
   // Trip 6 carries 100 of collected cash for the submit-settlement case.
-  await anyDb.updateTable('van_sales_trips').set({ cash_collected: 100 }).where('id', '=', 6).where('tenant_id', '=', TENANT).execute();
+  await anyDb
+    .updateTable('van_sales_trips')
+    .set({ cash_collected: 100 })
+    .where('id', '=', 6)
+    .where('tenant_id', '=', TENANT)
+    .execute();
   // One open cashier shift receives the settled rep cash (remittance row).
-  await anyDb.insertInto('cashier_shifts').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, location_id: null, status: 'open', opened_by: 1 }).execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      location_id: null,
+      status: 'open',
+      opened_by: 1,
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -208,8 +430,19 @@ function buildService(db: Kysely<Database>): VanSalesService {
   } as never);
   const audit = new AuditService(db);
   const radar = new VanFraudRadarService(db);
-  const service = new VanSalesService(db, audit as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, radar as never);
+  const service = new VanSalesService(
+    db,
+    audit as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    radar as never,
+  );
   return service;
 }
 
@@ -221,7 +454,10 @@ function buildController(service: VanSalesService): { driver: VanSalesController
       verifyDriverTokenForSettlement: async () => ({ ...DRIVER }),
       assertDriverPinChanged: async () => undefined,
     } as never,
-    {} as never, {} as never, {} as never, {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
   );
   const admin = new VanSalesAdminController(service, {} as never, {} as never, {} as never, {} as never);
   return { driver, admin };
@@ -238,7 +474,13 @@ function clearCollectionCaches(): void {
 }
 
 async function auditRows(db: Kysely<Database>, eventCode: string): Promise<any[]> {
-  return (db as any).selectFrom('audit_logs').selectAll().where('tenant_id', '=', TENANT).where('event_code', '=', eventCode).orderBy('id', 'asc').execute();
+  return (db as any)
+    .selectFrom('audit_logs')
+    .selectAll()
+    .where('tenant_id', '=', TENANT)
+    .where('event_code', '=', eventCode)
+    .orderBy('id', 'asc')
+    .execute();
 }
 
 async function tripRow(db: Kysely<Database>, tripId: number): Promise<any> {
@@ -246,16 +488,34 @@ async function tripRow(db: Kysely<Database>, tripId: number): Promise<any> {
 }
 
 async function vanStockQty(db: Kysely<Database>): Promise<number> {
-  const row = await (db as any).selectFrom('product_location_stock').select('qty').where('product_id', '=', 1).where('location_id', '=', 20).where('tenant_id', '=', TENANT).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('product_id', '=', 1)
+    .where('location_id', '=', 20)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirst();
   return Number(row?.qty || 0);
 }
 
 async function journalFor(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<any> {
-  return (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', sourceType).where('source_id', '=', sourceId).where('tenant_id', '=', TENANT).executeTakeFirst();
+  return (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirst();
 }
 
 async function journalByType(db: Kysely<Database>, sourceType: string): Promise<any> {
-  return (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', sourceType).where('tenant_id', '=', TENANT).orderBy('id', 'asc').executeTakeFirst();
+  return (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', sourceType)
+    .where('tenant_id', '=', TENANT)
+    .orderBy('id', 'asc')
+    .executeTakeFirst();
 }
 
 async function main(): Promise<void> {
@@ -276,8 +536,11 @@ async function main(): Promise<void> {
       const before = await auditRows(db, 'VAN_FIELD_SALE');
       assert.equal(before.length, 0, 'no sale audit rows before the sale');
       const res: any = await controller.executeSale('Bearer driver', {
-        tripId: 1, customerId: 41, customerName: 'Shop Customer 41',
-        paymentMethod: 'cash', paidAmount: 20,
+        tripId: 1,
+        customerId: 41,
+        customerName: 'Shop Customer 41',
+        paymentMethod: 'cash',
+        paidAmount: 20,
         items: [{ productId: 1, qty: 2, unitPrice: 10 }],
         clientTxId: 'm18-sale-1',
       });
@@ -289,12 +552,24 @@ async function main(): Promise<void> {
       assert.equal(Number(rows[0].created_by), REP_LINKED_USER_ID, 'the sale audit row names the rep linked login');
       assert.notEqual(Number(rows[0].created_by), FIRST_USER_ID, 'the sale audit row must not name the first user');
       assert.ok(String(rows[0].details).includes(res.docNo), 'the audit row names the sale document');
-      const saleRow: any = await (db as any).selectFrom('sales').selectAll().where('id', '=', saleId).executeTakeFirstOrThrow();
-      assert.equal(Number(saleRow.created_by), REP_LINKED_USER_ID, 'the sale row names the rep linked login, not the first user');
+      const saleRow: any = await (db as any)
+        .selectFrom('sales')
+        .selectAll()
+        .where('id', '=', saleId)
+        .executeTakeFirstOrThrow();
+      assert.equal(
+        Number(saleRow.created_by),
+        REP_LINKED_USER_ID,
+        'the sale row names the rep linked login, not the first user',
+      );
       const journal = await journalFor(db, 'sale', saleId);
       assert.ok(journal, 'the sale posted a journal');
       assert.equal(Number(journal.created_by), REP_LINKED_USER_ID, 'the sale journal names the rep linked login');
-      const items: any[] = await (db as any).selectFrom('sale_items').selectAll().where('sale_id', '=', saleId).execute();
+      const items: any[] = await (db as any)
+        .selectFrom('sale_items')
+        .selectAll()
+        .where('sale_id', '=', saleId)
+        .execute();
       assert.equal(items.length, 1, 'one sale line');
       saleItemId = Number(items[0].id);
       console.log('  (S1) field sale audit row names the rep passed');
@@ -306,20 +581,32 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       const res: any = await controller.recordCollection('Bearer driver', {
-        tripId: 2, customerId: 31, amount: 100, paymentMethod: 'cash', clientTxId: 'm18-coll-1',
+        tripId: 2,
+        customerId: 31,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm18-coll-1',
       });
       assert.equal(res.ok, true);
       assert.equal(res.amount, 100);
       const rows = await auditRows(db, 'VAN_FIELD_COLLECTION');
       assert.equal(rows.length, 1, 'exactly one audit row for the field collection');
-      assert.equal(Number(rows[0].created_by), REP_LINKED_USER_ID, 'the collection audit row names the rep linked login');
+      assert.equal(
+        Number(rows[0].created_by),
+        REP_LINKED_USER_ID,
+        'the collection audit row names the rep linked login',
+      );
       assert.ok(String(rows[0].details).includes(res.receiptNo), 'the audit row names the receipt');
       const journal = await journalByType(db, 'van_field_collection');
       assert.ok(journal, 'the collection posted a journal');
       assert.equal(Number(journal.created_by), REP_LINKED_USER_ID, 'the collection journal names the rep linked login');
       clearCollectionCaches();
       const replay: any = await controller.recordCollection('Bearer driver', {
-        tripId: 2, customerId: 31, amount: 100, paymentMethod: 'cash', clientTxId: 'm18-coll-1',
+        tripId: 2,
+        customerId: 31,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm18-coll-1',
       });
       assert.equal(replay.receiptNo, res.receiptNo, 'the replay returns the first receipt');
       assert.equal((await auditRows(db, 'VAN_FIELD_COLLECTION')).length, 1, 'the replay writes no second audit row');
@@ -330,7 +617,9 @@ async function main(): Promise<void> {
     // naming the rep who recorded it.
     {
       const res: any = await controller.recordTripExpense('Bearer driver', 3, {
-        expenseType: 'fuel', amount: 50, notes: 'وقود — محطة الطريق',
+        expenseType: 'fuel',
+        amount: 50,
+        notes: 'وقود — محطة الطريق',
       });
       assert.equal(res.ok, true);
       const rows = await auditRows(db, 'VAN_TRIP_EXPENSE');
@@ -344,7 +633,10 @@ async function main(): Promise<void> {
     // audit row naming the sending rep.
     {
       const res: any = await controller.createTransfer('Bearer driver', {
-        toRepId: 2, fromTripId: 4, items: [{ productId: 1, qty: 2 }], notes: 'تحويل دعم',
+        toRepId: 2,
+        fromTripId: 4,
+        items: [{ productId: 1, qty: 2 }],
+        notes: 'تحويل دعم',
       });
       assert.equal(res.ok, true);
       const rows = await auditRows(db, 'VAN_INTER_VAN_TRANSFER');
@@ -358,7 +650,11 @@ async function main(): Promise<void> {
     // audit row naming the submitting rep (linked to the S1 sale).
     {
       const res: any = await controller.submitFieldReturn('Bearer driver', {
-        tripId: 1, customerId: 41, saleId, returnReason: 'damaged', refundMethod: 'cash',
+        tripId: 1,
+        customerId: 41,
+        saleId,
+        returnReason: 'damaged',
+        refundMethod: 'cash',
         items: [{ productId: 1, qty: 1, unitPrice: 10, saleItemId }],
         notes: 'تالف عند العميل',
       });
@@ -374,7 +670,9 @@ async function main(): Promise<void> {
     // one audit row naming the submitting rep.
     {
       const res: any = await controller.submitTripSettlement('Bearer driver', {
-        tripId: 6, countedCash: 100, unloadRemainingToWarehouse: false,
+        tripId: 6,
+        countedCash: 100,
+        unloadRemainingToWarehouse: false,
       });
       assert.equal(res.ok, true);
       assert.equal(res.status, 'submitted_by_rep');
@@ -395,12 +693,18 @@ async function main(): Promise<void> {
       // real journal and a remittance row.
       clearCollectionCaches();
       const coll: any = await controller.recordCollection('Bearer driver', {
-        tripId: 7, customerId: 31, amount: 50, paymentMethod: 'cash', clientTxId: 'm18-coll-7',
+        tripId: 7,
+        customerId: 31,
+        amount: 50,
+        paymentMethod: 'cash',
+        clientTxId: 'm18-coll-7',
       });
       assert.equal(coll.ok, true);
       const stockQty = await vanStockQty(db);
       const res: any = await controller.settleTrip('Bearer driver', {
-        tripId: 7, countedCash: 50, unloadRemainingToWarehouse: false,
+        tripId: 7,
+        countedCash: 50,
+        unloadRemainingToWarehouse: false,
         countedStock: [{ productId: 1, countedQty: stockQty }],
         nightStockApproved: true,
         supervisorPin: SUPERVISOR_PIN,
@@ -411,12 +715,18 @@ async function main(): Promise<void> {
       assert.equal(trip.settled_by, null, 'PIN-mode settle records settled_by NULL, never 0');
       assert.equal(trip.supervisor_id, null, 'PIN-mode settle records supervisor_id NULL, never 0');
       assert.equal(trip.night_stock_approved_by, null, 'PIN-mode settle records night_stock_approved_by NULL');
-      assert.ok(String(trip.notes || '').includes('رمز المدير المشترك'), 'the trip notes record the shared-PIN approval method');
+      assert.ok(
+        String(trip.notes || '').includes('رمز المدير المشترك'),
+        'the trip notes record the shared-PIN approval method',
+      );
       const rows = await auditRows(db, 'VAN_TRIP_SETTLEMENT');
       const pinRow = rows.find((r: any) => String(r.details).includes('#7 '));
       assert.ok(pinRow, 'a settlement audit row exists for trip 7');
       assert.equal(pinRow.created_by, null, 'the PIN-mode settlement audit row records created_by NULL');
-      assert.ok(String(pinRow.details).includes('رمز المدير المشترك'), 'the audit row names the shared-PIN approval method');
+      assert.ok(
+        String(pinRow.details).includes('رمز المدير المشترك'),
+        'the audit row names the shared-PIN approval method',
+      );
       const journal = await journalFor(db, 'van_trip_settlement', 7);
       assert.ok(journal, 'the settlement posted a journal');
       assert.equal(journal.created_by, null, 'the settlement journal records created_by NULL, not 0');
@@ -431,7 +741,9 @@ async function main(): Promise<void> {
     {
       const stockQty = await vanStockQty(db);
       const res: any = await controller.settleTrip('Bearer driver', {
-        tripId: 8, countedCash: 0, unloadRemainingToWarehouse: false,
+        tripId: 8,
+        countedCash: 0,
+        unloadRemainingToWarehouse: false,
         countedStock: [{ productId: 1, countedQty: stockQty }],
         nightStockApproved: true,
         supervisorPin: SUPERVISOR_PASSWORD,
@@ -439,12 +751,20 @@ async function main(): Promise<void> {
       assert.equal(res.ok, true);
       const trip = await tripRow(db, 8);
       assert.equal(trip.status, 'settled', 'the trip settled');
-      assert.equal(Number(trip.settled_by), SUPERVISOR_USER_ID, 'account-mode settle records the supervisor as settler');
+      assert.equal(
+        Number(trip.settled_by),
+        SUPERVISOR_USER_ID,
+        'account-mode settle records the supervisor as settler',
+      );
       assert.equal(Number(trip.supervisor_id), SUPERVISOR_USER_ID, 'account-mode settle records the supervisor id');
       const rows = await auditRows(db, 'VAN_TRIP_SETTLEMENT');
       const accRow = rows.find((r: any) => String(r.details).includes('#8 '));
       assert.ok(accRow, 'a settlement audit row exists for trip 8');
-      assert.equal(Number(accRow.created_by), SUPERVISOR_USER_ID, 'the account-mode settlement audit row names the supervisor');
+      assert.equal(
+        Number(accRow.created_by),
+        SUPERVISOR_USER_ID,
+        'the account-mode settlement audit row names the supervisor',
+      );
       console.log('  (S8) account-mode settle records the identified supervisor passed');
     }
 
@@ -452,15 +772,15 @@ async function main(): Promise<void> {
     // controller endpoint: the admin session user is the supervisor.
     {
       const stockQty = await vanStockQty(db);
-      const res: any = await adminController.settleTripAdmin(
-        { authContext: adminAuth } as any, 9,
-        {
-          repId: 1, countedCash: 0, unloadRemainingToWarehouse: false,
-          countedStock: [{ productId: 1, countedQty: stockQty }],
-          nightStockApproved: true,
-          chargeStockVarianceToRep: false, notes: 'تصفية إدارية',
-        },
-      );
+      const res: any = await adminController.settleTripAdmin({ authContext: adminAuth } as any, 9, {
+        repId: 1,
+        countedCash: 0,
+        unloadRemainingToWarehouse: false,
+        countedStock: [{ productId: 1, countedQty: stockQty }],
+        nightStockApproved: true,
+        chargeStockVarianceToRep: false,
+        notes: 'تصفية إدارية',
+      });
       assert.equal(res.ok, true);
       const trip = await tripRow(db, 9);
       assert.equal(trip.status, 'settled', 'the trip settled');
@@ -485,7 +805,11 @@ async function main(): Promise<void> {
       );
       const rows = await auditRows(db, 'VAN_SUSPICION_INVALID_PIN');
       assert.equal(rows.length, 1, 'the invalid PIN wrote one suspicion row');
-      assert.equal(Number(rows[0].created_by), REP_LINKED_USER_ID, 'the suspicion row names the rep who entered the PIN');
+      assert.equal(
+        Number(rows[0].created_by),
+        REP_LINKED_USER_ID,
+        'the suspicion row names the rep who entered the PIN',
+      );
       const payload = JSON.parse(String(rows[0].details));
       assert.equal(Number(payload.actorUserId), REP_LINKED_USER_ID, 'the suspicion JSON carries the actor id too');
       console.log('  (S10) invalid-PIN suspicion names the rep passed');
@@ -497,11 +821,14 @@ async function main(): Promise<void> {
     {
       const stockQty = await vanStockQty(db);
       await assert.rejects(
-        () => controller.settleTrip('Bearer driver', {
-          tripId: 10, countedCash: 0, unloadRemainingToWarehouse: false,
-          countedStock: [{ productId: 1, countedQty: stockQty }],
-          supervisorPin: REP_PASSWORD,
-        }),
+        () =>
+          controller.settleTrip('Bearer driver', {
+            tripId: 10,
+            countedCash: 0,
+            unloadRemainingToWarehouse: false,
+            countedStock: [{ productId: 1, countedQty: stockQty }],
+            supervisorPin: REP_PASSWORD,
+          }),
         /MAKER_CHECKER_SELF_APPROVAL/,
       );
       assert.equal((await tripRow(db, 10)).status, 'open', 'the refused settle leaves the trip open');
@@ -515,18 +842,26 @@ async function main(): Promise<void> {
     // linked login stays honestly actorless (null, rep named in JSON).
     {
       await service.recordSuspicionEvent({
-        tenantId: TENANT, accountId: ACCOUNT, repId: 1,
-        eventCode: 'VAN_SUSPICION_PRICE_MANIPULATION', severity: 'high',
-        titleAr: 'اختبار فاعل صريح', detailsAr: 'اختبار فاعل صريح',
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        repId: 1,
+        eventCode: 'VAN_SUSPICION_PRICE_MANIPULATION',
+        severity: 'high',
+        titleAr: 'اختبار فاعل صريح',
+        detailsAr: 'اختبار فاعل صريح',
         actorUserId: FIRST_USER_ID,
       });
       const explicit = await auditRows(db, 'VAN_SUSPICION_PRICE_MANIPULATION');
       assert.equal(explicit.length, 1, 'the explicit-actor suspicion wrote one row');
       assert.equal(Number(explicit[0].created_by), FIRST_USER_ID, 'an explicitly passed actor is kept');
       await service.recordSuspicionEvent({
-        tenantId: TENANT, accountId: ACCOUNT, repId: 3,
-        eventCode: 'VAN_SUSPICION_GEOFENCE_VIOLATION', severity: 'high',
-        titleAr: 'اختبار بلا رابط', detailsAr: 'اختبار بلا رابط',
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        repId: 3,
+        eventCode: 'VAN_SUSPICION_GEOFENCE_VIOLATION',
+        severity: 'high',
+        titleAr: 'اختبار بلا رابط',
+        detailsAr: 'اختبار بلا رابط',
       });
       const unlinked = await auditRows(db, 'VAN_SUSPICION_GEOFENCE_VIOLATION');
       assert.equal(unlinked.length, 1, 'the unlinked-rep suspicion wrote one row');
@@ -544,7 +879,10 @@ async function main(): Promise<void> {
       const here = __dirname;
       // File #30 split: settleTrip moved to the S2 trips-settle
       // slice; the driver facade keeps only a thin delegate.
-      const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-trips-settle.ts'), 'utf8');
+      const controllerSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-trips-settle.ts'),
+        'utf8',
+      );
       assert.ok(
         !controllerSource.includes('Number(pinVerification.supervisorId || 0)'),
         'the settle slice no longer fabricates supervisor userId 0',
@@ -555,26 +893,35 @@ async function main(): Promise<void> {
       );
       // File #43 split: verifySupervisorPin lives in the S1 pin-gates
       // slice and settleTrip in the S5 settle-trip slice.
-      const pinGatesSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/pin-gates.service.ts'), 'utf8');
-      const settleTripSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
+      const pinGatesSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/pin-gates.service.ts'),
+        'utf8',
+      );
+      const settleTripSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'),
+        'utf8',
+      );
       // Split 2 of 5 moved the field sale to the field-sales service;
       // the refactor splits moved its implementation into the
       // execute-field-sale-internal slice (the facade keeps only a
       // thin delegate), so the pin reads the slice.
-      const fieldSalesSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'), 'utf8');
-      assert.ok(
-        pinGatesSource.includes('approvalMode'),
-        'verifySupervisorPin reports its approval mode',
+      const fieldSalesSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'),
+        'utf8',
       );
+      assert.ok(pinGatesSource.includes('approvalMode'), 'verifySupervisorPin reports its approval mode');
       assert.ok(
-        fieldSalesSource.includes("eventCode: AUDIT_EVENT_CODES.VAN_FIELD_SALE"),
+        fieldSalesSource.includes('eventCode: AUDIT_EVENT_CODES.VAN_FIELD_SALE'),
         'the field sale writes its audit row',
       );
       assert.ok(
-        settleTripSource.includes("eventCode: AUDIT_EVENT_CODES.VAN_TRIP_SETTLEMENT"),
+        settleTripSource.includes('eventCode: AUDIT_EVENT_CODES.VAN_TRIP_SETTLEMENT'),
         'the trip settlement writes its audit row',
       );
-      const radarSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-fraud-radar.service.ts'), 'utf8');
+      const radarSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/services/van-fraud-radar.service.ts'),
+        'utf8',
+      );
       assert.ok(
         radarSource.includes('resolveRepLinkedUserId'),
         'the fraud radar resolves the rep linked login for suspicion rows',

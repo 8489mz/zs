@@ -53,7 +53,10 @@ export function calculateUnbuildComponentReturn(params: {
   });
 }
 
-export function calculateShiftVariance(countedCash: number, expectedCash: number): {
+export function calculateShiftVariance(
+  countedCash: number,
+  expectedCash: number,
+): {
   variance: number;
   status: 'balanced' | 'surplus' | 'shortage';
 } {
@@ -117,7 +120,9 @@ export async function runPhase9CriticalTests() {
     assert.equal(rxDoc, `RX-${expectedDateTag}-0008`, 'RX doc_no must embed YYMMDD-0008');
     assert.equal(batchDoc, `BATCH-${expectedDateTag}-0055`, 'BATCH doc_no must embed YYMMDD-0055');
 
-    console.log('✓ Test 1 Passed: Universal Document Numbering standard strictly verified for SHIFT, UB, TRD, RX, BATCH.');
+    console.log(
+      '✓ Test 1 Passed: Universal Document Numbering standard strictly verified for SHIFT, UB, TRD, RX, BATCH.',
+    );
   }
 
   // Test 2: Manufacturing WAC Recalculation on Work Order Completion
@@ -145,7 +150,9 @@ export async function runPhase9CriticalTests() {
     assert.equal(result2.newTotalQty, 20);
     assert.equal(result2.newWacCost, 75.5);
 
-    console.log('✓ Test 2 Passed: Manufacturing WAC re-computation preserves weighted average cost without distortion.');
+    console.log(
+      '✓ Test 2 Passed: Manufacturing WAC re-computation preserves weighted average cost without distortion.',
+    );
   }
 
   // Test 3: Manufacturing Unbuild / Disassembly Allocation
@@ -220,7 +227,9 @@ export async function runPhase9CriticalTests() {
     assert.equal(activeBatches[1].batchNo, 'B-2026-MID', 'Middle expiring batch (2026-12) must be second');
     assert.equal(activeBatches[2].batchNo, 'B-2027', 'Latest expiring batch (2027-06) must be third');
 
-    console.log('✓ Test 5 Passed: Pharmacy FEFO engine guarantees earliest expiring batches are dispensed first and expired batches quarantined.');
+    console.log(
+      '✓ Test 5 Passed: Pharmacy FEFO engine guarantees earliest expiring batches are dispensed first and expired batches quarantined.',
+    );
   }
 
   // Test 6: Trade-In Valuation & Treasury Outflow

@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
-import { currencyMoneyDigits, toMinorUnits, fromMinorUnits, roundMoney } from '../../src/modules/accounting/engines/money-minor-units.engine';
+import {
+  currencyMoneyDigits,
+  toMinorUnits,
+  fromMinorUnits,
+  roundMoney,
+} from '../../src/modules/accounting/engines/money-minor-units.engine';
 
 assert.equal(currencyMoneyDigits('KWD'), 3);
 assert.equal(currencyMoneyDigits('omr'), 3);

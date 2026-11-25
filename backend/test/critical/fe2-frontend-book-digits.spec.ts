@@ -52,7 +52,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { currencyMoneyDigits as backendDigits, roundMoney as backendRoundMoney } from '../../src/modules/accounting/engines/money-minor-units.engine.ts';
+import {
+  currencyMoneyDigits as backendDigits,
+  roundMoney as backendRoundMoney,
+} from '../../src/modules/accounting/engines/money-minor-units.engine.ts';
 import { currencyMoneyDigits, roundMoneyValue } from '../../../frontend/src/shared/utils/money.ts';
 import { isThreeDecimalCurrency } from '../../../frontend/src/lib/currencies.ts';
 
@@ -73,7 +76,11 @@ for (const code of ['EGP', 'SAR', 'AED', 'USD', 'QAR']) {
 assert.equal(currencyMoneyDigits('kwd'), 3, 'lowercase codes normalize');
 assert.equal(currencyMoneyDigits(null), 2, 'missing currency falls back to 2');
 assert.equal(currencyMoneyDigits(''), 2, 'empty currency falls back to 2');
-assert.throws(() => currencyMoneyDigits('ج.م'), /Invalid currency code/, 'a symbol is not a code — callers must pass the code');
+assert.throws(
+  () => currencyMoneyDigits('ج.م'),
+  /Invalid currency code/,
+  'a symbol is not a code — callers must pass the code',
+);
 
 // 2. Rounding parity with the backend on the FE2 shapes' tricky
 // inputs, at both book precisions.
@@ -141,7 +148,11 @@ assert.equal(
   69665.4,
   'quotation estimated unit landed cost EGP',
 );
-assert.equal(roundMoneyValue(100.125 * (1 + 20 / 100), currencyMoneyDigits('EGP')), 120.15, 'shipment suggested retail EGP');
+assert.equal(
+  roundMoneyValue(100.125 * (1 + 20 / 100), currencyMoneyDigits('EGP')),
+  120.15,
+  'shipment suggested retail EGP',
+);
 
 // 7. Real call-site shapes — storefront + inventory + table bill.
 // Variant price: 550.125 stays at 3dp, rounds to 550.13 at 2dp.
@@ -160,13 +171,21 @@ assert.equal(roundMoneyValue(cartUnitJod * 2, 2), 24.69, 'EGP standard line tota
 const bogoTotal = roundMoneyValue(Math.max(0, 3 * cartUnitJod - 1 * cartUnitJod * (100 / 100)), 3);
 assert.equal(bogoTotal, 24.69, 'BOGO discounted total at 3dp');
 assert.equal(roundMoneyValue(bogoTotal / 3, 3), 8.23, 'BOGO unit price at 3dp');
-assert.equal(roundMoneyValue((2 * 20.005) + (1 * cartUnitJod), 3), 52.355, 'bundle total at 3dp');
+assert.equal(roundMoneyValue(2 * 20.005 + 1 * cartUnitJod, 3), 52.355, 'bundle total at 3dp');
 assert.equal(roundMoneyValue(24.69 + 52.355, 3), 77.045, 'cart subtotal sums rounded legs at 3dp');
 assert.equal(roundMoneyValue(100.125 * 0.1, 3), 10.013, 'coupon fallback discount at 3dp');
 assert.equal(roundMoneyValue(100.125 * 0.1, 2), 10.01, 'coupon fallback discount at 2dp');
 assert.equal(roundMoneyValue(1000.125 + 250.5, 3), 1250.625, 'stock-count expected value at 3dp');
-assert.equal(roundMoneyValue((100.125 + 10.005), currencyMoneyDigits('KWD')), 110.13, 'table-bill total + tip at KWD digits');
-assert.equal(roundMoneyValue((100.125 + 10.005), currencyMoneyDigits('EGP')), 110.13, 'table-bill total + tip at EGP digits');
+assert.equal(
+  roundMoneyValue(100.125 + 10.005, currencyMoneyDigits('KWD')),
+  110.13,
+  'table-bill total + tip at KWD digits',
+);
+assert.equal(
+  roundMoneyValue(100.125 + 10.005, currencyMoneyDigits('EGP')),
+  110.13,
+  'table-bill total + tip at EGP digits',
+);
 
 // 8. Source-pattern assertions — the real fail-without-fix. Each
 // fixed file must route through the helper AND must not contain its
@@ -181,45 +200,163 @@ const F = 'frontend/src/features/';
 const checks = [
   // [file, mustContain, mustNotContain]
   [`${F}purchases/contracts.ts`, 'digits: MoneyDigits', 'total: Number((safeQty * safeCost).toFixed(2)),'],
-  [`${F}purchases/contracts.ts`, 'roundMoneyValue(safeQty * safeCost, digits)', 'total: Number((mergedQty * incoming.cost).toFixed(2))'],
-  [`${F}purchases/contracts.ts`, 'roundMoneyValue(Math.max(0, Number(values.discount || 0)), digits)', 'const discount = Number(Math.max(0, Number(values.discount || 0)).toFixed(2));'],
-  [`${F}purchases/contracts.ts`, 'roundMoneyValue(Math.max(0, Number(values.freight || 0)), digits)', 'const freight = Number(Math.max(0, Number(values.freight || 0)).toFixed(2));'],
-  [`${F}purchases/hooks/useCreatePurchaseMutation.ts`, "currencyMoneyDigits(values.currency || getGlobalSystemCurrency())", 'buildPurchasePayload(values, items, taxRate, pricesIncludeTax, attachments)'],
-  [`${F}purchases/hooks/usePurchaseActions.ts`, 'currencyMoneyDigits(getGlobalSystemCurrency())', 'buildPurchaseUpdatePayload(purchase, payload)'],
-  [`${F}purchases/components/purchase-composer/usePurchaseComposerController.ts`, 'roundMoneyValue(taxable - taxable / (1 + taxRate / 100), bookDigits)', 'return Number((taxable - taxable / (1 + taxRate / 100)).toFixed(2));'],
-  [`${F}purchases/components/purchase-composer/usePurchaseComposerController.ts`, 'buildPurchaseDraftItem(product, parsed.qty, parsed.cost, bookDigits)', 'buildPurchaseDraftItem(product, parsed.qty, parsed.cost)'],
-  [`${F}purchases/components/PurchaseEditDialog.tsx`, 'roundMoneyValue(items.reduce((sum, item) => sum + item.qty * item.cost, 0), bookDigits)', 'Number(items.reduce((sum, item) => sum + item.qty * item.cost, 0).toFixed(2))'],
-  [`${F}purchases/components/MarginProtectionModal.tsx`, 'roundMoneyValue(item.newCost / (1 - (targetMargin / 100)), bookDigits)', 'Number((item.newCost / (1 - (targetMargin / 100))).toFixed(2))'],
-  [`${F}inventory/components/sections/stockCountMonitor.helpers.ts`, 'roundMoneyValue(expectedValue, digits)', 'expectedValue: Number(expectedValue.toFixed(2)),'],
-  [`${F}inventory/components/sections/StockCountMonitorCard.tsx`, 'summarizeSessionVariance(selectedSession, bookDigits, products)', 'summarizeSessionVariance(selectedSession, products)'],
+  [
+    `${F}purchases/contracts.ts`,
+    'roundMoneyValue(safeQty * safeCost, digits)',
+    'total: Number((mergedQty * incoming.cost).toFixed(2))',
+  ],
+  [
+    `${F}purchases/contracts.ts`,
+    'roundMoneyValue(Math.max(0, Number(values.discount || 0)), digits)',
+    'const discount = Number(Math.max(0, Number(values.discount || 0)).toFixed(2));',
+  ],
+  [
+    `${F}purchases/contracts.ts`,
+    'roundMoneyValue(Math.max(0, Number(values.freight || 0)), digits)',
+    'const freight = Number(Math.max(0, Number(values.freight || 0)).toFixed(2));',
+  ],
+  [
+    `${F}purchases/hooks/useCreatePurchaseMutation.ts`,
+    'currencyMoneyDigits(values.currency || getGlobalSystemCurrency())',
+    'buildPurchasePayload(values, items, taxRate, pricesIncludeTax, attachments)',
+  ],
+  [
+    `${F}purchases/hooks/usePurchaseActions.ts`,
+    'currencyMoneyDigits(getGlobalSystemCurrency())',
+    'buildPurchaseUpdatePayload(purchase, payload)',
+  ],
+  [
+    `${F}purchases/components/purchase-composer/usePurchaseComposerController.ts`,
+    'roundMoneyValue(taxable - taxable / (1 + taxRate / 100), bookDigits)',
+    'return Number((taxable - taxable / (1 + taxRate / 100)).toFixed(2));',
+  ],
+  [
+    `${F}purchases/components/purchase-composer/usePurchaseComposerController.ts`,
+    'buildPurchaseDraftItem(product, parsed.qty, parsed.cost, bookDigits)',
+    'buildPurchaseDraftItem(product, parsed.qty, parsed.cost)',
+  ],
+  [
+    `${F}purchases/components/PurchaseEditDialog.tsx`,
+    'roundMoneyValue(items.reduce((sum, item) => sum + item.qty * item.cost, 0), bookDigits)',
+    'Number(items.reduce((sum, item) => sum + item.qty * item.cost, 0).toFixed(2))',
+  ],
+  [
+    `${F}purchases/components/MarginProtectionModal.tsx`,
+    'roundMoneyValue(item.newCost / (1 - (targetMargin / 100)), bookDigits)',
+    'Number((item.newCost / (1 - (targetMargin / 100))).toFixed(2))',
+  ],
+  [
+    `${F}inventory/components/sections/stockCountMonitor.helpers.ts`,
+    'roundMoneyValue(expectedValue, digits)',
+    'expectedValue: Number(expectedValue.toFixed(2)),',
+  ],
+  [
+    `${F}inventory/components/sections/StockCountMonitorCard.tsx`,
+    'summarizeSessionVariance(selectedSession, bookDigits, products)',
+    'summarizeSessionVariance(selectedSession, products)',
+  ],
   // I2-D6: the autopsy export unit is the stored PER-UNIT landed
   // cost itself (landed_cost_egp is per-unit; the old expression
   // divided it by qty a second time and read 9.00 for a 90.00
   // unit). The pin still requires routing through the helper and
   // still forbids the old hardcoded-toFixed(2) snippet.
-  [`${F}import-sales/ContainerAutopsyModal.tsx`, "roundMoneyValue(Number(item.unit_landed_cost_egp ?? item.landed_cost_egp), currencyMoneyDigits('EGP'))", 'Number((Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1)).toFixed(2))'],
-  [`${F}import-sales/SupplierCredit.tsx`, "roundMoneyValue(remaining * rate, currencyMoneyDigits('EGP'))", 'setAmountEgp(String(Number((remaining * rate).toFixed(2))));'],
-  [`${F}import-sales/components/ChinaProformasTab.tsx`, 'roundMoneyValue(computedLinesTotal, currencyMoneyDigits(currency))', 'Number(computedLinesTotal.toFixed(2))'],
-  [`${F}import-sales/components/ChinaQuotationsTab.tsx`, "currencyMoneyDigits('EGP')", 'const estimatedUnitLandedCostEgp = Number('],
-  [`${F}import-sales/shipment-details-page/shipment-item-row-inputs.tsx`, "roundMoneyValue(pricingCostEgp * (1 + (Number(wholesaleMargin) || 0) / 100), currencyMoneyDigits('EGP'))", 'Math.round((pricingCostEgp * (1 + (Number(wholesaleMargin) || 0) / 100)) * 100) / 100'],
-  [`${F}products/components/NewProductForm.tsx`, "roundMoneyValue(newRetail, bookDigits)", "form.setValue('retailPrice', Number(newRetail.toFixed(2))"],
-  [`${F}products/components/ProductArchiveConfirmDialog.tsx`, 'roundMoneyValue(currentStock * unitCost, currencyMoneyDigits(getGlobalSystemCurrency()))', 'const totalCost = Number((currentStock * unitCost).toFixed(2));'],
-  [`${F}storefront/api/storefront.api.ts`, 'roundMoneyValue(subtotal * 0.1, digits)', 'const discountAmount = Math.round(subtotal * 0.1 * 100) / 100;'],
+  [
+    `${F}import-sales/ContainerAutopsyModal.tsx`,
+    "roundMoneyValue(Number(item.unit_landed_cost_egp ?? item.landed_cost_egp), currencyMoneyDigits('EGP'))",
+    'Number((Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1)).toFixed(2))',
+  ],
+  [
+    `${F}import-sales/SupplierCredit.tsx`,
+    "roundMoneyValue(remaining * rate, currencyMoneyDigits('EGP'))",
+    'setAmountEgp(String(Number((remaining * rate).toFixed(2))));',
+  ],
+  [
+    `${F}import-sales/components/ChinaProformasTab.tsx`,
+    'roundMoneyValue(computedLinesTotal, currencyMoneyDigits(currency))',
+    'Number(computedLinesTotal.toFixed(2))',
+  ],
+  [
+    `${F}import-sales/components/ChinaQuotationsTab.tsx`,
+    "currencyMoneyDigits('EGP')",
+    'const estimatedUnitLandedCostEgp = Number(',
+  ],
+  [
+    `${F}import-sales/shipment-details-page/shipment-item-row-inputs.tsx`,
+    "roundMoneyValue(pricingCostEgp * (1 + (Number(wholesaleMargin) || 0) / 100), currencyMoneyDigits('EGP'))",
+    'Math.round((pricingCostEgp * (1 + (Number(wholesaleMargin) || 0) / 100)) * 100) / 100',
+  ],
+  [
+    `${F}products/components/NewProductForm.tsx`,
+    'roundMoneyValue(newRetail, bookDigits)',
+    "form.setValue('retailPrice', Number(newRetail.toFixed(2))",
+  ],
+  [
+    `${F}products/components/ProductArchiveConfirmDialog.tsx`,
+    'roundMoneyValue(currentStock * unitCost, currencyMoneyDigits(getGlobalSystemCurrency()))',
+    'const totalCost = Number((currentStock * unitCost).toFixed(2));',
+  ],
+  [
+    `${F}storefront/api/storefront.api.ts`,
+    'roundMoneyValue(subtotal * 0.1, digits)',
+    'const discountAmount = Math.round(subtotal * 0.1 * 100) / 100;',
+  ],
   [`${F}storefront/lib/storefront-variant-pricing.ts`, 'roundMoneyValue(price, digits)', 'Math.round'],
-  [`${F}storefront/lib/storefront-cart-pricing.ts`, 'roundMoneyValue(basePrice * qty, digits)', 'function getCartRoundFactor'],
-  [`${F}storefront/lib/storefront-cart-pricing.ts`, 'roundMoneyValue(basePrice * qty, digits)', 'isThreeDecimalCurrency('],
-  [`${F}storefront/lib/storefront-cart-pricing.ts`, 'roundMoneyValue(basePrice * qty, digits)', 'Math.round(basePrice * qty * factor) / factor'],
-  [`${F}storefront/components/StorefrontCheckoutModal.tsx`, 'validateCoupon(tenantSlug, cleanCode, subtotal, currencyMoneyDigits(info?.currency || getGlobalSystemCurrency()))', 'validateCoupon(tenantSlug, cleanCode, subtotal)'],
-  [`${F}storefront/components/StorefrontCheckoutModal.tsx`, 'calculateCartSubtotal(cartItems, info?.currency)', 'calculateCartSubtotal(cartItems)'],
-  [`${F}storefront/components/StorefrontProductQuickViewModal.tsx`, 'resolveVariantUnitPrice(product.price, selectedVariant, bookDigits)', 'resolveVariantUnitPrice(product.price, selectedVariant)'],
-  [`${F}storefront/hooks/usePublicStorefront.ts`, 'buildCartProduct(activeProductMap.get(String(item.product.id))!, bookDigits, item.product.variantName)', 'buildCartProduct(activeProductMap.get(String(item.product.id))!, item.product.variantName)'],
-  [`${F}storefront/hooks/usePublicStorefront.ts`, 'calculateCartSubtotal(cartItems, infoQuery.data?.currency)', 'calculateCartSubtotal(cartItems)'],
-  [`${F}storefront/components/TableBillModal.tsx`, "roundMoneyValue((bill?.total || 0) + tipAmount, currencyMoneyDigits(bill?.currency || getGlobalSystemCurrency()))", 'Math.round(((bill?.total || 0) + tipAmount) * 100) / 100'],
+  [
+    `${F}storefront/lib/storefront-cart-pricing.ts`,
+    'roundMoneyValue(basePrice * qty, digits)',
+    'function getCartRoundFactor',
+  ],
+  [
+    `${F}storefront/lib/storefront-cart-pricing.ts`,
+    'roundMoneyValue(basePrice * qty, digits)',
+    'isThreeDecimalCurrency(',
+  ],
+  [
+    `${F}storefront/lib/storefront-cart-pricing.ts`,
+    'roundMoneyValue(basePrice * qty, digits)',
+    'Math.round(basePrice * qty * factor) / factor',
+  ],
+  [
+    `${F}storefront/components/StorefrontCheckoutModal.tsx`,
+    'validateCoupon(tenantSlug, cleanCode, subtotal, currencyMoneyDigits(info?.currency || getGlobalSystemCurrency()))',
+    'validateCoupon(tenantSlug, cleanCode, subtotal)',
+  ],
+  [
+    `${F}storefront/components/StorefrontCheckoutModal.tsx`,
+    'calculateCartSubtotal(cartItems, info?.currency)',
+    'calculateCartSubtotal(cartItems)',
+  ],
+  [
+    `${F}storefront/components/StorefrontProductQuickViewModal.tsx`,
+    'resolveVariantUnitPrice(product.price, selectedVariant, bookDigits)',
+    'resolveVariantUnitPrice(product.price, selectedVariant)',
+  ],
+  [
+    `${F}storefront/hooks/usePublicStorefront.ts`,
+    'buildCartProduct(activeProductMap.get(String(item.product.id))!, bookDigits, item.product.variantName)',
+    'buildCartProduct(activeProductMap.get(String(item.product.id))!, item.product.variantName)',
+  ],
+  [
+    `${F}storefront/hooks/usePublicStorefront.ts`,
+    'calculateCartSubtotal(cartItems, infoQuery.data?.currency)',
+    'calculateCartSubtotal(cartItems)',
+  ],
+  [
+    `${F}storefront/components/TableBillModal.tsx`,
+    'roundMoneyValue((bill?.total || 0) + tipAmount, currencyMoneyDigits(bill?.currency || getGlobalSystemCurrency()))',
+    'Math.round(((bill?.total || 0) + tipAmount) * 100) / 100',
+  ],
 ];
 for (const [file, mustContain, mustNotContain] of checks) {
   const content = read(file);
-  assert.ok(content.includes(mustContain), `${file} must route through the helper: missing ${JSON.stringify(mustContain)}`);
-  assert.ok(!content.includes(mustNotContain), `${file} still contains the old hardcoded-2dp code: ${JSON.stringify(mustNotContain)}`);
+  assert.ok(
+    content.includes(mustContain),
+    `${file} must route through the helper: missing ${JSON.stringify(mustContain)}`,
+  );
+  assert.ok(
+    !content.includes(mustNotContain),
+    `${file} still contains the old hardcoded-2dp code: ${JSON.stringify(mustNotContain)}`,
+  );
 }
 
 console.log('FE2 frontend book-digits proof passed');

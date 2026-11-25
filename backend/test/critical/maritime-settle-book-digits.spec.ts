@@ -99,7 +99,16 @@ async function seedJob(
   await db.deleteFrom('customers' as never).execute();
   await db
     .insertInto('maritime_jobs' as never)
-    .values({ id: jobId, tenant_id: 't1', customer_id: 4, client_invoiced_total: invoiced, client_paid_total: paid, payment_status: 'unpaid', paid_at: null, updated_at: new Date() } as never)
+    .values({
+      id: jobId,
+      tenant_id: 't1',
+      customer_id: 4,
+      client_invoiced_total: invoiced,
+      client_paid_total: paid,
+      payment_status: 'unpaid',
+      paid_at: null,
+      updated_at: new Date(),
+    } as never)
     .execute();
   await db
     .insertInto('customers' as never)
@@ -108,17 +117,33 @@ async function seedJob(
   const credit = -customerBalance;
   await db
     .insertInto('journal_entry_lines' as never)
-    .values({ tenant_id: 't1', journal_entry_id: 1, account_id: 1130, partner_type: 'customer', partner_id: 4, debit: 0, credit: credit > 0 ? credit : 0 } as never)
+    .values({
+      tenant_id: 't1',
+      journal_entry_id: 1,
+      account_id: 1130,
+      partner_type: 'customer',
+      partner_id: 4,
+      debit: 0,
+      credit: credit > 0 ? credit : 0,
+    } as never)
     .execute();
 }
 
 async function readJob(db: Kysely<Database>, jobId: string): Promise<{ paid: number; status: string }> {
-  const row = await db.selectFrom('maritime_jobs').select(['client_paid_total', 'payment_status']).where('tenant_id', '=', 't1').where('id', '=', jobId as never).executeTakeFirstOrThrow();
+  const row = await db
+    .selectFrom('maritime_jobs')
+    .select(['client_paid_total', 'payment_status'])
+    .where('tenant_id', '=', 't1')
+    .where('id', '=', jobId as never)
+    .executeTakeFirstOrThrow();
   return { paid: Number((row as any).client_paid_total), status: String((row as any).payment_status) };
 }
 
 async function milestoneCount(db: Kysely<Database>): Promise<number> {
-  const rows = await db.selectFrom('maritime_job_milestones' as never).selectAll().execute();
+  const rows = await db
+    .selectFrom('maritime_job_milestones' as never)
+    .selectAll()
+    .execute();
   return rows.length;
 }
 
@@ -164,10 +189,7 @@ async function main(): Promise<void> {
     // remainder (100.01) this amount would have passed.
     await seedCurrency(pg, 'KWD');
     await seedJob(db, 'job4', 100.005, 0, -100.005);
-    await assert.rejects(
-      service.settleJobFromCustomerBalance(auth, 'job4', { amount: 100.01 }),
-      /يتجاوز المتبقي/,
-    );
+    await assert.rejects(service.settleJobFromCustomerBalance(auth, 'job4', { amount: 100.01 }), /يتجاوز المتبقي/);
     const job4 = await readJob(db, 'job4');
     assert.equal(job4.paid, 0);
     assert.equal(job4.status, 'unpaid');
@@ -201,7 +223,10 @@ async function main(): Promise<void> {
     // unrounded float sum (separate decision, pinned as unchanged).
     // Maritime split: settleJobFromCustomerBalance + getCustomerActiveJobs
     // both live in the invoicing slice.
-    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-invoicing.service.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-invoicing.service.ts'),
+      'utf8',
+    );
     const start = source.indexOf('async settleJobFromCustomerBalance(');
     const end = source.indexOf('async getCustomerActiveJobs(');
     assert.ok(start > 0 && end > start);
@@ -211,7 +236,10 @@ async function main(): Promise<void> {
     assert.ok(body.includes('roundMoney(paid + amount, digits)'));
     assert.ok(!body.includes('toFixed(2)'));
     assert.ok(body.includes('newPaid >= invoiced - 0.01'));
-    const sibling = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write.service.ts'), 'utf8');
+    const sibling = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/purchases-write.service.ts'),
+      'utf8',
+    );
     assert.ok(sibling.includes('const newPaid = currentPaid + amount;'));
 
     console.log('maritime settle book digits checks passed');

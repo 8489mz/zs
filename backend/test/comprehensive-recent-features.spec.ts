@@ -34,7 +34,11 @@ async function runComprehensiveBackendAudit() {
 
     // Poll status
     const polledStatus = await terminalService.getPaymentStatus('audit-tenant', session.transactionId);
-    assert.equal(polledStatus.transactionId, session.transactionId, 'Status query must return corresponding transaction');
+    assert.equal(
+      polledStatus.transactionId,
+      session.transactionId,
+      'Status query must return corresponding transaction',
+    );
 
     // Simulate cashier cancellation if customer changes mind
     const cancelRes = await terminalService.cancelPayment('audit-tenant', session.transactionId);
@@ -49,7 +53,7 @@ async function runComprehensiveBackendAudit() {
   {
     // Simulation of Multi-Warehouse Engine across 7 locations
     console.log('  • Simulating 7-Warehouse replenishment routing & zero-stock protection...');
-    
+
     interface MockProductStock {
       id: number;
       name: string;
@@ -106,7 +110,7 @@ async function runComprehensiveBackendAudit() {
         }
       }
 
-      const deficit = (prod.soldLast48h + (prod.minStock * 2)) - shopStock;
+      const deficit = prod.soldLast48h + prod.minStock * 2 - shopStock;
       let rawNeeded = Math.max(1, deficit);
 
       // Pack/Carton rounding
@@ -127,14 +131,22 @@ async function runComprehensiveBackendAudit() {
         assert.ok(alternatives.length >= 2, 'Must list available alternative warehouses');
         assert.equal(alternatives[0].locationId, 2, 'Must indicate Wholesale warehouse as alternative');
         assert.equal(alternatives[0].qty, 50, 'Must show 50 pieces available in Wholesale warehouse');
-        console.log(`    ✓ Item "${prod.name}": 0 stock in Source Warehouse correctly blocked suggestedQty=0, routed to "${alternatives[0].name}" (${alternatives[0].qty} pcs)`);
+        console.log(
+          `    ✓ Item "${prod.name}": 0 stock in Source Warehouse correctly blocked suggestedQty=0, routed to "${alternatives[0].name}" (${alternatives[0].qty} pcs)`,
+        );
       }
 
       if (prod.id === 102) {
         // Sugar has 100 in warehouse, needed 30 + 40 - 5 = 65 -> rounded to 7 cartons = 70 pieces!
         assert.ok(suggestedQty > 0, 'Suggested qty must be positive when warehouse has stock');
-        assert.equal(suggestedQty % prod.cartonMultiplier, 0, 'Suggested qty must be perfectly rounded to full carton multiplier');
-        console.log(`    ✓ Item "${prod.name}": Pack multiplier ${prod.cartonMultiplier} correctly rounded needed pieces to ${suggestedQty} (${suggestedQty / prod.cartonMultiplier} cartons)`);
+        assert.equal(
+          suggestedQty % prod.cartonMultiplier,
+          0,
+          'Suggested qty must be perfectly rounded to full carton multiplier',
+        );
+        console.log(
+          `    ✓ Item "${prod.name}": Pack multiplier ${prod.cartonMultiplier} correctly rounded needed pieces to ${suggestedQty} (${suggestedQty / prod.cartonMultiplier} cartons)`,
+        );
       }
 
       // Predictive Purchase Deadline simulation
@@ -142,30 +154,32 @@ async function runComprehensiveBackendAudit() {
       const totalEnterpriseStock = Object.values(prod.stockByLocation).reduce((a, b) => a + b, 0);
       const daysOfSupply = Math.floor(totalEnterpriseStock / dailyBurnRate);
       assert.ok(daysOfSupply >= 0, 'Days of supply must be non-negative integer');
-      
+
       const deadlineDate = new Date();
       deadlineDate.setDate(deadlineDate.getDate() + Math.max(1, daysOfSupply - 1));
       const deadlineStr = deadlineDate.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' });
       assert.ok(deadlineStr.length > 5, 'Must generate valid localized Arabic deadline date');
-      console.log(`    ✓ Predictive Purchase Deadline for "${prod.name}": ${daysOfSupply} days remaining ➔ [Must buy before: ${deadlineStr}]`);
+      console.log(
+        `    ✓ Predictive Purchase Deadline for "${prod.name}": ${daysOfSupply} days remaining ➔ [Must buy before: ${deadlineStr}]`,
+      );
     }
 
     // Scale PLU Export format validation
     console.log('  • Verifying Electronic Scale PLU export format generation...');
     const scaleItems = [
-      { plu: 1, name: 'جبنة بيضاء براميلي', barcode: '200001', price: 180.00, unit: 'kg' },
-      { plu: 2, name: 'لانشون بقري سادة', barcode: '200002', price: 140.00, unit: 'kg' },
+      { plu: 1, name: 'جبنة بيضاء براميلي', barcode: '200001', price: 180.0, unit: 'kg' },
+      { plu: 2, name: 'لانشون بقري سادة', barcode: '200002', price: 140.0, unit: 'kg' },
     ];
 
     // 1. CSV Format
     const csvHeader = 'PLU,Name,Barcode,Price,Unit';
-    const csvLines = scaleItems.map(i => `${i.plu},"${i.name}",${i.barcode},${i.price.toFixed(2)},${i.unit}`);
+    const csvLines = scaleItems.map((i) => `${i.plu},"${i.name}",${i.barcode},${i.price.toFixed(2)},${i.unit}`);
     const fullCsv = [csvHeader, ...csvLines].join('\n');
     assert.ok(fullCsv.includes('PLU,Name,Barcode'), 'CSV must contain standard headers');
     assert.ok(fullCsv.includes('200001'), 'CSV must contain product barcodes');
 
     // 2. Rongta RLS1000 format validation (Fixed length text fields)
-    const rongtaLine = (item: typeof scaleItems[0]) => {
+    const rongtaLine = (item: (typeof scaleItems)[0]) => {
       const pluStr = String(item.plu).padStart(6, '0');
       const priceStr = String(Math.round(item.price * 100)).padStart(8, '0');
       return `${pluStr},${item.name.slice(0, 16).padEnd(16, ' ')},${item.barcode},${priceStr}`;
@@ -192,7 +206,8 @@ async function runComprehensiveBackendAudit() {
     // Delivery confirmation payload validation
     const deliveryProof = {
       orderId: 9842,
-      touchSignatureDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      touchSignatureDataUrl:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
       capturedPhotoUri: 'https://storage.zsystems.app/proofs/proof-9842.jpg',
       latitude: 30.0444,
       longitude: 31.2357,
@@ -200,10 +215,21 @@ async function runComprehensiveBackendAudit() {
       deliveredAt: new Date().toISOString(),
     };
 
-    assert.ok(deliveryProof.touchSignatureDataUrl.startsWith('data:image/png;base64,'), 'Signature must be valid canvas base64 image');
-    assert.ok(deliveryProof.latitude > 20 && deliveryProof.latitude < 35, 'Latitude must be within Egyptian boundaries');
-    assert.ok(deliveryProof.longitude > 25 && deliveryProof.longitude < 37, 'Longitude must be within Egyptian boundaries');
-    console.log(`  • Driver proof-of-delivery validated: GPS (${deliveryProof.latitude}, ${deliveryProof.longitude}) with Touch Canvas Signature`);
+    assert.ok(
+      deliveryProof.touchSignatureDataUrl.startsWith('data:image/png;base64,'),
+      'Signature must be valid canvas base64 image',
+    );
+    assert.ok(
+      deliveryProof.latitude > 20 && deliveryProof.latitude < 35,
+      'Latitude must be within Egyptian boundaries',
+    );
+    assert.ok(
+      deliveryProof.longitude > 25 && deliveryProof.longitude < 37,
+      'Longitude must be within Egyptian boundaries',
+    );
+    console.log(
+      `  • Driver proof-of-delivery validated: GPS (${deliveryProof.latitude}, ${deliveryProof.longitude}) with Touch Canvas Signature`,
+    );
 
     // Shipping Couriers (Bosta, Aramex, SMSA)
     const bostaPayload = {
@@ -220,7 +246,11 @@ async function runComprehensiveBackendAudit() {
       piecesCount: 1,
       paymentType: 'P', // Prepaid
     };
-    assert.equal(aramexPayload.destinationCityCode, 'RUH', 'Aramex destination must map to valid 3-letter IATA city code');
+    assert.equal(
+      aramexPayload.destinationCityCode,
+      'RUH',
+      'Aramex destination must map to valid 3-letter IATA city code',
+    );
 
     console.log('  ✓ Driver Portal & Courier Integrations (Bosta / Aramex / SMSA) verified successfully.\n');
   }
@@ -232,7 +262,7 @@ async function runComprehensiveBackendAudit() {
   {
     // Tap Payments GCC Charge Request Simulation
     const tapChargePayload = {
-      amount: 450.00,
+      amount: 450.0,
       currency: 'SAR',
       customer: {
         first_name: 'سلطان',
@@ -242,9 +272,15 @@ async function runComprehensiveBackendAudit() {
       source: { id: 'src_all' }, // Accepts Mada, Knet, Benefit, NAPS, Apple Pay
       redirect: { url: 'https://store.zsystems.app/payment/tap/callback' },
     };
-    assert.equal(tapChargePayload.source.id, 'src_all', 'Tap provider source must be src_all to support all GCC payment rails');
+    assert.equal(
+      tapChargePayload.source.id,
+      'src_all',
+      'Tap provider source must be src_all to support all GCC payment rails',
+    );
     assert.equal(tapChargePayload.currency, 'SAR', 'Currency must conform to GCC ISO code');
-    console.log(`  • Tap Payments GCC payload verified for ${tapChargePayload.amount} ${tapChargePayload.currency} (Mada/Knet/ApplePay)`);
+    console.log(
+      `  • Tap Payments GCC payload verified for ${tapChargePayload.amount} ${tapChargePayload.currency} (Mada/Knet/ApplePay)`,
+    );
 
     // Stripe Checkout Session Simulation
     const stripeSessionPayload = {
@@ -262,7 +298,11 @@ async function runComprehensiveBackendAudit() {
       mode: 'payment',
       success_url: 'https://store.zsystems.app/payment/stripe/success?session_id={CHECKOUT_SESSION_ID}',
     };
-    assert.equal(stripeSessionPayload.line_items[0].price_data.unit_amount, 2500, 'Stripe amounts must be in lowest currency denomination (cents)');
+    assert.equal(
+      stripeSessionPayload.line_items[0].price_data.unit_amount,
+      2500,
+      'Stripe amounts must be in lowest currency denomination (cents)',
+    );
     console.log('  • Stripe Global Checkout payload verified with USD cents conversion');
     console.log('  ✓ Payment Gateways verified successfully.\n');
   }
@@ -322,7 +362,10 @@ async function runComprehensiveBackendAudit() {
 
     assert.ok(digestMessage.includes('الملخص التنفيذي'), 'Digest must include header');
     assert.ok(digestMessage.includes('أذون الصرف المنقولة'), 'Digest must include transfers section');
-    assert.ok(digestMessage.includes('نواقص المخازن وتنبيهات الشراء'), 'Digest must include predictive purchase deadlines');
+    assert.ok(
+      digestMessage.includes('نواقص المخازن وتنبيهات الشراء'),
+      'Digest must include predictive purchase deadlines',
+    );
     console.log('  • Executive Daily Digest WhatsApp message synthesizer validated.');
 
     // 3. Demo Datasets Exhaustive Audit (All 5 Activities)
@@ -334,8 +377,14 @@ async function runComprehensiveBackendAudit() {
     for (const key of expectedKeys) {
       const dataset = DEMO_DATASETS[key];
       assert.ok(dataset, `Dataset ${key} must exist`);
-      assert.ok(dataset.categories.length >= 4, `Dataset ${key} must have at least 4 categories (found ${dataset.categories.length})`);
-      assert.ok(dataset.products.length >= 20, `Dataset ${key} must have at least 20 products (found ${dataset.products.length})`);
+      assert.ok(
+        dataset.categories.length >= 4,
+        `Dataset ${key} must have at least 4 categories (found ${dataset.categories.length})`,
+      );
+      assert.ok(
+        dataset.products.length >= 20,
+        `Dataset ${key} must have at least 20 products (found ${dataset.products.length})`,
+      );
 
       // Verify each product has valid fields
       const seenBarcodes = new Set<string>();
@@ -349,7 +398,9 @@ async function runComprehensiveBackendAudit() {
         assert.ok(p.costPrice >= 0, `Product "${p.name}" costPrice must be non-negative`);
         assert.ok(p.stockQty >= 0, `Product "${p.name}" stockQty must be non-negative`);
       }
-      console.log(`    ✓ Dataset "${dataset.name}": ${dataset.categories.length} categories, ${dataset.products.length} products, 100% unique barcodes & valid prices.`);
+      console.log(
+        `    ✓ Dataset "${dataset.name}": ${dataset.categories.length} categories, ${dataset.products.length} products, 100% unique barcodes & valid prices.`,
+      );
     }
 
     console.log('  ✓ AI, Daily Digest & Demo Datasets verified successfully.\n');
@@ -381,11 +432,15 @@ async function runComprehensiveBackendAudit() {
     };
 
     // 1. Cost change calculation
-    const costChangePercent = Number((((testItem.newCost - testItem.previousCost) / testItem.previousCost) * 100).toFixed(1));
+    const costChangePercent = Number(
+      (((testItem.newCost - testItem.previousCost) / testItem.previousCost) * 100).toFixed(1),
+    );
     assert.equal(costChangePercent, 20.0, 'Cost change percentage must be +20%');
 
     // 2. Compressed margin detection
-    const compressedMargin = Number((((testItem.currentRetail - testItem.newCost) / testItem.currentRetail) * 100).toFixed(1));
+    const compressedMargin = Number(
+      (((testItem.currentRetail - testItem.newCost) / testItem.currentRetail) * 100).toFixed(1),
+    );
     assert.equal(compressedMargin, 4.0, 'Margin at old retail price must be severely compressed to 4%');
     assert.ok(compressedMargin < testItem.targetMarginPercent, 'Must flag as margin compressed (< 25%)');
 
@@ -410,18 +465,27 @@ async function runComprehensiveBackendAudit() {
     const isLossMaking = lossMakingItem.currentRetail < lossMakingItem.newCost;
     assert.ok(isLossMaking, 'Must detect selling below new cost price');
 
-    const recommendedLossMakingRetail = Number((lossMakingItem.newCost / (1 - lossMakingItem.targetMarginPercent / 100)).toFixed(2));
+    const recommendedLossMakingRetail = Number(
+      (lossMakingItem.newCost / (1 - lossMakingItem.targetMarginPercent / 100)).toFixed(2),
+    );
     assert.equal(recommendedLossMakingRetail, 118.75, 'Recommended retail for oil must be 118.75 EGP');
 
     // 5. Printable Shelf Labels data synthesis
     const shelfTalkers = [
       { name: testItem.productName, oldPrice: testItem.currentRetail, newPrice: recommendedRetail, unit: 'قطعة' },
-      { name: lossMakingItem.productName, oldPrice: lossMakingItem.currentRetail, newPrice: recommendedLossMakingRetail, unit: 'زجاجة' },
+      {
+        name: lossMakingItem.productName,
+        oldPrice: lossMakingItem.currentRetail,
+        newPrice: recommendedLossMakingRetail,
+        unit: 'زجاجة',
+      },
     ];
     assert.equal(shelfTalkers.length, 2, 'Must generate printable shelf talkers for all repriced items');
     assert.ok(shelfTalkers[0].newPrice > shelfTalkers[0].oldPrice, 'New price must preserve target margin');
 
-    console.log(`  ✓ Margin Protection & Smart Repricing Engine validated (+20% cost -> recommended price +${recommendedRetail - testItem.currentRetail} EGP).\n`);
+    console.log(
+      `  ✓ Margin Protection & Smart Repricing Engine validated (+20% cost -> recommended price +${recommendedRetail - testItem.currentRetail} EGP).\n`,
+    );
   }
 
   // =========================================================================
@@ -438,15 +502,19 @@ async function runComprehensiveBackendAudit() {
       discountOverrides: number;
       salesCount: number;
     }) {
-      let rawScore = (stats.cartVoids * 12) + (stats.draftCancels * 18) + (stats.cancelledSales * 25) + (stats.discountOverrides * 8);
+      let rawScore =
+        stats.cartVoids * 12 + stats.draftCancels * 18 + stats.cancelledSales * 25 + stats.discountOverrides * 8;
       if (stats.salesCount > 10) {
-        rawScore = rawScore / Math.max(1, (stats.salesCount / 20));
+        rawScore = rawScore / Math.max(1, stats.salesCount / 20);
       }
       const riskScore = Math.min(100, Math.max(0, Math.round(rawScore)));
       let riskLevel: 'low' | 'medium' | 'high' = 'low';
       if (riskScore >= 60 || stats.cartVoids >= 5 || stats.cancelledSales >= 3) {
         riskLevel = 'high';
-      } else if (riskScore >= 30 || (stats.cartVoids + stats.draftCancels + stats.cancelledSales + stats.discountOverrides) >= 3) {
+      } else if (
+        riskScore >= 30 ||
+        stats.cartVoids + stats.draftCancels + stats.cancelledSales + stats.discountOverrides >= 3
+      ) {
         riskLevel = 'medium';
       }
       return { riskScore, riskLevel };
@@ -492,7 +560,8 @@ async function runComprehensiveBackendAudit() {
       const key = `tenant_1:${cashierId}`;
       const lastAlert = alertTracker.get(key) || 0;
       const now = Date.now();
-      if (now - lastAlert > 3600 * 1000) { // 60 min debounce
+      if (now - lastAlert > 3600 * 1000) {
+        // 60 min debounce
         alertTracker.set(key, now);
         return true; // Sent
       }
@@ -556,7 +625,11 @@ async function runComprehensiveBackendAudit() {
 
     // Charger (local: 3, buffer: 5 -> synced: 0 to prevent overselling on marketplace!)
     const chargerAmazon = calculateMarketplaceStock(inventory[1].stockQuantity, mappings[2].safetyStockBuffer);
-    assert.equal(chargerAmazon, 0, 'Charger stock must be 0 to prevent overselling since local stock is below safety buffer');
+    assert.equal(
+      chargerAmazon,
+      0,
+      'Charger stock must be 0 to prevent overselling since local stock is below safety buffer',
+    );
 
     // Cable (local: 0, buffer: 2 -> synced: 0)
     const cableNoon = calculateMarketplaceStock(inventory[2].stockQuantity, mappings[3].safetyStockBuffer);
@@ -573,10 +646,10 @@ async function runComprehensiveBackendAudit() {
     }
 
     function ingestOrder(order: MockExternalOrder) {
-      const mapping = mappings.find(m => m.marketplace === order.marketplace && m.marketplaceSku === order.sku);
+      const mapping = mappings.find((m) => m.marketplace === order.marketplace && m.marketplaceSku === order.sku);
       if (!mapping) throw new Error(`Mapping not found for SKU ${order.sku}`);
 
-      const product = inventory.find(p => p.id === mapping.productId);
+      const product = inventory.find((p) => p.id === mapping.productId);
       if (!product) throw new Error(`Product not found for ID ${mapping.productId}`);
 
       if (product.stockQuantity < order.quantity) {
@@ -692,7 +765,14 @@ async function runComprehensiveBackendAudit() {
         status: 'cooking',
         createdAtMs: now - 11 * 60 * 1000, // 11 mins ago (Warning)
         items: [
-          { id: 4, name: 'بيتزا سوبر سوبريم', qty: 1, modifiers: ['إكسترا جبنة'], status: 'cooking', station: 'bakery' },
+          {
+            id: 4,
+            name: 'بيتزا سوبر سوبريم',
+            qty: 1,
+            modifiers: ['إكسترا جبنة'],
+            status: 'cooking',
+            station: 'bakery',
+          },
         ],
       },
       {
@@ -729,14 +809,20 @@ async function runComprehensiveBackendAudit() {
 
     const grillTickets = filterTicketsByStation(tickets, 'grill');
     assert.equal(grillTickets.length, 2, 'Grill station must only see tickets with grill items');
-    assert.equal(grillTickets[0].items.every((i) => i.station === 'grill'), true, 'All items must belong to grill');
+    assert.equal(
+      grillTickets[0].items.every((i) => i.station === 'grill'),
+      true,
+      'All items must belong to grill',
+    );
 
     const beverageTickets = filterTicketsByStation(tickets, 'beverages');
     assert.equal(beverageTickets.length, 1, 'Beverage station must only see ticket 1');
     assert.equal(beverageTickets[0].items[0].name, 'عصير برتقال فريش');
 
     // 3. State machine transitions (pending -> cooking -> ready -> served)
-    function advanceStatus(status: 'pending' | 'cooking' | 'ready' | 'served'): 'pending' | 'cooking' | 'ready' | 'served' {
+    function advanceStatus(
+      status: 'pending' | 'cooking' | 'ready' | 'served',
+    ): 'pending' | 'cooking' | 'ready' | 'served' {
       if (status === 'pending') return 'cooking';
       if (status === 'cooking') return 'ready';
       return 'served';
@@ -765,17 +851,26 @@ async function runComprehensiveBackendAudit() {
 
     function calculateSignageOffer(product: MockProductForSignage) {
       const original = product.retailPrice;
-      const promo = product.promotionalPrice && product.promotionalPrice < original ? product.promotionalPrice : Number((original * 0.8).toFixed(2));
+      const promo =
+        product.promotionalPrice && product.promotionalPrice < original
+          ? product.promotionalPrice
+          : Number((original * 0.8).toFixed(2));
       const saving = Number((original - promo).toFixed(2));
       const discountPercent = Math.round(((original - promo) / original) * 100);
       return { original, promo, saving, discountPercent };
     }
 
-    const promoDeal = calculateSignageOffer({ name: 'وجبة كومبو عائلية مكس', retailPrice: 350.0, promotionalPrice: 280.0 });
+    const promoDeal = calculateSignageOffer({
+      name: 'وجبة كومبو عائلية مكس',
+      retailPrice: 350.0,
+      promotionalPrice: 280.0,
+    });
     assert.equal(promoDeal.saving, 70.0, 'Saving amount must be 70.0 EGP');
     assert.equal(promoDeal.discountPercent, 20, 'Discount must be exactly 20%');
 
-    console.log('  ✓ KDS state machine, urgency timers, station filters & Digital Signage engine verified successfully.\n');
+    console.log(
+      '  ✓ KDS state machine, urgency timers, station filters & Digital Signage engine verified successfully.\n',
+    );
   }
 
   console.log('================================================================');
@@ -787,4 +882,3 @@ runComprehensiveBackendAudit().catch((err) => {
   console.error('Audit failed with error:', err);
   process.exit(1);
 });
-

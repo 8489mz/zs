@@ -51,10 +51,7 @@ import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { Database } from '../../src/database/database.types';
 import { DeveloperController } from '../../src/modules/saas-admin/developer.controller';
-import {
-  DEVELOPER_MASTER_PASSWORD_HASH_KEY,
-  SaasAdminService,
-} from '../../src/modules/saas-admin/saas-admin.service';
+import { DEVELOPER_MASTER_PASSWORD_HASH_KEY, SaasAdminService } from '../../src/modules/saas-admin/saas-admin.service';
 import { SetDeveloperMasterPasswordDto } from '../../src/modules/saas-admin/dto/developer-update-plan.dto';
 import { SessionAuthGuard } from '../../src/core/auth/guards/session-auth.guard';
 import { SuperAdminRoleGuard } from '../../src/core/auth/guards/super-admin-role.guard';
@@ -88,11 +85,23 @@ async function main(): Promise<void> {
     `);
     await anyDb
       .insertInto('tenants')
-      .values({ id: TENANT, slug: TENANT, business_name: 'Z-Systems', status: 'active', created_at: new Date('2026-01-01T00:00:00Z') })
+      .values({
+        id: TENANT,
+        slug: TENANT,
+        business_name: 'Z-Systems',
+        status: 'active',
+        created_at: new Date('2026-01-01T00:00:00Z'),
+      })
       .execute();
     await anyDb
       .insertInto('tenants')
-      .values({ id: 'second', slug: 'second', business_name: 'Second', status: 'active', created_at: new Date('2026-02-01T00:00:00Z') })
+      .values({
+        id: 'second',
+        slug: 'second',
+        business_name: 'Second',
+        status: 'active',
+        created_at: new Date('2026-02-01T00:00:00Z'),
+      })
       .execute();
 
     const service = new SaasAdminService(
@@ -120,18 +129,14 @@ async function main(): Promise<void> {
       UnauthorizedException,
       'the removed fixed password must be rejected even in desktop mode',
     );
-    await assert.rejects(
-      () => controller.updatePlan({ masterPassword: 'wrong-password' }),
-      UnauthorizedException,
-    );
+    await assert.rejects(() => controller.updatePlan({ masterPassword: 'wrong-password' }), UnauthorizedException);
     const before = await controller.updatePlan({ masterPassword: 'EnvSecret123!' });
     assert.equal((before as { ok?: boolean }).ok, true, 'env secret must work until a hash is set');
 
     // 2. Super_admin sets the master password: bcrypt hash stored, never plaintext.
-    const setResult = await controller.setMasterPassword(
-      { newMasterPassword: 'SuperSecret123!' },
-      { authContext: superAdminAuth() } as never,
-    );
+    const setResult = await controller.setMasterPassword({ newMasterPassword: 'SuperSecret123!' }, {
+      authContext: superAdminAuth(),
+    } as never);
     assert.equal((setResult as { ok?: boolean }).ok, true);
     const storedHash = await service.getDeveloperMasterPasswordHash();
     assert.ok(storedHash, 'a hash must be stored after setting');
@@ -151,22 +156,15 @@ async function main(): Promise<void> {
       UnauthorizedException,
       'once a hash is set, the env value alone must never authenticate',
     );
-    await assert.rejects(
-      () => controller.updatePlan({ masterPassword: 'infoadmin' }),
-      UnauthorizedException,
-    );
+    await assert.rejects(() => controller.updatePlan({ masterPassword: 'infoadmin' }), UnauthorizedException);
     const after = await controller.updatePlan({ masterPassword: 'SuperSecret123!' });
     assert.equal((after as { ok?: boolean }).ok, true);
 
     // 4. Rotation replaces the secret; the old one stops working.
-    await controller.setMasterPassword(
-      { newMasterPassword: 'RotatedSecret99!' },
-      { authContext: superAdminAuth() } as never,
-    );
-    await assert.rejects(
-      () => controller.updatePlan({ masterPassword: 'SuperSecret123!' }),
-      UnauthorizedException,
-    );
+    await controller.setMasterPassword({ newMasterPassword: 'RotatedSecret99!' }, {
+      authContext: superAdminAuth(),
+    } as never);
+    await assert.rejects(() => controller.updatePlan({ masterPassword: 'SuperSecret123!' }), UnauthorizedException);
     const rotated = await controller.updatePlan({ masterPassword: 'RotatedSecret99!' });
     assert.equal((rotated as { ok?: boolean }).ok, true);
 
@@ -177,10 +175,7 @@ async function main(): Promise<void> {
     assert.equal(dtoOk.length, 0, '12-char master password must pass DTO validation');
     await assert.rejects(
       () =>
-        controller.setMasterPassword(
-          { newMasterPassword: 'ElevenChars' },
-          { authContext: superAdminAuth() } as never,
-        ),
+        controller.setMasterPassword({ newMasterPassword: 'ElevenChars' }, { authContext: superAdminAuth() } as never),
       (error: unknown) => (error as { code?: string }).code === 'PASSWORD_TOO_WEAK',
       '11-char set must be rejected by the role-aware minimum',
     );
@@ -195,20 +190,16 @@ async function main(): Promise<void> {
     // 7. The generic settings save path can never plant the hash key.
     const currentHash = await service.getDeveloperMasterPasswordHash();
     const settingsService = new SettingsService(db, { log: async () => undefined } as never, {} as never);
-    await settingsService.saveSettings(
-      { [DEVELOPER_MASTER_PASSWORD_HASH_KEY]: 'attacker-planted-value' },
-      { ...superAdminAuth(), role: 'admin' } as AuthContext,
-    );
+    await settingsService.saveSettings({ [DEVELOPER_MASTER_PASSWORD_HASH_KEY]: 'attacker-planted-value' }, {
+      ...superAdminAuth(),
+      role: 'admin',
+    } as AuthContext);
     const planted = await anyDb
       .selectFrom('settings')
       .selectAll()
       .where('key', '=', DEVELOPER_MASTER_PASSWORD_HASH_KEY)
       .executeTakeFirst();
-    assert.equal(
-      planted?.value,
-      currentHash,
-      'settings save must leave the stored hash untouched',
-    );
+    assert.equal(planted?.value, currentHash, 'settings save must leave the stored hash untouched');
 
     // 8. Unset env + no hash disables the panel.
     await anyDb.deleteFrom('settings').where('key', '=', DEVELOPER_MASTER_PASSWORD_HASH_KEY).execute();

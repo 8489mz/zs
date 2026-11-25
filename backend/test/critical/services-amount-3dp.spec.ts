@@ -42,7 +42,11 @@ import { TransactionHelper } from '../../src/database/helpers/transaction.helper
 import { up as widenServicesAmount } from '../../src/database/migrations/2040000000317_services_amount_3dp';
 
 const AUTH = {
-  tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['services'],
 } as unknown as AuthContext;
 
@@ -147,12 +151,18 @@ async function main(): Promise<void> {
     // scope is then nulls, exactly the no-shift path.
     await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Africa/Cairo')`.execute(db);
     await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'currency', 'KWD')`.execute(db);
-    await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES ('t1', 'KWD', true, 1)`.execute(db);
+    await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES ('t1', 'KWD', true, 1)`.execute(
+      db,
+    );
     await sql`INSERT INTO branches (id, tenant_id, name) VALUES (1, 't1', 'Main')`.execute(db);
     await sql`INSERT INTO stock_locations (id, tenant_id, branch_id, name) VALUES (1, 't1', 1, 'Store')`.execute(db);
     await sql`INSERT INTO users (id, tenant_id, username) VALUES (1, 't1', 'admin')`.execute(db);
-    await sql`INSERT INTO accounting_accounts (id, tenant_id, code, account_type) VALUES (1110, 't1', '1110', 'asset'), (1120, 't1', '1120', 'asset'), (4200, 't1', '4200', 'revenue')`.execute(db);
-    await sql`INSERT INTO accounting_settings (id, tenant_id, cash_account_id, bank_account_id) VALUES (1, 't1', 1110, 1120)`.execute(db);
+    await sql`INSERT INTO accounting_accounts (id, tenant_id, code, account_type) VALUES (1110, 't1', '1110', 'asset'), (1120, 't1', '1120', 'asset'), (4200, 't1', '4200', 'revenue')`.execute(
+      db,
+    );
+    await sql`INSERT INTO accounting_settings (id, tenant_id, cash_account_id, bank_account_id) VALUES (1, 't1', 1110, 1120)`.execute(
+      db,
+    );
 
     // Phase 1: the migration-presence proof. Production DDL at the base
     // is NUMERIC(14,2); the 0317 up() must widen it to (15,3).
@@ -180,11 +190,23 @@ async function main(): Promise<void> {
     );
 
     const response = (await service.createService(
-      { service: { name: 'KWD service', amount: 10.125, notes: '', date: '2026-06-15T12:00:00+02:00', paymentChannel: 'cash' } } as never,
+      {
+        service: {
+          name: 'KWD service',
+          amount: 10.125,
+          notes: '',
+          date: '2026-06-15T12:00:00+02:00',
+          paymentChannel: 'cash',
+        },
+      } as never,
       AUTH,
     )) as { summary: { totalAmount: number } };
 
-    const stored = await db.selectFrom('services').select('amount').where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
+    const stored = await db
+      .selectFrom('services')
+      .select('amount')
+      .where('tenant_id', '=', 't1')
+      .executeTakeFirstOrThrow();
     assert.equal(Number(stored.amount), 10.125, 'services.amount stores 10.125 exactly, not 10.13');
 
     const journal = await db
@@ -227,7 +249,10 @@ async function main(): Promise<void> {
       .where('action', '=', 'إضافة خدمة')
       .executeTakeFirstOrThrow();
     assert.ok(String(audit.details).includes('10.125'), `audit log prints 10.125, got: ${audit.details}`);
-    assert.ok(!String(audit.details).includes('10.13'), `audit log must not print the old 10.13, got: ${audit.details}`);
+    assert.ok(
+      !String(audit.details).includes('10.13'),
+      `audit log must not print the old 10.13, got: ${audit.details}`,
+    );
 
     assert.equal(Number(response.summary.totalAmount), 10.125, 'listServices inside the create response totals 10.125');
     console.log('services-amount-3dp: phase 2 (create 10.125 end to end) OK');

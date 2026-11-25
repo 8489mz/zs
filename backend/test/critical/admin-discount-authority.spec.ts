@@ -36,18 +36,33 @@ const MANAGER_PIN = '1234';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-a', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-a',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierDiscountAuth: AuthContext = {
-  userId: 3, sessionId: 'spec-b', username: 'cashier-b', role: 'cashier',
-  permissions: ['sales', 'canDiscount'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 3,
+  sessionId: 'spec-b',
+  username: 'cashier-b',
+  role: 'cashier',
+  permissions: ['sales', 'canDiscount'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -119,45 +134,122 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
-function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer: CashDrawerService; posting: AccountingPostingService } {
+function buildServices(db: Kysely<Database>): {
+  sales: SalesWriteService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -172,21 +264,40 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const planFeatures = { hasFeature: (_planId: any, _extra: any, feature: string) => feature === 'pos' };
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   return { sales, drawer, posting };
 }
 
-
 async function seedDiscountSettings(db: Kysely<Database>, allowance?: string): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'posMaxDiscountThresholdEnabled', value: 'true' }).execute();
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'posMaxDiscountThresholdType', value: '"percentage"' }).execute();
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'posMaxDiscountThresholdValue', value: '10' }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'posMaxDiscountThresholdEnabled', value: 'true' })
+    .execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'posMaxDiscountThresholdType', value: '"percentage"' })
+    .execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'posMaxDiscountThresholdValue', value: '10' })
+    .execute();
   if (allowance !== undefined) {
-    await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'posSmallDiscountFlatAllowance', value: allowance }).execute();
+    await anyDb
+      .insertInto('settings')
+      .values({ tenant_id: TENANT, key: 'posSmallDiscountFlatAllowance', value: allowance })
+      .execute();
   }
 }
 
@@ -194,9 +305,16 @@ function discountPayload(discount: number, managerPin?: string): any {
   const collectible = 100 - discount;
   return {
     items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-    discount, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: collectible }], tenderedAmount: collectible,
-    branchId: 1, locationId: 10, source: 'dashboard', managerPin,
+    discount,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: collectible }],
+    tenderedAmount: collectible,
+    branchId: 1,
+    locationId: 10,
+    source: 'dashboard',
+    managerPin,
   };
 }
 
@@ -214,9 +332,15 @@ function linePayload(lineDiscount: number, extra: Record<string, unknown> = {}):
   const collectible = 100 - lineDiscount;
   return {
     items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1, lineDiscount }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: collectible }], tenderedAmount: collectible,
-    branchId: 1, locationId: 10, source: 'pos',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: collectible }],
+    tenderedAmount: collectible,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
     ...extra,
   };
 }
@@ -224,15 +348,25 @@ function linePayload(lineDiscount: number, extra: Record<string, unknown> = {}):
 function pricePayload(price: number): any {
   return {
     items: [{ productId: 101, qty: 1, price, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: price }], tenderedAmount: price,
-    branchId: 1, locationId: 10, source: 'pos',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: price }],
+    tenderedAmount: price,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
   };
 }
 
 async function readSaleNote(db: Kysely<Database>, saleId: number): Promise<string> {
-  const row = await (db as any).selectFrom('sales').select('note')
-    .where('id', '=', saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  const row = await (db as any)
+    .selectFrom('sales')
+    .select('note')
+    .where('id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
   return String(row.note || '');
 }
 
@@ -258,8 +392,11 @@ async function main(): Promise<void> {
     const created: any = await sales.createSale(linePayload(51), adminAuth);
     const saleId = Number(created?.sale?.id);
     assert.ok(saleId > 0, 'admin 51% line discount must create the sale');
-    const sale = await (db as any).selectFrom('sales').select(['total', 'note'])
-      .where('id', '=', saleId).executeTakeFirstOrThrow();
+    const sale = await (db as any)
+      .selectFrom('sales')
+      .select(['total', 'note'])
+      .where('id', '=', saleId)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(sale.total), 49);
     assert.ok(!String(sale.note || '').includes('تحت الحد'), 'above-cost sale carries no floor tag');
   });
@@ -303,8 +440,11 @@ async function main(): Promise<void> {
     const created: any = await sales.createSale(pricePayload(80), adminAuth);
     const saleId = Number(created?.sale?.id);
     assert.ok(saleId > 0, 'admin price edit above threshold must create the sale');
-    const audit = await (db as any).selectFrom('pos_audit_events').selectAll()
-      .where('event_type', '=', 'price_edit').execute();
+    const audit = await (db as any)
+      .selectFrom('pos_audit_events')
+      .selectAll()
+      .where('event_type', '=', 'price_edit')
+      .execute();
     assert.equal(audit.length, 1, 'price edit audit row recorded');
   });
   console.log('  admin price edit above threshold without approval passed');
@@ -313,14 +453,24 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale/compute-totals-and-gates.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/create-sale/compute-totals-and-gates.ts'),
+      'utf8',
+    );
     assert.ok(serviceSource.includes('INV-POS-ADMIN-DISCOUNT-AUTHORITY'), 'service marks the admin authority');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('- INV-POS-ADMIN-DISCOUNT-AUTHORITY ').length - 1, 1, 'invariant entry exists exactly once');
+    assert.equal(
+      invariants.split('- INV-POS-ADMIN-DISCOUNT-AUTHORITY ').length - 1,
+      1,
+      'invariant entry exists exactly once',
+    );
   }
   console.log('  source + invariant pins passed');
 
   console.log('admin-discount-authority: OK');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

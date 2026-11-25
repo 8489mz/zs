@@ -123,11 +123,17 @@ async function main(): Promise<void> {
     assert.equal(red.status, 1, 'frontend check must exit 1 on an unlisted oversized file');
     assert.ok(red.stderr.includes('src/oversized.ts (1001 lines, not in baseline)'), 'frontend failure names the file');
     console.log('  frontend RED: unlisted oversized file exits 1 passed');
-    const update = spawnSync(process.execPath, [checkScript, '--root', src, '--baseline', baseline, '--update-baseline'], {
+    const update = spawnSync(
+      process.execPath,
+      [checkScript, '--root', src, '--baseline', baseline, '--update-baseline'],
+      {
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(update.status, 0, '--update-baseline must exit 0');
+    const green = spawnSync(process.execPath, [checkScript, '--root', src, '--baseline', baseline], {
       encoding: 'utf8',
     });
-    assert.equal(update.status, 0, '--update-baseline must exit 0');
-    const green = spawnSync(process.execPath, [checkScript, '--root', src, '--baseline', baseline], { encoding: 'utf8' });
     assert.equal(green.status, 0, 'frontend check must exit 0 once the file is baselined');
     console.log('  frontend GREEN: --update-baseline then pass passed');
   }
@@ -135,7 +141,10 @@ async function main(): Promise<void> {
   // (d) Wiring pins.
   {
     const guardrails = fs.readFileSync(path.join(backendRoot, 'scripts', 'check-architecture-guardrails.cjs'), 'utf8');
-    assert.ok(guardrails.includes("require('./file-size-guard.cjs')"), 'guardrails script requires the file-size guard module');
+    assert.ok(
+      guardrails.includes("require('./file-size-guard.cjs')"),
+      'guardrails script requires the file-size guard module',
+    );
     assert.ok(guardrails.includes('enforceFileSizeCap('), 'guardrails script calls enforceFileSizeCap');
     assert.ok(guardrails.includes('baselines/file-size.json'), 'guardrails script reads the backend baseline');
     const frontendPkg = JSON.parse(fs.readFileSync(path.join(frontendRoot, 'package.json'), 'utf8'));
@@ -157,16 +166,28 @@ async function main(): Promise<void> {
 
   // (d) Both real checks pass on the current tree (spawned, not stubbed).
   {
-    const backendCheck = spawnSync(process.execPath, [path.join(backendRoot, 'scripts', 'check-architecture-guardrails.cjs')], {
-      cwd: backendRoot,
-      encoding: 'utf8',
-    });
-    assert.equal(backendCheck.status, 0, `backend guardrails check must pass on the current tree: ${backendCheck.stderr}`);
+    const backendCheck = spawnSync(
+      process.execPath,
+      [path.join(backendRoot, 'scripts', 'check-architecture-guardrails.cjs')],
+      {
+        cwd: backendRoot,
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(
+      backendCheck.status,
+      0,
+      `backend guardrails check must pass on the current tree: ${backendCheck.stderr}`,
+    );
     const frontendCheck = spawnSync(process.execPath, [path.join(frontendRoot, 'scripts', 'file-size-check.mjs')], {
       cwd: frontendRoot,
       encoding: 'utf8',
     });
-    assert.equal(frontendCheck.status, 0, `frontend file-size check must pass on the current tree: ${frontendCheck.stderr}`);
+    assert.equal(
+      frontendCheck.status,
+      0,
+      `frontend file-size check must pass on the current tree: ${frontendCheck.stderr}`,
+    );
     console.log('  real-tree checks pass passed');
   }
 

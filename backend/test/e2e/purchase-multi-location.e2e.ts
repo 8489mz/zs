@@ -11,7 +11,9 @@ async function main() {
   const isLocal = allowedHosts.has(parsedUrl.hostname);
 
   if (!isLocal && process.env.E2E_ALLOW_REMOTE !== 'true') {
-    console.error('Safety Guard: E2E tests are not allowed to run against remote environments to prevent accidental data loss. Use E2E_ALLOW_REMOTE=true to override.');
+    console.error(
+      'Safety Guard: E2E tests are not allowed to run against remote environments to prevent accidental data loss. Use E2E_ALLOW_REMOTE=true to override.',
+    );
     process.exit(1);
   }
 
@@ -44,21 +46,33 @@ async function main() {
     assert.ok(branchId, 'Must have at least one branch');
 
     // 2. Create two locations
-    const loc1 = await client.post('/api/settings/locations', { name: `Loc 1 ${suffix}`, locationType: 'internal_warehouse', branchId }, 201);
-    const loc2 = await client.post('/api/settings/locations', { name: `Loc 2 ${suffix}`, locationType: 'internal_warehouse', branchId }, 201);
+    const loc1 = await client.post(
+      '/api/settings/locations',
+      { name: `Loc 1 ${suffix}`, locationType: 'internal_warehouse', branchId },
+      201,
+    );
+    const loc2 = await client.post(
+      '/api/settings/locations',
+      { name: `Loc 2 ${suffix}`, locationType: 'internal_warehouse', branchId },
+      201,
+    );
     loc1Id = loc1.location?.id;
     loc2Id = loc2.location?.id;
     assert.ok(loc1Id, 'loc1Id is missing');
     assert.ok(loc2Id, 'loc2Id is missing');
 
     // 3. Create a supplier
-    const createdSupplier = await client.post('/api/suppliers', {
-      name: supplierName,
-      phone: '',
-      address: '',
-      balance: 0,
-      notes: 'Multi loc supplier',
-    }, 201);
+    const createdSupplier = await client.post(
+      '/api/suppliers',
+      {
+        name: supplierName,
+        phone: '',
+        address: '',
+        balance: 0,
+        notes: 'Multi loc supplier',
+      },
+      201,
+    );
     supplierId = String(createdSupplier?.id || createdSupplier?.supplier?.id || '');
     if (!supplierId || supplierId === 'undefined') {
       const suppliersPayload = await client.get(`/api/suppliers?q=${encodeURIComponent(supplierName)}`);
@@ -69,9 +83,15 @@ async function main() {
 
     // 4. Create two products (no default category or location)
     const productPayload = {
-      barcode: '', itemType: 'product', itemKind: 'standard',
-      costPrice: 50, retailPrice: 100, wholesalePrice: 100, minStock: 0, stock: 0,
-      units: [{ name: 'Piece', multiplier: 1, isBaseUnit: true, isSaleUnit: true, isPurchaseUnit: true }]
+      barcode: '',
+      itemType: 'product',
+      itemKind: 'standard',
+      costPrice: 50,
+      retailPrice: 100,
+      wholesalePrice: 100,
+      minStock: 0,
+      stock: 0,
+      units: [{ name: 'Piece', multiplier: 1, isBaseUnit: true, isSaleUnit: true, isPurchaseUnit: true }],
     };
     await client.post('/api/products', { name: productName1, ...productPayload }, 201);
     await client.post('/api/products', { name: productName2, ...productPayload }, 201);
@@ -101,7 +121,7 @@ async function main() {
           cost: 50,
           unitName: 'Piece',
           unitMultiplier: 1,
-          locationId: Number(loc1Id) // Line 1 targets Loc 1
+          locationId: Number(loc1Id), // Line 1 targets Loc 1
         },
         {
           productId: Number(p2Id),
@@ -109,9 +129,9 @@ async function main() {
           cost: 50,
           unitName: 'Piece',
           unitMultiplier: 1,
-          locationId: Number(loc2Id) // Line 2 targets Loc 2
-        }
-      ]
+          locationId: Number(loc2Id), // Line 2 targets Loc 2
+        },
+      ],
     };
 
     const purchaseRes = await client.post('/api/purchases', purchasePayload, 201);

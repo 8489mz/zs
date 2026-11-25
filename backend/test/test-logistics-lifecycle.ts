@@ -68,42 +68,51 @@ async function runLogisticsLifecycleTest() {
     // Ensure tenant exists
     const existingTenant = await db.selectFrom('tenants').where('id', '=', tenantId).select('id').executeTakeFirst();
     if (!existingTenant) {
-      await db.insertInto('tenants').values({
-        id: tenantId,
-        slug: tenantId,
-        business_name: 'Dev Logistics Company',
-        owner_name: 'Dev Admin',
-        owner_phone: '01000000000',
-        owner_email: 'dev@zsystems.com',
-        plan_id: 'plan_ultimate',
-        activity_type: 'logistics',
-        status: 'active',
-        trial_starts_at: new Date(),
-        trial_ends_at: new Date(Date.now() + 365 * 86400000),
-        activated_at: new Date(),
-      } as any).execute();
+      await db
+        .insertInto('tenants')
+        .values({
+          id: tenantId,
+          slug: tenantId,
+          business_name: 'Dev Logistics Company',
+          owner_name: 'Dev Admin',
+          owner_phone: '01000000000',
+          owner_email: 'dev@zsystems.com',
+          plan_id: 'plan_ultimate',
+          activity_type: 'logistics',
+          status: 'active',
+          trial_starts_at: new Date(),
+          trial_ends_at: new Date(Date.now() + 365 * 86400000),
+          activated_at: new Date(),
+        } as any)
+        .execute();
     }
     console.log(`\nUsing tenant: ${tenantId}`);
 
     // Ensure test customer exists with negative balance (advance credit)
-    let customer = await db.selectFrom('customers')
+    let customer = await db
+      .selectFrom('customers')
       .where('tenant_id', '=', tenantId)
       .selectAll()
       .limit(1)
       .executeTakeFirst();
 
     if (!customer) {
-      const [newCust] = await db.insertInto('customers').values({
-        tenant_id: tenantId,
-        account_id: tenantId,
-        name: 'شركة الاستيراد والتصدير التجريبية',
-        phone: '01000000000',
-        balance: -200000, // 200,000 credit
-      } as any).returningAll().execute();
+      const [newCust] = await db
+        .insertInto('customers')
+        .values({
+          tenant_id: tenantId,
+          account_id: tenantId,
+          name: 'شركة الاستيراد والتصدير التجريبية',
+          phone: '01000000000',
+          balance: -200000, // 200,000 credit
+        } as any)
+        .returningAll()
+        .execute();
       customer = newCust;
     } else {
       // Give customer credit for the test
-      await db.updateTable('customers')
+      await db
+        .updateTable('customers')
         .set({ balance: -200000 } as any)
         .where('id', '=', customer.id as any)
         .execute();
@@ -127,7 +136,8 @@ async function runLogisticsLifecycleTest() {
     console.log(`PASS: Maritime Job created: #${createdJob.job_number} (ID: ${createdJob.id})`);
 
     // Set invoice amount on the job
-    await db.updateTable('maritime_jobs')
+    await db
+      .updateTable('maritime_jobs')
       .set({ client_invoiced_total: 150000 } as any)
       .where('id', '=', createdJob.id as any)
       .execute();
@@ -178,7 +188,9 @@ async function runLogisticsLifecycleTest() {
 
     // Settle job from customer balance
     console.log('Settling job from available balance...');
-    const settleRes = await maritimeService.settleJobFromCustomerBalance(auth, String(createdJob.id), { amount: 150000 });
+    const settleRes = await maritimeService.settleJobFromCustomerBalance(auth, String(createdJob.id), {
+      amount: 150000,
+    });
     console.log('Settlement result:', settleRes.message);
 
     const verifiedPaidJob = await maritimeService.getJobById(auth, String(createdJob.id));
@@ -198,7 +210,11 @@ async function runLogisticsLifecycleTest() {
       { key: 'LOAD', notes: 'تم تحميل الحاويات على متن السفينة MAERSK MC-KINNEY MOLLER', loc: 'Shanghai Berth 3' },
       { key: 'DEPT', notes: 'أبحرت السفينة باتجاه ميناء الإسكندرية', loc: 'East China Sea' },
       { key: 'ARRI', notes: 'وصلت السفينة إلى غاطس ميناء الإسكندرية', loc: 'Alexandria Anchorage' },
-      { key: 'DISC', notes: 'تم تفريغ الحاويات على رصيف محطة الإسكندرية وبدء فترة السماح 14 يوم', loc: 'Alexandria Quayside' },
+      {
+        key: 'DISC',
+        notes: 'تم تفريغ الحاويات على رصيف محطة الإسكندرية وبدء فترة السماح 14 يوم',
+        loc: 'Alexandria Quayside',
+      },
       { key: 'CUST', notes: 'تم الإفراج الجمركي وإنهاء إجراءات المعاينة', loc: 'Alexandria Customs Yard' },
       { key: 'GTO', notes: 'تم إصدار إذن التسليم D/O وخروج الحاويات من بوابة الميناء', loc: 'Alexandria Gate Out' },
       { key: 'DLVR', notes: 'تم تسليم البضائع وتفريغها بمستودع العميل', loc: 'Customer Warehouse - 6th October' },
@@ -211,24 +227,29 @@ async function runLogisticsLifecycleTest() {
     }
 
     // Verify container movement states
-    const containers = await db.selectFrom('maritime_containers')
+    const containers = await db
+      .selectFrom('maritime_containers')
       .where('tenant_id', '=', tenantId)
       .where('job_id', '=', String(createdJob.id))
       .selectAll()
       .execute();
-    console.log('PASS: Containers verified:', containers.map(c => ({
-      num: c.container_number,
-      freeDays: c.free_days,
-      dischargedAt: c.discharged_at,
-      isOverdue: c.is_overdue,
-    })));
+    console.log(
+      'PASS: Containers verified:',
+      containers.map((c) => ({
+        num: c.container_number,
+        freeDays: c.free_days,
+        dischargedAt: c.discharged_at,
+        isOverdue: c.is_overdue,
+      })),
+    );
 
     // 8. Close Shipment Completely
     console.log('\n[TEST 7] Closing Shipment Completely...');
     const closedJob = await maritimeService.updateJob(auth, String(createdJob.id), {
       notes: 'تمت كافة إجراءات الشحنة والتسليم وإرجاع الحاويات بنجاح تام وإغلاق الملف التشغيلي والمالي.',
     });
-    await db.updateTable('maritime_jobs')
+    await db
+      .updateTable('maritime_jobs')
       .set({ status: 'completed' })
       .where('id', '=', createdJob.id as any)
       .execute();

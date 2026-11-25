@@ -39,15 +39,24 @@ type FakeState = {
 class FakeSelectBuilder {
   private filters = new Map<string, unknown>();
 
-  constructor(private readonly table: string, private readonly state: FakeState) {}
+  constructor(
+    private readonly table: string,
+    private readonly state: FakeState,
+  ) {}
 
-  select(_columns: unknown): this { return this; }
+  select(_columns: unknown): this {
+    return this;
+  }
   where(column: string | unknown, _operator?: string, value?: unknown): this {
     if (typeof column === 'string') this.filters.set(column, value);
     return this;
   }
-  orderBy(_column?: unknown, _direction?: unknown): this { return this; }
-  forUpdate(): this { return this; }
+  orderBy(_column?: unknown, _direction?: unknown): this {
+    return this;
+  }
+  forUpdate(): this {
+    return this;
+  }
 
   async executeTakeFirst(): Promise<unknown> {
     const rows = await this.execute();
@@ -68,14 +77,19 @@ class FakeSelectBuilder {
 class FakeInsertBuilder {
   private payload: Record<string, unknown> = {};
 
-  constructor(private readonly table: string, private readonly state: FakeState) {}
+  constructor(
+    private readonly table: string,
+    private readonly state: FakeState,
+  ) {}
 
   values(payload: Record<string, unknown>): this {
     this.payload = payload;
     return this;
   }
 
-  returning(_columns: unknown): this { return this; }
+  returning(_columns: unknown): this {
+    return this;
+  }
 
   async executeTakeFirstOrThrow(): Promise<unknown> {
     if (this.table !== 'product_location_stock') throw new Error(`Unexpected insert table ${this.table}`);
@@ -98,7 +112,10 @@ class FakeUpdateBuilder {
   private payload: Record<string, unknown> = {};
   private filters = new Map<string, unknown>();
 
-  constructor(private readonly table: string, private readonly state: FakeState) {}
+  constructor(
+    private readonly table: string,
+    private readonly state: FakeState,
+  ) {}
 
   set(payload: Record<string, unknown>): this {
     this.payload = payload;
@@ -124,7 +141,8 @@ class FakeUpdateBuilder {
       if (row) {
         if (this.payload.qty !== undefined) row.qty = Number(this.payload.qty);
         if (this.payload.reserved_qty !== undefined) row.reserved_qty = Number(this.payload.reserved_qty);
-        if (this.payload.branch_id !== undefined) row.branch_id = this.payload.branch_id == null ? null : Number(this.payload.branch_id);
+        if (this.payload.branch_id !== undefined)
+          row.branch_id = this.payload.branch_id == null ? null : Number(this.payload.branch_id);
       }
       return;
     }
@@ -134,9 +152,15 @@ class FakeUpdateBuilder {
 
 class FakeStockDb {
   constructor(public readonly state: FakeState) {}
-  selectFrom(table: string): FakeSelectBuilder { return new FakeSelectBuilder(table, this.state); }
-  insertInto(table: string): FakeInsertBuilder { return new FakeInsertBuilder(table, this.state); }
-  updateTable(table: string): FakeUpdateBuilder { return new FakeUpdateBuilder(table, this.state); }
+  selectFrom(table: string): FakeSelectBuilder {
+    return new FakeSelectBuilder(table, this.state);
+  }
+  insertInto(table: string): FakeInsertBuilder {
+    return new FakeInsertBuilder(table, this.state);
+  }
+  updateTable(table: string): FakeUpdateBuilder {
+    return new FakeUpdateBuilder(table, this.state);
+  }
 }
 
 function createDb(productStock: number, locationQty: number = 0, reservedQty: number = 0): FakeStockDb {
@@ -314,4 +338,3 @@ runStockLedgerTests()
     console.error('location-stock-ledger.spec: FAILED', err);
     process.exit(1);
   });
-

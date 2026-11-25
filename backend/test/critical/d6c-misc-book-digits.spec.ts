@@ -87,19 +87,35 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 
 const KWD_AUTH = {
-  tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['settings'],
 } as unknown as AuthContext;
 const EGP_AUTH = {
-  tenantId: 't3', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't3',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['settings'],
 } as unknown as AuthContext;
 const SUPER_AUTH = {
-  tenantId: 't1', accountId: 'a1', role: 'super_admin', userId: 1, username: 'admin',
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'super_admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['settings'],
 } as unknown as AuthContext;
 const SUPER_AUTH_EGP = {
-  tenantId: 't3', accountId: 'a1', role: 'super_admin', userId: 1, username: 'admin',
+  tenantId: 't3',
+  accountId: 'a1',
+  role: 'super_admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['settings'],
 } as unknown as AuthContext;
 
@@ -110,21 +126,36 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 async function seedCurrency(db: Kysely<Database>, tenantId: string, currency: string): Promise<void> {
-  await sql`CREATE TABLE IF NOT EXISTS settings (tenant_id text, key text, value text, PRIMARY KEY (tenant_id, key))`.execute(db);
-  await sql`CREATE TABLE IF NOT EXISTS currency_exchange_rates (tenant_id text, currency_code text, is_base boolean, exchange_rate numeric)`.execute(db);
+  await sql`CREATE TABLE IF NOT EXISTS settings (tenant_id text, key text, value text, PRIMARY KEY (tenant_id, key))`.execute(
+    db,
+  );
+  await sql`CREATE TABLE IF NOT EXISTS currency_exchange_rates (tenant_id text, currency_code text, is_base boolean, exchange_rate numeric)`.execute(
+    db,
+  );
   await sql`INSERT INTO settings (tenant_id, key, value) VALUES (${tenantId}, 'currency', ${currency})`.execute(db);
-  await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES (${tenantId}, ${currency}, true, 1)`.execute(db);
+  await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES (${tenantId}, ${currency}, true, 1)`.execute(
+    db,
+  );
 }
 
 async function main(): Promise<void> {
   // Phase A: AR dunning, pure engine.
   {
-    const levels: DunningLevel[] = [{
-      id: 'lvl-1', level_order: 1, level_name: 'تذكير ودي', days_past_due: 7,
-      auto_block_sales: false, action_type: 'whatsapp', template_text: 'مستحق {total_overdue}',
-    }];
+    const levels: DunningLevel[] = [
+      {
+        id: 'lvl-1',
+        level_order: 1,
+        level_name: 'تذكير ودي',
+        days_past_due: 7,
+        auto_block_sales: false,
+        action_type: 'whatsapp',
+        template_text: 'مستحق {total_overdue}',
+      },
+    ];
     const input: CustomerDunningInput = {
-      customerId: 101, customerName: 'شركة النور', balance: 100.125,
+      customerId: 101,
+      customerName: 'شركة النور',
+      balance: 100.125,
       invoices: [{ id: 1, invoiceNumber: 'INV-001', createdAt: '2026-08-01T10:00:00Z', total: 100.125, paidAmount: 0 }],
       asOfDate: new Date('2026-10-01T12:00:00Z'),
     };
@@ -171,7 +202,13 @@ async function main(): Promise<void> {
 
   // Phase C: import lot sale cost, pure.
   {
-    const kwd = calculateImportSaleCost({ qty: 3, allocatedQty: 2, allocCostEgp: 66.75, fallbackUnitCostEgp: 16.6875, moneyDigits: 3 });
+    const kwd = calculateImportSaleCost({
+      qty: 3,
+      allocatedQty: 2,
+      allocCostEgp: 66.75,
+      fallbackUnitCostEgp: 16.6875,
+      moneyDigits: 3,
+    });
     assert.equal(kwd.shortfallQty, 1);
     assert.equal(kwd.totalCostEgp, 83.438);
     const egp = calculateImportSaleCost({ qty: 3, allocatedQty: 2, allocCostEgp: 66.75, fallbackUnitCostEgp: 16.6875 });
@@ -187,9 +224,22 @@ async function main(): Promise<void> {
     const item = buildShiftCashReturnItem({ id: 1, cash_refund: 100.125 }, 3);
     assert.equal(item?.amount, 100.125);
     assert.equal(buildShiftCashReturnItem({ id: 1, cash_refund: 100.125 })?.amount, 100.13);
-    const ret = summarizeReturnRows([{ id: '1', total: 100.125, returnType: 'sale', createdAt: '2026-11-08' } as never, { id: '2', total: 0, returnType: 'sale', createdAt: '2026-11-08' } as never], '2026-11-08', 3);
+    const ret = summarizeReturnRows(
+      [
+        { id: '1', total: 100.125, returnType: 'sale', createdAt: '2026-11-08' } as never,
+        { id: '2', total: 0, returnType: 'sale', createdAt: '2026-11-08' } as never,
+      ],
+      '2026-11-08',
+      3,
+    );
     assert.equal(ret.totalAmount, 100.125);
-    assert.equal(summarizeReturnRows([{ id: '1', total: 100.125, returnType: 'sale', createdAt: '2026-11-08' } as never], '2026-11-08').totalAmount, 100.13);
+    assert.equal(
+      summarizeReturnRows(
+        [{ id: '1', total: 100.125, returnType: 'sale', createdAt: '2026-11-08' } as never],
+        '2026-11-08',
+      ).totalAmount,
+      100.13,
+    );
     console.log('phase D helpers passed');
   }
 
@@ -211,14 +261,16 @@ async function main(): Promise<void> {
       `);
       await seedCurrency(db, 't1', 'KWD');
       await seedCurrency(db, 't3', 'EGP');
-      await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Africa/Cairo'), ('t3', 'timezone', 'Africa/Cairo')`.execute(db);
+      await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Africa/Cairo'), ('t3', 'timezone', 'Africa/Cairo')`.execute(
+        db,
+      );
       const service = new ServicesService(db as never, {} as never, {} as never, {} as never, {} as never);
-      const kwd = await service.listServices({}, KWD_AUTH) as any;
+      const kwd = (await service.listServices({}, KWD_AUTH)) as any;
       assert.equal(kwd.summary.totalAmount, 100.125);
       assert.equal(kwd.summary.cashAmount, 66.75);
       assert.equal(kwd.summary.cardAmount, 33.375);
       assert.equal(kwd.summary.averageAmount, 50.063);
-      const egp = await service.listServices({}, EGP_AUTH) as any;
+      const egp = (await service.listServices({}, EGP_AUTH)) as any;
       assert.equal(egp.summary.totalAmount, 100.13);
       assert.equal(egp.summary.cardAmount, 33.38);
       console.log('phase E services list passed');
@@ -241,9 +293,9 @@ async function main(): Promise<void> {
       await seedCurrency(db, 't1', 'KWD');
       await seedCurrency(db, 't3', 'EGP');
       const service = new PartnersService(db as never, {} as never, {} as never);
-      const kwd = await service.getCustomerPosSummary(1, KWD_AUTH) as any;
+      const kwd = (await service.getCustomerPosSummary(1, KWD_AUTH)) as any;
       assert.equal(kwd.remainingCredit, 100.125);
-      const egp = await service.getCustomerPosSummary(2, EGP_AUTH) as any;
+      const egp = (await service.getCustomerPosSummary(2, EGP_AUTH)) as any;
       assert.equal(egp.remainingCredit, 100.13);
       console.log('phase F partner credit passed');
     } finally {
@@ -278,11 +330,11 @@ async function main(): Promise<void> {
       await seedCurrency(db, 't1', 'KWD');
       await seedCurrency(db, 't3', 'EGP');
       const service = new SettingsAdminService(db as never, {} as never);
-      const kwd = await service.getDiagnostics(SUPER_AUTH) as any;
+      const kwd = (await service.getDiagnostics(SUPER_AUTH)) as any;
       assert.equal(kwd.finance.customerBalance, 100.125);
       assert.equal(kwd.finance.supplierBalance, 66.75);
       assert.equal(kwd.finance.treasuryNet, 33.375);
-      const egp = await service.getDiagnostics(SUPER_AUTH_EGP) as any;
+      const egp = (await service.getDiagnostics(SUPER_AUTH_EGP)) as any;
       assert.equal(egp.finance.customerBalance, 100.13);
       assert.equal(egp.finance.treasuryNet, 33.38);
       console.log('phase G diagnostics passed');
@@ -310,13 +362,25 @@ async function main(): Promise<void> {
       const service = new PurchaseRfqsService(db as never);
       await service.selectWinnerAndConvertToPo(KWD_AUTH, 1, 5);
       await service.selectWinnerAndConvertToPo(EGP_AUTH, 2, 5);
-      const kwdPo = await db.selectFrom('purchase_orders').selectAll().where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
-      const egpPo = await db.selectFrom('purchase_orders').selectAll().where('tenant_id', '=', 't3').executeTakeFirstOrThrow();
+      const kwdPo = await db
+        .selectFrom('purchase_orders')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .executeTakeFirstOrThrow();
+      const egpPo = await db
+        .selectFrom('purchase_orders')
+        .selectAll()
+        .where('tenant_id', '=', 't3')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(kwdPo.subtotal), 100.125);
       assert.equal(Number(kwdPo.total_amount), 100.125);
       assert.equal(Number(egpPo.subtotal), 100.13);
       assert.equal(Number(egpPo.total_amount), 100.13);
-      const kwdItem = await db.selectFrom('purchase_order_items').selectAll().where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
+      const kwdItem = await db
+        .selectFrom('purchase_order_items')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(kwdItem.total), 100.125);
       console.log('phase H rfq conversion passed');
     } finally {
@@ -345,20 +409,26 @@ async function main(): Promise<void> {
       `);
       await seedCurrency(db, 't1', 'KWD');
       const service = new RestaurantAdvancedFnbService(db as never);
-      const result = await service.calculateAndSaveTipPool({ tenantId: 't1', role: 'admin' }, {
-        shiftDate: '2026-11-08',
-        totalCashTips: 66.75,
-        totalCardTips: 33.375,
-        distributionMethod: 'equal',
-        staff: [
-          { employeeId: 1, employeeName: 'Ali', roleName: 'waiter', hoursWorked: 8 },
-          { employeeId: 2, employeeName: 'Mona', roleName: 'waiter', hoursWorked: 8 },
-        ],
-      });
+      const result = await service.calculateAndSaveTipPool(
+        { tenantId: 't1', role: 'admin' },
+        {
+          shiftDate: '2026-11-08',
+          totalCashTips: 66.75,
+          totalCardTips: 33.375,
+          distributionMethod: 'equal',
+          staff: [
+            { employeeId: 1, employeeName: 'Ali', roleName: 'waiter', hoursWorked: 8 },
+            { employeeId: 2, employeeName: 'Mona', roleName: 'waiter', hoursWorked: 8 },
+          ],
+        },
+      );
       assert.equal(result.totalTips, 100.125);
       assert.equal((result.distributions as any[])[0].allocatedAmount, 50.063);
       assert.equal((result.distributions as any[])[1].allocatedAmount, 50.062);
-      assert.equal((result.distributions as any[]).reduce((s: number, d: any) => s + d.allocatedAmount, 0), 100.125);
+      assert.equal(
+        (result.distributions as any[]).reduce((s: number, d: any) => s + d.allocatedAmount, 0),
+        100.125,
+      );
       const stored = await db.selectFrom('restaurant_tip_pools').selectAll().executeTakeFirstOrThrow();
       assert.equal(Number(stored.total_tips), 100.125);
       console.log('phase I tip pool passed');
@@ -385,10 +455,30 @@ async function main(): Promise<void> {
       await seedCurrency(db, 't1', 'KWD');
       await seedCurrency(db, 't3', 'EGP');
       const service = new RestaurantFoodWasteService(db as never, {} as never);
-      await service.logWaste(KWD_AUTH, { branchId: 1, productId: 10, quantity: 3, reason: 'spoilage', allowPending: true });
-      await service.logWaste(EGP_AUTH, { branchId: 2, productId: 11, quantity: 3, reason: 'spoilage', allowPending: true });
-      const kwdLog = await db.selectFrom('restaurant_food_waste_logs').selectAll().where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
-      const egpLog = await db.selectFrom('restaurant_food_waste_logs').selectAll().where('tenant_id', '=', 't3').executeTakeFirstOrThrow();
+      await service.logWaste(KWD_AUTH, {
+        branchId: 1,
+        productId: 10,
+        quantity: 3,
+        reason: 'spoilage',
+        allowPending: true,
+      });
+      await service.logWaste(EGP_AUTH, {
+        branchId: 2,
+        productId: 11,
+        quantity: 3,
+        reason: 'spoilage',
+        allowPending: true,
+      });
+      const kwdLog = await db
+        .selectFrom('restaurant_food_waste_logs')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .executeTakeFirstOrThrow();
+      const egpLog = await db
+        .selectFrom('restaurant_food_waste_logs')
+        .selectAll()
+        .where('tenant_id', '=', 't3')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(kwdLog.total_cost), 100.125);
       assert.equal(Number(egpLog.total_cost), 100.13);
       console.log('phase J food waste passed');
@@ -413,22 +503,39 @@ async function main(): Promise<void> {
       await seedCurrency(db, 't3', 'EGP');
       await db.transaction().execute(async (trx) => {
         await allocateSaleFromImportLots(trx as never, {
-          tenantId: 't1', saleId: 1, locationId: 5,
+          tenantId: 't1',
+          saleId: 1,
+          locationId: 5,
           items: [{ productId: 7, qty: 1, netUnitPrice: 110.1375 }],
         });
         await allocateSaleFromImportLots(trx as never, {
-          tenantId: 't3', saleId: 2, locationId: 5,
+          tenantId: 't3',
+          saleId: 2,
+          locationId: 5,
           items: [{ productId: 7, qty: 1, netUnitPrice: 110.1375 }],
         });
       });
-      const kwdAlloc = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
-      const egpAlloc = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't3').executeTakeFirstOrThrow();
+      const kwdAlloc = await db
+        .selectFrom('import_sale_allocations')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .executeTakeFirstOrThrow();
+      const egpAlloc = await db
+        .selectFrom('import_sale_allocations')
+        .selectAll()
+        .where('tenant_id', '=', 't3')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(kwdAlloc.gross_margin_egp), 100.13);
       assert.equal(Number(egpAlloc.gross_margin_egp), 100.13);
       await db.transaction().execute(async (trx) => {
         await restoreImportLotsFromCancelledSale(trx as never, { tenantId: 't1', saleId: 1 });
       });
-      const reversal = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't1').where('allocation_type', '=', 'cancellation').executeTakeFirstOrThrow();
+      const reversal = await db
+        .selectFrom('import_sale_allocations')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .where('allocation_type', '=', 'cancellation')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(reversal.gross_margin_egp), -100.13);
       console.log('phase K lot allocation passed');
     } finally {
@@ -456,8 +563,8 @@ async function main(): Promise<void> {
       await seedCurrency(db, 't1', 'KWD');
       await seedCurrency(db, 't3', 'EGP');
       const service = new ReturnsService(db as never, {} as never, {} as never, {} as never, {} as never);
-      const kwd = await service.listReturns({}, KWD_AUTH) as any;
-      const egp = await service.listReturns({}, EGP_AUTH) as any;
+      const kwd = (await service.listReturns({}, KWD_AUTH)) as any;
+      const egp = (await service.listReturns({}, EGP_AUTH)) as any;
       assert.equal(kwd.summary.totalAmount, 100.125);
       assert.equal(egp.summary.totalAmount, 100.13);
       console.log('phase L returns listing passed');
@@ -475,10 +582,26 @@ async function main(): Promise<void> {
       `);
       await seedCurrency(db, 't1', 'KWD');
       await seedCurrency(db, 't3', 'EGP');
-      await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Africa/Cairo'), ('t3', 'timezone', 'Africa/Cairo')`.execute(db);
+      await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Africa/Cairo'), ('t3', 'timezone', 'Africa/Cairo')`.execute(
+        db,
+      );
       const service = new ContractingService(db as never, {} as never);
-      const kwd = await service.createMaterialEscalation(KWD_AUTH, '1', { materialType: 'steel', materialName: 'Rebar', basePriceContract: 0, currentMarketPrice: 33.375, executedQuantity: 3, unit: 'ton' } as never) as any;
-      const egp = await service.createMaterialEscalation(EGP_AUTH, '1', { materialType: 'steel', materialName: 'Rebar', basePriceContract: 0, currentMarketPrice: 33.375, executedQuantity: 3, unit: 'ton' } as never) as any;
+      const kwd = (await service.createMaterialEscalation(KWD_AUTH, '1', {
+        materialType: 'steel',
+        materialName: 'Rebar',
+        basePriceContract: 0,
+        currentMarketPrice: 33.375,
+        executedQuantity: 3,
+        unit: 'ton',
+      } as never)) as any;
+      const egp = (await service.createMaterialEscalation(EGP_AUTH, '1', {
+        materialType: 'steel',
+        materialName: 'Rebar',
+        basePriceContract: 0,
+        currentMarketPrice: 33.375,
+        executedQuantity: 3,
+        unit: 'ton',
+      } as never)) as any;
       assert.equal(Number(kwd.totalCompensationAmount), 100.125);
       assert.equal(Number(egp.totalCompensationAmount), 100.13);
       console.log('phase M contracting escalation passed');
@@ -508,8 +631,16 @@ async function main(): Promise<void> {
       const egp = await service.syncCollections(EGP_AUTH);
       assert.equal(kwd.activeCases, 1);
       assert.equal(egp.activeCases, 1);
-      const kwdCase = await db.selectFrom('ar_collection_cases').selectAll().where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
-      const egpCase = await db.selectFrom('ar_collection_cases').selectAll().where('tenant_id', '=', 't3').executeTakeFirstOrThrow();
+      const kwdCase = await db
+        .selectFrom('ar_collection_cases')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .executeTakeFirstOrThrow();
+      const egpCase = await db
+        .selectFrom('ar_collection_cases')
+        .selectAll()
+        .where('tenant_id', '=', 't3')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(kwdCase.total_overdue), 100.125);
       assert.equal(Number(egpCase.total_overdue), 100.13);
       console.log('phase N dunning live sync passed');
@@ -560,11 +691,14 @@ async function main(): Promise<void> {
       `);
       await seedCurrency(db, 't1', 'KWD');
       await seedCurrency(db, 't3', 'EGP');
-      const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+      const foundation = {
+        ensureForAuth: async () => {},
+        ensureForScope: async () => {},
+      } as unknown as AccountingTenantFoundationService;
       const posting = new AccountingPostingService(foundation);
       const drawer = new CashDrawerService(db as never, new TransactionHelper(), posting);
-      const kwd = await drawer.listCashierShifts({}, KWD_AUTH) as any;
-      const egp = await drawer.listCashierShifts({}, EGP_AUTH) as any;
+      const kwd = (await drawer.listCashierShifts({}, KWD_AUTH)) as any;
+      const egp = (await drawer.listCashierShifts({}, EGP_AUTH)) as any;
       assert.equal(kwd.summary.totalVariance, 100.125);
       assert.equal(egp.summary.totalVariance, 100.13);
       const kwdRow = (kwd.cashierShifts as any[]).find((r) => Number(r.id) === 1);
@@ -644,8 +778,8 @@ async function main(): Promise<void> {
       await seedCurrency(db, 't1', 'KWD');
       await seedCurrency(db, 't3', 'EGP');
       const service = new ContractingService(db as never, {} as never);
-      const kwd = await service.getProjectEvmMetrics(KWD_AUTH, '1') as any;
-      const egp = await service.getProjectEvmMetrics(EGP_AUTH, '2') as any;
+      const kwd = (await service.getProjectEvmMetrics(KWD_AUTH, '1')) as any;
+      const egp = (await service.getProjectEvmMetrics(EGP_AUTH, '2')) as any;
       assert.equal(kwd.earnedValue, 100.125);
       assert.equal(kwd.actualCost, 33.37);
       assert.equal(kwd.plannedValue, 500);
@@ -669,5 +803,8 @@ async function main(): Promise<void> {
 
 main().then(
   () => console.log('d6c-misc-book-digits: all phases passed'),
-  (err) => { console.error(err); process.exit(1); },
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
 );

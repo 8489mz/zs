@@ -115,37 +115,86 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function seedShipment(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', container_number: 'C1', supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: 'proj-1',
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'sh-1-item', tenant_id: 't1', shipment_id: 'sh-1', product_id: 1,
-    quantity: 10, factory_unit_price_usd: 50, shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      container_number: 'C1',
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'sh-1-item',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 1,
+      quantity: 10,
+      factory_unit_price_usd: 50,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function postReceipt(db: Kysely<Database>, service: any): Promise<void> {
   await service.updateShipmentCosts('t1', 1, 'sh-1', {
-    status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
-    shippingCostUsd: 100, customsCostEgp: 2000, internalTransportCostEgp: 1000,
-    freightSupplierId: 2, customsSupplierId: 2, transportSupplierId: 2,
+    status: 'Arrived',
+    exchangeRateAtArrival: 50,
+    receiptLocationId: 10,
+    shippingCostUsd: 100,
+    customsCostEgp: 2000,
+    internalTransportCostEgp: 1000,
+    freightSupplierId: 2,
+    customsSupplierId: 2,
+    transportSupplierId: 2,
   });
-  const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+  const receipt: any = await (db as any)
+    .selectFrom('import_inventory_receipts')
+    .selectAll()
+    .where('shipment_id', '=', 'sh-1')
+    .executeTakeFirstOrThrow();
   assert.equal(receipt.state, 'posted');
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select(sql`count(*)`.as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select(sql`count(*)`.as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
 async function snapshotCosts(db: Kysely<Database>): Promise<{ item: number; lot: number; wac: number; stock: number }> {
-  const item: any = await (db as any).selectFrom('import_shipment_items').selectAll().where('id', '=', 'sh-1-item').executeTakeFirstOrThrow();
-  const lot: any = await (db as any).selectFrom('import_inventory_lots').selectAll().where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
-  const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
-  return { item: Number(item.landed_cost_egp), lot: Number(lot.unit_landed_cost_egp), wac: Number(product.cost_price), stock: Number(product.stock_qty) };
+  const item: any = await (db as any)
+    .selectFrom('import_shipment_items')
+    .selectAll()
+    .where('id', '=', 'sh-1-item')
+    .executeTakeFirstOrThrow();
+  const lot: any = await (db as any)
+    .selectFrom('import_inventory_lots')
+    .selectAll()
+    .where('shipment_id', '=', 'sh-1')
+    .executeTakeFirstOrThrow();
+  const product: any = await (db as any)
+    .selectFrom('products')
+    .selectAll()
+    .where('id', '=', 1)
+    .executeTakeFirstOrThrow();
+  return {
+    item: Number(item.landed_cost_egp),
+    lot: Number(lot.unit_landed_cost_egp),
+    wac: Number(product.cost_price),
+    stock: Number(product.stock_qty),
+  };
 }
 
 async function main(): Promise<void> {
@@ -157,16 +206,14 @@ async function main(): Promise<void> {
       await seedShipment(db);
       await postReceipt(db, service);
       const before = await snapshotCosts(db);
-      assert.deepEqual(before, { item: 3300, lot: 3300, wac: 3300, stock: 10 }, 'Posted landed cost is the full landed value');
+      assert.deepEqual(
+        before,
+        { item: 3300, lot: 3300, wac: 3300, stock: 10 },
+        'Posted landed cost is the full landed value',
+      );
       await assert.rejects(service.calculateLandedCost('t1', 'sh-1'), /تم ترحيل الشحنة/);
-      await assert.rejects(
-        service.updateShipmentCosts('t1', 1, 'sh-1', { customsCostEgp: 3000 }),
-        /تم ترحيل الشحنة/,
-      );
-      await assert.rejects(
-        service.updateShipmentItem('t1', 'sh-1-item', { receivedQuantity: 9 }),
-        /تم ترحيل الشحنة/,
-      );
+      await assert.rejects(service.updateShipmentCosts('t1', 1, 'sh-1', { customsCostEgp: 3000 }), /تم ترحيل الشحنة/);
+      await assert.rejects(service.updateShipmentItem('t1', 'sh-1-item', { receivedQuantity: 9 }), /تم ترحيل الشحنة/);
       await assert.rejects(
         service.addShipmentItem('t1', 'sh-1', { productId: '1', quantity: 1, factoryUnitPriceUsd: 50 }),
         /تم ترحيل الشحنة/,
@@ -185,17 +232,31 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db);
-      const preorder: any = await (db as any).insertInto('import_container_preorders').values({
-        tenant_id: 't1', preorder_no: 'PO-1', shipment_id: 'sh-1', customer_id: 1,
-        product_id: 1, reserved_quantity: 10, unit_price_egp: 3000,
-        total_price_egp: 30000, deposit_amount_egp: 0, status: 'reserved',
-      }).returning('id').executeTakeFirstOrThrow();
+      const preorder: any = await (db as any)
+        .insertInto('import_container_preorders')
+        .values({
+          tenant_id: 't1',
+          preorder_no: 'PO-1',
+          shipment_id: 'sh-1',
+          customer_id: 1,
+          product_id: 1,
+          reserved_quantity: 10,
+          unit_price_egp: 3000,
+          total_price_egp: 30000,
+          deposit_amount_egp: 0,
+          status: 'reserved',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
       await postReceipt(db, service);
       await service.convertPreorderToSale('t1', 1, String(preorder.id), {});
       const sold = await snapshotCosts(db);
       assert.equal(sold.stock, 0, 'All units sold before the late expense');
       const result = await service.processLateShipmentExpense('t1', 1, 'sh-1', {
-        lateExpenseAmount: 1000, title: 'Demurrage', supplierId: 2, idempotencyKey: 'leave-sold-1',
+        lateExpenseAmount: 1000,
+        title: 'Demurrage',
+        supplierId: 2,
+        idempotencyKey: 'leave-sold-1',
       });
       assert.equal(result.success, true);
       assert.equal(result.allocation.lateCogsAdjustmentEgp, 1000, 'The whole late expense lands on COGS');
@@ -203,14 +264,30 @@ async function main(): Promise<void> {
       const after = await snapshotCosts(db);
       assert.equal(after.wac, 3300, 'WAC unchanged to the cent when everything is sold');
       assert.equal(after.lot, 3300, 'Posted lot unit cost unchanged to the cent');
-      const lines: any[] = await (db as any).selectFrom('journal_entry_lines').selectAll()
-        .where('journal_entry_id', '=', (await (db as any).selectFrom('journal_entries').select('id').where('source_type', '=', 'import_late_expense').executeTakeFirstOrThrow()).id)
+      const lines: any[] = await (db as any)
+        .selectFrom('journal_entry_lines')
+        .selectAll()
+        .where(
+          'journal_entry_id',
+          '=',
+          (
+            await (db as any)
+              .selectFrom('journal_entries')
+              .select('id')
+              .where('source_type', '=', 'import_late_expense')
+              .executeTakeFirstOrThrow()
+          ).id,
+        )
         .execute();
       const debit = lines.reduce((s, l) => s + Number(l.debit || 0), 0);
       const credit = lines.reduce((s, l) => s + Number(l.credit || 0), 0);
       assert.equal(debit, credit, 'Late-expense journal balances');
       assert.equal(debit, 1000, 'COGS 1000 against the named payee, no inventory leg');
-      assert.equal(lines.filter((l) => Number(l.account_id) === 21).length, 0, 'No inventory line when nothing is on hand');
+      assert.equal(
+        lines.filter((l) => Number(l.account_id) === 21).length,
+        0,
+        'No inventory line when nothing is on hand',
+      );
       const payable = lines.find((l) => Number(l.credit) > 0);
       assert.equal(Number(payable.partner_id), 2, 'Credit carries the named payee');
       console.log('Case 2 passed: fully-sold late expense leaves WAC and lots untouched');
@@ -227,10 +304,17 @@ async function main(): Promise<void> {
       await seedShipment(db);
       await postReceipt(db, service);
       const before = await snapshotCosts(db);
-      await (db as any).updateTable('accounting_settings').set({ lock_date_all: '2999-12-31' }).where('id', '=', 1).execute();
+      await (db as any)
+        .updateTable('accounting_settings')
+        .set({ lock_date_all: '2999-12-31' })
+        .where('id', '=', 1)
+        .execute();
       await assert.rejects(
         service.processLateShipmentExpense('t1', 1, 'sh-1', {
-          lateExpenseAmount: 1000, title: 'Demurrage', supplierId: 2, idempotencyKey: 'leave-locked-1',
+          lateExpenseAmount: 1000,
+          title: 'Demurrage',
+          supplierId: 2,
+          idempotencyKey: 'leave-locked-1',
         }),
         (err: any) => err?.code === 'ACCOUNTING_PERIOD_LOCKED',
         'A posting into a locked period must carry the period-lock code',

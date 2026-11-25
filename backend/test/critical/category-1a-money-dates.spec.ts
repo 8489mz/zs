@@ -120,63 +120,134 @@ async function main(): Promise<void> {
     // ---- F1. FMCG promotion window: the reference day is Cairo ----
     {
       const promo = {
-        id: 1, name: 'Mix 10%', code: 'MIX10', promoType: 'mix_and_match', applyType: 'discount_percent',
-        buyConditions: [{ productId: 1, minQty: 1 }], reward: { discountPercent: 10 },
-        startDate: '2026-11-14', endDate: '2026-11-14', isActive: true,
+        id: 1,
+        name: 'Mix 10%',
+        code: 'MIX10',
+        promoType: 'mix_and_match',
+        applyType: 'discount_percent',
+        buyConditions: [{ productId: 1, minQty: 1 }],
+        reward: { discountPercent: 10 },
+        startDate: '2026-11-14',
+        endDate: '2026-11-14',
+        isActive: true,
       };
       const cart = [{ productId: 1, qty: 2, unitPrice: 100 }];
       // (a) A Date reference at 00:30 Cairo Nov 14: the UTC day is Nov 13.
       const byDate = evaluateFmcgCartPromotions({
-        cartItems: cart, activePromotions: [promo as never],
+        cartItems: cart,
+        activePromotions: [promo as never],
         referenceDate: new Date(CAIRO_HALF_PAST_MIDNIGHT),
       });
-      assert.equal(byDate.appliedPromotions.length, 1, 'F1(a): one-day promo starting today (Cairo) applies for a Date reference at 00:30 Cairo');
+      assert.equal(
+        byDate.appliedPromotions.length,
+        1,
+        'F1(a): one-day promo starting today (Cairo) applies for a Date reference at 00:30 Cairo',
+      );
       assert.equal(byDate.totalPromotionalDiscount, 20, 'F1(a): discount is 10% of the 200 subtotal');
       // (b) No referenceDate at all ("now" is 00:30 Cairo Nov 14).
       const restore = installFixedDate(CAIRO_HALF_PAST_MIDNIGHT);
       try {
         const byDefault = evaluateFmcgCartPromotions({ cartItems: cart, activePromotions: [promo as never] });
-        assert.equal(byDefault.appliedPromotions.length, 1, 'F1(b): one-day promo starting today (Cairo) applies for the no-argument default at 00:30 Cairo');
+        assert.equal(
+          byDefault.appliedPromotions.length,
+          1,
+          'F1(b): one-day promo starting today (Cairo) applies for the no-argument default at 00:30 Cairo',
+        );
         assert.equal(byDefault.totalPromotionalDiscount, 20, 'F1(b): discount is 10% of the 200 subtotal');
       } finally {
         restore();
       }
       // (c) String reference still drives the window (U5 pin, regression guard).
       const byString = evaluateFmcgCartPromotions({
-        cartItems: cart, activePromotions: [{ ...promo, startDate: '2026-11-01', endDate: '2026-11-30' } as never],
+        cartItems: cart,
+        activePromotions: [{ ...promo, startDate: '2026-11-01', endDate: '2026-11-30' } as never],
         referenceDate: '2026-11-08',
       });
       assert.equal(byString.appliedPromotions.length, 1, 'F1(c): string reference inside the window still applies');
-      console.log('✓ F1 Passed: FMCG reference day is the tenant-local day (Date branch, default branch, string guard)');
+      console.log(
+        '✓ F1 Passed: FMCG reference day is the tenant-local day (Date branch, default branch, string guard)',
+      );
     }
 
     // ---- F2. Van shortage push: the default target month is Cairo ----
     {
       const TENANT = 't1';
       const ACCOUNT = 'a1';
-      await (db as any).insertInto('hr_employees').values({
-        id: 21, tenant_id: TENANT, account_id: ACCOUNT, display_name: 'Rep Emp', national_id: null,
-        status: 'active', compensation_type: 'monthly', hourly_rate: 0, expected_daily_hours: 8,
-        hire_date: '2026-01-01', end_of_service_date: null, has_social_insurance: false,
-        insurance_salary: 0, has_income_tax: false, pay_frequency: 'monthly', user_id: null,
-        commission_type: null, commission_value: 0, commission_target: null, delay_policy: null,
-        approved_leave_days: 0,
-      }).execute();
-      await (db as any).insertInto('delivery_representatives').values({
-        id: 11, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep Emp',
-        phone: null, vehicle_plate: null, van_location_id: 10, employee_id: 21, national_id: null,
-      }).execute();
-      await (db as any).insertInto('van_rep_financial_settlements').values({
-        id: 401, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 11, trip_id: 11,
-        entry_type: 'cash_shortage', amount: 100, status: 'pending', notes: 'shortage',
-      }).execute();
-      await (db as any).insertInto('hr_payroll_runs').values({
-        id: 501, tenant_id: TENANT, account_id: ACCOUNT, period_month: '2026-11',
-        start_date: '2026-11-01', end_date: '2026-11-30', pay_frequency: 'monthly', status: 'draft',
-      }).execute();
+      await (db as any)
+        .insertInto('hr_employees')
+        .values({
+          id: 21,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          display_name: 'Rep Emp',
+          national_id: null,
+          status: 'active',
+          compensation_type: 'monthly',
+          hourly_rate: 0,
+          expected_daily_hours: 8,
+          hire_date: '2026-01-01',
+          end_of_service_date: null,
+          has_social_insurance: false,
+          insurance_salary: 0,
+          has_income_tax: false,
+          pay_frequency: 'monthly',
+          user_id: null,
+          commission_type: null,
+          commission_value: 0,
+          commission_target: null,
+          delay_policy: null,
+          approved_leave_days: 0,
+        })
+        .execute();
+      await (db as any)
+        .insertInto('delivery_representatives')
+        .values({
+          id: 11,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Rep Emp',
+          phone: null,
+          vehicle_plate: null,
+          van_location_id: 10,
+          employee_id: 21,
+          national_id: null,
+        })
+        .execute();
+      await (db as any)
+        .insertInto('van_rep_financial_settlements')
+        .values({
+          id: 401,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: 11,
+          trip_id: 11,
+          entry_type: 'cash_shortage',
+          amount: 100,
+          status: 'pending',
+          notes: 'shortage',
+        })
+        .execute();
+      await (db as any)
+        .insertInto('hr_payroll_runs')
+        .values({
+          id: 501,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          period_month: '2026-11',
+          start_date: '2026-11-01',
+          end_date: '2026-11-30',
+          pay_frequency: 'monthly',
+          status: 'draft',
+        })
+        .execute();
       const adminAuth: any = {
-        userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-        permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+        userId: 1,
+        sessionId: 'spec',
+        username: 'admin',
+        role: 'admin',
+        permissions: ['deliveryReps', 'accounting'],
+        tenantId: TENANT,
+        accountId: ACCOUNT,
       };
       const service: any = Object.create(VanSalesService.prototype);
       service.db = db;
@@ -193,8 +264,16 @@ async function main(): Promise<void> {
       assert.equal(pushed.effectiveRunId, 501, 'F2: the November run is the effective run');
       const adjustments = await (db as any).selectFrom('hr_employee_adjustments').selectAll().execute();
       assert.equal(adjustments.length, 1, 'F2: exactly one payroll adjustment is written');
-      assert.equal(dateKey(adjustments[0].date), '2026-11-01', 'F2: the adjustment is dated inside the November run period');
-      const row = await (db as any).selectFrom('van_rep_financial_settlements').selectAll().where('id', '=', 401).executeTakeFirst();
+      assert.equal(
+        dateKey(adjustments[0].date),
+        '2026-11-01',
+        'F2: the adjustment is dated inside the November run period',
+      );
+      const row = await (db as any)
+        .selectFrom('van_rep_financial_settlements')
+        .selectAll()
+        .where('id', '=', 401)
+        .executeTakeFirst();
       assert.ok(String(row.notes).includes('شهر 2026-11'), 'F2: the settlement note records the November run');
       console.log('✓ F2 Passed: van shortage push defaults to the tenant-local month');
     }
@@ -205,15 +284,31 @@ async function main(): Promise<void> {
       // (a) addDays across a DST transition, Berlin host: the old
       // host-local setDate returned 2026-03-29 for +2d from 2026-03-28.
       process.env.TZ = 'Europe/Berlin';
-      assert.equal(svc.addDays(svc.parseDate('2026-03-28'), 2), '2026-03-30', 'F3(a): addDays crosses the spring-forward transition without losing a day');
-      assert.equal(svc.addDays(svc.parseDate('2026-11-14'), 30), '2026-12-14', 'F3(a): addDays ordinary case is unchanged');
+      assert.equal(
+        svc.addDays(svc.parseDate('2026-03-28'), 2),
+        '2026-03-30',
+        'F3(a): addDays crosses the spring-forward transition without losing a day',
+      );
+      assert.equal(
+        svc.addDays(svc.parseDate('2026-11-14'), 30),
+        '2026-12-14',
+        'F3(a): addDays ordinary case is unchanged',
+      );
       process.env.TZ = 'Africa/Cairo';
       // (b) formatIsoDate on a pg DATE value: node-postgres returns a
       // stored DATE as a local-midnight Date, so on a Cairo host the
       // stored 2026-11-14 arrives as 2026-11-13T22:00Z.
       const stored = pgTypes.getTypeParser(1082)('2026-11-14');
-      assert.equal(stored.toISOString(), '2026-11-13T22:00:00.000Z', 'F3(b): harness check -- pg parses the stored DATE as local midnight on a Cairo host');
-      assert.equal(svc.formatIsoDate(stored), '2026-11-14', 'F3(b): formatIsoDate renders the stored calendar day, not the UTC day');
+      assert.equal(
+        stored.toISOString(),
+        '2026-11-13T22:00:00.000Z',
+        'F3(b): harness check -- pg parses the stored DATE as local midnight on a Cairo host',
+      );
+      assert.equal(
+        svc.formatIsoDate(stored),
+        '2026-11-14',
+        'F3(b): formatIsoDate renders the stored calendar day, not the UTC day',
+      );
       assert.equal(svc.formatIsoDate('2026-11-14'), '2026-11-14', 'F3(b): string passthrough is unchanged');
       assert.equal(svc.formatIsoDate(null), '', 'F3(b): empty input stays empty');
       console.log('✓ F3 Passed: supplier schedule day math is UTC-safe and DATE values render as stored');
@@ -242,7 +337,11 @@ async function main(): Promise<void> {
       } finally {
         restore();
       }
-      assert.equal(summary.rollupDate, '2026-11-14', 'F4(a): no-date rollup is stored under the Cairo day, not the UTC day');
+      assert.equal(
+        summary.rollupDate,
+        '2026-11-14',
+        'F4(a): no-date rollup is stored under the Cairo day, not the UTC day',
+      );
       assert.equal(summary.salesCount, 1, 'F4(a): the Cairo day counts exactly one sale');
       assert.equal(summary.salesTotal, 100, 'F4(a): the Cairo day totals sale 1 only');
       assert.equal(summary.cogsTotal, 10, 'F4(a): COGS follows the Cairo window');
@@ -251,7 +350,11 @@ async function main(): Promise<void> {
       const explicit = await controller.computeDayRollup('2026-11-14', undefined as any, req);
       assert.equal(explicit.rollupDate, '2026-11-14', 'F4(b): explicit date keeps its key');
       assert.equal(explicit.salesTotal, 100, 'F4(b): the explicit Cairo day totals sale 1, not sale 2 (UTC day)');
-      const stored = await (db as any).selectFrom('daily_commercial_rollups').selectAll().where('tenant_id', '=', TENANT).executeTakeFirst();
+      const stored = await (db as any)
+        .selectFrom('daily_commercial_rollups')
+        .selectAll()
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirst();
       assert.equal(dateKey(stored.rollup_date), '2026-11-14', 'F4(b): the stored rollup row is keyed by the Cairo day');
       console.log('✓ F4 Passed: daily rollup default and window are the tenant-local day');
     }
@@ -260,14 +363,20 @@ async function main(): Promise<void> {
     {
       const asOf = new Date('2026-11-20T12:00:00Z');
       const invoice = {
-        id: 1, invoiceNumber: 'INV-1',
+        id: 1,
+        invoiceNumber: 'INV-1',
         // 01:30 Cairo Nov 14 == 23:30 UTC Nov 13: the UTC day is Nov 13.
         createdAt: '2026-11-13T23:30:00.000Z',
-        total: 100, paidAmount: 0,
+        total: 100,
+        paidAmount: 0,
       };
       const result = allocateCustomerOverdueFifo(100, [invoice], asOf, 0, 2);
       assert.equal(result.overdueInvoices.length, 1, 'F5: the unpaid invoice is overdue');
-      assert.equal(result.overdueInvoices[0].createdAt, '2026-11-14', 'F5: createdAt stays the Cairo day (sibling pin)');
+      assert.equal(
+        result.overdueInvoices[0].createdAt,
+        '2026-11-14',
+        'F5: createdAt stays the Cairo day (sibling pin)',
+      );
       assert.equal(result.overdueInvoices[0].dueDate, '2026-11-14', 'F5: dueDate is the Cairo day, not the UTC day');
       assert.equal(result.overdueInvoices[0].daysOverdue, 6, 'F5: the day-count math is unchanged by the display fix');
       console.log('✓ F5 Passed: AR dunning due date is the business-timezone day');
@@ -276,14 +385,28 @@ async function main(): Promise<void> {
     // ---- F6. Subscription: next billing date advances from the stored day ----
     {
       const stored = pgTypes.getTypeParser(1082)('2026-11-14');
-      assert.equal(stored.toISOString(), '2026-11-13T22:00:00.000Z', 'F6: harness check -- pg parses the stored DATE as local midnight on a Cairo host');
-      assert.equal(calculateNextBillingDate(stored, 'monthly'), '2026-12-14', 'F6: next billing date advances from the stored day, not the UTC day');
+      assert.equal(
+        stored.toISOString(),
+        '2026-11-13T22:00:00.000Z',
+        'F6: harness check -- pg parses the stored DATE as local midnight on a Cairo host',
+      );
+      assert.equal(
+        calculateNextBillingDate(stored, 'monthly'),
+        '2026-12-14',
+        'F6: next billing date advances from the stored day, not the UTC day',
+      );
       assert.equal(calculateNextBillingDate('2026-01-15', 'monthly'), '2026-02-15', 'F6: string input is unchanged');
-      assert.equal(calculateNextBillingDate('2026-01-31', 'monthly'), '2026-02-28', 'F6: month-end clamping is unchanged');
+      assert.equal(
+        calculateNextBillingDate('2026-01-31', 'monthly'),
+        '2026-02-28',
+        'F6: month-end clamping is unchanged',
+      );
       console.log('✓ F6 Passed: next billing date advances from the stored calendar day');
     }
 
-    console.log('category-1a-money-dates.spec: ok (F1 FMCG, F2 van month, F3 supplier days, F4 rollup, F5 dunning, F6 billing)');
+    console.log(
+      'category-1a-money-dates.spec: ok (F1 FMCG, F2 van month, F3 supplier days, F4 rollup, F5 dunning, F6 billing)',
+    );
   } finally {
     await db.destroy();
   }

@@ -81,22 +81,45 @@ async function seedShipment(
   storedPerUnit: number,
   storedOverhead: number,
 ): Promise<void> {
-  await (db as any).insertInto('import_shipments').values({
-    id: shipmentId, tenant_id: 't1', container_number: 'MSCU-TEST-001', supplier_id: 1,
-    bill_of_lading: 'BL-TEST-001', status: 'Arrived', project_id: 'proj-1',
-    exchange_rate_at_arrival: 50, pricing_exchange_rate: null,
-    shipping_cost_usd: 5, customs_cost_egp: 100, internal_transport_cost_egp: 50,
-    actual_demurrage_fees: 0, late_expenses_total_egp: 0,
-    container_status: 'warehouse_received',
-    customs_duty_rate_percent: rates.duty, vat_rate_percent: rates.vat,
-    insurance_cost_usd: rates.insuranceUsd, funding_type: 'bank_transfer',
-  } as never).execute();
-  await (db as any).insertInto('import_shipment_items').values({
-    id: `${shipmentId}-item`, tenant_id: 't1', shipment_id: shipmentId, product_id: 1,
-    quantity: 10, received_quantity: 10, factory_unit_price_usd: 1,
-    allocated_overhead_egp: storedOverhead, landed_cost_egp: storedPerUnit,
-    shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await (db as any)
+    .insertInto('import_shipments')
+    .values({
+      id: shipmentId,
+      tenant_id: 't1',
+      container_number: 'MSCU-TEST-001',
+      supplier_id: 1,
+      bill_of_lading: 'BL-TEST-001',
+      status: 'Arrived',
+      project_id: 'proj-1',
+      exchange_rate_at_arrival: 50,
+      pricing_exchange_rate: null,
+      shipping_cost_usd: 5,
+      customs_cost_egp: 100,
+      internal_transport_cost_egp: 50,
+      actual_demurrage_fees: 0,
+      late_expenses_total_egp: 0,
+      container_status: 'warehouse_received',
+      customs_duty_rate_percent: rates.duty,
+      vat_rate_percent: rates.vat,
+      insurance_cost_usd: rates.insuranceUsd,
+      funding_type: 'bank_transfer',
+    } as never)
+    .execute();
+  await (db as any)
+    .insertInto('import_shipment_items')
+    .values({
+      id: `${shipmentId}-item`,
+      tenant_id: 't1',
+      shipment_id: shipmentId,
+      product_id: 1,
+      quantity: 10,
+      received_quantity: 10,
+      factory_unit_price_usd: 1,
+      allocated_overhead_egp: storedOverhead,
+      landed_cost_egp: storedPerUnit,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function main(): Promise<void> {

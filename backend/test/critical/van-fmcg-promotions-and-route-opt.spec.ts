@@ -1,12 +1,6 @@
 import { strict as assert } from 'node:assert';
-import {
-  evaluateFmcgCartPromotions,
-  FmcgPromotion,
-} from '../../src/modules/delivery-reps/fmcg-promotions.engine';
-import {
-  optimizeRouteTsp,
-  RouteStopInput,
-} from '../../src/modules/delivery-reps/route-optimization.engine';
+import { evaluateFmcgCartPromotions, FmcgPromotion } from '../../src/modules/delivery-reps/fmcg-promotions.engine';
+import { optimizeRouteTsp, RouteStopInput } from '../../src/modules/delivery-reps/route-optimization.engine';
 
 // ==========================================
 // TEST 1: FMCG Mix & Match Promotion (Buy X + Y -> Get Z Free)
@@ -115,16 +109,16 @@ assert.equal(res3.totalPromotionalDiscount, 600); // 400 + 200
 // Setup 4 stops along a road in a zigzag order (A -> C -> B -> D)
 // Correct sequential path should be (A -> B -> C -> D)
 const zigzagStops: RouteStopInput[] = [
-  { id: 1, name: 'متجر التوحيد', lat: 30.0100, lng: 31.2000, customerCode: 'C-01' }, // Stop A
-  { id: 3, name: 'سوبرماركت البركة', lat: 30.0300, lng: 31.2000, customerCode: 'C-03' }, // Stop C
-  { id: 2, name: 'بقالة الأمانة', lat: 30.0200, lng: 31.2000, customerCode: 'C-02' }, // Stop B (middle)
-  { id: 4, name: 'ماركت النور', lat: 30.0400, lng: 31.2000, customerCode: 'C-04' }, // Stop D
+  { id: 1, name: 'متجر التوحيد', lat: 30.01, lng: 31.2, customerCode: 'C-01' }, // Stop A
+  { id: 3, name: 'سوبرماركت البركة', lat: 30.03, lng: 31.2, customerCode: 'C-03' }, // Stop C
+  { id: 2, name: 'بقالة الأمانة', lat: 30.02, lng: 31.2, customerCode: 'C-02' }, // Stop B (middle)
+  { id: 4, name: 'ماركت النور', lat: 30.04, lng: 31.2, customerCode: 'C-04' }, // Stop D
   { id: 5, name: 'عميل بلا إحداثيات', lat: null, lng: null, customerCode: 'C-05' },
 ];
 
 const tspResult = optimizeRouteTsp(zigzagStops, {
-  startLat: 30.0050,
-  startLng: 31.2000,
+  startLat: 30.005,
+  startLng: 31.2,
 });
 
 assert.equal(tspResult.stats.totalStops, 5);

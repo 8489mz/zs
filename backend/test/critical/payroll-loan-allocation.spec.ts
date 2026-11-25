@@ -1,5 +1,11 @@
 import { strict as assert } from 'node:assert';
-import { allocateLoanDeduction, calculatePayrollLoanDueTotal, calculateLoanInstallmentSchedule, addLoanInstallmentMonths, requireLoanMoney } from '../../src/modules/hr/payroll-loan-allocation.engine';
+import {
+  allocateLoanDeduction,
+  calculatePayrollLoanDueTotal,
+  calculateLoanInstallmentSchedule,
+  addLoanInstallmentMonths,
+  requireLoanMoney,
+} from '../../src/modules/hr/payroll-loan-allocation.engine';
 
 /**
  * يحرس العطل الفعلي: خصم شهر واحد يغطي قسطين من **نفس القرض**، وكان رصيد القرض
@@ -23,14 +29,25 @@ function run(): void {
 
   // The production due-total calculation caps two due installments against
   // ONE loan outstanding balance before the reviewer approves the payroll.
-  assert.equal(calculatePayrollLoanDueTotal([
-    { loanId: 1, installmentAmount: 600, installmentPaid: 0, loanRemaining: 1000 },
-    { loanId: 1, installmentAmount: 600, installmentPaid: 0, loanRemaining: 1000 },
-    { loanId: 2, installmentAmount: 200, installmentPaid: 50, loanRemaining: 120 },
-  ], 2), 1120);
-  assert.throws(() => calculatePayrollLoanDueTotal([
-    { loanId: 1, installmentAmount: 100, installmentPaid: 110, loanRemaining: 500 },
-  ], 2), /exceeds original/);
+  assert.equal(
+    calculatePayrollLoanDueTotal(
+      [
+        { loanId: 1, installmentAmount: 600, installmentPaid: 0, loanRemaining: 1000 },
+        { loanId: 1, installmentAmount: 600, installmentPaid: 0, loanRemaining: 1000 },
+        { loanId: 2, installmentAmount: 200, installmentPaid: 50, loanRemaining: 120 },
+      ],
+      2,
+    ),
+    1120,
+  );
+  assert.throws(
+    () =>
+      calculatePayrollLoanDueTotal(
+        [{ loanId: 1, installmentAmount: 100, installmentPaid: 110, loanRemaining: 500 }],
+        2,
+      ),
+    /exceeds original/,
+  );
   // ── الحالة التي كانت تنكسر: قرض 1000، قسطان 600 + 600، الخصم يغطيهما ──────
   {
     let remainingToDeduct = 1200;
@@ -116,17 +133,38 @@ function run(): void {
 
   // ── الحالات التي لا يُخصم فيها شيء ────────────────────────────────────────
   assert.equal(
-    allocateLoanDeduction({ remainingToDeduct: 100, installmentAmount: 600, installmentPaid: 600, loanRemaining: 900, loanPaid: 0, minorUnits: 2 }),
+    allocateLoanDeduction({
+      remainingToDeduct: 100,
+      installmentAmount: 600,
+      installmentPaid: 600,
+      loanRemaining: 900,
+      loanPaid: 0,
+      minorUnits: 2,
+    }),
     null,
     'a fully paid installment is skipped',
   );
   assert.equal(
-    allocateLoanDeduction({ remainingToDeduct: 100, installmentAmount: 600, installmentPaid: 0, loanRemaining: 0, loanPaid: 600, minorUnits: 2 }),
+    allocateLoanDeduction({
+      remainingToDeduct: 100,
+      installmentAmount: 600,
+      installmentPaid: 0,
+      loanRemaining: 0,
+      loanPaid: 600,
+      minorUnits: 2,
+    }),
     null,
     'a loan with nothing left owing is skipped',
   );
   assert.equal(
-    allocateLoanDeduction({ remainingToDeduct: 0, installmentAmount: 600, installmentPaid: 0, loanRemaining: 900, loanPaid: 0, minorUnits: 2 }),
+    allocateLoanDeduction({
+      remainingToDeduct: 0,
+      installmentAmount: 600,
+      installmentPaid: 0,
+      loanRemaining: 900,
+      loanPaid: 0,
+      minorUnits: 2,
+    }),
     null,
     'nothing left to deduct',
   );

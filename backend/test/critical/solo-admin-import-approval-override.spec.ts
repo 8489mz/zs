@@ -74,8 +74,7 @@ import { Database } from '../../src/database/database.types';
 import { ImportCommercialService } from '../../src/modules/import-sales/services/import-commercial.service';
 
 const TENANT = 't1';
-const OLD_MSG =
-  'مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز للمستخدم الذي أنشأ الطلب اعتماده بنفسه.';
+const OLD_MSG = 'مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز للمستخدم الذي أنشأ الطلب اعتماده بنفسه.';
 const DECIDED_MSG = 'تم البت في هذا الطلب مسبقاً.';
 const STAMP_HEAD = 'اعتماد منفرد بقرار إداري';
 const STAMP_TAIL = 'لا يوجد مدير ثانٍ متاح';
@@ -108,35 +107,54 @@ async function makeDb(opts: {
   `);
   const requesterRole = opts.requesterRole ?? 'admin';
   const requesterId = opts.requesterId ?? 1;
-  await db.insertInto('users').values({ id: requesterId, tenant_id: TENANT, role: requesterRole, is_active: true } as any).execute();
+  await db
+    .insertInto('users')
+    .values({ id: requesterId, tenant_id: TENANT, role: requesterRole, is_active: true } as any)
+    .execute();
   if (opts.secondAdmin === 'active' || opts.secondAdmin === 'inactive') {
-    await db.insertInto('users').values({ id: 2, tenant_id: TENANT, role: 'admin', is_active: opts.secondAdmin === 'active' } as any).execute();
+    await db
+      .insertInto('users')
+      .values({ id: 2, tenant_id: TENANT, role: 'admin', is_active: opts.secondAdmin === 'active' } as any)
+      .execute();
   }
   if (opts.secondAdmin === 'other-tenant') {
-    await db.insertInto('users').values({ id: 2, tenant_id: 't2', role: 'admin', is_active: true } as any).execute();
+    await db
+      .insertInto('users')
+      .values({ id: 2, tenant_id: 't2', role: 'admin', is_active: true } as any)
+      .execute();
   }
   // A cashier requester still needs the tenant's admin present for
   // case 6 to prove the role leg (not the tenant-size leg) refuses.
   if (requesterRole === 'cashier') {
-    await db.insertInto('users').values({ id: 4, tenant_id: TENANT, role: 'admin', is_active: true } as any).execute();
+    await db
+      .insertInto('users')
+      .values({ id: 4, tenant_id: TENANT, role: 'admin', is_active: true } as any)
+      .execute();
   }
   const requestId = randomUUID();
-  await db.insertInto('import_approval_requests').values({
-    id: requestId,
-    tenant_id: TENANT,
-    module: 'import',
-    action_type: 'large_transfer',
-    reference_id: 'ref-1',
-    requested_by: requesterId,
-    status: 'pending',
-    request_payload: '{}',
-  } as any).execute();
+  await db
+    .insertInto('import_approval_requests')
+    .values({
+      id: requestId,
+      tenant_id: TENANT,
+      module: 'import',
+      action_type: 'large_transfer',
+      reference_id: 'ref-1',
+      requested_by: requesterId,
+      status: 'pending',
+      request_payload: '{}',
+    } as any)
+    .execute();
   const service = new ImportCommercialService({ db: db as any, generatePeriodProfitReport: async () => ({}) });
   return { pg, db, service, requestId };
 }
 
 async function requestRow(db: Kysely<Database>, requestId: string): Promise<any> {
-  return await db.selectFrom('import_approval_requests').selectAll().where('id', '=', requestId).executeTakeFirstOrThrow();
+  return await db
+    .selectFrom('import_approval_requests')
+    .selectAll()
+    .where('id', '=', requestId)
+    .executeTakeFirstOrThrow();
 }
 
 async function main(): Promise<void> {
@@ -305,7 +323,8 @@ async function main(): Promise<void> {
 
   // 11. Wiring: this spec is in both critical lists, in identical order (326 specs — the solo-admin-carrier-invoice-override spec is the last entry).
   {
-    const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+    const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+      .specs as string[];
     const pkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
@@ -320,14 +339,32 @@ async function main(): Promise<void> {
   // copy), the old ban message is still present, and the gate still
   // consumes only approved requests.
   {
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/import-sales/services/import-commercial.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../src/modules/import-sales/services/import-commercial.service.ts'),
+      'utf8',
+    );
     const helperSource = readFileSync(resolve(__dirname, '../../src/common/utils/manager-approval.ts'), 'utf8');
-    const gateSource = readFileSync(resolve(__dirname, '../../src/modules/import-sales/import-approval-gate/import-approval-gate.ts'), 'utf8');
-    assert.ok(serviceSource.includes('INV-SOLO-ADMIN-IMPORT-APPROVAL-OVERRIDE'), 'the service names the solo-admin import-approval override invariant');
+    const gateSource = readFileSync(
+      resolve(__dirname, '../../src/modules/import-sales/import-approval-gate/import-approval-gate.ts'),
+      'utf8',
+    );
+    assert.ok(
+      serviceSource.includes('INV-SOLO-ADMIN-IMPORT-APPROVAL-OVERRIDE'),
+      'the service names the solo-admin import-approval override invariant',
+    );
     assert.ok(serviceSource.includes('isSoloAdminOverride'), 'the service consults the shared solo-admin helper');
-    assert.ok(serviceSource.includes("from '../../../common/utils/manager-approval'"), 'the service imports the shared helper, it does not redefine it');
-    assert.ok(helperSource.split('export async function isSoloAdminOverride').length - 1 === 1, 'the shared helper is defined exactly once');
-    assert.ok(serviceSource.includes(OLD_MSG), 'the old maker-checker refusal message is still present byte-identically');
+    assert.ok(
+      serviceSource.includes("from '../../../common/utils/manager-approval'"),
+      'the service imports the shared helper, it does not redefine it',
+    );
+    assert.ok(
+      helperSource.split('export async function isSoloAdminOverride').length - 1 === 1,
+      'the shared helper is defined exactly once',
+    );
+    assert.ok(
+      serviceSource.includes(OLD_MSG),
+      'the old maker-checker refusal message is still present byte-identically',
+    );
     assert.ok(serviceSource.includes(STAMP_HEAD), 'the service stamps the override');
     assert.ok(gateSource.includes("req.status !== 'approved'"), 'the gate still consumes only approved requests');
     console.log('  PASS S5 source pins');

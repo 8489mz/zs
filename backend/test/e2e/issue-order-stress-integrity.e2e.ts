@@ -16,12 +16,12 @@ async function main() {
     password: process.env.DB_PASSWORD || 'postgres',
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT) || 5433,
-    database: process.env.DB_NAME || 'zs_dev' // MUST use dev DB
+    database: process.env.DB_NAME || 'zs_dev', // MUST use dev DB
   });
   await pg.connect();
 
   const suffix = uniqueSuffix('iss-stress');
-  
+
   try {
     // 1. Setup Required Entities
     const branchesRes = await client.get('/api/branches');
@@ -32,8 +32,16 @@ async function main() {
       branchId = newBranch.branch?.id || newBranch.id;
     }
 
-    const loc1Res = await client.post('/api/settings/locations', { name: `Loc 1 ${suffix}`, locationType: 'internal_warehouse', branchId }, 201);
-    const loc2Res = await client.post('/api/settings/locations', { name: `Loc 2 ${suffix}`, locationType: 'internal_warehouse', branchId }, 201);
+    const loc1Res = await client.post(
+      '/api/settings/locations',
+      { name: `Loc 1 ${suffix}`, locationType: 'internal_warehouse', branchId },
+      201,
+    );
+    const loc2Res = await client.post(
+      '/api/settings/locations',
+      { name: `Loc 2 ${suffix}`, locationType: 'internal_warehouse', branchId },
+      201,
+    );
     const loc1Id = loc1Res.location?.id;
     const loc2Id = loc2Res.location?.id;
 
@@ -42,9 +50,11 @@ async function main() {
     const categoriesPayload = await client.get('/api/categories');
     const categoryId = (categoriesPayload.categories as any[]).find((c: any) => c.name === catName).id;
     const totalProducts = 2000;
-    const existingRes = await pg.query("SELECT id FROM products WHERE name LIKE 'ProdIss issue-stress%' ORDER BY id ASC");
-    let productIds: number[] = existingRes.rows.map(r => Number(r.id));
-    
+    const existingRes = await pg.query(
+      "SELECT id FROM products WHERE name LIKE 'ProdIss issue-stress%' ORDER BY id ASC",
+    );
+    let productIds: number[] = existingRes.rows.map((r) => Number(r.id));
+
     // Concurrency limit function
     async function asyncPool(poolLimit: number, array: any[], iteratorFn: (item: any) => Promise<any>) {
       const ret = [];
@@ -61,26 +71,30 @@ async function main() {
       }
       return Promise.all(ret);
     }
-    
+
     if (productIds.length < totalProducts) {
       console.log('Inserting 2000 products for issue order test via API...');
       const itemsToCreate = Array.from({ length: totalProducts - productIds.length }, (_, i) => productIds.length + i);
       let createdCount = 0;
-      
+
       await asyncPool(50, itemsToCreate, async (i) => {
-        const p = await client.post('/api/products', {
-          categoryId,
-          name: `ProdIss issue-stress - ${i}`,
-          barcode: `BARIissue-stress-${i}`,
-          costPrice: 10,
-          retailPrice: 20,
-          wholesalePrice: 15,
-          minStock: 0,
-          stock: 0,
-          itemType: 'product',
-          itemKind: 'standard',
-          units: [{ name: 'Piece', multiplier: 1, isBaseUnit: true, isSaleUnit: true, isPurchaseUnit: true }]
-        }, 201);
+        const p = await client.post(
+          '/api/products',
+          {
+            categoryId,
+            name: `ProdIss issue-stress - ${i}`,
+            barcode: `BARIissue-stress-${i}`,
+            costPrice: 10,
+            retailPrice: 20,
+            wholesalePrice: 15,
+            minStock: 0,
+            stock: 0,
+            itemType: 'product',
+            itemKind: 'standard',
+            units: [{ name: 'Piece', multiplier: 1, isBaseUnit: true, isSaleUnit: true, isPurchaseUnit: true }],
+          },
+          201,
+        );
         productIds.push(Number(p.id || p.product?.id));
         createdCount++;
         if (createdCount % 500 === 0) console.log(`Created ${createdCount} products`);
@@ -91,8 +105,8 @@ async function main() {
     }
 
     // Double check productIds are valid
-    productIds = productIds.filter(id => !isNaN(id) && id > 0);
-    assert.ok(productIds.length >= 2000, "Should have 2000 valid product IDs");
+    productIds = productIds.filter((id) => !isNaN(id) && id > 0);
+    assert.ok(productIds.length >= 2000, 'Should have 2000 valid product IDs');
 
     // 3. Add initial stock via direct SQL for speed (since we already tested purchase integrity)
     // We add 10,000 qty to loc1 and loc2 for each product
@@ -103,36 +117,42 @@ async function main() {
       stockValues.push(`('default', 'default', $${sIdx++}, $${sIdx++}, 10000)`);
       stockParams.push(pid);
       stockParams.push(loc1Id);
-      
+
       stockValues.push(`('default', 'default', $${sIdx++}, $${sIdx++}, 10000)`);
       stockParams.push(pid);
       stockParams.push(loc2Id);
-      
+
       if (stockValues.length >= 1000) {
-        await pg.query(`
+        await pg.query(
+          `
           INSERT INTO product_location_stock (tenant_id, account_id, product_id, location_id, qty)
           VALUES ${stockValues.join(',')}
           ON CONFLICT ON CONSTRAINT product_location_stock_pkey 
           DO UPDATE SET qty = EXCLUDED.qty
-        `, stockParams);
+        `,
+          stockParams,
+        );
         stockValues = [];
         stockParams = [];
         sIdx = 1;
       }
     }
-    
+
     if (stockValues.length > 0) {
-      await pg.query(`
+      await pg.query(
+        `
         INSERT INTO product_location_stock (tenant_id, account_id, product_id, location_id, qty)
         VALUES ${stockValues.join(',')}
         ON CONFLICT ON CONSTRAINT product_location_stock_pkey 
         DO UPDATE SET qty = EXCLUDED.qty
-      `, stockParams);
+      `,
+        stockParams,
+      );
     }
-    
+
     // Also update global stock on products table
     await pg.query(`UPDATE products SET stock_qty = 20000 WHERE id = ANY($1::int[])`, [productIds]);
-    
+
     console.log(`Added initial stock for all products.`);
 
     // 4. Stress testing Issue Orders (Stock Transfers)
@@ -142,19 +162,19 @@ async function main() {
 
     for (const size of testSizes) {
       console.log(`\n--- Testing Issue Order with ${size} items ---`);
-      
+
       const items = [];
       for (let i = 0; i < size; i++) {
         items.push({
           productId: productIds[i],
-          qty: 1
+          qty: 1,
         });
       }
 
       const payload = {
         fromLocationId: Number(loc1Id),
         toLocationId: Number(loc2Id),
-        items
+        items,
       };
 
       const start = Date.now();
@@ -162,9 +182,9 @@ async function main() {
         const transferRes = await client.post('/api/stock-transfers', payload, 201);
         const duration = Date.now() - start;
         console.log(`✅ Success for ${size} items. API Time: ${duration}ms`);
-        
+
         maxSuccess = size;
-        
+
         if (duration > 60000) {
           console.log(`Operation took > 60s (${duration}ms). Stopping to avoid timeout.`);
           firstFail = size;
@@ -175,27 +195,33 @@ async function main() {
         if (size === 100) {
           // Check stock movements (deducted from loc1)
           const transferId = transferRes.transferId || transferRes.id || transferRes.transfer?.id;
-          const movs = await pg.query("SELECT COUNT(*) as c FROM stock_movements WHERE reference_type = 'transfer' AND reference_id = $1", [transferId]);
+          const movs = await pg.query(
+            "SELECT COUNT(*) as c FROM stock_movements WHERE reference_type = 'transfer' AND reference_id = $1",
+            [transferId],
+          );
           // It creates TWO movements per item (send from loc1, receive in loc2)
-          assert.equal(Number(movs.rows[0].c), 200, "Should have 200 stock movements (send + receive)");
+          assert.equal(Number(movs.rows[0].c), 200, 'Should have 200 stock movements (send + receive)');
 
           // Test missing stock rollback:
           try {
-             // Create one with 99999 qty for the first item
-             await client.post('/api/stock-transfers', {
+            // Create one with 99999 qty for the first item
+            await client.post(
+              '/api/stock-transfers',
+              {
                 fromLocationId: Number(loc1Id),
                 toLocationId: Number(loc2Id),
                 items: [
                   ...items.slice(0, 99),
-                  { productId: productIds[99], qty: 99999 } // this will fail
-                ]
-             }, 409);
-             console.log("✅ Rollback/Failure on missing stock worked.");
-          } catch(e) {
-             throw new Error("Missing stock did not rollback correctly: " + e);
+                  { productId: productIds[99], qty: 99999 }, // this will fail
+                ],
+              },
+              409,
+            );
+            console.log('✅ Rollback/Failure on missing stock worked.');
+          } catch (e) {
+            throw new Error('Missing stock did not rollback correctly: ' + e);
           }
         }
-
       } catch (e: any) {
         const duration = Date.now() - start;
         console.error(`❌ Failed for ${size} items. Time: ${duration}ms. Error: ${e.message}`);
@@ -207,7 +233,6 @@ async function main() {
     console.log(`\n=== STRESS TEST SUMMARY (ISSUE ORDERS) ===`);
     console.log(`Max Success: ${maxSuccess}`);
     console.log(`First Failure: ${firstFail || 'None'}`);
-
   } finally {
     await pg.end();
   }

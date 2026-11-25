@@ -44,7 +44,11 @@ async function main(): Promise<void> {
   // 0. Matcher self-check.
   const sample = '## 1. Backend doors (37)\n\n### backend/sales\n\n- Nest module: `x`\n\n### backend/accounting\n';
   assert.deepEqual(headings(sample, 'backend'), ['sales', 'accounting'], 'heading matcher must find backend headings');
-  assert.deepEqual(headings(sample, 'frontend'), [], 'heading matcher must not find frontend headings in a backend sample');
+  assert.deepEqual(
+    headings(sample, 'frontend'),
+    [],
+    'heading matcher must not find frontend headings in a backend sample',
+  );
 
   assert.ok(fs.existsSync(DOC_PATH), 'docs/MODULE_DOORS.md must exist');
   const doc = fs.readFileSync(DOC_PATH, 'utf8');
@@ -52,13 +56,13 @@ async function main(): Promise<void> {
 
   // 1. Every backend module on disk has exactly one door heading.
   const backendModules = listDirs(BACKEND_MODULES);
-  assert.equal(backendModules.length, 37, 'backend must have 37 modules (re-pin this spec + the doc if a module is added or removed)');
-  const backendHeadings = headings(doc, 'backend');
   assert.equal(
-    new Set(backendHeadings).size,
-    backendHeadings.length,
-    'backend door headings must be unique',
+    backendModules.length,
+    37,
+    'backend must have 37 modules (re-pin this spec + the doc if a module is added or removed)',
   );
+  const backendHeadings = headings(doc, 'backend');
+  assert.equal(new Set(backendHeadings).size, backendHeadings.length, 'backend door headings must be unique');
   for (const mod of backendModules) {
     assert.ok(backendHeadings.includes(mod), `docs/MODULE_DOORS.md is missing the door for backend module ${mod}`);
     const nestModule = path.join(BACKEND_MODULES, mod, `${mod}.module.ts`);
@@ -71,13 +75,13 @@ async function main(): Promise<void> {
 
   // 2. Every frontend feature on disk has exactly one door heading.
   const frontendFeatures = listDirs(FRONTEND_FEATURES);
-  assert.equal(frontendFeatures.length, 40, 'frontend must have 40 features (re-pin this spec + the doc if a feature is added or removed)');
-  const frontendHeadings = headings(doc, 'frontend');
   assert.equal(
-    new Set(frontendHeadings).size,
-    frontendHeadings.length,
-    'frontend door headings must be unique',
+    frontendFeatures.length,
+    40,
+    'frontend must have 40 features (re-pin this spec + the doc if a feature is added or removed)',
   );
+  const frontendHeadings = headings(doc, 'frontend');
+  assert.equal(new Set(frontendHeadings).size, frontendHeadings.length, 'frontend door headings must be unique');
   for (const feat of frontendFeatures) {
     assert.ok(frontendHeadings.includes(feat), `docs/MODULE_DOORS.md is missing the door for frontend feature ${feat}`);
   }
@@ -88,7 +92,11 @@ async function main(): Promise<void> {
       !fs.existsSync(path.join(FRONTEND_FEATURES, feat, 'index.ts')) &&
       !fs.existsSync(path.join(FRONTEND_FEATURES, feat, 'index.tsx')),
   );
-  assert.equal(missingOnDisk.length, 14, '14 frontend features must lack a public index.ts (re-pin if a feature gains one)');
+  assert.equal(
+    missingOnDisk.length,
+    14,
+    '14 frontend features must lack a public index.ts (re-pin if a feature gains one)',
+  );
   for (const feat of missingOnDisk) {
     assert.ok(doc.includes(`- \`${feat}\``), `docs/MODULE_DOORS.md must list ${feat} as missing a public index.ts`);
   }
@@ -102,15 +110,33 @@ async function main(): Promise<void> {
   }
 
   // 4. The doc states the pinned P0-1 coupling counts.
-  assert.ok(doc.includes('71 edges / 652 statements'), 'docs/MODULE_DOORS.md must state the pinned backend coupling (71 edges / 652 statements)');
-  assert.ok(doc.includes('57 edges / 133 statements'), 'docs/MODULE_DOORS.md must state the pinned frontend coupling (57 edges / 133 statements)');
-  assert.ok(doc.includes('79 external imports into `accounting-posting.service`'), 'docs/MODULE_DOORS.md must state the pinned posting-service cap');
-  assert.ok(doc.includes('15 into `accounting-tenant-foundation.service`'), 'docs/MODULE_DOORS.md must state the pinned foundation-service cap');
+  assert.ok(
+    doc.includes('71 edges / 652 statements'),
+    'docs/MODULE_DOORS.md must state the pinned backend coupling (71 edges / 652 statements)',
+  );
+  assert.ok(
+    doc.includes('57 edges / 133 statements'),
+    'docs/MODULE_DOORS.md must state the pinned frontend coupling (57 edges / 133 statements)',
+  );
+  assert.ok(
+    doc.includes('79 external imports into `accounting-posting.service`'),
+    'docs/MODULE_DOORS.md must state the pinned posting-service cap',
+  );
+  assert.ok(
+    doc.includes('15 into `accounting-tenant-foundation.service`'),
+    'docs/MODULE_DOORS.md must state the pinned foundation-service cap',
+  );
 
   // 5. No REVIEW flag remains: the 8 Phase 1 doors are resolved, each
   // recorded as a confirmed public door in section 4 of the document.
-  assert.ok(!doc.includes('REVIEW'), 'docs/MODULE_DOORS.md must not contain any REVIEW flag: all 8 Phase 1 doors are resolved');
-  assert.ok(doc.includes('## 4. Phase 1 door resolution'), 'docs/MODULE_DOORS.md must record the Phase 1 door resolution');
+  assert.ok(
+    !doc.includes('REVIEW'),
+    'docs/MODULE_DOORS.md must not contain any REVIEW flag: all 8 Phase 1 doors are resolved',
+  );
+  assert.ok(
+    doc.includes('## 4. Phase 1 door resolution'),
+    'docs/MODULE_DOORS.md must record the Phase 1 door resolution',
+  );
   const resolvedDoors = [
     'backend/src/modules/cash-drawer/helpers/cash-drawer.helper',
     'backend/src/modules/import-sales/helpers/import-lot-allocation.helper',

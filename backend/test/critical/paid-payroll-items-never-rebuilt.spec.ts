@@ -83,8 +83,13 @@ async function main(): Promise<void> {
         VALUES (2,'t1','a1',7,2,2,0,0,0,0,0,0,0,0,0,0,0,0,'draft','',NULL,NULL,NULL,NULL,NOW());
     `);
 
-    await (service as unknown as { payrollRebuildService: { rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void> } })
-      .payrollRebuildService.rebuildPayrollRunItems(db, 7, 'draft', 't1');
+    await (
+      service as unknown as {
+        payrollRebuildService: {
+          rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void>;
+        };
+      }
+    ).payrollRebuildService.rebuildPayrollRunItems(db, 7, 'draft', 't1');
 
     const paid = await pg.query<{ net_pay: string; status: string; journal_entry_id: number }>(
       'SELECT net_pay::text, status, journal_entry_id FROM hr_payroll_run_items WHERE id=1',

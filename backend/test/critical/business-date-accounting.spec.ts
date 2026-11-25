@@ -81,12 +81,21 @@ import { repairSaleEditCandidates } from '../../src/modules/accounting/remediati
 // depend on the machine's environment.
 process.env.BUSINESS_TIMEZONE = 'Africa/Cairo';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', userId: 1, username: 'tester', role: 'admin', permissions: [] } as never;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  userId: 1,
+  username: 'tester',
+  role: 'admin',
+  permissions: [],
+} as never;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_resolve, reject) => setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms)),
+    new Promise<T>((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms),
+    ),
   ]);
 }
 
@@ -116,38 +125,89 @@ async function main(): Promise<void> {
     // 2026-11-07. The UTC slice keys the previous day; the gateway keys
     // the tenant-local day. Same instant in Dubai (+04) is 02:30 on the 8th.
     const cairoInstant = new Date('2026-11-07T22:30:00.000Z');
-    assert.equal(await resolveBusinessDateKey(db, 't1', cairoInstant), '2026-11-08', 'Cairo 00:30 instant keys 2026-11-08');
-    assert.equal(await resolveBusinessDateKey(db, 't2', cairoInstant), '2026-11-08', 'Dubai 02:30 instant keys 2026-11-08');
-    assert.equal(await resolveBusinessDateKey(db, 't1', '2026-11-08'), '2026-11-08', 'calendar-day string passes through untouched');
-    assert.equal(await resolveBusinessDateKey(db, 't1', new Date('2026-11-08T22:30:00.000Z')), '2026-11-09', 'Cairo 00:30 on the 9th keys 2026-11-09, not the UTC 8th');
+    assert.equal(
+      await resolveBusinessDateKey(db, 't1', cairoInstant),
+      '2026-11-08',
+      'Cairo 00:30 instant keys 2026-11-08',
+    );
+    assert.equal(
+      await resolveBusinessDateKey(db, 't2', cairoInstant),
+      '2026-11-08',
+      'Dubai 02:30 instant keys 2026-11-08',
+    );
+    assert.equal(
+      await resolveBusinessDateKey(db, 't1', '2026-11-08'),
+      '2026-11-08',
+      'calendar-day string passes through untouched',
+    );
+    assert.equal(
+      await resolveBusinessDateKey(db, 't1', new Date('2026-11-08T22:30:00.000Z')),
+      '2026-11-09',
+      'Cairo 00:30 on the 9th keys 2026-11-09, not the UTC 8th',
+    );
     // Stored-DATE helper stays exact (the LEAVE verdict, pinned).
     assert.equal(accountingDateKey(new Date('2026-11-08T00:00:00.000Z')), '2026-11-08', 'stored DATE slices to itself');
     assert.equal(accountingDateKey('2026-11-08'), '2026-11-08', 'stored DATE string passes through');
 
     // 2. Payment-allocation rows end to end: a sale/payment recorded at
     // 00:30 Cairo belongs to the Cairo business day, not the UTC day.
-    await sql.raw(`INSERT INTO sales VALUES (1, 't1', 1, 'INV-1', 1000, 0, 0, 'cash', 'posted', '2026-11-07 22:30:00+00')`).execute(db);
-    await sql.raw(`INSERT INTO purchases VALUES (1, 't1', 7, 'BILL-1', 500, 0, 'cash', 'posted', '2026-11-07 22:30:00+00')`).execute(db);
+    await sql
+      .raw(`INSERT INTO sales VALUES (1, 't1', 1, 'INV-1', 1000, 0, 0, 'cash', 'posted', '2026-11-07 22:30:00+00')`)
+      .execute(db);
+    await sql
+      .raw(`INSERT INTO purchases VALUES (1, 't1', 7, 'BILL-1', 500, 0, 'cash', 'posted', '2026-11-07 22:30:00+00')`)
+      .execute(db);
     await sql.raw(`INSERT INTO customer_payments VALUES (1, 't1', 1, 300, '', '2026-11-07 22:30:00+00')`).execute(db);
-    await sql.raw(`INSERT INTO supplier_payments VALUES (1, 't1', 7, 'SP-1', 200, '', '2026-11-07 22:30:00+00')`).execute(db);
-    const openSales = await withTimeout(allocation.getOpenInvoices('customer', 1, AUTH), 25000, 'getOpenInvoices customer');
+    await sql
+      .raw(`INSERT INTO supplier_payments VALUES (1, 't1', 7, 'SP-1', 200, '', '2026-11-07 22:30:00+00')`)
+      .execute(db);
+    const openSales = await withTimeout(
+      allocation.getOpenInvoices('customer', 1, AUTH),
+      25000,
+      'getOpenInvoices customer',
+    );
     assert.equal(openSales.length, 1, 'one open sale');
     assert.equal(openSales[0].date, '2026-11-08', 'open sale date is the Cairo business day');
-    const openBills = await withTimeout(allocation.getOpenInvoices('supplier', 7, AUTH), 25000, 'getOpenInvoices supplier');
+    const openBills = await withTimeout(
+      allocation.getOpenInvoices('supplier', 7, AUTH),
+      25000,
+      'getOpenInvoices supplier',
+    );
     assert.equal(openBills.length, 1, 'one open bill');
     assert.equal(openBills[0].date, '2026-11-08', 'open bill date is the Cairo business day');
-    const openPayments = await withTimeout(allocation.getUnallocatedPayments('customer', 1, AUTH), 25000, 'getUnallocatedPayments customer');
+    const openPayments = await withTimeout(
+      allocation.getUnallocatedPayments('customer', 1, AUTH),
+      25000,
+      'getUnallocatedPayments customer',
+    );
     assert.equal(openPayments.length, 1, 'one unallocated customer payment');
     assert.equal(openPayments[0].date, '2026-11-08', 'unallocated customer payment date is the Cairo business day');
-    const openSupplierPayments = await withTimeout(allocation.getUnallocatedPayments('supplier', 7, AUTH), 25000, 'getUnallocatedPayments supplier');
+    const openSupplierPayments = await withTimeout(
+      allocation.getUnallocatedPayments('supplier', 7, AUTH),
+      25000,
+      'getUnallocatedPayments supplier',
+    );
     assert.equal(openSupplierPayments.length, 1, 'one unallocated supplier payment');
-    assert.equal(openSupplierPayments[0].date, '2026-11-08', 'unallocated supplier payment date is the Cairo business day');
+    assert.equal(
+      openSupplierPayments[0].date,
+      '2026-11-08',
+      'unallocated supplier payment date is the Cairo business day',
+    );
 
     // 3. Dunning engine (pure, no db): invoice created 00:30 Cairo shows
     // the Cairo day; the engine-computed due date is untouched.
     const dunning = allocateCustomerOverdueFifo(
       1000,
-      [{ id: 1, invoiceNumber: 'INV-1', createdAt: new Date('2026-11-07T22:30:00.000Z'), dueDate: '2026-11-10', total: 1000, paidAmount: 0 }],
+      [
+        {
+          id: 1,
+          invoiceNumber: 'INV-1',
+          createdAt: new Date('2026-11-07T22:30:00.000Z'),
+          dueDate: '2026-11-10',
+          total: 1000,
+          paidAmount: 0,
+        },
+      ],
       new Date('2026-11-20T12:00:00Z'),
       0,
       2,
@@ -174,12 +234,22 @@ async function main(): Promise<void> {
       25000,
       'repairSaleEditCandidates empty batch',
     );
-    assert.equal(report.runId, `sale-edit-remediation-${expectedRunDay}`, 'empty-batch run id uses the tenant-local day');
+    assert.equal(
+      report.runId,
+      `sale-edit-remediation-${expectedRunDay}`,
+      'empty-batch run id uses the tenant-local day',
+    );
     assert.equal(report.counts.wouldReverse, 0, 'empty batch reverses nothing');
     // The formatter the services use agrees with the gateway on the same instant.
-    assert.equal(todayTenantDate('Africa/Cairo', cairoInstant), '2026-11-08', 'todayTenantDate agrees with the gateway');
+    assert.equal(
+      todayTenantDate('Africa/Cairo', cairoInstant),
+      '2026-11-08',
+      'todayTenantDate agrees with the gateway',
+    );
 
-    console.log('business-date-accounting.spec: ok (gateway Cairo/Dubai boundary, allocation 4/4 rows 2026-11-08, dunning createdAt 2026-11-08, periods Jan-Mar, remediation run id tenant-local)');
+    console.log(
+      'business-date-accounting.spec: ok (gateway Cairo/Dubai boundary, allocation 4/4 rows 2026-11-08, dunning createdAt 2026-11-08, periods Jan-Mar, remediation run id tenant-local)',
+    );
   } finally {
     await db.destroy();
   }
@@ -187,5 +257,8 @@ async function main(): Promise<void> {
 
 main().then(
   () => process.exit(0),
-  (error) => { console.error(error); process.exit(1); },
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
 );

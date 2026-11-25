@@ -70,22 +70,38 @@ import { AccountingTenantFoundationService } from '../../src/modules/accounting/
 import { InventoryTransferService } from '../../src/modules/inventory/services/inventory-transfer.service';
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 const REASON = 'Two units lost in transit';
 const APPROVER_PASSWORD = 'approver-password';
 
 async function seedProduct(db: Kysely<Database>, id: number, qty: number, cost: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(db);
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(
+    db,
+  );
 }
 
-async function makeTransfer(service: InventoryTransferService, items: Array<{ productId: number; qty: number }>): Promise<number> {
-  const res = await service.createStockTransfer({ fromLocationId: 1, toLocationId: 2, items } as never, AUTH) as any;
+async function makeTransfer(
+  service: InventoryTransferService,
+  items: Array<{ productId: number; qty: number }>,
+): Promise<number> {
+  const res = (await service.createStockTransfer({ fromLocationId: 1, toLocationId: 2, items } as never, AUTH)) as any;
   return Number(res.transferId);
 }
 
 async function transferItemId(db: Kysely<Database>, transferId: number, productId: number): Promise<number> {
-  const row = await sql<{ id: number }>`SELECT id FROM stock_transfer_items WHERE transfer_id = ${transferId} AND product_id = ${productId}`.execute(db);
+  const row = await sql<{
+    id: number;
+  }>`SELECT id FROM stock_transfer_items WHERE transfer_id = ${transferId} AND product_id = ${productId}`.execute(db);
   return Number(row.rows[0].id);
 }
 
@@ -95,14 +111,21 @@ async function transferStatus(db: Kysely<Database>, transferId: number): Promise
 }
 
 async function transitQty(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await sql<{ qty: string }>`SELECT b.qty FROM product_location_stock b JOIN stock_locations l ON l.id = b.location_id WHERE b.product_id = ${productId} AND l.location_type = 'in_transit'`.execute(db);
+  const row = await sql<{
+    qty: string;
+  }>`SELECT b.qty FROM product_location_stock b JOIN stock_locations l ON l.id = b.location_id WHERE b.product_id = ${productId} AND l.location_type = 'in_transit'`.execute(
+    db,
+  );
   return row.rows.length ? Number(row.rows[0].qty) : 0;
 }
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new InventoryTransferService(
     db as never,
@@ -154,7 +177,9 @@ async function main(): Promise<void> {
     // for shortfall receipts (INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL).
     const approverRecord = await createPasswordRecord(APPROVER_PASSWORD);
     await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', '', '', true)`.execute(db);
-    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(db);
+    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(
+      db,
+    );
 
     // Case 1: no items / empty items -> rejected, transfer stays sent, transit intact.
     await seedProduct(db, 1, 100, 10);
@@ -170,7 +195,10 @@ async function main(): Promise<void> {
     // stock stays intact for both items.
     await seedProduct(db, 2, 100, 10);
     await seedProduct(db, 3, 100, 10);
-    const t2 = await makeTransfer(service, [{ productId: 2, qty: 5 }, { productId: 3, qty: 5 }]);
+    const t2 = await makeTransfer(service, [
+      { productId: 2, qty: 5 },
+      { productId: 3, qty: 5 },
+    ]);
     const t2item1 = await transferItemId(db, t2, 2);
     await assert.rejects(
       service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item1, receivedQty: 5 }] } as never),
@@ -183,13 +211,25 @@ async function main(): Promise<void> {
     // succeeds: the omitted item is received 0 with its 5 units
     // written off with the reason, and the named item is immediately
     // available at the destination.
-    await service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item1, receivedQty: 5 }], varianceReason: REASON, approvalSecret: APPROVER_PASSWORD } as never);
+    await service.receiveStockTransfer(t2, AUTH, {
+      items: [{ itemId: t2item1, receivedQty: 5 }],
+      varianceReason: REASON,
+      approvalSecret: APPROVER_PASSWORD,
+    } as never);
     assert.equal(await transferStatus(db, t2), 'received');
-    const omitted2 = await sql<{ received_qty: string; variance_qty: string; variance_reason: string | null }>`SELECT received_qty, variance_qty, variance_reason FROM stock_transfer_items WHERE transfer_id = ${t2} AND product_id = 3`.execute(db);
+    const omitted2 = await sql<{
+      received_qty: string;
+      variance_qty: string;
+      variance_reason: string | null;
+    }>`SELECT received_qty, variance_qty, variance_reason FROM stock_transfer_items WHERE transfer_id = ${t2} AND product_id = 3`.execute(
+      db,
+    );
     assert.equal(Number(omitted2.rows[0].received_qty), 0);
     assert.equal(Number(omitted2.rows[0].variance_qty), 5);
     assert.equal(omitted2.rows[0].variance_reason, REASON);
-    const dest2 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 2 AND location_id = 2`.execute(db);
+    const dest2 = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE product_id = 2 AND location_id = 2`.execute(db);
     assert.equal(Number(dest2.rows[0].qty), 5);
     assert.equal(await transitQty(db, 2), 0);
     assert.equal(await transitQty(db, 3), 0);
@@ -206,39 +246,86 @@ async function main(): Promise<void> {
     );
     assert.equal(await transferStatus(db, t3), 'sent');
     await assert.rejects(
-      service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 8 }], varianceReason: 'lost', approvalSecret: APPROVER_PASSWORD } as never),
+      service.receiveStockTransfer(t3, AUTH, {
+        items: [{ itemId: t3item, receivedQty: 8 }],
+        varianceReason: 'lost',
+        approvalSecret: APPROVER_PASSWORD,
+      } as never),
       /TRANSFER_SHORTAGE_REASON_REQUIRED/,
     );
     assert.equal(await transferStatus(db, t3), 'sent');
-    await service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 8 }], varianceReason: REASON, approvalSecret: APPROVER_PASSWORD } as never);
+    await service.receiveStockTransfer(t3, AUTH, {
+      items: [{ itemId: t3item, receivedQty: 8 }],
+      varianceReason: REASON,
+      approvalSecret: APPROVER_PASSWORD,
+    } as never);
     assert.equal(await transferStatus(db, t3), 'received');
-    const item3 = await sql<{ variance_reason: string | null }>`SELECT variance_reason FROM stock_transfer_items WHERE id = ${t3item}`.execute(db);
+    const item3 = await sql<{
+      variance_reason: string | null;
+    }>`SELECT variance_reason FROM stock_transfer_items WHERE id = ${t3item}`.execute(db);
     assert.equal(item3.rows[0].variance_reason, REASON);
 
     // Case 4: cost moves between ship and receive -- shrinkage stays at dispatch cost.
     await seedProduct(db, 5, 100, 10);
     const t4 = await makeTransfer(service, [{ productId: 5, qty: 10 }]);
-    const dispatchMov = await sql<{ unit_cost: string; total_cost: string }>`SELECT unit_cost, total_cost FROM stock_movements WHERE reference_id = ${t4} AND movement_type = 'transfer_send'`.execute(db);
+    const dispatchMov = await sql<{
+      unit_cost: string;
+      total_cost: string;
+    }>`SELECT unit_cost, total_cost FROM stock_movements WHERE reference_id = ${t4} AND movement_type = 'transfer_send'`.execute(
+      db,
+    );
     assert.equal(Number(dispatchMov.rows[0].unit_cost), 10);
     assert.equal(Number(dispatchMov.rows[0].total_cost), 100);
     await sql`UPDATE products SET cost_price = 25 WHERE id = 5`.execute(db);
     const t4item = await transferItemId(db, t4, 5);
-    await service.receiveStockTransfer(t4, AUTH, { items: [{ itemId: t4item, receivedQty: 8 }], varianceReason: REASON, approvalSecret: APPROVER_PASSWORD } as never);
-    const loss = await sql<{ id: number; unit_cost: string; total_cost: string }>`SELECT id, unit_cost, total_cost FROM stock_movements WHERE reference_id = ${t4} AND movement_type = 'transfer_transit_loss'`.execute(db);
+    await service.receiveStockTransfer(t4, AUTH, {
+      items: [{ itemId: t4item, receivedQty: 8 }],
+      varianceReason: REASON,
+      approvalSecret: APPROVER_PASSWORD,
+    } as never);
+    const loss = await sql<{
+      id: number;
+      unit_cost: string;
+      total_cost: string;
+    }>`SELECT id, unit_cost, total_cost FROM stock_movements WHERE reference_id = ${t4} AND movement_type = 'transfer_transit_loss'`.execute(
+      db,
+    );
     assert.equal(Number(loss.rows[0].unit_cost), 10);
     assert.equal(Number(loss.rows[0].total_cost), 20);
-    const lines = await sql<{ code: string; debit: string; credit: string }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'inventory_adjustment' AND e.source_id = ${Number(loss.rows[0].id)} ORDER BY a.code`.execute(db);
-    assert.deepEqual(lines.rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) })), [
-      { code: '1140', debit: 0, credit: 20 },
-      { code: '5300', debit: 20, credit: 0 },
-    ]);
-    const item4 = await sql<{ variance_reason: string }>`SELECT variance_reason FROM stock_transfer_items WHERE id = ${t4item}`.execute(db);
+    const lines = await sql<{
+      code: string;
+      debit: string;
+      credit: string;
+    }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'inventory_adjustment' AND e.source_id = ${Number(loss.rows[0].id)} ORDER BY a.code`.execute(
+      db,
+    );
+    assert.deepEqual(
+      lines.rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) })),
+      [
+        { code: '1140', debit: 0, credit: 20 },
+        { code: '5300', debit: 20, credit: 0 },
+      ],
+    );
+    const item4 = await sql<{
+      variance_reason: string;
+    }>`SELECT variance_reason FROM stock_transfer_items WHERE id = ${t4item}`.execute(db);
     assert.equal(item4.rows[0].variance_reason, REASON);
-    const header4 = await sql<{ has_transit_variance: boolean; transit_variance_journal_entry_id: number }>`SELECT has_transit_variance, transit_variance_journal_entry_id FROM stock_transfers WHERE id = ${t4}`.execute(db);
+    const header4 = await sql<{
+      has_transit_variance: boolean;
+      transit_variance_journal_entry_id: number;
+    }>`SELECT has_transit_variance, transit_variance_journal_entry_id FROM stock_transfers WHERE id = ${t4}`.execute(
+      db,
+    );
     assert.equal(header4.rows[0].has_transit_variance, true);
-    const journalId = await sql<{ id: number }>`SELECT id FROM journal_entries WHERE source_type = 'inventory_adjustment' AND source_id = ${Number(loss.rows[0].id)}`.execute(db);
+    const journalId = await sql<{
+      id: number;
+    }>`SELECT id FROM journal_entries WHERE source_type = 'inventory_adjustment' AND source_id = ${Number(loss.rows[0].id)}`.execute(
+      db,
+    );
     assert.equal(Number(header4.rows[0].transit_variance_journal_entry_id), Number(journalId.rows[0].id));
-    const dest4 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 5 AND location_id = 2`.execute(db);
+    const dest4 = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE product_id = 5 AND location_id = 2`.execute(db);
     assert.equal(Number(dest4.rows[0].qty), 8);
     const glob4 = await sql<{ stock_qty: string }>`SELECT stock_qty FROM products WHERE id = 5`.execute(db);
     // Company-wide total: 100 - 2 lost in transit = 98 (90 still at the
@@ -251,9 +338,18 @@ async function main(): Promise<void> {
     const t5 = await makeTransfer(service, [{ productId: 6, qty: 10 }]);
     const t5item = await transferItemId(db, t5, 6);
     await service.receiveStockTransfer(t5, AUTH, { items: [{ itemId: t5item, receivedQty: 10 }] } as never);
-    const loss5 = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM stock_movements WHERE reference_id = ${t5} AND movement_type = 'transfer_transit_loss'`.execute(db);
+    const loss5 = await sql<{
+      n: string;
+    }>`SELECT COUNT(*) AS n FROM stock_movements WHERE reference_id = ${t5} AND movement_type = 'transfer_transit_loss'`.execute(
+      db,
+    );
     assert.equal(Number(loss5.rows[0].n), 0);
-    const header5 = await sql<{ has_transit_variance: boolean; transit_variance_journal_entry_id: number | null }>`SELECT has_transit_variance, transit_variance_journal_entry_id FROM stock_transfers WHERE id = ${t5}`.execute(db);
+    const header5 = await sql<{
+      has_transit_variance: boolean;
+      transit_variance_journal_entry_id: number | null;
+    }>`SELECT has_transit_variance, transit_variance_journal_entry_id FROM stock_transfers WHERE id = ${t5}`.execute(
+      db,
+    );
     assert.equal(header5.rows[0].has_transit_variance, false);
     assert.equal(header5.rows[0].transit_variance_journal_entry_id, null);
 
@@ -266,7 +362,12 @@ async function main(): Promise<void> {
       /TRANSFER_RECEIPT_INVALID/,
     );
     await assert.rejects(
-      service.receiveStockTransfer(t6, AUTH, { items: [{ itemId: t6item, receivedQty: 5 }, { itemId: t6item, receivedQty: 5 }] } as never),
+      service.receiveStockTransfer(t6, AUTH, {
+        items: [
+          { itemId: t6item, receivedQty: 5 },
+          { itemId: t6item, receivedQty: 5 },
+        ],
+      } as never),
       /TRANSFER_RECEIPT_INVALID/,
     );
     assert.equal(await transferStatus(db, t6), 'sent');

@@ -10,7 +10,7 @@ import { AuthContext } from '../../../src/core/auth/interfaces/auth-context.inte
 
 /**
  * Z-SYSTEMS ERP — CUSTOMER, SUPPLIER & EMPLOYEE SELF-SERVICE PORTALS SIMULATION
- * 
+ *
  * Verifies:
  * 1. Foundation: Tenant isolation, Branch, Department, Employee, Customer.
  * 2. Employee Portal Authentication: Secure PIN login with bcrypt hashing & signed tokens.
@@ -166,14 +166,17 @@ async function runCustomerSupplierPortalSimulation() {
     const customerId = Number(custRes.rows[0].id);
 
     // Issue customer portal session token
-    const customerToken = signPortalToken({
-      customerId,
-      name: 'مؤسسة أفق التقنية',
-      phone: '0543322110',
-      tenantId: tenantA,
-      accountId: accountA,
-      role: 'customer',
-    }, PORTAL_TOKEN_TTL_MS);
+    const customerToken = signPortalToken(
+      {
+        customerId,
+        name: 'مؤسسة أفق التقنية',
+        phone: '0543322110',
+        tenantId: tenantA,
+        accountId: accountA,
+        role: 'customer',
+      },
+      PORTAL_TOKEN_TTL_MS,
+    );
 
     console.log(`[OK] تم توليد رمز دخول آمن لبوابة العميل #${customerId}.`);
 
@@ -199,7 +202,9 @@ async function runCustomerSupplierPortalSimulation() {
     const totalPaid = Number(statementRes.rows[0].total_paid);
     const outstandingBalance = totalInvoiced - totalPaid;
 
-    console.log(`[STATEMENT] إجمالي الفواتير: ${totalInvoiced} ر.س | المسدد: ${totalPaid} ر.س | الرصيد المتبقي: ${outstandingBalance} ر.س`);
+    console.log(
+      `[STATEMENT] إجمالي الفواتير: ${totalInvoiced} ر.س | المسدد: ${totalPaid} ر.س | الرصيد المتبقي: ${outstandingBalance} ر.س`,
+    );
     if (totalInvoiced !== 5750 || totalPaid !== 1000 || outstandingBalance !== 4750) {
       throw new Error(`Customer statement balance mismatch: expected 4750, got ${outstandingBalance}`);
     }
@@ -237,13 +242,16 @@ async function runCustomerSupplierPortalSimulation() {
     let crossTenantBlocked = false;
     try {
       // Trying to verify employee from Tenant A inside Tenant B
-      const fakeTokenTenantB = signPortalToken({
-        employeeId,
-        name: 'خالد الشمري',
-        tenantId: tenantB, // Wrong tenant
-        accountId: accountB,
-        role: 'employee',
-      }, PORTAL_TOKEN_TTL_MS);
+      const fakeTokenTenantB = signPortalToken(
+        {
+          employeeId,
+          name: 'خالد الشمري',
+          tenantId: tenantB, // Wrong tenant
+          accountId: accountB,
+          role: 'employee',
+        },
+        PORTAL_TOKEN_TTL_MS,
+      );
 
       await employeePortalService.verifyToken(`Bearer ${fakeTokenTenantB}`);
     } catch (err: any) {
@@ -258,7 +266,6 @@ async function runCustomerSupplierPortalSimulation() {
     console.log('\n================================================================');
     console.log('[SUCCESS] اكتملت محاكاة بوابات العملاء والموظفين والمناديب بنجاح 100%!');
     console.log('================================================================\n');
-
   } catch (err: any) {
     console.error('[ERROR] SIMULATION FAILED:', err.message || err);
     console.error(err.stack);

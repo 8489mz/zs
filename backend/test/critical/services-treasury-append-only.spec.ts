@@ -70,23 +70,41 @@ import { AccountingTenantFoundationService } from '../../src/modules/accounting/
 import { ServicesService } from '../../src/modules/services/services.service';
 import { migration as auditKeyMigration } from '../../src/database/migrations/2040000000293_audit_logs_idempotency_key';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 const OLD_SERVICE_DATE = '2026-11-05T12:00:00.000Z';
 
 function realPosting(): AccountingPostingService {
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   return new AccountingPostingService(foundation);
 }
 
 type TreasuryLeg = { id: number; txn_type: string; amount: string | number; created_at: Date | string };
 
 async function treasuryLegs(db: Kysely<Database>, serviceId: number): Promise<TreasuryLeg[]> {
-  const rows = await sql<TreasuryLeg>`SELECT id, txn_type, amount, created_at FROM treasury_transactions WHERE tenant_id = 't1' AND reference_type = 'service' AND reference_id = ${serviceId} ORDER BY id`.execute(db);
+  const rows =
+    await sql<TreasuryLeg>`SELECT id, txn_type, amount, created_at FROM treasury_transactions WHERE tenant_id = 't1' AND reference_type = 'service' AND reference_id = ${serviceId} ORDER BY id`.execute(
+      db,
+    );
   return rows.rows;
 }
 
 async function journalCounts(db: Kysely<Database>): Promise<{ service: number; reversal: number }> {
-  const rows = await sql<{ source_type: string; n: string }>`SELECT source_type, count(*)::text AS n FROM journal_entries WHERE tenant_id = 't1' AND source_type IN ('service', 'service_reversal') GROUP BY source_type`.execute(db);
+  const rows = await sql<{
+    source_type: string;
+    n: string;
+  }>`SELECT source_type, count(*)::text AS n FROM journal_entries WHERE tenant_id = 't1' AND source_type IN ('service', 'service_reversal') GROUP BY source_type`.execute(
+    db,
+  );
   const out = { service: 0, reversal: 0 };
   for (const row of rows.rows) {
     if (row.source_type === 'service') out.service = Number(row.n);
@@ -95,8 +113,15 @@ async function journalCounts(db: Kysely<Database>): Promise<{ service: number; r
   return out;
 }
 
-async function serviceRow(db: Kysely<Database>, serviceId: number): Promise<{ id: number; amount: string | number; revision: number } | null> {
-  const rows = await sql<{ id: number; amount: string | number; revision: number }>`SELECT id, amount, revision FROM services WHERE tenant_id = 't1' AND id = ${serviceId}`.execute(db);
+async function serviceRow(
+  db: Kysely<Database>,
+  serviceId: number,
+): Promise<{ id: number; amount: string | number; revision: number } | null> {
+  const rows = await sql<{
+    id: number;
+    amount: string | number;
+    revision: number;
+  }>`SELECT id, amount, revision FROM services WHERE tenant_id = 't1' AND id = ${serviceId}`.execute(db);
   return rows.rows?.[0] || null;
 }
 
@@ -137,19 +162,30 @@ async function main(): Promise<void> {
     `);
     await auditKeyMigration.up(db as never);
 
-    const service = new ServicesService(db as never, new TransactionHelper(), new AuditService(db as never), {} as never, realPosting());
+    const service = new ServicesService(
+      db as never,
+      new TransactionHelper(),
+      new AuditService(db as never),
+      {} as never,
+      realPosting(),
+    );
 
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    await sql`INSERT INTO cashier_shifts (id, tenant_id, account_id, doc_no, opened_by, status, branch_id, location_id, opening_cash, expected_cash, created_at) VALUES (1, 't1', 'a1', 'SHIFT-A', 1, 'open', 1, 1, 0, 0, ${twoHoursAgo})`.execute(db);
+    await sql`INSERT INTO cashier_shifts (id, tenant_id, account_id, doc_no, opened_by, status, branch_id, location_id, opening_cash, expected_cash, created_at) VALUES (1, 't1', 'a1', 'SHIFT-A', 1, 'open', 1, 1, 0, 0, ${twoHoursAgo})`.execute(
+      db,
+    );
 
-    const payload = (name: string, amount: number, date = OLD_SERVICE_DATE) => ({
-      service: { name, amount, notes: '', date, paymentChannel: 'cash' },
-    }) as never;
+    const payload = (name: string, amount: number, date = OLD_SERVICE_DATE) =>
+      ({
+        service: { name, amount, notes: '', date, paymentChannel: 'cash' },
+      }) as never;
 
     // Case 1: update append-only + created_at is NOW, not service_date.
-    const created1 = await service.createService(payload('توصيل', 100), AUTH) as { ok: boolean };
+    const created1 = (await service.createService(payload('توصيل', 100), AUTH)) as { ok: boolean };
     assert.equal(created1.ok, true, 'case 1 create ok');
-    const svc1 = await sql<{ id: number }>`SELECT id FROM services WHERE name = 'توصيل' ORDER BY id DESC LIMIT 1`.execute(db);
+    const svc1 = await sql<{
+      id: number;
+    }>`SELECT id FROM services WHERE name = 'توصيل' ORDER BY id DESC LIMIT 1`.execute(db);
     const id1 = Number(svc1.rows[0].id);
     const legsBefore = await treasuryLegs(db, id1);
     assert.equal(legsBefore.length, 1, 'case 1: one leg after create');
@@ -162,7 +198,7 @@ async function main(): Promise<void> {
     assert.equal(journalsBefore.reversal, 0, 'case 1: no reversal journal after create');
 
     const updateBefore = new Date();
-    const updated1 = await service.updateService(id1, payload('توصيل', 150), AUTH) as { ok: boolean };
+    const updated1 = (await service.updateService(id1, payload('توصيل', 150), AUTH)) as { ok: boolean };
     const updateAfter = new Date();
     assert.equal(updated1.ok, true, 'case 1 update ok');
     const row1 = await serviceRow(db, id1);
@@ -177,42 +213,73 @@ async function main(): Promise<void> {
     const reversal = legsAfter.find((leg) => leg.txn_type === 'cash_out');
     assert.ok(reversal, 'case 1: a cash_out reversal leg exists');
     assert.equal(Number(reversal?.amount), -100, 'case 1: reversal is -100');
-    assert.ok(toMs(reversal!.created_at) >= updateBefore.getTime() - 1000 && toMs(reversal!.created_at) <= updateAfter.getTime() + 1000, 'case 1: reversal created_at is now');
+    assert.ok(
+      toMs(reversal!.created_at) >= updateBefore.getTime() - 1000 &&
+        toMs(reversal!.created_at) <= updateAfter.getTime() + 1000,
+      'case 1: reversal created_at is now',
+    );
     const fresh = legsAfter.find((leg) => leg.txn_type === 'cash_in' && leg.id !== originalLeg.id);
     assert.ok(fresh, 'case 1: a new cash_in leg exists');
     assert.equal(Number(fresh?.amount), 150, 'case 1: new leg is 150');
-    assert.ok(toMs(fresh!.created_at) >= updateBefore.getTime() - 1000 && toMs(fresh!.created_at) <= updateAfter.getTime() + 1000, 'case 1: new leg created_at is now');
-    assert.ok(toMs(fresh!.created_at) - new Date(OLD_SERVICE_DATE).getTime() > 24 * 60 * 60 * 1000, 'case 1: new leg is NOT backdated to service_date');
-    assert.equal(legsAfter.reduce((sum, leg) => sum + Number(leg.amount), 0), 150, 'case 1: legs net to 150');
+    assert.ok(
+      toMs(fresh!.created_at) >= updateBefore.getTime() - 1000 &&
+        toMs(fresh!.created_at) <= updateAfter.getTime() + 1000,
+      'case 1: new leg created_at is now',
+    );
+    assert.ok(
+      toMs(fresh!.created_at) - new Date(OLD_SERVICE_DATE).getTime() > 24 * 60 * 60 * 1000,
+      'case 1: new leg is NOT backdated to service_date',
+    );
+    assert.equal(
+      legsAfter.reduce((sum, leg) => sum + Number(leg.amount), 0),
+      150,
+      'case 1: legs net to 150',
+    );
     const journalsAfter = await journalCounts(db);
     assert.equal(journalsAfter.service, 2, 'case 1: rev-2 service journal posted');
     assert.equal(journalsAfter.reversal, 1, 'case 1: one reversal journal posted');
     console.log('case 1 (update append-only, created_at now) passed');
 
     // Case 2: delete keeps the treasury legs, reverses the journal.
-    const created2 = await service.createService(payload('تنظيف', 200), AUTH) as { ok: boolean };
+    const created2 = (await service.createService(payload('تنظيف', 200), AUTH)) as { ok: boolean };
     assert.equal(created2.ok, true, 'case 2 create ok');
-    const svc2 = await sql<{ id: number }>`SELECT id FROM services WHERE name = 'تنظيف' ORDER BY id DESC LIMIT 1`.execute(db);
+    const svc2 = await sql<{
+      id: number;
+    }>`SELECT id FROM services WHERE name = 'تنظيف' ORDER BY id DESC LIMIT 1`.execute(db);
     const id2 = Number(svc2.rows[0].id);
     const journalsBeforeDelete = await journalCounts(db);
-    const deleted2 = await service.deleteService(id2, AUTH) as { ok: boolean };
+    const deleted2 = (await service.deleteService(id2, AUTH)) as { ok: boolean };
     assert.equal(deleted2.ok, true, 'case 2 delete ok');
     assert.equal(await serviceRow(db, id2), null, 'case 2: service row is gone');
     const legs2 = await treasuryLegs(db, id2);
     assert.equal(legs2.length, 2, 'case 2: both legs remain after delete');
-    assert.deepEqual(legs2.map((leg) => Number(leg.amount)).sort((a, b) => a - b), [-200, 200], 'case 2: original +200 and reversal -200');
-    assert.equal(legs2.reduce((sum, leg) => sum + Number(leg.amount), 0), 0, 'case 2: legs net to 0');
+    assert.deepEqual(
+      legs2.map((leg) => Number(leg.amount)).sort((a, b) => a - b),
+      [-200, 200],
+      'case 2: original +200 and reversal -200',
+    );
+    assert.equal(
+      legs2.reduce((sum, leg) => sum + Number(leg.amount), 0),
+      0,
+      'case 2: legs net to 0',
+    );
     const journalsAfterDelete = await journalCounts(db);
     assert.equal(journalsAfterDelete.service, journalsBeforeDelete.service, 'case 2: no new service journal on delete');
-    assert.equal(journalsAfterDelete.reversal, journalsBeforeDelete.reversal + 1, 'case 2: one reversal journal on delete');
+    assert.equal(
+      journalsAfterDelete.reversal,
+      journalsBeforeDelete.reversal + 1,
+      'case 2: one reversal journal on delete',
+    );
     console.log('case 2 (delete keeps legs, reverses journal) passed');
 
     // Case 4: update inside an OPEN shift succeeds.
-    const created4 = await service.createService(payload('صيانة', 50), AUTH) as { ok: boolean };
+    const created4 = (await service.createService(payload('صيانة', 50), AUTH)) as { ok: boolean };
     assert.equal(created4.ok, true, 'case 4 create ok');
-    const svc4 = await sql<{ id: number }>`SELECT id FROM services WHERE name = 'صيانة' ORDER BY id DESC LIMIT 1`.execute(db);
+    const svc4 = await sql<{
+      id: number;
+    }>`SELECT id FROM services WHERE name = 'صيانة' ORDER BY id DESC LIMIT 1`.execute(db);
     const id4 = Number(svc4.rows[0].id);
-    const updated4 = await service.updateService(id4, payload('صيانة', 60), AUTH) as { ok: boolean };
+    const updated4 = (await service.updateService(id4, payload('صيانة', 60), AUTH)) as { ok: boolean };
     assert.equal(updated4.ok, true, 'case 4: update in an open shift succeeds');
     const row4 = await serviceRow(db, id4);
     assert.equal(Number(row4?.amount), 60, 'case 4: amount updated to 60');
@@ -221,10 +288,14 @@ async function main(): Promise<void> {
 
     // Case 3: update AND delete inside a CLOSED shift are refused, nothing changes.
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    await sql`INSERT INTO cashier_shifts (id, tenant_id, account_id, doc_no, opened_by, status, branch_id, location_id, opening_cash, expected_cash, created_at) VALUES (2, 't1', 'a1', 'SHIFT-B', 1, 'open', 1, 1, 0, 0, ${oneHourAgo})`.execute(db);
-    const created3 = await service.createService(payload('تركيب', 300), AUTH) as { ok: boolean };
+    await sql`INSERT INTO cashier_shifts (id, tenant_id, account_id, doc_no, opened_by, status, branch_id, location_id, opening_cash, expected_cash, created_at) VALUES (2, 't1', 'a1', 'SHIFT-B', 1, 'open', 1, 1, 0, 0, ${oneHourAgo})`.execute(
+      db,
+    );
+    const created3 = (await service.createService(payload('تركيب', 300), AUTH)) as { ok: boolean };
     assert.equal(created3.ok, true, 'case 3 create ok');
-    const svc3 = await sql<{ id: number }>`SELECT id FROM services WHERE name = 'تركيب' ORDER BY id DESC LIMIT 1`.execute(db);
+    const svc3 = await sql<{
+      id: number;
+    }>`SELECT id FROM services WHERE name = 'تركيب' ORDER BY id DESC LIMIT 1`.execute(db);
     const id3 = Number(svc3.rows[0].id);
     // The service must have taken shift B's scope (latest open shift).
     const legs3Before = await treasuryLegs(db, id3);

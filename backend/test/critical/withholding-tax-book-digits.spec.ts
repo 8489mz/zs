@@ -121,8 +121,14 @@ async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
   // Bare (unquoted) settings value: tenantBaseCurrency JSON-parses
   // with a legacy fallback, and extractFromPurchases reads the raw
   // value — both paths must agree on the same seeded form.
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: code } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: code } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): WithholdingTaxService {
@@ -135,13 +141,29 @@ function makeServices(db: Kysely<Database>): WithholdingTaxService {
 }
 
 async function storedRow(db: Kysely<Database>, id: number): Promise<{ base: number; tax: number; status: string }> {
-  const row = await (db as any).selectFrom('withholding_tax_transactions').select(['base_amount', 'tax_amount', 'status']).where('id', '=', id).executeTakeFirstOrThrow() as unknown as { base_amount: string; tax_amount: string; status: string };
+  const row = (await (db as any)
+    .selectFrom('withholding_tax_transactions')
+    .select(['base_amount', 'tax_amount', 'status'])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow()) as unknown as { base_amount: string; tax_amount: string; status: string };
   return { base: Number(row.base_amount), tax: Number(row.tax_amount), status: row.status };
 }
 
-async function journalLines(db: Kysely<Database>, entryId: number): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
-  const rows = await (db as any).selectFrom('journal_entry_lines').select(['account_id', 'debit', 'credit']).where('journal_entry_id', '=', entryId).orderBy('id').execute() as unknown as Array<{ account_id: number; debit: string; credit: string }>;
-  return rows.map((row) => ({ accountId: Number(row.account_id), debit: Number(row.debit), credit: Number(row.credit) }));
+async function journalLines(
+  db: Kysely<Database>,
+  entryId: number,
+): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['account_id', 'debit', 'credit'])
+    .where('journal_entry_id', '=', entryId)
+    .orderBy('id')
+    .execute()) as unknown as Array<{ account_id: number; debit: string; credit: string }>;
+  return rows.map((row) => ({
+    accountId: Number(row.account_id),
+    debit: Number(row.debit),
+    credit: Number(row.credit),
+  }));
 }
 
 async function main(): Promise<void> {
@@ -152,16 +174,26 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'KWD');
       const svc = makeServices(db);
       const created = await svc.createTransaction(auth, {
-        direction: 'payable', source_type: 'manual', invoice_number: 'INV-1', invoice_date: '2026-10-15',
-        partner_type: 'supplier', partner_id: 5, partner_name: 'Supplier Co',
-        wht_type: 'goods', wht_rate: 1, base_amount: 1000.125,
+        direction: 'payable',
+        source_type: 'manual',
+        invoice_number: 'INV-1',
+        invoice_date: '2026-10-15',
+        partner_type: 'supplier',
+        partner_id: 5,
+        partner_name: 'Supplier Co',
+        wht_type: 'goods',
+        wht_rate: 1,
+        base_amount: 1000.125,
       } as never);
       const stored = await storedRow(db, Number(created.id));
       assert.equal(stored.base, 1000.125);
       assert.equal(stored.tax, 10.001);
       assert.equal(stored.status, 'draft');
 
-      const paid = await svc.updateStatus(auth, Number(created.id), { status: 'paid' }) as unknown as { status: string; payment_reference: string };
+      const paid = (await svc.updateStatus(auth, Number(created.id), { status: 'paid' })) as unknown as {
+        status: string;
+        payment_reference: string;
+      };
       assert.equal(paid.status, 'paid');
       assert.ok(String(paid.payment_reference).startsWith('JE-'));
       const entryId = Number(String(paid.payment_reference).replace('JE-', ''));
@@ -172,9 +204,16 @@ async function main(): Promise<void> {
         { accountId: 60, debit: 10.001, credit: 0 },
         { accountId: 20, debit: 0, credit: 10.001 },
       ]);
-      const supplier = await (db as any).selectFrom('suppliers').select('balance').where('id', '=', 5).executeTakeFirstOrThrow() as unknown as { balance: string };
+      const supplier = (await (db as any)
+        .selectFrom('suppliers')
+        .select('balance')
+        .where('id', '=', 5)
+        .executeTakeFirstOrThrow()) as unknown as { balance: string };
       assert.equal(Number(supplier.balance), -10.001);
-      const ledger = await (db as any).selectFrom('supplier_ledger').select(['amount', 'balance_after']).executeTakeFirstOrThrow() as unknown as { amount: string; balance_after: string };
+      const ledger = (await (db as any)
+        .selectFrom('supplier_ledger')
+        .select(['amount', 'balance_after'])
+        .executeTakeFirstOrThrow()) as unknown as { amount: string; balance_after: string };
       assert.equal(Number(ledger.amount), -10.001);
       assert.equal(Number(ledger.balance_after), -10.001);
     } finally {
@@ -189,17 +228,31 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'EGP');
       const svc = makeServices(db);
       const created = await svc.createTransaction(auth, {
-        direction: 'payable', source_type: 'manual', invoice_number: 'INV-2', invoice_date: '2026-10-15',
-        partner_type: 'supplier', partner_id: 5, partner_name: 'Supplier Co',
-        wht_type: 'goods', wht_rate: 1, base_amount: 200.55,
+        direction: 'payable',
+        source_type: 'manual',
+        invoice_number: 'INV-2',
+        invoice_date: '2026-10-15',
+        partner_type: 'supplier',
+        partner_id: 5,
+        partner_name: 'Supplier Co',
+        wht_type: 'goods',
+        wht_rate: 1,
+        base_amount: 200.55,
       } as never);
       const stored = await storedRow(db, Number(created.id));
       assert.equal(stored.base, 200.55);
       assert.equal(stored.tax, 2.01);
       await svc.updateStatus(auth, Number(created.id), { status: 'paid' });
-      const supplier = await (db as any).selectFrom('suppliers').select('balance').where('id', '=', 5).executeTakeFirstOrThrow() as unknown as { balance: string };
+      const supplier = (await (db as any)
+        .selectFrom('suppliers')
+        .select('balance')
+        .where('id', '=', 5)
+        .executeTakeFirstOrThrow()) as unknown as { balance: string };
       assert.equal(Number(supplier.balance), -2.01);
-      const ledger = await (db as any).selectFrom('supplier_ledger').select(['amount', 'balance_after']).executeTakeFirstOrThrow() as unknown as { amount: string; balance_after: string };
+      const ledger = (await (db as any)
+        .selectFrom('supplier_ledger')
+        .select(['amount', 'balance_after'])
+        .executeTakeFirstOrThrow()) as unknown as { amount: string; balance_after: string };
       assert.equal(Number(ledger.amount), -2.01);
       assert.equal(Number(ledger.balance_after), -2.01);
     } finally {
@@ -211,17 +264,31 @@ async function main(): Promise<void> {
   {
     const { pg, db } = await makeDb();
     try {
-      await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: 'KWD' } as never).execute();
-      await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never).execute();
+      await db
+        .insertInto('settings' as never)
+        .values({ tenant_id: 't1', key: 'currency', value: 'KWD' } as never)
+        .execute();
+      await db
+        .insertInto('currency_exchange_rates' as never)
+        .values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never)
+        .execute();
       const svc = makeServices(db);
       await assert.rejects(
         svc.createTransaction(auth, {
-          direction: 'payable', invoice_number: 'INV-3', invoice_date: '2026-10-15',
-          partner_name: 'Supplier Co', wht_type: 'goods', wht_rate: 1, base_amount: 1000.125,
+          direction: 'payable',
+          invoice_number: 'INV-3',
+          invoice_date: '2026-10-15',
+          partner_name: 'Supplier Co',
+          wht_type: 'goods',
+          wht_rate: 1,
+          base_amount: 1000.125,
         } as never),
         /لا يطابق/,
       );
-      const count = await (db as any).selectFrom('withholding_tax_transactions').select((eb: any) => eb.fn.countAll().as('n')).executeTakeFirstOrThrow() as unknown as { n: string };
+      const count = (await (db as any)
+        .selectFrom('withholding_tax_transactions')
+        .select((eb: any) => eb.fn.countAll().as('n'))
+        .executeTakeFirstOrThrow()) as unknown as { n: string };
       assert.equal(Number(count.n), 0);
     } finally {
       await db.destroy();
@@ -234,21 +301,48 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'KWD');
       const svc = makeServices(db);
-      await db.insertInto('purchases' as never).values({
-        id: 9, tenant_id: 't1', supplier_id: 5, status: 'posted', created_at: '2026-10-15',
-        subtotal: 1114.125, discount: 0, tax_amount: 114, prices_include_tax: true, doc_no: 'PUR-9',
-      } as never).execute();
-      const extracted = await svc.extractFromPurchases(auth, { fromDate: '2026-10-01', toDate: '2026-10-31', defaultWhtType: 'goods', defaultWhtRate: 1 } as never);
+      await db
+        .insertInto('purchases' as never)
+        .values({
+          id: 9,
+          tenant_id: 't1',
+          supplier_id: 5,
+          status: 'posted',
+          created_at: '2026-10-15',
+          subtotal: 1114.125,
+          discount: 0,
+          tax_amount: 114,
+          prices_include_tax: true,
+          doc_no: 'PUR-9',
+        } as never)
+        .execute();
+      const extracted = await svc.extractFromPurchases(auth, {
+        fromDate: '2026-10-01',
+        toDate: '2026-10-31',
+        defaultWhtType: 'goods',
+        defaultWhtRate: 1,
+      } as never);
       assert.equal(extracted.extracted_count, 1);
       assert.equal(extracted.total_tax_added, 10.001);
-      const extRow = await (db as any).selectFrom('withholding_tax_transactions').select(['base_amount', 'tax_amount']).where('source_type', '=', 'purchase').executeTakeFirstOrThrow() as unknown as { base_amount: string; tax_amount: string };
+      const extRow = (await (db as any)
+        .selectFrom('withholding_tax_transactions')
+        .select(['base_amount', 'tax_amount'])
+        .where('source_type', '=', 'purchase')
+        .executeTakeFirstOrThrow()) as unknown as { base_amount: string; tax_amount: string };
       assert.equal(Number(extRow.base_amount), 1000.125);
       assert.equal(Number(extRow.tax_amount), 10.001);
 
       const created = await svc.createTransaction(auth, {
-        direction: 'payable', source_type: 'manual', invoice_number: 'INV-4', invoice_date: '2026-10-15',
-        partner_type: 'supplier', partner_id: 5, partner_name: 'Supplier Co',
-        wht_type: 'goods', wht_rate: 1, base_amount: 1000.125,
+        direction: 'payable',
+        source_type: 'manual',
+        invoice_number: 'INV-4',
+        invoice_date: '2026-10-15',
+        partner_type: 'supplier',
+        partner_id: 5,
+        partner_name: 'Supplier Co',
+        wht_type: 'goods',
+        wht_rate: 1,
+        base_amount: 1000.125,
       } as never);
       const stored = await storedRow(db, Number(created.id));
       assert.equal(stored.base, Number(extRow.base_amount));
@@ -271,11 +365,24 @@ async function main(): Promise<void> {
       const info = await pg.query<{ column_name: string; numeric_scale: string }>(
         `SELECT column_name, numeric_scale::text FROM information_schema.columns WHERE table_name='withholding_tax_transactions' AND column_name IN ('base_amount','tax_amount') ORDER BY column_name`,
       );
-      assert.deepEqual(info.rows.map((r) => [r.column_name, Number(r.numeric_scale)]), [['base_amount', 3], ['tax_amount', 3]]);
-      const kept = await pg.query<{ base_amount: string; tax_amount: string }>('SELECT base_amount::text, tax_amount::text FROM withholding_tax_transactions');
-      assert.deepEqual(kept.rows.map((r) => [Number(r.base_amount), Number(r.tax_amount)]), [[1000.12, 10]]);
+      assert.deepEqual(
+        info.rows.map((r) => [r.column_name, Number(r.numeric_scale)]),
+        [
+          ['base_amount', 3],
+          ['tax_amount', 3],
+        ],
+      );
+      const kept = await pg.query<{ base_amount: string; tax_amount: string }>(
+        'SELECT base_amount::text, tax_amount::text FROM withholding_tax_transactions',
+      );
+      assert.deepEqual(
+        kept.rows.map((r) => [Number(r.base_amount), Number(r.tax_amount)]),
+        [[1000.12, 10]],
+      );
       await pg.exec(`INSERT INTO withholding_tax_transactions (base_amount, tax_amount) VALUES (1000.125, 10.001)`);
-      const kept2 = await pg.query<{ tax_amount: string }>('SELECT tax_amount::text FROM withholding_tax_transactions ORDER BY id DESC LIMIT 1');
+      const kept2 = await pg.query<{ tax_amount: string }>(
+        'SELECT tax_amount::text FROM withholding_tax_transactions ORDER BY id DESC LIMIT 1',
+      );
       assert.equal(Number(kept2.rows[0].tax_amount), 10.001);
       // Idempotent: a second run is a no-op.
       await widenMigration.up(db as any);
@@ -287,26 +394,44 @@ async function main(): Promise<void> {
   // Case 6: source pin — the create/post/sync slice uses book digits,
   // and the extraction path is untouched.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/withholding-tax.service.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/accounting/services/withholding-tax.service.ts'),
+      'utf8',
+    );
     const createStart = source.indexOf('async createTransaction(');
     const extractStart = source.indexOf('async extractFromPurchases(');
     const syncStart = source.indexOf('private async syncPartnerSubLedger(');
     const deleteStart = source.indexOf('Delete transaction');
     assert.ok(createStart > 0 && extractStart > createStart && syncStart > 0 && deleteStart > syncStart);
     const createBody = source.slice(createStart, extractStart);
-    assert.ok(createBody.includes('tenantBaseCurrency(trx, tenantId)'), 'creation must resolve digits on the transaction handle');
+    assert.ok(
+      createBody.includes('tenantBaseCurrency(trx, tenantId)'),
+      'creation must resolve digits on the transaction handle',
+    );
     assert.ok(createBody.includes('toBookMoney(bookBaseAmount'), 'creation must round the base at book digits');
     assert.ok(createBody.includes('base_amount: bookBaseAmount'), 'creation must store the book-digits base');
     assert.ok(!createBody.includes('this.toMoney(baseAmount *'), 'creation must not compute tax at 2dp');
     const syncBody = source.slice(syncStart, deleteStart);
-    assert.ok(syncBody.includes('tenantBaseCurrency(trx, tenantId)'), 'sync must resolve digits on the transaction handle');
+    assert.ok(
+      syncBody.includes('tenantBaseCurrency(trx, tenantId)'),
+      'sync must resolve digits on the transaction handle',
+    );
     assert.ok(syncBody.includes('toBookMoney(tx.tax_amount'), 'sync must move the stored amount at book digits');
-    assert.ok(syncBody.includes('balance_after: Number(updated.balance)'), 'balance_after must be the exact returned balance');
+    assert.ok(
+      syncBody.includes('balance_after: Number(updated.balance)'),
+      'balance_after must be the exact returned balance',
+    );
     assert.ok(!syncBody.includes('.toFixed(2)'), 'sync must not re-round the snapshot at 2dp');
     assert.ok(!syncBody.includes('this.toMoney(tx.tax_amount)'), 'sync must not use the 2dp helper');
     const extractBody = source.slice(extractStart, source.indexOf('Update transaction status'));
-    assert.ok(extractBody.includes('currencyMoneyDigits(currencyRow'), 'extraction keeps its raw-settings digits resolution');
-    const migrationSource = readFileSync(resolve(__dirname, '../../src/database/migrations/2040000000276_withholding_tax_minor_unit_precision.ts'), 'utf8');
+    assert.ok(
+      extractBody.includes('currencyMoneyDigits(currencyRow'),
+      'extraction keeps its raw-settings digits resolution',
+    );
+    const migrationSource = readFileSync(
+      resolve(__dirname, '../../src/database/migrations/2040000000276_withholding_tax_minor_unit_precision.ts'),
+      'utf8',
+    );
     assert.ok(migrationSource.includes("'withholding_tax_transactions', 'base_amount', 3"));
     assert.ok(migrationSource.includes("'withholding_tax_transactions', 'tax_amount', 3"));
   }

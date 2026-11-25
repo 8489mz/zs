@@ -59,30 +59,46 @@ function main() {
 
   // 5. Modifier composition changed: whole line keeps its resolved cost.
   {
-    const items: any[] = [{
-      productId: 1, unitMultiplier: 1, qty: 1, costPrice: 13,
-      modifiers: [{ productId: 10, qty: 2, consumptionQty: 2, costPrice: 4 }],
-    }];
-    restoreFrozenSaleLineCosts(items, [{
-      product_id: 1, unit_multiplier: 1,
-      modifiers: JSON.stringify([{ productId: 10, qty: 1, consumptionQty: 2, costPrice: 6 }]),
-      cost_price: 11,
-    }]);
+    const items: any[] = [
+      {
+        productId: 1,
+        unitMultiplier: 1,
+        qty: 1,
+        costPrice: 13,
+        modifiers: [{ productId: 10, qty: 2, consumptionQty: 2, costPrice: 4 }],
+      },
+    ];
+    restoreFrozenSaleLineCosts(items, [
+      {
+        product_id: 1,
+        unit_multiplier: 1,
+        modifiers: JSON.stringify([{ productId: 10, qty: 1, consumptionQty: 2, costPrice: 6 }]),
+        cost_price: 11,
+      },
+    ]);
     assert.equal(items[0].costPrice, 13);
   }
 
   // 6. Modifier composition unchanged but component WAC moved: line AND modifier costs restore.
   // Old line: parent 5 + modifier cost 6 = 11. Resolved now: parent 7 + modifier cost 8 = 15.
   {
-    const items: any[] = [{
-      productId: 1, unitMultiplier: 1, qty: 1, costPrice: 15,
-      modifiers: [{ productId: 10, qty: 1, consumptionQty: 2, costPrice: 8 }],
-    }];
-    restoreFrozenSaleLineCosts(items, [{
-      product_id: 1, unit_multiplier: 1,
-      modifiers: JSON.stringify([{ productId: 10, qty: 1, consumptionQty: 2, costPrice: 6 }]),
-      cost_price: 11,
-    }]);
+    const items: any[] = [
+      {
+        productId: 1,
+        unitMultiplier: 1,
+        qty: 1,
+        costPrice: 15,
+        modifiers: [{ productId: 10, qty: 1, consumptionQty: 2, costPrice: 8 }],
+      },
+    ];
+    restoreFrozenSaleLineCosts(items, [
+      {
+        product_id: 1,
+        unit_multiplier: 1,
+        modifiers: JSON.stringify([{ productId: 10, qty: 1, consumptionQty: 2, costPrice: 6 }]),
+        cost_price: 11,
+      },
+    ]);
     assert.equal(items[0].costPrice, 11);
     assert.equal(items[0].modifiers[0].costPrice, 6);
   }
@@ -110,15 +126,23 @@ function main() {
   // 9. Same component, qty and consumption but a different modifier option:
   // a different configuration, so the line keeps its resolved cost.
   {
-    const items: any[] = [{
-      productId: 1, unitMultiplier: 1, qty: 1, costPrice: 15,
-      modifiers: [{ productId: 10, optionId: 99, qty: 1, consumptionQty: 2, costPrice: 8 }],
-    }];
-    restoreFrozenSaleLineCosts(items, [{
-      product_id: 1, unit_multiplier: 1,
-      modifiers: JSON.stringify([{ productId: 10, optionId: 7, qty: 1, consumptionQty: 2, costPrice: 6 }]),
-      cost_price: 11,
-    }]);
+    const items: any[] = [
+      {
+        productId: 1,
+        unitMultiplier: 1,
+        qty: 1,
+        costPrice: 15,
+        modifiers: [{ productId: 10, optionId: 99, qty: 1, consumptionQty: 2, costPrice: 8 }],
+      },
+    ];
+    restoreFrozenSaleLineCosts(items, [
+      {
+        product_id: 1,
+        unit_multiplier: 1,
+        modifiers: JSON.stringify([{ productId: 10, optionId: 7, qty: 1, consumptionQty: 2, costPrice: 6 }]),
+        cost_price: 11,
+      },
+    ]);
     assert.equal(items[0].costPrice, 15);
   }
 

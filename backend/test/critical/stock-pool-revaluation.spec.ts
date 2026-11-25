@@ -62,10 +62,7 @@ async function main(): Promise<void> {
       .where('id', '=', 1)
       .executeTakeFirstOrThrow();
     assert.equal(Number(row.cost_price), 5.5);
-    assert.ok(
-      new Date(row.updated_at).getTime() > stamp.getTime(),
-      'revaluation stamps updated_at',
-    );
+    assert.ok(new Date(row.updated_at).getTime() > stamp.getTime(), 'revaluation stamps updated_at');
 
     await assert.rejects(revalueStockCost(db as any, 't1', 999, 100, 50));
     await assert.rejects(revalueStockCost(db as any, 't1', 1, 0, 50));

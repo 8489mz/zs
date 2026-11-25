@@ -61,13 +61,23 @@ const ACCOUNT = 'a1';
 const MANAGER_PIN = '1234';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-cashier', username: 'cashier', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-cashier',
+  username: 'cashier',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -131,46 +141,115 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
   // The fixture admin holds an open shift: createSale's cash-sale
   // gate (INV-ADMIN-CASH-SALE-SHIFT-REQUIRED) rejects dashboard
   // cash sales without one, so without this seed no floor
   // behaviour case runs at all (GAP-1). The cashier_shifts DDL
   // here carries only the gate's columns; the seed uses only
   // those columns, the same shape as the prepared-waste spec.
-  await anyDb.insertInto('cashier_shifts').values({
-    tenant_id: TENANT, account_id: ACCOUNT, opened_by: 1, status: 'open', branch_id: 1,
-  }).execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      opened_by: 1,
+      status: 'open',
+      branch_id: 1,
+    })
+    .execute();
 }
 
-async function seedProduct(db: Kysely<Database>, opts: { retail: number; wholesale?: number; cost: number; minSelling: number; qty?: number }): Promise<void> {
+async function seedProduct(
+  db: Kysely<Database>,
+  opts: { retail: number; wholesale?: number; cost: number; minSelling: number; qty?: number },
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Product 101',
-    stock_qty: opts.qty ?? 100, cost_price: opts.cost, retail_price: opts.retail,
-    wholesale_price: opts.wholesale ?? opts.retail, min_selling_price: opts.minSelling,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: opts.qty ?? 100,
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Product 101',
+      stock_qty: opts.qty ?? 100,
+      cost_price: opts.cost,
+      retail_price: opts.retail,
+      wholesale_price: opts.wholesale ?? opts.retail,
+      min_selling_price: opts.minSelling,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: opts.qty ?? 100,
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): SalesWriteService {
@@ -188,25 +267,41 @@ function buildService(db: Kysely<Database>): SalesWriteService {
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
   return new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
 }
-
 
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
   const created: any = await service.createSale(payload, auth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
 function salePayload(price: number, extra: Record<string, unknown> = {}): any {
   return {
     items: [{ productId: 101, qty: 1, price, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
     payments: [{ paymentChannel: 'cash', amount: price }],
-    tenderedAmount: price, branchId: 1, locationId: 10, source: 'dashboard',
+    tenderedAmount: price,
+    branchId: 1,
+    locationId: 10,
+    source: 'dashboard',
     ...extra,
   };
 }
@@ -220,19 +315,31 @@ function editPayload(price: number, extra: Record<string, unknown> = {}): any {
 }
 
 async function readSale(db: Kysely<Database>, saleId: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll()
-    .where('id', '=', saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function readSaleItem(db: Kysely<Database>, saleId: number): Promise<any> {
-  return (db as any).selectFrom('sale_items').selectAll()
-    .where('sale_id', '=', saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sale_items')
+    .selectAll()
+    .where('sale_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function locationQty(db: Kysely<Database>): Promise<number> {
-  const row = await (db as any).selectFrom('product_location_stock').select('qty')
-    .where('tenant_id', '=', TENANT).where('product_id', '=', 101).where('location_id', '=', 10)
-    .executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('tenant_id', '=', TENANT)
+    .where('product_id', '=', 101)
+    .where('location_id', '=', 10)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.qty);
 }
 
@@ -249,7 +356,15 @@ async function expectAppError(promise: Promise<unknown>, code: string): Promise<
 async function main(): Promise<void> {
   // 0. Pure helper table: the formula itself, both sites' inputs.
   {
-    const base = { productId: 101, costPrice: 90, unitMultiplier: 1, qty: 1, minSellingPrice: 80, effectiveAllowedUnitPrice: 100, netLineTotal: 85 };
+    const base = {
+      productId: 101,
+      costPrice: 90,
+      unitMultiplier: 1,
+      qty: 1,
+      minSellingPrice: 80,
+      effectiveAllowedUnitPrice: 100,
+      netLineTotal: 85,
+    };
     // Below the cost floor.
     assert.deepEqual(findBelowFloorSaleItems([base]), [101]);
     // At the floor: not below.
@@ -260,18 +375,50 @@ async function main(): Promise<void> {
     assert.deepEqual(findBelowFloorSaleItems([{ ...base, netLineTotal: 89.999 }]), []);
     assert.deepEqual(findBelowFloorSaleItems([{ ...base, netLineTotal: 89.99 }]), [101]);
     // min_selling_price binds when it exceeds cost.
-    assert.deepEqual(findBelowFloorSaleItems([{ ...base, costPrice: 50, minSellingPrice: 95, netLineTotal: 90 }]), [101]);
+    assert.deepEqual(
+      findBelowFloorSaleItems([{ ...base, costPrice: 50, minSellingPrice: 95, netLineTotal: 90 }]),
+      [101],
+    );
     assert.deepEqual(findBelowFloorSaleItems([{ ...base, costPrice: 50, minSellingPrice: 95, netLineTotal: 95 }]), []);
     // Unit multiplier scales both the cost and the min price. The
     // allowed price is per sold unit (a carton), so it scales too.
-    assert.deepEqual(findBelowFloorSaleItems([{ ...base, unitMultiplier: 12, qty: 1, costPrice: 1080, minSellingPrice: 80, effectiveAllowedUnitPrice: 1200, netLineTotal: 1079 }]), [101]);
-    assert.deepEqual(findBelowFloorSaleItems([{ ...base, unitMultiplier: 12, qty: 1, costPrice: 1080, minSellingPrice: 80, effectiveAllowedUnitPrice: 1200, netLineTotal: 1080 }]), []);
+    assert.deepEqual(
+      findBelowFloorSaleItems([
+        {
+          ...base,
+          unitMultiplier: 12,
+          qty: 1,
+          costPrice: 1080,
+          minSellingPrice: 80,
+          effectiveAllowedUnitPrice: 1200,
+          netLineTotal: 1079,
+        },
+      ]),
+      [101],
+    );
+    assert.deepEqual(
+      findBelowFloorSaleItems([
+        {
+          ...base,
+          unitMultiplier: 12,
+          qty: 1,
+          costPrice: 1080,
+          minSellingPrice: 80,
+          effectiveAllowedUnitPrice: 1200,
+          netLineTotal: 1080,
+        },
+      ]),
+      [],
+    );
     // The allowed-price override lowers the floor: an offer/wholesale
     // price of 85 below the 90 cost is not below its own floor.
     assert.deepEqual(findBelowFloorSaleItems([{ ...base, effectiveAllowedUnitPrice: 85, netLineTotal: 85 }]), []);
     assert.deepEqual(findBelowFloorSaleItems([{ ...base, effectiveAllowedUnitPrice: 85, netLineTotal: 84 }]), [101]);
     // No override: the standard floor binds.
-    assert.deepEqual(findBelowFloorSaleItems([{ ...base, effectiveAllowedUnitPrice: undefined, netLineTotal: 85 }]), [101]);
+    assert.deepEqual(
+      findBelowFloorSaleItems([{ ...base, effectiveAllowedUnitPrice: undefined, netLineTotal: 85 }]),
+      [101],
+    );
     // Services are exempt.
     assert.deepEqual(findBelowFloorSaleItems([{ ...base, isService: true, netLineTotal: 1 }]), []);
     console.log('  pure helper table passed');
@@ -334,9 +481,16 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await seedProduct(db, { retail: 100, cost: 90, minSelling: 80 });
-      await (db as any).insertInto('cashier_shifts').values({
-        tenant_id: TENANT, account_id: ACCOUNT, opened_by: 2, status: 'open', branch_id: 1,
-      }).execute();
+      await (db as any)
+        .insertInto('cashier_shifts')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          opened_by: 2,
+          status: 'open',
+          branch_id: 1,
+        })
+        .execute();
       const service = buildService(db);
       const saleId = await createAndGetId(service, salePayload(100), cashierAuth);
       await service.updateSale(saleId, editPayload(85, { managerPin: MANAGER_PIN }), cashierAuth);
@@ -385,8 +539,12 @@ async function main(): Promise<void> {
       await seedProduct(db, { retail: 100, cost: 90, minSelling: 80 });
       const service = buildService(db);
       const saleId = await createAndGetId(service, salePayload(100), adminAuth);
-      await (db as any).updateTable('products').set({ cost_price: 70 })
-        .where('id', '=', 101).where('tenant_id', '=', TENANT).execute();
+      await (db as any)
+        .updateTable('products')
+        .set({ cost_price: 70 })
+        .where('id', '=', 101)
+        .where('tenant_id', '=', TENANT)
+        .execute();
       // INV-POS-ADMIN-DISCOUNT-AUTHORITY: the admin edit posts, but the
       // floor is still evaluated on the FROZEN 90 (not the new WAC 70),
       // so the line is tagged as below the floor.
@@ -405,8 +563,12 @@ async function main(): Promise<void> {
         await seedProduct(db2, { retail: 100, cost: 90, minSelling: 80 });
         const service = buildService(db2);
         const saleId = await createAndGetId(service, salePayload(100), adminAuth);
-        await (db2 as any).updateTable('products').set({ cost_price: 110 })
-          .where('id', '=', 101).where('tenant_id', '=', TENANT).execute();
+        await (db2 as any)
+          .updateTable('products')
+          .set({ cost_price: 110 })
+          .where('id', '=', 101)
+          .where('tenant_id', '=', TENANT)
+          .execute();
         await service.updateSale(saleId, editPayload(95), adminAuth);
         const item = await readSaleItem(db2, saleId);
         assert.equal(Number(item.cost_price), 90);
@@ -427,9 +589,16 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await seedProduct(db, { retail: 100, cost: 90, minSelling: 80 });
-      await (db as any).insertInto('cashier_shifts').values({
-        tenant_id: TENANT, account_id: ACCOUNT, opened_by: 2, status: 'open', branch_id: 1,
-      }).execute();
+      await (db as any)
+        .insertInto('cashier_shifts')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          opened_by: 2,
+          status: 'open',
+          branch_id: 1,
+        })
+        .execute();
       const service = buildService(db);
       await expectAppError(service.createSale(salePayload(85), cashierAuth), 'MANAGER_AUTH_REQUIRED');
       const saleId = await createAndGetId(service, salePayload(85, { managerPin: MANAGER_PIN }), cashierAuth);
@@ -449,13 +618,23 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const createSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale/compute-totals-and-gates.ts'), 'utf8');
-    const editSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts'), 'utf8');
+    const createSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/create-sale/compute-totals-and-gates.ts'),
+      'utf8',
+    );
+    const editSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts'),
+      'utf8',
+    );
     const serviceSource = createSource + editSource;
     assert.ok(serviceSource.includes('findBelowFloorSaleItems'), 'both sites call the shared helper');
     assert.ok(serviceSource.includes('INV-SALE-EDIT-COST-FLOOR'), 'edit floor check is marked');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-SALE-EDIT-COST-FLOOR').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-SALE-EDIT-COST-FLOOR').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
     console.log('  source + invariant pins passed');
   }
 

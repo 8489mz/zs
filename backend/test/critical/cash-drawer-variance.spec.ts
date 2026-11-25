@@ -46,7 +46,10 @@ assert.equal(computeCashDrawerVariance(100, 100, 3), 0);
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const inTx = <T>(fn: (trx: any) => Promise<T>): Promise<T> => db.transaction().execute(fn);
@@ -96,13 +99,24 @@ async function main() {
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
       INSERT INTO settings VALUES ('t1','currency','KWD');
     `);
-    for (const [code, type] of [[1110, 'asset'], [7110, 'revenue'], [7290, 'expense']] as const) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), type]);
+    for (const [code, type] of [
+      [1110, 'asset'],
+      [7110, 'revenue'],
+      [7290, 'expense'],
+    ] as const) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        type,
+      ]);
     }
 
     const linesOf = async (entryId: number) => {
       const r = await pg.query<{ account_id: string; debit: string; credit: string }>(
-        'SELECT account_id, debit, credit FROM journal_entry_lines WHERE journal_entry_id=$1 ORDER BY account_id', [entryId]);
+        'SELECT account_id, debit, credit FROM journal_entry_lines WHERE journal_entry_id=$1 ORDER BY account_id',
+        [entryId],
+      );
       return r.rows.map((row) => [Number(row.account_id), Number(row.debit), Number(row.credit)] as const);
     };
 
@@ -113,9 +127,13 @@ async function main() {
       VALUES (1,'t1',NULL,NULL,1,100,100.005,'closed','2026-10-20',1,'SHIFT-1')`);
     const res1 = await inTx((trx) => posting.postCashierShiftVariance(trx, 1, auth));
     assert.equal(res1.posted, true, 'a 0.005 KWD variance must post (old gate dropped it)');
-    assert.deepEqual(await linesOf(Number(res1.journalEntryId)), [[1110, 0.005, 0], [7110, 0, 0.005]]);
+    assert.deepEqual(await linesOf(Number(res1.journalEntryId)), [
+      [1110, 0.005, 0],
+      [7110, 0, 0.005],
+    ]);
     const shift1 = await pg.query<{ variance_resolution: string; variance_journal_entry_id: string }>(
-      'SELECT variance_resolution, variance_journal_entry_id FROM cashier_shifts WHERE id=1');
+      'SELECT variance_resolution, variance_journal_entry_id FROM cashier_shifts WHERE id=1',
+    );
     assert.equal(shift1.rows[0].variance_resolution, 'surplus_recognized');
     assert.equal(Number(shift1.rows[0].variance_journal_entry_id), Number(res1.journalEntryId));
 
@@ -127,11 +145,16 @@ async function main() {
     const res2 = await inTx((trx) => posting.postCashierShiftVariance(trx, 2, auth));
     assert.equal(res2.posted, false);
     assert.equal(res2.journalEntryId, null);
-    const count = await pg.query<{ count: string }>(`SELECT count(*) AS count FROM journal_entries WHERE source_type='cashier_shift_variance'`);
+    const count = await pg.query<{ count: string }>(
+      `SELECT count(*) AS count FROM journal_entries WHERE source_type='cashier_shift_variance'`,
+    );
     assert.equal(Number(count.rows[0].count), 1);
   } finally {
     await db.destroy();
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

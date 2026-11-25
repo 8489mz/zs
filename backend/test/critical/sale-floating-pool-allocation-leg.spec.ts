@@ -73,20 +73,41 @@ async function seedProduct(
   globalQty: number,
   rows: Array<{ branchId: number | null; locationId: number | null; qty: number; reservedQty: number }>,
 ): Promise<void> {
-  await db.insertInto('products').values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: globalQty, reserved_qty: 0 } as any).execute();
+  await db
+    .insertInto('products')
+    .values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: globalQty, reserved_qty: 0 } as any)
+    .execute();
   for (const row of rows) {
-    await db.insertInto('product_location_stock').values({
-      tenant_id: 't1', account_id: 'a1', product_id: 1,
-      branch_id: row.branchId, location_id: row.locationId,
-      qty: row.qty, reserved_qty: row.reservedQty,
-    } as any).execute();
+    await db
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: 1,
+        branch_id: row.branchId,
+        location_id: row.locationId,
+        qty: row.qty,
+        reserved_qty: row.reservedQty,
+      } as any)
+      .execute();
   }
 }
 
 async function balances(db: Kysely<Database>): Promise<{ global: number; location: number; pool: number }> {
   const product = await db.selectFrom('products').select('stock_qty').where('id', '=', 1).executeTakeFirstOrThrow();
-  const loc = await db.selectFrom('product_location_stock').select('qty').where('product_id', '=', 1).where('location_id', '=', 10).executeTakeFirst();
-  const pool = await db.selectFrom('product_location_stock').select('qty').where('product_id', '=', 1).where('location_id', 'is', null).where('branch_id', 'is', null).executeTakeFirst();
+  const loc = await db
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('product_id', '=', 1)
+    .where('location_id', '=', 10)
+    .executeTakeFirst();
+  const pool = await db
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('product_id', '=', 1)
+    .where('location_id', 'is', null)
+    .where('branch_id', 'is', null)
+    .executeTakeFirst();
   return { global: Number(product.stock_qty), location: Number(loc?.qty || 0), pool: Number(pool?.qty || 0) };
 }
 
@@ -250,13 +271,30 @@ async function main(): Promise<void> {
       ]);
       await db.transaction().execute(async (trx) => {
         await reserveLocationStock(trx as any, {
-          ...AUTH_SCOPE, branchId: 1, locationId: 10,
+          ...AUTH_SCOPE,
+          branchId: 1,
+          locationId: 10,
           items: [{ productId: 1, qty: 30 }],
         });
       });
-      const locRow = await db.selectFrom('product_location_stock').select(['qty', 'reserved_qty']).where('product_id', '=', 1).where('location_id', '=', 10).executeTakeFirstOrThrow();
-      const poolRow = await db.selectFrom('product_location_stock').select(['qty', 'reserved_qty']).where('product_id', '=', 1).where('location_id', 'is', null).where('branch_id', 'is', null).executeTakeFirstOrThrow();
-      const product = await db.selectFrom('products').select('reserved_qty').where('id', '=', 1).executeTakeFirstOrThrow();
+      const locRow = await db
+        .selectFrom('product_location_stock')
+        .select(['qty', 'reserved_qty'])
+        .where('product_id', '=', 1)
+        .where('location_id', '=', 10)
+        .executeTakeFirstOrThrow();
+      const poolRow = await db
+        .selectFrom('product_location_stock')
+        .select(['qty', 'reserved_qty'])
+        .where('product_id', '=', 1)
+        .where('location_id', 'is', null)
+        .where('branch_id', 'is', null)
+        .executeTakeFirstOrThrow();
+      const product = await db
+        .selectFrom('products')
+        .select('reserved_qty')
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(locRow.reserved_qty), 30);
       assert.equal(Number(poolRow.reserved_qty), 0);
       assert.equal(Number(product.reserved_qty), 30);
@@ -273,11 +311,18 @@ async function main(): Promise<void> {
       // Release round-trips exactly.
       await db.transaction().execute(async (trx) => {
         await releaseLocationStock(trx as any, {
-          ...AUTH_SCOPE, branchId: 1, locationId: 10,
+          ...AUTH_SCOPE,
+          branchId: 1,
+          locationId: 10,
           items: [{ productId: 1, qty: 30 }],
         });
       });
-      const after = await db.selectFrom('product_location_stock').select('reserved_qty').where('product_id', '=', 1).where('location_id', '=', 10).executeTakeFirstOrThrow();
+      const after = await db
+        .selectFrom('product_location_stock')
+        .select('reserved_qty')
+        .where('product_id', '=', 1)
+        .where('location_id', '=', 10)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(after.reserved_qty), 0);
     } finally {
       await db.destroy();
@@ -288,19 +333,25 @@ async function main(): Promise<void> {
   // the pool row is read with the exact null/null predicate, and the
   // hardcoded 0 error quantity is gone.
   {
-    const source = readFileSync(
-      resolve(__dirname, '../../src/modules/sales/services/sales-write.service.ts'),
-      'utf8',
-    );
+    const source = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-write.service.ts'), 'utf8');
     const seamCalls = source.split('computeSaleAllocationLegs({').length - 1;
-    assert.equal(seamCalls, 8, 'computeSaleAllocationLegs must be called twice at each of the four deduction sites (create/edit, parent/modifier)');
-    assert.equal(source.split('currentAvailableQty: 0').length - 1, 0, 'the hardcoded 0 pooled-availability error quantity must be gone');
-    const poolReads = source.match(/where\('location_id', 'is', null\)\s*\.where\('branch_id', 'is', null\)/g) || [];
-    assert.equal(poolReads.length, 4, 'exactly four pool-row reads (one per deduction site) with the location+branch null predicate');
-    const helper = readFileSync(
-      resolve(__dirname, '../../src/modules/sales/helpers/sales-write.helper.ts'),
-      'utf8',
+    assert.equal(
+      seamCalls,
+      8,
+      'computeSaleAllocationLegs must be called twice at each of the four deduction sites (create/edit, parent/modifier)',
     );
+    assert.equal(
+      source.split('currentAvailableQty: 0').length - 1,
+      0,
+      'the hardcoded 0 pooled-availability error quantity must be gone',
+    );
+    const poolReads = source.match(/where\('location_id', 'is', null\)\s*\.where\('branch_id', 'is', null\)/g) || [];
+    assert.equal(
+      poolReads.length,
+      4,
+      'exactly four pool-row reads (one per deduction site) with the location+branch null predicate',
+    );
+    const helper = readFileSync(resolve(__dirname, '../../src/modules/sales/helpers/sales-write.helper.ts'), 'utf8');
     assert.ok(helper.includes('export function computeSaleAllocationLegs'));
     assert.ok(helper.includes('fromPool: true'));
   }
@@ -312,7 +363,11 @@ async function main(): Promise<void> {
   // cases above are unchanged.)
   {
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-FLOATING-POOL-ALLOCATION-LEG').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-FLOATING-POOL-ALLOCATION-LEG').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
   }
 
   console.log('Sale floating-pool allocation-leg tests passed');

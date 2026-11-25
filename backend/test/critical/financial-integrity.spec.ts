@@ -28,13 +28,13 @@ console.log('=== بدء اختبارات الثوابت المالية والح�
 {
   assert.equal(roundMoneyToTwoDecimals(10.555), 10.56);
   assert.equal(roundMoneyToTwoDecimals(10.554), 10.55);
-  assert.equal(roundMoneyToTwoDecimals(0.0001), 0.00);
+  assert.equal(roundMoneyToTwoDecimals(0.0001), 0.0);
   assert.equal(roundMoneyToTwoDecimals(0), 0);
-  assert.equal(roundMoneyToTwoDecimals(-0.0001), -0.00);
+  assert.equal(roundMoneyToTwoDecimals(-0.0001), -0.0);
 
   assert.equal(roundQty(10.5554), 10.555);
   assert.equal(roundQty(10.5556), 10.556);
-  assert.equal(roundQty(1.0001), 1.000);
+  assert.equal(roundQty(1.0001), 1.0);
   console.log('✓ 1. اختبارات الدقة الحسابية للتقريب المالي (2 خانات) والكميات (3 خانات) اجتازت بنجاح');
 }
 
@@ -249,10 +249,10 @@ console.log('=== بدء اختبارات الثوابت المالية والح�
   }
 
   const cases = [
-    { total: 100.00, count: 3 }, // 33.34, 33.33, 33.33 = 100.00
-    { total: 1000.10, count: 7 },
+    { total: 100.0, count: 3 }, // 33.34, 33.33, 33.33 = 100.00
+    { total: 1000.1, count: 7 },
     { total: 99.99, count: 12 },
-    { total: 0.10, count: 3 },
+    { total: 0.1, count: 3 },
   ];
 
   for (const c of cases) {
@@ -268,4 +268,3 @@ console.log('=== بدء اختبارات الثوابت المالية والح�
 console.log('\n=============================================================================');
 console.log('  كافة اختبارات الثوابت المالية والحسابية المعززة (Financial Integrity) اجتازت 100%');
 console.log('=============================================================================\n');
-

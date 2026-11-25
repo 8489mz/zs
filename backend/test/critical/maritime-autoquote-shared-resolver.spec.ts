@@ -59,7 +59,13 @@ async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
-  const authT2 = { tenantId: 't2', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+  const authT2 = {
+    tenantId: 't2',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 1,
+    permissions: [],
+  } as unknown as AuthContext;
   const service = new MaritimeFreightService(db, {} as never, {} as never, {} as never);
 
   try {
@@ -82,12 +88,19 @@ async function main(): Promise<void> {
     assert.equal(skipped.details.length, 1);
     assert.match(skipped.details[0], /لا يوجد سعر صرف مسجل/);
     assert.match(skipped.details[0], /RFQ-1/);
-    const rfq = await (db as any).selectFrom('maritime_rfqs').select(['status', 'auto_awarded']).where('id', '=', 1).executeTakeFirstOrThrow();
+    const rfq = await (db as any)
+      .selectFrom('maritime_rfqs')
+      .select(['status', 'auto_awarded'])
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow();
     assert.equal(rfq.status, 'sent');
     assert.equal(rfq.auto_awarded, false);
 
     // 2. The resolver itself: live rate, base currency, fail-closed.
-    await (db as any).insertInto('currency_exchange_rates').values({ tenant_id: 't1', currency_code: 'USD', exchange_rate: 56, is_base: false }).execute();
+    await (db as any)
+      .insertInto('currency_exchange_rates')
+      .values({ tenant_id: 't1', currency_code: 'USD', exchange_rate: 56, is_base: false })
+      .execute();
     assert.equal(await service.resolveAutoQuoteExchangeRate('t1', 'USD'), 56);
     assert.equal(await service.resolveAutoQuoteExchangeRate('t1', 'EGP'), 1);
     await assert.rejects(service.resolveAutoQuoteExchangeRate('t2', 'USD'), /سعر صرف USD غير متاح/);
@@ -98,21 +111,32 @@ async function main(): Promise<void> {
     assert.equal(config.requireManualAwardAndMargin, false, 'other stored keys survive');
     const saved: any = await service.savePipelineSettings(auth, { marginFloor: 160 } as never);
     assert.ok(!('defaultExchangeRate' in saved));
-    const storedRow = await (db as any).selectFrom('settings').select('value').where('tenant_id', '=', 't1').where('key', '=', 'maritime_pipeline_config').executeTakeFirstOrThrow();
+    const storedRow = await (db as any)
+      .selectFrom('settings')
+      .select('value')
+      .where('tenant_id', '=', 't1')
+      .where('key', '=', 'maritime_pipeline_config')
+      .executeTakeFirstOrThrow();
     assert.ok(!String(storedRow.value).includes('defaultExchangeRate'), 'the stored JSON must not keep the key');
 
     // 4. Source pins.
     // Maritime split: the pipeline lives in the pipeline slice, and
     // processAutomatedPipelineForTenant is its LAST method, so the
     // next-method search returns -1 — fall back to EOF.
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-pipeline.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-pipeline.service.ts'),
+      'utf8',
+    );
     const pipelineStart = serviceSource.indexOf('async processAutomatedPipelineForTenant(');
     const pipelineEnd = serviceSource.indexOf('\n  async ', pipelineStart + 10);
     const pipelineBody = serviceSource.slice(pipelineStart, pipelineEnd === -1 ? undefined : pipelineEnd);
     assert.ok(pipelineBody.includes('resolveAutoQuoteExchangeRate'), 'the pipeline must resolve through the helper');
     assert.ok(!pipelineBody.includes('48.5'), 'no hardcoded rate in the pipeline');
     assert.ok(!pipelineBody.includes('defaultExchangeRate'), 'no config-default rate in the pipeline');
-    const typesSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.types.ts'), 'utf8');
+    const typesSource = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.types.ts'),
+      'utf8',
+    );
     assert.ok(!typesSource.includes('defaultExchangeRate'), 'the config type must not carry the key');
     assert.ok(!typesSource.includes('48.5'), 'the config default must not carry a hardcoded rate');
     for (const rel of [
@@ -124,7 +148,10 @@ async function main(): Promise<void> {
       assert.ok(!content.includes('defaultExchangeRate'), `${rel} must not reference the removed key`);
       assert.ok(!content.includes('48.5'), `${rel} must not hardcode the rate`);
     }
-    const settingsTab = readFileSync(resolve(__dirname, '../../../frontend/src/features/maritime-freight/components/MaritimePipelineSettingsTab.tsx'), 'utf8');
+    const settingsTab = readFileSync(
+      resolve(__dirname, '../../../frontend/src/features/maritime-freight/components/MaritimePipelineSettingsTab.tsx'),
+      'utf8',
+    );
     assert.ok(settingsTab.includes('سعر الصرف الحي المسجل'), 'the settings tab explains the live rate');
 
     console.log('maritime auto-quote shared resolver checks passed');

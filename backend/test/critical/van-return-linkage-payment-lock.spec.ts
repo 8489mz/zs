@@ -160,66 +160,224 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('settings').values([
-    { tenant_id: TENANT, key: 'currency', value: 'EGP' },
-    { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
-  ]).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values([
-    { id: 1, tenant_id: TENANT, username: 'sys', phone: null, is_active: true },
-    { id: 2, tenant_id: TENANT, username: 'sup', phone: null, role: 'admin', is_active: true },
-    { id: 3, tenant_id: TENANT, username: 'cashier', phone: null, role: 'cashier', is_active: true },
-  ]).execute();
+  await anyDb
+    .insertInto('settings')
+    .values([
+      { tenant_id: TENANT, key: 'currency', value: 'EGP' },
+      { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values([
+      { id: 1, tenant_id: TENANT, username: 'sys', phone: null, is_active: true },
+      { id: 2, tenant_id: TENANT, username: 'sup', phone: null, role: 'admin', is_active: true },
+      { id: 3, tenant_id: TENANT, username: 'cashier', phone: null, role: 'cashier', is_active: true },
+    ])
+    .execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [1160, '1160', 'asset'], [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'],
-    [5100, '5100', 'expense'], [6400, '6400', 'expense'], [7100, '7100', 'revenue'], [7200, '7200', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [1160, '1160', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
+    [6400, '6400', 'expense'],
+    [7100, '7100', 'revenue'],
+    [7200, '7200', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-    lock_date_all: null, lock_date_non_adviser: null, lock_date_tax: null,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 30, tenant_id: TENANT, account_id: ACCOUNT, name: 'Damaged', location_type: 'damaged', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', phone: null, van_location_id: 20, is_van_rep: true, permissions: JSON.stringify({ can_give_discount: true, can_give_invoice_discount: true, max_discount_percent: 0, can_collect_cash: true }) }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 2', phone: null, van_location_id: 20, is_van_rep: true, permissions: JSON.stringify({ can_give_discount: true, can_collect_cash: true }) }).execute();
-  await anyDb.insertInto('customers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer 1', balance: 500, credit_limit: 10000, is_active: true }).execute();
-  await anyDb.insertInto('customers').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer 2', balance: 0, credit_limit: 10000, is_active: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+      lock_date_all: null,
+      lock_date_non_adviser: null,
+      lock_date_tax: null,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 30,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Damaged',
+      location_type: 'damaged',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 1',
+      phone: null,
+      van_location_id: 20,
+      is_van_rep: true,
+      permissions: JSON.stringify({
+        can_give_discount: true,
+        can_give_invoice_discount: true,
+        max_discount_percent: 0,
+        can_collect_cash: true,
+      }),
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 2',
+      phone: null,
+      van_location_id: 20,
+      is_van_rep: true,
+      permissions: JSON.stringify({ can_give_discount: true, can_collect_cash: true }),
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer 1',
+      balance: 500,
+      credit_limit: 10000,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer 2',
+      balance: 0,
+      credit_limit: 10000,
+      is_active: true,
+    })
+    .execute();
   await sql`SELECT setval(pg_get_serial_sequence('customers', 'id'), (SELECT MAX(id) FROM customers))`.execute(db);
-  await anyDb.insertInto('cashier_shifts').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'CS-1', opened_by: 2, opening_cash: 0, status: 'open', branch_id: null, location_id: null }).execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'CS-1',
+      opened_by: 2,
+      opening_cash: 0,
+      status: 'open',
+      branch_id: null,
+      location_id: null,
+    })
+    .execute();
 }
 
-async function seedTrip(db: Kysely<Database>, id: number, opts: { repId?: number; cashCollected?: number; businessDay?: string | null } = {}): Promise<void> {
-  await (db as any).insertInto('van_sales_trips').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: opts.repId ?? 1, vehicle_id: null,
-    shift_name: null, start_odometer: 100, end_odometer: null, distance_km: null,
-    van_location_id: 20, source_warehouse_id: 10, status: 'open',
-    settlement_status: 'open', loaded_amount: 0, sales_amount: 0, cash_collected: opts.cashCollected ?? 10000,
-    credit_sales: 0, returns_amount: 0, cash_refunds: 0, total_instapay_sales: 0,
-    total_instapay_collections: 0, variance: null, stock_variance_details: null, notes: null,
-    night_stock_approved_by: null, night_stock_notes: null,
-    business_day: opts.businessDay ?? null, submitted_per_day_cash: null,
-    opened_at: '2026-11-09T08:00:00+02:00',
-  }).execute();
+async function seedTrip(
+  db: Kysely<Database>,
+  id: number,
+  opts: { repId?: number; cashCollected?: number; businessDay?: string | null } = {},
+): Promise<void> {
+  await (db as any)
+    .insertInto('van_sales_trips')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: opts.repId ?? 1,
+      vehicle_id: null,
+      shift_name: null,
+      start_odometer: 100,
+      end_odometer: null,
+      distance_km: null,
+      van_location_id: 20,
+      source_warehouse_id: 10,
+      status: 'open',
+      settlement_status: 'open',
+      loaded_amount: 0,
+      sales_amount: 0,
+      cash_collected: opts.cashCollected ?? 10000,
+      credit_sales: 0,
+      returns_amount: 0,
+      cash_refunds: 0,
+      total_instapay_sales: 0,
+      total_instapay_collections: 0,
+      variance: null,
+      stock_variance_details: null,
+      notes: null,
+      night_stock_approved_by: null,
+      night_stock_notes: null,
+      business_day: opts.businessDay ?? null,
+      submitted_per_day_cash: null,
+      opened_at: '2026-11-09T08:00:00+02:00',
+    })
+    .execute();
 }
 
 async function seedProduct(db: Kysely<Database>, id: number, vanQty = 100): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${id}`,
-    stock_qty: vanQty, cost_price: 50,
-    retail_price: 100, wholesale_price: 80,
-    half_wholesale_price: null, credit_price: 90,
-    is_active: true,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Product ${id}`,
+      stock_qty: vanQty,
+      cost_price: 50,
+      retail_price: 100,
+      wholesale_price: 80,
+      half_wholesale_price: null,
+      credit_price: 90,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty })
+    .execute();
 }
 
 async function seedPin(db: Kysely<Database>, pin: string): Promise<void> {
@@ -258,73 +416,218 @@ async function seedVanSale(
   const total = opts.total ?? 1000;
   const qty = opts.qty ?? 10;
   const unitPrice = opts.unitPrice ?? 100;
-  await anyDb.insertInto('sales').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `INV-${id}`, total, subtotal: total,
-    discount: 0, tax_rate: 0, tax_amount: 0, delivery_fee: 0, delivery_fee_mode: 'per_order',
-    service_charge: 0, tip_amount: 0, paid_amount: opts.paidAmount ?? 0, applied_amount: opts.paidAmount ?? 0,
-    tendered_amount: opts.paidAmount ?? 0, change_amount: 0, store_credit_used: 0, prices_include_tax: true,
-    status: 'posted', payment_type: opts.paymentType ?? 'cash', payment_channel: opts.paymentChannel ?? 'cash',
-    collection_status: null, customer_id: opts.customerId === undefined ? 1 : opts.customerId, customer_name: 'Customer 1',
-    customer_phone: null, customer_address: null, branch_id: null, location_id: 20, created_by: 2,
-    delivery_rep_id: 1, van_trip_id: opts.tripId === undefined ? 1 : opts.tripId, sale_origin: 'van_field', order_type: null,
-    exchange_return_id: null, is_credit_overridden: false, credit_override_by_user_id: null,
-    credit_override_reason: null, transfer_reference: null, transfer_receipt_url: null,
-    recipient_name: null, recipient_phone: null, recipient_role: null, recipient_signature: null,
-    note: null, delivery_gps_lat: null, delivery_gps_lng: null, gps_missing_reason: null,
-    delivery_proof_photo: null, packaging_breakdown: null,
-    created_at: opts.createdAt ?? '2026-11-09T08:00:00+02:00',
-    received_at: opts.createdAt ?? '2026-11-09T08:00:00+02:00',
-  }).execute();
+  await anyDb
+    .insertInto('sales')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `INV-${id}`,
+      total,
+      subtotal: total,
+      discount: 0,
+      tax_rate: 0,
+      tax_amount: 0,
+      delivery_fee: 0,
+      delivery_fee_mode: 'per_order',
+      service_charge: 0,
+      tip_amount: 0,
+      paid_amount: opts.paidAmount ?? 0,
+      applied_amount: opts.paidAmount ?? 0,
+      tendered_amount: opts.paidAmount ?? 0,
+      change_amount: 0,
+      store_credit_used: 0,
+      prices_include_tax: true,
+      status: 'posted',
+      payment_type: opts.paymentType ?? 'cash',
+      payment_channel: opts.paymentChannel ?? 'cash',
+      collection_status: null,
+      customer_id: opts.customerId === undefined ? 1 : opts.customerId,
+      customer_name: 'Customer 1',
+      customer_phone: null,
+      customer_address: null,
+      branch_id: null,
+      location_id: 20,
+      created_by: 2,
+      delivery_rep_id: 1,
+      van_trip_id: opts.tripId === undefined ? 1 : opts.tripId,
+      sale_origin: 'van_field',
+      order_type: null,
+      exchange_return_id: null,
+      is_credit_overridden: false,
+      credit_override_by_user_id: null,
+      credit_override_reason: null,
+      transfer_reference: null,
+      transfer_receipt_url: null,
+      recipient_name: null,
+      recipient_phone: null,
+      recipient_role: null,
+      recipient_signature: null,
+      note: null,
+      delivery_gps_lat: null,
+      delivery_gps_lng: null,
+      gps_missing_reason: null,
+      delivery_proof_photo: null,
+      packaging_breakdown: null,
+      created_at: opts.createdAt ?? '2026-11-09T08:00:00+02:00',
+      received_at: opts.createdAt ?? '2026-11-09T08:00:00+02:00',
+    })
+    .execute();
   const itemIds: number[] = [];
-  const inserted = await anyDb.insertInto('sale_items').values({
-    sale_id: id, product_id: 101, product_name: 'Product 101', qty, unit_price: unitPrice,
-    line_total: qty * unitPrice, line_discount: 0, cost_price: 50, consumer_price: 100,
-    pricing_tier_type: 'retail', unit_offer_savings: 0, unit_name: 'piece', unit_multiplier: 1,
-    is_bonus: false, bonus_reason: null, tenant_id: TENANT, account_id: ACCOUNT, modifiers: null,
-  }).returning(['id']).execute();
+  const inserted = await anyDb
+    .insertInto('sale_items')
+    .values({
+      sale_id: id,
+      product_id: 101,
+      product_name: 'Product 101',
+      qty,
+      unit_price: unitPrice,
+      line_total: qty * unitPrice,
+      line_discount: 0,
+      cost_price: 50,
+      consumer_price: 100,
+      pricing_tier_type: 'retail',
+      unit_offer_savings: 0,
+      unit_name: 'piece',
+      unit_multiplier: 1,
+      is_bonus: false,
+      bonus_reason: null,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      modifiers: null,
+    })
+    .returning(['id'])
+    .execute();
   itemIds.push(Number(inserted[0].id));
   for (const leg of opts.legs || []) {
-    await anyDb.insertInto('sale_payments').values({
-      sale_id: id, payment_channel: leg.channel, amount: leg.amount, applied_amount: leg.amount,
-      tendered_amount: leg.amount, change_amount: 0, card_rrn: null, tenant_id: TENANT, account_id: ACCOUNT,
-    }).execute();
+    await anyDb
+      .insertInto('sale_payments')
+      .values({
+        sale_id: id,
+        payment_channel: leg.channel,
+        amount: leg.amount,
+        applied_amount: leg.amount,
+        tendered_amount: leg.amount,
+        change_amount: 0,
+        card_rrn: null,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+      })
+      .execute();
   }
   if (opts.ledgerCredit != null) {
-    await anyDb.insertInto('customer_ledger').values({
-      customer_id: opts.customerId ?? 1, supplier_id: null, entry_type: 'sale_credit',
-      amount: opts.ledgerCredit, balance_after: null, note: 'split credit leg',
-      reference_type: 'sale', reference_id: id, van_trip_id: opts.tripId ?? 1,
-      gps_lat: null, gps_lng: null, tenant_id: TENANT, account_id: ACCOUNT,
-    }).execute();
+    await anyDb
+      .insertInto('customer_ledger')
+      .values({
+        customer_id: opts.customerId ?? 1,
+        supplier_id: null,
+        entry_type: 'sale_credit',
+        amount: opts.ledgerCredit,
+        balance_after: null,
+        note: 'split credit leg',
+        reference_type: 'sale',
+        reference_id: id,
+        van_trip_id: opts.tripId ?? 1,
+        gps_lat: null,
+        gps_lng: null,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+      })
+      .execute();
   }
   return itemIds;
 }
 
 // P1's own shape for the due computation (paid_amount = total).
-async function seedCashSaleForDue(db: Kysely<Database>, id: number, tripId: number, total: number, createdAt: string): Promise<void> {
-  await (db as any).insertInto('sales').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `INV-${id}`, total, subtotal: total,
-    discount: 0, tax_rate: 0, tax_amount: 0, delivery_fee: 0, delivery_fee_mode: 'per_order',
-    service_charge: 0, tip_amount: 0, paid_amount: total, store_credit_used: 0, prices_include_tax: true,
-    status: 'posted', payment_type: 'cash', payment_channel: 'cash', collection_status: 'prepaid_by_rep',
-    customer_id: null, branch_id: null, location_id: null, created_by: 2, delivery_rep_id: 1,
-    van_trip_id: tripId, sale_origin: 'van_field', exchange_return_id: null,
-    is_credit_overridden: false, credit_override_by_user_id: null, credit_override_reason: null,
-    transfer_reference: null, transfer_receipt_url: null, recipient_name: null, recipient_phone: null,
-    recipient_role: null, recipient_signature: null, note: null, delivery_gps_lat: null,
-    delivery_gps_lng: null, delivery_proof_photo: null, packaging_breakdown: null,
-    created_at: createdAt, received_at: createdAt,
-  }).execute();
+async function seedCashSaleForDue(
+  db: Kysely<Database>,
+  id: number,
+  tripId: number,
+  total: number,
+  createdAt: string,
+): Promise<void> {
+  await (db as any)
+    .insertInto('sales')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `INV-${id}`,
+      total,
+      subtotal: total,
+      discount: 0,
+      tax_rate: 0,
+      tax_amount: 0,
+      delivery_fee: 0,
+      delivery_fee_mode: 'per_order',
+      service_charge: 0,
+      tip_amount: 0,
+      paid_amount: total,
+      store_credit_used: 0,
+      prices_include_tax: true,
+      status: 'posted',
+      payment_type: 'cash',
+      payment_channel: 'cash',
+      collection_status: 'prepaid_by_rep',
+      customer_id: null,
+      branch_id: null,
+      location_id: null,
+      created_by: 2,
+      delivery_rep_id: 1,
+      van_trip_id: tripId,
+      sale_origin: 'van_field',
+      exchange_return_id: null,
+      is_credit_overridden: false,
+      credit_override_by_user_id: null,
+      credit_override_reason: null,
+      transfer_reference: null,
+      transfer_receipt_url: null,
+      recipient_name: null,
+      recipient_phone: null,
+      recipient_role: null,
+      recipient_signature: null,
+      note: null,
+      delivery_gps_lat: null,
+      delivery_gps_lng: null,
+      delivery_proof_photo: null,
+      packaging_breakdown: null,
+      created_at: createdAt,
+      received_at: createdAt,
+    })
+    .execute();
 }
 
 // P1's shape: an old approved cash return with sale_id NULL.
-async function seedLegacyCashRefund(db: Kysely<Database>, id: number, tripId: number, total: number, createdAt: string): Promise<void> {
-  await (db as any).insertInto('van_field_returns').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `RET-${id}`, trip_id: tripId, rep_id: 1,
-    customer_id: 1, sale_id: null, status: 'approved', return_reason: 'damaged',
-    refund_method: 'cash', total_amount: total, items_json: null, notes: null,
-    rejection_reason: null, approved_by: 2, approved_at: createdAt, created_at: createdAt,
-  }).execute();
+async function seedLegacyCashRefund(
+  db: Kysely<Database>,
+  id: number,
+  tripId: number,
+  total: number,
+  createdAt: string,
+): Promise<void> {
+  await (db as any)
+    .insertInto('van_field_returns')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `RET-${id}`,
+      trip_id: tripId,
+      rep_id: 1,
+      customer_id: 1,
+      sale_id: null,
+      status: 'approved',
+      return_reason: 'damaged',
+      refund_method: 'cash',
+      total_amount: total,
+      items_json: null,
+      notes: null,
+      rejection_reason: null,
+      approved_by: 2,
+      approved_at: createdAt,
+      created_at: createdAt,
+    })
+    .execute();
 }
 
 function buildReturns(db: Kysely<Database>): { service: VanReturnsService; recordedAudit: any[] } {
@@ -334,7 +637,9 @@ function buildReturns(db: Kysely<Database>): { service: VanReturnsService; recor
   } as never);
   const recordedAudit: any[] = [];
   const auditStub = {
-    log: async (action: string, details: string) => { recordedAudit.push({ action, details }); },
+    log: async (action: string, details: string) => {
+      recordedAudit.push({ action, details });
+    },
     logWithExecutor: async () => {},
   };
   const service = new VanReturnsService(db, posting, undefined, auditStub as never);
@@ -348,7 +653,9 @@ function buildEdit(db: Kysely<Database>): { service: SalesEditAndCancelService; 
   } as never);
   const recordedAudit: any[] = [];
   const auditStub = {
-    log: async (action: string, details: string) => { recordedAudit.push({ action, details }); },
+    log: async (action: string, details: string) => {
+      recordedAudit.push({ action, details });
+    },
     logWithExecutor: async () => {},
   };
   const authz = new SalesAuthorizationService(db as never);
@@ -379,7 +686,9 @@ function buildEdit(db: Kysely<Database>): { service: SalesEditAndCancelService; 
     restoreSaleInventoryBatches: async () => {},
     recordImportLotShortfalls: async () => {},
     getAllowNegativeStockSales: async () => false,
-    buildInsufficientStockError: (async () => { throw new Error('unexpected stock error'); }) as never,
+    buildInsufficientStockError: (async () => {
+      throw new Error('unexpected stock error');
+    }) as never,
     lockProductRow: async () => {},
     lockSaleStockRows: async () => {},
     getCurrentProductOffers: async () => [],
@@ -404,7 +713,7 @@ function buildLifecycle(db: Kysely<Database>): VanTripLifecycleService {
     deductVanSalePharmacyBatches: async () => [],
     moveVanInventoryBatches: async () => 0,
     deductVanSaleInventoryBatches: async () => [],
-    resolveSystemAuthContext: async () => ({ ...ADMIN, userId: 2 } as never),
+    resolveSystemAuthContext: async () => ({ ...ADMIN, userId: 2 }) as never,
     recordSuspicionEvent: async () => ({}),
     listRepServedCustomerIds: async () => new Set<number>(),
     resolveRepLinkedUserId: async () => null,
@@ -412,25 +721,50 @@ function buildLifecycle(db: Kysely<Database>): VanTripLifecycleService {
 }
 
 async function saleRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll().where('id', '=', id).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', id)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function legs(db: Kysely<Database>, saleId: number): Promise<any[]> {
-  return (db as any).selectFrom('sale_payments').selectAll().where('sale_id', '=', saleId).where('tenant_id', '=', TENANT).orderBy('id').execute();
+  return (db as any)
+    .selectFrom('sale_payments')
+    .selectAll()
+    .where('sale_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .orderBy('id')
+    .execute();
 }
 
 async function returnRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('van_field_returns').selectAll().where('id', '=', id).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('van_field_returns')
+    .selectAll()
+    .where('id', '=', id)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row = await (db as any).selectFrom(table).select(sql`count(*)`.as('c')).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom(table)
+    .select(sql`count(*)`.as('c'))
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.c);
 }
 
 async function journals(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<any[]> {
-  return (db as any).selectFrom('journal_entries').selectAll()
-    .where('tenant_id', '=', TENANT).where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute();
+  return (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('tenant_id', '=', TENANT)
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute();
 }
 
 async function journalLines(db: Kysely<Database>, entryId: number): Promise<any[]> {
@@ -438,8 +772,12 @@ async function journalLines(db: Kysely<Database>, entryId: number): Promise<any[
 }
 
 function lineFor(lines: any[], accountId: number): { debit: number; credit: number } {
-  return lines.filter((l: any) => Number(l.account_id) === accountId)
-    .reduce((acc: any, l: any) => ({ debit: acc.debit + Number(l.debit || 0), credit: acc.credit + Number(l.credit || 0) }), { debit: 0, credit: 0 });
+  return lines
+    .filter((l: any) => Number(l.account_id) === accountId)
+    .reduce(
+      (acc: any, l: any) => ({ debit: acc.debit + Number(l.debit || 0), credit: acc.credit + Number(l.credit || 0) }),
+      { debit: 0, credit: 0 },
+    );
 }
 
 async function expectCode(promise: Promise<unknown>, code: string): Promise<void> {
@@ -483,15 +821,22 @@ async function main(): Promise<void> {
       const [itemId] = await seedVanSale(db, 100, { tripId: 1, customerId: 1, paymentType: 'cash' });
       await expectCode(
         service.submitFieldReturn(1, TENANT, ACCOUNT, {
-          tripId: 1, customerId: 1, saleId: null, returnReason: 'damaged',
-          refundMethod: 'cash', items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: itemId }],
+          tripId: 1,
+          customerId: 1,
+          saleId: null,
+          returnReason: 'damaged',
+          refundMethod: 'cash',
+          items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: itemId }],
         }),
         'RETURN_REQUIRES_SALE_ID',
       );
       await expectCode(
         service.submitFieldReturn(1, TENANT, ACCOUNT, {
-          tripId: 1, customerId: 1, returnReason: 'damaged',
-          refundMethod: 'cash', items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: itemId }],
+          tripId: 1,
+          customerId: 1,
+          returnReason: 'damaged',
+          refundMethod: 'cash',
+          items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: itemId }],
         }),
         'RETURN_REQUIRES_SALE_ID',
       );
@@ -499,8 +844,12 @@ async function main(): Promise<void> {
       const [otherItemId] = await seedVanSale(db, 105, { tripId: 1, customerId: 2, paymentType: 'cash' });
       await expectCode(
         service.submitFieldReturn(1, TENANT, ACCOUNT, {
-          tripId: 1, customerId: 1, saleId: 105, returnReason: 'damaged',
-          refundMethod: 'cash', items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: otherItemId }],
+          tripId: 1,
+          customerId: 1,
+          saleId: 105,
+          returnReason: 'damaged',
+          refundMethod: 'cash',
+          items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: otherItemId }],
         }),
         'SALE_CUSTOMER_MISMATCH',
       );
@@ -510,8 +859,12 @@ async function main(): Promise<void> {
       await (db as any).updateTable('sales').set({ delivery_rep_id: 2 }).where('id', '=', 107).execute();
       await expectCode(
         service.submitFieldReturn(1, TENANT, ACCOUNT, {
-          tripId: 1, customerId: 1, saleId: 107, returnReason: 'damaged',
-          refundMethod: 'cash', items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: rep2ItemId }],
+          tripId: 1,
+          customerId: 1,
+          saleId: 107,
+          returnReason: 'damaged',
+          refundMethod: 'cash',
+          items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: rep2ItemId }],
         }),
         'SALE_REP_MISMATCH',
       );
@@ -519,7 +872,9 @@ async function main(): Promise<void> {
       assert.equal(await countRows(db, 'journal_entries'), 0);
       assert.equal(await countRows(db, 'stock_movements'), 0);
       console.log('1. no-saleId + foreign-sale refusals, nothing written, passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. Credit sale + cash refund is refused by the (now
@@ -531,23 +886,38 @@ async function main(): Promise<void> {
       await seedTrip(db, 1);
       await seedProduct(db, 101);
       const { service } = buildReturns(db);
-      const [itemId] = await seedVanSale(db, 101, { tripId: 1, customerId: 1, paymentType: 'credit', paymentChannel: 'credit' });
+      const [itemId] = await seedVanSale(db, 101, {
+        tripId: 1,
+        customerId: 1,
+        paymentType: 'credit',
+        paymentChannel: 'credit',
+      });
       await expectCode(
         service.submitFieldReturn(1, TENANT, ACCOUNT, {
-          tripId: 1, customerId: 1, saleId: 101, returnReason: 'customer_request',
-          refundMethod: 'cash', items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: itemId }],
+          tripId: 1,
+          customerId: 1,
+          saleId: 101,
+          returnReason: 'customer_request',
+          refundMethod: 'cash',
+          items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: itemId }],
         }),
         'REFUND_METHOD_MISMATCH',
       );
       const ok = await service.submitFieldReturn(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 1, saleId: 101, returnReason: 'customer_request',
-        refundMethod: 'credit', items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: itemId }],
+        tripId: 1,
+        customerId: 1,
+        saleId: 101,
+        returnReason: 'customer_request',
+        refundMethod: 'credit',
+        items: [{ productId: 101, qty: 1, unitPrice: 100, saleItemId: itemId }],
       });
       assert.equal(ok.status, 'pending_approval');
       assert.equal(Number(ok.totalAmount), 100);
       assert.equal(await countRows(db, 'van_field_returns'), 1);
       console.log('2. credit sale: cash refund refused, credit refund posts, passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. Split refund respects per-leg caps net of prior returns:
@@ -560,12 +930,21 @@ async function main(): Promise<void> {
       await seedProduct(db, 101);
       const { service } = buildReturns(db);
       const [itemId] = await seedVanSale(db, 102, {
-        tripId: 1, customerId: 1, paymentType: 'split', paymentChannel: 'mixed', ledgerCredit: 400,
+        tripId: 1,
+        customerId: 1,
+        paymentType: 'split',
+        paymentChannel: 'mixed',
+        ledgerCredit: 400,
       });
-      const ret = (refundMethod: 'cash' | 'credit', qty: number) => service.submitFieldReturn(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 1, saleId: 102, returnReason: 'customer_request',
-        refundMethod, items: [{ productId: 101, qty, unitPrice: 100, saleItemId: itemId }],
-      });
+      const ret = (refundMethod: 'cash' | 'credit', qty: number) =>
+        service.submitFieldReturn(1, TENANT, ACCOUNT, {
+          tripId: 1,
+          customerId: 1,
+          saleId: 102,
+          returnReason: 'customer_request',
+          refundMethod,
+          items: [{ productId: 101, qty, unitPrice: 100, saleItemId: itemId }],
+        });
       await expectCode(ret('cash', 7), 'REFUND_METHOD_MISMATCH');
       await ret('cash', 3);
       await expectCode(ret('cash', 4), 'REFUND_METHOD_MISMATCH');
@@ -573,7 +952,9 @@ async function main(): Promise<void> {
       await expectCode(ret('credit', 4), 'REFUND_METHOD_MISMATCH');
       assert.equal(await countRows(db, 'van_field_returns'), 2);
       console.log('3. split per-leg caps net of prior returns, passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 4. An edit leaves sale_payments byte-identical (same ids,
@@ -586,14 +967,23 @@ async function main(): Promise<void> {
       await seedProduct(db, 101);
       const { service } = buildEdit(db);
       await seedVanSale(db, 200, {
-        tripId: null, customerId: 1, paymentType: 'cash', paymentChannel: 'cash',
-        total: 1000, paidAmount: 1000, legs: [{ channel: 'cash', amount: 1000 }],
+        tripId: null,
+        customerId: 1,
+        paymentType: 'cash',
+        paymentChannel: 'cash',
+        total: 1000,
+        paidAmount: 1000,
+        legs: [{ channel: 'cash', amount: 1000 }],
       });
       const before = await legs(db, 200);
       assert.equal(before.length, 1);
-      await service.updateSale(200, editPayload([
-        { productId: 101, qty: 12, price: 100, unitName: 'piece', unitMultiplier: 1, priceType: 'retail' },
-      ]), ADMIN as never);
+      await service.updateSale(
+        200,
+        editPayload([
+          { productId: 101, qty: 12, price: 100, unitName: 'piece', unitMultiplier: 1, priceType: 'retail' },
+        ]),
+        ADMIN as never,
+      );
       const after = await legs(db, 200);
       assert.deepEqual(after, before);
       const sale = await saleRow(db, 200);
@@ -613,7 +1003,9 @@ async function main(): Promise<void> {
       assert.equal(debit, credit);
       assert.ok(debit > 0);
       console.log('4. edit leaves legs byte-identical, passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 5. An edit that restates the total BELOW the stored legs is
@@ -626,13 +1018,22 @@ async function main(): Promise<void> {
       await seedProduct(db, 101);
       const { service } = buildEdit(db);
       await seedVanSale(db, 201, {
-        tripId: null, customerId: 1, paymentType: 'cash', paymentChannel: 'cash',
-        total: 1000, paidAmount: 1000, legs: [{ channel: 'cash', amount: 1000 }],
+        tripId: null,
+        customerId: 1,
+        paymentType: 'cash',
+        paymentChannel: 'cash',
+        total: 1000,
+        paidAmount: 1000,
+        legs: [{ channel: 'cash', amount: 1000 }],
       });
       await expectCode(
-        service.updateSale(201, editPayload([
-          { productId: 101, qty: 8, price: 100, unitName: 'piece', unitMultiplier: 1, priceType: 'retail' },
-        ]), ADMIN as never),
+        service.updateSale(
+          201,
+          editPayload([
+            { productId: 101, qty: 8, price: 100, unitName: 'piece', unitMultiplier: 1, priceType: 'retail' },
+          ]),
+          ADMIN as never,
+        ),
         'SALE_EDIT_OVERPAID_LEGS',
       );
       const sale = await saleRow(db, 201);
@@ -642,7 +1043,9 @@ async function main(): Promise<void> {
       assert.equal(Number(after[0].amount), 1000);
       assert.equal((await journals(db, 'sale_edit', 201)).length, 0);
       console.log('5. overpaid-legs edit refused, nothing written, passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 6. The adjustment endpoint: PIN + reason gates, legs replaced,
@@ -657,8 +1060,13 @@ async function main(): Promise<void> {
       await seedPin(db, '4321');
       const { service, recordedAudit } = buildEdit(db);
       await seedVanSale(db, 210, {
-        tripId: null, customerId: 1, paymentType: 'cash', paymentChannel: 'cash',
-        total: 1000, paidAmount: 1000, legs: [{ channel: 'cash', amount: 1000 }],
+        tripId: null,
+        customerId: 1,
+        paymentType: 'cash',
+        paymentChannel: 'cash',
+        total: 1000,
+        paidAmount: 1000,
+        legs: [{ channel: 'cash', amount: 1000 }],
       });
       const adjust = (payload: Partial<AdjustSalePaymentsDto>, auth: any) =>
         service.adjustSalePayments(210, payload as AdjustSalePaymentsDto, auth);
@@ -671,13 +1079,16 @@ async function main(): Promise<void> {
         'PAYMENT_ADJUSTMENT_REASON_REQUIRED',
       );
       await expectCode(
-        adjust({ payments: [{ paymentChannel: 'card', amount: 1000 }], reason: 'card instead of cash', managerPin: '0000' }, CASHIER),
+        adjust(
+          { payments: [{ paymentChannel: 'card', amount: 1000 }], reason: 'card instead of cash', managerPin: '0000' },
+          CASHIER,
+        ),
         'MANAGER_AUTH_INVALID',
       );
-      const res = await adjust(
+      const res = (await adjust(
         { payments: [{ paymentChannel: 'card', amount: 1000 }], reason: 'card instead of cash', managerPin: '4321' },
         CASHIER,
-      ) as any;
+      )) as any;
       assert.equal(res.ok, true);
       assert.equal(Number(res.remainingReceivable), 0);
       const after = await legs(db, 210);
@@ -701,41 +1112,66 @@ async function main(): Promise<void> {
       assert.equal(debit, credit);
       assert.ok(debit > 0);
       // The old cash leg was reversed in treasury; no new cash leg.
-      const treasury = await (db as any).selectFrom('treasury_transactions').selectAll()
-        .where('tenant_id', '=', TENANT).where('reference_id', '=', 210).execute();
+      const treasury = await (db as any)
+        .selectFrom('treasury_transactions')
+        .selectAll()
+        .where('tenant_id', '=', TENANT)
+        .where('reference_id', '=', 210)
+        .execute();
       assert.ok(treasury.some((t: any) => Number(t.amount) === -1000));
       assert.ok(!treasury.some((t: any) => Number(t.amount) === 1000));
       // Audit-logged with reason + actor after commit.
       assert.ok(recordedAudit.some((a: any) => String(a.action || '').includes('تعديل دفعات')));
       // One money edit per sale: a later item edit is refused...
       await expectCode(
-        service.updateSale(210, editPayload([
-          { productId: 101, qty: 11, price: 100, unitName: 'piece', unitMultiplier: 1, priceType: 'retail' },
-        ]), ADMIN as never),
+        service.updateSale(
+          210,
+          editPayload([
+            { productId: 101, qty: 11, price: 100, unitName: 'piece', unitMultiplier: 1, priceType: 'retail' },
+          ]),
+          ADMIN as never,
+        ),
         'SALE_EDIT_ALREADY_APPLIED',
       );
       // ...and so is a second adjustment.
       await expectCode(
-        adjust({ payments: [{ paymentChannel: 'cash', amount: 1000 }], reason: 'back to cash', managerPin: '4321' }, CASHIER),
+        adjust(
+          { payments: [{ paymentChannel: 'cash', amount: 1000 }], reason: 'back to cash', managerPin: '4321' },
+          CASHIER,
+        ),
         'SALE_EDIT_ALREADY_APPLIED',
       );
       // Overpaid legs on a fresh sale are refused, legs untouched.
       await seedVanSale(db, 211, {
-        tripId: null, customerId: 1, paymentType: 'cash', paymentChannel: 'cash',
-        total: 1000, paidAmount: 1000, legs: [{ channel: 'cash', amount: 1000 }],
+        tripId: null,
+        customerId: 1,
+        paymentType: 'cash',
+        paymentChannel: 'cash',
+        total: 1000,
+        paidAmount: 1000,
+        legs: [{ channel: 'cash', amount: 1000 }],
       });
       await expectCode(
-        service.adjustSalePayments(211, {
-          payments: [{ paymentChannel: 'cash', amount: 600 }, { paymentChannel: 'card', amount: 500 }],
-          reason: 'overpaid legs',
-        } as AdjustSalePaymentsDto, ADMIN as never),
+        service.adjustSalePayments(
+          211,
+          {
+            payments: [
+              { paymentChannel: 'cash', amount: 600 },
+              { paymentChannel: 'card', amount: 500 },
+            ],
+            reason: 'overpaid legs',
+          } as AdjustSalePaymentsDto,
+          ADMIN as never,
+        ),
         'SALE_PAYMENT_ADJUSTMENT_OVERPAID',
       );
       const legs211 = await legs(db, 211);
       assert.equal(legs211.length, 1);
       assert.equal(Number(legs211[0].amount), 1000);
       console.log('6. adjustment gates + success + audit + one-edit rule, passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 7. F7: a damaged return on a credit sale approves into the
@@ -748,16 +1184,30 @@ async function main(): Promise<void> {
       await seedTrip(db, 1);
       await seedProduct(db, 101);
       const { service } = buildReturns(db);
-      const [itemId] = await seedVanSale(db, 103, { tripId: 1, customerId: 1, paymentType: 'credit', paymentChannel: 'credit' });
+      const [itemId] = await seedVanSale(db, 103, {
+        tripId: 1,
+        customerId: 1,
+        paymentType: 'credit',
+        paymentChannel: 'credit',
+      });
       const submitted = await service.submitFieldReturn(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 1, saleId: 103, returnReason: 'damaged',
-        refundMethod: 'credit', items: [{ productId: 101, qty: 2, unitPrice: 100, saleItemId: itemId }],
+        tripId: 1,
+        customerId: 1,
+        saleId: 103,
+        returnReason: 'damaged',
+        refundMethod: 'credit',
+        items: [{ productId: 101, qty: 2, unitPrice: 100, saleItemId: itemId }],
       });
       await service.approveFieldReturn(TENANT, ACCOUNT, Number(submitted.returnId), 2);
       const ret = await returnRow(db, Number(submitted.returnId));
       assert.equal(ret.status, 'approved');
-      const damagedStock = await (db as any).selectFrom('product_location_stock').selectAll()
-        .where('tenant_id', '=', TENANT).where('product_id', '=', 101).where('location_id', '=', 30).executeTakeFirst();
+      const damagedStock = await (db as any)
+        .selectFrom('product_location_stock')
+        .selectAll()
+        .where('tenant_id', '=', TENANT)
+        .where('product_id', '=', 101)
+        .where('location_id', '=', 30)
+        .executeTakeFirst();
       assert.ok(damagedStock, 'damaged location should hold the restocked qty');
       assert.equal(Number(damagedStock.qty), 2);
       const entries = await journals(db, 'van_field_return', Number(submitted.returnId));
@@ -766,14 +1216,19 @@ async function main(): Promise<void> {
       const debit = lines.reduce((s: number, l: any) => s + Number(l.debit || 0), 0);
       const credit = lines.reduce((s: number, l: any) => s + Number(l.credit || 0), 0);
       assert.equal(debit, credit);
-      assert.ok(lines.some((l: any) => Number(l.location_id) === 30), 'journal lines must be tagged with the damaged location');
+      assert.ok(
+        lines.some((l: any) => Number(l.location_id) === 30),
+        'journal lines must be tagged with the damaged location',
+      );
       assert.equal(lineFor(lines, 4100).debit, 200);
       assert.equal(lineFor(lines, 1130).credit, 200);
       assert.equal(lineFor(lines, 1140).debit, 100);
       assert.equal(lineFor(lines, 5100).credit, 100);
       assert.ok(!lines.some((l: any) => Number(l.account_id) === 5300), 'no automatic damaged write-off leg');
       console.log('7. damaged return: damaged location + journal, no 5300 leg, passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 8. The orphan evidence spec is wired into BOTH critical lists,
@@ -784,7 +1239,9 @@ async function main(): Promise<void> {
     const pkgPath = path.join(specDir, '..', '..', 'package.json');
     const list = JSON.parse(fs.readFileSync(jsonPath, 'utf8')).specs as string[];
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    const chain = String(pkg.scripts['test:critical:serial']).split(' && ').map((x) => x.replace(/^ts-node /, ''));
+    const chain = String(pkg.scripts['test:critical:serial'])
+      .split(' && ')
+      .map((x) => x.replace(/^ts-node /, ''));
     assert.equal(list.length, 308);
     assert.equal(chain.length, 308);
     assert.deepEqual(list, chain);
@@ -801,12 +1258,18 @@ async function main(): Promise<void> {
   {
     // (a) Pure DTO validation, no DB.
     const dto = plainToInstance(CreateReturnDto, {
-      type: 'sale', items: [{ productId: 101, qty: 1 }],
+      type: 'sale',
+      items: [{ productId: 101, qty: 1 }],
     });
     const errors = await validate(dto);
-    assert.ok(errors.some((e: any) => e.property === 'invoiceId'), 'invoiceId must be a validation error');
+    assert.ok(
+      errors.some((e: any) => e.property === 'invoiceId'),
+      'invoiceId must be a validation error',
+    );
     const valid = plainToInstance(CreateReturnDto, {
-      type: 'sale', invoiceId: 5, items: [{ productId: 101, qty: 1 }],
+      type: 'sale',
+      invoiceId: 5,
+      items: [{ productId: 101, qty: 1 }],
     });
     assert.equal((await validate(valid)).length, 0);
 
@@ -818,16 +1281,30 @@ async function main(): Promise<void> {
         await seedProduct(db, 101);
         const { service } = buildEdit(db);
         await seedVanSale(db, 220, {
-          tripId: null, customerId: 1, paymentType: 'cash', paymentChannel: 'cash',
-          total: 1000, paidAmount: 1000, legs: [{ channel: 'cash', amount: 1000 }],
+          tripId: null,
+          customerId: 1,
+          paymentType: 'cash',
+          paymentChannel: 'cash',
+          total: 1000,
+          paidAmount: 1000,
+          legs: [{ channel: 'cash', amount: 1000 }],
         });
-        await (db as any).insertInto('payment_allocations').values({
-          tenant_id: TENANT, account_id: ACCOUNT, invoice_type: 'sale', invoice_id: 220, amount: 500,
-        }).execute();
+        await (db as any)
+          .insertInto('payment_allocations')
+          .values({
+            tenant_id: TENANT,
+            account_id: ACCOUNT,
+            invoice_type: 'sale',
+            invoice_id: 220,
+            amount: 500,
+          })
+          .execute();
         await expectCode(service.cancelSale(220, 'test cancel', '', ADMIN as never), 'SALE_CANCEL_HAS_LATER_PAYMENTS');
         assert.equal((await saleRow(db, 220)).status, 'posted');
         console.log('9a/9b. DTO invoiceId + cancel-with-later-payments refusals, passed');
-      } finally { await db.destroy(); }
+      } finally {
+        await db.destroy();
+      }
     }
 
     // (c) Legacy NULL-sale_id return still reduces the trip due.
@@ -843,7 +1320,9 @@ async function main(): Promise<void> {
         assert.equal(due.days.length, 1);
         assert.equal(due.days[0].due, 800);
         console.log('9c. legacy NULL-sale_id return still reduces the trip due, passed');
-      } finally { await db.destroy(); }
+      } finally {
+        await db.destroy();
+      }
     }
   }
 

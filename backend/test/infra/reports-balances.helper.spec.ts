@@ -42,9 +42,7 @@ const supplierRows = buildSupplierBalanceRows(
     { id: 4, name: 'North', phone: '100', balance: 0 },
     { id: 5, name: 'Delta', phone: '200', balance: 250 },
   ],
-  new Map([
-    ['4', 1100],
-  ]),
+  new Map([['4', 1100]]),
 );
 assert.deepEqual(supplierRows[0], {
   id: '4',
@@ -62,8 +60,15 @@ assert.deepEqual(summarizeSupplierBalanceRows(filterSupplierBalanceRows(supplier
 
 console.log('reports balances helper checks passed');
 
-const filCustomerRows = buildCustomerBalanceRows([{id:7,name:'KWD',balance:0,credit_limit:0.005}],new Map([['7',0.001]]),3);
-assert.equal(filCustomerRows[0].balance,0.001);
-assert.equal(filCustomerRows[0].availableCredit,0.004);
-assert.equal(summarizeCustomerBalanceRows(filCustomerRows,3).totalBalance,0.001);
-assert.equal(summarizeSupplierBalanceRows([{id:'8',name:'OMR',phone:'',balance:0.001}],3).totalBalance,0.001);
+const filCustomerRows = buildCustomerBalanceRows(
+  [{ id: 7, name: 'KWD', balance: 0, credit_limit: 0.005 }],
+  new Map([['7', 0.001]]),
+  3,
+);
+assert.equal(filCustomerRows[0].balance, 0.001);
+assert.equal(filCustomerRows[0].availableCredit, 0.004);
+assert.equal(summarizeCustomerBalanceRows(filCustomerRows, 3).totalBalance, 0.001);
+assert.equal(
+  summarizeSupplierBalanceRows([{ id: '8', name: 'OMR', phone: '', balance: 0.001 }], 3).totalBalance,
+  0.001,
+);

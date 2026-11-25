@@ -53,7 +53,11 @@ import { WithholdingTaxService } from '../../src/modules/accounting/services/wit
 import { AgedDebtsService } from '../../src/modules/accounting/services/aged-debts.service';
 
 const AUTH = {
-  tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['accounting'],
 } as unknown as AuthContext;
 
@@ -255,4 +259,7 @@ async function main() {
   console.log('accounting-digits-services: OK (49 assertions)');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

@@ -11,7 +11,7 @@ import { TransactionHelper } from '../../../src/database/helpers/transaction.hel
 
 /**
  * Z-SYSTEMS ERP — SALES ORDERS & QUOTATIONS LIFECYCLE SIMULATION
- * 
+ *
  * Verifies:
  * 1. Foundation: Tenant, Branch, Warehouse Stock Location, Customer, and Catalog Products.
  * 2. Quotation Creation: Item pricing, tax, discounts, and validity dates.
@@ -47,43 +47,50 @@ async function runSalesOrdersQuotationSimulation() {
   // SalesWrite stub for convertToSale
   const salesWriteStub: any = {
     createSale: async (payload: any, auth: AuthContext) => {
-      const subtotal = payload.items.reduce((s: number, i: any) => s + (i.price * i.qty), 0);
+      const subtotal = payload.items.reduce((s: number, i: any) => s + i.price * i.qty, 0);
       const discount = payload.discount || 0;
       const total = subtotal - discount;
 
-      const saleRes = await db.insertInto('sales').values({
-        tenant_id: auth.tenantId!,
-        account_id: auth.accountId!,
-        branch_id: payload.branchId,
-        customer_id: payload.customerId || null,
-        doc_no: `INV-${simUid}-001`,
-        table_number: '',
-        order_type: 'takeaway',
-        payment_type: 'cash',
-        payment_channel: 'cash',
-        subtotal,
-        discount,
-        tax_rate: 15,
-        tax_amount: 0,
-        total,
-        paid_amount: total,
-        status: 'completed',
-      } as any).returning('id').executeTakeFirstOrThrow();
-
-      for (const it of payload.items) {
-        await db.insertInto('sale_items').values({
+      const saleRes = await db
+        .insertInto('sales')
+        .values({
           tenant_id: auth.tenantId!,
           account_id: auth.accountId!,
-          sale_id: saleRes.id,
-          product_id: it.productId,
-          product_name: 'شاشة سامسونج',
-          qty: it.qty,
-          unit_price: it.price,
-          line_total: it.price * it.qty,
-          unit_name: 'قطعة',
-          unit_multiplier: 1,
-          cost_price: 1800,
-        } as any).execute();
+          branch_id: payload.branchId,
+          customer_id: payload.customerId || null,
+          doc_no: `INV-${simUid}-001`,
+          table_number: '',
+          order_type: 'takeaway',
+          payment_type: 'cash',
+          payment_channel: 'cash',
+          subtotal,
+          discount,
+          tax_rate: 15,
+          tax_amount: 0,
+          total,
+          paid_amount: total,
+          status: 'completed',
+        } as any)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      for (const it of payload.items) {
+        await db
+          .insertInto('sale_items')
+          .values({
+            tenant_id: auth.tenantId!,
+            account_id: auth.accountId!,
+            sale_id: saleRes.id,
+            product_id: it.productId,
+            product_name: 'شاشة سامسونج',
+            qty: it.qty,
+            unit_price: it.price,
+            line_total: it.price * it.qty,
+            unit_name: 'قطعة',
+            unit_multiplier: 1,
+            cost_price: 1800,
+          } as any)
+          .execute();
       }
 
       return { sale: { id: saleRes.id, total } };
@@ -185,64 +192,70 @@ async function runSalesOrdersQuotationSimulation() {
 
     // 2. Quotation Creation Workflow
     console.log('\n--- 2. إنشاء عرض سعر تجاري للعميل (Quotation Flow) ---');
-    const quoteRes = await quotationsService.createQuotation({
-      customerId,
-      customerName: 'شركة الرواد للتجارة',
-      customerPhone: '0501112233',
-      branchId,
-      subtotal: 5750,
-      discountAmount: 250,
-      taxAmount: 825,
-      totalAmount: 6325,
-      validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-      notes: 'عرض أسعار خاص يشمل الضمان لمدة سنتين والتوصيل المجاني',
-      items: [
-        {
-          productId: product1Id,
-          productName: 'شاشة سامسونج 65 بوصة',
-          quantity: 2,
-          unitPrice: 2500,
-          discount: 250,
-          total: 4750,
-        },
-        {
-          productId: product2Id,
-          productName: 'جهاز صوتي محيطي',
-          quantity: 1,
-          unitPrice: 750,
-          discount: 0,
-          total: 750,
-        },
-      ],
-    }, auth);
+    const quoteRes = await quotationsService.createQuotation(
+      {
+        customerId,
+        customerName: 'شركة الرواد للتجارة',
+        customerPhone: '0501112233',
+        branchId,
+        subtotal: 5750,
+        discountAmount: 250,
+        taxAmount: 825,
+        totalAmount: 6325,
+        validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        notes: 'عرض أسعار خاص يشمل الضمان لمدة سنتين والتوصيل المجاني',
+        items: [
+          {
+            productId: product1Id,
+            productName: 'شاشة سامسونج 65 بوصة',
+            quantity: 2,
+            unitPrice: 2500,
+            discount: 250,
+            total: 4750,
+          },
+          {
+            productId: product2Id,
+            productName: 'جهاز صوتي محيطي',
+            quantity: 1,
+            unitPrice: 750,
+            discount: 0,
+            total: 750,
+          },
+        ],
+      },
+      auth,
+    );
 
     const quotationId = Number((quoteRes as any).quotation?.id);
     console.log(`[OK] تم إنشاء عرض السعر #${quotationId} بإجمالي 6,325 ر.س بنجاح.`);
 
     // 3. Draft Sales Order Creation (No auto reserve)
     console.log('\n--- 3. إنشاء أمر بيع مسودة دون حجز فوري للمخزون ---');
-    const draftOrderRes = await salesOrdersService.createOrder({
-      customerId,
-      customerName: 'شركة الرواد للتجارة',
-      customerPhone: '0501112233',
-      branchId,
-      autoReserve: false,
-      quotationId,
-      subtotal: 5000,
-      discountAmount: 0,
-      taxAmount: 750,
-      totalAmount: 5750,
-      notes: 'أمر بيع مستند لعرض السعر',
-      items: [
-        {
-          productId: product1Id,
-          productName: 'شاشة سامسونج 65 بوصة',
-          quantity: 2,
-          unitPrice: 2500,
-          total: 5000,
-        },
-      ],
-    }, auth);
+    const draftOrderRes = await salesOrdersService.createOrder(
+      {
+        customerId,
+        customerName: 'شركة الرواد للتجارة',
+        customerPhone: '0501112233',
+        branchId,
+        autoReserve: false,
+        quotationId,
+        subtotal: 5000,
+        discountAmount: 0,
+        taxAmount: 750,
+        totalAmount: 5750,
+        notes: 'أمر بيع مستند لعرض السعر',
+        items: [
+          {
+            productId: product1Id,
+            productName: 'شاشة سامسونج 65 بوصة',
+            quantity: 2,
+            unitPrice: 2500,
+            total: 5000,
+          },
+        ],
+      },
+      auth,
+    );
 
     const draftOrderId = Number((draftOrderRes as any).order?.id);
     const fetchedDraft = await salesOrdersService.getOrderById(draftOrderId, auth);
@@ -279,26 +292,29 @@ async function runSalesOrdersQuotationSimulation() {
 
     // 6. Create Confirmed Order with Auto-Reserve & Convert to Sale
     console.log('\n--- 6. إنشاء أمر بيع معتمد مع الحجز التلقائي وتحويله لفاتورة بيع ---');
-    const orderToConvertRes = await salesOrdersService.createOrder({
-      customerId,
-      customerName: 'شركة الرواد للتجارة',
-      customerPhone: '0501112233',
-      branchId,
-      autoReserve: true,
-      subtotal: 5000,
-      discountAmount: 200,
-      taxAmount: 720,
-      totalAmount: 5520,
-      items: [
-        {
-          productId: product1Id,
-          productName: 'شاشة سامسونج 65 بوصة',
-          quantity: 2,
-          unitPrice: 2500,
-          total: 5000,
-        },
-      ],
-    }, auth);
+    const orderToConvertRes = await salesOrdersService.createOrder(
+      {
+        customerId,
+        customerName: 'شركة الرواد للتجارة',
+        customerPhone: '0501112233',
+        branchId,
+        autoReserve: true,
+        subtotal: 5000,
+        discountAmount: 200,
+        taxAmount: 720,
+        totalAmount: 5520,
+        items: [
+          {
+            productId: product1Id,
+            productName: 'شاشة سامسونج 65 بوصة',
+            quantity: 2,
+            unitPrice: 2500,
+            total: 5000,
+          },
+        ],
+      },
+      auth,
+    );
 
     const convertOrderId = Number((orderToConvertRes as any).order?.id);
     console.log(`[OK] تم إنشاء أمر البيع #${convertOrderId} بحالة confirmed وحجز تلقائي.`);
@@ -318,19 +334,24 @@ async function runSalesOrdersQuotationSimulation() {
     const ordersList = (listRes as any).orders || [];
     const summary = (listRes as any).summary || {};
 
-    console.log(`[OK] إجمالي أوامر البيع المسجلة: ${ordersList.length} (ملغي: ${summary.cancelled}, محول: ${summary.converted}).`);
+    console.log(
+      `[OK] إجمالي أوامر البيع المسجلة: ${ordersList.length} (ملغي: ${summary.cancelled}, محول: ${summary.converted}).`,
+    );
 
     // 8. Delete Draft Order
     console.log('\n--- 8. إنشاء أمر بيع مسودة وحذفه نهائياً ---');
-    const tempDraftRes = await salesOrdersService.createOrder({
-      customerId,
-      customerName: 'عميل مسودة للحذف',
-      branchId,
-      autoReserve: false,
-      subtotal: 100,
-      totalAmount: 100,
-      items: [],
-    }, auth);
+    const tempDraftRes = await salesOrdersService.createOrder(
+      {
+        customerId,
+        customerName: 'عميل مسودة للحذف',
+        branchId,
+        autoReserve: false,
+        subtotal: 100,
+        totalAmount: 100,
+        items: [],
+      },
+      auth,
+    );
     const tempDraftId = Number((tempDraftRes as any).order?.id);
 
     await salesOrdersService.deleteOrder(tempDraftId, auth);
@@ -350,7 +371,6 @@ async function runSalesOrdersQuotationSimulation() {
     console.log('\n================================================================');
     console.log('[SUCCESS] اكتملت محاكاة دورة حياة طلبات البيع وعروض الأسعار بنجاح 100%!');
     console.log('================================================================\n');
-
   } catch (err: any) {
     console.error('[ERROR] SIMULATION FAILED:', err.message || err);
     console.error(err.stack);

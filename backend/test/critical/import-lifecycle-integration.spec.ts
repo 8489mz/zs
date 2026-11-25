@@ -78,7 +78,11 @@ function testFeasibilityZeroValuesAndBreakEven(): void {
   // Factory (500,000) + Shipping (50,000) + Duty (27,500) + Clearance (10,000) = 587,500 EGP
   assert.equal(withMarkup.totalAccountingCostEgp, 587500, 'Refundable VAT must not be capitalized into inventory');
   // Total cash investment required MUST include the VAT:
-  assert.equal(withMarkup.totalProjectInvestmentEgp, 587500 + 80850, 'Cash investment required must include refundable VAT paid at port');
+  assert.equal(
+    withMarkup.totalProjectInvestmentEgp,
+    587500 + 80850,
+    'Cash investment required must include refundable VAT paid at port',
+  );
 
   // Break-even units: Total units / (1 + 0.25) = 1000 / 1.25 = 800 units
   assert.equal(withMarkup.breakEvenUnits, 800, 'Break-even units at 25% markup must be exactly 800 units');
@@ -113,8 +117,16 @@ function testCbmLandedCostAndLateExpenseIAS2(): void {
 
   assert.equal(lateAlloc.soldQuantity, 80, 'Sold quantity must be 80 units');
   assert.equal(lateAlloc.lateCogsAdjustmentEgp, 20000, '40% of late expense must adjust COGS for sold units');
-  assert.equal(lateAlloc.lateInventoryAdjustmentEgp, 30000, '60% of late expense must adjust on-hand inventory valuation');
-  assert.equal(lateAlloc.unitCostIncreaseEgp, 250, 'Each remaining on-hand unit increases in cost by 30,000 / 120 = 250 EGP');
+  assert.equal(
+    lateAlloc.lateInventoryAdjustmentEgp,
+    30000,
+    '60% of late expense must adjust on-hand inventory valuation',
+  );
+  assert.equal(
+    lateAlloc.unitCostIncreaseEgp,
+    250,
+    'Each remaining on-hand unit increases in cost by 30,000 / 120 = 250 EGP',
+  );
 }
 
 function testProjectProfitScopingAndPartnerPayoutCeiling(): void {
@@ -185,7 +197,7 @@ function testProjectPreClosureAuditGate(): void {
     { id: 2, container_number: 'MSKU1002', status: 'In Transit' }, // In transit => block closure
   ];
 
-  const unarrived = shipments.filter(s => s.status !== 'Arrived' && s.status !== 'Cleared');
+  const unarrived = shipments.filter((s) => s.status !== 'Arrived' && s.status !== 'Cleared');
   assert.equal(unarrived.length, 1, 'Closure gate must identify in-transit shipment');
 
   const proformas = [
@@ -193,7 +205,7 @@ function testProjectPreClosureAuditGate(): void {
     { id: 11, invoice_number: 'PI-02', total_amount: 5000, paid_amount: 3000 }, // Unpaid balance 2000
   ];
 
-  const unpaidProformas = proformas.filter(p => p.paid_amount < p.total_amount);
+  const unpaidProformas = proformas.filter((p) => p.paid_amount < p.total_amount);
   assert.equal(unpaidProformas.length, 1, 'Closure gate must detect unpaid proforma balance');
 }
 

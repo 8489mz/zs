@@ -86,12 +86,21 @@ class FakeSelectBuilder {
   private filters: FakeFilter[] = [];
   private sort?: { column: string; direction: string };
 
-  constructor(private readonly table: string, private readonly db: FakeDb) {}
+  constructor(
+    private readonly table: string,
+    private readonly db: FakeDb,
+  ) {}
 
-  leftJoin(): this { return this; }
-  select(): this { return this; }
+  leftJoin(): this {
+    return this;
+  }
+  select(): this {
+    return this;
+  }
   orderBy(column?: string, direction = 'asc'): this {
-    const parts = String(column || '').trim().split(/\s+/);
+    const parts = String(column || '')
+      .trim()
+      .split(/\s+/);
     if (column && !this.sort) this.sort = { column: parts[0] || column, direction: parts[1] || direction };
     return this;
   }
@@ -117,17 +126,20 @@ class FakeSelectBuilder {
   }
 
   private filter<T extends Record<string, unknown>>(rows: T[]): T[] {
-    const filtered = rows.filter((row) => this.filters.every((filter) => {
-      const column = normalizeColumn(filter.column);
-      if (!column) return true;
-      const actual = row[column];
-      if (filter.op === '=') {
-        if (typeof actual === 'string' || typeof filter.value === 'string') return String(actual) === String(filter.value);
-        return Number(actual) === Number(filter.value);
-      }
-      if (filter.op === 'in' && Array.isArray(filter.value)) return filter.value.map(Number).includes(Number(actual));
-      return false;
-    }));
+    const filtered = rows.filter((row) =>
+      this.filters.every((filter) => {
+        const column = normalizeColumn(filter.column);
+        if (!column) return true;
+        const actual = row[column];
+        if (filter.op === '=') {
+          if (typeof actual === 'string' || typeof filter.value === 'string')
+            return String(actual) === String(filter.value);
+          return Number(actual) === Number(filter.value);
+        }
+        if (filter.op === 'in' && Array.isArray(filter.value)) return filter.value.map(Number).includes(Number(actual));
+        return false;
+      }),
+    );
     if (!this.sort) return filtered;
     const column = normalizeColumn(this.sort.column);
     const direction = this.sort.direction.toLowerCase();
@@ -142,7 +154,10 @@ class FakeSelectBuilder {
 class FakeDeleteBuilder {
   private filters: Array<{ column: unknown; value: unknown }> = [];
 
-  constructor(private readonly table: string, private readonly db: FakeDb) {}
+  constructor(
+    private readonly table: string,
+    private readonly db: FakeDb,
+  ) {}
 
   where(column: unknown, _op?: string, value?: unknown): this {
     this.filters.push({ column, value });
@@ -156,13 +171,16 @@ class FakeDeleteBuilder {
   async execute(): Promise<Array<{ numDeletedRows: bigint }>> {
     if (this.table !== 'held_sales') return [{ numDeletedRows: 0n }];
     const idsToDelete = this.db.heldSales
-      .filter((row) => this.filters.every((filter) => {
-        const column = normalizeColumn(filter.column);
-        if (!column) return true;
-        const actual = row[column as keyof HeldSaleRow];
-        if (typeof actual === 'string' || typeof filter.value === 'string') return String(actual) === String(filter.value);
-        return Number(actual || 0) === Number(filter.value);
-      }))
+      .filter((row) =>
+        this.filters.every((filter) => {
+          const column = normalizeColumn(filter.column);
+          if (!column) return true;
+          const actual = row[column as keyof HeldSaleRow];
+          if (typeof actual === 'string' || typeof filter.value === 'string')
+            return String(actual) === String(filter.value);
+          return Number(actual || 0) === Number(filter.value);
+        }),
+      )
       .map((row) => row.id);
     if (!this.filters.length) {
       const deletedCount = this.db.heldSales.length;
@@ -177,15 +195,9 @@ class FakeDeleteBuilder {
 }
 
 class FakeDb {
-  heldSales: HeldSaleRow[] = [
-    heldSale(1, cashierA.userId),
-    heldSale(2, cashierB.userId),
-  ];
+  heldSales: HeldSaleRow[] = [heldSale(1, cashierA.userId), heldSale(2, cashierB.userId)];
   auditLogs: string[] = [];
-  heldSaleItems: HeldSaleItemRow[] = [
-    heldSaleItem(101, 1, 'Tea'),
-    heldSaleItem(102, 2, 'Coffee'),
-  ];
+  heldSaleItems: HeldSaleItemRow[] = [heldSaleItem(101, 1, 'Tea'), heldSaleItem(102, 2, 'Coffee')];
 
   selectFrom(table: string): FakeSelectBuilder {
     return new FakeSelectBuilder(table, this);
@@ -241,7 +253,11 @@ function createServices(db = new FakeDb()) {
   const write = new SalesWriteService(
     db as any,
     {} as any,
-    { log: async (_action: string, details: string) => { db.auditLogs.push(details); } } as any,
+    {
+      log: async (_action: string, details: string) => {
+        db.auditLogs.push(details);
+      },
+    } as any,
     authz,
     {} as any,
     query,
@@ -257,7 +273,10 @@ async function run(): Promise<void> {
   {
     const { query } = createServices();
     const result = await query.listHeldSales(cashierA);
-    assert.deepEqual((result.heldSales as Array<Record<string, unknown>>).map((sale) => sale.id), ['1']);
+    assert.deepEqual(
+      (result.heldSales as Array<Record<string, unknown>>).map((sale) => sale.id),
+      ['1'],
+    );
   }
 
   {
@@ -271,8 +290,14 @@ async function run(): Promise<void> {
   {
     const { db, write } = createServices();
     await write.clearHeldSales(cashierA);
-    assert.deepEqual(db.heldSales.map((sale) => sale.id), [2]);
-    assert.deepEqual(db.heldSaleItems.map((item) => item.held_sale_id), [2]);
+    assert.deepEqual(
+      db.heldSales.map((sale) => sale.id),
+      [2],
+    );
+    assert.deepEqual(
+      db.heldSaleItems.map((item) => item.held_sale_id),
+      [2],
+    );
     assert.match(db.auditLogs[0] || '', /scope=own held sales/);
     assert.match(db.auditLogs[0] || '', /deletedCount=1/);
   }
@@ -281,7 +306,10 @@ async function run(): Promise<void> {
     const { db, query, write } = createServices();
     assert.deepEqual((await query.listHeldSales(invalidCashier)).heldSales as Array<Record<string, unknown>>, []);
     await write.clearHeldSales(invalidCashier);
-    assert.deepEqual(db.heldSales.map((sale) => sale.id), [1, 2]);
+    assert.deepEqual(
+      db.heldSales.map((sale) => sale.id),
+      [1, 2],
+    );
     assert.match(db.auditLogs[0] || '', /deletedCount=0/);
   }
 
@@ -382,7 +410,10 @@ async function run(): Promise<void> {
       },
     ]);
     await write.deleteHeldSale(2, manager);
-    assert.deepEqual(db.heldSales.map((sale) => sale.id), [1]);
+    assert.deepEqual(
+      db.heldSales.map((sale) => sale.id),
+      [1],
+    );
   }
 
   {

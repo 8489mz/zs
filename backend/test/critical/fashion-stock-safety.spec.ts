@@ -1,13 +1,15 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { assertFashionExpectedStock, assertFashionRemovedStockSafe, fashionLocationAccessMode } from '../../src/modules/catalog/engines/fashion-stock-safety.engine';
+import {
+  assertFashionExpectedStock,
+  assertFashionRemovedStockSafe,
+  fashionLocationAccessMode,
+} from '../../src/modules/catalog/engines/fashion-stock-safety.engine';
 
 const item = { stock_qty: '5.000', reserved_qty: '0', cost_price: '25.00' };
 
 test('fashion merge allows fully reconciled, unreserved stock of the same cost', () => {
-  assert.doesNotThrow(() => assertFashionRemovedStockSafe(item, [
-    { qty: '2.000' }, { qty: '3.000' },
-  ], 25));
+  assert.doesNotThrow(() => assertFashionRemovedStockSafe(item, [{ qty: '2.000' }, { qty: '3.000' }], 25));
 });
 
 test('fashion group must not archive or zero stock reserved for an order', () => {
@@ -32,9 +34,16 @@ test('fashion stock merge must reject cost mismatch without a valuation adjustme
 });
 
 test('zero stock with no reservation can be archived safely', () => {
-  assert.doesNotThrow(() => assertFashionRemovedStockSafe({
-    stock_qty: 0, reserved_qty: 0, cost_price: 25,
-  }, []));
+  assert.doesNotThrow(() =>
+    assertFashionRemovedStockSafe(
+      {
+        stock_qty: 0,
+        reserved_qty: 0,
+        cost_price: 25,
+      },
+      [],
+    ),
+  );
 });
 
 test('rejects stale or missing original stock before an explicit adjustment', () => {

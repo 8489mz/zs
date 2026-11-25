@@ -117,9 +117,16 @@ function buildService(opts: {
 
 function retFixture(overrides: Record<string, any> = {}): Record<string, any> {
   return {
-    id: 31, tenant_id: 't1', trip_id: 11, rep_id: 4, customer_id: 21,
-    sale_id: 7, status: 'pending_approval', return_reason: 'customer_request',
-    refund_method: 'credit', total_amount: 800,
+    id: 31,
+    tenant_id: 't1',
+    trip_id: 11,
+    rep_id: 4,
+    customer_id: 21,
+    sale_id: 7,
+    status: 'pending_approval',
+    return_reason: 'customer_request',
+    refund_method: 'credit',
+    total_amount: 800,
     items_json: JSON.stringify([{ productId: 1, qty: 8, unitPrice: 100, saleItemId: 101 }]),
     doc_no: 'VRET-1',
     ...overrides,
@@ -138,17 +145,23 @@ async function main() {
     const service = buildService({
       ret: retFixture(),
       trip: tripRow(),
-      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'cancelled', payment_type: 'credit', total: 1000, paid_amount: 0 },
+      sale: {
+        id: 7,
+        doc_no: 'S-1',
+        customer_id: 21,
+        resolved_rep_id: 4,
+        status: 'cancelled',
+        payment_type: 'credit',
+        total: 1000,
+        paid_amount: 0,
+      },
       saleLines: [{ id: 101, product_id: 1, qty: 10, line_total: 1000, product_name: 'Widget' }],
       existingReturns: [],
       repSales: [],
       soldLines: [],
       counters,
     });
-    await assert.rejects(
-      async () => service.approveFieldReturn('t1', 'a1', 31, 99),
-      /RETURN_SALE_NOT_POSTED/,
-    );
+    await assert.rejects(async () => service.approveFieldReturn('t1', 'a1', 31, 99), /RETURN_SALE_NOT_POSTED/);
   }
 
   // 2. Linked: sale edited below the claimed quantity -> rejected.
@@ -156,17 +169,23 @@ async function main() {
     const service = buildService({
       ret: retFixture(),
       trip: tripRow(),
-      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted', payment_type: 'credit', total: 1000, paid_amount: 0 },
+      sale: {
+        id: 7,
+        doc_no: 'S-1',
+        customer_id: 21,
+        resolved_rep_id: 4,
+        status: 'posted',
+        payment_type: 'credit',
+        total: 1000,
+        paid_amount: 0,
+      },
       saleLines: [{ id: 101, product_id: 1, qty: 5, line_total: 500, product_name: 'Widget' }],
       existingReturns: [],
       repSales: [],
       soldLines: [],
       counters,
     });
-    await assert.rejects(
-      async () => service.approveFieldReturn('t1', 'a1', 31, 99),
-      /RETURN_QTY_EXCEEDS_SOLD/,
-    );
+    await assert.rejects(async () => service.approveFieldReturn('t1', 'a1', 31, 99), /RETURN_QTY_EXCEEDS_SOLD/);
   }
 
   // 3. Linked: remaining excludes this return itself (8 of 10, other return 2) -> passes re-check.
@@ -174,10 +193,25 @@ async function main() {
     const service = buildService({
       ret: retFixture(),
       trip: tripRow(),
-      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted', payment_type: 'credit', total: 1000, paid_amount: 0 },
+      sale: {
+        id: 7,
+        doc_no: 'S-1',
+        customer_id: 21,
+        resolved_rep_id: 4,
+        status: 'posted',
+        payment_type: 'credit',
+        total: 1000,
+        paid_amount: 0,
+      },
       saleLines: [{ id: 101, product_id: 1, qty: 10, line_total: 1000, product_name: 'Widget' }],
       existingReturns: [
-        { id: 30, items_json: JSON.stringify([{ productId: 1, qty: 2, saleItemId: 101 }]), status: 'approved', refund_method: 'credit', total_amount: 200 },
+        {
+          id: 30,
+          items_json: JSON.stringify([{ productId: 1, qty: 2, saleItemId: 101 }]),
+          status: 'approved',
+          refund_method: 'credit',
+          total_amount: 200,
+        },
         { id: 31, items_json: JSON.stringify([{ productId: 1, qty: 8, saleItemId: 101 }]), status: 'pending_approval' },
       ],
       repSales: [],
@@ -196,27 +230,46 @@ async function main() {
   // 4. Linked: asking 9 with remaining 8 -> rejected.
   {
     const service = buildService({
-      ret: retFixture({ items_json: JSON.stringify([{ productId: 1, qty: 9, unitPrice: 100, saleItemId: 101 }]), total_amount: 900 }),
+      ret: retFixture({
+        items_json: JSON.stringify([{ productId: 1, qty: 9, unitPrice: 100, saleItemId: 101 }]),
+        total_amount: 900,
+      }),
       trip: tripRow(),
-      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted', payment_type: 'credit', total: 1000, paid_amount: 0 },
+      sale: {
+        id: 7,
+        doc_no: 'S-1',
+        customer_id: 21,
+        resolved_rep_id: 4,
+        status: 'posted',
+        payment_type: 'credit',
+        total: 1000,
+        paid_amount: 0,
+      },
       saleLines: [{ id: 101, product_id: 1, qty: 10, line_total: 1000, product_name: 'Widget' }],
       existingReturns: [
-        { id: 30, items_json: JSON.stringify([{ productId: 1, qty: 2, saleItemId: 101 }]), status: 'approved', refund_method: 'credit', total_amount: 200 },
+        {
+          id: 30,
+          items_json: JSON.stringify([{ productId: 1, qty: 2, saleItemId: 101 }]),
+          status: 'approved',
+          refund_method: 'credit',
+          total_amount: 200,
+        },
       ],
       repSales: [],
       soldLines: [],
       counters,
     });
-    await assert.rejects(
-      async () => service.approveFieldReturn('t1', 'a1', 31, 99),
-      /RETURN_QTY_EXCEEDS_SOLD/,
-    );
+    await assert.rejects(async () => service.approveFieldReturn('t1', 'a1', 31, 99), /RETURN_QTY_EXCEEDS_SOLD/);
   }
 
   // 5. Unlinked: no posted rep sales left -> rejected.
   {
     const service = buildService({
-      ret: retFixture({ sale_id: null, items_json: JSON.stringify([{ productId: 1, qty: 2, unitPrice: 100 }]), total_amount: 200 }),
+      ret: retFixture({
+        sale_id: null,
+        items_json: JSON.stringify([{ productId: 1, qty: 2, unitPrice: 100 }]),
+        total_amount: 200,
+      }),
       trip: tripRow(),
       sale: null,
       saleLines: [],
@@ -225,16 +278,17 @@ async function main() {
       soldLines: [],
       counters,
     });
-    await assert.rejects(
-      async () => service.approveFieldReturn('t1', 'a1', 31, 99),
-      /NO_REP_SALES_HISTORY_FOR_RETURN/,
-    );
+    await assert.rejects(async () => service.approveFieldReturn('t1', 'a1', 31, 99), /NO_REP_SALES_HISTORY_FOR_RETURN/);
   }
 
   // 6. Unlinked: price above the highest net unit -> rejected.
   {
     const service = buildService({
-      ret: retFixture({ sale_id: null, items_json: JSON.stringify([{ productId: 1, qty: 2, unitPrice: 60 }]), total_amount: 120 }),
+      ret: retFixture({
+        sale_id: null,
+        items_json: JSON.stringify([{ productId: 1, qty: 2, unitPrice: 60 }]),
+        total_amount: 120,
+      }),
       trip: tripRow(),
       sale: null,
       saleLines: [],
@@ -243,16 +297,17 @@ async function main() {
       soldLines: [{ product_id: 1, product_name: 'Widget', qty: 10, line_total: 500 }],
       counters,
     });
-    await assert.rejects(
-      async () => service.approveFieldReturn('t1', 'a1', 31, 99),
-      /RETURN_PRICE_EXCEEDS_NET/,
-    );
+    await assert.rejects(async () => service.approveFieldReturn('t1', 'a1', 31, 99), /RETURN_PRICE_EXCEEDS_NET/);
   }
 
   // 7. Unlinked: within the remaining aggregate -> passes re-check.
   {
     const service = buildService({
-      ret: retFixture({ sale_id: null, items_json: JSON.stringify([{ productId: 1, qty: 8, unitPrice: 50 }]), total_amount: 400 }),
+      ret: retFixture({
+        sale_id: null,
+        items_json: JSON.stringify([{ productId: 1, qty: 8, unitPrice: 50 }]),
+        total_amount: 400,
+      }),
       trip: tripRow(),
       sale: null,
       saleLines: [],
@@ -272,17 +327,23 @@ async function main() {
     const service = buildService({
       ret: retFixture(),
       trip: tripRow('settled'),
-      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted', payment_type: 'credit', total: 1000, paid_amount: 0 },
+      sale: {
+        id: 7,
+        doc_no: 'S-1',
+        customer_id: 21,
+        resolved_rep_id: 4,
+        status: 'posted',
+        payment_type: 'credit',
+        total: 1000,
+        paid_amount: 0,
+      },
       saleLines: [{ id: 101, product_id: 1, qty: 10, line_total: 1000, product_name: 'Widget' }],
       existingReturns: [],
       repSales: [],
       soldLines: [],
       counters,
     });
-    await assert.rejects(
-      async () => service.approveFieldReturn('t1', 'a1', 31, 99),
-      /INVALID_TRIP/,
-    );
+    await assert.rejects(async () => service.approveFieldReturn('t1', 'a1', 31, 99), /INVALID_TRIP/);
   }
 
   assert.equal(counters.tripLockReads > 0, true, 'the trip row must be locked inside the approval transaction');
@@ -290,4 +351,7 @@ async function main() {
   console.log('Van return approval provenance tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

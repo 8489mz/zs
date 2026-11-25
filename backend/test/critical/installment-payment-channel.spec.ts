@@ -66,8 +66,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const ADMIN = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: [],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -99,33 +104,90 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   for (const [id, code] of [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [2110, '2110'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [2110, '2110'],
   ] as Array<[number, string]>) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, supplier_payable_account_id: 2110,
-  }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'عميل اختبار', phone: '010',
-    balance: 500, credit_limit: 0, is_credit_blocked: false, store_credit_balance: 0,
-    loyalty_points: 0, is_active: true,
-  }).execute();
-  await anyDb.insertInto('customer_installment_plans').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, plan_number: 'PLAN-1', customer_id: 1,
-    total_amount: 100, down_payment: 0, financed_amount: 100, interest_rate_percent: 0,
-    interest_amount: 0, total_with_interest: 100, installment_count: 1, monthly_amount: 100,
-    start_date: '2026-11-05', status: 'active', created_by: 1,
-  }).execute();
-  await anyDb.insertInto('customer_installments').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, plan_id: 1, customer_id: 1,
-    installment_number: 1, due_date: '2026-11-05', amount: 100, paid_amount: 0,
-    status: 'pending', payment_method: 'cash',
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      supplier_payable_account_id: 2110,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'عميل اختبار',
+      phone: '010',
+      balance: 500,
+      credit_limit: 0,
+      is_credit_blocked: false,
+      store_credit_balance: 0,
+      loyalty_points: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_installment_plans')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      plan_number: 'PLAN-1',
+      customer_id: 1,
+      total_amount: 100,
+      down_payment: 0,
+      financed_amount: 100,
+      interest_rate_percent: 0,
+      interest_amount: 0,
+      total_with_interest: 100,
+      installment_count: 1,
+      monthly_amount: 100,
+      start_date: '2026-11-05',
+      status: 'active',
+      created_by: 1,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_installments')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      plan_id: 1,
+      customer_id: 1,
+      installment_number: 1,
+      due_date: '2026-11-05',
+      amount: 100,
+      paid_amount: 0,
+      status: 'pending',
+      payment_method: 'cash',
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): CustomerInstallmentsService {
@@ -163,21 +225,30 @@ async function main(): Promise<void> {
       const anyDb = db as any;
       const service = buildService(db);
       const result = await service.payInstallment(
-        1, { amount: 100, paymentMethod: 'bank_transfer', transferReference: '  TRX-987654  ' }, ADMIN,
+        1,
+        { amount: 100, paymentMethod: 'bank_transfer', transferReference: '  TRX-987654  ' },
+        ADMIN,
       );
       assert.equal((result as any).success, true);
-      const payment = await anyDb.selectFrom('customer_payments')
-        .select(['payment_channel', 'transfer_reference', 'amount']).executeTakeFirstOrThrow();
+      const payment = await anyDb
+        .selectFrom('customer_payments')
+        .select(['payment_channel', 'transfer_reference', 'amount'])
+        .executeTakeFirstOrThrow();
       assert.equal(payment.payment_channel, 'bank');
       assert.equal(payment.transfer_reference, 'TRX-987654');
       assert.equal(Number(payment.amount), 100);
-      const treasury = await anyDb.selectFrom('treasury_transactions')
-        .select(['payment_channel', 'amount']).executeTakeFirstOrThrow();
+      const treasury = await anyDb
+        .selectFrom('treasury_transactions')
+        .select(['payment_channel', 'amount'])
+        .executeTakeFirstOrThrow();
       assert.equal(treasury.payment_channel, 'bank');
       assert.equal(Number(treasury.amount), 100);
       assert.equal(await journalDebitAccount(db), 1120);
-      const installment = await anyDb.selectFrom('customer_installments')
-        .select(['status', 'payment_method', 'paid_amount']).where('id', '=', 1).executeTakeFirstOrThrow();
+      const installment = await anyDb
+        .selectFrom('customer_installments')
+        .select(['status', 'payment_method', 'paid_amount'])
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(installment.status, 'paid');
       assert.equal(installment.payment_method, 'bank_transfer');
       assert.equal(Number(installment.paid_amount), 100);
@@ -195,12 +266,16 @@ async function main(): Promise<void> {
       const anyDb = db as any;
       const service = buildService(db);
       await service.payInstallment(1, { amount: 100, paymentMethod: method, transferReference: 'REF-123' }, ADMIN);
-      const payment = await anyDb.selectFrom('customer_payments')
-        .select(['payment_channel', 'transfer_reference']).executeTakeFirstOrThrow();
+      const payment = await anyDb
+        .selectFrom('customer_payments')
+        .select(['payment_channel', 'transfer_reference'])
+        .executeTakeFirstOrThrow();
       assert.equal(payment.payment_channel, method);
       assert.equal(payment.transfer_reference, 'REF-123');
-      const treasury = await anyDb.selectFrom('treasury_transactions')
-        .select(['payment_channel']).executeTakeFirstOrThrow();
+      const treasury = await anyDb
+        .selectFrom('treasury_transactions')
+        .select(['payment_channel'])
+        .executeTakeFirstOrThrow();
       assert.equal(treasury.payment_channel, method);
       assert.equal(await journalDebitAccount(db), 1120);
     } finally {
@@ -218,16 +293,23 @@ async function main(): Promise<void> {
       const service = buildService(db);
       const result = await service.payInstallment(1, { amount: 100, paymentMethod: 'cash' }, ADMIN);
       assert.equal((result as any).success, true);
-      const payment = await anyDb.selectFrom('customer_payments')
-        .select(['payment_channel', 'transfer_reference', 'amount']).executeTakeFirstOrThrow();
+      const payment = await anyDb
+        .selectFrom('customer_payments')
+        .select(['payment_channel', 'transfer_reference', 'amount'])
+        .executeTakeFirstOrThrow();
       assert.equal(payment.payment_channel, 'cash');
       assert.equal(payment.transfer_reference, null);
-      const treasury = await anyDb.selectFrom('treasury_transactions')
-        .select(['payment_channel']).executeTakeFirstOrThrow();
+      const treasury = await anyDb
+        .selectFrom('treasury_transactions')
+        .select(['payment_channel'])
+        .executeTakeFirstOrThrow();
       assert.equal(treasury.payment_channel, 'cash');
       assert.equal(await journalDebitAccount(db), 1110);
-      const installment = await anyDb.selectFrom('customer_installments')
-        .select(['status', 'payment_method']).where('id', '=', 1).executeTakeFirstOrThrow();
+      const installment = await anyDb
+        .selectFrom('customer_installments')
+        .select(['status', 'payment_method'])
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(installment.status, 'paid');
       assert.equal(installment.payment_method, 'cash');
     } finally {
@@ -245,15 +327,18 @@ async function main(): Promise<void> {
       const service = buildService(db);
       await assert.rejects(
         () => service.payInstallment(1, { amount: 100, paymentMethod: 'bank_transfer' }, ADMIN),
-        (err: any) => err.code === 'NONCASH_RECEIPT_REFERENCE_REQUIRED'
-          && String(err.message || '').includes('transfer reference'),
+        (err: any) =>
+          err.code === 'NONCASH_RECEIPT_REFERENCE_REQUIRED' && String(err.message || '').includes('transfer reference'),
       );
       assert.equal(await countRows(db, 'customer_payments'), 0);
       assert.equal(await countRows(db, 'treasury_transactions'), 0);
       assert.equal(await countRows(db, 'journal_entries'), 0);
       assert.equal(await countRows(db, 'customer_ledger'), 0);
-      const installment = await anyDb.selectFrom('customer_installments')
-        .select(['status', 'paid_amount']).where('id', '=', 1).executeTakeFirstOrThrow();
+      const installment = await anyDb
+        .selectFrom('customer_installments')
+        .select(['status', 'paid_amount'])
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(installment.status, 'pending');
       assert.equal(Number(installment.paid_amount), 0);
     } finally {
@@ -300,13 +385,34 @@ async function main(): Promise<void> {
 
   // Source pins: the channel travels on both rows, the DTO declares
   // the reference, and the method validation fails closed.
-  const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/customer-installments.service.ts'), 'utf8');
-  assert.ok(serviceSource.includes('payment_channel: paymentChannel'), 'the customer_payments insert must carry the channel');
-  assert.ok(serviceSource.includes('transfer_reference: transferReference'), 'the customer_payments insert must carry the transfer reference');
-  assert.ok(serviceSource.includes('INSTALLMENT_PAYMENT_METHOD_REQUIRED'), 'a missing method must fail closed with a named error');
-  assert.ok(serviceSource.includes('INSTALLMENT_PAYMENT_METHOD_INVALID'), 'an unknown method must fail closed with a named error');
-  assert.ok(serviceSource.includes("bank_transfer: 'bank'"), "bank_transfer must map to the 'bank' channel the 0251 CHECK allows");
-  const financeSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-finance.service.ts'), 'utf8');
+  const serviceSource = readFileSync(
+    resolve(__dirname, '../../src/modules/sales/services/customer-installments.service.ts'),
+    'utf8',
+  );
+  assert.ok(
+    serviceSource.includes('payment_channel: paymentChannel'),
+    'the customer_payments insert must carry the channel',
+  );
+  assert.ok(
+    serviceSource.includes('transfer_reference: transferReference'),
+    'the customer_payments insert must carry the transfer reference',
+  );
+  assert.ok(
+    serviceSource.includes('INSTALLMENT_PAYMENT_METHOD_REQUIRED'),
+    'a missing method must fail closed with a named error',
+  );
+  assert.ok(
+    serviceSource.includes('INSTALLMENT_PAYMENT_METHOD_INVALID'),
+    'an unknown method must fail closed with a named error',
+  );
+  assert.ok(
+    serviceSource.includes("bank_transfer: 'bank'"),
+    "bank_transfer must map to the 'bank' channel the 0251 CHECK allows",
+  );
+  const financeSource = readFileSync(
+    resolve(__dirname, '../../src/modules/sales/services/sales-finance.service.ts'),
+    'utf8',
+  );
   assert.ok(financeSource.includes('payment_channel: paymentChannel'), 'the treasury insert must carry the channel');
   const dtoSource = readFileSync(resolve(__dirname, '../../src/modules/sales/dto/customer-installment.dto.ts'), 'utf8');
   assert.ok(dtoSource.includes('transferReference?: string'), 'the pay-installment DTO must declare transferReference');

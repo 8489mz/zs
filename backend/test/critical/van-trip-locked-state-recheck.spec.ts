@@ -61,8 +61,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const adminAuth: any = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['deliveryReps', 'accounting'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 };
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -94,29 +99,91 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Warehouse', code: 'WH', is_active: true, location_type: 'branch_stock' }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van', code: 'VAN_4', is_active: true, location_type: 'van_stock' }).execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Warehouse',
+      code: 'WH',
+      is_active: true,
+      location_type: 'branch_stock',
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van',
+      code: 'VAN_4',
+      is_active: true,
+      location_type: 'van_stock',
+    })
+    .execute();
 }
 
 async function seedRep(db: Kysely<Database>, repId: number, extra: Record<string, unknown> = {}): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('delivery_representatives').values({
-    id: repId, tenant_id: TENANT, account_id: ACCOUNT, name: `Rep ${repId}`,
-    phone: null, vehicle_plate: null, van_location_id: 10, employee_id: null, national_id: null, ...extra,
-  }).execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: repId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Rep ${repId}`,
+      phone: null,
+      vehicle_plate: null,
+      van_location_id: 10,
+      employee_id: null,
+      national_id: null,
+      ...extra,
+    })
+    .execute();
 }
 
-async function seedTrip(db: Kysely<Database>, tripId: number, repId: number, extra: Record<string, unknown> = {}): Promise<void> {
+async function seedTrip(
+  db: Kysely<Database>,
+  tripId: number,
+  repId: number,
+  extra: Record<string, unknown> = {},
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('van_sales_trips').values({
-    id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: repId, vehicle_id: null,
-    start_odometer: 100, end_odometer: null, van_location_id: 10, source_warehouse_id: 1,
-    status: 'open', settlement_status: 'open', loaded_amount: 0, sales_amount: 0,
-    cash_collected: 0, credit_sales: 0, returns_amount: 0, cash_refunds: 0,
-    total_instapay_sales: 0, total_instapay_collections: 0, variance: 0, ...extra,
-  }).execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({
+      id: tripId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: repId,
+      vehicle_id: null,
+      start_odometer: 100,
+      end_odometer: null,
+      van_location_id: 10,
+      source_warehouse_id: 1,
+      status: 'open',
+      settlement_status: 'open',
+      loaded_amount: 0,
+      sales_amount: 0,
+      cash_collected: 0,
+      credit_sales: 0,
+      returns_amount: 0,
+      cash_refunds: 0,
+      total_instapay_sales: 0,
+      total_instapay_collections: 0,
+      variance: 0,
+      ...extra,
+    })
+    .execute();
 }
 
 async function tripRow(db: Kysely<Database>, tripId: number): Promise<any> {
@@ -131,12 +198,7 @@ async function tripRow(db: Kysely<Database>, tripId: number): Promise<any> {
  * only the builder selectFrom returns would be dropped by the first
  * .where(); the proxy re-wraps every chained builder instead.
  */
-function proxiedBuilder(
-  builder: any,
-  hook: (() => Promise<void>) | undefined,
-  fired: Set<string>,
-  key: string,
-): any {
+function proxiedBuilder(builder: any, hook: (() => Promise<void>) | undefined, fired: Set<string>, key: string): any {
   if (!hook) return builder;
   return new Proxy(builder, {
     get(target: any, prop: string) {
@@ -157,7 +219,8 @@ function proxiedBuilder(
           // Re-wrap only chained builders (which carry a terminal
           // method); promises and plain nodes pass through untouched.
           if (
-            out && typeof out === 'object' &&
+            out &&
+            typeof out === 'object' &&
             (typeof out.executeTakeFirst === 'function' || typeof out.execute === 'function')
           ) {
             return proxiedBuilder(out, hook, fired, key);
@@ -179,7 +242,10 @@ function proxiedBuilder(
  */
 function proxyDb(
   realDb: Kysely<Database>,
-  hooks: { tripSettled?: (trx: any, tripId: number) => Promise<void>; expenseAdded?: (trx: any, tripId: number) => Promise<void> },
+  hooks: {
+    tripSettled?: (trx: any, tripId: number) => Promise<void>;
+    expenseAdded?: (trx: any, tripId: number) => Promise<void>;
+  },
   tripId: number,
 ): any {
   const fired = new Set<string>();
@@ -238,16 +304,25 @@ async function main(): Promise<void> {
       await seedRep(db, 4);
       await seedTrip(db, 11, 4);
       let hookFired = false;
-      const service = buildVanService(proxyDb(db, {
-        tripSettled: async (trx: any, tripId: number) => {
-          hookFired = true;
-          await trx.updateTable('van_sales_trips').set({ status: 'settled' }).where('id', '=', tripId).execute();
-        },
-      }, 11));
+      const service = buildVanService(
+        proxyDb(
+          db,
+          {
+            tripSettled: async (trx: any, tripId: number) => {
+              hookFired = true;
+              await trx.updateTable('van_sales_trips').set({ status: 'settled' }).where('id', '=', tripId).execute();
+            },
+          },
+          11,
+        ),
+      );
       await assert.rejects(
-        () => service.executeFieldSaleInternal(4, TENANT, ACCOUNT, {
-          tripId: 11, paymentMethod: 'cash', items: [{ productId: 1, qty: 1 }],
-        }),
+        () =>
+          service.executeFieldSaleInternal(4, TENANT, ACCOUNT, {
+            tripId: 11,
+            paymentMethod: 'cash',
+            items: [{ productId: 1, qty: 1 }],
+          }),
         /INVALID_TRIP/,
       );
       assert.equal(hookFired, true, 'the concurrent settle must land before the locked re-read');
@@ -257,8 +332,13 @@ async function main(): Promise<void> {
       // rejection itself plus zero ledger rows below.
       assert.equal((await tripRow(db, 11)).status, 'open', 'the rejected transaction rolled back');
       assert.equal(
-        await (db as any).selectFrom('customer_ledger').selectAll().execute().then((r: any[]) => r.length),
-        0, 'no collection/sale ledger row was written',
+        await (db as any)
+          .selectFrom('customer_ledger')
+          .selectAll()
+          .execute()
+          .then((r: any[]) => r.length),
+        0,
+        'no collection/sale ledger row was written',
       );
     } finally {
       await db.destroy();
@@ -275,9 +355,12 @@ async function main(): Promise<void> {
       await seedTrip(db, 11, 4, { status: 'settled', settlement_status: 'settled' });
       const service = buildVanService(db);
       await assert.rejects(
-        () => service.executeFieldSaleInternal(4, TENANT, ACCOUNT, {
-          tripId: 11, paymentMethod: 'cash', items: [{ productId: 1, qty: 1 }],
-        }),
+        () =>
+          service.executeFieldSaleInternal(4, TENANT, ACCOUNT, {
+            tripId: 11,
+            paymentMethod: 'cash',
+            items: [{ productId: 1, qty: 1 }],
+          }),
         /INVALID_TRIP/,
       );
     } finally {
@@ -293,27 +376,52 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedRep(db, 4);
       await seedTrip(db, 11, 4);
-      await (db as any).insertInto('customers').values({
-        id: 21, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop', phone: null,
-        balance: 100, credit_limit: 0, metadata: null, customer_type: 'cash', is_active: true,
-      }).execute();
+      await (db as any)
+        .insertInto('customers')
+        .values({
+          id: 21,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Shop',
+          phone: null,
+          balance: 100,
+          credit_limit: 0,
+          metadata: null,
+          customer_type: 'cash',
+          is_active: true,
+        })
+        .execute();
       let hookFired = false;
-      const service = buildVanService(proxyDb(db, {
-        tripSettled: async (trx: any, tripId: number) => {
-          hookFired = true;
-          await trx.updateTable('van_sales_trips').set({ status: 'settled' }).where('id', '=', tripId).execute();
-        },
-      }, 11));
+      const service = buildVanService(
+        proxyDb(
+          db,
+          {
+            tripSettled: async (trx: any, tripId: number) => {
+              hookFired = true;
+              await trx.updateTable('van_sales_trips').set({ status: 'settled' }).where('id', '=', tripId).execute();
+            },
+          },
+          11,
+        ),
+      );
       await assert.rejects(
-        () => service.recordFieldCollectionInternal(4, TENANT, ACCOUNT, {
-          tripId: 11, customerId: 21, amount: 50,
-        }),
+        () =>
+          service.recordFieldCollectionInternal(4, TENANT, ACCOUNT, {
+            tripId: 11,
+            customerId: 21,
+            amount: 50,
+          }),
         /INVALID_TRIP/,
       );
       assert.equal(hookFired, true, 'the concurrent settle must land before the locked re-read');
       assert.equal(
-        await (db as any).selectFrom('customer_ledger').selectAll().execute().then((r: any[]) => r.length),
-        0, 'no collection ledger row was written',
+        await (db as any)
+          .selectFrom('customer_ledger')
+          .selectAll()
+          .execute()
+          .then((r: any[]) => r.length),
+        0,
+        'no collection ledger row was written',
       );
     } finally {
       await db.destroy();
@@ -331,17 +439,38 @@ async function main(): Promise<void> {
       await seedRep(db, 4);
       await seedTrip(db, 11, 4, { cash_collected: 100 });
       let hookFired = false;
-      const service = buildVanService(proxyDb(db, {
-        expenseAdded: async (trx: any, tripId: number) => {
-          hookFired = true;
-          await trx.insertInto('van_trip_expenses').values({
-            tenant_id: TENANT, account_id: ACCOUNT, trip_id: tripId, amount: 30,
-          }).execute();
+      const service = buildVanService(
+        proxyDb(
+          db,
+          {
+            expenseAdded: async (trx: any, tripId: number) => {
+              hookFired = true;
+              await trx
+                .insertInto('van_trip_expenses')
+                .values({
+                  tenant_id: TENANT,
+                  account_id: ACCOUNT,
+                  trip_id: tripId,
+                  amount: 30,
+                })
+                .execute();
+            },
+          },
+          11,
+        ),
+      );
+      const result = await service.settleTrip(
+        4,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 11,
+          countedCash: 0,
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
         },
-      }, 11));
-      const result = await service.settleTrip(4, TENANT, ACCOUNT, {
-        tripId: 11, countedCash: 0, unloadRemainingToWarehouse: false, endOdometer: 120,
-      }, adminAuth);
+        adminAuth,
+      );
       assert.equal(hookFired, true, 'the mid-flight expense must land before the locked money re-read');
       assert.equal(result.expectedCash, 70, 'expected cash uses the in-transaction expense total');
       assert.equal(result.tripExpenses, 30, 'trip expenses are the in-transaction total');
@@ -400,16 +529,33 @@ async function main(): Promise<void> {
   {
     const { db } = await makeDb();
     try {
-      await (db as any).insertInto('van_load_requisitions').values({
-        id: 201, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'REQ-1', rep_id: 4,
-        source_warehouse_id: 1, status: 'pending', requested_items: '[]', approved_items: '[]',
-        notes: null, rejection_reason: null, trip_id: null, reviewed_by: null,
-      }).execute();
+      await (db as any)
+        .insertInto('van_load_requisitions')
+        .values({
+          id: 201,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          doc_no: 'REQ-1',
+          rep_id: 4,
+          source_warehouse_id: 1,
+          status: 'pending',
+          requested_items: '[]',
+          approved_items: '[]',
+          notes: null,
+          rejection_reason: null,
+          trip_id: null,
+          reviewed_by: null,
+        })
+        .execute();
       const service = Object.create(VanRequisitionsService.prototype);
       service.db = db;
       const first = await service.markRequisitionDispatched(TENANT, 201, 11, 99);
       assert.equal(first.ok, true, 'the first dispatch succeeds');
-      const row = await (db as any).selectFrom('van_load_requisitions').selectAll().where('id', '=', 201).executeTakeFirst();
+      const row = await (db as any)
+        .selectFrom('van_load_requisitions')
+        .selectAll()
+        .where('id', '=', 201)
+        .executeTakeFirst();
       assert.equal(row.status, 'dispatched', 'the row is dispatched');
       assert.equal(Number(row.trip_id), 11, 'the dispatch links the first trip');
       await assert.rejects(
@@ -417,7 +563,11 @@ async function main(): Promise<void> {
         /ALREADY_DISPATCHED/,
         'the second dispatch fails closed',
       );
-      const rowAfter = await (db as any).selectFrom('van_load_requisitions').selectAll().where('id', '=', 201).executeTakeFirst();
+      const rowAfter = await (db as any)
+        .selectFrom('van_load_requisitions')
+        .selectAll()
+        .where('id', '=', 201)
+        .executeTakeFirst();
       assert.equal(Number(rowAfter.trip_id), 11, 'the second dispatch did not overwrite the trip link');
     } finally {
       await db.destroy();
@@ -441,23 +591,53 @@ async function main(): Promise<void> {
       service.db = db;
       service.salesService = salesStub;
       const seedOrder = async (orderId: number, status: string) => {
-        await (db as any).insertInto('sales_orders').values({
-          id: orderId, tenant_id: TENANT, account_id: ACCOUNT, order_number: `SO-${orderId}`,
-          order_source: 'van_presales', status, sale_id: null, customer_id: null,
-          customer_name: null, customer_phone: null, rep_id: 4, branch_id: 1,
-          warehouse_location_id: 1, payment_terms: 'cash', discount_amount: 0,
-          total_amount: 100, notes: null,
-        }).execute();
-        await (db as any).insertInto('sales_order_items').values({
-          id: orderId, tenant_id: TENANT, account_id: ACCOUNT, sales_order_id: orderId,
-          product_id: 1, quantity: 2, reserved_quantity: 2, delivered_quantity: 0,
-          unit_price: 50, discount: 0, unit_name: 'piece',
-        }).execute();
+        await (db as any)
+          .insertInto('sales_orders')
+          .values({
+            id: orderId,
+            tenant_id: TENANT,
+            account_id: ACCOUNT,
+            order_number: `SO-${orderId}`,
+            order_source: 'van_presales',
+            status,
+            sale_id: null,
+            customer_id: null,
+            customer_name: null,
+            customer_phone: null,
+            rep_id: 4,
+            branch_id: 1,
+            warehouse_location_id: 1,
+            payment_terms: 'cash',
+            discount_amount: 0,
+            total_amount: 100,
+            notes: null,
+          })
+          .execute();
+        await (db as any)
+          .insertInto('sales_order_items')
+          .values({
+            id: orderId,
+            tenant_id: TENANT,
+            account_id: ACCOUNT,
+            sales_order_id: orderId,
+            product_id: 1,
+            quantity: 2,
+            reserved_quantity: 2,
+            delivered_quantity: 0,
+            unit_price: 50,
+            discount: 0,
+            unit_name: 'piece',
+          })
+          .execute();
       };
       const orderRow = async (orderId: number) =>
         (db as any).selectFrom('sales_orders').selectAll().where('id', '=', orderId).executeTakeFirst();
       const itemRow = async (orderId: number) =>
-        (db as any).selectFrom('sales_order_items').selectAll().where('sales_order_id', '=', orderId).executeTakeFirst();
+        (db as any)
+          .selectFrom('sales_order_items')
+          .selectAll()
+          .where('sales_order_id', '=', orderId)
+          .executeTakeFirst();
 
       await seedOrder(301, 'approved');
       const converted = await service.convertPreSalesOrderToInvoice(301, adminAuth, {});
@@ -491,11 +671,12 @@ async function main(): Promise<void> {
       // A failed sale reverts the claim to 'approved' — and the
       // reservation was never released outside the sale transaction.
       await seedOrder(302, 'approved');
-      service.salesService = { createSale: async () => { throw new Error('SALE_BOOM'); } };
-      await assert.rejects(
-        () => service.convertPreSalesOrderToInvoice(302, adminAuth, {}),
-        /SALE_BOOM/,
-      );
+      service.salesService = {
+        createSale: async () => {
+          throw new Error('SALE_BOOM');
+        },
+      };
+      await assert.rejects(() => service.convertPreSalesOrderToInvoice(302, adminAuth, {}), /SALE_BOOM/);
       assert.equal((await orderRow(302)).status, 'approved', 'the claim reverts to approved');
       assert.equal(Number((await itemRow(302)).reserved_quantity), 2, 'the reservation is intact');
     } finally {
@@ -510,18 +691,40 @@ async function main(): Promise<void> {
     const { db } = await makeDb();
     try {
       await seedRep(db, 4, { employee_id: 9 });
-      await (db as any).insertInto('hr_employees').values({
-        id: 9, tenant_id: TENANT, account_id: ACCOUNT, display_name: 'Rep 4', national_id: null, status: 'active',
-      }).execute();
-      await (db as any).insertInto('van_rep_financial_settlements').values({
-        id: 401, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 4, trip_id: 11,
-        entry_type: 'cash_shortage', amount: 25, status: 'pending', notes: 'shortage',
-      }).execute();
+      await (db as any)
+        .insertInto('hr_employees')
+        .values({
+          id: 9,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          display_name: 'Rep 4',
+          national_id: null,
+          status: 'active',
+        })
+        .execute();
+      await (db as any)
+        .insertInto('van_rep_financial_settlements')
+        .values({
+          id: 401,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: 4,
+          trip_id: 11,
+          entry_type: 'cash_shortage',
+          amount: 25,
+          status: 'pending',
+          notes: 'shortage',
+        })
+        .execute();
       const service = buildVanService(db);
       const first = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [401] }, adminAuth);
       assert.equal(first.results[0].success, true, 'the first push succeeds');
       assert.equal(first.processedCount, 1, 'one item processed');
-      const itemRow = await (db as any).selectFrom('van_rep_financial_settlements').selectAll().where('id', '=', 401).executeTakeFirst();
+      const itemRow = await (db as any)
+        .selectFrom('van_rep_financial_settlements')
+        .selectAll()
+        .where('id', '=', 401)
+        .executeTakeFirst();
       assert.equal(itemRow.status, 'pushed_to_payroll', 'the item is pushed');
       const adjustments = () => (db as any).selectFrom('hr_employee_adjustments').selectAll().execute();
       assert.equal((await adjustments()).length, 1, 'exactly one payroll adjustment');
@@ -543,17 +746,29 @@ async function main(): Promise<void> {
   // coordinator and is not pinned here.)
   {
     const here = __dirname;
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/trip-open-load.service.ts'), 'utf8');
+    const vanSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/trip-open-load.service.ts'),
+      'utf8',
+    );
     assert.ok(vanSource.includes('INV-VAN-TRIP-LOCKED-STATE-RECHECK'), 'van-sales names the invariant');
     assert.ok(vanSource.includes('uq_van_trips_one_open_per_rep'), 'the open guard names the unique index');
-    const reqSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-requisitions.service.ts'), 'utf8');
+    const reqSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-requisitions.service.ts'),
+      'utf8',
+    );
     assert.ok(reqSource.includes('INV-VAN-TRIP-LOCKED-STATE-RECHECK'), 'requisitions names the invariant');
-    const preSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-pre-sales.service.ts'), 'utf8');
+    const preSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-pre-sales.service.ts'),
+      'utf8',
+    );
     assert.ok(preSource.includes('INV-VAN-TRIP-LOCKED-STATE-RECHECK'), 'pre-sales names the invariant');
     assert.ok(preSource.includes('conversionRelease'), 'pre-sales hands the release to createSale');
     const facadeSource = readFileSync(resolve(here, '../../src/modules/sales/sales.service.ts'), 'utf8');
     assert.ok(facadeSource.includes('conversionRelease'), 'the sale facade forwards the conversion release');
-    const migrationSource = readFileSync(resolve(here, '../../src/database/migrations/2040000000314_van_open_trip_unique_index.ts'), 'utf8');
+    const migrationSource = readFileSync(
+      resolve(here, '../../src/database/migrations/2040000000314_van_open_trip_unique_index.ts'),
+      'utf8',
+    );
     assert.ok(migrationSource.includes('uq_van_trips_one_open_per_rep'), 'migration 0314 creates the index');
     console.log('  source pins passed');
   }

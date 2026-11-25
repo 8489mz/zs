@@ -104,35 +104,97 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>, currency: string): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: currency }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('van_sales_trips').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true })
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' })
+    .execute();
 }
 
 async function seedTaxSetting(db: Kysely<Database>, key: string, value: string): Promise<void> {
   await (db as any).insertInto('settings').values({ tenant_id: TENANT, key, value }).execute();
 }
 
-async function seedProduct(db: Kysely<Database>, id: number, retail: number, cost: number, vanQty: number): Promise<void> {
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  retail: number,
+  cost: number,
+  vanQty: number,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({ id, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${id}`, stock_qty: vanQty, cost_price: cost, retail_price: retail, credit_price: 0, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Product ${id}`,
+      stock_qty: vanQty,
+      cost_price: cost,
+      retail_price: retail,
+      credit_price: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -141,11 +203,27 @@ function buildService(db: Kysely<Database>): VanSalesService {
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   // INV-VAN-FIELD-NONCASH-EVIDENCE-GATE: the InstaPay case below now
   // has to carry supervisor evidence, and this spec's users DDL has
@@ -153,28 +231,44 @@ function buildService(db: Kysely<Database>): VanSalesService {
   // stubbed approved here (tax is what this spec pins). The real
   // PIN path is driven in van-field-noncash-evidence.spec.ts.
   (service as any).verifySupervisorPin = async () => ({
-    approved: true, supervisorId: 2, supervisorName: 'Supervisor',
+    approved: true,
+    supervisorId: 2,
+    supervisorName: 'Supervisor',
   });
   return service;
 }
 
 async function saleRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll().where('id', '=', id).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', id)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
-async function journalLines(db: Kysely<Database>, saleId: number): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+async function journalLines(
+  db: Kysely<Database>,
+  saleId: number,
+): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('journal_entries', 'journal_entries.id', 'journal_entry_lines.journal_entry_id')
     .select(['journal_entry_lines.account_id', 'journal_entry_lines.debit', 'journal_entry_lines.credit'])
     .where('journal_entries.source_type', '=', 'sale')
     .where('journal_entries.source_id', '=', saleId)
     .where('journal_entries.tenant_id', '=', TENANT)
-    .execute() as unknown as Array<Record<string, unknown>>;
+    .execute()) as unknown as Array<Record<string, unknown>>;
   return rows.map((r) => ({ accountId: Number(r.account_id), debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
-function lineFor(lines: Array<{ accountId: number; debit: number; credit: number }>, accountId: number): { debit: number; credit: number } {
-  return lines.filter((l) => l.accountId === accountId).reduce((acc, l) => ({ debit: acc.debit + l.debit, credit: acc.credit + l.credit }), { debit: 0, credit: 0 });
+function lineFor(
+  lines: Array<{ accountId: number; debit: number; credit: number }>,
+  accountId: number,
+): { debit: number; credit: number } {
+  return lines
+    .filter((l) => l.accountId === accountId)
+    .reduce((acc, l) => ({ debit: acc.debit + l.debit, credit: acc.credit + l.credit }), { debit: 0, credit: 0 });
 }
 
 async function main(): Promise<void> {
@@ -187,7 +281,8 @@ async function main(): Promise<void> {
       await seedProduct(db, 101, 100, 50, 10);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 2 }],
       });
       assert.equal(res.total, 230);
@@ -203,8 +298,13 @@ async function main(): Promise<void> {
       assert.equal(lineFor(lines, 1130).debit, 230); // rep custody, tax-inclusive
       assert.equal(lineFor(lines, 4100).credit, 200); // revenue, net of tax
       assert.equal(lineFor(lines, 2120).credit, 30); // sales tax payable
-      assert.equal(lines.reduce((s, l) => s + l.debit, 0), lines.reduce((s, l) => s + l.credit, 0));
-    } finally { await db.destroy(); }
+      assert.equal(
+        lines.reduce((s, l) => s + l.debit, 0),
+        lines.reduce((s, l) => s + l.credit, 0),
+      );
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. EGP, no tax setting at all: the same sale posts zero tax.
@@ -215,7 +315,8 @@ async function main(): Promise<void> {
       await seedProduct(db, 102, 100, 50, 10);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 102, qty: 2 }],
       });
       assert.equal(res.total, 200);
@@ -226,7 +327,9 @@ async function main(): Promise<void> {
       const lines = await journalLines(db, res.saleId);
       assert.equal(lineFor(lines, 2120).credit, 0);
       assert.equal(lineFor(lines, 4100).credit, 200);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. EGP, legacy `tax_rate` spelling only: 100 x 1 at 10% posts tax 10.
@@ -238,14 +341,17 @@ async function main(): Promise<void> {
       await seedProduct(db, 103, 100, 50, 10);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 103, qty: 1 }],
       });
       assert.equal(res.total, 110);
       const sale = await saleRow(db, res.saleId);
       assert.equal(Number(sale.tax_rate), 10);
       assert.equal(Number(sale.tax_amount), 10);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 4. KWD 3dp at book digits, not toFixed(2): 10.125 x 1 at 15%
@@ -258,7 +364,8 @@ async function main(): Promise<void> {
       await seedProduct(db, 104, 10.125, 4.005, 10);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 104, qty: 1 }],
       });
       assert.equal(res.total, 11.644);
@@ -269,7 +376,9 @@ async function main(): Promise<void> {
       const lines = await journalLines(db, res.saleId);
       assert.equal(lineFor(lines, 2120).credit, 1.519);
       assert.equal(lineFor(lines, 4100).credit, 10.125);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 5. Split with tax: 200 + 30 tax = 230, cash 100 collected, the
@@ -280,10 +389,26 @@ async function main(): Promise<void> {
       await seedFoundation(db, 'EGP');
       await seedTaxSetting(db, 'taxRate', '15');
       await seedProduct(db, 105, 100, 50, 10);
-      await (db as any).insertInto('customers').values({ id: 7, tenant_id: TENANT, account_id: ACCOUNT, name: 'Credit Customer', balance: 0, credit_limit: 1000, customer_type: 'credit', metadata: '{}', is_active: true }).execute();
+      await (db as any)
+        .insertInto('customers')
+        .values({
+          id: 7,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Credit Customer',
+          balance: 0,
+          credit_limit: 1000,
+          customer_type: 'credit',
+          metadata: '{}',
+          is_active: true,
+        })
+        .execute();
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'split', paidAmount: 100, customerId: 7,
+        tripId: 1,
+        paymentMethod: 'split',
+        paidAmount: 100,
+        customerId: 7,
         items: [{ productId: 105, qty: 2 }],
       });
       assert.equal(res.total, 230);
@@ -291,12 +416,22 @@ async function main(): Promise<void> {
       assert.equal(res.creditOwed, 130);
       const sale = await saleRow(db, res.saleId);
       assert.equal(Number(sale.tax_amount), 30);
-      const cust = await (db as any).selectFrom('customers').select('balance').where('id', '=', 7).executeTakeFirstOrThrow() as any;
+      const cust = (await (db as any)
+        .selectFrom('customers')
+        .select('balance')
+        .where('id', '=', 7)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(cust.balance), 130);
-      const trip = await (db as any).selectFrom('van_sales_trips').select(['cash_collected', 'credit_sales']).where('id', '=', 1).executeTakeFirstOrThrow() as any;
+      const trip = (await (db as any)
+        .selectFrom('van_sales_trips')
+        .select(['cash_collected', 'credit_sales'])
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(trip.cash_collected), 100);
       assert.equal(Number(trip.credit_sales), 130);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 6. InstaPay with tax: the settled amount is the tax-inclusive
@@ -309,20 +444,32 @@ async function main(): Promise<void> {
       await seedProduct(db, 106, 100, 50, 10);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'instapay',
-        supervisorOverridePin: '4321', transferReference: 'IP-9988221',
+        tripId: 1,
+        paymentMethod: 'instapay',
+        supervisorOverridePin: '4321',
+        transferReference: 'IP-9988221',
         items: [{ productId: 106, qty: 2 }],
       });
       assert.equal(res.total, 230);
       const sale = await saleRow(db, res.saleId);
       assert.equal(Number(sale.paid_amount), 230);
-      const payment = await (db as any).selectFrom('sale_payments').select(['amount', 'payment_channel']).where('sale_id', '=', res.saleId).executeTakeFirstOrThrow() as any;
+      const payment = (await (db as any)
+        .selectFrom('sale_payments')
+        .select(['amount', 'payment_channel'])
+        .where('sale_id', '=', res.saleId)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(payment.amount), 230);
       assert.equal(payment.payment_channel, 'bank_transfer');
-      const trip = await (db as any).selectFrom('van_sales_trips').select(['sales_amount', 'total_instapay_sales']).where('id', '=', 1).executeTakeFirstOrThrow() as any;
+      const trip = (await (db as any)
+        .selectFrom('van_sales_trips')
+        .select(['sales_amount', 'total_instapay_sales'])
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(trip.sales_amount), 230);
       assert.equal(Number(trip.total_instapay_sales), 230);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 7. Source pin: the canonical engine + shared totals drive the
@@ -335,13 +482,22 @@ async function main(): Promise<void> {
   // File #52 split: executeFieldSaleInternal now lives in the S1 slice —
   // the slice file IS the method, so the pin reads it to EOF.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'),
+      'utf8',
+    );
     const start = source.indexOf('async executeFieldSaleInternal(');
     assert.ok(start > 0);
     const body = source.slice(start);
     assert.ok(body.includes('INV-VAN-SALE-TAX-OPTIONAL'), 'tax block marker present');
-    assert.ok(body.includes("resolveSaleTaxRate(configuredTaxRate, configuredTaxRate)"), 'configured rate resolved through the canonical engine');
-    assert.ok(body.includes('computeInvoiceTotals(subtotalSale, discountSale, vanTaxRate, false, 0, 0, 0)'), 'shared totals on the net base, tax added on top');
+    assert.ok(
+      body.includes('resolveSaleTaxRate(configuredTaxRate, configuredTaxRate)'),
+      'configured rate resolved through the canonical engine',
+    );
+    assert.ok(
+      body.includes('computeInvoiceTotals(subtotalSale, discountSale, vanTaxRate, false, 0, 0, 0)'),
+      'shared totals on the net base, tax added on top',
+    );
     assert.ok(body.includes('tax_rate: vanTaxRate'), 'stored tax_rate comes from the resolved rate');
     assert.ok(body.includes('tax_amount: vanTaxAmount'), 'stored tax_amount comes from the shared totals');
     const marker = body.indexOf('INV-VAN-SALE-TAX-OPTIONAL');

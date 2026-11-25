@@ -19,7 +19,10 @@ async function main(): Promise<void> {
 
   const empty = Object.assign(new RecountStockCountItemDto(), { countedQty: 3, reason: '' });
   const emptyViolations = await validate(empty);
-  assert.ok(emptyViolations.some((v) => v.property === 'reason'), 'an empty reason is still rejected');
+  assert.ok(
+    emptyViolations.some((v) => v.property === 'reason'),
+    'an empty reason is still rejected',
+  );
 
   console.log('recount reason DTO checks passed');
 }

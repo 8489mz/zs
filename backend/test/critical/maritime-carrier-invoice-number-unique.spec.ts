@@ -57,7 +57,10 @@ async function main(): Promise<void> {
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const calls: Array<{ sourceType: string; lines: Array<{ debit: number; credit: number }> }> = [];
   const postingStub = {
-    postDomainJournal: async (_trx: unknown, input: { sourceType: string; lines: Array<{ debit: number; credit: number }> }) => {
+    postDomainJournal: async (
+      _trx: unknown,
+      input: { sourceType: string; lines: Array<{ debit: number; credit: number }> },
+    ) => {
       calls.push({ sourceType: input.sourceType, lines: input.lines });
       return 900;
     },
@@ -107,14 +110,18 @@ async function main(): Promise<void> {
     assert.equal(calls.length, 0);
 
     // 2. Same number, same line: rejected, nothing saved, totals untouched.
-    await assert.rejects(
-      service.createCarrierInvoice(auth, '1', dto('MSCU-100', 9)),
-      /مستخدم من قبل/,
-    );
+    await assert.rejects(service.createCarrierInvoice(auth, '1', dto('MSCU-100', 9)), /مستخدم من قبل/);
     assert.equal(calls.length, 0);
-    const jobAfterDup = await db.selectFrom('maritime_jobs' as any).selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+    const jobAfterDup = await db
+      .selectFrom('maritime_jobs' as any)
+      .selectAll()
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow();
     assert.equal(Number((jobAfterDup as any).carrier_cost_total), 0);
-    const rowsAfterDup = await db.selectFrom('maritime_carrier_invoices' as any).selectAll().execute();
+    const rowsAfterDup = await db
+      .selectFrom('maritime_carrier_invoices' as any)
+      .selectAll()
+      .execute();
     assert.equal(rowsAfterDup.length, 1);
 
     // 3. Same number, different line: succeeds (per-line uniqueness).
@@ -124,12 +131,12 @@ async function main(): Promise<void> {
     assert.equal(calls.length, 0);
 
     // 4. Same number, different case/whitespace, line inherited from the job: rejected.
-    await assert.rejects(
-      service.createCarrierInvoice(auth, '1', dto('  mscu-100  ')),
-      /مستخدم من قبل/,
-    );
+    await assert.rejects(service.createCarrierInvoice(auth, '1', dto('  mscu-100  ')), /مستخدم من قبل/);
     assert.equal(calls.length, 0);
-    const rowsAfterCase = await db.selectFrom('maritime_carrier_invoices' as any).selectAll().execute();
+    const rowsAfterCase = await db
+      .selectFrom('maritime_carrier_invoices' as any)
+      .selectAll()
+      .execute();
     assert.equal(rowsAfterCase.length, 2);
 
     console.log('maritime carrier invoice number uniqueness checks passed');

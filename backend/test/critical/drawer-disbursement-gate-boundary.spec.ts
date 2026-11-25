@@ -64,13 +64,23 @@ const CASHIER_PASSWORD = 'cashier-secret-1';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-cashier', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-cashier',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function expectCode(promise: Promise<unknown>, code: string): Promise<void> {
@@ -153,46 +163,130 @@ async function seedDrawerFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string, string, string, boolean]> = [
-    [1110, '1110', 'asset', 'debit', true], [1111, '1111', 'asset', 'debit', true], [1120, '1120', 'asset', 'debit', true],
-    [1130, '1130', 'asset', 'debit', false], [1140, '1140', 'asset', 'debit', false],
-    [2120, '2120', 'liability', 'credit', false], [4100, '4100', 'income', 'credit', false],
-    [4300, '4300', 'income', 'credit', false], [5100, '5100', 'expense', 'debit', false],
-    [6950, '6950', 'expense', 'debit', false], [7100, '7100', 'income', 'credit', false],
+    [1110, '1110', 'asset', 'debit', true],
+    [1111, '1111', 'asset', 'debit', true],
+    [1120, '1120', 'asset', 'debit', true],
+    [1130, '1130', 'asset', 'debit', false],
+    [1140, '1140', 'asset', 'debit', false],
+    [2120, '2120', 'liability', 'credit', false],
+    [4100, '4100', 'income', 'credit', false],
+    [4300, '4300', 'income', 'credit', false],
+    [5100, '5100', 'expense', 'debit', false],
+    [6950, '6950', 'expense', 'debit', false],
+    [7100, '7100', 'income', 'credit', false],
   ];
   for (const [id, code, accountType, normalBalance, isCashBank] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: accountType, normal_balance: normalBalance, is_cash_bank: isCashBank, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id,
+        tenant_id: TENANT,
+        code,
+        name_ar: code,
+        account_type: accountType,
+        normal_balance: normalBalance,
+        is_cash_bank: isCashBank,
+        is_active: true,
+        is_tax: false,
+      })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
   const cashierRecord = await createPasswordRecord(CASHIER_PASSWORD);
-  await (db as any).updateTable('users').set({ password_hash: cashierRecord.hash, password_salt: cashierRecord.salt }).where('id', '=', 2).execute();
+  await (db as any)
+    .updateTable('users')
+    .set({ password_hash: cashierRecord.hash, password_salt: cashierRecord.salt })
+    .where('id', '=', 2)
+    .execute();
 }
 
 async function seedCashierShift(db: Kysely<Database>, id: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: 2, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: 2,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
 function buildDrawerServices(db: Kysely<Database>): { drawer: CashDrawerService } {
@@ -206,12 +300,18 @@ function buildDrawerServices(db: Kysely<Database>): { drawer: CashDrawerService 
 }
 
 async function treasuryRows(db: Kysely<Database>, shiftId: number): Promise<any[]> {
-  const res = await sql<any>`select id, txn_type, amount, note, created_by from treasury_transactions where reference_type = 'cashier_shift' and reference_id = ${shiftId} order by id asc`.execute(db);
+  const res =
+    await sql<any>`select id, txn_type, amount, note, created_by from treasury_transactions where reference_type = 'cashier_shift' and reference_id = ${shiftId} order by id asc`.execute(
+      db,
+    );
   return res.rows || [];
 }
 
 async function journalLines(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<any[]> {
-  const res = await sql<any>`select je.id as entry_id, jel.account_id, jel.debit, jel.credit from journal_entries je join journal_entry_lines jel on jel.journal_entry_id = je.id where je.source_type = ${sourceType} and je.source_id = ${sourceId} order by jel.id asc`.execute(db);
+  const res =
+    await sql<any>`select je.id as entry_id, jel.account_id, jel.debit, jel.credit from journal_entries je join journal_entry_lines jel on jel.journal_entry_id = je.id where je.source_type = ${sourceType} and je.source_id = ${sourceId} order by jel.id asc`.execute(
+      db,
+    );
   return res.rows || [];
 }
 
@@ -240,7 +340,9 @@ async function makeEditGateDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', '', '', true);
   `);
   const cashierRecord = await createPasswordRecord(CASHIER_PASSWORD);
-  await sql`INSERT INTO users VALUES (2, 't1', 'cashier-a', 1, 'cashier', ${cashierRecord.hash}, ${cashierRecord.salt}, true)`.execute(db);
+  await sql`INSERT INTO users VALUES (2, 't1', 'cashier-a', 1, 'cashier', ${cashierRecord.hash}, ${cashierRecord.salt}, true)`.execute(
+    db,
+  );
   return { pg, db };
 }
 
@@ -260,9 +362,19 @@ function buildEditGateServices(db: Kysely<Database>): { sales: SalesWriteService
   const returnsStub = {};
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
-    undefined, undefined, drawer,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
+    undefined,
+    undefined,
+    drawer,
   );
   return { sales };
 }
@@ -270,9 +382,15 @@ function buildEditGateServices(db: Kysely<Database>): { sales: SalesWriteService
 function editPayload(managerPin?: string): any {
   return {
     items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
-    branchId: 1, locationId: 10, source: 'pos',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: 100 }],
+    tenderedAmount: 100,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
     editReason: 'تصحيح سعر الصنف',
     ...(managerPin !== undefined ? { managerPin } : {}),
   };
@@ -284,9 +402,30 @@ function editPayload(managerPin?: string): any {
 // a manager password (a different admin) is the only credential
 // that can approve.
 
-const ADMIN1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin1', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
-const COUNT_CASHIER = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 2, username: 'cashier', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
-const ADMIN2 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 3, username: 'admin2', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const ADMIN1 = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin1',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
+const COUNT_CASHIER = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'cashier',
+  userId: 2,
+  username: 'cashier',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
+const ADMIN2 = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 3,
+  username: 'admin2',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 
 async function makeCountDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -327,11 +466,17 @@ async function makeCountDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE import_inventory_lots (id bigserial PRIMARY KEY, tenant_id text, product_id bigint, status text, remaining_quantity numeric, location_id bigint, receipt_date date, created_at timestamptz DEFAULT NOW());
   `);
   const admin1Record = await createPasswordRecord('admin1-pass');
-  await sql`UPDATE users SET password_hash = ${admin1Record.hash}, password_salt = ${admin1Record.salt} WHERE id = 1`.execute(db);
+  await sql`UPDATE users SET password_hash = ${admin1Record.hash}, password_salt = ${admin1Record.salt} WHERE id = 1`.execute(
+    db,
+  );
   const admin2Record = await createPasswordRecord('admin2-pass');
-  await sql`INSERT INTO users VALUES (3, 't1', 'admin2', 1, 'admin', ${admin2Record.hash}, ${admin2Record.salt}, true)`.execute(db);
+  await sql`INSERT INTO users VALUES (3, 't1', 'admin2', 1, 'admin', ${admin2Record.hash}, ${admin2Record.salt}, true)`.execute(
+    db,
+  );
   const cashierRecord = await createPasswordRecord(CASHIER_PASSWORD);
-  await sql`INSERT INTO users VALUES (2, 't1', 'cashier', 1, 'cashier', ${cashierRecord.hash}, ${cashierRecord.salt}, true)`.execute(db);
+  await sql`INSERT INTO users VALUES (2, 't1', 'cashier', 1, 'cashier', ${cashierRecord.hash}, ${cashierRecord.salt}, true)`.execute(
+    db,
+  );
   await sql`INSERT INTO settings VALUES ('t1', 'managerPin', '"2468"')`.execute(db);
   return { pg, db };
 }
@@ -352,17 +497,39 @@ function buildCountService(db: Kysely<Database>): InventoryCountService {
   );
 }
 
-async function seedCountSession(db: Kysely<Database>, sessionId: number, productId: number, countedBy: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${productId}, 't1', 'a1', ${`Product ${productId}`}, 100, 0, 10, true, false)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${productId}, 1, 1, 100, 0)`.execute(db);
+async function seedCountSession(
+  db: Kysely<Database>,
+  sessionId: number,
+  productId: number,
+  countedBy: number,
+): Promise<void> {
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${productId}, 't1', 'a1', ${`Product ${productId}`}, 100, 0, 10, true, false)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${productId}, 1, 1, 100, 0)`.execute(
+    db,
+  );
   await sql`UPDATE product_location_stock SET qty = 90 WHERE product_id = ${productId} AND location_id = 1`.execute(db);
-  await sql`INSERT INTO stock_count_sessions (id, tenant_id, account_id, doc_no, branch_id, location_id, status, note, counted_by, created_at, updated_at) VALUES (${sessionId}, 't1', 'a1', ${`ZSC-${sessionId}`}, 1, 1, 'draft', '', ${countedBy}, NOW(), NOW())`.execute(db);
-  await sql`INSERT INTO stock_count_items (tenant_id, account_id, session_id, product_id, product_name, expected_qty, counted_qty, variance_qty, reason, note, counted_serials, batch_counts) VALUES ('t1', 'a1', ${sessionId}, ${productId}, ${`Product ${productId}`}, 90, 85, -5, 'shortage found', '', null, null)`.execute(db);
+  await sql`INSERT INTO stock_count_sessions (id, tenant_id, account_id, doc_no, branch_id, location_id, status, note, counted_by, created_at, updated_at) VALUES (${sessionId}, 't1', 'a1', ${`ZSC-${sessionId}`}, 1, 1, 'draft', '', ${countedBy}, NOW(), NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO stock_count_items (tenant_id, account_id, session_id, product_id, product_name, expected_qty, counted_qty, variance_qty, reason, note, counted_serials, batch_counts) VALUES ('t1', 'a1', ${sessionId}, ${productId}, ${`Product ${productId}`}, 90, 85, -5, 'shortage found', '', null, null)`.execute(
+    db,
+  );
 }
 
-async function countSessionState(db: Kysely<Database>, id: number): Promise<{ status: string; approvedBy: number | null }> {
-  const row = await sql<{ status: string; approved_by: number | null }>`SELECT status, approved_by FROM stock_count_sessions WHERE id = ${id}`.execute(db);
-  return { status: row.rows[0].status, approvedBy: row.rows[0].approved_by == null ? null : Number(row.rows[0].approved_by) };
+async function countSessionState(
+  db: Kysely<Database>,
+  id: number,
+): Promise<{ status: string; approvedBy: number | null }> {
+  const row = await sql<{
+    status: string;
+    approved_by: number | null;
+  }>`SELECT status, approved_by FROM stock_count_sessions WHERE id = ${id}`.execute(db);
+  return {
+    status: row.rows[0].status,
+    approvedBy: row.rows[0].approved_by == null ? null : Number(row.rows[0].approved_by),
+  };
 }
 
 async function main(): Promise<void> {
@@ -374,7 +541,17 @@ async function main(): Promise<void> {
       await seedDrawerFoundation(db);
       await seedCashierShift(db, 1);
       const { drawer } = buildDrawerServices(db);
-      await drawer.recordCashMovement(1, { type: 'cash_out', amount: 10, note: 'صرف نقدي', managerPin: CASHIER_PASSWORD, requestKey: 'gate-cash-out-0001' } as never, cashierAuth);
+      await drawer.recordCashMovement(
+        1,
+        {
+          type: 'cash_out',
+          amount: 10,
+          note: 'صرف نقدي',
+          managerPin: CASHIER_PASSWORD,
+          requestKey: 'gate-cash-out-0001',
+        } as never,
+        cashierAuth,
+      );
       const rows = await treasuryRows(db, 1);
       assert.equal(rows.length, 1, 'one treasury row');
       assert.equal(Number(rows[0].amount), -10, 'a cash_out leaves the drawer');
@@ -383,7 +560,8 @@ async function main(): Promise<void> {
       assert.deepEqual([Number(lines[0].account_id), Number(lines[0].debit)], [6950, 10], 'cash_out Dr expense');
       assert.deepEqual([Number(lines[1].account_id), Number(lines[1].credit)], [1110, 10], 'cash_out Cr cash');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  cash_out accepts the cashier own password passed');
   }
@@ -396,17 +574,37 @@ async function main(): Promise<void> {
       await seedDrawerFoundation(db);
       await seedCashierShift(db, 1);
       const { drawer } = buildDrawerServices(db);
-      await drawer.recordCashMovement(1, { type: 'safe_drop', amount: 300, note: 'إيداع الخزينة', managerPin: CASHIER_PASSWORD, requestKey: 'gate-safe-drop-0001', counterpartAccountId: 1111 } as never, cashierAuth);
+      await drawer.recordCashMovement(
+        1,
+        {
+          type: 'safe_drop',
+          amount: 300,
+          note: 'إيداع الخزينة',
+          managerPin: CASHIER_PASSWORD,
+          requestKey: 'gate-safe-drop-0001',
+          counterpartAccountId: 1111,
+        } as never,
+        cashierAuth,
+      );
       const rows = await treasuryRows(db, 1);
       assert.equal(rows.length, 1, 'one treasury row');
       assert.equal(Number(rows[0].amount), -300, 'a safe drop leaves the drawer');
       assert.equal(Number(rows[0].created_by), 2, 'the cashier is recorded as the actor');
       const lines = await journalLines(db, 'cash_drawer_safe_drop', Number(rows[0].id));
-      assert.deepEqual([Number(lines[0].account_id), Number(lines[0].debit), Number(lines[0].credit)], [1111, 300, 0], 'Dr safe account 1111');
-      assert.deepEqual([Number(lines[1].account_id), Number(lines[1].debit), Number(lines[1].credit)], [1110, 0, 300], 'Cr drawer cash');
+      assert.deepEqual(
+        [Number(lines[0].account_id), Number(lines[0].debit), Number(lines[0].credit)],
+        [1111, 300, 0],
+        'Dr safe account 1111',
+      );
+      assert.deepEqual(
+        [Number(lines[1].account_id), Number(lines[1].debit), Number(lines[1].credit)],
+        [1110, 0, 300],
+        'Cr drawer cash',
+      );
       assert.equal(await drawer.computeShiftExpectedCash(1, cashierAuth), -300, 'expected cash reflects the drop');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  safe_drop to 1111 accepts the cashier own password passed');
   }
@@ -422,13 +620,25 @@ async function main(): Promise<void> {
       await seedCashierShift(db, 1);
       const { drawer } = buildDrawerServices(db);
       await expectCode(
-        drawer.recordCashMovement(1, { type: 'safe_drop', amount: 300, note: 'إيداع الخزينة', managerPin: CASHIER_PASSWORD, requestKey: 'gate-safe-drop-0002', counterpartAccountId: 1110 } as never, cashierAuth),
+        drawer.recordCashMovement(
+          1,
+          {
+            type: 'safe_drop',
+            amount: 300,
+            note: 'إيداع الخزينة',
+            managerPin: CASHIER_PASSWORD,
+            requestKey: 'gate-safe-drop-0002',
+            counterpartAccountId: 1110,
+          } as never,
+          cashierAuth,
+        ),
         'DRAWER_COUNTERPART_SAME_AS_CASH',
       );
       assert.equal((await treasuryRows(db, 1)).length, 0, 'no treasury row is written');
       assert.equal(await journalTotals(db), 0, 'no journal is written');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  safe_drop to the drawer cash account itself is rejected passed');
   }
@@ -441,13 +651,24 @@ async function main(): Promise<void> {
       await seedCashierShift(db, 1);
       const { drawer } = buildDrawerServices(db);
       await expectCode(
-        drawer.recordCashMovement(1, { type: 'cash_out', amount: 10, note: 'صرف نقدي', managerPin: 'wrong-password', requestKey: 'gate-cash-out-0002' } as never, cashierAuth),
+        drawer.recordCashMovement(
+          1,
+          {
+            type: 'cash_out',
+            amount: 10,
+            note: 'صرف نقدي',
+            managerPin: 'wrong-password',
+            requestKey: 'gate-cash-out-0002',
+          } as never,
+          cashierAuth,
+        ),
         'CURRENT_USER_PASSWORD_INVALID',
       );
       assert.equal((await treasuryRows(db, 1)).length, 0, 'no treasury row is written');
       assert.equal(await journalTotals(db), 0, 'no journal is written');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  wrong password still fails closed passed');
   }
@@ -461,10 +682,21 @@ async function main(): Promise<void> {
       await seedDrawerFoundation(db);
       await seedCashierShift(db, 1);
       const { drawer } = buildDrawerServices(db);
-      await drawer.recordCashMovement(1, { type: 'cash_out', amount: 10, note: 'صرف نقدي', managerPin: MANAGER_PIN, requestKey: 'gate-cash-out-0003' } as never, cashierAuth);
+      await drawer.recordCashMovement(
+        1,
+        {
+          type: 'cash_out',
+          amount: 10,
+          note: 'صرف نقدي',
+          managerPin: MANAGER_PIN,
+          requestKey: 'gate-cash-out-0003',
+        } as never,
+        cashierAuth,
+      );
       assert.equal((await treasuryRows(db, 1)).length, 1, 'one treasury row');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  manager PIN still accepted as fallback passed');
   }
@@ -477,12 +709,23 @@ async function main(): Promise<void> {
       await seedDrawerFoundation(db);
       await seedCashierShift(db, 1);
       const { drawer } = buildDrawerServices(db);
-      await drawer.recordCashMovement(1, { type: 'cash_in', amount: 20, note: 'توريد', managerPin: CASHIER_PASSWORD, requestKey: 'gate-cash-in-00001' } as never, cashierAuth);
+      await drawer.recordCashMovement(
+        1,
+        {
+          type: 'cash_in',
+          amount: 20,
+          note: 'توريد',
+          managerPin: CASHIER_PASSWORD,
+          requestKey: 'gate-cash-in-00001',
+        } as never,
+        cashierAuth,
+      );
       const rows = await treasuryRows(db, 1);
       assert.equal(rows.length, 1, 'one treasury row');
       assert.equal(Number(rows[0].amount), 20, 'a cash_in enters the drawer');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  cash_in with the cashier own password unchanged passed');
   }
@@ -495,17 +738,52 @@ async function main(): Promise<void> {
     try {
       await seedDrawerFoundation(db);
       const adminRecord = await createPasswordRecord('admin-secret-1');
-      await (db as any).updateTable('users').set({ password_hash: adminRecord.hash, password_salt: adminRecord.salt }).where('id', '=', 1).execute();
-      await (db as any).insertInto('cashier_shifts').values({
-        id: 2, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-2',
-        opened_by: 1, status: 'open', branch_id: 1, location_id: 10,
-        opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-      }).execute();
+      await (db as any)
+        .updateTable('users')
+        .set({ password_hash: adminRecord.hash, password_salt: adminRecord.salt })
+        .where('id', '=', 1)
+        .execute();
+      await (db as any)
+        .insertInto('cashier_shifts')
+        .values({
+          id: 2,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          doc_no: 'SHIFT-2',
+          opened_by: 1,
+          status: 'open',
+          branch_id: 1,
+          location_id: 10,
+          opening_cash: 0,
+          expected_cash: 0,
+          created_at: SHIFT_OPENED_AT,
+        })
+        .execute();
       const { drawer } = buildDrawerServices(db);
-      await drawer.recordCashMovement(2, { type: 'cash_out', amount: 10, note: 'صرف إداري', managerPin: '', requestKey: 'gate-admin-cash-out-0001' } as never, adminAuth);
+      await drawer.recordCashMovement(
+        2,
+        {
+          type: 'cash_out',
+          amount: 10,
+          note: 'صرف إداري',
+          managerPin: '',
+          requestKey: 'gate-admin-cash-out-0001',
+        } as never,
+        adminAuth,
+      );
       assert.equal((await treasuryRows(db, 2)).length, 1, 'admin outbound succeeds without password');
       await expectCode(
-        drawer.recordCashMovement(2, { type: 'cash_out', amount: 10, note: 'صرف إداري', managerPin: 'wrong-pass', requestKey: 'gate-admin-cash-out-0002' } as never, adminAuth),
+        drawer.recordCashMovement(
+          2,
+          {
+            type: 'cash_out',
+            amount: 10,
+            note: 'صرف إداري',
+            managerPin: 'wrong-pass',
+            requestKey: 'gate-admin-cash-out-0002',
+          } as never,
+          adminAuth,
+        ),
         'CURRENT_USER_PASSWORD_INVALID',
       );
       await expectCode(
@@ -513,7 +791,8 @@ async function main(): Promise<void> {
         'CURRENT_USER_PASSWORD_REQUIRED',
       );
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  admin outbound bypasses empty secret while close stays mandatory passed');
   }
@@ -526,7 +805,8 @@ async function main(): Promise<void> {
       const { sales } = buildEditGateServices(db);
       await expectCode(sales.updateSale(999, editPayload(CASHIER_PASSWORD), cashierAuth), 'MANAGER_AUTH_INVALID');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  posted-invoice edit rejects the cashier own password passed');
   }
@@ -539,7 +819,8 @@ async function main(): Promise<void> {
       const { sales } = buildEditGateServices(db);
       await expectCode(sales.updateSale(999, editPayload(), cashierAuth), 'MANAGER_AUTH_REQUIRED');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  posted-invoice edit still requires a manager PIN passed');
   }
@@ -552,7 +833,8 @@ async function main(): Promise<void> {
       const { sales } = buildEditGateServices(db);
       await expectCode(sales.updateSale(999, editPayload(MANAGER_PIN), cashierAuth), 'SALE_NOT_FOUND');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  posted-invoice edit still opens with the manager PIN passed');
   }
@@ -569,14 +851,18 @@ async function main(): Promise<void> {
       await seedCountSession(db, 301, 1, 1);
       await expectCode(service.postStockCountSession(301, COUNT_CASHIER, CASHIER_PASSWORD), 'ADMIN_PASSWORD_INVALID');
       assert.equal((await countSessionState(db, 301)).status, 'draft', 'session stays draft');
-      await expectCode(service.postStockCountSession(301, COUNT_CASHIER, '2468'), 'STOCK_COUNT_APPROVER_NOT_IDENTIFIED');
+      await expectCode(
+        service.postStockCountSession(301, COUNT_CASHIER, '2468'),
+        'STOCK_COUNT_APPROVER_NOT_IDENTIFIED',
+      );
       assert.equal((await countSessionState(db, 301)).status, 'draft', 'session stays draft');
       await service.postStockCountSession(301, COUNT_CASHIER, 'admin2-pass');
       const approved = await countSessionState(db, 301);
       assert.equal(approved.status, 'posted', 'session posts with a manager approval');
       assert.equal(approved.approvedBy, 3, 'approved_by is the approving manager, not the poster');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  count approval stays manager-gated passed');
   }

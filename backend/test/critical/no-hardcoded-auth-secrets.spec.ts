@@ -117,7 +117,12 @@ function run(): void {
   //    install-secret file — never through the retired public literal.
   withTempSecretFile((secretPath) => {
     withEnv(
-      { APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, SESSION_CSRF_SECRET: undefined, ZS_INSTALL_SECRET_PATH: secretPath },
+      {
+        APP_MODE: 'SELF_CONTAINED',
+        SESSION_SECRET: undefined,
+        SESSION_CSRF_SECRET: undefined,
+        ZS_INSTALL_SECRET_PATH: secretPath,
+      },
       () => {
         assert.notEqual(
           resolvePortalTokenSecret(),
@@ -128,9 +133,9 @@ function run(): void {
         assert.equal(verifyPortalToken<any>(`Bearer ${token}`, ERRORS).employeeId, 7);
 
         // 3. A token forged with the old public literal is rejected.
-        const encoded = Buffer
-          .from(JSON.stringify({ employeeId: 999, tenantId: 'victim-tenant', exp: Date.now() + 60_000 }))
-          .toString('base64url');
+        const encoded = Buffer.from(
+          JSON.stringify({ employeeId: 999, tenantId: 'victim-tenant', exp: Date.now() + 60_000 }),
+        ).toString('base64url');
         const forged = createHmac('sha256', 'zs-desktop-offline-portal-token-secret')
           .update(encoded)
           .digest('base64url');
@@ -144,8 +149,14 @@ function run(): void {
   const dirA = fs.mkdtempSync(path.join(os.tmpdir(), 'zs-install-secret-a-'));
   const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'zs-install-secret-b-'));
   try {
-    const envA = { APP_MODE: 'SELF_CONTAINED', ZS_INSTALL_SECRET_PATH: path.join(dirA, 'install-secret') } as unknown as NodeJS.ProcessEnv;
-    const envB = { APP_MODE: 'SELF_CONTAINED', ZS_INSTALL_SECRET_PATH: path.join(dirB, 'install-secret') } as unknown as NodeJS.ProcessEnv;
+    const envA = {
+      APP_MODE: 'SELF_CONTAINED',
+      ZS_INSTALL_SECRET_PATH: path.join(dirA, 'install-secret'),
+    } as unknown as NodeJS.ProcessEnv;
+    const envB = {
+      APP_MODE: 'SELF_CONTAINED',
+      ZS_INSTALL_SECRET_PATH: path.join(dirB, 'install-secret'),
+    } as unknown as NodeJS.ProcessEnv;
     const stored = encryptMfaSecret('JBSWY3DPEHPK3PXP', envA);
     assert.equal(decryptMfaSecret(stored, envA), 'JBSWY3DPEHPK3PXP');
     assert.throws(() => decryptMfaSecret(stored, envB), /MFA_SECRET_CORRUPT/);
@@ -156,15 +167,24 @@ function run(): void {
 
   // 5. Cloud stays fail-closed: no env secret, no install-secret file.
   withEnv(
-    { APP_MODE: 'CLOUD_SAAS', SESSION_SECRET: undefined, SESSION_CSRF_SECRET: undefined, ZS_INSTALL_SECRET_PATH: undefined },
+    {
+      APP_MODE: 'CLOUD_SAAS',
+      SESSION_SECRET: undefined,
+      SESSION_CSRF_SECRET: undefined,
+      ZS_INSTALL_SECRET_PATH: undefined,
+    },
     () => {
       expectAppError('PORTAL_TOKEN_SECRET_MISSING', () => resolvePortalTokenSecret());
     },
   );
 
   // 6. Wiring: this spec is in test:critical and its INV entry exists once.
-  const specs = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'backend', 'scripts', 'critical-specs.json'), 'utf8')).specs as string[];
-  assert.ok(specs.includes('test/critical/no-hardcoded-auth-secrets.spec.ts'), 'this spec must be wired into test:critical');
+  const specs = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'backend', 'scripts', 'critical-specs.json'), 'utf8'))
+    .specs as string[];
+  assert.ok(
+    specs.includes('test/critical/no-hardcoded-auth-secrets.spec.ts'),
+    'this spec must be wired into test:critical',
+  );
   const invariants = fs.readFileSync(path.join(REPO_ROOT, 'ARCHITECTURE_INVARIANTS.md'), 'utf8');
   assert.equal(
     invariants.split('INV-PORTAL-PER-INSTALL-SECRET').length - 1,

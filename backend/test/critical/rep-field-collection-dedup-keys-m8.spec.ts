@@ -106,54 +106,236 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(SUPERVISOR_PIN)) }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(SUPERVISOR_PIN)) })
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true })
+    .execute();
   // One open trip per case (1-6), one customer per case (31-35).
   for (let tripId = 1; tripId <= 6; tripId++) {
-    await anyDb.insertInto('van_sales_trips').values({ id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' }).execute();
+    await anyDb
+      .insertInto('van_sales_trips')
+      .values({ id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' })
+      .execute();
   }
   // Customer 31: owes 200, all of it rep 1's share (ledger +200 via trip 1) — the B3 customer.
-  await anyDb.insertInto('customers').values({ id: 31, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 31', balance: 200, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-  await anyDb.insertInto('customer_ledger').values({ customer_id: 31, entry_type: 'sale', amount: 200, balance_after: 200, reference_type: 'sale', reference_id: null, van_trip_id: 1, tenant_id: TENANT, account_id: ACCOUNT }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 31,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 31',
+      balance: 200,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_ledger')
+    .values({
+      customer_id: 31,
+      entry_type: 'sale',
+      amount: 200,
+      balance_after: 200,
+      reference_type: 'sale',
+      reference_id: null,
+      van_trip_id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
   // Customer 32: owes 200, all of it rep 1's share (ledger +200 via trip 2) — the true-retry / B7 clientTxId customer.
-  await anyDb.insertInto('customers').values({ id: 32, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 32', balance: 200, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-  await anyDb.insertInto('customer_ledger').values({ customer_id: 32, entry_type: 'sale', amount: 200, balance_after: 200, reference_type: 'sale', reference_id: null, van_trip_id: 2, tenant_id: TENANT, account_id: ACCOUNT }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 32,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 32',
+      balance: 200,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_ledger')
+    .values({
+      customer_id: 32,
+      entry_type: 'sale',
+      amount: 200,
+      balance_after: 200,
+      reference_type: 'sale',
+      reference_id: null,
+      van_trip_id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
   // Customer 33: owes 200, all of it rep 1's share (ledger +200 via trip 3) — the B7 twin customer.
-  await anyDb.insertInto('customers').values({ id: 33, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 33', balance: 200, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-  await anyDb.insertInto('customer_ledger').values({ customer_id: 33, entry_type: 'sale', amount: 200, balance_after: 200, reference_type: 'sale', reference_id: null, van_trip_id: 3, tenant_id: TENANT, account_id: ACCOUNT }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 33,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 33',
+      balance: 200,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_ledger')
+    .values({
+      customer_id: 33,
+      entry_type: 'sale',
+      amount: 200,
+      balance_after: 200,
+      reference_type: 'sale',
+      reference_id: null,
+      van_trip_id: 3,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
   // Customer 34: owes 300, all of it rep 1's share (ledger +300 via trip 4) — the B8 customer (two trips).
-  await anyDb.insertInto('customers').values({ id: 34, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 34', balance: 300, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-  await anyDb.insertInto('customer_ledger').values({ customer_id: 34, entry_type: 'sale', amount: 300, balance_after: 300, reference_type: 'sale', reference_id: null, van_trip_id: 4, tenant_id: TENANT, account_id: ACCOUNT }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 34,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 34',
+      balance: 300,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_ledger')
+    .values({
+      customer_id: 34,
+      entry_type: 'sale',
+      amount: 300,
+      balance_after: 300,
+      reference_type: 'sale',
+      reference_id: null,
+      van_trip_id: 4,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
   // Customer 35: owes 300, all of it rep 1's share (ledger +300 via trip 6) — the legacy-tag customer.
   // A pre-0268 payment row sits on this customer: note tag only, no
   // client_tx_id column, no van_trip_id — exactly the row the legacy
   // fallback exists for. Its 100 is NOT reflected in the balance:
   // the case asserts only that a new collection with the same key on
   // trip 6 posts as new, never that the legacy row's money moved.
-  await anyDb.insertInto('customers').values({ id: 35, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 35', balance: 300, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-  await anyDb.insertInto('customer_ledger').values({ customer_id: 35, entry_type: 'sale', amount: 300, balance_after: 300, reference_type: 'sale', reference_id: null, van_trip_id: 6, tenant_id: TENANT, account_id: ACCOUNT }).execute();
-  await anyDb.insertInto('customer_payments').values({
-    tenant_id: TENANT, account_id: ACCOUNT, customer_id: 35, amount: 100,
-    note: 'سند تحصيل نقدي ميداني بواسطة المندوب (#COL-LEGACY) [tx:m8-legacy-key]',
-    payment_channel: 'cash', van_trip_id: null, rep_id: 1, client_tx_id: null,
-  }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 35,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 35',
+      balance: 300,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_ledger')
+    .values({
+      customer_id: 35,
+      entry_type: 'sale',
+      amount: 300,
+      balance_after: 300,
+      reference_type: 'sale',
+      reference_id: null,
+      van_trip_id: 6,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_payments')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      customer_id: 35,
+      amount: 100,
+      note: 'سند تحصيل نقدي ميداني بواسطة المندوب (#COL-LEGACY) [tx:m8-legacy-key]',
+      payment_channel: 'cash',
+      van_trip_id: null,
+      rep_id: 1,
+      client_tx_id: null,
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -162,11 +344,27 @@ function buildService(db: Kysely<Database>): VanSalesService {
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   return service;
 }
@@ -179,16 +377,31 @@ function clearCollectionCaches(): void {
 }
 
 async function customerBalance(db: Kysely<Database>, customerId: number): Promise<number> {
-  const row = await (db as any).selectFrom('customers').select('balance').where('id', '=', customerId).executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('customers')
+    .select('balance')
+    .where('id', '=', customerId)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.balance);
 }
 
 async function customerPayments(db: Kysely<Database>, customerId: number): Promise<any[]> {
-  return (db as any).selectFrom('customer_payments').selectAll().where('tenant_id', '=', TENANT).where('customer_id', '=', customerId).orderBy('id', 'asc').execute();
+  return (db as any)
+    .selectFrom('customer_payments')
+    .selectAll()
+    .where('tenant_id', '=', TENANT)
+    .where('customer_id', '=', customerId)
+    .orderBy('id', 'asc')
+    .execute();
 }
 
 async function journalCount(db: Kysely<Database>, sourceType: string): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', sourceType).where('tenant_id', '=', TENANT).execute();
+  const rows = await (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', sourceType)
+    .where('tenant_id', '=', TENANT)
+    .execute();
   return rows.length;
 }
 
@@ -212,15 +425,24 @@ async function main(): Promise<void> {
       clearCollectionCaches();
       const journalsBefore = await journalCount(db, 'van_field_collection');
       const cash = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 31, amount: 100, paymentMethod: 'cash', clientTxId: 'm8-b3-cash',
+        tripId: 1,
+        customerId: 31,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm8-b3-cash',
       });
       assert.equal(cash.ok, true);
       assert.equal(cash.amount, 100);
       assert.equal(cash.previousBalance, 200, 'cash leg: previous balance is the 200 debt');
       assert.equal(cash.newBalance, 100, 'cash leg: new balance is 100');
       const insta = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 31, amount: 100, paymentMethod: 'instapay',
-        supervisorOverridePin: SUPERVISOR_PIN, transferReference: 'IP-778899', clientTxId: 'm8-b3-insta',
+        tripId: 1,
+        customerId: 31,
+        amount: 100,
+        paymentMethod: 'instapay',
+        supervisorOverridePin: SUPERVISOR_PIN,
+        transferReference: 'IP-778899',
+        clientTxId: 'm8-b3-insta',
       });
       assert.equal(insta.ok, true);
       assert.equal(insta.amount, 100);
@@ -235,7 +457,11 @@ async function main(): Promise<void> {
         ['cash', 'instapay'],
         'one cash leg and one instapay leg',
       );
-      assert.equal(await journalCount(db, 'van_field_collection'), journalsBefore + 2, 'exactly two collection journals posted');
+      assert.equal(
+        await journalCount(db, 'van_field_collection'),
+        journalsBefore + 2,
+        'exactly two collection journals posted',
+      );
       const trip = await tripRow(db, 1);
       assert.equal(Number(trip.cash_collected), 100, 'trip cash total holds only the cash leg');
       assert.equal(Number(trip.total_instapay_collections), 100, 'trip instapay total holds only the electronic leg');
@@ -249,13 +475,21 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       const first = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 2, customerId: 32, amount: 100, paymentMethod: 'cash', clientTxId: 'm8-retry-1',
+        tripId: 2,
+        customerId: 32,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm8-retry-1',
       });
       assert.equal(first.ok, true);
       assert.equal(first.previousBalance, 200);
       assert.equal(first.newBalance, 100);
       const retry = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 2, customerId: 32, amount: 100, paymentMethod: 'cash', clientTxId: 'm8-retry-1',
+        tripId: 2,
+        customerId: 32,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm8-retry-1',
       });
       assert.equal(retry.receiptNo, first.receiptNo, 'the retry returns the first receipt');
       assert.equal(retry.amount, 100);
@@ -272,7 +506,11 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       const first = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 2, customerId: 32, amount: 100, paymentMethod: 'cash', clientTxId: 'm8-retry-1',
+        tripId: 2,
+        customerId: 32,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm8-retry-1',
       });
       assert.equal(first.receiptNo, (await customerPayments(db, 32))[0].note.match(/#([A-Z0-9-]+)/)?.[1]);
       assert.equal(first.previousBalance, 200, 'database replay: previous balance is the real 200');
@@ -291,14 +529,20 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       const first = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 3, customerId: 33, amount: 100, paymentMethod: 'cash',
+        tripId: 3,
+        customerId: 33,
+        amount: 100,
+        paymentMethod: 'cash',
       });
       assert.equal(first.ok, true);
       assert.equal(first.previousBalance, 200);
       assert.equal(first.newBalance, 100);
       clearCollectionCaches();
       const twin = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 3, customerId: 33, amount: 100, paymentMethod: 'cash',
+        tripId: 3,
+        customerId: 33,
+        amount: 100,
+        paymentMethod: 'cash',
       });
       assert.equal(twin.receiptNo, first.receiptNo, 'the twin replay returns the first receipt');
       assert.equal(twin.amount, 100);
@@ -317,14 +561,22 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       const first = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 4, customerId: 34, amount: 100, paymentMethod: 'cash', clientTxId: 'm8-shared-key',
+        tripId: 4,
+        customerId: 34,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm8-shared-key',
       });
       assert.equal(first.ok, true);
       assert.equal(first.previousBalance, 300);
       assert.equal(first.newBalance, 200);
       clearCollectionCaches();
       const second = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 5, customerId: 34, amount: 100, paymentMethod: 'cash', clientTxId: 'm8-shared-key',
+        tripId: 5,
+        customerId: 34,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm8-shared-key',
       });
       assert.equal(second.ok, true);
       assert.notEqual(second.receiptNo, first.receiptNo, 'the second trip has its own receipt');
@@ -333,11 +585,7 @@ async function main(): Promise<void> {
       assert.equal(await customerBalance(db, 34), 100, 'both trips collected 100 off the 300 debt');
       const payments = await customerPayments(db, 34);
       assert.equal(payments.length, 2, 'two payment rows were written');
-      assert.deepEqual(
-        payments.map((p: any) => Number(p.van_trip_id)).sort(),
-        [4, 5],
-        'one payment row per trip',
-      );
+      assert.deepEqual(payments.map((p: any) => Number(p.van_trip_id)).sort(), [4, 5], 'one payment row per trip');
       console.log('  (S5) B8: clientTxId reused on a different trip posts as new passed');
     }
 
@@ -349,7 +597,11 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       const res = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 6, customerId: 35, amount: 100, paymentMethod: 'cash', clientTxId: 'm8-legacy-key',
+        tripId: 6,
+        customerId: 35,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm8-legacy-key',
       });
       assert.equal(res.ok, true);
       assert.equal(res.previousBalance, 300, 'legacy-key collection: previous balance is the 300 debt');
@@ -389,7 +641,10 @@ async function main(): Promise<void> {
       assert.ok(!fnSlice.includes('newBalance: 0'), 'no replay branch returns newBalance 0');
       // File #30 split: recordFieldCollection moved to the S3 sales
       // slice; the facade keeps only a thin delegate.
-      const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-sales.ts'), 'utf8');
+      const controllerSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/van-sales-driver/van-sales-driver-sales.ts'),
+        'utf8',
+      );
       assert.ok(
         controllerSource.includes('recordFieldCollection(driver.repId, driver.tenantId, driver.accountId, body)'),
         'the driver sales slice forwards the verified driver to recordFieldCollection',

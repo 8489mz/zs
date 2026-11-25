@@ -70,8 +70,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice', 'canDiscount'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice', 'canDiscount'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -149,41 +154,119 @@ async function seedFoundation(
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'taxRate', value: '14' }).execute();
   if (opts.deliveryFeeMode) {
-    await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'deliveryFeeMode', value: opts.deliveryFeeMode }).execute();
+    await anyDb
+      .insertInto('settings')
+      .values({ tenant_id: TENANT, key: 'deliveryFeeMode', value: opts.deliveryFeeMode })
+      .execute();
   }
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   const accounts: Array<[number, string, string | null]> = [
-    [1110, '1110', null], [1120, '1120', null], [1130, '1130', null], [1140, '1140', null],
-    [2115, '2115', 'liability'], [2120, '2120', null], [4100, '4100', null], [4200, '4200', 'revenue'], [4300, '4300', null], [5100, '5100', null],
+    [1110, '1110', null],
+    [1120, '1120', null],
+    [1130, '1130', null],
+    [1140, '1140', null],
+    [2115, '2115', 'liability'],
+    [2120, '2120', null],
+    [4100, '4100', null],
+    [4200, '4200', 'revenue'],
+    [4300, '4300', null],
+    [5100, '5100', null],
   ];
   for (const [id, code, accountType] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false, account_type: accountType }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false, account_type: accountType })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('cashier_shifts').values({
-    tenant_id: TENANT, account_id: ACCOUNT, opened_by: 1, status: 'open', branch_id: 1,
-  }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Product 101',
-    stock_qty: 100, cost_price: 10, retail_price: 50,
-    wholesale_price: 50, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      opened_by: 1,
+      status: 'open',
+      branch_id: 1,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Product 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 50,
+      wholesale_price: 50,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
   for (const rep of opts.reps || []) {
-    await anyDb.insertInto('delivery_representatives').values({
-      id: rep.id, tenant_id: TENANT, account_id: ACCOUNT, name: rep.name,
-      phone: null, is_active: true, rep_type: rep.rep_type, is_van_rep: rep.is_van_rep || false,
-    }).execute();
+    await anyDb
+      .insertInto('delivery_representatives')
+      .values({
+        id: rep.id,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: rep.name,
+        phone: null,
+        is_active: true,
+        rep_type: rep.rep_type,
+        is_van_rep: rep.is_van_rep || false,
+      })
+      .execute();
   }
 }
 
@@ -202,8 +285,16 @@ function buildServices(db: Kysely<Database>): StorefrontService {
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
   const salesWrite = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const salesService = new SalesService(query, salesWrite);
   return new StorefrontService(db, salesService, {} as never, {} as never);
@@ -212,46 +303,89 @@ function buildServices(db: Kysely<Database>): StorefrontService {
 async function seedOrder(db: Kysely<Database>): Promise<void> {
   // Unpaid COD delivery order: goods 100 + delivery fee 20 = 120.
   const base: Record<string, unknown> = {
-    id: 77, tenant_id: TENANT, account_id: ACCOUNT, order_number: 'ON-1',
-    customer_name: 'Online Customer', customer_phone: '01012345678', customer_address: 'Cairo',
+    id: 77,
+    tenant_id: TENANT,
+    account_id: ACCOUNT,
+    order_number: 'ON-1',
+    customer_name: 'Online Customer',
+    customer_phone: '01012345678',
+    customer_address: 'Cairo',
     items_json: JSON.stringify([{ productId: 101, quantity: 2, unitPrice: 50, total: 100 }]),
-    subtotal: 100, delivery_fee: 20, total_amount: 120, status: 'confirmed',
-    payment_method: 'cod', payment_status: 'pending', gateway_provider: '',
-    fulfillment_type: 'delivery', branch_id: 1, sale_id: null,
-    discount_amount: 0, coupon_code: null,
+    subtotal: 100,
+    delivery_fee: 20,
+    total_amount: 120,
+    status: 'confirmed',
+    payment_method: 'cod',
+    payment_status: 'pending',
+    gateway_provider: '',
+    fulfillment_type: 'delivery',
+    branch_id: 1,
+    sale_id: null,
+    discount_amount: 0,
+    coupon_code: null,
   };
   await (db as any).insertInto('online_orders').values(base).execute();
 }
 
 async function readSale(db: Kysely<Database>, saleId: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll()
-    .where('id', '=', saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function readReps(db: Kysely<Database>): Promise<any[]> {
-  return (db as any).selectFrom('delivery_representatives').selectAll()
-    .where('tenant_id', '=', TENANT).orderBy('id', 'asc').execute();
+  return (db as any)
+    .selectFrom('delivery_representatives')
+    .selectAll()
+    .where('tenant_id', '=', TENANT)
+    .orderBy('id', 'asc')
+    .execute();
 }
 
-async function journalLeg(db: Kysely<Database>, saleId: number, accountId: number, side: 'debit' | 'credit'): Promise<number> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', 'sale').where('source_id', '=', saleId).execute();
+async function journalLeg(
+  db: Kysely<Database>,
+  saleId: number,
+  accountId: number,
+  side: 'debit' | 'credit',
+): Promise<number> {
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', 'sale')
+    .where('source_id', '=', saleId)
+    .execute();
   assert.equal(entries.length, 1, 'exactly one posted sale journal');
-  const rows = await (db as any).selectFrom('journal_entry_lines').select([side])
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select([side])
     .where('journal_entry_id', '=', entries[0].id)
-    .where('account_id', '=', accountId).execute();
+    .where('account_id', '=', accountId)
+    .execute();
   return rows.reduce((sum: number, row: any) => sum + Number(row[side] || 0), 0);
 }
 
 async function journalTotals(db: Kysely<Database>, saleId: number): Promise<{ debit: number; credit: number }> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', 'sale').where('source_id', '=', saleId).execute();
-  const rows = await (db as any).selectFrom('journal_entry_lines').select(['debit', 'credit'])
-    .where('journal_entry_id', '=', entries[0].id).execute();
-  return rows.reduce((acc: { debit: number; credit: number }, row: any) => ({
-    debit: acc.debit + Number(row.debit || 0),
-    credit: acc.credit + Number(row.credit || 0),
-  }), { debit: 0, credit: 0 });
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', 'sale')
+    .where('source_id', '=', saleId)
+    .execute();
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['debit', 'credit'])
+    .where('journal_entry_id', '=', entries[0].id)
+    .execute();
+  return rows.reduce(
+    (acc: { debit: number; credit: number }, row: any) => ({
+      debit: acc.debit + Number(row.debit || 0),
+      credit: acc.credit + Number(row.credit || 0),
+    }),
+    { debit: 0, credit: 0 },
+  );
 }
 
 async function main(): Promise<void> {
@@ -271,7 +405,11 @@ async function main(): Promise<void> {
       const saleId = Number(result.saleId);
       assert.ok(Number.isInteger(saleId) && saleId > 0, 'conversion must return a sale id');
       const sale = await readSale(db, saleId);
-      assert.equal(sale.delivery_fee_mode, 'freelance_courier', 'the sale carries the tenant courier mode, not store_fleet');
+      assert.equal(
+        sale.delivery_fee_mode,
+        'freelance_courier',
+        'the sale carries the tenant courier mode, not store_fleet',
+      );
       assert.equal(Number(sale.delivery_rep_id), 2, 'the conversion links the store rep');
       assert.equal(await journalLeg(db, saleId, 2115, 'credit'), 20, 'the courier fee posts Cr 2115 (rep payable)');
       assert.equal(await journalLeg(db, saleId, 4200, 'credit'), 0, 'no delivery fee reaches Cr 4200 store revenue');
@@ -297,8 +435,16 @@ async function main(): Promise<void> {
       assert.equal(result.ok, true, 'store-fleet conversion must succeed');
       const sale = await readSale(db, Number(result.saleId));
       assert.equal(sale.delivery_fee_mode, 'store_fleet', 'the sale carries the tenant store_fleet mode');
-      assert.equal(await journalLeg(db, Number(result.saleId), 4200, 'credit'), 20, 'the store-fleet fee posts Cr 4200 (store revenue)');
-      assert.equal(await journalLeg(db, Number(result.saleId), 2115, 'credit'), 0, 'no delivery fee reaches Cr 2115 rep payable');
+      assert.equal(
+        await journalLeg(db, Number(result.saleId), 4200, 'credit'),
+        20,
+        'the store-fleet fee posts Cr 4200 (store revenue)',
+      );
+      assert.equal(
+        await journalLeg(db, Number(result.saleId), 2115, 'credit'),
+        0,
+        'no delivery fee reaches Cr 2115 rep payable',
+      );
       const totals = await journalTotals(db, Number(result.saleId));
       assert.equal(totals.debit, totals.credit, 'the sale journal balances');
     } finally {
@@ -322,9 +468,21 @@ async function main(): Promise<void> {
       const result: any = await service.convertToSale(77, adminAuth);
       assert.equal(result.ok, true, 'conversion with van + delivery reps must succeed');
       const sale = await readSale(db, Number(result.saleId));
-      assert.equal(Number(sale.delivery_rep_id), 2, 'a storefront delivery picks the delivery-type rep, not the lower-id van rep');
-      assert.equal(sale.delivery_fee_mode, 'freelance_courier', 'with no tenant mode set, createSale falls back to freelance_courier for a delivery-type rep');
-      assert.equal(await journalLeg(db, Number(result.saleId), 2115, 'credit'), 20, 'the fee posts Cr 2115 for the delivery rep');
+      assert.equal(
+        Number(sale.delivery_rep_id),
+        2,
+        'a storefront delivery picks the delivery-type rep, not the lower-id van rep',
+      );
+      assert.equal(
+        sale.delivery_fee_mode,
+        'freelance_courier',
+        'with no tenant mode set, createSale falls back to freelance_courier for a delivery-type rep',
+      );
+      assert.equal(
+        await journalLeg(db, Number(result.saleId), 2115, 'credit'),
+        20,
+        'the fee posts Cr 2115 for the delivery rep',
+      );
     } finally {
       await db.destroy();
     }
@@ -352,8 +510,16 @@ async function main(): Promise<void> {
       assert.equal(meta?.auto_created_store_rep, true, 'the auto rep carries the auto_created_store_rep marking');
       const sale = await readSale(db, Number(result.saleId));
       assert.equal(Number(sale.delivery_rep_id), Number(auto.id), 'the sale links the auto-created rep');
-      assert.equal(sale.delivery_fee_mode, 'store_fleet', 'with no tenant mode set, createSale infers store_fleet from the auto store rep');
-      assert.equal(await journalLeg(db, Number(result.saleId), 4200, 'credit'), 20, 'the auto store rep fee posts Cr 4200');
+      assert.equal(
+        sale.delivery_fee_mode,
+        'store_fleet',
+        'with no tenant mode set, createSale infers store_fleet from the auto store rep',
+      );
+      assert.equal(
+        await journalLeg(db, Number(result.saleId), 4200, 'credit'),
+        20,
+        'the auto store rep fee posts Cr 4200',
+      );
     } finally {
       await db.destroy();
     }

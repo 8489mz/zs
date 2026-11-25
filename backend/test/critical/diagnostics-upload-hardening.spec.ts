@@ -39,7 +39,10 @@ async function testGuardRunsBeforeTheUpload(): Promise<void> {
     assert.equal(await guard.canActivate(contextFor('203.0.113.9')), true);
   }
   const ctx = contextFor('203.0.113.9');
-  await assert.rejects(() => guard.canActivate(ctx), (err: unknown) => err instanceof HttpException && err.getStatus() === 429);
+  await assert.rejects(
+    () => guard.canActivate(ctx),
+    (err: unknown) => err instanceof HttpException && err.getStatus() === 429,
+  );
   assert.equal(ctx.headers['Retry-After'], '60');
   assert.equal(await guard.canActivate(contextFor('203.0.113.10')), true, 'limits are per client IP');
 }
@@ -50,10 +53,22 @@ async function testOnlyZipBundlesAreStored(): Promise<void> {
   assert.equal(isZipBuffer(Buffer.alloc(0)), false);
 
   let touchedDb = false;
-  const db = new Proxy({}, { get: () => { touchedDb = true; throw new Error('db must not be reached'); } });
+  const db = new Proxy(
+    {},
+    {
+      get: () => {
+        touchedDb = true;
+        throw new Error('db must not be reached');
+      },
+    },
+  );
   const service = new SaasDiagnosticsService(db as any);
   await assert.rejects(
-    () => service.saveUploadedDiagnosticBundle({ buffer: Buffer.from('junk'), size: 4 } as any, { clientName: 'x', clientIdentifier: 'y' }),
+    () =>
+      service.saveUploadedDiagnosticBundle({ buffer: Buffer.from('junk'), size: 4 } as any, {
+        clientName: 'x',
+        clientIdentifier: 'y',
+      }),
     /ZIP/,
   );
   assert.equal(touchedDb, false, 'a non-zip body is refused before any query or disk write');

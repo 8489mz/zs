@@ -47,7 +47,10 @@ import { resolve } from 'node:path';
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
@@ -122,7 +125,7 @@ async function main() {
     assert.equal(await drawer.computeShiftExpectedCash(2, auth), 60);
     // Partition check: the two shifts together count every movement
     // exactly once: 100 + 30 + 50 - 10 - 20 - 40 = 110.
-    const total = await drawer.computeShiftExpectedCash(1, auth) + await drawer.computeShiftExpectedCash(2, auth);
+    const total = (await drawer.computeShiftExpectedCash(1, auth)) + (await drawer.computeShiftExpectedCash(2, auth));
     assert.equal(total, 110);
 
     // The movement list follows the same rule: expense A and the
@@ -143,7 +146,11 @@ async function main() {
 
     // Invariant pin: the entry exists exactly once and is last.
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-EXPECTED-CASH-SINGLE-WINDOW').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-EXPECTED-CASH-SINGLE-WINDOW').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
 
     console.log('Expected cash single window tests passed');
   } finally {

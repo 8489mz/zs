@@ -67,8 +67,13 @@ const ACCOUNT = 'a1';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -139,47 +144,123 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, account_id: ACCOUNT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, account_id: ACCOUNT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, key: 'currency', value: 'EGP' })
+    .execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, key: 'managerPin', value: '"1234"' })
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): {
-  sales: SalesWriteService; drawer: CashDrawerService; posting: AccountingPostingService;
-  kds: KdsService; printers: KitchenPrintersService;
+  sales: SalesWriteService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+  kds: KdsService;
+  printers: KitchenPrintersService;
 } {
   const foundation = {
     ensureForAuth: async () => {},
@@ -199,9 +280,20 @@ function buildServices(db: Kysely<Database>): {
   // any so this spec still compiles against the base tree, where the
   // parameter does not exist yet and the extra argument is ignored.
   const sales = new (SalesWriteService as any)(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
-    undefined, undefined, undefined, kds,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
+    undefined,
+    undefined,
+    undefined,
+    kds,
   ) as SalesWriteService;
   const printers = new KitchenPrintersService(db);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
@@ -209,37 +301,66 @@ function buildServices(db: Kysely<Database>): {
 }
 
 async function seedKdsState(db: Kysely<Database>, tickets: Record<string, unknown>): Promise<void> {
-  await (db as any).insertInto('settings').values({
-    tenant_id: TENANT, account_id: 'default',
-    key: 'kds_tickets_runtime_state', value: JSON.stringify({ tickets }),
-  }).execute();
+  await (db as any)
+    .insertInto('settings')
+    .values({
+      tenant_id: TENANT,
+      account_id: 'default',
+      key: 'kds_tickets_runtime_state',
+      value: JSON.stringify({ tickets }),
+    })
+    .execute();
 }
 
 async function readKdsState(db: Kysely<Database>): Promise<any> {
-  const row: any = await (db as any).selectFrom('settings').select('value')
+  const row: any = await (db as any)
+    .selectFrom('settings')
+    .select('value')
     .where('key', '=', 'kds_tickets_runtime_state')
-    .where(sql<boolean>`tenant_id = ${TENANT}`).executeTakeFirst();
+    .where(sql<boolean>`tenant_id = ${TENANT}`)
+    .executeTakeFirst();
   return row ? JSON.parse(row.value) : null;
 }
 
 async function seedSale(db: Kysely<Database>, id: number, docNo: string, status = 'posted'): Promise<void> {
-  await (db as any).insertInto('sales').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: docNo,
-    status, order_type: 'dine_in', table_number: '5', total: 100,
-    created_at: new Date(),
-  }).execute();
+  await (db as any)
+    .insertInto('sales')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: docNo,
+      status,
+      order_type: 'dine_in',
+      table_number: '5',
+      total: 100,
+      created_at: new Date(),
+    })
+    .execute();
 }
 
 async function seedSaleItem(db: Kysely<Database>, saleId: number, productId: number, name: string): Promise<void> {
-  await (db as any).insertInto('sale_items').values({
-    tenant_id: TENANT, account_id: ACCOUNT, sale_id: saleId, product_id: productId,
-    product_name: name, qty: 1, unit_price: 100, line_total: 100, unit_name: 'قطعة',
-  }).execute();
+  await (db as any)
+    .insertInto('sale_items')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      sale_id: saleId,
+      product_id: productId,
+      product_name: name,
+      qty: 1,
+      unit_price: 100,
+      line_total: 100,
+      unit_name: 'قطعة',
+    })
+    .execute();
 }
 
 /** A capture TCP server: collects every byte a printer client sends. */
 async function startCaptureServer(): Promise<{
-  port: number; waitForBytes: (timeoutMs?: number) => Promise<string>; close: () => Promise<void>;
+  port: number;
+  waitForBytes: (timeoutMs?: number) => Promise<string>;
+  close: () => Promise<void>;
 }> {
   const chunks: Buffer[] = [];
   let resolveBytes: ((value: string) => void) | null = null;
@@ -257,11 +378,15 @@ async function startCaptureServer(): Promise<{
   const port = (server.address() as net.AddressInfo).port;
   return {
     port,
-    waitForBytes: (timeoutMs = 5000) => new Promise<string>((resolve, reject) => {
-      if (chunks.length > 0) return resolve(Buffer.concat(chunks).toString('utf8'));
-      const timer = setTimeout(() => reject(new Error('timed out waiting for printer bytes')), timeoutMs);
-      resolveBytes = (value) => { clearTimeout(timer); resolve(value); };
-    }),
+    waitForBytes: (timeoutMs = 5000) =>
+      new Promise<string>((resolve, reject) => {
+        if (chunks.length > 0) return resolve(Buffer.concat(chunks).toString('utf8'));
+        const timer = setTimeout(() => reject(new Error('timed out waiting for printer bytes')), timeoutMs);
+        resolveBytes = (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        };
+      }),
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
@@ -283,32 +408,44 @@ async function main(): Promise<void> {
     // resolve it at compile time and the rest of the spec still runs at base.
     const helper: any = await import('../../src/modules/sales/helpers/' + 'kds-station.helper');
     assert.equal(
-      helper.resolveItemStation({ productStation: null, categoryStation: 'grill', productName: 'Cappuccino', categoryName: 'مشروبات' }),
-      'grill', 'category station beats keyword guessing, even when the name has no keyword',
+      helper.resolveItemStation({
+        productStation: null,
+        categoryStation: 'grill',
+        productName: 'Cappuccino',
+        categoryName: 'مشروبات',
+      }),
+      'grill',
+      'category station beats keyword guessing, even when the name has no keyword',
     );
     assert.equal(
       helper.resolveItemStation({ productStation: 'general', categoryStation: 'grill', productName: 'كباب حلبي' }),
-      'general', 'product station beats category station',
+      'general',
+      'product station beats category station',
     );
     assert.equal(
       helper.resolveItemStation({ productStation: null, categoryStation: null, productName: 'باربكيو' }),
-      'kitchen', 'باربكيو must not match the بار beverage keyword',
+      'kitchen',
+      'باربكيو must not match the بار beverage keyword',
     );
     assert.equal(
       helper.resolveItemStation({ productStation: null, categoryStation: null, productName: 'مشويات مشكلة' }),
-      'grill', 'the grill keyword still matches its real word form',
+      'grill',
+      'the grill keyword still matches its real word form',
     );
     assert.equal(
       helper.resolveItemStation({ productStation: null, categoryStation: null, productName: 'البار' }),
-      'beverages', 'a real bar word still routes to beverages',
+      'beverages',
+      'a real bar word still routes to beverages',
     );
     assert.equal(
       helper.resolveItemStation({ productStation: null, categoryStation: null, productName: 'Cappuccino' }),
-      'kitchen', 'a name with no keyword falls through to kitchen',
+      'kitchen',
+      'a name with no keyword falls through to kitchen',
     );
     assert.equal(
       helper.resolveItemStation({ productStation: 'expo', categoryStation: null, productName: 'كباب' }),
-      'grill', 'expo is a filter view, not an item station — it falls through to inference',
+      'grill',
+      'expo is a filter view, not an item station — it falls through to inference',
     );
     assert.equal(helper.mapPrinterStationToKdsStation('bar'), 'beverages', 'printer bar maps to beverages');
     assert.equal(helper.mapPrinterStationToKdsStation('fryer'), 'kitchen', 'printer fryer maps to kitchen');
@@ -326,7 +463,11 @@ async function main(): Promise<void> {
     assert.equal(helper.isAllowedKdsTransition('served', 'pending'), false);
     assert.equal(helper.isAllowedKdsItemTransition('pending', 'cooking'), true);
     assert.equal(helper.isAllowedKdsItemTransition('cooking', 'ready'), true);
-    assert.equal(helper.isAllowedKdsItemTransition('pending', 'ready'), true, 'tap-to-complete: an item may be marked ready directly');
+    assert.equal(
+      helper.isAllowedKdsItemTransition('pending', 'ready'),
+      true,
+      'tap-to-complete: an item may be marked ready directly',
+    );
     assert.equal(helper.isAllowedKdsItemTransition('ready', 'cooking'), false, 'an item may not be un-marked');
     assert.equal(helper.isAllowedKdsItemTransition('ready', 'pending'), false);
     assert.equal(helper.isAllowedKdsItemTransition('cooking', 'pending'), false);
@@ -341,12 +482,100 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       const { kds } = buildServices(db);
       const anyDb = db as any;
-      await anyDb.insertInto('product_categories').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'مشويات', is_active: true, kitchen_station: 'grill' }).execute();
-      await anyDb.insertInto('product_categories').values({ id: 11, tenant_id: TENANT, account_id: ACCOUNT, name: 'مشروبات', is_active: true, kitchen_station: 'beverages' }).execute();
-      await anyDb.insertInto('products').values({ id: 201, tenant_id: TENANT, account_id: ACCOUNT, name: 'Cappuccino', stock_qty: 10, cost_price: 5, retail_price: 30, wholesale_price: 30, min_selling_price: 1, is_active: true, item_type: 'product', category_id: 10, kitchen_station: null }).execute();
-      await anyDb.insertInto('products').values({ id: 202, tenant_id: TENANT, account_id: ACCOUNT, name: 'باربكيو', stock_qty: 10, cost_price: 5, retail_price: 30, wholesale_price: 30, min_selling_price: 1, is_active: true, item_type: 'product', category_id: null, kitchen_station: null }).execute();
-      await anyDb.insertInto('products').values({ id: 203, tenant_id: TENANT, account_id: ACCOUNT, name: 'سلطة', stock_qty: 10, cost_price: 5, retail_price: 30, wholesale_price: 30, min_selling_price: 1, is_active: true, item_type: 'product', category_id: null, kitchen_station: 'general' }).execute();
-      await anyDb.insertInto('products').values({ id: 204, tenant_id: TENANT, account_id: ACCOUNT, name: 'كباب حلبي', stock_qty: 10, cost_price: 5, retail_price: 30, wholesale_price: 30, min_selling_price: 1, is_active: true, item_type: 'product', category_id: null, kitchen_station: null }).execute();
+      await anyDb
+        .insertInto('product_categories')
+        .values({
+          id: 10,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مشويات',
+          is_active: true,
+          kitchen_station: 'grill',
+        })
+        .execute();
+      await anyDb
+        .insertInto('product_categories')
+        .values({
+          id: 11,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مشروبات',
+          is_active: true,
+          kitchen_station: 'beverages',
+        })
+        .execute();
+      await anyDb
+        .insertInto('products')
+        .values({
+          id: 201,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Cappuccino',
+          stock_qty: 10,
+          cost_price: 5,
+          retail_price: 30,
+          wholesale_price: 30,
+          min_selling_price: 1,
+          is_active: true,
+          item_type: 'product',
+          category_id: 10,
+          kitchen_station: null,
+        })
+        .execute();
+      await anyDb
+        .insertInto('products')
+        .values({
+          id: 202,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'باربكيو',
+          stock_qty: 10,
+          cost_price: 5,
+          retail_price: 30,
+          wholesale_price: 30,
+          min_selling_price: 1,
+          is_active: true,
+          item_type: 'product',
+          category_id: null,
+          kitchen_station: null,
+        })
+        .execute();
+      await anyDb
+        .insertInto('products')
+        .values({
+          id: 203,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'سلطة',
+          stock_qty: 10,
+          cost_price: 5,
+          retail_price: 30,
+          wholesale_price: 30,
+          min_selling_price: 1,
+          is_active: true,
+          item_type: 'product',
+          category_id: null,
+          kitchen_station: 'general',
+        })
+        .execute();
+      await anyDb
+        .insertInto('products')
+        .values({
+          id: 204,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'كباب حلبي',
+          stock_qty: 10,
+          cost_price: 5,
+          retail_price: 30,
+          wholesale_price: 30,
+          min_selling_price: 1,
+          is_active: true,
+          item_type: 'product',
+          category_id: null,
+          kitchen_station: null,
+        })
+        .execute();
       await seedSale(db, 310, 'S-310');
       await seedSaleItem(db, 310, 201, 'Cappuccino');
       await seedSaleItem(db, 310, 202, 'باربكيو');
@@ -361,10 +590,14 @@ async function main(): Promise<void> {
       assert.equal(byName.get('سلطة'), 'general', 'a product configured general keeps general');
       assert.equal(byName.get('كباب حلبي'), 'grill', 'the grill keyword still routes');
       const generalOnly: any = await kds.getActiveTickets(adminAuth, { station: 'general' });
-      assert.ok(generalOnly.tickets.some((t: any) => Number(t.id) === 310), 'the general filter must still show the ticket');
+      assert.ok(
+        generalOnly.tickets.some((t: any) => Number(t.id) === 310),
+        'the general filter must still show the ticket',
+      );
       assert.deepEqual(
         generalOnly.tickets.find((t: any) => Number(t.id) === 310).items.map((i: any) => i.name),
-        ['سلطة'], 'the general filter shows only the general item',
+        ['سلطة'],
+        'the general filter shows only the general item',
       );
     } finally {
       await db.destroy();
@@ -381,10 +614,19 @@ async function main(): Promise<void> {
       const { kds } = buildServices(db);
       const anyDb = db as any;
       for (let i = 1; i <= 201; i++) {
-        await anyDb.insertInto('sales').values({
-          id: 1000 + i, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `S-${1000 + i}`,
-          status: 'posted', order_type: 'dine_in', total: 10, created_at: new Date(),
-        }).execute();
+        await anyDb
+          .insertInto('sales')
+          .values({
+            id: 1000 + i,
+            tenant_id: TENANT,
+            account_id: ACCOUNT,
+            doc_no: `S-${1000 + i}`,
+            status: 'posted',
+            order_type: 'dine_in',
+            total: 10,
+            created_at: new Date(),
+          })
+          .execute();
       }
       const result: any = await kds.getActiveTickets(adminAuth, {});
       assert.equal(result.truncated, true, '201 active sales must report truncated');
@@ -429,7 +671,8 @@ async function main(): Promise<void> {
       );
       const afterFire: any = await kds.getActiveTickets(adminAuth, {});
       assert.equal(
-        afterFire.tickets.find((t: any) => Number(t.id) === 300).status, 'ready',
+        afterFire.tickets.find((t: any) => Number(t.id) === 300).status,
+        'ready',
         'the refused fire must leave the ticket ready',
       );
       const served = await kds.setTicketStatus(adminAuth, 300, 'served');
@@ -437,8 +680,11 @@ async function main(): Promise<void> {
       // Item moves: tap-to-complete is legal, un-marking is not.
       await seedSale(db, 301, 'S-301');
       await seedSaleItem(db, 301, 101, 'Widget 101');
-      const itemRow: any = await (db as any).selectFrom('sale_items').select('id')
-        .where('sale_id', '=', 301).executeTakeFirstOrThrow();
+      const itemRow: any = await (db as any)
+        .selectFrom('sale_items')
+        .select('id')
+        .where('sale_id', '=', 301)
+        .executeTakeFirstOrThrow();
       const marked = await kds.setItemStatus(adminAuth, 301, Number(itemRow.id), 'ready');
       assert.equal(marked.itemStatus, 'ready', 'pending -> ready (tap-to-complete) stays legal');
       await assert.rejects(
@@ -479,13 +725,20 @@ async function main(): Promise<void> {
       });
       state = await readKdsState(db);
       assert.equal(state.tickets['500'], undefined, 'no stored state means nothing to move, and nothing breaks');
-      await (db as any).updateTable('settings').set({ value: JSON.stringify({ tickets: { '500': { status: 'ready', itemsStatus: {}, updatedAt: now } } }) })
-        .where('key', '=', 'kds_tickets_runtime_state').execute();
+      await (db as any)
+        .updateTable('settings')
+        .set({ value: JSON.stringify({ tickets: { '500': { status: 'ready', itemsStatus: {}, updatedAt: now } } }) })
+        .where('key', '=', 'kds_tickets_runtime_state')
+        .execute();
       await db.transaction().execute(async (trx) => {
         await (kds as any).transferTicketStateInTrx(TENANT, 500, 502, trx);
       });
       state = await readKdsState(db);
-      assert.equal(state.tickets['502'].status, 'ready', 'the trx-aware transfer moves the status inside the caller transaction');
+      assert.equal(
+        state.tickets['502'].status,
+        'ready',
+        'the trx-aware transfer moves the status inside the caller transaction',
+      );
       assert.equal(state.tickets['500'], undefined);
     } finally {
       await db.destroy();
@@ -502,47 +755,105 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 1);
       const { sales, kds } = buildServices(db);
       const anyDb = db as any;
-      await anyDb.insertInto('sales').values({
-        id: 500, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'DRAFT-500',
-        status: 'draft', order_type: 'dine_in', table_number: '5', total: 0,
-        created_at: new Date(),
-      }).execute();
-      await anyDb.insertInto('sale_items').values({
-        tenant_id: TENANT, account_id: ACCOUNT, sale_id: 500, product_id: 101,
-        product_name: 'Widget 101', qty: 1, unit_price: 100, line_total: 100, unit_name: 'قطعة',
-      }).execute();
-      await anyDb.insertInto('online_orders').values({
-        id: 900, tenant_id: TENANT, account_id: ACCOUNT, order_number: 'ORD-900',
-        customer_name: 'عميل', customer_phone: '01012345678', items_json: '[]',
-        subtotal: 100, delivery_fee: 0, total_amount: 100, status: 'confirmed',
-        payment_method: 'cod', payment_status: 'unpaid',
-        kitchen_draft_sale_id: 500, order_type: 'dine_in', fulfillment_type: 'dine_in',
-        stock_reserved: false, sale_id: null, branch_id: 1,
-      }).execute();
+      await anyDb
+        .insertInto('sales')
+        .values({
+          id: 500,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          doc_no: 'DRAFT-500',
+          status: 'draft',
+          order_type: 'dine_in',
+          table_number: '5',
+          total: 0,
+          created_at: new Date(),
+        })
+        .execute();
+      await anyDb
+        .insertInto('sale_items')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          sale_id: 500,
+          product_id: 101,
+          product_name: 'Widget 101',
+          qty: 1,
+          unit_price: 100,
+          line_total: 100,
+          unit_name: 'قطعة',
+        })
+        .execute();
+      await anyDb
+        .insertInto('online_orders')
+        .values({
+          id: 900,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          order_number: 'ORD-900',
+          customer_name: 'عميل',
+          customer_phone: '01012345678',
+          items_json: '[]',
+          subtotal: 100,
+          delivery_fee: 0,
+          total_amount: 100,
+          status: 'confirmed',
+          payment_method: 'cod',
+          payment_status: 'unpaid',
+          kitchen_draft_sale_id: 500,
+          order_type: 'dine_in',
+          fulfillment_type: 'dine_in',
+          stock_reserved: false,
+          sale_id: null,
+          branch_id: 1,
+        })
+        .execute();
       await seedKdsState(db, {
         '500': { status: 'cooking', itemsStatus: {}, updatedAt: new Date().toISOString() },
       });
-      const created: any = await sales.createSale({
-        items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-        discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-        payments: [{ paymentChannel: 'cash', amount: 100 }],
-        tenderedAmount: 100, branchId: 1, locationId: 10, source: 'pos',
-        orderType: 'dine_in', tableNumber: '5', onlineOrderId: 900,
-      } as any, adminAuth);
+      const created: any = await sales.createSale(
+        {
+          items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
+          discount: 0,
+          taxRate: 0,
+          paymentType: 'cash',
+          paymentChannel: 'cash',
+          payments: [{ paymentChannel: 'cash', amount: 100 }],
+          tenderedAmount: 100,
+          branchId: 1,
+          locationId: 10,
+          source: 'pos',
+          orderType: 'dine_in',
+          tableNumber: '5',
+          onlineOrderId: 900,
+        } as any,
+        adminAuth,
+      );
       const newId = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-      assert.ok(Number.isInteger(newId) && newId > 0, `createSale must return the posted sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+      assert.ok(
+        Number.isInteger(newId) && newId > 0,
+        `createSale must return the posted sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+      );
       assert.notEqual(newId, 500, 'the posted sale is a new row, not the draft');
       const state = await readKdsState(db);
-      assert.equal(state.tickets[String(newId)]?.status, 'cooking', 'the draft cooking progress must carry onto the posted sale');
+      assert.equal(
+        state.tickets[String(newId)]?.status,
+        'cooking',
+        'the draft cooking progress must carry onto the posted sale',
+      );
       assert.equal(state.tickets['500'], undefined, 'the draft key is gone');
-      const order: any = await anyDb.selectFrom('online_orders').selectAll().where('id', '=', 900).executeTakeFirstOrThrow();
+      const order: any = await anyDb
+        .selectFrom('online_orders')
+        .selectAll()
+        .where('id', '=', 900)
+        .executeTakeFirstOrThrow();
       assert.equal(order.kitchen_draft_sale_id, null, 'the draft pointer is cleared');
       assert.equal(order.sale_id, newId, 'the order points at the posted sale');
       const draftGone: any = await anyDb.selectFrom('sales').select('id').where('id', '=', 500).executeTakeFirst();
       assert.equal(draftGone, undefined, 'the draft sale row is deleted by the release block');
       const tickets: any = await kds.getActiveTickets(adminAuth, {});
       assert.equal(
-        tickets.tickets.find((t: any) => Number(t.id) === newId)?.status, 'cooking',
+        tickets.tickets.find((t: any) => Number(t.id) === newId)?.status,
+        'cooking',
         'the KDS shows the posted sale as cooking, not as a brand-new pending ticket',
       );
     } finally {
@@ -559,15 +870,26 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       const { kds } = buildServices(db);
       await seedSale(db, 310, 'S-310');
-      await (db as any).insertInto('settings').values({
-        tenant_id: TENANT, account_id: 'default',
-        key: 'kds_tickets_runtime_state', value: '{bad json',
-      }).execute();
+      await (db as any)
+        .insertInto('settings')
+        .values({
+          tenant_id: TENANT,
+          account_id: 'default',
+          key: 'kds_tickets_runtime_state',
+          value: '{bad json',
+        })
+        .execute();
       const result: any = await kds.getActiveTickets(adminAuth, {});
-      assert.ok(result.tickets.some((t: any) => Number(t.id) === 310), 'a corrupt blob must not hide the tickets');
+      assert.ok(
+        result.tickets.some((t: any) => Number(t.id) === 310),
+        'a corrupt blob must not hide the tickets',
+      );
       assert.equal(result.kdsStateCorrupt, true, 'the response must flag the corrupt state for the banner');
-      const row: any = await (db as any).selectFrom('settings').select('value')
-        .where('key', '=', 'kds_tickets_runtime_state').executeTakeFirstOrThrow();
+      const row: any = await (db as any)
+        .selectFrom('settings')
+        .select('value')
+        .where('key', '=', 'kds_tickets_runtime_state')
+        .executeTakeFirstOrThrow();
       assert.equal(row.value, '{bad json', 'the stored row is left untouched, never overwritten with an empty state');
     } finally {
       await db.destroy();
@@ -585,22 +907,30 @@ async function main(): Promise<void> {
       await seedSale(db, 311, 'S-311');
       await seedSale(db, 312, 'S-312');
       const now = new Date().toISOString();
-      await (db as any).insertInto('settings').values({
-        tenant_id: TENANT, account_id: 'default',
-        key: 'kds_tickets_runtime_state',
-        value: JSON.stringify({ tickets: {
-          '311': { status: 'cooking', itemsStatus: {}, updatedAt: now },
-          '312': null,
-          '313': { status: 'flying', itemsStatus: {}, updatedAt: now },
-        } }),
-      }).execute();
+      await (db as any)
+        .insertInto('settings')
+        .values({
+          tenant_id: TENANT,
+          account_id: 'default',
+          key: 'kds_tickets_runtime_state',
+          value: JSON.stringify({
+            tickets: {
+              '311': { status: 'cooking', itemsStatus: {}, updatedAt: now },
+              '312': null,
+              '313': { status: 'flying', itemsStatus: {}, updatedAt: now },
+            },
+          }),
+        })
+        .execute();
       const result: any = await kds.getActiveTickets(adminAuth, {});
       assert.equal(
-        result.tickets.find((t: any) => Number(t.id) === 311)?.status, 'cooking',
+        result.tickets.find((t: any) => Number(t.id) === 311)?.status,
+        'cooking',
         'the good entry keeps its cooking state',
       );
       assert.equal(
-        result.tickets.find((t: any) => Number(t.id) === 312)?.status, 'pending',
+        result.tickets.find((t: any) => Number(t.id) === 312)?.status,
+        'pending',
         'the null entry is quarantined and the ticket falls back to pending',
       );
       assert.equal(result.kdsStateCorrupt, true, 'quarantined entries flag the corrupt state too');
@@ -619,18 +949,42 @@ async function main(): Promise<void> {
       const { kds } = buildServices(db);
       const anyDb = db as any;
       await seedSale(db, 320, 'S-320');
-      await anyDb.insertInto('pos_delivery_aggregators').values({
-        id: 1, tenant_id: TENANT, account_id: ACCOUNT, code: 'jahez', name: 'Jahez',
-      }).execute();
-      await anyDb.insertInto('pos_aggregator_orders').values({
-        id: 1, tenant_id: TENANT, account_id: ACCOUNT, aggregator_id: 1,
-        external_order_id: 'EXT-1', display_number: 'J-1', status: 'received',
-        customer_name: 'عميل', rider_name: null, order_payload: '{bad json',
-        created_at: new Date(),
-      }).execute();
+      await anyDb
+        .insertInto('pos_delivery_aggregators')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          code: 'jahez',
+          name: 'Jahez',
+        })
+        .execute();
+      await anyDb
+        .insertInto('pos_aggregator_orders')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          aggregator_id: 1,
+          external_order_id: 'EXT-1',
+          display_number: 'J-1',
+          status: 'received',
+          customer_name: 'عميل',
+          rider_name: null,
+          order_payload: '{bad json',
+          created_at: new Date(),
+        })
+        .execute();
       const result: any = await kds.getActiveTickets(adminAuth, {});
-      assert.ok(result.tickets.some((t: any) => Number(t.id) === 320), 'the sale ticket must survive a corrupt aggregator row');
-      assert.equal(result.tickets.some((t: any) => Number(t.id) === 10000001), false, 'the corrupt aggregator row is skipped, not shown');
+      assert.ok(
+        result.tickets.some((t: any) => Number(t.id) === 320),
+        'the sale ticket must survive a corrupt aggregator row',
+      );
+      assert.equal(
+        result.tickets.some((t: any) => Number(t.id) === 10000001),
+        false,
+        'the corrupt aggregator row is skipped, not shown',
+      );
     } finally {
       await db.destroy();
     }
@@ -648,14 +1002,29 @@ async function main(): Promise<void> {
       const anyDb = db as any;
       const capture = await startCaptureServer();
       try {
-        await anyDb.insertInto('pos_kitchen_printers').values({
-          tenant_id: TENANT, name: 'Grill', station_code: 'grill',
-          ip_address: '127.0.0.1', port: capture.port, is_active: true, category_ids: '[]',
-        }).execute();
-        const results: any[] = await (printers as any).printTicketForSale(TENANT, {
-          id: 1, docNo: 'S-1', tableNumber: '5', orderType: 'dine_in',
-          items: [{ name: 'كباب حلبي', qty: 2, notes: 'بدون بصل' }],
-        }, ['grill']);
+        await anyDb
+          .insertInto('pos_kitchen_printers')
+          .values({
+            tenant_id: TENANT,
+            name: 'Grill',
+            station_code: 'grill',
+            ip_address: '127.0.0.1',
+            port: capture.port,
+            is_active: true,
+            category_ids: '[]',
+          })
+          .execute();
+        const results: any[] = await (printers as any).printTicketForSale(
+          TENANT,
+          {
+            id: 1,
+            docNo: 'S-1',
+            tableNumber: '5',
+            orderType: 'dine_in',
+            items: [{ name: 'كباب حلبي', qty: 2, notes: 'بدون بصل' }],
+          },
+          ['grill'],
+        );
         assert.equal(results.length, 1, 'one matched printer');
         assert.equal(results[0].ok, true, 'the reachable printer reports ok');
         const bytes = await capture.waitForBytes();
@@ -667,39 +1036,80 @@ async function main(): Promise<void> {
       }
       // Unreachable printer: ok:false, no throw.
       const deadPort = await freePort();
-      await anyDb.insertInto('pos_kitchen_printers').values({
-        tenant_id: TENANT, name: 'Dead grill', station_code: 'grill',
-        ip_address: '127.0.0.1', port: deadPort, is_active: true, category_ids: '[]',
-      }).execute();
-      const failed: any[] = await (printers as any).printTicketForSale(TENANT, {
-        id: 2, docNo: 'S-2', tableNumber: '5', orderType: 'dine_in',
-        items: [{ name: 'كباب حلبي', qty: 1 }],
-      }, ['grill']);
+      await anyDb
+        .insertInto('pos_kitchen_printers')
+        .values({
+          tenant_id: TENANT,
+          name: 'Dead grill',
+          station_code: 'grill',
+          ip_address: '127.0.0.1',
+          port: deadPort,
+          is_active: true,
+          category_ids: '[]',
+        })
+        .execute();
+      const failed: any[] = await (printers as any).printTicketForSale(
+        TENANT,
+        {
+          id: 2,
+          docNo: 'S-2',
+          tableNumber: '5',
+          orderType: 'dine_in',
+          items: [{ name: 'كباب حلبي', qty: 1 }],
+        },
+        ['grill'],
+      );
       // Both grill printers match: the first case's server is closed by now,
       // so both are unreachable and both must report ok:false.
       assert.equal(failed.length, 2, 'both grill printers match');
-      assert.ok(failed.every((r: any) => r.ok === false), 'every unreachable printer reports ok:false, never silent success');
+      assert.ok(
+        failed.every((r: any) => r.ok === false),
+        'every unreachable printer reports ok:false, never silent success',
+      );
       const dead = failed.find((r: any) => r.printerName === 'Dead grill');
       assert.ok(dead && String(dead.error || '').length > 0, 'the failure carries a reason');
       // No matching printer: empty, so the caller falls back to Electron.
-      const none: any[] = await (printers as any).printTicketForSale(TENANT, {
-        id: 3, docNo: 'S-3', orderType: 'dine_in',
-        items: [{ name: 'كيك', qty: 1 }],
-      }, ['bakery']);
+      const none: any[] = await (printers as any).printTicketForSale(
+        TENANT,
+        {
+          id: 3,
+          docNo: 'S-3',
+          orderType: 'dine_in',
+          items: [{ name: 'كيك', qty: 1 }],
+        },
+        ['bakery'],
+      );
       assert.deepEqual(none, [], 'no matching printer returns an empty list');
       // Category match: a bar printer (beverages) with category 10 still
       // fires for a kitchen-station ticket whose item is in category 10.
       const capture2 = await startCaptureServer();
       try {
-        await anyDb.insertInto('pos_kitchen_printers').values({
-          tenant_id: TENANT, name: 'Bar', station_code: 'bar',
-          ip_address: '127.0.0.1', port: capture2.port, is_active: true, category_ids: '[10]',
-        }).execute();
-        const catResults: any[] = await (printers as any).printTicketForSale(TENANT, {
-          id: 4, docNo: 'S-4', orderType: 'dine_in',
-          items: [{ name: 'سلطة', qty: 1, categoryId: 10 }],
-        }, ['kitchen']);
-        assert.ok(catResults.some((r: any) => r.printerName === 'Bar' && r.ok), 'the category_ids match routes the ticket');
+        await anyDb
+          .insertInto('pos_kitchen_printers')
+          .values({
+            tenant_id: TENANT,
+            name: 'Bar',
+            station_code: 'bar',
+            ip_address: '127.0.0.1',
+            port: capture2.port,
+            is_active: true,
+            category_ids: '[10]',
+          })
+          .execute();
+        const catResults: any[] = await (printers as any).printTicketForSale(
+          TENANT,
+          {
+            id: 4,
+            docNo: 'S-4',
+            orderType: 'dine_in',
+            items: [{ name: 'سلطة', qty: 1, categoryId: 10 }],
+          },
+          ['kitchen'],
+        );
+        assert.ok(
+          catResults.some((r: any) => r.printerName === 'Bar' && r.ok),
+          'the category_ids match routes the ticket',
+        );
         const bytes2 = await capture2.waitForBytes();
         assert.ok(bytes2.includes('S-4'), 'the category-matched printer receives the bytes');
       } finally {
@@ -719,16 +1129,51 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       const { printers } = buildServices(db);
       const anyDb = db as any;
-      await anyDb.insertInto('product_categories').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'مشويات', is_active: true, kitchen_station: 'grill' }).execute();
-      await anyDb.insertInto('products').values({ id: 201, tenant_id: TENANT, account_id: ACCOUNT, name: 'كباب حلبي', stock_qty: 10, cost_price: 5, retail_price: 30, wholesale_price: 30, min_selling_price: 1, is_active: true, item_type: 'product', category_id: 10, kitchen_station: null }).execute();
+      await anyDb
+        .insertInto('product_categories')
+        .values({
+          id: 10,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مشويات',
+          is_active: true,
+          kitchen_station: 'grill',
+        })
+        .execute();
+      await anyDb
+        .insertInto('products')
+        .values({
+          id: 201,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'كباب حلبي',
+          stock_qty: 10,
+          cost_price: 5,
+          retail_price: 30,
+          wholesale_price: 30,
+          min_selling_price: 1,
+          is_active: true,
+          item_type: 'product',
+          category_id: 10,
+          kitchen_station: null,
+        })
+        .execute();
       await seedSale(db, 700, 'S-700');
       await seedSaleItem(db, 700, 201, 'كباب حلبي');
       const capture = await startCaptureServer();
       try {
-        await anyDb.insertInto('pos_kitchen_printers').values({
-          tenant_id: TENANT, name: 'Grill', station_code: 'grill',
-          ip_address: '127.0.0.1', port: capture.port, is_active: true, category_ids: '[]',
-        }).execute();
+        await anyDb
+          .insertInto('pos_kitchen_printers')
+          .values({
+            tenant_id: TENANT,
+            name: 'Grill',
+            station_code: 'grill',
+            ip_address: '127.0.0.1',
+            port: capture.port,
+            is_active: true,
+            category_ids: '[]',
+          })
+          .execute();
         const results: any[] = await (printers as any).printTicketForPostedSale(TENANT, 700);
         assert.equal(results.length, 1, 'the grill printer matches the posted sale');
         assert.equal(results[0].ok, true);

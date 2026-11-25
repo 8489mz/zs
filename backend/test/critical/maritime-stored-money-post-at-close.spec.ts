@@ -102,7 +102,10 @@ async function main(): Promise<void> {
   };
   const service = new MaritimeFreightService(db, {} as never, {} as never, postingStub as never);
 
-  async function journalLines(sourceType: string, sourceId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
+  async function journalLines(
+    sourceType: string,
+    sourceId: number,
+  ): Promise<Array<{ code: string; debit: number; credit: number }>> {
     const rows = await (db as any)
       .selectFrom('journal_entries as je')
       .innerJoin('journal_entry_lines as jl', (j: any) => j.onRef('jl.journal_entry_id', '=', 'je.id'))
@@ -115,7 +118,11 @@ async function main(): Promise<void> {
   }
 
   async function jobTotals(jobId: number): Promise<{ other: number; net: number }> {
-    const row = await (db as any).selectFrom('maritime_jobs').select(['other_costs_total', 'net_profit']).where('id', '=', jobId).executeTakeFirstOrThrow();
+    const row = await (db as any)
+      .selectFrom('maritime_jobs')
+      .select(['other_costs_total', 'net_profit'])
+      .where('id', '=', jobId)
+      .executeTakeFirstOrThrow();
     return { other: Number(row.other_costs_total), net: Number(row.net_profit) };
   }
 
@@ -208,7 +215,11 @@ async function main(): Promise<void> {
     await pg.exec(`DELETE FROM accounting_accounts WHERE code = '7180'`);
     const recreated = await service.postStoredMoneyAtClose(db as never, 't1', 4, auth);
     assert.equal(recreated.forex.posted, true);
-    const acc7180 = await (db as any).selectFrom('accounting_accounts').selectAll().where('code', '=', '7180').executeTakeFirstOrThrow();
+    const acc7180 = await (db as any)
+      .selectFrom('accounting_accounts')
+      .selectAll()
+      .where('code', '=', '7180')
+      .executeTakeFirstOrThrow();
     assert.equal(acc7180.name_en, 'Unrealized FX Gains');
     assert.equal(acc7180.is_system, true);
     assert.equal(Number(acc7180.parent_id), 7100);
@@ -220,10 +231,7 @@ async function main(): Promise<void> {
     // 5. A missing parent fails closed with no journal.
     await pg.exec(`DELETE FROM accounting_accounts WHERE code IN ('7180','7100')`);
     const beforeFail = await journalCount();
-    await assert.rejects(
-      service.postStoredMoneyAtClose(db as never, 't1', 5, auth),
-      /الإيرادات أو المصروفات/,
-    );
+    await assert.rejects(service.postStoredMoneyAtClose(db as never, 't1', 5, auth), /الإيرادات أو المصروفات/);
     assert.equal(await journalCount(), beforeFail);
 
     // 6. Source pins: both close paths call the posting, and the
@@ -233,8 +241,14 @@ async function main(): Promise<void> {
     // with them, trailing after the helper); addJobMilestone +
     // releaseDeliveryOrder live in the jobs-milestones slice — per-slice
     // reads.
-    const jobClose = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-job-close.service.ts'), 'utf8');
-    const milestones = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-jobs-milestones.service.ts'), 'utf8');
+    const jobClose = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-job-close.service.ts'),
+      'utf8',
+    );
+    const milestones = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-jobs-milestones.service.ts'),
+      'utf8',
+    );
     const helperStart = jobClose.indexOf('async postStoredMoneyAtClose(');
     const consolidationStart = jobClose.indexOf('2. Consolidation & Sub-Jobs');
     assert.ok(helperStart > 0 && consolidationStart > helperStart);
@@ -247,7 +261,11 @@ async function main(): Promise<void> {
     const updateJobStart = jobClose.indexOf('async updateJob(');
     const updateJobEnd = jobClose.indexOf('async getQuotationCharges(');
     assert.ok(jobClose.slice(updateJobStart, updateJobEnd).includes('postStoredMoneyAtClose'));
-    assert.ok(milestones.slice(milestones.indexOf('async addJobMilestone('), milestones.indexOf('async releaseDeliveryOrder(')).includes('postStoredMoneyAtClose'));
+    assert.ok(
+      milestones
+        .slice(milestones.indexOf('async addJobMilestone('), milestones.indexOf('async releaseDeliveryOrder('))
+        .includes('postStoredMoneyAtClose'),
+    );
 
     console.log('maritime stored money post at close checks passed');
   } finally {

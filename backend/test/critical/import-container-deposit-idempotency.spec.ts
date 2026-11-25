@@ -218,7 +218,11 @@ async function main(): Promise<void> {
         .selectFrom('import_container_deposits')
         .select(['serial_id', 'idempotency_key'] as never)
         .execute();
-      assert.equal((legacy[0] as any).idempotency_key, `legacy:${(legacy[0] as any).serial_id}`, 'Legacy rows are backfilled with a stable legacy:<serial_id> key');
+      assert.equal(
+        (legacy[0] as any).idempotency_key,
+        `legacy:${(legacy[0] as any).serial_id}`,
+        'Legacy rows are backfilled with a stable legacy:<serial_id> key',
+      );
       const index = await sql<{ indexname: string }>`
         SELECT indexname FROM pg_indexes
         WHERE tablename = 'import_container_deposits'
@@ -240,7 +244,11 @@ async function main(): Promise<void> {
       const deposit = await service.recordContainerDeposit('t1', 1, trialDto());
       assert.equal(Number(deposit.deposit_amount_egp), 100, 'Deposit records the trial 100 EGP amount');
       assert.equal(deposit.refund_status, 'pending', 'Deposit starts pending');
-      assert.equal(deposit.idempotency_key, 'deposit:sh-1:MSCU-TEST-001', 'No client key: the service stores the derived natural key');
+      assert.equal(
+        deposit.idempotency_key,
+        'deposit:sh-1:MSCU-TEST-001',
+        'No client key: the service stores the derived natural key',
+      );
       assert.equal(await depositCount(db), 1, 'Exactly one deposit row exists');
       assert.equal(await journalEntryCount(db), 1, 'Exactly one JE is posted');
       assert.equal(await treasuryCount(db), 1, 'Exactly one treasury row is recorded');

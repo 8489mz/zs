@@ -408,10 +408,7 @@ const consecutiveNegVisit = evaluateItineraryVisitRules({
   customerId: 77,
   visitType: 'negative',
   negativeReason: 'shop_closed',
-  recentCustomerVisits: [
-    { visitType: 'negative' },
-    { visitType: 'negative' },
-  ],
+  recentCustomerVisits: [{ visitType: 'negative' }, { visitType: 'negative' }],
 });
 assert.equal(consecutiveNegVisit.isValid, true);
 assert.equal(consecutiveNegVisit.hasConsecutiveNegativeAlert, true);
@@ -422,7 +419,7 @@ const ghostVisit = evaluateItineraryVisitRules({
   customerId: 77,
   visitType: 'negative',
   negativeReason: 'no_cash',
-  repGps: { lat: 30.0510, lng: 31.2400 },
+  repGps: { lat: 30.051, lng: 31.24 },
   customerGps: { lat: 30.0444, lng: 31.2357 },
   maxAllowedGeofenceMeters: 300,
 });
@@ -499,16 +496,19 @@ assert.equal(shortageReconciliation.cashVariance, -1150);
 assert.equal(shortageReconciliation.cashVarianceStatus, 'shortage');
 assert.equal(shortageReconciliation.cashShortageAmount, 1150);
 
-const stockShortageAudit = reconcileVanStockAudit([
-  {
-    productId: 101,
-    productName: 'جبنة بيضاء 500جم',
-    systemQty: 25,
-    countedQty: 0,
-    costPrice: 15,
-    retailPrice: 20,
-  },
-], 2);
+const stockShortageAudit = reconcileVanStockAudit(
+  [
+    {
+      productId: 101,
+      productName: 'جبنة بيضاء 500جم',
+      systemQty: 25,
+      countedQty: 0,
+      costPrice: 15,
+      retailPrice: 20,
+    },
+  ],
+  2,
+);
 assert.equal(stockShortageAudit.hasStockDiscrepancy, true);
 assert.equal(stockShortageAudit.totalStockShortageCost, 375); // 25 * 15
 

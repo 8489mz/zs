@@ -21,7 +21,11 @@ function fakeDb(captured: CapturedInsert[]) {
       return {
         values(row: CapturedInsert) {
           captured.push(row);
-          return { async execute() { /* no-op */ } };
+          return {
+            async execute() {
+              /* no-op */
+            },
+          };
         },
       };
     },
@@ -33,10 +37,10 @@ async function testImpersonatorIsRecorded(): Promise<void> {
   const audit = new AuditService(fakeDb(captured));
 
   await audit.log('حذف فاتورة', 'تم حذف فاتورة', {
-    userId: 42,          // the tenant owner whose identity the session runs under
+    userId: 42, // the tenant owner whose identity the session runs under
     tenantId: 'tenant-a',
     accountId: 'tenant-a:main',
-    impersonatedBy: 7,   // the platform admin actually driving it
+    impersonatedBy: 7, // the platform admin actually driving it
   });
 
   assert.equal(captured.length, 1);

@@ -36,7 +36,10 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const inTx = <T>(fn: (trx: any) => Promise<T>): Promise<T> => db.transaction().execute(fn);
@@ -84,7 +87,12 @@ async function main(): Promise<void> {
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
     `);
     for (const code of [1110, 1120, 2140]) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), '']);
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        '',
+      ]);
     }
     // Whole-run drives: one approved item per run.
     await pg.exec(`
@@ -97,32 +105,35 @@ async function main(): Promise<void> {
         (13,'t1',19,3,100,'approved');
     `);
     const amount = async (id: number, code: number, side: 'debit' | 'credit') => {
-      const rows = await pg.query<{ amount: string }>(`SELECT coalesce(sum(${side}),0) AS amount FROM journal_entry_lines WHERE journal_entry_id=$1 AND account_id=$2`, [id, code]);
+      const rows = await pg.query<{ amount: string }>(
+        `SELECT coalesce(sum(${side}),0) AS amount FROM journal_entry_lines WHERE journal_entry_id=$1 AND account_id=$2`,
+        [id, code],
+      );
       return Number(rows.rows[0].amount);
     };
 
-    const drawerRun = await inTx(trx => posting.postPayrollPayment(trx, 7, 'drawer', auth));
+    const drawerRun = await inTx((trx) => posting.postPayrollPayment(trx, 7, 'drawer', auth));
     assert.equal(drawerRun.posted, true);
     assert.equal(await amount(drawerRun.journalEntryId!, 2140, 'debit'), 150);
     assert.equal(await amount(drawerRun.journalEntryId!, 1110, 'credit'), 150);
     assert.equal(await amount(drawerRun.journalEntryId!, 1120, 'credit'), 0);
 
-    const cashRun = await inTx(trx => posting.postPayrollPayment(trx, 8, 'cash', auth));
+    const cashRun = await inTx((trx) => posting.postPayrollPayment(trx, 8, 'cash', auth));
     assert.equal(await amount(cashRun.journalEntryId!, 1110, 'credit'), 150);
     assert.equal(await amount(cashRun.journalEntryId!, 1120, 'credit'), 0);
 
-    const bankRun = await inTx(trx => posting.postPayrollPayment(trx, 9, 'bank', auth));
+    const bankRun = await inTx((trx) => posting.postPayrollPayment(trx, 9, 'bank', auth));
     assert.equal(await amount(bankRun.journalEntryId!, 1120, 'credit'), 150);
     assert.equal(await amount(bankRun.journalEntryId!, 1110, 'credit'), 0);
 
-    const drawerItem = await inTx(trx => posting.postPayrollItemPayment(trx, 11, 'drawer', auth));
+    const drawerItem = await inTx((trx) => posting.postPayrollItemPayment(trx, 11, 'drawer', auth));
     assert.equal(await amount(drawerItem.journalEntryId!, 1110, 'credit'), 100);
     assert.equal(await amount(drawerItem.journalEntryId!, 1120, 'credit'), 0);
 
-    const cashItem = await inTx(trx => posting.postPayrollItemPayment(trx, 12, 'cash', auth));
+    const cashItem = await inTx((trx) => posting.postPayrollItemPayment(trx, 12, 'cash', auth));
     assert.equal(await amount(cashItem.journalEntryId!, 1110, 'credit'), 100);
 
-    const bankItem = await inTx(trx => posting.postPayrollItemPayment(trx, 13, 'bank', auth));
+    const bankItem = await inTx((trx) => posting.postPayrollItemPayment(trx, 13, 'bank', auth));
     assert.equal(await amount(bankItem.journalEntryId!, 1120, 'credit'), 100);
     assert.equal(await amount(bankItem.journalEntryId!, 1110, 'credit'), 0);
 

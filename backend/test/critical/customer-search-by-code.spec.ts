@@ -59,8 +59,28 @@ async function searchIds(db: Kysely<Database>, q: string): Promise<number[]> {
     await anyDb
       .insertInto('customers')
       .values([
-        { id: 3060, tenant_id: 't1', name: 'محل اختبار جملة 1', phone: '01122220001', metadata: '{}', address: '', customer_type: 'wholesale', company_name: '', tax_number: '' },
-        { id: 3061, tenant_id: 't1', name: 'عميل آخر', phone: '01000000000', metadata: '{}', address: '', customer_type: 'cash', company_name: '', tax_number: '' },
+        {
+          id: 3060,
+          tenant_id: 't1',
+          name: 'محل اختبار جملة 1',
+          phone: '01122220001',
+          metadata: '{}',
+          address: '',
+          customer_type: 'wholesale',
+          company_name: '',
+          tax_number: '',
+        },
+        {
+          id: 3061,
+          tenant_id: 't1',
+          name: 'عميل آخر',
+          phone: '01000000000',
+          metadata: '{}',
+          address: '',
+          customer_type: 'cash',
+          company_name: '',
+          tax_number: '',
+        },
       ])
       .execute();
 
@@ -71,7 +91,7 @@ async function searchIds(db: Kysely<Database>, q: string): Promise<number[]> {
     // (c) Bare digits still work.
     assert.deepEqual(await searchIds(db, '3060'), [3060], "search '3060' must match id 3060");
     // (d) Name search is not regressed.
-    assert.deepEqual(await searchIds(db, 'محل اختبار'), [3060], "search by name must still match id 3060");
+    assert.deepEqual(await searchIds(db, 'محل اختبار'), [3060], 'search by name must still match id 3060');
 
     console.log('customer-search-by-code.spec passed');
   } finally {

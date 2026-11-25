@@ -381,12 +381,13 @@ async function main(): Promise<void> {
     }
     for (const blocked of ['contracting', 'maritime_freight', 'warehousing', 'services'] as const) {
       const resolved = resolvePillarScopedFeatures(blocked, ['sales', 'catalog', 'deliveryReps'], []);
-      assert.ok(
-        !resolved.includes('deliveryReps'),
-        `resolvePillarScopedFeatures(${blocked}) must stay gated off`,
-      );
+      assert.ok(!resolved.includes('deliveryReps'), `resolvePillarScopedFeatures(${blocked}) must stay gated off`);
     }
-    const mfgResolved = resolvePillarScopedFeatures('manufacturing', ['sales', 'catalog', 'sessions', 'cashDrawer'], []);
+    const mfgResolved = resolvePillarScopedFeatures(
+      'manufacturing',
+      ['sales', 'catalog', 'sessions', 'cashDrawer'],
+      [],
+    );
     assert.ok(
       !mfgResolved.includes('deliveryReps'),
       'resolvePillarScopedFeatures(manufacturing) must not default-grant deliveryReps on starter plans',
@@ -456,14 +457,28 @@ async function main(): Promise<void> {
     const guard = new PermissionsGuard(new Reflector(), new PermissionService(), featureService, {} as never);
     for (const activity of RETAIL_PROFILES) {
       for (const planId of ['plan_basic', 'tier_band1_L1', 'plan_pro', 'plan_ultimate'] as const) {
-        const auth = ownerAuth(`t-${activity}-${planId}`, { planId, activityType: activity, pillar: 'commerce', extraFeatures: [] });
+        const auth = ownerAuth(`t-${activity}-${planId}`, {
+          planId,
+          activityType: activity,
+          pillar: 'commerce',
+          extraFeatures: [],
+        });
         assert.equal(guard.canActivate(guardContext(auth, 'list')), true, `list allowed for ${activity}/${planId}`);
         assert.equal(guard.canActivate(guardContext(auth, 'create')), true, `create allowed for ${activity}/${planId}`);
-        assert.equal(guard.canActivate(guardContext(auth, 'settleOrder')), true, `settleOrder allowed for ${activity}/${planId}`);
+        assert.equal(
+          guard.canActivate(guardContext(auth, 'settleOrder')),
+          true,
+          `settleOrder allowed for ${activity}/${planId}`,
+        );
       }
     }
     for (const blocked of ['warehousing', 'services'] as const) {
-      const auth = ownerAuth(`t-blocked-${blocked}`, { planId: 'plan_ultimate', activityType: blocked, pillar: 'commerce', extraFeatures: [] });
+      const auth = ownerAuth(`t-blocked-${blocked}`, {
+        planId: 'plan_ultimate',
+        activityType: blocked,
+        pillar: 'commerce',
+        extraFeatures: [],
+      });
       assert.throws(
         () => guard.canActivate(guardContext(auth, 'list')),
         ForbiddenException,
@@ -475,39 +490,130 @@ async function main(): Promise<void> {
     // 7) Real end-to-end starter retail flow: create rep -> delivery sale -> settlement
     const e2eTenant = 't-retail_general-plan_basic';
     const e2eAuth = ownerAuth(e2eTenant, { planId: 'plan_basic', activityType: 'retail_general', pillar: 'commerce' });
-    await anyDb.insertInto('settings').values({ tenant_id: e2eTenant, account_id: ACCOUNT, key: 'currency', value: 'EGP' }).execute();
-    await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: e2eTenant, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-    await anyDb.insertInto('users').values({ id: 10, tenant_id: e2eTenant, account_id: ACCOUNT, username: 'muse', role: 'admin', is_active: true }).execute();
-    for (const [id, code] of [[1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'], [2115, '2115'], [2120, '2120'], [4100, '4100'], [4200, '4200'], [4300, '4300'], [5100, '5100'], [7100, '7100'], [7200, '7200']] as const) {
-      await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: e2eTenant, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('settings')
+      .values({ tenant_id: e2eTenant, account_id: ACCOUNT, key: 'currency', value: 'EGP' })
+      .execute();
+    await anyDb
+      .insertInto('currency_exchange_rates')
+      .values({ tenant_id: e2eTenant, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+      .execute();
+    await anyDb
+      .insertInto('users')
+      .values({ id: 10, tenant_id: e2eTenant, account_id: ACCOUNT, username: 'muse', role: 'admin', is_active: true })
+      .execute();
+    for (const [id, code] of [
+      [1110, '1110'],
+      [1120, '1120'],
+      [1130, '1130'],
+      [1140, '1140'],
+      [2115, '2115'],
+      [2120, '2120'],
+      [4100, '4100'],
+      [4200, '4200'],
+      [4300, '4300'],
+      [5100, '5100'],
+      [7100, '7100'],
+      [7200, '7200'],
+    ] as const) {
+      await anyDb
+        .insertInto('accounting_accounts')
+        .values({ id, tenant_id: e2eTenant, code, name_ar: code, is_active: true, is_tax: false })
+        .execute();
     }
-    await anyDb.insertInto('accounting_settings').values({
-      id: 1, tenant_id: e2eTenant, account_id: ACCOUNT,
-      cash_account_id: 1110, bank_account_id: 1120, customer_receivable_account_id: 1130,
-      inventory_account_id: 1140, sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-      cogs_account_id: 5100, sales_tax_account_id: 2120,
-    }).execute();
-    await anyDb.insertInto('branches').values({ id: 1, tenant_id: e2eTenant, account_id: ACCOUNT, name: 'Main', default_stock_location_id: 10 }).execute();
-    await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: e2eTenant, account_id: ACCOUNT, branch_id: 1, name: 'Main Store', location_type: 'internal_warehouse', is_active: true }).execute();
-    await anyDb.insertInto('products').values({
-      id: 101, tenant_id: e2eTenant, account_id: ACCOUNT, name: 'Retail Item',
-      stock_qty: 20, cost_price: 50, retail_price: 120, wholesale_price: 120, min_selling_price: 1,
-      is_active: true, item_type: 'product',
-    }).execute();
-    await anyDb.insertInto('product_location_stock').values({
-      tenant_id: e2eTenant, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 20,
-    }).execute();
-    await anyDb.insertInto('customers').values({
-      id: 7, tenant_id: e2eTenant, account_id: ACCOUNT, name: 'Walk-in Delivery Customer',
-      balance: 0, credit_limit: 0, is_credit_blocked: false, is_active: true,
-    }).execute();
-    await anyDb.insertInto('cashier_shifts').values({
-      id: 1, tenant_id: e2eTenant, account_id: ACCOUNT, doc_no: 'SHIFT-1',
-      opened_by: 10, status: 'open', branch_id: 1, location_id: 10,
-      opening_cash: 0, expected_cash: 0, created_at: '2026-11-16T08:00:00.000Z',
-    }).execute();
+    await anyDb
+      .insertInto('accounting_settings')
+      .values({
+        id: 1,
+        tenant_id: e2eTenant,
+        account_id: ACCOUNT,
+        cash_account_id: 1110,
+        bank_account_id: 1120,
+        customer_receivable_account_id: 1130,
+        inventory_account_id: 1140,
+        sales_revenue_account_id: 4100,
+        sales_discount_account_id: 4300,
+        cogs_account_id: 5100,
+        sales_tax_account_id: 2120,
+      })
+      .execute();
+    await anyDb
+      .insertInto('branches')
+      .values({ id: 1, tenant_id: e2eTenant, account_id: ACCOUNT, name: 'Main', default_stock_location_id: 10 })
+      .execute();
+    await anyDb
+      .insertInto('stock_locations')
+      .values({
+        id: 10,
+        tenant_id: e2eTenant,
+        account_id: ACCOUNT,
+        branch_id: 1,
+        name: 'Main Store',
+        location_type: 'internal_warehouse',
+        is_active: true,
+      })
+      .execute();
+    await anyDb
+      .insertInto('products')
+      .values({
+        id: 101,
+        tenant_id: e2eTenant,
+        account_id: ACCOUNT,
+        name: 'Retail Item',
+        stock_qty: 20,
+        cost_price: 50,
+        retail_price: 120,
+        wholesale_price: 120,
+        min_selling_price: 1,
+        is_active: true,
+        item_type: 'product',
+      })
+      .execute();
+    await anyDb
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: e2eTenant,
+        account_id: ACCOUNT,
+        product_id: 101,
+        branch_id: 1,
+        location_id: 10,
+        qty: 20,
+      })
+      .execute();
+    await anyDb
+      .insertInto('customers')
+      .values({
+        id: 7,
+        tenant_id: e2eTenant,
+        account_id: ACCOUNT,
+        name: 'Walk-in Delivery Customer',
+        balance: 0,
+        credit_limit: 0,
+        is_credit_blocked: false,
+        is_active: true,
+      })
+      .execute();
+    await anyDb
+      .insertInto('cashier_shifts')
+      .values({
+        id: 1,
+        tenant_id: e2eTenant,
+        account_id: ACCOUNT,
+        doc_no: 'SHIFT-1',
+        opened_by: 10,
+        status: 'open',
+        branch_id: 1,
+        location_id: 10,
+        opening_cash: 0,
+        expected_cash: 0,
+        created_at: '2026-11-16T08:00:00.000Z',
+      })
+      .execute();
 
-    const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+    const foundation = {
+      ensureForAuth: async () => {},
+      ensureForScope: async () => {},
+    } as unknown as AccountingTenantFoundationService;
     const posting = new AccountingPostingService(foundation);
     const authz = new SalesAuthorizationService(db);
     const finance = new SalesFinanceService(db);
@@ -515,7 +621,18 @@ async function main(): Promise<void> {
     const idempotency = new IdempotencyService(db);
     const tx = new TransactionHelper();
     const audit = new AuditService(db);
-    const salesWrite = new SalesWriteService(db, tx, audit, authz, finance, query, posting, idempotency, featureService as never, {} as never);
+    const salesWrite = new SalesWriteService(
+      db,
+      tx,
+      audit,
+      authz,
+      finance,
+      query,
+      posting,
+      idempotency,
+      featureService as never,
+      {} as never,
+    );
     const repsService = new DeliveryRepsService(db, audit, posting, finance);
 
     // 7a. Create rep after guard passes
@@ -552,7 +669,11 @@ async function main(): Promise<void> {
     const settleRes: any = await repsService.settleOrder(saleId, e2eAuth, { countedCashAmount: 140 });
     assert.equal(settleRes?.ok, true, 'settleOrder must succeed');
 
-    const settledSale = await anyDb.selectFrom('sales').select(['delivery_status', 'delivery_rep_id']).where('id', '=', saleId).executeTakeFirst();
+    const settledSale = await anyDb
+      .selectFrom('sales')
+      .select(['delivery_status', 'delivery_rep_id'])
+      .where('id', '=', saleId)
+      .executeTakeFirst();
     assert.equal(settledSale?.delivery_status, 'settled', 'sale must become settled');
     assert.equal(Number(settledSale?.delivery_rep_id), Number(createdRep.id));
 
@@ -567,16 +688,27 @@ async function main(): Promise<void> {
     console.log('  7) starter retail create rep -> delivery sale -> settleOrder: OK');
 
     // 8) Frontend Apps Store & navigation search contract pins
-    const appsCatalogSrc = fs.readFileSync(path.join(REPO_ROOT, 'frontend/src/features/apps-store/data/apps-catalog.tsx'), 'utf8');
-    const repsCatalogMatch = appsCatalogSrc.match(/key:\s*'deliveryRepsModuleEnabled'[\s\S]*?featureFlag:\s*'deliveryReps'/);
+    const appsCatalogSrc = fs.readFileSync(
+      path.join(REPO_ROOT, 'frontend/src/features/apps-store/data/apps-catalog.tsx'),
+      'utf8',
+    );
+    const repsCatalogMatch = appsCatalogSrc.match(
+      /key:\s*'deliveryRepsModuleEnabled'[\s\S]*?featureFlag:\s*'deliveryReps'/,
+    );
     assert.ok(repsCatalogMatch, 'deliveryRepsModuleEnabled catalog entry must exist');
     assert.ok(
       repsCatalogMatch[0].includes("requiredPlan: 'plan_basic'"),
       'deliveryRepsModuleEnabled catalog entry must require plan_basic, never plan_ultimate',
     );
 
-    const repsRoutesSrc = fs.readFileSync(path.join(REPO_ROOT, 'frontend/src/features/delivery-reps/routes.tsx'), 'utf8');
-    assert.ok(repsRoutesSrc.includes('مندوب') && repsRoutesSrc.includes('توصيل') && repsRoutesSrc.includes('تسوية'), 'delivery-reps navigation item must carry search keywords for مندوب / توصيل / تسوية');
+    const repsRoutesSrc = fs.readFileSync(
+      path.join(REPO_ROOT, 'frontend/src/features/delivery-reps/routes.tsx'),
+      'utf8',
+    );
+    assert.ok(
+      repsRoutesSrc.includes('مندوب') && repsRoutesSrc.includes('توصيل') && repsRoutesSrc.includes('تسوية'),
+      'delivery-reps navigation item must carry search keywords for مندوب / توصيل / تسوية',
+    );
     console.log('  8) frontend catalog requiredPlan + search keywords pins: OK');
 
     console.log('delivery-reps-retail-self-install.spec: ALL PASSED');

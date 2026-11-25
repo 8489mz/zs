@@ -30,7 +30,7 @@ const r1 = computeIpc(
   baseTerms,
   { previousGrossWorkDone: 0, previousAdvanceRecovered: 0, previousRetentionHeld: 0, carriedForwardDebitIn: 0 },
   { grossWorkDone: 50_000 },
-  {}
+  {},
 );
 assert.equal(r1.advanceRecoveryAmount, 0, 'Recovery below start window must be 0');
 
@@ -39,39 +39,58 @@ const r2 = computeIpc(
   baseTerms,
   { previousGrossWorkDone: 50_000, previousAdvanceRecovered: 0, previousRetentionHeld: 0, carriedForwardDebitIn: 0 },
   { grossWorkDone: 400_000 }, // cumulative 450,000 = 45%
-  {}
+  {},
 );
 assert.equal(r2.advanceRecoveryAmount, 50_000, 'Mid-window recovery must be 50,000');
 
 // 3. Beyond window end (85% progress -> factor clamped to 1.0) -> Target 100,000, prev 50,000 -> Recover 50,000
 const r3 = computeIpc(
   baseTerms,
-  { previousGrossWorkDone: 450_000, previousAdvanceRecovered: 50_000, previousRetentionHeld: 0, carriedForwardDebitIn: 0 },
+  {
+    previousGrossWorkDone: 450_000,
+    previousAdvanceRecovered: 50_000,
+    previousRetentionHeld: 0,
+    carriedForwardDebitIn: 0,
+  },
   { grossWorkDone: 400_000 }, // cumulative 850,000 = 85%
-  {}
+  {},
 );
 assert.equal(r3.advanceRecoveryAmount, 50_000, 'End-window recovery must reach advance total (50,000 remaining)');
 
 // 4. Invariant I1 Inviolable Ceiling: Future invoice with 100% progress -> remaining advance is 0 -> Recovery must be 0!
 const r4 = computeIpc(
   baseTerms,
-  { previousGrossWorkDone: 850_000, previousAdvanceRecovered: 100_000, previousRetentionHeld: 0, carriedForwardDebitIn: 0 },
+  {
+    previousGrossWorkDone: 850_000,
+    previousAdvanceRecovered: 100_000,
+    previousRetentionHeld: 0,
+    carriedForwardDebitIn: 0,
+  },
   { grossWorkDone: 150_000 }, // cumulative 1,000,000 = 100%
-  {}
+  {},
 );
 assert.equal(r4.advanceRecoveryAmount, 0, 'Invariant I1: Recovery must NEVER exceed total advance paid');
 
 // 5. Invariant I1 Override Ceiling: User attempts manual override with 50% on remaining advance of only 15,000
 const r5 = computeIpc(
   baseTerms,
-  { previousGrossWorkDone: 800_000, previousAdvanceRecovered: 85_000, previousRetentionHeld: 0, carriedForwardDebitIn: 0 },
+  {
+    previousGrossWorkDone: 800_000,
+    previousAdvanceRecovered: 85_000,
+    previousRetentionHeld: 0,
+    carriedForwardDebitIn: 0,
+  },
   { grossWorkDone: 100_000 },
   {
     advanceRecoveryOverride: true,
     advanceRecoveryPercent: 50, // 50% of 100,000 = 50,000, but only 15,000 remains!
-  }
+  },
 );
-assert.equal(r5.advanceRecoveryAmount, 15_000, 'Invariant I1: Manual override MUST be capped by remaining advance (15,000)');
+assert.equal(
+  r5.advanceRecoveryAmount,
+  15_000,
+  'Invariant I1: Manual override MUST be capped by remaining advance (15,000)',
+);
 
 // 6. Default Path Verification: When advanceRecoveryOverride is undefined/false, does NOT use flat 10%
 // At 24% progress: factor = (24 - 10)/(80 - 10) = 14/70 = 20% of 100k = 20k target
@@ -79,9 +98,13 @@ const r6 = computeIpc(
   baseTerms,
   { previousGrossWorkDone: 0, previousAdvanceRecovered: 0, previousRetentionHeld: 0, carriedForwardDebitIn: 0 },
   { grossWorkDone: 240_000 }, // 24% progress
-  { advanceRecoveryPercent: 10 } // Notice: advanceRecoveryOverride is NOT true!
+  { advanceRecoveryPercent: 10 }, // Notice: advanceRecoveryOverride is NOT true!
 );
-assert.equal(r6.advanceRecoveryAmount, 20_000, 'Default path must run bounded window (20,000), ignoring flat percentage without override flag');
+assert.equal(
+  r6.advanceRecoveryAmount,
+  20_000,
+  'Default path must run bounded window (20,000), ignoring flat percentage without override flag',
+);
 
 console.log('Invariant I1 PASSED: Advance recovery correctly bounded and capped on all paths.');
 
@@ -97,7 +120,7 @@ const r7 = computeIpc(
     mosAdded: 30_000,
     mosReleased: 5_000,
   },
-  {}
+  {},
 );
 // Gross certified = 100,000 + 20,000 + 30,000 - 5,000 = 145,000
 // Retention must be 10% of 100,000 (GWD) = 10,000 (NOT 10% of 145,000)
@@ -109,7 +132,7 @@ const r8 = computeIpc(
   { ...baseTerms, retentionRate: 0.1, retentionCap: 50_000 },
   { previousGrossWorkDone: 0, previousAdvanceRecovered: 0, previousRetentionHeld: 46_000, carriedForwardDebitIn: 0 },
   { grossWorkDone: 100_000 }, // potential = 10,000, but only 4,000 under cap!
-  {}
+  {},
 );
 assert.equal(r8.retentionHeldAmount, 4_000, 'Invariant I2: Retention must be capped at contractual retention cap');
 
@@ -122,7 +145,7 @@ const r9 = computeIpc(
   { ...baseTerms, ldCapPct: 10 },
   { previousGrossWorkDone: 0, previousAdvanceRecovered: 0, previousRetentionHeld: 0, carriedForwardDebitIn: 0 },
   { grossWorkDone: 100_000 },
-  { ldAmount: 150_000 }
+  { ldAmount: 150_000 },
 );
 assert.equal(r9.ldAmount, 100_000, 'Invariant I3: Liquidated damages must be capped by contractual cap (100,000)');
 
@@ -142,9 +165,13 @@ const r10 = computeIpc(
       { deductionType: 'backcharge', amount: 3_000, description: 'Row 2 cleanup' },
       { deductionType: 'backcharge', amount: 2_000, description: 'Row 3 equipment damage' },
     ],
-  }
+  },
 );
-assert.equal(r10.backchargeAmount, 10_000, 'Invariant I12: All itemized rows of same type must be summed without row loss');
+assert.equal(
+  r10.backchargeAmount,
+  10_000,
+  'Invariant I12: All itemized rows of same type must be summed without row loss',
+);
 
 // 11. Header / detail discrepancy detection
 let threwExpected = false;
@@ -159,7 +186,7 @@ try {
         { deductionType: 'backcharge', amount: 5_000 },
         { deductionType: 'backcharge', amount: 5_000 },
       ],
-    }
+    },
   );
 } catch (err: any) {
   threwExpected = true;

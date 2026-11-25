@@ -26,8 +26,11 @@ import { allocateInstallmentInterest } from '../../src/modules/accounting/engine
 // number of fils, and the earlier installment earns more than the
 // later one (effective interest declines with the balance).
 const kwd = allocateInstallmentInterest(100, [53.562, 53.563], 7.125, 3);
-assert.equal(kwd.reduce((sum, amount) => sum + amount, 0), 7.125);
-assert.ok(kwd.every(amount => Math.abs(amount * 1000 - Math.round(amount * 1000)) < 1e-9));
+assert.equal(
+  kwd.reduce((sum, amount) => sum + amount, 0),
+  7.125,
+);
+assert.ok(kwd.every((amount) => Math.abs(amount * 1000 - Math.round(amount * 1000)) < 1e-9));
 assert.ok(kwd[0] > kwd[1]);
 
 // Exact-sum property at 2 decimals on a schedule that does not

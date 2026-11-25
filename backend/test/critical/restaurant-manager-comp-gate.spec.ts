@@ -68,9 +68,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { Kysely } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
-import {
-  RestaurantAdvancedFnbService,
-} from '../../src/modules/sales/services/restaurant-advanced-fnb.service';
+import { RestaurantAdvancedFnbService } from '../../src/modules/sales/services/restaurant-advanced-fnb.service';
 import { RestaurantAdvancedFnbController } from '../../src/modules/sales/controllers/restaurant-advanced-fnb.controller';
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
@@ -96,26 +94,38 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 async function resetDb(pg: PGlite): Promise<void> {
-  await pg.exec(
-    `TRUNCATE settings, currency_exchange_rates, users, restaurant_manager_comps RESTART IDENTITY`,
-  );
+  await pg.exec(`TRUNCATE settings, currency_exchange_rates, users, restaurant_manager_comps RESTART IDENTITY`);
 }
 
 async function seedBase(db: Kysely<Database>, pinValue = '"1234"'): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: pinValue }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({
-    tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1,
-  }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({
+      tenant_id: TENANT,
+      currency_code: 'EGP',
+      is_base: true,
+      exchange_rate: 1,
+    })
+    .execute();
 }
 
 async function seedAdminUser(db: Kysely<Database>, password: string): Promise<void> {
   const record = await createPasswordRecord(password);
-  await (db as any).insertInto('users').values({
-    username: 'boss', role: 'admin', password_hash: record.hash, password_salt: record.salt,
-    is_active: true, tenant_id: TENANT, account_id: ACCOUNT,
-  }).execute();
+  await (db as any)
+    .insertInto('users')
+    .values({
+      username: 'boss',
+      role: 'admin',
+      password_hash: record.hash,
+      password_salt: record.salt,
+      is_active: true,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
 }
 
 async function expectAppError(promise: Promise<unknown>, code: string, statusCode: number): Promise<void> {
@@ -137,8 +147,13 @@ async function countComps(pg: PGlite): Promise<number> {
 function reqFor(role: string, permissions: string[], userId: number): any {
   return {
     authContext: {
-      userId, sessionId: `s${userId}`, username: role === 'admin' ? 'admin' : 'cashier',
-      role, permissions, tenantId: TENANT, accountId: ACCOUNT,
+      userId,
+      sessionId: `s${userId}`,
+      username: role === 'admin' ? 'admin' : 'cashier',
+      role,
+      permissions,
+      tenantId: TENANT,
+      accountId: ACCOUNT,
     },
   };
 }
@@ -238,7 +253,10 @@ async function main(): Promise<void> {
       assert.equal(res.comp.manager_name, 'اعتماد المدير', 'the recorded manager is the verified approver');
       assert.equal(Number(res.comp.amount), 75);
       assert.equal(res.comp.sale_id, null, 'a cart comp names no sale');
-      assert.ok(String(res.message).includes('يُرحَّل الخصم مع الفاتورة'), 'the message must say the discount posts with the sale');
+      assert.ok(
+        String(res.message).includes('يُرحَّل الخصم مع الفاتورة'),
+        'the message must say the discount posts with the sale',
+      );
       assert.equal(await countComps(pg), 1);
       console.log('  (5) controller manager with the right PIN records the cart comp passed');
     }

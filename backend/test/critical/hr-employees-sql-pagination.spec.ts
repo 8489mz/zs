@@ -87,7 +87,14 @@ async function insertApprovedLeave(
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const hr = new HrService(db, new TransactionHelper(), { log: async () => {} } as never, {} as never, {} as never, undefined);
+  const hr = new HrService(
+    db,
+    new TransactionHelper(),
+    { log: async () => {} } as never,
+    {} as never,
+    {} as never,
+    undefined,
+  );
 
   try {
     await pg.exec(`
@@ -221,7 +228,11 @@ async function main(): Promise<void> {
 
     // 6f. Search by phone WITH the file-view permission.
     const byPhonePriv = await list(hr, { search: '01022222222' }, AUTH_PRIV);
-    assert.equal(byPhonePriv.pagination.totalItems, 1, 'search by phone with permission must match exactly one employee');
+    assert.equal(
+      byPhonePriv.pagination.totalItems,
+      1,
+      'search by phone with permission must match exactly one employee',
+    );
     assert.equal(byPhonePriv.employees[0].id, '2', 'search by phone with permission must return employee 2');
 
     // 6g. Search by phone WITHOUT the file-view permission must NOT
@@ -238,9 +249,17 @@ async function main(): Promise<void> {
     assert.equal(filler.employees.length, 25, 'search filler page 1 must hold 25 rows');
 
     // 7. The leave-balance reconcile follows the page (INV-LEAVE-BALANCE-NOT-DEDUCTING).
-    assert.equal(capped.employees.find((row) => row.id === '250')?.usedAnnualLeaves, 2, 'page 1 must read used 2 for id 250');
+    assert.equal(
+      capped.employees.find((row) => row.id === '250')?.usedAnnualLeaves,
+      2,
+      'page 1 must read used 2 for id 250',
+    );
     const lastPage = await list(hr, { page: 10, pageSize: 25 }, AUTH);
-    assert.equal(lastPage.employees.find((row) => row.id === '1')?.usedAnnualLeaves, 2, 'last page must read used 2 for id 1');
+    assert.equal(
+      lastPage.employees.find((row) => row.id === '1')?.usedAnnualLeaves,
+      2,
+      'last page must read used 2 for id 1',
+    );
     assert.equal(lastPage.summary.totalItems, 250, 'last page summary must still count the full set');
     assert.equal(lastPage.summary.activeCount, 249, 'last page activeCount must still count the full set');
 

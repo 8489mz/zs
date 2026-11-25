@@ -36,18 +36,33 @@ function testOvertimeAndDailyRates() {
   // 2 hours * 50 * 1.5 = 150.00
   assert.equal(overtimePay, 150.0, 'أجر الإضافي لساعتين بمعدل 1.5x هو 150.00');
   // Hourly base includes 2h * 50 = 100 already; only the additional 50 is owed.
-  assert.equal(calculateHourlyOvertimePremium({
-    minorUnits: 2,
-    overtimeMinutes: 120, calculatedHourlyRate: 50, overtimeMultiplier: 1.5,
-  }), 50);
-  assert.equal(calculateHourlyOvertimePremium({
-    minorUnits: 2,
-    overtimeMinutes: 120, calculatedHourlyRate: 50, overtimeMultiplier: 2,
-  }), 100);
-  assert.equal(calculateHourlyOvertimePremium({
-    minorUnits: 2,
-    overtimeMinutes: 120, calculatedHourlyRate: 50, overtimeMultiplier: 1,
-  }), 0);
+  assert.equal(
+    calculateHourlyOvertimePremium({
+      minorUnits: 2,
+      overtimeMinutes: 120,
+      calculatedHourlyRate: 50,
+      overtimeMultiplier: 1.5,
+    }),
+    50,
+  );
+  assert.equal(
+    calculateHourlyOvertimePremium({
+      minorUnits: 2,
+      overtimeMinutes: 120,
+      calculatedHourlyRate: 50,
+      overtimeMultiplier: 2,
+    }),
+    100,
+  );
+  assert.equal(
+    calculateHourlyOvertimePremium({
+      minorUnits: 2,
+      overtimeMinutes: 120,
+      calculatedHourlyRate: 50,
+      overtimeMultiplier: 1,
+    }),
+    0,
+  );
 
   // 1.3 Hourly employee daily rate
   const hourlyRateCalc = calculateDailyRate({
@@ -135,16 +150,22 @@ function testIncomeTaxCalculations() {
   // 4.1 Income under tax exemption limit (<= 3333/month)
   // Synthetic progressive rates, supplied explicitly by the calling policy.
   const exampleBrackets = [
-    { min: 0, max: 3333, rate: 0.00 },
-    { min: 3333, max: 4583, rate: 0.10 },
+    { min: 0, max: 3333, rate: 0.0 },
+    { min: 3333, max: 4583, rate: 0.1 },
     { min: 4583, max: 6250, rate: 0.15 },
-    { min: 6250, max: 16666, rate: 0.20 },
+    { min: 6250, max: 16666, rate: 0.2 },
     { min: 16666, max: null, rate: 0.225 },
   ];
-  assert.throws(() => calculateIncomeTax({
-    minorUnits: 2,
-    isEnabled: true, hasIncomeTax: true, taxableIncome: 10000,
-  }), /Explicit tax brackets/);
+  assert.throws(
+    () =>
+      calculateIncomeTax({
+        minorUnits: 2,
+        isEnabled: true,
+        hasIncomeTax: true,
+        taxableIncome: 10000,
+      }),
+    /Explicit tax brackets/,
+  );
   const exempt = calculateIncomeTax({
     minorUnits: 2,
     isEnabled: true,
@@ -187,7 +208,7 @@ function testPayrollLinePriorityAndCaps() {
   // 5.1 Normal case: Total deductions well below 50% cap
   {
     const line = calculateEmployeePayrollLine({
-    minorUnits: 2,
+      minorUnits: 2,
       employeeId: 101,
       baseSalary: 10000,
       allowanceAmount: 2000,
@@ -201,7 +222,7 @@ function testPayrollLinePriorityAndCaps() {
       assetRecoveryDeduction: 0,
       otherDeductions: 100,
       scheduledLoanDeduction: 1000,
-      maxDeductionPct: 0.50,
+      maxDeductionPct: 0.5,
     });
 
     assert.equal(line.grossPay, 13000.0, 'إجمالي الراتب (10000 + 2000 + 500 + 500 = 13000)');
@@ -225,7 +246,7 @@ function testPayrollLinePriorityAndCaps() {
   // Net Pay: 6000 - (600 + 1000 + 1400) = 3000 (exactly 50% preserved!).
   {
     const line = calculateEmployeePayrollLine({
-    minorUnits: 2,
+      minorUnits: 2,
       employeeId: 102,
       baseSalary: 6000,
       allowanceAmount: 0,
@@ -239,7 +260,7 @@ function testPayrollLinePriorityAndCaps() {
       assetRecoveryDeduction: 0,
       otherDeductions: 0,
       scheduledLoanDeduction: 2000,
-      maxDeductionPct: 0.50,
+      maxDeductionPct: 0.5,
     });
 
     assert.equal(line.grossPay, 6000.0, 'إجمالي الراتب 6000');
@@ -261,7 +282,7 @@ function testPayrollLinePriorityAndCaps() {
   // Net Pay: 4000 - (400 + 1600) = 2000.
   {
     const line = calculateEmployeePayrollLine({
-    minorUnits: 2,
+      minorUnits: 2,
       employeeId: 103,
       baseSalary: 4000,
       allowanceAmount: 0,
@@ -275,7 +296,7 @@ function testPayrollLinePriorityAndCaps() {
       assetRecoveryDeduction: 0,
       otherDeductions: 0,
       scheduledLoanDeduction: 800,
-      maxDeductionPct: 0.50,
+      maxDeductionPct: 0.5,
     });
 
     assert.equal(line.grossPay, 4000.0, 'إجمالي الراتب 4000');
@@ -308,7 +329,7 @@ function testDoubleEntryPayrollRunReconciliation() {
     assetRecoveryDeduction: 150,
     otherDeductions: 100,
     scheduledLoanDeduction: 1500,
-    maxDeductionPct: 0.50,
+    maxDeductionPct: 0.5,
   });
 
   const line2: PayrollLineItemOutput = calculateEmployeePayrollLine({
@@ -326,7 +347,7 @@ function testDoubleEntryPayrollRunReconciliation() {
     assetRecoveryDeduction: 0,
     otherDeductions: 0,
     scheduledLoanDeduction: 1000,
-    maxDeductionPct: 0.50,
+    maxDeductionPct: 0.5,
   });
 
   const line3: PayrollLineItemOutput = calculateEmployeePayrollLine({
@@ -344,7 +365,7 @@ function testDoubleEntryPayrollRunReconciliation() {
     assetRecoveryDeduction: 0,
     otherDeductions: 0,
     scheduledLoanDeduction: 1500,
-    maxDeductionPct: 0.50,
+    maxDeductionPct: 0.5,
   });
 
   const reconciliation = reconcilePayrollRunJournalTotals([line1, line2, line3], 2);

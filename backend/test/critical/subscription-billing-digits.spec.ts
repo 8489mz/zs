@@ -104,35 +104,62 @@ async function serviceMain(): Promise<void> {
     `);
 
     async function seedTenant(tenantId: string, currency: string): Promise<void> {
-      await anyDb.insertInto('settings').values({ key: 'currency', value: currency, tenant_id: tenantId, account_id: tenantId }).execute();
+      await anyDb
+        .insertInto('settings')
+        .values({ key: 'currency', value: currency, tenant_id: tenantId, account_id: tenantId })
+        .execute();
       await anyDb
         .insertInto('currency_exchange_rates')
         .values({ tenant_id: tenantId, currency_code: currency, exchange_rate: 1, is_base: true })
         .execute();
     }
 
-    async function seedSubscription(tenantId: string, subId: string, qty: number, unitPrice: number, taxRate: number): Promise<void> {
+    async function seedSubscription(
+      tenantId: string,
+      subId: string,
+      qty: number,
+      unitPrice: number,
+      taxRate: number,
+    ): Promise<void> {
       await anyDb
         .insertInto('commercial_subscriptions')
         .values({
-          id: subId, tenant_id: tenantId, contract_number: `SUB-${subId}`, customer_id: 1,
-          billing_period: 'monthly', next_billing_date: '2026-01-01', auto_renew: true,
-          recurring_amount: 0, status: 'active', start_date: '2026-01-01', invoices_count: 0,
+          id: subId,
+          tenant_id: tenantId,
+          contract_number: `SUB-${subId}`,
+          customer_id: 1,
+          billing_period: 'monthly',
+          next_billing_date: '2026-01-01',
+          auto_renew: true,
+          recurring_amount: 0,
+          status: 'active',
+          start_date: '2026-01-01',
+          invoices_count: 0,
         })
         .execute();
       await anyDb
         .insertInto('commercial_subscription_lines')
         .values({
-          id: `line-${subId}`, tenant_id: tenantId, subscription_id: subId,
-          quantity: qty, unit_price: unitPrice, tax_rate: taxRate, total_price: 0,
+          id: `line-${subId}`,
+          tenant_id: tenantId,
+          subscription_id: subId,
+          quantity: qty,
+          unit_price: unitPrice,
+          tax_rate: taxRate,
+          total_price: 0,
         })
         .execute();
     }
 
     function authFor(tenantId: string): AuthContext {
       return {
-        userId: 1, sessionId: 'sess-spec', username: 'actor-1', role: 'admin',
-        permissions: [], tenantId, accountId: tenantId,
+        userId: 1,
+        sessionId: 'sess-spec',
+        username: 'actor-1',
+        role: 'admin',
+        permissions: [],
+        tenantId,
+        accountId: tenantId,
       } as unknown as AuthContext;
     }
 
@@ -142,7 +169,11 @@ async function serviceMain(): Promise<void> {
     const kwdService = new CommercialSubscriptionService(db);
     const kwdResult = await kwdService.generateDueInvoices(authFor('t-kwd'));
     assert.equal(kwdResult.generatedInvoices.length, 1);
-    const kwdSale = await anyDb.selectFrom('sales').selectAll().where('tenant_id', '=', 't-kwd').executeTakeFirstOrThrow();
+    const kwdSale = await anyDb
+      .selectFrom('sales')
+      .selectAll()
+      .where('tenant_id', '=', 't-kwd')
+      .executeTakeFirstOrThrow();
     assert.equal(Number(kwdSale.subtotal), 0.375);
     assert.equal(Number(kwdSale.tax_amount), 0.053);
     assert.equal(Number(kwdSale.total), 0.428);
@@ -152,7 +183,11 @@ async function serviceMain(): Promise<void> {
     await seedSubscription('t-egp', 'sub-egp', 5, 200, 14);
     const egpService = new CommercialSubscriptionService(db);
     await egpService.generateDueInvoices(authFor('t-egp'));
-    const egpSale = await anyDb.selectFrom('sales').selectAll().where('tenant_id', '=', 't-egp').executeTakeFirstOrThrow();
+    const egpSale = await anyDb
+      .selectFrom('sales')
+      .selectAll()
+      .where('tenant_id', '=', 't-egp')
+      .executeTakeFirstOrThrow();
     assert.equal(Number(egpSale.subtotal), 1000);
     assert.equal(Number(egpSale.tax_amount), 140);
     assert.equal(Number(egpSale.total), 1140);

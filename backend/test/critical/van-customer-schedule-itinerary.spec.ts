@@ -76,11 +76,7 @@ assert.equal(isCustomerScheduledForDay([], 'wednesday'), true);
 
 // 4. Timezone resolution
 const tzResult = getCurrentBusinessDay('Africa/Cairo');
-assert.ok(
-  ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(
-    tzResult.dayKey,
-  ),
-);
+assert.ok(['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(tzResult.dayKey));
 // 5. Rep-Specific Multi-Rep Schedules (e.g. Rep 21 on Sunday, Rep 22 on Thursday)
 import { extractAssignedRepIds } from '../../src/modules/delivery-reps/rep-target.engine';
 

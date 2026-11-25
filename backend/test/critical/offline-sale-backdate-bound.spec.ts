@@ -38,14 +38,9 @@ import { up as migration0325Up } from '../../src/database/migrations/20400000003
 const NOW = new Date('2026-11-14T12:00:00.000Z');
 const isoDaysAgo = (days: number, extraMs = 0): string =>
   new Date(NOW.getTime() - days * 24 * 60 * 60 * 1000 - extraMs).toISOString();
-const isoMinutesAhead = (minutes: number): string =>
-  new Date(NOW.getTime() + minutes * 60 * 1000).toISOString();
+const isoMinutesAhead = (minutes: number): string => new Date(NOW.getTime() + minutes * 60 * 1000).toISOString();
 
-assert.equal(
-  OFFLINE_CREATED_AT_MAX_AGE_MS,
-  7 * 24 * 60 * 60 * 1000,
-  'the offline past bound is 7 days in ms',
-);
+assert.equal(OFFLINE_CREATED_AT_MAX_AGE_MS, 7 * 24 * 60 * 60 * 1000, 'the offline past bound is 7 days in ms');
 
 // A backdate inside the window is still accepted with its business day.
 assert.ok(validateOfflineCreatedAt(isoDaysAgo(1), NOW) instanceof Date);
@@ -57,10 +52,7 @@ assert.throws(
   /OFFLINE_TIMESTAMP_INVALID/,
   'a year-2000 backdate must reject, never book into a past month',
 );
-assert.throws(
-  () => validateOfflineCreatedAt('1970-01-01T00:00:00.000Z', NOW),
-  /OFFLINE_TIMESTAMP_INVALID/,
-);
+assert.throws(() => validateOfflineCreatedAt('1970-01-01T00:00:00.000Z', NOW), /OFFLINE_TIMESTAMP_INVALID/);
 
 // Anything older than the window rejects, even by one second.
 assert.throws(
@@ -76,10 +68,7 @@ assert.throws(
 
 // The future bound is unchanged: +5min passes (skew allowance), +6min rejects.
 assert.ok(validateOfflineCreatedAt(isoMinutesAhead(5), NOW) instanceof Date);
-assert.throws(
-  () => validateOfflineCreatedAt(isoMinutesAhead(6), NOW),
-  /OFFLINE_TIMESTAMP_INVALID/,
-);
+assert.throws(() => validateOfflineCreatedAt(isoMinutesAhead(6), NOW), /OFFLINE_TIMESTAMP_INVALID/);
 assert.throws(
   () => validateOfflineCreatedAt(isoMinutesAhead(60), NOW),
   /OFFLINE_TIMESTAMP_INVALID/,
@@ -146,10 +135,10 @@ async function main() {
     // An offline sale row: claimed day (client, 1 day ago) + receipt instant (server, now).
     const claimedDay = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const receiptInstant = new Date().toISOString();
-    await pg.query(
-      `INSERT INTO sales (id, tenant_id, created_at, received_at) VALUES (1, 't1', $1, $2)`,
-      [claimedDay, receiptInstant],
-    );
+    await pg.query(`INSERT INTO sales (id, tenant_id, created_at, received_at) VALUES (1, 't1', $1, $2)`, [
+      claimedDay,
+      receiptInstant,
+    ]);
     const row = await pg.query<{ created_at: string; received_at: string }>(
       `SELECT created_at, received_at FROM sales WHERE id = 1`,
     );
@@ -162,13 +151,14 @@ async function main() {
 
     // An online sale row: no stamps supplied — received_at stays NULL.
     await pg.query(`INSERT INTO sales (id, tenant_id) VALUES (2, 't1')`);
-    const online = await pg.query<{ received_at: string | null }>(
-      `SELECT received_at FROM sales WHERE id = 2`,
-    );
+    const online = await pg.query<{ received_at: string | null }>(`SELECT received_at FROM sales WHERE id = 2`);
     assert.equal(online.rows[0].received_at, null, 'an online sale carries no received_at');
   } finally {
     await db.destroy();
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

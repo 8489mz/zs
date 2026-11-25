@@ -35,7 +35,14 @@ import { Database } from '../../src/database/database.types';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { AccountingService } from '../../src/modules/accounting/accounting.service';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['accounting'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['accounting'],
+} as unknown as AuthContext;
 
 async function createDb(): Promise<Kysely<Database>> {
   const pglite = new PGlite();
@@ -90,10 +97,10 @@ async function main(): Promise<void> {
     await assertAccountIdNotNull(db);
     const service = new AccountingService(db as never, {} as never);
 
-    const root = await service.createAccount(
+    const root = (await service.createAccount(
       { code: '1010', nameAr: 'الصندوق', nameEn: 'Cash', accountType: 'asset', normalBalance: 'debit' } as never,
       AUTH,
-    ) as { ok: boolean; accountId: string };
+    )) as { ok: boolean; accountId: string };
     assert.equal(root.ok, true);
     const rootId = Number(root.accountId);
     assert.ok(Number.isSafeInteger(rootId) && rootId > 0, 'root account id returned');
@@ -105,10 +112,17 @@ async function main(): Promise<void> {
     assert.equal(rootRow.rows[0]?.account_id, 'a1');
     assert.equal(rootRow.rows[0]?.code, '1010');
 
-    const child = await service.createAccount(
-      { code: '1011', nameAr: 'صندوق فرعي', nameEn: 'Petty Cash', accountType: 'asset', normalBalance: 'debit', parentId: rootId } as never,
+    const child = (await service.createAccount(
+      {
+        code: '1011',
+        nameAr: 'صندوق فرعي',
+        nameEn: 'Petty Cash',
+        accountType: 'asset',
+        normalBalance: 'debit',
+        parentId: rootId,
+      } as never,
       AUTH,
-    ) as { ok: boolean; accountId: string };
+    )) as { ok: boolean; accountId: string };
     assert.equal(child.ok, true);
     const childRow = await sql<{ account_id: string; parent_id: number }>`
       SELECT account_id, parent_id FROM accounting_accounts WHERE id = ${Number(child.accountId)}
@@ -117,10 +131,11 @@ async function main(): Promise<void> {
     assert.equal(Number(childRow.rows[0]?.parent_id), rootId);
 
     await assert.rejects(
-      () => service.createAccount(
-        { code: '1010', nameAr: 'مكرر', nameEn: 'Duplicate', accountType: 'asset', normalBalance: 'debit' } as never,
-        AUTH,
-      ),
+      () =>
+        service.createAccount(
+          { code: '1010', nameAr: 'مكرر', nameEn: 'Duplicate', accountType: 'asset', normalBalance: 'debit' } as never,
+          AUTH,
+        ),
       /Account code already exists/,
     );
 

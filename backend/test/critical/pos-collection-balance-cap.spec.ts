@@ -89,8 +89,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const ADMIN = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['purchases'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['purchases'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -125,24 +130,69 @@ async function seedFoundation(db: Kysely<Database>, customerBalance: number): Pr
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   for (const [id, code] of [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [2110, '2110'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [2110, '2110'],
   ] as Array<[number, string]>) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, supplier_payable_account_id: 2110,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'عميل اختبار', phone: '010',
-    balance: customerBalance, credit_limit: 0, is_credit_blocked: false, store_credit_balance: 0,
-    loyalty_points: 0, is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      supplier_payable_account_id: 2110,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'عميل اختبار',
+      phone: '010',
+      balance: customerBalance,
+      credit_limit: 0,
+      is_credit_blocked: false,
+      store_credit_balance: 0,
+      loyalty_points: 0,
+      is_active: true,
+    })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): { write: PurchasesWriteService } {
@@ -201,11 +251,20 @@ async function main(): Promise<void> {
       assert.equal(Number(credit.account_id), 1130);
       assert.equal(Number(credit.credit), 150);
       const entry = await anyDb.selectFrom('journal_entries').select('description').executeTakeFirstOrThrow();
-      assert.ok(String(entry.description).includes(docNo), `journal description must carry the REC docNo (got: ${entry.description})`);
+      assert.ok(
+        String(entry.description).includes(docNo),
+        `journal description must carry the REC docNo (got: ${entry.description})`,
+      );
       const ledger = await anyDb.selectFrom('customer_ledger').select('note').executeTakeFirstOrThrow();
-      assert.ok(String(ledger.note).includes(docNo), `customer ledger note must carry the REC docNo (got: ${ledger.note})`);
+      assert.ok(
+        String(ledger.note).includes(docNo),
+        `customer ledger note must carry the REC docNo (got: ${ledger.note})`,
+      );
       const treasury = await anyDb.selectFrom('treasury_transactions').select('note').executeTakeFirstOrThrow();
-      assert.ok(String(treasury.note).includes(docNo), `treasury note must carry the REC docNo (got: ${treasury.note})`);
+      assert.ok(
+        String(treasury.note).includes(docNo),
+        `treasury note must carry the REC docNo (got: ${treasury.note})`,
+      );
     } finally {
       await db.destroy();
     }
@@ -226,12 +285,8 @@ async function main(): Promise<void> {
       assert.equal((first as any).ok, true);
       assert.equal(await customerBalance(db), 0);
       await assert.rejects(
-        () => write.createCustomerPayment(
-          { customerId: 1, amount: 50, paymentChannel: 'cash' } as any,
-          ADMIN,
-        ),
-        (err: any) => isBalanceCapRefusal(err)
-          && String(err.message || '').includes('50'),
+        () => write.createCustomerPayment({ customerId: 1, amount: 50, paymentChannel: 'cash' } as any, ADMIN),
+        (err: any) => isBalanceCapRefusal(err) && String(err.message || '').includes('50'),
         'a second full collection must be refused with the total-cap code naming the amount',
       );
       assert.equal(await countRows(db, 'customer_payments'), 1, 'no second receipt row was written');
@@ -252,13 +307,11 @@ async function main(): Promise<void> {
       await seedFoundation(db, 100);
       const { write } = buildServices(db);
       await assert.rejects(
-        () => write.createCustomerPayment(
-          { customerId: 1, amount: 150, paymentChannel: 'cash' } as any,
-          ADMIN,
-        ),
-        (err: any) => isBalanceCapRefusal(err)
-          && String(err.message || '').includes('150')
-          && String(err.message || '').includes('100'),
+        () => write.createCustomerPayment({ customerId: 1, amount: 150, paymentChannel: 'cash' } as any, ADMIN),
+        (err: any) =>
+          isBalanceCapRefusal(err) &&
+          String(err.message || '').includes('150') &&
+          String(err.message || '').includes('100'),
         'an over-collection must be refused with the total-cap code naming both amounts',
       );
       assert.equal(await countRows(db, 'customer_payments'), 0);
@@ -280,10 +333,7 @@ async function main(): Promise<void> {
       await seedFoundation(db, 0);
       const { write } = buildServices(db);
       await assert.rejects(
-        () => write.createCustomerPayment(
-          { customerId: 1, amount: 10, paymentChannel: 'cash' } as any,
-          ADMIN,
-        ),
+        () => write.createCustomerPayment({ customerId: 1, amount: 10, paymentChannel: 'cash' } as any, ADMIN),
         (err: any) => isBalanceCapRefusal(err),
         'a collection on a zero balance must be refused',
       );
@@ -300,10 +350,7 @@ async function main(): Promise<void> {
       await seedFoundation(db, -50);
       const { write } = buildServices(db);
       await assert.rejects(
-        () => write.createCustomerPayment(
-          { customerId: 1, amount: 10, paymentChannel: 'cash' } as any,
-          ADMIN,
-        ),
+        () => write.createCustomerPayment({ customerId: 1, amount: 10, paymentChannel: 'cash' } as any, ADMIN),
         (err: any) => isBalanceCapRefusal(err),
         'a collection on a negative balance must be refused',
       );
@@ -340,11 +387,23 @@ async function main(): Promise<void> {
   // write, and the journal posting names the receipt number.
   {
     const here = __dirname;
-    const serviceSrc = readFileSync(resolve(here, '../../src/modules/purchases/services/purchases-write-customer-payments.service.ts'), 'utf8');
-    assert.ok(serviceSrc.includes('REP_COLLECTION_EXCEEDS_TOTAL_BALANCE'), 'the customer-payment service uses the total-cap error code');
+    const serviceSrc = readFileSync(
+      resolve(here, '../../src/modules/purchases/services/purchases-write-customer-payments.service.ts'),
+      'utf8',
+    );
+    assert.ok(
+      serviceSrc.includes('REP_COLLECTION_EXCEEDS_TOTAL_BALANCE'),
+      'the customer-payment service uses the total-cap error code',
+    );
     assert.ok(serviceSrc.includes('INV-REP-COLLECTION-TOTAL-BALANCE-CAP'), 'the service names the invariant');
     assert.ok(!serviceSrc.includes('isAdvance'), 'no silent-advance branch remains on this path');
-    const postingSrc = readFileSync(resolve(here, '../../src/modules/accounting/services/purchases-treasury-posting/post-customer-payment-expense.ts'), 'utf8');
+    const postingSrc = readFileSync(
+      resolve(
+        here,
+        '../../src/modules/accounting/services/purchases-treasury-posting/post-customer-payment-expense.ts',
+      ),
+      'utf8',
+    );
     assert.ok(postingSrc.includes('docNo'), 'the customer-payment posting names the receipt number');
     console.log('  source pins passed');
   }
@@ -359,10 +418,19 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db, 0);
       const anyDb = db as any;
-      await anyDb.insertInto('maritime_jobs').values({
-        id: 1, tenant_id: TENANT, customer_id: 1, job_number: 'JOB-260101-0001',
-        client_invoiced_total: 0, client_paid_total: 0, payment_status: 'unpaid', status: 'active',
-      }).execute();
+      await anyDb
+        .insertInto('maritime_jobs')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          customer_id: 1,
+          job_number: 'JOB-260101-0001',
+          client_invoiced_total: 0,
+          client_paid_total: 0,
+          payment_status: 'unpaid',
+          status: 'active',
+        })
+        .execute();
       const { write } = buildServices(db);
       const result = await write.createCustomerPayment(
         { customerId: 1, amount: 100, paymentChannel: 'cash', jobId: 1 } as any,
@@ -371,8 +439,15 @@ async function main(): Promise<void> {
       assert.equal((result as any).ok, true);
       assert.equal(Number((result as any).jobId), 1);
       assert.equal(String((result as any).jobNumber), 'JOB-260101-0001');
-      assert.equal(await customerBalance(db), -100, 'the deposit takes the customer balance negative as an advance against the job');
-      const job = await anyDb.selectFrom('maritime_jobs').select(['client_paid_total', 'payment_status']).executeTakeFirstOrThrow();
+      assert.equal(
+        await customerBalance(db),
+        -100,
+        'the deposit takes the customer balance negative as an advance against the job',
+      );
+      const job = await anyDb
+        .selectFrom('maritime_jobs')
+        .select(['client_paid_total', 'payment_status'])
+        .executeTakeFirstOrThrow();
       assert.equal(Number(job.client_paid_total), 100);
       assert.equal(String(job.payment_status), 'partially_paid');
       assert.equal(await countRows(db, 'maritime_job_milestones'), 1, 'a PAYMENT milestone is recorded');
@@ -391,18 +466,24 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db, 100);
       const anyDb = db as any;
-      await anyDb.insertInto('maritime_jobs').values({
-        id: 1, tenant_id: TENANT, customer_id: 1, job_number: 'JOB-260101-0002',
-        client_invoiced_total: 100, client_paid_total: 60, payment_status: 'partially_paid', status: 'active',
-      }).execute();
+      await anyDb
+        .insertInto('maritime_jobs')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          customer_id: 1,
+          job_number: 'JOB-260101-0002',
+          client_invoiced_total: 100,
+          client_paid_total: 60,
+          payment_status: 'partially_paid',
+          status: 'active',
+        })
+        .execute();
       const { write } = buildServices(db);
       await assert.rejects(
-        () => write.createCustomerPayment(
-          { customerId: 1, amount: 50, paymentChannel: 'cash', jobId: 1 } as any,
-          ADMIN,
-        ),
-        (err: any) => isBalanceCapRefusal(err)
-          && String(err.message || '').includes('JOB-260101-0002'),
+        () =>
+          write.createCustomerPayment({ customerId: 1, amount: 50, paymentChannel: 'cash', jobId: 1 } as any, ADMIN),
+        (err: any) => isBalanceCapRefusal(err) && String(err.message || '').includes('JOB-260101-0002'),
         'a job payment above the remaining invoiced amount must be refused with the total-cap code naming the job',
       );
       assert.equal(await countRows(db, 'customer_payments'), 0, 'no receipt row was written');
@@ -420,17 +501,29 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db, 100);
       const anyDb = db as any;
-      await anyDb.insertInto('maritime_jobs').values({
-        id: 1, tenant_id: TENANT, customer_id: 1, job_number: 'JOB-260101-0003',
-        client_invoiced_total: 100, client_paid_total: 60, payment_status: 'partially_paid', status: 'active',
-      }).execute();
+      await anyDb
+        .insertInto('maritime_jobs')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          customer_id: 1,
+          job_number: 'JOB-260101-0003',
+          client_invoiced_total: 100,
+          client_paid_total: 60,
+          payment_status: 'partially_paid',
+          status: 'active',
+        })
+        .execute();
       const { write } = buildServices(db);
       const result = await write.createCustomerPayment(
         { customerId: 1, amount: 40, paymentChannel: 'cash', jobId: 1 } as any,
         ADMIN,
       );
       assert.equal((result as any).ok, true);
-      const job = await anyDb.selectFrom('maritime_jobs').select(['client_paid_total', 'payment_status']).executeTakeFirstOrThrow();
+      const job = await anyDb
+        .selectFrom('maritime_jobs')
+        .select(['client_paid_total', 'payment_status'])
+        .executeTakeFirstOrThrow();
       assert.equal(Number(job.client_paid_total), 100);
       assert.equal(String(job.payment_status), 'paid');
       assert.equal(await customerBalance(db), 60);

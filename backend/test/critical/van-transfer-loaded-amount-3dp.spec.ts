@@ -91,22 +91,36 @@ async function makeAcceptDb(opts: { tenant: string; currency: 'KWD' | 'EGP' }): 
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   await pg.exec(ACCEPT_SCHEMA);
   await sql`INSERT INTO settings VALUES (${tenant}, 'currency', ${'"' + currency + '"'})`.execute(db);
-  await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES (${tenant}, ${currency}, 1, true), (${tenant}, 'USD', 50, false)`.execute(db);
+  await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES (${tenant}, ${currency}, 1, true), (${tenant}, 'USD', 50, false)`.execute(
+    db,
+  );
   // One product, retail 33.33, cost 10; 0.7 units sit in the sender
   // van location (11), none in the receiver van location (12).
   // Global stock equals the location sum (0.7) so the ledger's
   // unassigned-balance reconciliation inserts a zero row, not a
   // phantom quantity.
   await sql`INSERT INTO products VALUES (1, ${tenant}, ${tenant}, 'Item', 0.7, 0, 33.33, 10, NOW())`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES (${tenant}, ${tenant}, 1, NULL, 11, 0.7, 0), (${tenant}, ${tenant}, 1, NULL, 12, 0, 0)`.execute(db);
-  await sql`INSERT INTO van_sales_trips (id, tenant_id, account_id, rep_id, van_location_id, source_warehouse_id, status, loaded_amount) VALUES (1, ${tenant}, ${tenant}, 101, 11, 10, 'open', 100), (2, ${tenant}, ${tenant}, 102, 12, 10, 'open', 0)`.execute(db);
-  await sql`INSERT INTO van_stock_transfers (id, tenant_id, account_id, transfer_no, from_rep_id, from_trip_id, from_van_location_id, to_rep_id, to_trip_id, to_van_location_id, status, total_items_count, total_qty) VALUES (1, ${tenant}, ${tenant}, 'XFR-260918-0001', 101, 1, 11, 102, 2, 12, 'pending', 1, 0.7)`.execute(db);
-  await sql`INSERT INTO van_stock_transfer_items (transfer_id, tenant_id, product_id, qty, unit_cost, unit_price) VALUES (1, ${tenant}, 1, 0.7, 10, 33.33)`.execute(db);
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES (${tenant}, ${tenant}, 1, NULL, 11, 0.7, 0), (${tenant}, ${tenant}, 1, NULL, 12, 0, 0)`.execute(
+    db,
+  );
+  await sql`INSERT INTO van_sales_trips (id, tenant_id, account_id, rep_id, van_location_id, source_warehouse_id, status, loaded_amount) VALUES (1, ${tenant}, ${tenant}, 101, 11, 10, 'open', 100), (2, ${tenant}, ${tenant}, 102, 12, 10, 'open', 0)`.execute(
+    db,
+  );
+  await sql`INSERT INTO van_stock_transfers (id, tenant_id, account_id, transfer_no, from_rep_id, from_trip_id, from_van_location_id, to_rep_id, to_trip_id, to_van_location_id, status, total_items_count, total_qty) VALUES (1, ${tenant}, ${tenant}, 'XFR-260918-0001', 101, 1, 11, 102, 2, 12, 'pending', 1, 0.7)`.execute(
+    db,
+  );
+  await sql`INSERT INTO van_stock_transfer_items (transfer_id, tenant_id, product_id, qty, unit_cost, unit_price) VALUES (1, ${tenant}, 1, 0.7, 10, 33.33)`.execute(
+    db,
+  );
   return db;
 }
 
 async function tripLoaded(db: Kysely<Database>, tripId: number): Promise<number> {
-  const row = await db.selectFrom('van_sales_trips' as any).select(['loaded_amount' as any]).where('id', '=', tripId).executeTakeFirst();
+  const row = await db
+    .selectFrom('van_sales_trips' as any)
+    .select(['loaded_amount' as any])
+    .where('id', '=', tripId)
+    .executeTakeFirst();
   return Number((row as any).loaded_amount);
 }
 
@@ -152,8 +166,14 @@ async function main(): Promise<void> {
       // Pre-migration pin — the truncation this migration removes:
       // 100.125 stores as 100.13 on the 15,2 schema.
       await sql`INSERT INTO "van_sales_trips" (id, tenant_id, loaded_amount) VALUES (1, 't1', 100.125)`.execute(db);
-      const { rows: oldRows } = await sql<{ loaded_amount: unknown }>`SELECT loaded_amount FROM "van_sales_trips" WHERE id = 1`.execute(db);
-      assert.equal(String(oldRows[0].loaded_amount), '100.13', 'on the unpatched 15,2 schema a 100.125 loaded_amount must store as 100.13 (the truncation)');
+      const { rows: oldRows } = await sql<{
+        loaded_amount: unknown;
+      }>`SELECT loaded_amount FROM "van_sales_trips" WHERE id = 1`.execute(db);
+      assert.equal(
+        String(oldRows[0].loaded_amount),
+        '100.13',
+        'on the unpatched 15,2 schema a 100.125 loaded_amount must store as 100.13 (the truncation)',
+      );
       await sql`DELETE FROM "van_sales_trips" WHERE id = 1`.execute(db);
       // up() widens to NUMERIC(16,3): precision 16 keeps the 13
       // integer digits (15 - 2 + 3).
@@ -173,12 +193,24 @@ async function main(): Promise<void> {
       assert.equal(postDown.scale, 3, 'after down() scale must stay 3');
       // A 3dp value round-trips exactly after the migration.
       await sql`INSERT INTO "van_sales_trips" (id, tenant_id, loaded_amount) VALUES (2, 't1', 23.331)`.execute(db);
-      const { rows: newRows } = await sql<{ loaded_amount: unknown }>`SELECT loaded_amount FROM "van_sales_trips" WHERE id = 2`.execute(db);
-      assert.equal(String(newRows[0].loaded_amount), '23.331', 'loaded_amount must round-trip 23.331 exactly after the migration');
+      const { rows: newRows } = await sql<{
+        loaded_amount: unknown;
+      }>`SELECT loaded_amount FROM "van_sales_trips" WHERE id = 2`.execute(db);
+      assert.equal(
+        String(newRows[0].loaded_amount),
+        '23.331',
+        'loaded_amount must round-trip 23.331 exactly after the migration',
+      );
       // A pre-existing 2dp value is preserved by the widening.
       await sql`INSERT INTO "van_sales_trips" (id, tenant_id, loaded_amount) VALUES (3, 't1', 100.13)`.execute(db);
-      const { rows: keptRows } = await sql<{ loaded_amount: unknown }>`SELECT loaded_amount FROM "van_sales_trips" WHERE id = 3`.execute(db);
-      assert.equal(String(keptRows[0].loaded_amount), '100.130', 'a pre-existing 100.13 must read back as 100.130 after widening');
+      const { rows: keptRows } = await sql<{
+        loaded_amount: unknown;
+      }>`SELECT loaded_amount FROM "van_sales_trips" WHERE id = 3`.execute(db);
+      assert.equal(
+        String(keptRows[0].loaded_amount),
+        '100.130',
+        'a pre-existing 100.13 must read back as 100.130 after widening',
+      );
     } finally {
       await db.destroy();
     }
@@ -239,16 +271,27 @@ async function main(): Promise<void> {
       path.join(REPO_ROOT, 'backend', 'src', 'modules', 'delivery-reps', 'services', 'van-transfers.service.ts'),
       'utf8',
     );
-    const stripped = serviceSrc
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/(^|\s)\/\/.*$/gm, '$1');
+    const stripped = serviceSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
     const toFixed2 = (stripped.match(/\.toFixed\(\s*2\s*\)/g) || []).length;
     assert.equal(toFixed2, 0, `the service must keep zero hardcoded 2dp rounding sites, got ${toFixed2}`);
-    assert.ok(stripped.includes('roundMoney(totalTransferRetailValue, digits)'), 'the accept path must round through roundMoney at tenant digits');
-    assert.ok(stripped.includes("tenantBaseCurrency(trx as unknown as Kysely<Database>, tenantId)"), 'the accept path must resolve digits from the tenant base currency on the transaction');
-    const files = fs.readdirSync(MIGRATIONS_DIR).filter((n) => n.endsWith('.ts') && !n.endsWith('.d.ts')).sort();
+    assert.ok(
+      stripped.includes('roundMoney(totalTransferRetailValue, digits)'),
+      'the accept path must round through roundMoney at tenant digits',
+    );
+    assert.ok(
+      stripped.includes('tenantBaseCurrency(trx as unknown as Kysely<Database>, tenantId)'),
+      'the accept path must resolve digits from the tenant base currency on the transaction',
+    );
+    const files = fs
+      .readdirSync(MIGRATIONS_DIR)
+      .filter((n) => n.endsWith('.ts') && !n.endsWith('.d.ts'))
+      .sort();
     assert.ok(files.includes(MIGRATION_FILE), 'the 0338 migration file must exist in the migrations directory');
-    assert.equal(files[files.length - 1], HIGHEST_MIGRATION_FILE, 'the 0342 migration must be the highest-numbered migration on disk');
+    assert.equal(
+      files[files.length - 1],
+      HIGHEST_MIGRATION_FILE,
+      'the 0342 migration must be the highest-numbered migration on disk',
+    );
     const touching: string[] = [];
     for (const file of files) {
       const src = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
@@ -259,8 +302,12 @@ async function main(): Promise<void> {
       ['2040000000045', '2040000000338'],
       'only 0045 and 0338 may mention loaded_amount',
     );
-    const specs = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'backend', 'scripts', 'critical-specs.json'), 'utf8')).specs as string[];
-    assert.ok(specs.includes('test/critical/van-transfer-loaded-amount-3dp.spec.ts'), 'this spec must be wired into test:critical');
+    const specs = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'backend', 'scripts', 'critical-specs.json'), 'utf8'))
+      .specs as string[];
+    assert.ok(
+      specs.includes('test/critical/van-transfer-loaded-amount-3dp.spec.ts'),
+      'this spec must be wired into test:critical',
+    );
     const invariants = fs.readFileSync(path.join(REPO_ROOT, 'ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(
       invariants.split('INV-VAN-TRANSFER-LOADED-AMOUNT-3DP').length - 1,
@@ -269,7 +316,9 @@ async function main(): Promise<void> {
     );
   }
 
-  console.log('van-transfer-loaded-amount-3dp: all cases passed (migration NUMERIC(16,3), KWD 76.669/23.331, EGP 76.67/23.33 unchanged)');
+  console.log(
+    'van-transfer-loaded-amount-3dp: all cases passed (migration NUMERIC(16,3), KWD 76.669/23.331, EGP 76.67/23.33 unchanged)',
+  );
 }
 
 main().catch((error) => {

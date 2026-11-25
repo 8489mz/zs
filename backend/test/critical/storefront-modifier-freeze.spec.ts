@@ -150,51 +150,148 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT, slug: 'test10k', activity_type: 'retail' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'taxRate', value: '14' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2115, '2115'], [2120, '2120'], [4100, '4100'], [4200, '4200'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2115, '2115'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4200, '4200'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('cashier_shifts').values({
-    tenant_id: TENANT, account_id: ACCOUNT, opened_by: 1, status: 'open', branch_id: 1,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      opened_by: 1,
+      status: 'open',
+      branch_id: 1,
+    })
+    .execute();
   // Product 101: the meal, 10 on hand — the modifier contract's line product.
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Meal 101',
-    stock_qty: 10, cost_price: 10, retail_price: 50,
-    wholesale_price: 50, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 10,
-  }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Store Rep',
-    phone: null, is_active: true, rep_type: 'store_fleet',
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Meal 101',
+      stock_qty: 10,
+      cost_price: 10,
+      retail_price: 50,
+      wholesale_price: 50,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 10,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Store Rep',
+      phone: null,
+      is_active: true,
+      rep_type: 'store_fleet',
+    })
+    .execute();
   // Modifier truth at placement: option 201 "Extra cheese", price 10,
   // group 301 "Extras" (mandatory, min 1), linked to product 101.
-  await anyDb.insertInto('pos_modifier_groups').values({
-    id: 301, tenant_id: TENANT, name: 'Extras', selection_type: 'multiple',
-    is_mandatory: true, min_selections: 1, max_selections: 10, is_active: true,
-  }).execute();
-  await anyDb.insertInto('product_pos_modifiers').values({
-    id: 1, tenant_id: TENANT, product_id: 101, modifier_group_id: 301,
-  }).execute();
-  await anyDb.insertInto('pos_modifier_options').values({
-    id: 201, tenant_id: TENANT, price: 10, group_id: 301, component_product_id: null, consumption_qty: 1,
-  }).execute();
+  await anyDb
+    .insertInto('pos_modifier_groups')
+    .values({
+      id: 301,
+      tenant_id: TENANT,
+      name: 'Extras',
+      selection_type: 'multiple',
+      is_mandatory: true,
+      min_selections: 1,
+      max_selections: 10,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_pos_modifiers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      product_id: 101,
+      modifier_group_id: 301,
+    })
+    .execute();
+  await anyDb
+    .insertInto('pos_modifier_options')
+    .values({
+      id: 201,
+      tenant_id: TENANT,
+      price: 10,
+      group_id: 301,
+      component_product_id: null,
+      consumption_qty: 1,
+    })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): { storefront: StorefrontService; sales: SalesService } {
@@ -216,8 +313,16 @@ function buildServices(db: Kysely<Database>): { storefront: StorefrontService; s
   const planFeatures = { hasFeature: (_planId: unknown, _extra: unknown, feature: string) => feature === 'restaurant' };
   const returnsStub = {};
   const salesWrite = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const salesService = new SalesService(query, salesWrite);
   const storefront = new StorefrontService(db, salesService, {} as never, {} as never);
@@ -230,52 +335,89 @@ async function seedSettings(db: Kysely<Database>, entries: Array<[string, string
   }
 }
 
-async function seedOrder(
-  db: Kysely<Database>,
-  overrides: Record<string, unknown>,
-): Promise<void> {
+async function seedOrder(db: Kysely<Database>, overrides: Record<string, unknown>): Promise<void> {
   const base: Record<string, unknown> = {
-    id: 77, tenant_id: TENANT, account_id: ACCOUNT, order_number: 'ON-1',
-    customer_name: 'Online Customer', customer_phone: '01012345678', customer_address: 'Cairo',
-    items_json: JSON.stringify([{
-      productId: 101, quantity: 1, unitPrice: 50, total: 60,
-      modifiers: [{ optionId: 201, productId: 0, name: 'Extra cheese', price: 10, qty: 1, groupId: 301 }],
-    }]),
-    subtotal: 60, delivery_fee: 0, total_amount: 60, status: 'pending',
-    payment_method: 'instapay_wallet', payment_status: 'paid', gateway_provider: 'manual',
-    paid_at: new Date(), fulfillment_type: 'delivery', branch_id: 1, sale_id: null,
-    discount_amount: 0, coupon_code: null,
+    id: 77,
+    tenant_id: TENANT,
+    account_id: ACCOUNT,
+    order_number: 'ON-1',
+    customer_name: 'Online Customer',
+    customer_phone: '01012345678',
+    customer_address: 'Cairo',
+    items_json: JSON.stringify([
+      {
+        productId: 101,
+        quantity: 1,
+        unitPrice: 50,
+        total: 60,
+        modifiers: [{ optionId: 201, productId: 0, name: 'Extra cheese', price: 10, qty: 1, groupId: 301 }],
+      },
+    ]),
+    subtotal: 60,
+    delivery_fee: 0,
+    total_amount: 60,
+    status: 'pending',
+    payment_method: 'instapay_wallet',
+    payment_status: 'paid',
+    gateway_provider: 'manual',
+    paid_at: new Date(),
+    fulfillment_type: 'delivery',
+    branch_id: 1,
+    sale_id: null,
+    discount_amount: 0,
+    coupon_code: null,
   };
-  await (db as any).insertInto('online_orders').values({ ...base, ...overrides }).execute();
+  await (db as any)
+    .insertInto('online_orders')
+    .values({ ...base, ...overrides })
+    .execute();
 }
 
 async function readOrder(db: Kysely<Database>, orderId: number): Promise<any> {
-  return (db as any).selectFrom('online_orders').selectAll()
-    .where('id', '=', orderId).executeTakeFirstOrThrow();
+  return (db as any).selectFrom('online_orders').selectAll().where('id', '=', orderId).executeTakeFirstOrThrow();
 }
 
 async function readSale(db: Kysely<Database>, saleId: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll()
-    .where('id', '=', saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function journalTotals(db: Kysely<Database>, saleId: number): Promise<{ debit: number; credit: number }> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', 'sale').where('source_id', '=', saleId).execute();
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', 'sale')
+    .where('source_id', '=', saleId)
+    .execute();
   assert.equal(entries.length, 1, 'exactly one posted sale journal');
-  const rows = await (db as any).selectFrom('journal_entry_lines').select(['debit', 'credit'])
-    .where('journal_entry_id', '=', entries[0].id).execute();
-  return rows.reduce((acc: { debit: number; credit: number }, row: any) => ({
-    debit: acc.debit + Number(row.debit || 0),
-    credit: acc.credit + Number(row.credit || 0),
-  }), { debit: 0, credit: 0 });
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['debit', 'credit'])
+    .where('journal_entry_id', '=', entries[0].id)
+    .execute();
+  return rows.reduce(
+    (acc: { debit: number; credit: number }, row: any) => ({
+      debit: acc.debit + Number(row.debit || 0),
+      credit: acc.credit + Number(row.credit || 0),
+    }),
+    { debit: 0, credit: 0 },
+  );
 }
 
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice', 'canDiscount'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice', 'canDiscount'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function setOptionPrice(db: Kysely<Database>, price: number): Promise<void> {
@@ -359,10 +501,29 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await setOptionPrice(db, 25);
       const { sales } = buildServices(db);
-      const posted: any = await sales.createSale({
-        items: [{ productId: 101, qty: 1, quantity: 1, price: 50, unitPrice: 50, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail', discount: 0, modifiers: [{ optionId: 201, productId: 0, name: 'Extra cheese', price: 10, qty: 1, groupId: 301 }] }],
-        branchId: 1, locationId: 10, paymentType: 'cash', orderType: 'takeaway',
-      } as any, adminAuth);
+      const posted: any = await sales.createSale(
+        {
+          items: [
+            {
+              productId: 101,
+              qty: 1,
+              quantity: 1,
+              price: 50,
+              unitPrice: 50,
+              unitName: 'قطعة',
+              unitMultiplier: 1,
+              priceType: 'retail',
+              discount: 0,
+              modifiers: [{ optionId: 201, productId: 0, name: 'Extra cheese', price: 10, qty: 1, groupId: 301 }],
+            },
+          ],
+          branchId: 1,
+          locationId: 10,
+          paymentType: 'cash',
+          orderType: 'takeaway',
+        } as any,
+        adminAuth,
+      );
       const sale = await readSale(db, Number(posted.sale.id));
       assert.equal(Number(sale.total), 75, 'a walk-in sale re-prices the modifier to the current 25 (50 + 25)');
       assert.equal(Number(sale.paid_amount), 75, 'the walk-in sale is paid at its re-priced total');
@@ -379,7 +540,10 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedSettings(db, [['storefront_allow_out_of_stock', 'true']]);
       await seedOrder(db, {
-        payment_method: 'cod', payment_status: 'pending', gateway_provider: null, paid_at: null,
+        payment_method: 'cod',
+        payment_status: 'pending',
+        gateway_provider: null,
+        paid_at: null,
       });
       await setOptionPrice(db, 25);
       const { storefront } = buildServices(db);

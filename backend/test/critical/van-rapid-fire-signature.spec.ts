@@ -72,8 +72,13 @@ function buildService(opts: { recentSale: any; recentItems: any[]; internalCalls
   service.executeFieldSaleInternal = async (...args: any[]) => {
     opts.internalCalls.push(args);
     return {
-      ok: true, saleId: 999, docNo: 'NEW-1', total: 100,
-      paymentMethod: 'cash', customerName: 'Customer', itemsCount: 2,
+      ok: true,
+      saleId: 999,
+      docNo: 'NEW-1',
+      total: 100,
+      paymentMethod: 'cash',
+      customerName: 'Customer',
+      itemsCount: 2,
     };
   };
   return service;
@@ -104,12 +109,23 @@ async function main() {
     const internalCalls: any[] = [];
     const service = buildService({
       recentSale: recentSaleRow,
-      recentItems: [{ product_id: 1, qty: 2 }, { product_id: 2, qty: 1 }],
+      recentItems: [
+        { product_id: 1, qty: 2 },
+        { product_id: 2, qty: 1 },
+      ],
       internalCalls,
     });
     const result = await service.executeFieldSale(
-      4, 't1', 'a1',
-      payloadFor([{ productId: 9, qty: 2, unitPrice: 10 }, { productId: 8, qty: 1, unitPrice: 10 }], 'case1'),
+      4,
+      't1',
+      'a1',
+      payloadFor(
+        [
+          { productId: 9, qty: 2, unitPrice: 10 },
+          { productId: 8, qty: 1, unitPrice: 10 },
+        ],
+        'case1',
+      ),
     );
     assert.equal(result.saleId, 999, 'a different sale must be created, not merged into the recent one');
     assert.equal(internalCalls.length, 1);
@@ -121,12 +137,23 @@ async function main() {
     const internalCalls: any[] = [];
     const service = buildService({
       recentSale: recentSaleRow,
-      recentItems: [{ product_id: 1, qty: 2 }, { product_id: 2, qty: 1 }],
+      recentItems: [
+        { product_id: 1, qty: 2 },
+        { product_id: 2, qty: 1 },
+      ],
       internalCalls,
     });
     const result = await service.executeFieldSale(
-      4, 't1', 'a1',
-      payloadFor([{ productId: 1, qty: 5, unitPrice: 10 }, { productId: 2, qty: 1, unitPrice: 10 }], 'case2'),
+      4,
+      't1',
+      'a1',
+      payloadFor(
+        [
+          { productId: 1, qty: 5, unitPrice: 10 },
+          { productId: 2, qty: 1, unitPrice: 10 },
+        ],
+        'case2',
+      ),
     );
     assert.equal(result.saleId, 999);
     assert.equal(internalCalls.length, 1);
@@ -138,12 +165,23 @@ async function main() {
     const internalCalls: any[] = [];
     const service = buildService({
       recentSale: recentSaleRow,
-      recentItems: [{ product_id: 2, qty: 1 }, { product_id: 1, qty: 2 }],
+      recentItems: [
+        { product_id: 2, qty: 1 },
+        { product_id: 1, qty: 2 },
+      ],
       internalCalls,
     });
     const result = await service.executeFieldSale(
-      4, 't1', 'a1',
-      payloadFor([{ productId: 1, qty: 2, unitPrice: 10 }, { productId: 2, qty: 1, unitPrice: 10 }], 'case3'),
+      4,
+      't1',
+      'a1',
+      payloadFor(
+        [
+          { productId: 1, qty: 2, unitPrice: 10 },
+          { productId: 2, qty: 1, unitPrice: 10 },
+        ],
+        'case3',
+      ),
     );
     assert.equal(result.saleId, 77, 'a true duplicate returns the existing sale');
     assert.equal(internalCalls.length, 0);
@@ -155,8 +193,16 @@ async function main() {
     const internalCalls: any[] = [];
     const service = buildService({ recentSale: null, recentItems: [], internalCalls });
     const result = await service.executeFieldSale(
-      4, 't1', 'a1',
-      payloadFor([{ productId: 1, qty: 2, unitPrice: 10 }, { productId: 2, qty: 1, unitPrice: 10 }], 'case4'),
+      4,
+      't1',
+      'a1',
+      payloadFor(
+        [
+          { productId: 1, qty: 2, unitPrice: 10 },
+          { productId: 2, qty: 1, unitPrice: 10 },
+        ],
+        'case4',
+      ),
     );
     assert.equal(result.saleId, 999);
     assert.equal(internalCalls.length, 1);
@@ -165,4 +211,7 @@ async function main() {
   console.log('Van rapid-fire signature tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

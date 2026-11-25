@@ -68,7 +68,11 @@ async function main(): Promise<void> {
     );
     assert.deepEqual(
       rows.rows.map((r) => [Number(r.source_id), Number(r.base_amount), Number(r.tax_amount)]),
-      [[1, 1000, 10], [2, 1000, 10], [4, 1000.125, 10.001]],
+      [
+        [1, 1000, 10],
+        [2, 1000, 10],
+        [4, 1000.125, 10.001],
+      ],
     );
 
     console.log('WHT base excludes VAT tests passed.');

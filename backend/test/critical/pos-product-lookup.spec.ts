@@ -50,12 +50,23 @@ class FakeSelectBuilder {
   private hasExpressionFilter = false;
   private rowLimit = 1000;
 
-  constructor(private readonly table: string, private readonly db: FakeDb) {}
+  constructor(
+    private readonly table: string,
+    private readonly db: FakeDb,
+  ) {}
 
-  select(): this { return this; }
-  leftJoin(): this { return this; }
-  innerJoin(): this { return this; }
-  orderBy(): this { return this; }
+  select(): this {
+    return this;
+  }
+  leftJoin(): this {
+    return this;
+  }
+  innerJoin(): this {
+    return this;
+  }
+  orderBy(): this {
+    return this;
+  }
 
   where(columnOrExpression: unknown, op?: string, value?: unknown): this {
     if (typeof columnOrExpression === 'string') {
@@ -76,9 +87,15 @@ class FakeSelectBuilder {
       const childParams: any[] = Array.isArray(rawNode.parameters) ? rawNode.parameters : [];
       return childParams.flatMap((child) => extractSqlValues(child));
     };
-    const inMatch = fragments.join(' ').match(/LOWER\(\s*TRIM\(\s*(p\.barcode|p\.sku|p\.style_code|pu\.barcode)\s*\)\s*\)\s+IN\s*\(/i);
+    const inMatch = fragments
+      .join(' ')
+      .match(/LOWER\(\s*TRIM\(\s*(p\.barcode|p\.sku|p\.style_code|pu\.barcode)\s*\)\s*\)\s+IN\s*\(/i);
     if (inMatch) {
-      const values = extractSqlValues(node).map((v) => String(v ?? '').trim().toLowerCase());
+      const values = extractSqlValues(node).map((v) =>
+        String(v ?? '')
+          .trim()
+          .toLowerCase(),
+      );
       this.filters.push({ column: inMatch[1].toLowerCase(), op: 'in', value: values, lower: true });
       return this;
     }
@@ -108,22 +125,32 @@ class FakeSelectBuilder {
   private executeProductLookup(): Array<Record<string, unknown>> {
     const matchesStringFilter = (rawVal: unknown, filter: { op: string; value: unknown; lower?: boolean }) => {
       if (filter.op === 'in' && Array.isArray(filter.value)) {
-        return filter.value.includes(String(rawVal || '').trim().toLowerCase());
+        return filter.value.includes(
+          String(rawVal || '')
+            .trim()
+            .toLowerCase(),
+        );
       }
       return filter.lower
         ? String(rawVal || '').toLowerCase() === String(filter.value || '').toLowerCase()
         : rawVal === filter.value;
     };
-    const barcodeFilter = this.filters.find((filter) => filter.column === 'p.barcode' && (filter.op === '=' || filter.op === 'in'));
+    const barcodeFilter = this.filters.find(
+      (filter) => filter.column === 'p.barcode' && (filter.op === '=' || filter.op === 'in'),
+    );
     let rows = this.db.products.filter((product) => product.is_active);
     if (barcodeFilter) {
       rows = rows.filter((product) => matchesStringFilter(product.barcode, barcodeFilter));
     }
-    const skuFilter = this.filters.find((filter) => filter.column === 'p.sku' && (filter.op === '=' || filter.op === 'in'));
+    const skuFilter = this.filters.find(
+      (filter) => filter.column === 'p.sku' && (filter.op === '=' || filter.op === 'in'),
+    );
     if (skuFilter) {
       rows = rows.filter((product) => matchesStringFilter(product.sku, skuFilter));
     }
-    const styleCodeFilter = this.filters.find((filter) => filter.column === 'p.style_code' && (filter.op === '=' || filter.op === 'in'));
+    const styleCodeFilter = this.filters.find(
+      (filter) => filter.column === 'p.style_code' && (filter.op === '=' || filter.op === 'in'),
+    );
     if (styleCodeFilter) {
       rows = rows.filter((product) => matchesStringFilter(product.style_code, styleCodeFilter));
     }
@@ -139,12 +166,9 @@ class FakeSelectBuilder {
           .flatMap((unit) => [unit.name, unit.barcode || ''])
           .join(' ')
           .toLowerCase();
-        const haystack = [
-          product.name,
-          product.barcode || '',
-          product.style_code || '',
-          unitHaystack,
-        ].join(' ').toLowerCase();
+        const haystack = [product.name, product.barcode || '', product.style_code || '', unitHaystack]
+          .join(' ')
+          .toLowerCase();
         return haystack.includes(needle);
       });
     }
@@ -152,14 +176,20 @@ class FakeSelectBuilder {
   }
 
   private executeUnitBarcodeLookup(): Array<Record<string, unknown>> {
-    const barcodeFilter = this.filters.find((filter) => filter.column === 'pu.barcode' && (filter.op === '=' || filter.op === 'in'));
+    const barcodeFilter = this.filters.find(
+      (filter) => filter.column === 'pu.barcode' && (filter.op === '=' || filter.op === 'in'),
+    );
     const excludedIds = this.filters.find((filter) => filter.column === 'p.id' && filter.op === 'not in')?.value;
     const excluded = Array.isArray(excludedIds) ? excludedIds.map(Number) : [];
     const matchingUnits = this.db.productUnits
       .filter((unit) => {
         if (!barcodeFilter) return true;
         if (barcodeFilter.op === 'in' && Array.isArray(barcodeFilter.value)) {
-          return barcodeFilter.value.includes(String(unit.barcode || '').trim().toLowerCase());
+          return barcodeFilter.value.includes(
+            String(unit.barcode || '')
+              .trim()
+              .toLowerCase(),
+          );
         }
         return barcodeFilter.lower
           ? String(unit.barcode || '').toLowerCase() === String(barcodeFilter.value || '').toLowerCase()
@@ -172,13 +202,15 @@ class FakeSelectBuilder {
       const product = this.db.products.find((entry) => entry.id === unit.product_id && entry.is_active);
       if (!product) return [];
       const { is_active: _isActive, ...productFields } = product;
-      return [{
-        ...productFields,
-        matched_unit_id: unit.id,
-        matched_unit_name: unit.name,
-        matched_unit_multiplier: unit.multiplier,
-        matched_unit_barcode: unit.barcode,
-      }];
+      return [
+        {
+          ...productFields,
+          matched_unit_id: unit.id,
+          matched_unit_name: unit.name,
+          matched_unit_multiplier: unit.multiplier,
+          matched_unit_barcode: unit.barcode,
+        },
+      ];
     });
   }
 
@@ -190,14 +222,8 @@ class FakeSelectBuilder {
 }
 
 class FakeDb {
-  products: ProductRow[] = [
-    product(1, 'Milk', '111', 9),
-    product(2, 'Coffee', '222', 22),
-  ];
-  productUnits: UnitRow[] = [
-    unit(10, 1, 'قطعة', '111'),
-    unit(20, 2, 'كرتونة', 'BOX222'),
-  ];
+  products: ProductRow[] = [product(1, 'Milk', '111', 9), product(2, 'Coffee', '222', 22)];
+  productUnits: UnitRow[] = [unit(10, 1, 'قطعة', '111'), unit(20, 2, 'كرتونة', 'BOX222')];
   lastProductQueryLimit = 0;
   searchNeedle = '';
 
@@ -206,7 +232,13 @@ class FakeDb {
   }
 }
 
-function product(id: number, name: string, barcode: string, retailPrice: number, categoryId: number | null = null): ProductRow {
+function product(
+  id: number,
+  name: string,
+  barcode: string,
+  retailPrice: number,
+  categoryId: number | null = null,
+): ProductRow {
   return {
     id,
     name,
@@ -333,7 +365,9 @@ async function run(): Promise<void> {
 
   {
     const db = new FakeDb();
-    db.products = Array.from({ length: 80 }, (_entry, index) => product(index + 1, `Product ${index + 1}`, `BC-${index + 1}`, index + 1));
+    db.products = Array.from({ length: 80 }, (_entry, index) =>
+      product(index + 1, `Product ${index + 1}`, `BC-${index + 1}`, index + 1),
+    );
     const { service } = createService(db);
     const result = await service.listPosProducts({ q: 'product', limit: 500 }, cashier);
     assert.equal((result.products as Array<Record<string, unknown>>).length, 80);
@@ -360,10 +394,7 @@ async function run(): Promise<void> {
 
   {
     const db = new FakeDb();
-    db.products = [
-      product(1, 'AAA First', 'A-1', 9, 7),
-      product(2, 'BBB Second', 'B-2', 9, 8),
-    ];
+    db.products = [product(1, 'AAA First', 'A-1', 9, 7), product(2, 'BBB Second', 'B-2', 9, 8)];
     const { service } = createService(db);
     const result = await service.listPosProducts({}, cashier);
     assert.deepEqual(productIds(result), ['1', '2'], 'no category filter: browse window unchanged');
@@ -372,29 +403,42 @@ async function run(): Promise<void> {
   {
     // An exact barcode still wins even when its product is in another category.
     const db = new FakeDb();
-    db.products = [
-      product(1, 'AAA First', 'A-1', 9, 7),
-      product(2, 'BBB Second', 'B-2', 9, 8),
-    ];
+    db.products = [product(1, 'AAA First', 'A-1', 9, 7), product(2, 'BBB Second', 'B-2', 9, 8)];
     const { service } = createService(db);
     const result = await service.listPosProducts({ barcode: 'B-2', categoryId: 7 }, cashier);
     assert.deepEqual(productIds(result), ['2']);
   }
 
   {
-    assert.deepEqual(Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, CatalogController.prototype.listPosProducts), ['sales']);
+    assert.deepEqual(Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, CatalogController.prototype.listPosProducts), [
+      'sales',
+    ]);
     const guard = new PermissionsGuard(
       { getAllAndOverride: () => ['sales'] } as any,
       {
-        hasAllPermissions: (granted: string[], required: string[]) => required.every((permission) => granted.includes(permission)),
-        hasAnyPermission: (granted: string[], required: string[]) => required.some((permission) => granted.includes(permission)),
+        hasAllPermissions: (granted: string[], required: string[]) =>
+          required.every((permission) => granted.includes(permission)),
+        hasAnyPermission: (granted: string[], required: string[]) =>
+          required.some((permission) => granted.includes(permission)),
       } as any,
       { hasFeature: () => true } as any,
-      {} as any
+      {} as any,
     );
-    assert.equal(guard.canActivate({ getHandler: () => null, getClass: () => CatalogController, switchToHttp: () => ({ getRequest: () => ({ authContext: cashier }) }) } as any), true);
+    assert.equal(
+      guard.canActivate({
+        getHandler: () => null,
+        getClass: () => CatalogController,
+        switchToHttp: () => ({ getRequest: () => ({ authContext: cashier }) }),
+      } as any),
+      true,
+    );
     assert.throws(
-      () => guard.canActivate({ getHandler: () => null, getClass: () => CatalogController, switchToHttp: () => ({ getRequest: () => ({ authContext: { ...cashier, permissions: [] } }) }) } as any),
+      () =>
+        guard.canActivate({
+          getHandler: () => null,
+          getClass: () => CatalogController,
+          switchToHttp: () => ({ getRequest: () => ({ authContext: { ...cashier, permissions: [] } }) }),
+        } as any),
       ForbiddenException,
     );
   }

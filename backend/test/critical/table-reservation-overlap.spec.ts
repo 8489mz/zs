@@ -93,10 +93,7 @@ async function main(): Promise<void> {
     {
       await resetDb(pg);
       await service.createReservation(TENANT, 1, createDto({ guestName: 'First' }));
-      await expectConflict(
-        service.createReservation(TENANT, 1, createDto({ guestName: 'Second' })),
-        '5',
-      );
+      await expectConflict(service.createReservation(TENANT, 1, createDto({ guestName: 'Second' })), '5');
       console.log('  (1) same table + same instant confirmed -> 409 passed');
     }
 
@@ -105,7 +102,9 @@ async function main(): Promise<void> {
       await resetDb(pg);
       await service.createReservation(TENANT, 1, createDto({ guestName: 'First' }));
       const second = await service.createReservation(
-        TENANT, 1, createDto({ guestName: 'Second', reservationTime: OTHER_TIME }),
+        TENANT,
+        1,
+        createDto({ guestName: 'Second', reservationTime: OTHER_TIME }),
       );
       assert.ok(second.id, 'different instant must succeed');
       console.log('  (2) same table, different instant -> both succeed passed');
@@ -115,9 +114,7 @@ async function main(): Promise<void> {
     {
       await resetDb(pg);
       await service.createReservation(TENANT, 1, createDto({ guestName: 'First' }));
-      const second = await service.createReservation(
-        TENANT, 1, createDto({ guestName: 'Second', tableNumber: '7' }),
-      );
+      const second = await service.createReservation(TENANT, 1, createDto({ guestName: 'Second', tableNumber: '7' }));
       assert.ok(second.id, 'different table must succeed');
       console.log('  (3) same instant, different table -> both succeed passed');
     }
@@ -141,9 +138,14 @@ async function main(): Promise<void> {
     // though the waitlist row here carries a real table number).
     {
       await resetDb(pg);
-      await service.createReservation(TENANT, 1, createDto({
-        guestName: 'Waitlisted', reservationType: 'waitlist',
-      }));
+      await service.createReservation(
+        TENANT,
+        1,
+        createDto({
+          guestName: 'Waitlisted',
+          reservationType: 'waitlist',
+        }),
+      );
       const booked = await service.createReservation(TENANT, 1, createDto({ guestName: 'Booked' }));
       assert.ok(booked.id, 'waitlist row must not block');
       console.log('  (5) waitlist existing -> new confirmed succeeds passed');
@@ -153,13 +155,8 @@ async function main(): Promise<void> {
     {
       await resetDb(pg);
       await service.createReservation(TENANT, 1, createDto({ guestName: 'Table 5' }));
-      const other = await service.createReservation(
-        TENANT, 1, createDto({ guestName: 'Table 7', tableNumber: '7' }),
-      );
-      await expectConflict(
-        service.updateStatus(TENANT, other.id, { status: 'confirmed', tableNumber: '5' }),
-        '5',
-      );
+      const other = await service.createReservation(TENANT, 1, createDto({ guestName: 'Table 7', tableNumber: '7' }));
+      await expectConflict(service.updateStatus(TENANT, other.id, { status: 'confirmed', tableNumber: '5' }), '5');
       console.log('  (6) updateStatus move onto booked table -> 409 passed');
     }
 
@@ -167,9 +164,7 @@ async function main(): Promise<void> {
     {
       await resetDb(pg);
       const row = await service.createReservation(TENANT, 1, createDto({ guestName: 'Self' }));
-      const seated = await service.updateStatus(
-        TENANT, row.id, { status: 'seated', tableNumber: '5' },
-      );
+      const seated = await service.updateStatus(TENANT, row.id, { status: 'seated', tableNumber: '5' });
       assert.equal(seated.status, 'seated', 'self seated move must succeed');
       const again = await service.updateStatus(TENANT, row.id, { status: 'confirmed' });
       assert.equal(again.status, 'confirmed', 'self status-only update must succeed');
@@ -181,13 +176,9 @@ async function main(): Promise<void> {
     {
       await resetDb(pg);
       await service.createReservation(TENANT, 1, createDto({ guestName: 'Branch 1', branchId: 1 }));
-      const otherBranch = await service.createReservation(
-        TENANT, 1, createDto({ guestName: 'Branch 2', branchId: 2 }),
-      );
+      const otherBranch = await service.createReservation(TENANT, 1, createDto({ guestName: 'Branch 2', branchId: 2 }));
       assert.ok(otherBranch.id, 'different branch must succeed');
-      const nullBranch = await service.createReservation(
-        TENANT, 1, createDto({ guestName: 'No branch' }),
-      );
+      const nullBranch = await service.createReservation(TENANT, 1, createDto({ guestName: 'No branch' }));
       assert.ok(nullBranch.id, 'null branch must not collide with a numbered branch');
       console.log('  (8) same table+time, different branch -> succeeds passed');
     }
@@ -196,9 +187,7 @@ async function main(): Promise<void> {
     {
       await resetDb(pg);
       await service.createReservation(TENANT, 1, createDto({ guestName: 'Tenant 1' }));
-      const otherTenant = await service.createReservation(
-        OTHER_TENANT, 1, createDto({ guestName: 'Tenant 2' }),
-      );
+      const otherTenant = await service.createReservation(OTHER_TENANT, 1, createDto({ guestName: 'Tenant 2' }));
       assert.ok(otherTenant.id, 'different tenant must succeed');
       console.log('  (9) same table+time, different tenant -> succeeds passed');
     }
@@ -211,10 +200,7 @@ async function main(): Promise<void> {
       await service.updateStatus(TENANT, first.id, { status: 'cancelled' });
       const second = await service.createReservation(TENANT, 1, createDto({ guestName: 'Second' }));
       assert.ok(second.id, 're-booking a cancelled slot must succeed');
-      await expectConflict(
-        service.updateStatus(TENANT, first.id, { status: 'confirmed' }),
-        '5',
-      );
+      await expectConflict(service.updateStatus(TENANT, first.id, { status: 'confirmed' }), '5');
       console.log('  (10) re-activating cancelled into a taken slot -> 409 passed');
     }
 

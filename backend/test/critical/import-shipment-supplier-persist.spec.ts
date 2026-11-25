@@ -90,7 +90,10 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -107,14 +110,22 @@ async function main(): Promise<void> {
         billOfLading: 'BL-001',
       });
       assert.equal(Number(created.supplier_id), 9, 'createShipment must persist the selected supplier id');
-      const stored: any = await (db as any).selectFrom('import_shipments').selectAll()
-        .where('tenant_id', '=', 't1').where('id', '=', created.id).executeTakeFirstOrThrow();
+      const stored: any = await (db as any)
+        .selectFrom('import_shipments')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .where('id', '=', created.id)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(stored.supplier_id), 9, 'Stored row must carry supplier_id 9');
 
       const list: any = await service.listShipments('t1');
       assert.equal(list.rows.length, 1, 'List must contain the created shipment');
       assert.equal(Number(list.rows[0].supplier_id), 9, 'List row must carry supplier_id');
-      assert.equal(list.rows[0].supplier_name, 'Shipment Supplier', 'List row must carry the supplier name, not undefined');
+      assert.equal(
+        list.rows[0].supplier_name,
+        'Shipment Supplier',
+        'List row must carry the supplier name, not undefined',
+      );
 
       const detail: any = await service.getShipmentById('t1', created.id);
       assert.equal(Number(detail.supplier_id), 9, 'Detail must carry supplier_id');
@@ -127,7 +138,9 @@ async function main(): Promise<void> {
       // supplier set, the detail page defaults each component payee
       // to the shipment supplier (9) — the only inputs the default
       // reads are pinned above (supplier_id 9, payees null).
-      console.log('Case A passed: supplier persists and reads back by name in list + detail; payee-default inputs pinned');
+      console.log(
+        'Case A passed: supplier persists and reads back by name in list + detail; payee-default inputs pinned',
+      );
     } finally {
       await db.destroy();
     }
@@ -175,14 +188,30 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      await (db as any).insertInto('suppliers').values({
-        id: 77, tenant_id: 't2', name: 'Foreign Only Supplier', phone: '', address: '', balance: 0, is_active: true,
-      } as never).execute();
+      await (db as any)
+        .insertInto('suppliers')
+        .values({
+          id: 77,
+          tenant_id: 't2',
+          name: 'Foreign Only Supplier',
+          phone: '',
+          address: '',
+          balance: 0,
+          is_active: true,
+        } as never)
+        .execute();
       // Seeded directly — createShipment would refuse a foreign
       // supplier (Case B) — so the row can only exist as legacy data.
-      await (db as any).insertInto('import_shipments').values({
-        id: 'sh-foreign', tenant_id: 't1', container_number: 'MSCU-TEST-005', supplier_id: 77, status: 'Pending',
-      } as never).execute();
+      await (db as any)
+        .insertInto('import_shipments')
+        .values({
+          id: 'sh-foreign',
+          tenant_id: 't1',
+          container_number: 'MSCU-TEST-005',
+          supplier_id: 77,
+          status: 'Pending',
+        } as never)
+        .execute();
       const list: any = await service.listShipments('t1');
       const foreignRow = list.rows.find((r: any) => r.container_number === 'MSCU-TEST-005');
       assert.ok(foreignRow, 'Foreign-supplier shipment must be listed');

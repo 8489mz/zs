@@ -95,7 +95,10 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -124,11 +127,19 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const shipment = await service.createShipment('t1', { containerNumber: 'MSCU-2', supplierId: '9' });
-      await db.insertInto('import_shipment_items' as never).values({
-        tenant_id: 't1', shipment_id: shipment.id, product_id: 5, quantity: 10,
-        received_quantity: 10, factory_unit_price_usd: 10, landed_cost_egp: 0,
-        shortage_handling_method: 'capitalize',
-      } as never).execute();
+      await db
+        .insertInto('import_shipment_items' as never)
+        .values({
+          tenant_id: 't1',
+          shipment_id: shipment.id,
+          product_id: 5,
+          quantity: 10,
+          received_quantity: 10,
+          factory_unit_price_usd: 10,
+          landed_cost_egp: 0,
+          shortage_handling_method: 'capitalize',
+        } as never)
+        .execute();
       await assert.rejects(
         async () => service.updateShipmentCosts('t1', 1, shipment.id, { status: 'Arrived', receiptLocationId: 10 }),
         /IMPORT_ARRIVAL_RATE_REQUIRED/,
@@ -165,7 +176,11 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      const shipment = await service.createShipment('t1', { containerNumber: 'MSCU-3', supplierId: '9', exchangeRateAtArrival: 50 });
+      const shipment = await service.createShipment('t1', {
+        containerNumber: 'MSCU-3',
+        supplierId: '9',
+        exchangeRateAtArrival: 50,
+      });
       assert.equal(Number(shipment.exchange_rate_at_arrival), 50, 'A supplied arrival rate is persisted at creation');
       await service.addShipmentItem('t1', shipment.id, { productId: 5, quantity: 10, factoryUnitPriceUsd: 10 });
       await service.updateShipmentCosts('t1', 1, shipment.id, { exchangeRateAtArrival: 51 });
@@ -173,7 +188,11 @@ async function main(): Promise<void> {
       assert.equal(Number(item.landed_cost_egp), 510, 'The rate change recalculates landed cost before posting');
       await service.updateShipmentCosts('t1', 1, shipment.id, { status: 'Arrived', receiptLocationId: 10 });
       assert.equal(await countRows(db, 'import_inventory_receipts'), 1, 'The receipt posts on Arrived');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 5).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 5)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.cost_price), 510, 'WAC posts at the recalculated landed cost');
     } finally {
       await db.destroy();
@@ -194,9 +213,20 @@ async function main(): Promise<void> {
       `);
       await migrate0281Up(db as any);
       await migrate0281Up(db as any);
-      await db.insertInto('import_shipments' as never).values({ id: 'new-1', tenant_id: 't1' } as never).execute();
-      const legacy: any = await (db as any).selectFrom('import_shipments').selectAll().where('id', '=', 'legacy-1').executeTakeFirstOrThrow();
-      const fresh: any = await (db as any).selectFrom('import_shipments').selectAll().where('id', '=', 'new-1').executeTakeFirstOrThrow();
+      await db
+        .insertInto('import_shipments' as never)
+        .values({ id: 'new-1', tenant_id: 't1' } as never)
+        .execute();
+      const legacy: any = await (db as any)
+        .selectFrom('import_shipments')
+        .selectAll()
+        .where('id', '=', 'legacy-1')
+        .executeTakeFirstOrThrow();
+      const fresh: any = await (db as any)
+        .selectFrom('import_shipments')
+        .selectAll()
+        .where('id', '=', 'new-1')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(legacy.exchange_rate_at_arrival), 1, 'A pre-existing row keeps its stored value');
       assert.equal(fresh.exchange_rate_at_arrival, null, 'A new row without a rate stores NULL after the migration');
     } finally {
@@ -207,4 +237,7 @@ async function main(): Promise<void> {
   console.log('Import arrival rate fail-closed tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

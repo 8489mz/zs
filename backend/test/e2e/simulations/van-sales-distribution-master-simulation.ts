@@ -52,12 +52,7 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
   const accountingPosting = new AccountingPostingService(accountingFoundation);
   const auditService = { log: async () => {} } as unknown as AuditService;
   const deliveryRepsService = {} as unknown as DeliveryRepsService;
-  const vanSalesService = new VanSalesService(
-    db,
-    auditService,
-    deliveryRepsService,
-    accountingPosting,
-  );
+  const vanSalesService = new VanSalesService(db, auditService, deliveryRepsService, accountingPosting);
   const vanPreSalesService = new VanPreSalesService(db);
 
   // إعداد مستخدمي الاختبار (مشرف التوزيع ومندوب المبيعات)
@@ -186,8 +181,22 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     const pRiceId = Number(pRiceRes.rows[0].id);
 
     // ضخ رصيد المستودع المركزي الافتتاحي: 120 عبوة عصير + 60 شيكارة أرز
-    await applyStockDelta(db as any, { productId: pJuiceId, delta: 120, branchId, locationId: mainWarehouseId, tenantId: testTenantId, accountId: testAccountId });
-    await applyStockDelta(db as any, { productId: pRiceId, delta: 60, branchId, locationId: mainWarehouseId, tenantId: testTenantId, accountId: testAccountId });
+    await applyStockDelta(db as any, {
+      productId: pJuiceId,
+      delta: 120,
+      branchId,
+      locationId: mainWarehouseId,
+      tenantId: testTenantId,
+      accountId: testAccountId,
+    });
+    await applyStockDelta(db as any, {
+      productId: pRiceId,
+      delta: 60,
+      branchId,
+      locationId: mainWarehouseId,
+      tenantId: testTenantId,
+      accountId: testAccountId,
+    });
 
     console.log(`✓ تم تكويد العصير (#${pJuiceId}) والأرز (#${pRiceId}) وضخ المخزون في المستودع المركزي.`);
 
@@ -230,7 +239,9 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     if (!duplicatePhoneAttempt.ok || !duplicatePhoneAttempt.alreadyExisted) {
       throw new Error('Phone deduplication shield failed: expected alreadyExisted to be true');
     }
-    console.log(`✓ درع منع التكرار: تم التقاط نفس الهاتف، ربط المحل بخط السير وإرجاع الكود (${duplicatePhoneAttempt.customer.customerCode}) دون أخطاء.`);
+    console.log(
+      `✓ درع منع التكرار: تم التقاط نفس الهاتف، ربط المحل بخط السير وإرجاع الكود (${duplicatePhoneAttempt.customer.customerCode}) دون أخطاء.`,
+    );
 
     // عميل جملة إضافي بسقف ائتمان
     const custARes = await sql<{ id: number }>`
@@ -268,14 +279,23 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     console.log(`✓ إجمالي الطلبية: ${preSalesOrderRes.totalAmount} جنيه (عدد البنود: ${preSalesOrderRes.itemsCount}).`);
 
     // التحقق من الحجز الآلي الفعلي لمخزون المستودع
-    const reservedRiceRow = await sql<{ reserved_qty: string }>`SELECT reserved_qty FROM products WHERE id = ${pRiceId}`.execute(db);
+    const reservedRiceRow = await sql<{
+      reserved_qty: string;
+    }>`SELECT reserved_qty FROM products WHERE id = ${pRiceId}`.execute(db);
     if (Number(reservedRiceRow.rows[0].reserved_qty) < 5) {
-      throw new Error(`Warehouse reservation failed: expected reserved_qty >= 5, got ${reservedRiceRow.rows[0].reserved_qty}`);
+      throw new Error(
+        `Warehouse reservation failed: expected reserved_qty >= 5, got ${reservedRiceRow.rows[0].reserved_qty}`,
+      );
     }
     console.log(`✓ تم حجز 5 شكاير أرز و 24 عبوة عصير آلياً في رصيد المستودع المركزي المحجوز.`);
 
     // اعتماد المشرف لأمر الحجز
-    const approvalRes = await vanPreSalesService.approvePreSalesOrder(preSalesOrderId, supervisorUserId, testTenantId, testAccountId);
+    const approvalRes = await vanPreSalesService.approvePreSalesOrder(
+      preSalesOrderId,
+      supervisorUserId,
+      testTenantId,
+      testAccountId,
+    );
     if (!approvalRes.ok || approvalRes.status !== 'approved') {
       throw new Error(`Supervisor order approval failed: ${JSON.stringify(approvalRes)}`);
     }
@@ -289,7 +309,7 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
       sourceWarehouseId: mainWarehouseId,
       items: [
         { productId: pJuiceId, qty: 60 }, // 60 عبوة = 5 كراتين
-        { productId: pRiceId, qty: 20 },  // 20 شيكارة
+        { productId: pRiceId, qty: 20 }, // 20 شيكارة
       ],
     });
 
@@ -298,13 +318,25 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     }
 
     const tripId = Number(loadResult.tripId);
-    console.log(`✓ تم فتح الرحلة (#${tripId}) بنجاح وتحميل بضاعة بقيمة ${loadResult.totalLoadedValue.toLocaleString()} جنيه.`);
+    console.log(
+      `✓ تم فتح الرحلة (#${tripId}) بنجاح وتحميل بضاعة بقيمة ${loadResult.totalLoadedValue.toLocaleString()} جنيه.`,
+    );
 
     // التحقق من خصم المخزون من المستودع وإضافته لسيارة الفان
-    const whJuiceStock = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE location_id = ${mainWarehouseId} AND product_id = ${pJuiceId}`.execute(db);
-    const vanJuiceStock = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE location_id = ${vanLocationId} AND product_id = ${pJuiceId}`.execute(db);
+    const whJuiceStock = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE location_id = ${mainWarehouseId} AND product_id = ${pJuiceId}`.execute(
+      db,
+    );
+    const vanJuiceStock = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE location_id = ${vanLocationId} AND product_id = ${pJuiceId}`.execute(
+      db,
+    );
     if (Number(whJuiceStock.rows[0].qty) !== 60 || Number(vanJuiceStock.rows[0].qty) !== 60) {
-      throw new Error(`Stock transfer verification failed: Warehouse=${whJuiceStock.rows[0].qty}, Van=${vanJuiceStock.rows[0].qty}`);
+      throw new Error(
+        `Stock transfer verification failed: Warehouse=${whJuiceStock.rows[0].qty}, Van=${vanJuiceStock.rows[0].qty}`,
+      );
     }
     console.log(`✓ رصيد العصير بالمستودع المركزي أصبح 60 عبوة، ورصيد سيارة الفان أصبح 60 عبوة.`);
 
@@ -327,10 +359,16 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     if (!sale1.ok || !sale1.saleId) {
       throw new Error(`Field sale 1 failed: ${JSON.stringify(sale1)}`);
     }
-    console.log(`✓ الفاتورة 1 (#${sale1.saleId}): بيع 2 كرتونة عصير + 1 عبوة بونص مجاني بقيمة ${sale1.total} جنيه نقداً.`);
+    console.log(
+      `✓ الفاتورة 1 (#${sale1.saleId}): بيع 2 كرتونة عصير + 1 عبوة بونص مجاني بقيمة ${sale1.total} جنيه نقداً.`,
+    );
 
     // التحقق من خصم 25 عبوة من رصيد الفان (24 عبوة كراتين + 1 عبوة بونص)
-    const vanJuiceAfterSale1 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE location_id = ${vanLocationId} AND product_id = ${pJuiceId}`.execute(db);
+    const vanJuiceAfterSale1 = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE location_id = ${vanLocationId} AND product_id = ${pJuiceId}`.execute(
+      db,
+    );
     if (Number(vanJuiceAfterSale1.rows[0].qty) !== 35) {
       throw new Error(`Van stock after bonus sale mismatch: expected 35, got ${vanJuiceAfterSale1.rows[0].qty}`);
     }
@@ -390,9 +428,13 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     if (!sale2.ok || !sale2.saleId) {
       throw new Error(`Field sale 2 override failed: ${JSON.stringify(sale2)}`);
     }
-    console.log(`✓ الفاتورة 2 (#${sale2.saleId}): تم اعتماد البيع الآجل بالـ PIN وسجلت المديونية بمبلغ ${sale2.total} جنيه.`);
+    console.log(
+      `✓ الفاتورة 2 (#${sale2.saleId}): تم اعتماد البيع الآجل بالـ PIN وسجلت المديونية بمبلغ ${sale2.total} جنيه.`,
+    );
 
-    const custABalance = await sql<{ balance: string }>`SELECT balance FROM customers WHERE id = ${customerAId}`.execute(db);
+    const custABalance = await sql<{
+      balance: string;
+    }>`SELECT balance FROM customers WHERE id = ${customerAId}`.execute(db);
     console.log(`✓ رصيد حساب العميل أ الجديد في كشف الحساب: ${custABalance.rows[0].balance} جنيه.`);
 
     // -------------------------------------------------------------------------
@@ -411,7 +453,9 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     console.log(`✓ تم تحصيل دفعة نقدية بقيمة 300.00 جنيه (الرصيد المتبقي للعميل: ${collectionRes.newBalance} جنيه).`);
 
     // إجمالي الكاش المحصل في عهدة المندوب الآن: 440 (مبيعات) + 300 (تحصيل) = 740 جنيه
-    const tripRow = await sql<{ cash_collected: string }>`SELECT cash_collected FROM van_sales_trips WHERE id = ${tripId}`.execute(db);
+    const tripRow = await sql<{
+      cash_collected: string;
+    }>`SELECT cash_collected FROM van_sales_trips WHERE id = ${tripId}`.execute(db);
     if (Number(tripRow.rows[0].cash_collected) !== 740) {
       throw new Error(`Trip cash collected mismatch: expected 740, got ${tripRow.rows[0].cash_collected}`);
     }
@@ -453,7 +497,9 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     });
 
     const expensesSummary = await vanSalesService.getTripExpenses(tripId, testTenantId);
-    console.log(`✓ تم تسجيل إيصالات المصروفات: وقود (150) + كارتة (30) = إجمالي ${expensesSummary.totalExpenses} جنيه.`);
+    console.log(
+      `✓ تم تسجيل إيصالات المصروفات: وقود (150) + كارتة (30) = إجمالي ${expensesSummary.totalExpenses} جنيه.`,
+    );
 
     // -------------------------------------------------------------------------
     // STEP 11: [جديد] تصفية الرحلة وتوريد الكاش مع إنهاء الزيارة النشطة آلياً
@@ -481,9 +527,13 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     `.execute(db);
 
     if (settledTrip.rows[0].status !== 'settled' || Number(settledTrip.rows[0].variance) !== 0) {
-      throw new Error(`Settlement verification failed: status=${settledTrip.rows[0].status}, variance=${settledTrip.rows[0].variance}`);
+      throw new Error(
+        `Settlement verification failed: status=${settledTrip.rows[0].status}, variance=${settledTrip.rows[0].variance}`,
+      );
     }
-    console.log(`✓ تم إغلاق وتصفية الرحلة بنجاح: الحالة (${settledTrip.rows[0].status})، الفارق (${settledTrip.rows[0].variance} فرق صفرى).`);
+    console.log(
+      `✓ تم إغلاق وتصفية الرحلة بنجاح: الحالة (${settledTrip.rows[0].status})، الفارق (${settledTrip.rows[0].variance} فرق صفرى).`,
+    );
 
     // التحقق من توثيق الزيارة التلقائية في جدول van_field_visits
     const autoVisitRow = await sql<{ id: number; visit_type: string; sale_id: number | null }>`
@@ -494,12 +544,24 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     if (autoVisitRow.rows.length === 0) {
       throw new Error('Auto active visit finalization check failed: no visit recorded in van_field_visits');
     }
-    console.log(`✓ تم رصد وتوثيق زيارة العميل الميداني تلقائياً (#${autoVisitRow.rows[0].id}) بنوع [${autoVisitRow.rows[0].visit_type}].`);
+    console.log(
+      `✓ تم رصد وتوثيق زيارة العميل الميداني تلقائياً (#${autoVisitRow.rows[0].id}) بنوع [${autoVisitRow.rows[0].visit_type}].`,
+    );
 
     // التحقق من تفريغ رصيد الفان وإرجاع المتبقي للمستودع المركزي
-    const vanJuiceFinal = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE location_id = ${vanLocationId} AND product_id = ${pJuiceId}`.execute(db);
-    const whJuiceFinal = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE location_id = ${mainWarehouseId} AND product_id = ${pJuiceId}`.execute(db);
-    console.log(`✓ تم تفريغ الفان بالكامل: رصيد الفان (${vanJuiceFinal.rows[0]?.qty || 0})، ورصيد المستودع المركزي (${whJuiceFinal.rows[0]?.qty} عبوة).`);
+    const vanJuiceFinal = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE location_id = ${vanLocationId} AND product_id = ${pJuiceId}`.execute(
+      db,
+    );
+    const whJuiceFinal = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE location_id = ${mainWarehouseId} AND product_id = ${pJuiceId}`.execute(
+      db,
+    );
+    console.log(
+      `✓ تم تفريغ الفان بالكامل: رصيد الفان (${vanJuiceFinal.rows[0]?.qty || 0})، ورصيد المستودع المركزي (${whJuiceFinal.rows[0]?.qty} عبوة).`,
+    );
 
     // -------------------------------------------------------------------------
     // STEP 12: التدقيق المحاسبي الشامل وتوازن دفاتر الأستاذ (Double-Entry Invariants)
@@ -521,10 +583,14 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     const delta = Math.abs(totalDebit - totalCredit);
 
     console.log(`📊 إجمالي القيود المُرحلة: ${totalJournals} قيداً محاسبياً.`);
-    console.log(`📊 إجمالي المدين: ${totalDebit.toLocaleString()} جنيه | إجمالي الدائن: ${totalCredit.toLocaleString()} جنيه | الفارق: ${delta}`);
+    console.log(
+      `📊 إجمالي المدين: ${totalDebit.toLocaleString()} جنيه | إجمالي الدائن: ${totalCredit.toLocaleString()} جنيه | الفارق: ${delta}`,
+    );
 
     if (delta > 0.001) {
-      throw new Error(`CRITICAL: Van sales journal entries do not balance! Debit=${totalDebit}, Credit=${totalCredit}, Delta=${delta}`);
+      throw new Error(
+        `CRITICAL: Van sales journal entries do not balance! Debit=${totalDebit}, Credit=${totalCredit}, Delta=${delta}`,
+      );
     }
 
     const unbalancedEntries = await sql<{ id: number; diff: string }>`
@@ -546,12 +612,15 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     console.log('\n=============================================================================');
     console.log('  تهانينا! فحص مبيعات وتوزيع الفان والجملة (Van Sales & Field Flow) اجتاز 100%');
     console.log('=============================================================================\n');
-
   } finally {
     // تنظيف بيانات الاختبار بترتيب عكسي آمن
-    await sql`DELETE FROM journal_entry_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE tenant_id = ${testTenantId})`.execute(db);
+    await sql`DELETE FROM journal_entry_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE tenant_id = ${testTenantId})`.execute(
+      db,
+    );
     await sql`DELETE FROM journal_entries WHERE tenant_id = ${testTenantId}`.execute(db);
-    await sql`DELETE FROM sales_order_items WHERE sales_order_id IN (SELECT id FROM sales_orders WHERE tenant_id = ${testTenantId})`.execute(db);
+    await sql`DELETE FROM sales_order_items WHERE sales_order_id IN (SELECT id FROM sales_orders WHERE tenant_id = ${testTenantId})`.execute(
+      db,
+    );
     await sql`DELETE FROM sales_orders WHERE tenant_id = ${testTenantId}`.execute(db);
     await sql`DELETE FROM van_field_visits WHERE tenant_id = ${testTenantId}`.execute(db);
     await sql`DELETE FROM settlement_allocations WHERE tenant_id = ${testTenantId}`.execute(db);

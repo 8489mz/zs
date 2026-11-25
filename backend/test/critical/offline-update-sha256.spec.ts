@@ -1,6 +1,9 @@
 import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
-import { assertTrustedOfflineUpdatePackage, OfflineReleasesService } from '../../src/modules/settings/services/offline-releases.service';
+import {
+  assertTrustedOfflineUpdatePackage,
+  OfflineReleasesService,
+} from '../../src/modules/settings/services/offline-releases.service';
 import { BadRequestException } from '@nestjs/common';
 
 const payload = Buffer.from('test release archive bytes, not a real update');
@@ -13,7 +16,11 @@ assert.throws(() => assertTrustedOfflineUpdatePackage(Buffer.alloc(128 * 1024 * 
 console.log('Offline update package trust and upload limit regressions passed');
 
 async function rejectCloudUpdates(): Promise<void> {
-  const saved = { APP_MODE: process.env.APP_MODE, PORTABLE_MODE: process.env.PORTABLE_MODE, IS_ELECTRON: process.env.IS_ELECTRON };
+  const saved = {
+    APP_MODE: process.env.APP_MODE,
+    PORTABLE_MODE: process.env.PORTABLE_MODE,
+    IS_ELECTRON: process.env.IS_ELECTRON,
+  };
   try {
     process.env.APP_MODE = 'CLOUD_SAAS';
     process.env.PORTABLE_MODE = 'true';
@@ -21,7 +28,10 @@ async function rejectCloudUpdates(): Promise<void> {
     // No DB or filesystem is supplied: rejection must precede any update work.
     const service = new OfflineReleasesService({} as any);
     await assert.rejects(() => service.triggerUpdate({} as any), BadRequestException);
-    await assert.rejects(() => service.applyLocalUpdate({ version: '1.2.3', patchUrl: 'https://example.com/patch.zip', changelog: '' }), BadRequestException);
+    await assert.rejects(
+      () => service.applyLocalUpdate({ version: '1.2.3', patchUrl: 'https://example.com/patch.zip', changelog: '' }),
+      BadRequestException,
+    );
     await assert.rejects(() => service.applyLocalZipUpdate({ buffer: payload } as any), BadRequestException);
   } finally {
     for (const [key, value] of Object.entries(saved)) {
@@ -31,4 +41,7 @@ async function rejectCloudUpdates(): Promise<void> {
   }
 }
 
-void rejectCloudUpdates().catch((error) => { console.error(error); process.exitCode = 1; });
+void rejectCloudUpdates().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

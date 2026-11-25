@@ -120,44 +120,89 @@ async function seedShipment(
   container = 'C1',
   projectId: string | null = 'proj-1',
 ): Promise<void> {
-  await db.insertInto('import_shipments' as never).values({
-    id: shipmentId, tenant_id: 't1', container_number: container, supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: projectId,
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: `${shipmentId}-item`, tenant_id: 't1', shipment_id: shipmentId, product_id: 1,
-    quantity: 10, factory_unit_price_usd: 1, shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: shipmentId,
+      tenant_id: 't1',
+      container_number: container,
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: projectId,
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: `${shipmentId}-item`,
+      tenant_id: 't1',
+      shipment_id: shipmentId,
+      product_id: 1,
+      quantity: 10,
+      factory_unit_price_usd: 1,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function postReceipt(db: Kysely<Database>, service: any, shipmentId = 'sh-1'): Promise<void> {
   await service.updateShipmentCosts('t1', 1, shipmentId, {
-    status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
-    shippingCostUsd: 5, customsCostEgp: 100, internalTransportCostEgp: 50,
-    freightSupplierId: 2, customsSupplierId: 3, transportSupplierId: 4,
+    status: 'Arrived',
+    exchangeRateAtArrival: 50,
+    receiptLocationId: 10,
+    shippingCostUsd: 5,
+    customsCostEgp: 100,
+    internalTransportCostEgp: 50,
+    freightSupplierId: 2,
+    customsSupplierId: 3,
+    transportSupplierId: 4,
   });
-  const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('shipment_id', '=', shipmentId).executeTakeFirstOrThrow();
+  const receipt: any = await (db as any)
+    .selectFrom('import_inventory_receipts')
+    .selectAll()
+    .where('shipment_id', '=', shipmentId)
+    .executeTakeFirstOrThrow();
   assert.equal(receipt.state, 'posted');
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select(sql`count(*)`.as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select(sql`count(*)`.as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
 async function receiptJournalLines(db: Kysely<Database>, shipmentId: string): Promise<any[]> {
-  const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll()
-    .where('shipment_id', '=', shipmentId).executeTakeFirstOrThrow();
-  const entry: any = await (db as any).selectFrom('journal_entries').selectAll()
-    .where('id', '=', Number(receipt.journal_entry_id)).executeTakeFirstOrThrow();
-  return (db as any).selectFrom('journal_entry_lines').selectAll()
-    .where('journal_entry_id', '=', entry.id).orderBy('id').execute();
+  const receipt: any = await (db as any)
+    .selectFrom('import_inventory_receipts')
+    .selectAll()
+    .where('shipment_id', '=', shipmentId)
+    .executeTakeFirstOrThrow();
+  const entry: any = await (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('id', '=', Number(receipt.journal_entry_id))
+    .executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('journal_entry_lines')
+    .selectAll()
+    .where('journal_entry_id', '=', entry.id)
+    .orderBy('id')
+    .execute();
 }
 
 async function supplierLedgerTotal(db: Kysely<Database>, supplierId: number): Promise<number> {
-  const rows: any[] = await (db as any).selectFrom('supplier_ledger').select('amount')
-    .where('supplier_id', '=', supplierId).execute();
+  const rows: any[] = await (db as any)
+    .selectFrom('supplier_ledger')
+    .select('amount')
+    .where('supplier_id', '=', supplierId)
+    .execute();
   return rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
 }
 
@@ -181,7 +226,11 @@ async function main(): Promise<void> {
       assert.equal(Number(debitLine.debit), 900);
       const creditsByPartner = new Map<number, number>();
       for (const line of lines) {
-        if (Number(line.credit) > 0) creditsByPartner.set(Number(line.partner_id), (creditsByPartner.get(Number(line.partner_id)) || 0) + Number(line.credit));
+        if (Number(line.credit) > 0)
+          creditsByPartner.set(
+            Number(line.partner_id),
+            (creditsByPartner.get(Number(line.partner_id)) || 0) + Number(line.credit),
+          );
       }
       assert.equal(creditsByPartner.get(1), 500, 'Goods supplier carries only the goods value');
       assert.equal(creditsByPartner.get(2), 250, 'Carrier carries the freight');
@@ -198,9 +247,15 @@ async function main(): Promise<void> {
       assert.equal(centres[0].dimension, 'project');
       assert.equal(centres[0].name, 'مشروع: اختبار مشروع استيراد 001');
       for (const line of lines) {
-        assert.equal(Number(line.cost_center_id), Number(centres[0].id), `Line ${line.id} carries the project cost centre`);
+        assert.equal(
+          Number(line.cost_center_id),
+          Number(centres[0].id),
+          `Line ${line.id} carries the project cost centre`,
+        );
       }
-      console.log('Case A passed: trial-shape receipt JE carries the project cost centre on every line and each supplier sub-account');
+      console.log(
+        'Case A passed: trial-shape receipt JE carries the project cost centre on every line and each supplier sub-account',
+      );
     } finally {
       await db.destroy();
     }
@@ -221,7 +276,11 @@ async function main(): Promise<void> {
       const lines1 = await receiptJournalLines(db, 'sh-1');
       const lines2 = await receiptJournalLines(db, 'sh-2');
       for (const line of [...lines1, ...lines2]) {
-        assert.equal(Number(line.cost_center_id), Number(centres[0].id), `Line ${line.id} reuses the project cost centre`);
+        assert.equal(
+          Number(line.cost_center_id),
+          Number(centres[0].id),
+          `Line ${line.id} reuses the project cost centre`,
+        );
       }
       console.log('Case B passed: second receipt on the same project reuses the cost centre');
     } finally {
@@ -261,9 +320,15 @@ async function main(): Promise<void> {
       await seedShipment(db, 'sh-1', 'C1', 'proj-missing');
       await assert.rejects(
         service.updateShipmentCosts('t1', 1, 'sh-1', {
-          status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
-          shippingCostUsd: 5, customsCostEgp: 100, internalTransportCostEgp: 50,
-          freightSupplierId: 2, customsSupplierId: 3, transportSupplierId: 4,
+          status: 'Arrived',
+          exchangeRateAtArrival: 50,
+          receiptLocationId: 10,
+          shippingCostUsd: 5,
+          customsCostEgp: 100,
+          internalTransportCostEgp: 50,
+          freightSupplierId: 2,
+          customsSupplierId: 3,
+          transportSupplierId: 4,
         }),
         /IMPORT_RECEIPT_PROJECT_NOT_FOUND/,
       );
@@ -271,7 +336,11 @@ async function main(): Promise<void> {
       assert.equal(await countRows(db, 'journal_entries'), 0, 'No journal may exist after a refused posting');
       assert.equal(await countRows(db, 'stock_movements'), 0, 'No stock movement may exist after a refused posting');
       assert.equal(await countRows(db, 'cost_centers'), 0, 'No cost centre may be created by a refused posting');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.stock_qty), 0, 'Stock stays zero after a refused posting');
       console.log('Case D passed: dangling project reference fails closed with zero writes');
     } finally {

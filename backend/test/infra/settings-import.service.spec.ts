@@ -43,11 +43,23 @@ function createState(): DbState {
 
 class FakeSelectBuilder {
   private conditions: Array<{ column: unknown; value: unknown }> = [];
-  constructor(private readonly table: string, private readonly state: DbState) {}
-  select(): this { return this; }
-  selectAll(): this { return this; }
-  orderBy(): this { return this; }
-  where(column: unknown, _op?: string, value?: unknown): this { this.conditions.push({ column, value }); return this; }
+  constructor(
+    private readonly table: string,
+    private readonly state: DbState,
+  ) {}
+  select(): this {
+    return this;
+  }
+  selectAll(): this {
+    return this;
+  }
+  orderBy(): this {
+    return this;
+  }
+  where(column: unknown, _op?: string, value?: unknown): this {
+    this.conditions.push({ column, value });
+    return this;
+  }
   async execute() {
     if (this.table === 'stock_locations') {
       return this.state.stock_locations.filter((row) => row.tenant_id === tenantId && row.is_active !== false);
@@ -91,8 +103,14 @@ class FakeSelectBuilder {
 
 class FakeDeleteBuilder {
   private conditions: Array<{ column: unknown; value: unknown }> = [];
-  constructor(private readonly table: string, private readonly state: DbState) {}
-  where(column: unknown, _op?: string, value?: unknown): this { this.conditions.push({ column, value }); return this; }
+  constructor(
+    private readonly table: string,
+    private readonly state: DbState,
+  ) {}
+  where(column: unknown, _op?: string, value?: unknown): this {
+    this.conditions.push({ column, value });
+    return this;
+  }
   async execute() {
     if (this.table === 'product_units') {
       const productId = this.conditions.find((c) => c.column === 'product_id')?.value;
@@ -105,9 +123,18 @@ class FakeDeleteBuilder {
 
 class FakeInsertBuilder {
   private payload: Record<string, unknown> = {};
-  constructor(private readonly table: string, private readonly state: DbState, private readonly failOnCustomerNumber: number | null) {}
-  values(payload: Record<string, unknown>): this { this.payload = payload; return this; }
-  returning(): this { return this; }
+  constructor(
+    private readonly table: string,
+    private readonly state: DbState,
+    private readonly failOnCustomerNumber: number | null,
+  ) {}
+  values(payload: Record<string, unknown>): this {
+    this.payload = payload;
+    return this;
+  }
+  returning(): this {
+    return this;
+  }
   async execute() {
     if (this.table === 'customer_ledger') {
       this.state.customer_ledger.push({ ...this.payload });
@@ -154,9 +181,18 @@ class FakeInsertBuilder {
 class FakeUpdateBuilder {
   private payload: Record<string, unknown> = {};
   private id = 0;
-  constructor(private readonly table: string, private readonly state: DbState) {}
-  set(payload: Record<string, unknown>): this { this.payload = payload; return this; }
-  where(column: unknown, _op?: string, value?: unknown): this { if (column === 'id') this.id = Number(value || 0); return this; }
+  constructor(
+    private readonly table: string,
+    private readonly state: DbState,
+  ) {}
+  set(payload: Record<string, unknown>): this {
+    this.payload = payload;
+    return this;
+  }
+  where(column: unknown, _op?: string, value?: unknown): this {
+    if (column === 'id') this.id = Number(value || 0);
+    return this;
+  }
   async execute() {
     const list = this.table === 'customers' ? this.state.customers : this.state.products;
     const row = list.find((entry) => entry.id === this.id && entry.tenant_id === tenantId);
@@ -165,19 +201,32 @@ class FakeUpdateBuilder {
 }
 
 class FakeDb {
-  constructor(public state: DbState, private readonly failOnCustomerNumber: number | null = null) {}
-  selectFrom(table: string) { return new FakeSelectBuilder(table, this.state); }
-  insertInto(table: string) { return new FakeInsertBuilder(table, this.state, this.failOnCustomerNumber); }
-  updateTable(table: string) { return new FakeUpdateBuilder(table, this.state); }
-  deleteFrom(table: string) { return new FakeDeleteBuilder(table, this.state); }
+  constructor(
+    public state: DbState,
+    private readonly failOnCustomerNumber: number | null = null,
+  ) {}
+  selectFrom(table: string) {
+    return new FakeSelectBuilder(table, this.state);
+  }
+  insertInto(table: string) {
+    return new FakeInsertBuilder(table, this.state, this.failOnCustomerNumber);
+  }
+  updateTable(table: string) {
+    return new FakeUpdateBuilder(table, this.state);
+  }
+  deleteFrom(table: string) {
+    return new FakeDeleteBuilder(table, this.state);
+  }
   transaction() {
-    return { execute: async <T>(work: (trx: FakeDb) => Promise<T>) => {
-      const snapshot = JSON.parse(JSON.stringify(this.state)) as DbState;
-      const trxDb = new FakeDb(snapshot, this.failOnCustomerNumber);
-      const result = await work(trxDb);
-      this.state = trxDb.state;
-      return result;
-    } };
+    return {
+      execute: async <T>(work: (trx: FakeDb) => Promise<T>) => {
+        const snapshot = JSON.parse(JSON.stringify(this.state)) as DbState;
+        const trxDb = new FakeDb(snapshot, this.failOnCustomerNumber);
+        const result = await work(trxDb);
+        this.state = trxDb.state;
+        return result;
+      },
+    };
   }
 }
 
@@ -191,19 +240,41 @@ function createService(failOnCustomerNumber: number | null = null) {
       return 999;
     },
   };
-  const service = new SettingsImportService(db as any, { log: async (action: string) => { auditCalls.push(action); } } as any, postingStub as any);
+  const service = new SettingsImportService(
+    db as any,
+    {
+      log: async (action: string) => {
+        auditCalls.push(action);
+      },
+    } as any,
+    postingStub as any,
+  );
   return { db, service, auditCalls, journals };
 }
 
-const actor = { userId: 7, username: 'owner', role: 'super_admin', permissions: ['settings'], tenantId, accountId } as any;
+const actor = {
+  userId: 7,
+  username: 'owner',
+  role: 'super_admin',
+  permissions: ['settings'],
+  tenantId,
+  accountId,
+} as any;
 
 async function run(): Promise<void> {
   {
     const { db, service, auditCalls } = createService(2);
-    await assert.rejects(() => service.importCustomers([
-      { name: 'Alice', phone: '1', openingBalance: 25 },
-      { name: 'Bob', phone: '2', openingBalance: 40 },
-    ], actor), /forced_customer_insert_failure_2/);
+    await assert.rejects(
+      () =>
+        service.importCustomers(
+          [
+            { name: 'Alice', phone: '1', openingBalance: 25 },
+            { name: 'Bob', phone: '2', openingBalance: 40 },
+          ],
+          actor,
+        ),
+      /forced_customer_insert_failure_2/,
+    );
     assert.equal(db.state.customers.length, 0);
     assert.equal(db.state.customer_ledger.length, 0);
     assert.deepEqual(auditCalls, []);
@@ -211,10 +282,13 @@ async function run(): Promise<void> {
 
   {
     const { db, service, auditCalls } = createService();
-    const result = await service.importCustomers([
-      { name: 'Alice', phone: '1', openingBalance: 25 },
-      { name: 'Bob', phone: '2', openingBalance: 40 },
-    ], actor);
+    const result = await service.importCustomers(
+      [
+        { name: 'Alice', phone: '1', openingBalance: 25 },
+        { name: 'Bob', phone: '2', openingBalance: 40 },
+      ],
+      actor,
+    );
     assert.equal(result.ok, true);
     assert.equal(result.inserted, 2);
     assert.equal(db.state.customers.length, 2);
@@ -231,26 +305,29 @@ async function run(): Promise<void> {
   {
     // Test importCustomers with Van and wholesale metadata
     const { db, service } = createService();
-    const result = await service.importCustomers([
-      {
-        'اسم العميل / المحل (إجباري)': 'سوبرماركت الأمل',
-        'كود المحل / العميل': 'CUST-1001',
-        'رقم الموبايل': '01012345678',
-        'خط السير / مسار التوزيع': 'خط الهرم',
-        'الحي / المربع السكني': 'العشرين',
-        'العنوان التفصيلي': 'شارع فيصل',
-        'يوم الزيارة الأسبوعي': 'الإثنين',
-        'أيام الزيارة (إن تعددت)': 'الإثنين، الخميس',
-        'ترتيب خط السير': 1,
-        'المندوب المسؤول / المخصص': 'أحمد محمود',
-        'رابط الموقع / GPS': 'https://maps.google.com/?q=30,31',
-        'فئة السعر': 'جملة',
-        'نوع النشاط / التصنيف': 'سوبرماركت',
-        'نوع العميل (نقدي / آجل)': 'wholesale',
-        'الحد الائتماني': 5000,
-        'رصيد افتتاحي': 1200,
-      },
-    ], actor);
+    const result = await service.importCustomers(
+      [
+        {
+          'اسم العميل / المحل (إجباري)': 'سوبرماركت الأمل',
+          'كود المحل / العميل': 'CUST-1001',
+          'رقم الموبايل': '01012345678',
+          'خط السير / مسار التوزيع': 'خط الهرم',
+          'الحي / المربع السكني': 'العشرين',
+          'العنوان التفصيلي': 'شارع فيصل',
+          'يوم الزيارة الأسبوعي': 'الإثنين',
+          'أيام الزيارة (إن تعددت)': 'الإثنين، الخميس',
+          'ترتيب خط السير': 1,
+          'المندوب المسؤول / المخصص': 'أحمد محمود',
+          'رابط الموقع / GPS': 'https://maps.google.com/?q=30,31',
+          'فئة السعر': 'جملة',
+          'نوع النشاط / التصنيف': 'سوبرماركت',
+          'نوع العميل (نقدي / آجل)': 'wholesale',
+          'الحد الائتماني': 5000,
+          'رصيد افتتاحي': 1200,
+        },
+      ],
+      actor,
+    );
     assert.equal(result.ok, true);
     assert.equal(result.inserted, 1);
     assert.equal(db.state.customers.length, 1);
@@ -275,22 +352,25 @@ async function run(): Promise<void> {
   {
     // Test importProducts with units (Piece + Carton) from Excel columns
     const { db, service, journals } = createService();
-    const result = await service.importProducts([
-      {
-        'اسم الصنف (إجباري)': 'شاحن سامسونج أصلي',
-        'الباركود': '622800800',
-        'سعر التكلفة': 500,
-        'سعر البيع': 750,
-        'سعر الجملة': 600,
-        'الكمية': 24,
-        'وحدة القياس الأساسية': 'قطعة',
-        'وحدة البيع': 'قطعة',
-        'وحدة الشراء': 'كرتونة',
-        'اسم وحدة إضافية': 'كرتونة',
-        'معامل الوحدة الإضافية': 12,
-        'باركود الوحدة الإضافية': '622800801',
-      },
-    ], actor);
+    const result = await service.importProducts(
+      [
+        {
+          'اسم الصنف (إجباري)': 'شاحن سامسونج أصلي',
+          الباركود: '622800800',
+          'سعر التكلفة': 500,
+          'سعر البيع': 750,
+          'سعر الجملة': 600,
+          الكمية: 24,
+          'وحدة القياس الأساسية': 'قطعة',
+          'وحدة البيع': 'قطعة',
+          'وحدة الشراء': 'كرتونة',
+          'اسم وحدة إضافية': 'كرتونة',
+          'معامل الوحدة الإضافية': 12,
+          'باركود الوحدة الإضافية': '622800801',
+        },
+      ],
+      actor,
+    );
 
     assert.equal(result.ok, true);
     assert.equal(result.inserted, 1);
@@ -307,7 +387,10 @@ async function run(): Promise<void> {
     assert.equal(journals[0].sourceType, 'catalog_opening_stock', 'journal source is the product opening stock');
     assert.deepEqual(
       (journals[0].lines as Array<Record<string, unknown>>).map((line) => [line.accountId, line.debit, line.credit]),
-      [[1140, 12000, 0], [3100, 0, 12000]],
+      [
+        [1140, 12000, 0],
+        [3100, 0, 12000],
+      ],
       '24 units at 500.00 debit 1140 12,000.00 and credit 3100 12,000.00',
     );
 
@@ -330,17 +413,20 @@ async function run(): Promise<void> {
     assert.equal(extraUnit.is_purchase_unit_default, true);
 
     // Test updating existing product with new carton multiplier (e.g. 24)
-    const updateResult = await service.importProducts([
-      {
-        'اسم الصنف': 'شاحن سامسونج أصلي',
-        'الباركود': '622800800',
-        'سعر التكلفة': 480,
-        'وحدة القياس': 'قطعة',
-        'وحدة الشراء': 'كرتونة',
-        'اسم وحدة إضافية': 'كرتونة',
-        'معامل الوحدة الإضافية': 24,
-      },
-    ], actor);
+    const updateResult = await service.importProducts(
+      [
+        {
+          'اسم الصنف': 'شاحن سامسونج أصلي',
+          الباركود: '622800800',
+          'سعر التكلفة': 480,
+          'وحدة القياس': 'قطعة',
+          'وحدة الشراء': 'كرتونة',
+          'اسم وحدة إضافية': 'كرتونة',
+          'معامل الوحدة الإضافية': 24,
+        },
+      ],
+      actor,
+    );
 
     assert.equal(updateResult.ok, true);
     assert.equal(updateResult.updated, 1);
@@ -358,25 +444,39 @@ async function run(): Promise<void> {
 
     // Test location alias: When tenant has "رصيد الفرع الرئيسي", importing with "المخزن الرئيسي" maps to it without duplicate location
     db.state.stock_locations = [
-      { id: 1, name: 'رصيد الفرع الرئيسي', branch_id: 1, tenant_id: tenantId, location_type: 'branch_stock', is_active: true }
+      {
+        id: 1,
+        name: 'رصيد الفرع الرئيسي',
+        branch_id: 1,
+        tenant_id: tenantId,
+        location_type: 'branch_stock',
+        is_active: true,
+      },
     ];
     db.state.nextLocationId = 2;
 
-    const locImportResult = await service.importProducts([
-      {
-        'اسم الصنف': 'ماوس لاسلكي',
-        'الباركود': '622999001',
-        'الكمية': 15,
-        'المخزن': 'المخزن الرئيسي',
-      },
-    ], actor);
+    const locImportResult = await service.importProducts(
+      [
+        {
+          'اسم الصنف': 'ماوس لاسلكي',
+          الباركود: '622999001',
+          الكمية: 15,
+          المخزن: 'المخزن الرئيسي',
+        },
+      ],
+      actor,
+    );
 
     assert.equal(locImportResult.ok, true);
     assert.equal(locImportResult.inserted, 1);
     // The zero-cost mouse posts no opening-stock journal.
     assert.equal(journals.length, 1, 'zero-cost import posts no journal');
     // Assert no second location was created!
-    assert.equal(db.state.stock_locations.length, 1, 'Must NOT create duplicate location when alias or single location matches');
+    assert.equal(
+      db.state.stock_locations.length,
+      1,
+      'Must NOT create duplicate location when alias or single location matches',
+    );
     assert.equal(db.state.stock_locations[0]?.name, 'رصيد الفرع الرئيسي');
 
     // Verify product_location_stock is mapped to location 1
@@ -409,19 +509,25 @@ async function run(): Promise<void> {
     // INV-IMPORT-CHUNKED-1000: nameless rows are counted as skipped instead of
     // silently dropped, so the chunked summary stays honest.
     const { db, service } = createService();
-    const result = await service.importProducts([
-      { name: '', barcode: '' },
-      { name: 'Real Product', barcode: 'REAL-1', 'سعر البيع': 10 },
-    ], actor);
+    const result = await service.importProducts(
+      [
+        { name: '', barcode: '' },
+        { name: 'Real Product', barcode: 'REAL-1', 'سعر البيع': 10 },
+      ],
+      actor,
+    );
     assert.equal(result.ok, true);
     assert.equal(result.inserted, 1);
     assert.equal(result.skipped, 1);
     assert.equal(db.state.products.length, 1);
 
-    const customerResult = await service.importCustomers([
-      { name: '', phone: '' },
-      { name: 'Alice', phone: '1' },
-    ], actor);
+    const customerResult = await service.importCustomers(
+      [
+        { name: '', phone: '' },
+        { name: 'Alice', phone: '1' },
+      ],
+      actor,
+    );
     assert.equal(customerResult.ok, true);
     assert.equal(customerResult.inserted, 1);
     assert.equal(customerResult.skipped, 1);

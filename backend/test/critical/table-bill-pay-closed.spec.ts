@@ -83,10 +83,17 @@ async function main(): Promise<void> {
   {
     const { pg, db } = await makeDb();
     try {
-      await db.insertInto('held_sales' as never).values({
-        id: 1, tenant_id: 't1', paid_online: false,
-        paid_online_amount: null, paid_online_ref: null, note: 'original note',
-      } as never).execute();
+      await db
+        .insertInto('held_sales' as never)
+        .values({
+          id: 1,
+          tenant_id: 't1',
+          paid_online: false,
+          paid_online_amount: null,
+          paid_online_ref: null,
+          note: 'original note',
+        } as never)
+        .execute();
       const service = makeService(db);
       await expectClosed(service);
       const held = await (db as any).selectFrom('held_sales').selectAll().executeTakeFirstOrThrow();
@@ -120,7 +127,10 @@ async function main(): Promise<void> {
   // storefront code (facade + all slices) so a resurrected write anywhere fails.
   {
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/storefront/services/storefront-table-bill.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/storefront/services/storefront-table-bill.service.ts'),
+      'utf8',
+    );
     const storefrontFiles = [
       'modules/storefront/storefront.service.ts',
       'modules/storefront/storefront-helpers.ts',
@@ -145,13 +155,23 @@ async function main(): Promise<void> {
     assert.ok(methodSource.includes('ServiceUnavailableException'), 'the method fails closed with 503');
     assert.ok(!storefrontAll.includes('TAB-PAY-'), 'no generated payment reference remains in the service');
     assert.ok(!storefrontAll.includes('paid_online: true'), 'no paid_online marking remains in the service');
-    assert.ok(!storefrontAll.includes('restaurant_table_service_calls'), 'no service-call write remains in the service');
-    const apiSource = readFileSync(resolve(here, '../../../frontend/src/features/storefront/api/storefront.api.ts'), 'utf8');
+    assert.ok(
+      !storefrontAll.includes('restaurant_table_service_calls'),
+      'no service-call write remains in the service',
+    );
+    const apiSource = readFileSync(
+      resolve(here, '../../../frontend/src/features/storefront/api/storefront.api.ts'),
+      'utf8',
+    );
     assert.ok(apiSource.includes('INV-TABLE-BILL-PAY-CLOSED'), 'the API helper names the invariant');
     assert.ok(!apiSource.includes('paidOnline: true'), 'the API helper never fabricates a paid result');
     assert.ok(!apiSource.includes('REF-${Date.now'), 'no generated fallback reference remains in the API helper');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-TABLE-BILL-PAY-CLOSED').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-TABLE-BILL-PAY-CLOSED').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
     console.log('  source + invariant pins passed');
   }
 

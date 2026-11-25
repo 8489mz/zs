@@ -78,46 +78,112 @@ import { AccountingTenantFoundationService } from '../../src/modules/accounting/
 import { InventoryAdjustmentService } from '../../src/modules/inventory/services/inventory-adjustment.service';
 import { getLocationAvailability, previewConsumableStockQty } from '../../src/common/utils/location-stock-ledger';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 
-async function seedProduct(db: Kysely<Database>, id: number, globalQty: number, globalReserved: number, locQty: number, locReserved: number, cost: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, ${globalReserved}, ${cost}, true, false)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${locQty}, ${locReserved})`.execute(db);
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  globalQty: number,
+  globalReserved: number,
+  locQty: number,
+  locReserved: number,
+  cost: number,
+): Promise<void> {
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, ${globalReserved}, ${cost}, true, false)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${locQty}, ${locReserved})`.execute(
+    db,
+  );
 }
 
 async function seedUnassigned(db: Kysely<Database>, id: number, qty: number, reserved: number): Promise<void> {
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, NULL, NULL, ${qty}, ${reserved})`.execute(db);
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, NULL, NULL, ${qty}, ${reserved})`.execute(
+    db,
+  );
 }
 
 async function locationRow(db: Kysely<Database>, productId: number): Promise<{ qty: number; reserved_qty: number }> {
-  const row = await sql<{ qty: string; reserved_qty: string }>`SELECT qty, reserved_qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = 1`.execute(db);
+  const row = await sql<{
+    qty: string;
+    reserved_qty: string;
+  }>`SELECT qty, reserved_qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = 1`.execute(
+    db,
+  );
   return { qty: Number(row.rows[0].qty), reserved_qty: Number(row.rows[0].reserved_qty) };
 }
 
-async function globalRow(db: Kysely<Database>, productId: number): Promise<{ stock_qty: number; reserved_qty: number }> {
-  const row = await sql<{ stock_qty: string; reserved_qty: string }>`SELECT stock_qty, reserved_qty FROM products WHERE id = ${productId}`.execute(db);
+async function globalRow(
+  db: Kysely<Database>,
+  productId: number,
+): Promise<{ stock_qty: number; reserved_qty: number }> {
+  const row = await sql<{
+    stock_qty: string;
+    reserved_qty: string;
+  }>`SELECT stock_qty, reserved_qty FROM products WHERE id = ${productId}`.execute(db);
   return { stock_qty: Number(row.rows[0].stock_qty), reserved_qty: Number(row.rows[0].reserved_qty) };
 }
 
 async function availableAt(db: Kysely<Database>, productId: number): Promise<number> {
-  const availability = await getLocationAvailability(db as never, { tenantId: 't1', accountId: 'a1', productId, locationId: 1, branchId: 1 });
+  const availability = await getLocationAvailability(db as never, {
+    tenantId: 't1',
+    accountId: 'a1',
+    productId,
+    locationId: 1,
+    branchId: 1,
+  });
   return availability.availableAtLocation;
 }
 
-async function movementFor(db: Kysely<Database>, productId: number): Promise<{ id: number; qty: number; before_qty: number; after_qty: number } | null> {
-  const rows = await sql<{ id: string; qty: string; before_qty: string; after_qty: string }>`SELECT id, qty, before_qty, after_qty FROM stock_movements WHERE reference_type = 'inventory_adjustment' AND reference_id = ${productId} ORDER BY id ASC`.execute(db);
+async function movementFor(
+  db: Kysely<Database>,
+  productId: number,
+): Promise<{ id: number; qty: number; before_qty: number; after_qty: number } | null> {
+  const rows = await sql<{
+    id: string;
+    qty: string;
+    before_qty: string;
+    after_qty: string;
+  }>`SELECT id, qty, before_qty, after_qty FROM stock_movements WHERE reference_type = 'inventory_adjustment' AND reference_id = ${productId} ORDER BY id ASC`.execute(
+    db,
+  );
   if (!rows.rows.length) return null;
   const row = rows.rows[rows.rows.length - 1];
-  return { id: Number(row.id), qty: Number(row.qty), before_qty: Number(row.before_qty), after_qty: Number(row.after_qty) };
+  return {
+    id: Number(row.id),
+    qty: Number(row.qty),
+    before_qty: Number(row.before_qty),
+    after_qty: Number(row.after_qty),
+  };
 }
 
 async function movementCount(db: Kysely<Database>, productId: number): Promise<number> {
-  const rows = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM stock_movements WHERE reference_type = 'inventory_adjustment' AND reference_id = ${productId}`.execute(db);
+  const rows = await sql<{
+    n: string;
+  }>`SELECT COUNT(*) AS n FROM stock_movements WHERE reference_type = 'inventory_adjustment' AND reference_id = ${productId}`.execute(
+    db,
+  );
   return Number(rows.rows[0].n);
 }
 
-async function journalLinesFor(db: Kysely<Database>, movementId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
-  const rows = await sql<{ code: string; debit: string; credit: string }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'inventory_adjustment' AND e.source_id = ${movementId} AND e.tenant_id = 't1' ORDER BY a.code`.execute(db);
+async function journalLinesFor(
+  db: Kysely<Database>,
+  movementId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
+  const rows = await sql<{
+    code: string;
+    debit: string;
+    credit: string;
+  }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'inventory_adjustment' AND e.source_id = ${movementId} AND e.tenant_id = 't1' ORDER BY a.code`.execute(
+    db,
+  );
   return rows.rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
@@ -128,19 +194,34 @@ async function journalCount(db: Kysely<Database>): Promise<number> {
 
 async function expectCode(promise: Promise<unknown>, code: string): Promise<void> {
   let caught: unknown;
-  try { await promise; } catch (error) { caught = error; }
+  try {
+    await promise;
+  } catch (error) {
+    caught = error;
+  }
   assert.ok(caught, `expected rejection with ${code}`);
   assert.equal((caught as { code?: string }).code, code);
 }
 
-function adjust(service: InventoryAdjustmentService, productId: number, actionType: string, qty: number): Promise<Record<string, unknown>> {
-  return service.createInventoryAdjustment({ productId, locationId: 1, branchId: 1, actionType, qty, reason: 'single basis check' } as never, AUTH);
+function adjust(
+  service: InventoryAdjustmentService,
+  productId: number,
+  actionType: string,
+  qty: number,
+): Promise<Record<string, unknown>> {
+  return service.createInventoryAdjustment(
+    { productId, locationId: 1, branchId: 1, actionType, qty, reason: 'single basis check' } as never,
+    AUTH,
+  );
 }
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new InventoryAdjustmentService(
     db as never,
@@ -191,7 +272,7 @@ async function main(): Promise<void> {
     // set raw 12 -> 8 and booked -4 / 40; the fix books exactly -2.
     await seedProduct(db, 1, 12, 2, 12, 2, 10);
     assert.equal(await availableAt(db, 1), 10);
-    const result1 = await adjust(service, 1, 'adjust', 8) as { adjustment: { beforeQty: number; afterQty: number } };
+    const result1 = (await adjust(service, 1, 'adjust', 8)) as { adjustment: { beforeQty: number; afterQty: number } };
     // Response scope values stay raw on-hand (12 -> 10); their
     // difference is the available delta (-2).
     assert.equal(result1.adjustment.beforeQty, 12);
@@ -307,7 +388,13 @@ async function main(): Promise<void> {
     await seedProduct(db, 9, 10, 0, 5, 0, 10);
     await seedUnassigned(db, 9, 5, 0);
     assert.equal(await availableAt(db, 9), 10);
-    const preview9 = await previewConsumableStockQty(db as never, { tenantId: 't1', accountId: 'a1', productId: 9, branchId: 1, locationId: 1 });
+    const preview9 = await previewConsumableStockQty(db as never, {
+      tenantId: 't1',
+      accountId: 'a1',
+      productId: 9,
+      branchId: 1,
+      locationId: 1,
+    });
     assert.equal(preview9, 10);
     await adjust(service, 9, 'adjust', 7);
     const mov9 = await movementFor(db, 9);
@@ -329,17 +416,44 @@ async function main(): Promise<void> {
     {
       const { readFileSync } = await import('node:fs');
       const { resolve } = await import('node:path');
-      const serviceSrc = readFileSync(resolve(__dirname, '../../src/modules/inventory/services/inventory-adjustment.service.ts'), 'utf8');
-      assert.ok(serviceSrc.includes('previewConsumableStockQty'), 'adjustment service must read before-qty on the available basis');
-      assert.ok(!serviceSrc.includes('setScopedStockQty'), 'adjustment service must not set the raw scoped qty from the available target');
-      assert.ok(!serviceSrc.includes('previewAssignedLocationStockQty'), 'adjustment service must not read before-qty on the location-only basis');
-      assert.ok(serviceSrc.includes('getLocationAvailability'), 'adjustment service must serve the dialog-prefill availability read');
+      const serviceSrc = readFileSync(
+        resolve(__dirname, '../../src/modules/inventory/services/inventory-adjustment.service.ts'),
+        'utf8',
+      );
+      assert.ok(
+        serviceSrc.includes('previewConsumableStockQty'),
+        'adjustment service must read before-qty on the available basis',
+      );
+      assert.ok(
+        !serviceSrc.includes('setScopedStockQty'),
+        'adjustment service must not set the raw scoped qty from the available target',
+      );
+      assert.ok(
+        !serviceSrc.includes('previewAssignedLocationStockQty'),
+        'adjustment service must not read before-qty on the location-only basis',
+      );
+      assert.ok(
+        serviceSrc.includes('getLocationAvailability'),
+        'adjustment service must serve the dialog-prefill availability read',
+      );
       await seedProduct(db, 10, 10, 2, 10, 2, 10);
-      const availability = await getLocationAvailability(db as never, { tenantId: 't1', accountId: 'a1', productId: 10, locationId: 1, branchId: 1 });
+      const availability = await getLocationAvailability(db as never, {
+        tenantId: 't1',
+        accountId: 'a1',
+        productId: 10,
+        locationId: 1,
+        branchId: 1,
+      });
       assert.equal(availability.availableAtLocation, 8);
       assert.equal(availability.locationQty, 10);
       assert.equal(availability.locationReservedQty, 2);
-      const preview10 = await previewConsumableStockQty(db as never, { tenantId: 't1', accountId: 'a1', productId: 10, branchId: 1, locationId: 1 });
+      const preview10 = await previewConsumableStockQty(db as never, {
+        tenantId: 't1',
+        accountId: 'a1',
+        productId: 10,
+        branchId: 1,
+        locationId: 1,
+      });
       assert.equal(preview10, 8);
       assert.equal(preview10, availability.availableAtLocation);
     }

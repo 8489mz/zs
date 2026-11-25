@@ -30,7 +30,7 @@ import {
 {
   const lines = [
     { quantity: 2, unitPrice: 500, taxRate: 14 }, // net: 1000, tax: 140
-    { quantity: 1, unitPrice: 2000, taxRate: 0 },  // net: 2000, tax: 0
+    { quantity: 1, unitPrice: 2000, taxRate: 0 }, // net: 2000, tax: 0
   ];
   const totals = calculateSubscriptionTotals(lines, 2);
   assert.equal(totals.subtotal, 3000);

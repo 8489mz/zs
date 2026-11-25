@@ -39,7 +39,12 @@ import { VanSalesService } from '../../src/modules/delivery-reps/van-sales.servi
 const TENANT = 't-van-fefo';
 const ACCOUNT = 'a-van-fefo';
 
-async function batchRows(db: Kysely<Database>, productId: number): Promise<Array<{ id: number; locationId: number | null; batch: string; expiry: string; qty: number; status: string }>> {
+async function batchRows(
+  db: Kysely<Database>,
+  productId: number,
+): Promise<
+  Array<{ id: number; locationId: number | null; batch: string; expiry: string; qty: number; status: string }>
+> {
   const rows = await (db as any)
     .selectFrom('pharmacy_batches')
     .selectAll()
@@ -116,33 +121,92 @@ async function main(): Promise<void> {
     // digits through tenantBaseCurrency (settings +
     // currency_exchange_rates); the fixture answers with EGP (2dp).
     await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-    await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 }).execute();
+    await anyDb
+      .insertInto('currency_exchange_rates')
+      .values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 })
+      .execute();
     await anyDb.insertInto('accounting_settings').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT }).execute();
-    await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+    await anyDb
+      .insertInto('stock_locations')
+      .values({
+        id: 10,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Main warehouse',
+        location_type: 'internal_warehouse',
+        is_active: true,
+      })
+      .execute();
 
     async function seedRep(repId: number): Promise<void> {
-      await anyDb.insertInto('delivery_representatives').values({ id: repId, tenant_id: TENANT, account_id: ACCOUNT, name: `Rep ${repId}`, is_van_rep: true }).execute();
+      await anyDb
+        .insertInto('delivery_representatives')
+        .values({ id: repId, tenant_id: TENANT, account_id: ACCOUNT, name: `Rep ${repId}`, is_van_rep: true })
+        .execute();
     }
     async function seedProduct(productId: number, stock: number): Promise<void> {
-      await anyDb.insertInto('products').values({ id: productId, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${productId}`, stock_qty: stock, cost_price: 10, retail_price: 100, wholesale_price: 90, credit_price: 100, consumer_price: 100, is_active: true }).execute();
-      await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: productId, location_id: 10, qty: stock }).execute();
+      await anyDb
+        .insertInto('products')
+        .values({
+          id: productId,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: `Product ${productId}`,
+          stock_qty: stock,
+          cost_price: 10,
+          retail_price: 100,
+          wholesale_price: 90,
+          credit_price: 100,
+          consumer_price: 100,
+          is_active: true,
+        })
+        .execute();
+      await anyDb
+        .insertInto('product_location_stock')
+        .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: productId, location_id: 10, qty: stock })
+        .execute();
     }
     async function seedBatch(productId: number, batch: string, expiry: string, qty: number): Promise<number> {
-      const row = await anyDb.insertInto('pharmacy_batches').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: productId, drug_id: null, batch_number: batch, expiry_date: expiry, quantity: qty, unit_cost: 10, location_id: 10, status: 'active' }).returning(['id']).executeTakeFirstOrThrow();
+      const row = await anyDb
+        .insertInto('pharmacy_batches')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          product_id: productId,
+          drug_id: null,
+          batch_number: batch,
+          expiry_date: expiry,
+          quantity: qty,
+          unit_cost: 10,
+          location_id: 10,
+          status: 'active',
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
       return Number(row.id);
     }
     async function vanLocationId(repId: number): Promise<number> {
-      const rep = await anyDb.selectFrom('delivery_representatives').select('van_location_id').where('id', '=', repId).executeTakeFirstOrThrow();
+      const rep = await anyDb
+        .selectFrom('delivery_representatives')
+        .select('van_location_id')
+        .where('id', '=', repId)
+        .executeTakeFirstOrThrow();
       return Number(rep.van_location_id);
     }
 
     // Case 1: load carries FEFO batches onto the van, merging by batch number.
     await seedRep(1);
     await seedProduct(101, 20);
-    await anyDb.insertInto('pharmacy_drugs').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, name: 'Drug 101' }).execute();
+    await anyDb
+      .insertInto('pharmacy_drugs')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, name: 'Drug 101' })
+      .execute();
     await seedBatch(101, 'B-EARLY', '2027-01-31', 10);
     await seedBatch(101, 'B-LATE', '2027-06-30', 10);
-    const trip1 = await service.openTripAndLoad(1, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 101, qty: 12 }] });
+    const trip1 = await service.openTripAndLoad(1, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 101, qty: 12 }],
+    });
     assert.ok(trip1.tripId > 0);
     const van1 = await vanLocationId(1);
     assert.equal(await scopedQty(db, 101, 10), 8);
@@ -159,7 +223,10 @@ async function main(): Promise<void> {
     );
 
     // Case 2: a second load of the same batch merges into the van row.
-    await service.loadSupplementaryStockToActiveTrip(1, TENANT, ACCOUNT, trip1.tripId, { sourceWarehouseId: 10, items: [{ productId: 101, qty: 4 }] });
+    await service.loadSupplementaryStockToActiveTrip(1, TENANT, ACCOUNT, trip1.tripId, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 101, qty: 4 }],
+    });
     const afterReload = await batchRows(db, 101);
     assert.deepEqual(
       afterReload.map((r) => [r.locationId, r.batch, r.qty, r.status]),
@@ -175,14 +242,23 @@ async function main(): Promise<void> {
     // expired batch, and records allocations against the sale items.
     await seedRep(2);
     await seedProduct(102, 20);
-    await anyDb.insertInto('pharmacy_drugs').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 102, name: 'Drug 102' }).execute();
+    await anyDb
+      .insertInto('pharmacy_drugs')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 102, name: 'Drug 102' })
+      .execute();
     const expiredId = await seedBatch(102, 'B-OLD', '2020-01-31', 5);
     await seedBatch(102, 'B-NEW', '2027-03-31', 10);
-    const trip2 = await service.openTripAndLoad(2, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 102, qty: 12 }] });
+    const trip2 = await service.openTripAndLoad(2, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 102, qty: 12 }],
+    });
     const van2 = await vanLocationId(2);
     // The expired batch is skipped at load: only 10 valid units travel.
     const loaded2 = await batchRows(db, 102);
-    assert.equal(loaded2.filter((r) => r.locationId === van2).reduce((s, r) => s + r.qty, 0), 10);
+    assert.equal(
+      loaded2.filter((r) => r.locationId === van2).reduce((s, r) => s + r.qty, 0),
+      10,
+    );
     assert.equal(loaded2.find((r) => r.id === expiredId)?.qty, 5);
     const sale2 = await service.executeFieldSale(2, TENANT, ACCOUNT, {
       tripId: trip2.tripId,
@@ -192,9 +268,17 @@ async function main(): Promise<void> {
     assert.ok(sale2.saleId > 0);
     assert.equal(await scopedQty(db, 102, van2), 8);
     const sold2 = await batchRows(db, 102);
-    assert.equal(sold2.filter((r) => r.locationId === van2).reduce((s, r) => s + r.qty, 0), 6);
+    assert.equal(
+      sold2.filter((r) => r.locationId === van2).reduce((s, r) => s + r.qty, 0),
+      6,
+    );
     assert.equal(sold2.find((r) => r.id === expiredId)?.qty, 5);
-    const allocs = await anyDb.selectFrom('sale_pharmacy_batch_allocations').selectAll().where('sale_id', '=', sale2.saleId).where('tenant_id', '=', TENANT).execute();
+    const allocs = await anyDb
+      .selectFrom('sale_pharmacy_batch_allocations')
+      .selectAll()
+      .where('sale_id', '=', sale2.saleId)
+      .where('tenant_id', '=', TENANT)
+      .execute();
     assert.equal(allocs.length, 1);
     assert.equal(Number(allocs[0].quantity), 4);
     assert.equal(Number(allocs[0].product_id), 102);
@@ -206,9 +290,15 @@ async function main(): Promise<void> {
     // rolls everything back (pooled stock, batches, no sale row).
     await seedRep(3);
     await seedProduct(103, 5);
-    await anyDb.insertInto('pharmacy_drugs').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 103, name: 'Drug 103' }).execute();
+    await anyDb
+      .insertInto('pharmacy_drugs')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 103, name: 'Drug 103' })
+      .execute();
     await seedBatch(103, 'B-ONLY', '2027-01-31', 3);
-    const trip3 = await service.openTripAndLoad(3, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 103, qty: 5 }] });
+    const trip3 = await service.openTripAndLoad(3, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 103, qty: 5 }],
+    });
     const van3 = await vanLocationId(3);
     await assert.rejects(
       service.executeFieldSale(3, TENANT, ACCOUNT, {
@@ -219,14 +309,25 @@ async function main(): Promise<void> {
       (err: any) => err && err.code === 'PHARMACY_FEFO_STOCK_UNAVAILABLE',
     );
     assert.equal(await scopedQty(db, 103, van3), 5);
-    assert.equal((await batchRows(db, 103)).filter((r) => r.locationId === van3).reduce((s, r) => s + r.qty, 0), 3);
-    const sales3 = await anyDb.selectFrom('sales').select('id').where('van_trip_id', '=', trip3.tripId).where('tenant_id', '=', TENANT).execute();
+    assert.equal(
+      (await batchRows(db, 103)).filter((r) => r.locationId === van3).reduce((s, r) => s + r.qty, 0),
+      3,
+    );
+    const sales3 = await anyDb
+      .selectFrom('sales')
+      .select('id')
+      .where('van_trip_id', '=', trip3.tripId)
+      .where('tenant_id', '=', TENANT)
+      .execute();
     assert.equal(sales3.length, 0);
 
     // Case 5: a product with no drug link and no batch rows sells pooled-only.
     await seedRep(4);
     await seedProduct(104, 10);
-    const trip4 = await service.openTripAndLoad(4, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 104, qty: 6 }] });
+    const trip4 = await service.openTripAndLoad(4, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 104, qty: 6 }],
+    });
     const van4 = await vanLocationId(4);
     const sale4 = await service.executeFieldSale(4, TENANT, ACCOUNT, {
       tripId: trip4.tripId,
@@ -241,12 +342,21 @@ async function main(): Promise<void> {
     // batches cannot cover it; the sale remains the fail-closed boundary.
     await seedRep(5);
     await seedProduct(105, 8);
-    await anyDb.insertInto('pharmacy_drugs').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 105, name: 'Drug 105' }).execute();
+    await anyDb
+      .insertInto('pharmacy_drugs')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 105, name: 'Drug 105' })
+      .execute();
     await seedBatch(105, 'B-PART', '2027-01-31', 2);
-    const trip5 = await service.openTripAndLoad(5, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 105, qty: 8 }] });
+    const trip5 = await service.openTripAndLoad(5, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 105, qty: 8 }],
+    });
     const van5 = await vanLocationId(5);
     assert.equal(await scopedQty(db, 105, van5), 8);
-    assert.equal((await batchRows(db, 105)).filter((r) => r.locationId === van5).reduce((s, r) => s + r.qty, 0), 2);
+    assert.equal(
+      (await batchRows(db, 105)).filter((r) => r.locationId === van5).reduce((s, r) => s + r.qty, 0),
+      2,
+    );
     await assert.rejects(
       service.executeFieldSale(5, TENANT, ACCOUNT, {
         tripId: trip5.tripId,

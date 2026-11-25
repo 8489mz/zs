@@ -26,13 +26,16 @@ const dto = (allocations: Array<{ invoiceId: number; amount: number }>) => ({
 });
 
 // KWD (3dp): a 10.123 allocation is legal and totals exactly.
-assert.deepEqual(
-  validatePaymentAllocationRequest(dto([{ invoiceId: 1, amount: 10.123 }]), 3).totalAllocating,
-  10.123,
-);
+assert.deepEqual(validatePaymentAllocationRequest(dto([{ invoiceId: 1, amount: 10.123 }]), 3).totalAllocating, 10.123);
 // KWD: multi-line totals accumulate in fils, not cents.
 assert.deepEqual(
-  validatePaymentAllocationRequest(dto([{ invoiceId: 1, amount: 10.123 }, { invoiceId: 2, amount: 0.007 }]), 3).totalAllocating,
+  validatePaymentAllocationRequest(
+    dto([
+      { invoiceId: 1, amount: 10.123 },
+      { invoiceId: 2, amount: 0.007 },
+    ]),
+    3,
+  ).totalAllocating,
   10.13,
 );
 // EGP (2dp): the same 10.123 is correctly rejected -- precision is judged
@@ -46,7 +49,13 @@ assert.throws(() => validatePaymentAllocationRequest(dto([{ invoiceId: 1, amount
 assert.throws(() => validatePaymentAllocationRequest(dto([{ invoiceId: 1, amount: Number.NaN }]), 3));
 // Allocations come back sorted by invoice id, as before.
 assert.deepEqual(
-  validatePaymentAllocationRequest(dto([{ invoiceId: 2, amount: 1 }, { invoiceId: 1, amount: 2 }]), 2).allocations.map((a) => a.invoiceId),
+  validatePaymentAllocationRequest(
+    dto([
+      { invoiceId: 2, amount: 1 },
+      { invoiceId: 1, amount: 2 },
+    ]),
+    2,
+  ).allocations.map((a) => a.invoiceId),
   [1, 2],
 );
 

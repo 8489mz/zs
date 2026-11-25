@@ -37,15 +37,25 @@ import 'reflect-metadata';
 import { strict as assert } from 'node:assert';
 import * as crypto from 'node:crypto';
 import { ZatcaPhase2Service } from '../../src/modules/tax-integration/services/zatca/zatca-phase2.service';
-import { resolveZatcaSellerIdentity, parseSettingsText } from '../../src/modules/tax-integration/engines/zatca-seller-identity.engine';
+import {
+  resolveZatcaSellerIdentity,
+  parseSettingsText,
+} from '../../src/modules/tax-integration/engines/zatca-seller-identity.engine';
 
 function testIdentityTable(): void {
   assert.deepEqual(
-    resolveZatcaSellerIdentity({ taxId: '300123456700003', isActive: true, companyName: '"Acme Co"', storeName: 'Other', businessName: 'Tenant Co' }),
+    resolveZatcaSellerIdentity({
+      taxId: '300123456700003',
+      isActive: true,
+      companyName: '"Acme Co"',
+      storeName: 'Other',
+      businessName: 'Tenant Co',
+    }),
     { sellerName: 'Acme Co', sellerVatNumber: '300123456700003' },
   );
   assert.equal(
-    resolveZatcaSellerIdentity({ taxId: '300123456700003', storeName: '  Shop Name  ', businessName: 'Tenant Co' }).sellerName,
+    resolveZatcaSellerIdentity({ taxId: '300123456700003', storeName: '  Shop Name  ', businessName: 'Tenant Co' })
+      .sellerName,
     'Shop Name',
   );
   assert.equal(
@@ -57,26 +67,14 @@ function testIdentityTable(): void {
   assert.equal(parseSettingsText(''), '');
   assert.equal(parseSettingsText(null), '');
 
-  assert.throws(
-    () => resolveZatcaSellerIdentity({ isActive: true, companyName: 'Acme' }),
-    /not configured/,
-  );
+  assert.throws(() => resolveZatcaSellerIdentity({ isActive: true, companyName: 'Acme' }), /not configured/);
   assert.throws(
     () => resolveZatcaSellerIdentity({ taxId: '300000000000003', isActive: false, companyName: 'Acme' }),
     /inactive/,
   );
-  assert.throws(
-    () => resolveZatcaSellerIdentity({ taxId: '12345', companyName: 'Acme' }),
-    /15-digit/,
-  );
-  assert.throws(
-    () => resolveZatcaSellerIdentity({ taxId: '300123456700003' }),
-    /seller name is not configured/,
-  );
-  assert.throws(
-    () => resolveZatcaSellerIdentity({ taxId: ' 300123456700003 ' }),
-    /seller name is not configured/,
-  );
+  assert.throws(() => resolveZatcaSellerIdentity({ taxId: '12345', companyName: 'Acme' }), /15-digit/);
+  assert.throws(() => resolveZatcaSellerIdentity({ taxId: '300123456700003' }), /seller name is not configured/);
+  assert.throws(() => resolveZatcaSellerIdentity({ taxId: ' 300123456700003 ' }), /seller name is not configured/);
 }
 
 async function main(): Promise<void> {
@@ -97,7 +95,12 @@ async function main(): Promise<void> {
     last_invoice_hash: 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMjRiMWUxMDhkNDQ3ZjhlNzY1ZmVhNGU3NDkyNDQ1NQ==',
   };
 
-  function drive(opts: { customerId: number | null; taxId?: string | null; isActive?: boolean; egsUpdates: { count: number } }) {
+  function drive(opts: {
+    customerId: number | null;
+    taxId?: string | null;
+    isActive?: boolean;
+    egsUpdates: { count: number };
+  }) {
     function chainable(result: unknown) {
       const q: any = {
         select: () => q,
@@ -118,14 +121,34 @@ async function main(): Promise<void> {
       return q;
     }
     const sale = {
-      id: 7, doc_no: 'INV-7', status: 'posted', branch_id: null,
-      customer_id: opts.customerId, customer_name: 'Buyer Co',
+      id: 7,
+      doc_no: 'INV-7',
+      status: 'posted',
+      branch_id: null,
+      customer_id: opts.customerId,
+      customer_name: 'Buyer Co',
       created_at: new Date('2026-10-30T10:00:00.000Z'),
-      tax_rate: 15, tax_amount: 15, prices_include_tax: false,
-      zatca_icv: null, zatca_hash: null, zatca_uuid: null,
-      zatca_ubl_xml: null, zatca_qr: null, zatca_egs_id: null,
+      tax_rate: 15,
+      tax_amount: 15,
+      prices_include_tax: false,
+      zatca_icv: null,
+      zatca_hash: null,
+      zatca_uuid: null,
+      zatca_ubl_xml: null,
+      zatca_qr: null,
+      zatca_egs_id: null,
     };
-    const items = [{ qty: 1, unit_price: 100, line_total: 100, product_name: 'Widget', net_line_total: 100, allocated_discount: 0, allocated_tax: 15 }];
+    const items = [
+      {
+        qty: 1,
+        unit_price: 100,
+        line_total: 100,
+        product_name: 'Widget',
+        net_line_total: 100,
+        allocated_discount: 0,
+        allocated_tax: 15,
+      },
+    ];
     const customer = { id: 9, name: 'Buyer Co', tax_number: '300987654300003', address: 'Buyer Street' };
     const trx: any = {
       selectFrom: (table: string) => {
@@ -176,7 +199,10 @@ async function main(): Promise<void> {
   assert.equal(missingUpdates.count, 0);
 
   // Inactive settings and malformed tax ID: same fail-closed.
-  await assert.rejects(drive({ customerId: 9, taxId: '300123456700003', isActive: false, egsUpdates: { count: 0 } }), /inactive/);
+  await assert.rejects(
+    drive({ customerId: 9, taxId: '300123456700003', isActive: false, egsUpdates: { count: 0 } }),
+    /inactive/,
+  );
   await assert.rejects(drive({ customerId: 9, taxId: '12345', egsUpdates: { count: 0 } }), /15-digit/);
 
   console.log('ZATCA seller identity and profile tests passed.');

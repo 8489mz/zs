@@ -96,7 +96,11 @@ import { Database } from '../../src/database/database.types';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { PaymentAllocationService } from '../../src/modules/accounting/services/payment-allocation.service';
 import * as migration0329 from '../../src/database/migrations/2040000000329_payment_allocations_allocation_date';
-import { todayTenantDate, formatLocalCalendarDay, formatTenantTime24 } from '../../src/common/utils/tenant-timezone.util';
+import {
+  todayTenantDate,
+  formatLocalCalendarDay,
+  formatTenantTime24,
+} from '../../src/common/utils/tenant-timezone.util';
 
 const SRC = path.resolve(__dirname, '../../src');
 const BACKEND = path.resolve(__dirname, '../..');
@@ -128,8 +132,16 @@ function runCairoChild(src: string): string {
       encoding: 'utf8',
     });
   } finally {
-    try { fs.unlinkSync(file); } catch { /* already gone */ }
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* already gone */ }
+    try {
+      fs.unlinkSync(file);
+    } catch {
+      /* already gone */
+    }
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* already gone */
+    }
   }
 }
 
@@ -149,31 +161,68 @@ async function main(): Promise<void> {
     const { zone, tenantDay, utcDay } = pickZone();
     await sql.raw(`INSERT INTO settings VALUES ('t1', 'currency', 'EGP')`).execute(db);
     await sql.raw(`INSERT INTO settings VALUES ('t1', 'timezone', '${zone}')`).execute(db);
-    await sql.raw(`INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ('t1', 'EGP', 1, true)`).execute(db);
-    await sql.raw(`INSERT INTO customer_payments (id, tenant_id, customer_id, amount) VALUES (1, 't1', 11, 100)`).execute(db);
-    await sql.raw(`INSERT INTO sales (id, tenant_id, customer_id, total, paid_amount, store_credit_used, payment_type, status) VALUES (99, 't1', 11, 100, 0, 0, 'cash', 'posted')`).execute(db);
-    const auth = { tenantId: 't1', accountId: 'a1', userId: 1, username: 'tester', role: 'admin', permissions: [] } as unknown as AuthContext;
+    await sql
+      .raw(
+        `INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ('t1', 'EGP', 1, true)`,
+      )
+      .execute(db);
+    await sql
+      .raw(`INSERT INTO customer_payments (id, tenant_id, customer_id, amount) VALUES (1, 't1', 11, 100)`)
+      .execute(db);
+    await sql
+      .raw(
+        `INSERT INTO sales (id, tenant_id, customer_id, total, paid_amount, store_credit_used, payment_type, status) VALUES (99, 't1', 11, 100, 0, 0, 'cash', 'posted')`,
+      )
+      .execute(db);
+    const auth = {
+      tenantId: 't1',
+      accountId: 'a1',
+      userId: 1,
+      username: 'tester',
+      role: 'admin',
+      permissions: [],
+    } as unknown as AuthContext;
     const svc = new PaymentAllocationService(db);
     const res = await svc.allocatePayment(
-      { partnerType: 'customer', paymentType: 'customer_payment', partnerId: 11, paymentId: 1, allocations: [{ invoiceId: 99, amount: 10 }] },
+      {
+        partnerType: 'customer',
+        paymentType: 'customer_payment',
+        partnerId: 11,
+        paymentId: 1,
+        allocations: [{ invoiceId: 99, amount: 10 }],
+      },
       auth,
     );
     assert.equal(res.success, true, 'allocation posts');
     assert.equal(res.totalAllocated, 10, 'allocation total is 10');
     const row = await db.selectFrom('payment_allocations').select('allocation_date').executeTakeFirst();
     assert.ok(row, 'one allocation row written');
-    const written = row!.allocation_date instanceof Date
-      ? row!.allocation_date.toISOString().slice(0, 10) // PGlite returns DATE as UTC midnight: the slice is exact here
-      : String(row!.allocation_date).slice(0, 10);
-    assert.equal(written, tenantDay, `allocation_date is the tenant day (${zone} = ${tenantDay}), not the DB day (got ${written})`);
+    const written =
+      row!.allocation_date instanceof Date
+        ? row!.allocation_date.toISOString().slice(0, 10) // PGlite returns DATE as UTC midnight: the slice is exact here
+        : String(row!.allocation_date).slice(0, 10);
+    assert.equal(
+      written,
+      tenantDay,
+      `allocation_date is the tenant day (${zone} = ${tenantDay}), not the DB day (got ${written})`,
+    );
     assert.notEqual(written, utcDay, `allocation_date must differ from DB CURRENT_DATE (${utcDay}) at this hour`);
     console.log(`✓ §C passed: allocation_date = ${written} (tenant ${zone}), DB day = ${utcDay}`);
 
     // ── §B. ZATCA wiring pins ───
-    const zatcaText = fs.readFileSync(path.join(SRC, 'modules/tax-integration/services/zatca/zatca-phase2.service.ts'), 'utf8');
-    assert.ok(zatcaText.includes('formatTenantTime24(businessTimezone, saleDate)'), 'issueTime comes from formatTenantTime24 in the tenant zone');
+    const zatcaText = fs.readFileSync(
+      path.join(SRC, 'modules/tax-integration/services/zatca/zatca-phase2.service.ts'),
+      'utf8',
+    );
+    assert.ok(
+      zatcaText.includes('formatTenantTime24(businessTimezone, saleDate)'),
+      'issueTime comes from formatTenantTime24 in the tenant zone',
+    );
     assert.ok(!zatcaText.includes('toTimeString()'), 'issueTime no longer uses the host-local toTimeString()');
-    assert.ok(zatcaText.includes('todayTenantDate(businessTimezone, saleDate)'), 'issueDate still uses todayTenantDate in the tenant zone');
+    assert.ok(
+      zatcaText.includes('todayTenantDate(businessTimezone, saleDate)'),
+      'issueDate still uses todayTenantDate in the tenant zone',
+    );
     assert.ok(zatcaText.includes('formatTenantTime24'), 'formatTenantTime24 is imported from the tenant-timezone util');
     console.log('✓ §B passed: ZATCA issueTime is tenant-zone; no toTimeString() remains');
 
@@ -183,14 +232,23 @@ async function main(): Promise<void> {
     assert.equal(fmt('UTC', FROZEN), '21:30:00', 'UTC time of the frozen instant');
     assert.equal(fmt('Africa/Cairo', FROZEN), '23:30:00', 'Cairo time of the frozen instant');
     assert.equal(fmt('Asia/Kuwait', FROZEN), '00:30:00', 'Kuwait time of the frozen instant (next day)');
-    assert.equal(todayTenantDate('Asia/Kuwait', FROZEN), '2026-04-09', 'Kuwait day agrees with its time (date+time are one instant)');
-    assert.equal(fmt('Africa/Cairo', new Date('2026-04-08T22:00:00.000Z')), '00:00:00', 'midnight formats as 00:00:00, never 24:00:00 (hourCycle h23)');
+    assert.equal(
+      todayTenantDate('Asia/Kuwait', FROZEN),
+      '2026-04-09',
+      'Kuwait day agrees with its time (date+time are one instant)',
+    );
+    assert.equal(
+      fmt('Africa/Cairo', new Date('2026-04-08T22:00:00.000Z')),
+      '00:00:00',
+      'midnight formats as 00:00:00, never 24:00:00 (hourCycle h23)',
+    );
     // Mechanism, labeled: the OLD expression is host-local. Under a Cairo
     // host it yields 23:30:00 while the Kuwait tenant's time is 00:30:00.
     // (True on both trees — it proves WHY the fix was needed, not the fix.)
     let cairoOut: string;
     try {
-      cairoOut = runCairoChild(`import { formatTenantTime24, todayTenantDate } from '../../../src/common/utils/tenant-timezone.util';
+      cairoOut =
+        runCairoChild(`import { formatTenantTime24, todayTenantDate } from '../../../src/common/utils/tenant-timezone.util';
 const frozen = new Date('2026-04-08T21:30:00.000Z');
 console.log('TIME_CAIRO=' + formatTenantTime24('Africa/Cairo', frozen));
 console.log('TIME_KUWAIT=' + formatTenantTime24('Asia/Kuwait', frozen));
@@ -200,19 +258,48 @@ console.log('OLD_HOST_TIME=' + new Date('2026-04-08T21:30:00.000Z').toTimeString
     } catch (e: any) {
       assert.fail(`Cairo child failed (expected on pristine — formatTenantTime24 missing): ${e.stderr || e.message}`);
     }
-    assert.ok(cairoOut!.includes('TIME_CAIRO=23:30:00'), `Cairo child: helper agrees under a non-UTC host (got: ${cairoOut!.trim()})`);
-    assert.ok(cairoOut!.includes('TIME_KUWAIT=00:30:00'), `Cairo child: Kuwait time still 00:30:00 (got: ${cairoOut!.trim()})`);
-    assert.ok(cairoOut!.includes('DAY_KUWAIT=2026-04-09'), `Cairo child: Kuwait day still 2026-04-09 (got: ${cairoOut!.trim()})`);
-    assert.ok(cairoOut!.includes('OLD_HOST_TIME=23:30:00'), `Cairo child: the OLD toTimeString() yields host-local 23:30:00, not tenant 00:30:00 (got: ${cairoOut!.trim()})`);
-    console.log('✓ §A passed: formatTenantTime24 agrees date+time in the tenant zone; old expression proven host-local');
+    assert.ok(
+      cairoOut!.includes('TIME_CAIRO=23:30:00'),
+      `Cairo child: helper agrees under a non-UTC host (got: ${cairoOut!.trim()})`,
+    );
+    assert.ok(
+      cairoOut!.includes('TIME_KUWAIT=00:30:00'),
+      `Cairo child: Kuwait time still 00:30:00 (got: ${cairoOut!.trim()})`,
+    );
+    assert.ok(
+      cairoOut!.includes('DAY_KUWAIT=2026-04-09'),
+      `Cairo child: Kuwait day still 2026-04-09 (got: ${cairoOut!.trim()})`,
+    );
+    assert.ok(
+      cairoOut!.includes('OLD_HOST_TIME=23:30:00'),
+      `Cairo child: the OLD toTimeString() yields host-local 23:30:00, not tenant 00:30:00 (got: ${cairoOut!.trim()})`,
+    );
+    console.log(
+      '✓ §A passed: formatTenantTime24 agrees date+time in the tenant zone; old expression proven host-local',
+    );
 
     // ── §D. postSupplierBill entryDate: pins + mechanism ───
-    const postingText = fs.readFileSync(path.join(SRC, 'modules/accounting/services/purchases-treasury-posting.service.ts'), 'utf8');
-    assert.ok(postingText.includes('formatLocalCalendarDay'), 'postSupplierBill derives the bill day from local calendar parts');
-    assert.ok(!postingText.includes('new Date((bill as any).bill_date)'), 'postSupplierBill no longer wraps the pg DATE in new Date()');
-    const coreText = fs.readFileSync(path.join(SRC, 'modules/accounting/services/journal-posting-core.service.ts'), 'utf8');
+    const postingText = fs.readFileSync(
+      path.join(SRC, 'modules/accounting/services/purchases-treasury-posting.service.ts'),
+      'utf8',
+    );
+    assert.ok(
+      postingText.includes('formatLocalCalendarDay'),
+      'postSupplierBill derives the bill day from local calendar parts',
+    );
+    assert.ok(
+      !postingText.includes('new Date((bill as any).bill_date)'),
+      'postSupplierBill no longer wraps the pg DATE in new Date()',
+    );
+    const coreText = fs.readFileSync(
+      path.join(SRC, 'modules/accounting/services/journal-posting-core.service.ts'),
+      'utf8',
+    );
     const widened = (coreText.match(/entryDate: Date \| string/g) || []).length;
-    assert.ok(widened >= 2, `insertPostedJournal/postDomainJournal admit a day string (found ${widened} widened signatures, want 2)`);
+    assert.ok(
+      widened >= 2,
+      `insertPostedJournal/postDomainJournal admit a day string (found ${widened} widened signatures, want 2)`,
+    );
     // Mechanism, labeled: the REAL resolveBusinessDateKey on PGlite in a
     // Cairo-TZ child. The old path (local-midnight Date, tenant UTC)
     // yields the previous day; the new path (day string) is exact.
@@ -243,27 +330,63 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     } catch (e: any) {
       assert.fail(`Cairo mechanism child failed: ${e.stderr || e.message}`);
     }
-    assert.ok(mechOut!.includes('OLD=2026-11-13'), `Cairo child: old path yields the previous day (got: ${mechOut!.trim()})`);
+    assert.ok(
+      mechOut!.includes('OLD=2026-11-13'),
+      `Cairo child: old path yields the previous day (got: ${mechOut!.trim()})`,
+    );
     assert.ok(mechOut!.includes('NEW=2026-11-14'), `Cairo child: day-string path is exact (got: ${mechOut!.trim()})`);
-    assert.ok(mechOut!.includes('LOCAL_PARTS=2026-11-14'), `Cairo child: local parts recover the stored day (got: ${mechOut!.trim()})`);
+    assert.ok(
+      mechOut!.includes('LOCAL_PARTS=2026-11-14'),
+      `Cairo child: local parts recover the stored day (got: ${mechOut!.trim()})`,
+    );
     console.log('✓ §D passed: postSupplierBill passes the day string; old path proven one day early');
 
     // ── §E. The REAL migration 0329 on PGlite ───
     assert.equal(typeof migration0329.migration?.up, 'function', 'migration 0329 exports an up()');
-    const defBefore = await sql<{ column_default: string | null }>`SELECT column_default FROM information_schema.columns WHERE table_name = 'payment_allocations' AND column_name = 'allocation_date'`.execute(db);
-    assert.notEqual(defBefore.rows[0]?.column_default, null, 'fixture carries the 0063 CURRENT_DATE default before the migration');
+    const defBefore = await sql<{
+      column_default: string | null;
+    }>`SELECT column_default FROM information_schema.columns WHERE table_name = 'payment_allocations' AND column_name = 'allocation_date'`.execute(
+      db,
+    );
+    assert.notEqual(
+      defBefore.rows[0]?.column_default,
+      null,
+      'fixture carries the 0063 CURRENT_DATE default before the migration',
+    );
     await migration0329.migration!.up(db);
-    const defAfter = await sql<{ column_default: string | null }>`SELECT column_default FROM information_schema.columns WHERE table_name = 'payment_allocations' AND column_name = 'allocation_date'`.execute(db);
+    const defAfter = await sql<{
+      column_default: string | null;
+    }>`SELECT column_default FROM information_schema.columns WHERE table_name = 'payment_allocations' AND column_name = 'allocation_date'`.execute(
+      db,
+    );
     assert.equal(defAfter.rows[0]?.column_default, null, 'migration 0329 dropped the CURRENT_DATE default');
     await migration0329.migration!.up(db); // idempotent re-run
-    const defAgain = await sql<{ column_default: string | null }>`SELECT column_default FROM information_schema.columns WHERE table_name = 'payment_allocations' AND column_name = 'allocation_date'`.execute(db);
+    const defAgain = await sql<{
+      column_default: string | null;
+    }>`SELECT column_default FROM information_schema.columns WHERE table_name = 'payment_allocations' AND column_name = 'allocation_date'`.execute(
+      db,
+    );
     assert.equal(defAgain.rows[0]?.column_default, null, 'migration 0329 re-run is a no-op');
     let threw = false;
     try {
-      await sql.raw(`INSERT INTO payment_allocations (tenant_id, account_id, partner_type, partner_id, payment_type, invoice_type, invoice_id, allocated_amount) VALUES ('t1', 'a1', 'customer', 11, 'customer_payment', 'sale', 99, 5)`).execute(db);
-    } catch { threw = true; }
-    assert.equal(threw, true, 'an insert without allocation_date now fails (NOT NULL, fail-closed) instead of silently stamping the DB day');
-    await sql.raw(`INSERT INTO payment_allocations (tenant_id, account_id, partner_type, partner_id, payment_type, invoice_type, invoice_id, allocated_amount, allocation_date) VALUES ('t1', 'a1', 'customer', 11, 'customer_payment', 'sale', 99, 5, '2026-11-14')`).execute(db);
+      await sql
+        .raw(
+          `INSERT INTO payment_allocations (tenant_id, account_id, partner_type, partner_id, payment_type, invoice_type, invoice_id, allocated_amount) VALUES ('t1', 'a1', 'customer', 11, 'customer_payment', 'sale', 99, 5)`,
+        )
+        .execute(db);
+    } catch {
+      threw = true;
+    }
+    assert.equal(
+      threw,
+      true,
+      'an insert without allocation_date now fails (NOT NULL, fail-closed) instead of silently stamping the DB day',
+    );
+    await sql
+      .raw(
+        `INSERT INTO payment_allocations (tenant_id, account_id, partner_type, partner_id, payment_type, invoice_type, invoice_id, allocated_amount, allocation_date) VALUES ('t1', 'a1', 'customer', 11, 'customer_payment', 'sale', 99, 5, '2026-11-14')`,
+      )
+      .execute(db);
     console.log('✓ §E passed: migration 0329 dropped the default (idempotent); writer-supplied dates still insert');
   } finally {
     await db.destroy();
@@ -271,6 +394,12 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
 }
 
 main().then(
-  () => { console.log('CLOCK-B4-P2 CHECKS PASSED'); process.exit(0); },
-  (e) => { console.error(e); process.exit(1); },
+  () => {
+    console.log('CLOCK-B4-P2 CHECKS PASSED');
+    process.exit(0);
+  },
+  (e) => {
+    console.error(e);
+    process.exit(1);
+  },
 );

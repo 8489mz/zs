@@ -74,14 +74,8 @@ async function main(): Promise<void> {
   present('maritime-freight.service.ts', 'maritime freight tax file');
   present('INV-SUBSCRIPTION-TAX-RATE-SOURCE', 'subscription tax-rate source invariant');
   present('INV-MARITIME-FREIGHT-TAX', 'maritime freight tax invariant');
-  absent(
-    'takes its rate from the client DTO',
-    'superseded tax claim "takes its rate from the client DTO"',
-  );
-  absent(
-    'subscription billing and maritime charge tax still compute inline',
-    'stale unnamed tax summary',
-  );
+  absent('takes its rate from the client DTO', 'superseded tax claim "takes its rate from the client DTO"');
+  absent('subscription billing and maritime charge tax still compute inline', 'stale unnamed tax summary');
 
   // 4. Cost — the four landed-cost paths by name, now routed through
   // the single allocation path (G7: the M0 "still four paths" pin is

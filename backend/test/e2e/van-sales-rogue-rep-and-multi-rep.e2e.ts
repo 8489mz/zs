@@ -712,14 +712,19 @@ async function bootstrapPgliteSchema(db: Kysely<Database>): Promise<void> {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `;
-  for (const stmt of ddl.split(';').map((s) => s.trim()).filter(Boolean)) {
+  for (const stmt of ddl
+    .split(';')
+    .map((s) => s.trim())
+    .filter(Boolean)) {
     await sql.raw(stmt).execute(db);
   }
 }
 
 async function cleanup(db: Kysely<Database>): Promise<void> {
   const dbAny = db as any;
-  await sql`DELETE FROM journal_entry_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE tenant_id = ${TENANT})`.execute(db);
+  await sql`DELETE FROM journal_entry_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE tenant_id = ${TENANT})`.execute(
+    db,
+  );
   const tables = [
     'journal_entries',
     'accounting_posting_failures',
@@ -795,7 +800,10 @@ async function main(): Promise<void> {
                 const newAudits = await sql<any>`SELECT * FROM audit_logs WHERE id > ${prevMaxAuditId} ORDER BY id ASC`
                   .execute(rawDb)
                   .catch(() => ({ rows: [] }));
-                await sql.raw('ROLLBACK').execute(rawDb).catch(() => {});
+                await sql
+                  .raw('ROLLBACK')
+                  .execute(rawDb)
+                  .catch(() => {});
                 for (const row of newAudits.rows) {
                   await (rawDb as any)
                     .insertInto('audit_logs')
@@ -827,8 +835,14 @@ async function main(): Promise<void> {
                 const newAudits = await sql<any>`SELECT * FROM audit_logs WHERE id > ${prevMaxAuditId} ORDER BY id ASC`
                   .execute(rawDb)
                   .catch(() => ({ rows: [] }));
-                await sql.raw(`ROLLBACK TO SAVEPOINT ${sp}`).execute(rawDb).catch(() => {});
-                await sql.raw(`RELEASE SAVEPOINT ${sp}`).execute(rawDb).catch(() => {});
+                await sql
+                  .raw(`ROLLBACK TO SAVEPOINT ${sp}`)
+                  .execute(rawDb)
+                  .catch(() => {});
+                await sql
+                  .raw(`RELEASE SAVEPOINT ${sp}`)
+                  .execute(rawDb)
+                  .catch(() => {});
                 for (const row of newAudits.rows) {
                   await (rawDb as any)
                     .insertInto('audit_logs')
@@ -1229,7 +1243,11 @@ async function main(): Promise<void> {
     const customerList = Array.isArray(supRoutes) ? supRoutes : (supRoutes as any).customers || [];
     const supSharedCust = customerList.find((c: any) => Number(c.customerId || c.id) === sharedCustomerId);
     assert.ok(supSharedCust, 'Supervisor route dashboard must include the shared customer');
-    assert.equal(Number(supSharedCust.balance ?? supSharedCust.totalCompanyBalance), 2000, 'Supervisor sees total remaining company balance = 2,000');
+    assert.equal(
+      Number(supSharedCust.balance ?? supSharedCust.totalCompanyBalance),
+      2000,
+      'Supervisor sees total remaining company balance = 2,000',
+    );
     assert.ok(Array.isArray(supSharedCust.repBalances), 'Supervisor sees repBalances breakdown array');
     const supRep1Bal = supSharedCust.repBalances.find((rb: any) => Number(rb.repId) === rep1Id);
     const supRep2Bal = supSharedCust.repBalances.find((rb: any) => Number(rb.repId) === rep2Id);
@@ -1389,7 +1407,11 @@ async function main(): Promise<void> {
       .select(['balance'])
       .where('id', '=', sharedCustomerId)
       .executeTakeFirstOrThrow();
-    assert.equal(Number(custAfterCashReturn.balance), 2000, 'Customer balance must remain 2,000 after cash sale & cash return');
+    assert.equal(
+      Number(custAfterCashReturn.balance),
+      2000,
+      'Customer balance must remain 2,000 after cash sale & cash return',
+    );
 
     // 5.11 Fake Road Expense Abuse (300 EGP fuel expense > 150 EGP single-expense cap without supervisor PIN)
     await assert.rejects(
@@ -1444,7 +1466,8 @@ async function main(): Promise<void> {
           },
           rogueRepAuth,
         ),
-      (err: any) => err.code === 'MAKER_CHECKER_SELF_APPROVAL' || err.code === 'MAKER_CHECKER_SELF_SETTLEMENT_FORBIDDEN',
+      (err: any) =>
+        err.code === 'MAKER_CHECKER_SELF_APPROVAL' || err.code === 'MAKER_CHECKER_SELF_SETTLEMENT_FORBIDDEN',
       'Rep settling his own trip must be blocked by Maker-Checker',
     );
 
@@ -1460,7 +1483,7 @@ async function main(): Promise<void> {
         unloadRemainingToWarehouse: true,
         countedStock: [
           { productId: Number(productA.id), countedQty: 31 }, // 50 loaded - 15 credit - 5 cash + 1 return = 31 (exact)
-          { productId: Number(productB.id), countedQty: 8 },  // 10 loaded -> 8 counted (2 missing!)
+          { productId: Number(productB.id), countedQty: 8 }, // 10 loaded -> 8 counted (2 missing!)
         ],
         chargeStockVarianceToRep: true,
         endOdometer: 1065,

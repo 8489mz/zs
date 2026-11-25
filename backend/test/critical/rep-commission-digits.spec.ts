@@ -98,7 +98,8 @@ async function main(): Promise<void> {
 
   // Non-finite input fails closed instead of paying zero commission.
   assert.throws(
-    () => calculateRepCommissionMetrics({ actualSales: Number.POSITIVE_INFINITY, actualCollections: 0, moneyDigits: 3 }),
+    () =>
+      calculateRepCommissionMetrics({ actualSales: Number.POSITIVE_INFINITY, actualCollections: 0, moneyDigits: 3 }),
     /Non-finite monetary amount/,
   );
 
@@ -180,13 +181,31 @@ async function main(): Promise<void> {
     () => calculateRepCommissionMetrics({ actualSales: 100, actualCollections: 0, moneyDigits: NO_DIGITS }),
     /Invalid monetary minor units/,
   );
-  assert.throws(() => aggregateCustomerBalancesByRep(entries, { 2: 10.125 }, NO_DIGITS), /Invalid monetary minor units/);
   assert.throws(
-    () => resolveIsolatedRepCustomerBalance({ repId: 101, breakdown: null, assignedRepIds: [101], fallbackTotalBalance: 10.125, moneyDigits: NO_DIGITS }),
+    () => aggregateCustomerBalancesByRep(entries, { 2: 10.125 }, NO_DIGITS),
     /Invalid monetary minor units/,
   );
   assert.throws(
-    () => validateIsolatedRepCollection({ repId: 101, collectionAmount: 1, repBalance: 10, otherRepsBalance: 0, totalCustomerBalance: 10, moneyDigits: NO_DIGITS }),
+    () =>
+      resolveIsolatedRepCustomerBalance({
+        repId: 101,
+        breakdown: null,
+        assignedRepIds: [101],
+        fallbackTotalBalance: 10.125,
+        moneyDigits: NO_DIGITS,
+      }),
+    /Invalid monetary minor units/,
+  );
+  assert.throws(
+    () =>
+      validateIsolatedRepCollection({
+        repId: 101,
+        collectionAmount: 1,
+        repBalance: 10,
+        otherRepsBalance: 0,
+        totalCustomerBalance: 10,
+        moneyDigits: NO_DIGITS,
+      }),
     /Invalid monetary minor units/,
   );
 

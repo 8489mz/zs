@@ -54,7 +54,11 @@ async function main(): Promise<void> {
     assert.equal(result.payments.length, 3, 'all three legs are applied');
     assert.deepEqual(
       result.payments.map((leg) => [leg.paymentChannel, leg.amount]),
-      [['card', 200], ['wallet', 200], ['cash', 200]],
+      [
+        ['card', 200],
+        ['wallet', 200],
+        ['cash', 200],
+      ],
       'each leg keeps its channel and amount',
     );
     assert.equal(result.appliedAmount, 600, 'applied amount equals the invoice total');

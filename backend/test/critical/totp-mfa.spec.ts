@@ -43,13 +43,21 @@ const RFC_VECTORS: Array<{ seconds: number; code: string }> = [
 ];
 
 function runBase32(): void {
-  assert.equal(RFC_SECRET_BASE32, 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', 'base32 encoding must match the RFC 4648 alphabet');
+  assert.equal(
+    RFC_SECRET_BASE32,
+    'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
+    'base32 encoding must match the RFC 4648 alphabet',
+  );
   assert.equal(decodeBase32(RFC_SECRET_BASE32).toString('ascii'), RFC_SECRET_ASCII, 'decode must invert encode');
 
   // ما يكتبه الناس يدوياً: مسافات وشُرَط وحروف صغيرة وحشو.
   assert.equal(decodeBase32('gezd gnbv gy3t-qojq').toString('ascii'), '1234567890');
   assert.equal(decodeBase32('GEZDGNBVGY3TQOJQ====').toString('ascii'), '1234567890');
-  assert.throws(() => decodeBase32('GEZD1!8'), /INVALID_BASE32_SECRET/, 'an invalid alphabet must be rejected, not silently truncated');
+  assert.throws(
+    () => decodeBase32('GEZD1!8'),
+    /INVALID_BASE32_SECRET/,
+    'an invalid alphabet must be rejected, not silently truncated',
+  );
 
   for (let i = 1; i <= 20; i += 1) {
     const bytes = Buffer.alloc(i, i);
@@ -74,7 +82,11 @@ function runDriftWindow(): void {
   for (const offset of [-1, 0, 1]) {
     const atMs = now + offset * TOTP_STEP_SECONDS * 1000;
     const code = generateTotpCode(secret, { atMs });
-    assert.equal(verifyTotpCode(secret, code, { atMs: now }), currentStep + offset, `a code ${offset} step away must be accepted`);
+    assert.equal(
+      verifyTotpCode(secret, code, { atMs: now }),
+      currentStep + offset,
+      `a code ${offset} step away must be accepted`,
+    );
   }
 
   for (const offset of [-2, 2, 10]) {
@@ -107,8 +119,16 @@ function runSecretGeneration(): void {
 
   const other = generateTotpSecret();
   const atMs = 1_700_000_000_000;
-  assert.notEqual(generateTotpCode(secret, { atMs }), generateTotpCode(other, { atMs }), 'different secrets must give different codes');
-  assert.equal(verifyTotpCode(other, generateTotpCode(secret, { atMs }), { atMs }), null, 'a code from another secret must not verify');
+  assert.notEqual(
+    generateTotpCode(secret, { atMs }),
+    generateTotpCode(other, { atMs }),
+    'different secrets must give different codes',
+  );
+  assert.equal(
+    verifyTotpCode(other, generateTotpCode(secret, { atMs }), { atMs }),
+    null,
+    'a code from another secret must not verify',
+  );
 
   assert.equal(formatSecretForDisplay('ABCDEFGH'), 'ABCD EFGH');
 }
@@ -129,7 +149,10 @@ function runOtpauthUri(): void {
  * هذا هو الفرق الكامل بين نسخة احتياطية مسروقة تُمكّن من توليد رموز أي مستخدم، ونسخة لا تُمكّن.
  */
 function runSecretCipher(): void {
-  const env = { APP_MODE: 'CLOUD_SAAS', SESSION_SECRET: 'a-very-long-session-secret-value' } as unknown as NodeJS.ProcessEnv;
+  const env = {
+    APP_MODE: 'CLOUD_SAAS',
+    SESSION_SECRET: 'a-very-long-session-secret-value',
+  } as unknown as NodeJS.ProcessEnv;
   const secret = generateTotpSecret();
   const stored = encryptMfaSecret(secret, env);
 
@@ -148,7 +171,10 @@ function runSecretCipher(): void {
   assert.throws(() => decryptMfaSecret('garbage', env), /MFA_SECRET_CORRUPT/);
 
   // مفتاح آخر لا يفك التشفير.
-  const otherEnv = { APP_MODE: 'CLOUD_SAAS', SESSION_SECRET: 'a-completely-different-secret-val' } as unknown as NodeJS.ProcessEnv;
+  const otherEnv = {
+    APP_MODE: 'CLOUD_SAAS',
+    SESSION_SECRET: 'a-completely-different-secret-val',
+  } as unknown as NodeJS.ProcessEnv;
   assert.throws(() => decryptMfaSecret(stored, otherEnv), /MFA_SECRET_CORRUPT/);
 
   // فشل آمن في السحابة: بلا سر لا تشفير ولا فك تشفير — لا مفتاح افتراضي معروف للجميع.
@@ -162,11 +188,17 @@ function runSecretCipher(): void {
   const installSecretDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zs-install-secret-'));
   const installSecretPath = path.join(installSecretDir, 'install-secret');
   try {
-    const desktopEnv = { APP_MODE: 'SELF_CONTAINED', ZS_INSTALL_SECRET_PATH: installSecretPath } as unknown as NodeJS.ProcessEnv;
+    const desktopEnv = {
+      APP_MODE: 'SELF_CONTAINED',
+      ZS_INSTALL_SECRET_PATH: installSecretPath,
+    } as unknown as NodeJS.ProcessEnv;
     const desktopStored = encryptMfaSecret(secret, desktopEnv);
     assert.equal(decryptMfaSecret(desktopStored, desktopEnv), secret);
 
-    const pilotEnv = { APP_MODE: 'LOCAL_PILOT', ZS_INSTALL_SECRET_PATH: installSecretPath } as unknown as NodeJS.ProcessEnv;
+    const pilotEnv = {
+      APP_MODE: 'LOCAL_PILOT',
+      ZS_INSTALL_SECRET_PATH: installSecretPath,
+    } as unknown as NodeJS.ProcessEnv;
     const pilotStored = encryptMfaSecret(secret, pilotEnv);
     assert.equal(decryptMfaSecret(pilotStored, pilotEnv), secret);
   } finally {
@@ -174,10 +206,18 @@ function runSecretCipher(): void {
   }
 
   // مفتاح مخصَّص له الأولوية على SESSION_SECRET.
-  const dedicated = { APP_MODE: 'CLOUD_SAAS', SESSION_SECRET: 'a-very-long-session-secret-value', MFA_ENCRYPTION_KEY: 'dedicated-mfa-key-long-enough-01' } as unknown as NodeJS.ProcessEnv;
+  const dedicated = {
+    APP_MODE: 'CLOUD_SAAS',
+    SESSION_SECRET: 'a-very-long-session-secret-value',
+    MFA_ENCRYPTION_KEY: 'dedicated-mfa-key-long-enough-01',
+  } as unknown as NodeJS.ProcessEnv;
   const dedicatedStored = encryptMfaSecret(secret, dedicated);
   assert.equal(decryptMfaSecret(dedicatedStored, dedicated), secret);
-  assert.throws(() => decryptMfaSecret(dedicatedStored, env), /MFA_SECRET_CORRUPT/, 'the dedicated key must actually be the key in use');
+  assert.throws(
+    () => decryptMfaSecret(dedicatedStored, env),
+    /MFA_SECRET_CORRUPT/,
+    'the dedicated key must actually be the key in use',
+  );
 }
 
 /**

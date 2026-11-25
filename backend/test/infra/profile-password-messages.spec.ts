@@ -71,11 +71,7 @@ assert.notEqual(body.message, 'كلمة المرور مطلوبة.');
 
 // RED case 3 — the static code-map fallback must never again translate
 // a too-weak password as "required" (it hid the real reason).
-const mapped = translateErrorMessageFromCode(
-  'PASSWORD_TOO_WEAK',
-  'Password must be at least 12 characters long',
-  400,
-);
+const mapped = translateErrorMessageFromCode('PASSWORD_TOO_WEAK', 'Password must be at least 12 characters long', 400);
 assert.notEqual(mapped, 'كلمة المرور مطلوبة.');
 assert.ok(mapped.includes('قصير'), `fallback must say the password is too short, got: ${mapped}`);
 

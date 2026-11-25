@@ -64,20 +64,38 @@ const ACCOUNT = 'a1';
 const MANAGER_PIN = '1234';
 
 const adminAuth = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 const cashierAAuth = {
-  userId: 2, sessionId: 'spec-a', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-a',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 const cashierBAuth = {
-  userId: 3, sessionId: 'spec-b', username: 'cashier-b', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 3,
+  sessionId: 'spec-b',
+  username: 'cashier-b',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 function drawerOnly(db: Kysely<Database>): CashDrawerService {
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   return new CashDrawerService(db, new TransactionHelper(), posting);
 }
@@ -120,22 +138,57 @@ const PRECISION_DDL = `
 
 async function seedClosedShiftA(db: Kysely<Database>, closeNote: string): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('cashier_shifts').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, branch_id: null, location_id: null,
-    opened_by: 2, opening_cash: 0, expected_cash: 100, counted_cash: 100, variance: 0,
-    status: 'closed', created_at: new Date('2026-01-01T00:00:00.000Z'),
-    closed_at: new Date('2026-01-01T10:00:00.000Z'), closed_by: 2,
-    close_note: closeNote, doc_no: 'SHIFT-1',
-  }).execute();
-  await anyDb.insertInto('sales').values({
-    id: 1, tenant_id: TENANT, status: 'posted', created_by: 2,
-    created_at: new Date('2026-01-01T01:00:00.000Z'), branch_id: null, location_id: null,
-    total: 100, paid_amount: 100, payment_type: 'cash', payment_channel: 'cash',
-    collection_status: '', delivery_fee: 0, delivery_fee_mode: 'freelance_courier', tip_amount: 0,
-  }).execute();
-  await anyDb.insertInto('sale_payments').values({
-    id: 1, tenant_id: TENANT, sale_id: 1, payment_channel: 'cash', amount: 100,
-  }).execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: null,
+      location_id: null,
+      opened_by: 2,
+      opening_cash: 0,
+      expected_cash: 100,
+      counted_cash: 100,
+      variance: 0,
+      status: 'closed',
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+      closed_at: new Date('2026-01-01T10:00:00.000Z'),
+      closed_by: 2,
+      close_note: closeNote,
+      doc_no: 'SHIFT-1',
+    })
+    .execute();
+  await anyDb
+    .insertInto('sales')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      status: 'posted',
+      created_by: 2,
+      created_at: new Date('2026-01-01T01:00:00.000Z'),
+      branch_id: null,
+      location_id: null,
+      total: 100,
+      paid_amount: 100,
+      payment_type: 'cash',
+      payment_channel: 'cash',
+      collection_status: '',
+      delivery_fee: 0,
+      delivery_fee_mode: 'freelance_courier',
+      tip_amount: 0,
+    })
+    .execute();
+  await anyDb
+    .insertInto('sale_payments')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      sale_id: 1,
+      payment_channel: 'cash',
+      amount: 100,
+    })
+    .execute();
 }
 
 async function runPartA(): Promise<void> {
@@ -151,7 +204,10 @@ async function runPartA(): Promise<void> {
       await anyDb.updateTable('sales').set({ total: 150, paid_amount: 150 }).where('id', '=', 1).execute();
       await anyDb.updateTable('sale_payments').set({ amount: 150 }).where('id', '=', 1).execute();
       const result = await (drawer as any).refreshClosedShiftSummary(db, 1, {
-        saleId: 1, kind: 'edit', reason: 'price corrected', auth: adminAuth,
+        saleId: 1,
+        kind: 'edit',
+        reason: 'price corrected',
+        auth: adminAuth,
       });
       assert.equal(result.refreshed, true, 'a money edit must refresh the closed shift');
       assert.equal(Number(result.previousExpectedCash), 100);
@@ -169,7 +225,10 @@ async function runPartA(): Promise<void> {
       // A2: a second refresh with no change writes nothing and stamps nothing new.
       const noteBefore = String(row.close_note);
       const again = await (drawer as any).refreshClosedShiftSummary(db, 1, {
-        saleId: 1, kind: 'edit', reason: 'price corrected', auth: adminAuth,
+        saleId: 1,
+        kind: 'edit',
+        reason: 'price corrected',
+        auth: adminAuth,
       });
       assert.equal(again.refreshed, false, 'an unchanged recomputation must not rewrite the row');
       const rowAgain = await shiftRow(db, 1);
@@ -187,10 +246,17 @@ async function runPartA(): Promise<void> {
     try {
       await pg.exec(PRECISION_DDL);
       await seedClosedShiftA(db, 'Closed normally');
-      await (db as any).updateTable('cashier_shifts').set({ status: 'open', closed_at: null }).where('id', '=', 1).execute();
+      await (db as any)
+        .updateTable('cashier_shifts')
+        .set({ status: 'open', closed_at: null })
+        .where('id', '=', 1)
+        .execute();
       const drawer = drawerOnly(db);
       const result = await (drawer as any).refreshClosedShiftSummary(db, 1, {
-        saleId: 1, kind: 'edit', reason: 'x', auth: adminAuth,
+        saleId: 1,
+        kind: 'edit',
+        reason: 'x',
+        auth: adminAuth,
       });
       assert.equal(result.refreshed, false, 'open shifts recompute on read and need no refresh');
       const row = await shiftRow(db, 1);
@@ -208,20 +274,33 @@ async function runPartA(): Promise<void> {
     const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
     try {
       await pg.exec(PRECISION_DDL);
-      const blindNote = 'BLIND_CLOSE::' + JSON.stringify({
-        blindClose: true,
-        declared: { cash: 100, cardTotal: 0, cardCount: 0, walletTotal: 0, walletCount: 0, instapayTotal: 0, instapayCount: 0 },
-        detailTotals: { card: 0, wallet: 0, instapay: 0 },
-        details: { card: [], wallet: [], instapay: [] },
-        note: 'blind close',
-      });
+      const blindNote =
+        'BLIND_CLOSE::' +
+        JSON.stringify({
+          blindClose: true,
+          declared: {
+            cash: 100,
+            cardTotal: 0,
+            cardCount: 0,
+            walletTotal: 0,
+            walletCount: 0,
+            instapayTotal: 0,
+            instapayCount: 0,
+          },
+          detailTotals: { card: 0, wallet: 0, instapay: 0 },
+          details: { card: [], wallet: [], instapay: [] },
+          note: 'blind close',
+        });
       await seedClosedShiftA(db, blindNote);
       const drawer = drawerOnly(db);
       const anyDb = db as any;
       await anyDb.updateTable('sales').set({ total: 130, paid_amount: 130 }).where('id', '=', 1).execute();
       await anyDb.updateTable('sale_payments').set({ amount: 130 }).where('id', '=', 1).execute();
       const result = await (drawer as any).refreshClosedShiftSummary(db, 1, {
-        saleId: 1, kind: 'edit', reason: 'price corrected', auth: adminAuth,
+        saleId: 1,
+        kind: 'edit',
+        reason: 'price corrected',
+        auth: adminAuth,
       });
       assert.equal(result.refreshed, true);
       const row = await shiftRow(db, 1);
@@ -229,7 +308,11 @@ async function runPartA(): Promise<void> {
       const parsed = JSON.parse(String(row.close_note).slice('BLIND_CLOSE::'.length));
       assert.equal(parsed.blindClose, true, 'blind-close metadata must survive the stamp');
       assert.equal(parsed.declared.cash, 100, 'declared totals are never rewritten by a refresh');
-      assert.equal(Array.isArray(parsed.postCloseCorrections), true, 'correction must be recorded inside the blind JSON');
+      assert.equal(
+        Array.isArray(parsed.postCloseCorrections),
+        true,
+        'correction must be recorded inside the blind JSON',
+      );
       assert.equal(parsed.postCloseCorrections.length, 1);
       assert.equal(Number(parsed.postCloseCorrections[0].previousExpectedCash), 100);
       assert.equal(Number(parsed.postCloseCorrections[0].correctedExpectedCash), 130);
@@ -250,7 +333,10 @@ async function runPartA(): Promise<void> {
       const drawer = drawerOnly(db);
       await (db as any).updateTable('sales').set({ status: 'cancelled' }).where('id', '=', 1).execute();
       const result = await (drawer as any).refreshClosedShiftSummary(db, 1, {
-        saleId: 1, kind: 'cancel', reason: 'cancelled after close', auth: adminAuth,
+        saleId: 1,
+        kind: 'cancel',
+        reason: 'cancelled after close',
+        auth: adminAuth,
       });
       assert.equal(result.refreshed, false, 'a cancel that nets to the same figure must not rewrite the row');
       const row = await shiftRow(db, 1);
@@ -335,48 +421,140 @@ async function seedFoundationFull(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('customers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Regular Customer', credit_limit: 10000, balance: 0, is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Regular Customer',
+      credit_limit: 10000,
+      balance: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
 }
 
 async function seedShiftFull(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, counted_cash: null, variance: null,
-    close_note: null, created_at: new Date('2026-01-01T00:00:00.000Z'),
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      counted_cash: null,
+      variance: null,
+      close_note: null,
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+    })
+    .execute();
 }
 
-function buildFullServices(db: Kysely<Database>, withDrawer: boolean): { sales: SalesWriteService; drawer: CashDrawerService } {
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+function buildFullServices(
+  db: Kysely<Database>,
+  withDrawer: boolean,
+): { sales: SalesWriteService; drawer: CashDrawerService } {
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const authz = new SalesAuthorizationService(db);
   const finance = new SalesFinanceService(db);
@@ -393,9 +571,19 @@ function buildFullServices(db: Kysely<Database>, withDrawer: boolean): { sales: 
   // (the accessor caches the sub-service), so updateSale's refresh
   // helper would see no drawer (SHIFT_REFRESH_UNAVAILABLE in B1).
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
-    undefined, undefined, withDrawer ? drawer : undefined,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
+    undefined,
+    undefined,
+    withDrawer ? drawer : undefined,
   );
   return { sales, drawer };
 }
@@ -403,19 +591,32 @@ function buildFullServices(db: Kysely<Database>, withDrawer: boolean): { sales: 
 function posPayloadFull(total: number): any {
   return {
     items: [{ productId: 101, qty: 1, price: total, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: total }], tenderedAmount: total,
-    branchId: 1, locationId: 10, source: 'pos',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: total }],
+    tenderedAmount: total,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
   };
 }
 
 async function closeShiftRow(db: Kysely<Database>, id: number): Promise<void> {
-  await (db as any).updateTable('cashier_shifts')
+  await (db as any)
+    .updateTable('cashier_shifts')
     .set({
-      status: 'closed', closed_at: new Date(), expected_cash: 100,
-      counted_cash: 100, variance: 0, close_note: 'Closed normally', closed_by: 2,
+      status: 'closed',
+      closed_at: new Date(),
+      expected_cash: 100,
+      counted_cash: 100,
+      variance: 0,
+      close_note: 'Closed normally',
+      closed_by: 2,
     })
-    .where('id', '=', id).execute();
+    .where('id', '=', id)
+    .execute();
 }
 
 async function runPartB(): Promise<void> {
@@ -434,10 +635,30 @@ async function runPartB(): Promise<void> {
       // The cashier collected 50 cash from a customer during the shift.
       // The edit below cannot move the sale's stored legs (payment-lock),
       // so the refresh aggregates legs (100) + this collection (50) = 150.
-      await (db as any).insertInto('customer_payments').values({ id: 1, tenant_id: TENANT, created_by: 2, created_at: '2026-01-01T12:00:00.000Z', branch_id: 1, location_id: 10, payment_channel: 'cash', amount: 50, note: 'customer cash collection' }).execute();
-      const edited: any = await sales.updateSale(saleId, {
-        ...posPayloadFull(150), customerId: 1, editReason: 'price corrected after close', managerPin: MANAGER_PIN,
-      }, adminAuth);
+      await (db as any)
+        .insertInto('customer_payments')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          created_by: 2,
+          created_at: '2026-01-01T12:00:00.000Z',
+          branch_id: 1,
+          location_id: 10,
+          payment_channel: 'cash',
+          amount: 50,
+          note: 'customer cash collection',
+        })
+        .execute();
+      const edited: any = await sales.updateSale(
+        saleId,
+        {
+          ...posPayloadFull(150),
+          customerId: 1,
+          editReason: 'price corrected after close',
+          managerPin: MANAGER_PIN,
+        },
+        adminAuth,
+      );
       assert.equal(edited.ok, true, 'post-close edit must succeed');
       const row = await shiftRow(db, 1);
       assert.equal(Number(row.expected_cash), 150, 'stored expected cash must refresh to the edited figure');
@@ -448,7 +669,11 @@ async function runPartB(): Promise<void> {
       assert.ok(String(row.close_note).includes('150'), 'stamp records the corrected figure');
       assert.ok(String(row.close_note).includes(`S-${saleId}`), 'stamp names the sale');
       assert.ok(String(row.close_note).includes('price corrected after close'), 'stamp records the reason');
-      const sale = await (db as any).selectFrom('sales').select(['total', 'status']).where('id', '=', saleId).executeTakeFirstOrThrow();
+      const sale = await (db as any)
+        .selectFrom('sales')
+        .select(['total', 'status'])
+        .where('id', '=', saleId)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(sale.total), 150, 'the sale itself carries the edited total');
       assert.equal(sale.status, 'posted');
     } finally {
@@ -473,7 +698,11 @@ async function runPartB(): Promise<void> {
       assert.equal(Number(row.expected_cash), 100, 'cancel nets to the same figure: stored expected cash untouched');
       assert.equal(Number(row.variance), 0);
       assert.equal(String(row.close_note), 'Closed normally', 'no stamp when the recomputation is unchanged');
-      const sale = await (db as any).selectFrom('sales').select('status').where('id', '=', saleId).executeTakeFirstOrThrow();
+      const sale = await (db as any)
+        .selectFrom('sales')
+        .select('status')
+        .where('id', '=', saleId)
+        .executeTakeFirstOrThrow();
       assert.equal(sale.status, 'cancelled');
     } finally {
       await db.destroy();
@@ -494,12 +723,24 @@ async function runPartB(): Promise<void> {
       await closeShiftRow(db, 1);
       await seedShiftFull(db, 99, 1);
       await assert.rejects(
-        () => sales.updateSale(saleId, {
-          ...posPayloadFull(150), customerId: 1, editReason: 'price corrected after close', managerPin: MANAGER_PIN,
-        }, adminAuth),
+        () =>
+          sales.updateSale(
+            saleId,
+            {
+              ...posPayloadFull(150),
+              customerId: 1,
+              editReason: 'price corrected after close',
+              managerPin: MANAGER_PIN,
+            },
+            adminAuth,
+          ),
         (error: unknown) => (error as { code?: string }).code === 'SHIFT_REFRESH_UNAVAILABLE',
       );
-      const sale = await (db as any).selectFrom('sales').select(['total', 'status']).where('id', '=', saleId).executeTakeFirstOrThrow();
+      const sale = await (db as any)
+        .selectFrom('sales')
+        .select(['total', 'status'])
+        .where('id', '=', saleId)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(sale.total), 100, 'the refused edit must roll back');
       const row = await shiftRow(db, 1);
       assert.equal(Number(row.expected_cash), 100);

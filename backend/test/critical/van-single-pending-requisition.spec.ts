@@ -15,7 +15,11 @@ describe('Van Single Pending Requisition & Supplementary Load Invariant Specific
 
     // Rule assertion: new submission MUST be rejected
     const canSubmitNew = !hasPending;
-    assert.equal(canSubmitNew, false, 'Driver must not be allowed to submit a new load requisition while one is pending');
+    assert.equal(
+      canSubmitNew,
+      false,
+      'Driver must not be allowed to submit a new load requisition while one is pending',
+    );
   });
 
   it('should allow cancellation of pending requisition and return previous items for recovery', () => {

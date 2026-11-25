@@ -2,12 +2,7 @@ import { strict as assert } from 'node:assert';
 import crypto from 'crypto';
 
 // 1. Haversine Distance Engine (matches MobileAttendanceService)
-function calculateHaversineDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number {
+function calculateHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Earth radius in meters
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const phi1 = toRad(lat1);
@@ -71,9 +66,7 @@ function simulateOnlineOrderCreation(payload: {
   const total = subtotal + effectiveDeliveryFee;
 
   // Address
-  const customerAddress = isDineIn
-    ? `طاولة رقم: ${tableNo || 'غير محدد'}`
-    : payload.customerAddress || '';
+  const customerAddress = isDineIn ? `طاولة رقم: ${tableNo || 'غير محدد'}` : payload.customerAddress || '';
 
   // Sale record for KDS
   const saleRecord = {
@@ -129,18 +122,18 @@ async function runTestSuite() {
   // Test Case 1: GPS Geodesic Haversine Calculation
   // -------------------------------------------------------------
   console.log('Test 1: Geodesic Haversine Distance & Geofence Accuracy...');
-  const cairoBranchLat = 30.044420;
+  const cairoBranchLat = 30.04442;
   const cairoBranchLon = 31.235712;
 
   // Employee standing 30 meters away
-  const employeeNearbyLat = 30.044600;
-  const employeeNearbyLon = 31.235850;
+  const employeeNearbyLat = 30.0446;
+  const employeeNearbyLon = 31.23585;
   const distNearby = calculateHaversineDistance(cairoBranchLat, cairoBranchLon, employeeNearbyLat, employeeNearbyLon);
   console.log(`  -> Nearby distance calculated: ${distNearby} meters`);
   assert(distNearby < 100, 'Nearby distance must be within 100m');
 
   // Employee standing 1.2 km away
-  const employeeFarLat = 30.054420;
+  const employeeFarLat = 30.05442;
   const employeeFarLon = 31.245712;
   const distFar = calculateHaversineDistance(cairoBranchLat, cairoBranchLon, employeeFarLat, employeeFarLon);
   console.log(`  -> Far distance calculated: ${distFar} meters`);
@@ -186,7 +179,12 @@ async function runTestSuite() {
   }
   const punches: MockPunch[] = [];
 
-  function recordPunch(employeeId: number, requestedType: 'auto' | 'check_in' | 'check_out', distance: number, selfie: string) {
+  function recordPunch(
+    employeeId: number,
+    requestedType: 'auto' | 'check_in' | 'check_out',
+    distance: number,
+    selfie: string,
+  ) {
     const todayPunches = punches.filter((p) => p.employeeId === employeeId);
     let resolvedType: 'check_in' | 'check_out' = 'check_in';
     if (requestedType === 'auto') {

@@ -101,14 +101,24 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const vanCashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-cashier-van', username: 'cashier', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-cashier-van',
+  username: 'cashier',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
   activityType: 'wholesale_van',
 } as unknown as AuthContext;
 
 const retailCashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-cashier-retail', username: 'cashier', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-cashier-retail',
+  username: 'cashier',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
   activityType: 'retail_general',
 } as unknown as AuthContext;
 
@@ -182,79 +192,264 @@ async function seedFoundation(db: Kysely<Database>, mode: string): Promise<void>
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
   // Branch 1 sells from location 10 and says single_location — the
   // provisioning default the trial tenant carries. Branch 2 owns
   // location 21; its 50 pieces must never enter branch 1's pool.
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main', default_stock_location_id: 10, sales_stock_mode: mode }).execute();
-  await anyDb.insertInto('branches').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Other', default_stock_location_id: 21, sales_stock_mode: null }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Branch warehouse', location_type: 'branch_stock', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, branch_id: null, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('branches')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main',
+      default_stock_location_id: 10,
+      sales_stock_mode: mode,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Other',
+      default_stock_location_id: 21,
+      sales_stock_mode: null,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Branch warehouse',
+      location_type: 'branch_stock',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 20,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: null,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
   // Location 30: the rep's van (van_stock, qty 100) — seeded on
   // BRANCH 1 on purpose, the real creation shape (van-common ensures
   // a rep's van_stock location on the tenant's default branch). It
   // must NEVER enter the POS pool: van stock is loaded custody, sold
   // only via field sales and reconciled at trip settlement.
-  await anyDb.insertInto('stock_locations').values({ id: 30, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van 1', location_type: 'van_stock', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 21, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 2, name: 'Other warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 30,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van 1',
+      location_type: 'van_stock',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 21,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 2,
+      name: 'Other warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
   // Trial item: 12.00/pc, one carton = 12 pcs = 144.00. Global
   // stock_qty 196 = 4 + 42 + 100 + 50, so the global figure alone
   // proves nothing — only the scoped pool matters.
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'صنف اختبار جمله ا',
-    barcode: '200001', stock_qty: 196, reserved_qty: 0, cost_price: 10, retail_price: 12,
-    wholesale_price: 12, half_wholesale_price: 12, credit_price: 12, min_selling_price: 0,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('products').values({
-    id: 102, tenant_id: TENANT, account_id: ACCOUNT, name: 'صنف بلا رصيد',
-    barcode: '200002', stock_qty: 0, reserved_qty: 0, cost_price: 10, retail_price: 12,
-    wholesale_price: 12, min_selling_price: 0,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_units').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, name: 'قطعة',
-    multiplier: 1, barcode: '200001', is_base_unit: true, is_sale_unit_default: true, is_purchase_unit_default: true,
-  }).execute();
-  await anyDb.insertInto('product_units').values({
-    id: 2, tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, name: 'كرتونة',
-    multiplier: 12, barcode: '200012', is_base_unit: false, is_sale_unit_default: false, is_purchase_unit_default: false,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 4, reserved_qty: 0,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: null, location_id: 20, qty: 42, reserved_qty: 0,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: null, location_id: 30, qty: 100, reserved_qty: 0,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 2, location_id: 21, qty: 50, reserved_qty: 0,
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'صنف اختبار جمله ا',
+      barcode: '200001',
+      stock_qty: 196,
+      reserved_qty: 0,
+      cost_price: 10,
+      retail_price: 12,
+      wholesale_price: 12,
+      half_wholesale_price: 12,
+      credit_price: 12,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 102,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'صنف بلا رصيد',
+      barcode: '200002',
+      stock_qty: 0,
+      reserved_qty: 0,
+      cost_price: 10,
+      retail_price: 12,
+      wholesale_price: 12,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_units')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      name: 'قطعة',
+      multiplier: 1,
+      barcode: '200001',
+      is_base_unit: true,
+      is_sale_unit_default: true,
+      is_purchase_unit_default: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_units')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      name: 'كرتونة',
+      multiplier: 12,
+      barcode: '200012',
+      is_base_unit: false,
+      is_sale_unit_default: false,
+      is_purchase_unit_default: false,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 4,
+      reserved_qty: 0,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: null,
+      location_id: 20,
+      qty: 42,
+      reserved_qty: 0,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: null,
+      location_id: 30,
+      qty: 100,
+      reserved_qty: 0,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 2,
+      location_id: 21,
+      qty: 50,
+      reserved_qty: 0,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-1',
-    opened_by: 2, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'SHIFT-1',
+      opened_by: 2,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+    })
+    .execute();
 }
 
 function buildCatalogService(db: Kysely<Database>): CatalogProductService {
@@ -278,22 +473,37 @@ function buildSalesService(db: Kysely<Database>): SalesWriteService {
   const planFeatures = { hasFeature: (_planId: any, _extra: any, feature: string) => feature === 'pos' };
   const returnsStub = {};
   return new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
 }
 
 async function displayedStock(service: CatalogProductService, auth: AuthContext, productId: number): Promise<number> {
   const result: any = await service.listPosProducts({ branchId: 1 }, auth);
   const row = (result.products as any[]).find((p: any) => Number(p.id) === productId);
-  assert.ok(row, `expected product ${productId} in the POS list, got ${JSON.stringify(result.products)?.slice(0, 200)}`);
+  assert.ok(
+    row,
+    `expected product ${productId} in the POS list, got ${JSON.stringify(result.products)?.slice(0, 200)}`,
+  );
   return Number(row.stock);
 }
 
 async function locationQty(db: Kysely<Database>, productId: number, locationId: number): Promise<number> {
-  const row = await (db as any).selectFrom('product_location_stock').select(['qty'])
-    .where('tenant_id', '=', TENANT).where('product_id', '=', productId).where('location_id', '=', locationId)
-    .executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('product_location_stock')
+    .select(['qty'])
+    .where('tenant_id', '=', TENANT)
+    .where('product_id', '=', productId)
+    .where('location_id', '=', locationId)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.qty);
 }
 
@@ -311,22 +521,35 @@ function posPayload(qty: number): any {
   const price = 12;
   return {
     items: [{ productId: 101, qty, price, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
     payments: [{ paymentChannel: 'cash', amount: price * qty }],
-    tenderedAmount: price * qty, branchId: 1, locationId: 10, source: 'pos',
+    tenderedAmount: price * qty,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
   };
 }
 
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
   const created: any = await service.createSale(payload, auth);
-  const id = Number((created?.sale?.id ?? created?.saleId) ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
 async function readSaleTotal(db: Kysely<Database>, saleId: number): Promise<number> {
-  const row = await (db as any).selectFrom('sales').select(['total'])
-    .where('id', '=', saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('sales')
+    .select(['total'])
+    .where('id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.total);
 }
 
@@ -338,7 +561,10 @@ async function main(): Promise<void> {
     assert.equal(posSellsFromAllOperationalLocations({ sales_stock_mode: 'single_location' }, 'retail_general'), false);
     assert.equal(posSellsFromAllOperationalLocations({ sales_stock_mode: 'single_location' }, undefined), false);
     assert.equal(posSellsFromAllOperationalLocations({ sales_stock_mode: 'single_location' }, null), false);
-    assert.equal(posSellsFromAllOperationalLocations({ sales_stock_mode: 'all_operational_locations' }, 'retail_general'), true);
+    assert.equal(
+      posSellsFromAllOperationalLocations({ sales_stock_mode: 'all_operational_locations' }, 'retail_general'),
+      true,
+    );
     assert.equal(posSellsFromAllOperationalLocations(null, 'wholesale_van'), true);
     console.log('  (a) helper table passed');
   }
@@ -461,7 +687,8 @@ async function main(): Promise<void> {
   // (g) Wiring: this spec is in both critical lists (309 specs,
   // identical order) — the suite count moves 300 -> 303 with this batch (F4 + F9 + F10).
   {
-    const specs = JSON.parse(readFileSync(join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+    const specs = JSON.parse(readFileSync(join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+      .specs as string[];
     const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));

@@ -46,7 +46,12 @@ async function setupDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   return { pg, db };
 }
 
-async function insertJournal(db: Kysely<Database>, sourceType: string, sourceId: number, reversedBy: number | null): Promise<void> {
+async function insertJournal(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+  reversedBy: number | null,
+): Promise<void> {
   await sql`
     INSERT INTO journal_entries (tenant_id, source_type, source_id, status, reversed_by_entry_id)
     VALUES ('t1', ${sourceType}, ${sourceId}, 'posted', ${reversedBy})
@@ -123,7 +128,11 @@ async function main(): Promise<void> {
       await raceWindowMigrationUp(db as any);
       await insertJournal(db, 'stock_count_chunk', 7, null);
       await insertJournal(db, 'stock_count_chunk', 7, null);
-      assert.equal(await countJournals(db, 'stock_count_chunk', 7), 2, 'uncovered type keeps its own multiplicity rules');
+      assert.equal(
+        await countJournals(db, 'stock_count_chunk', 7),
+        2,
+        'uncovered type keeps its own multiplicity rules',
+      );
     } finally {
       await db.destroy();
     }
@@ -150,6 +159,12 @@ async function main(): Promise<void> {
 }
 
 main().then(
-  () => { console.log('race-window-uniqueness.spec: ok'); process.exit(0); },
-  (err) => { console.error(err); process.exit(1); },
+  () => {
+    console.log('race-window-uniqueness.spec: ok');
+    process.exit(0);
+  },
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
 );

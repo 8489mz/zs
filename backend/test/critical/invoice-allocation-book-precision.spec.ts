@@ -64,36 +64,48 @@ function testBookPrecisionAllocation(): void {
   assert.equal(Number(discountSum.toFixed(3)), 5.005);
 
   // The defect: the same stored inputs under a 2dp book throw.
-  assert.throws(() => allocateInvoiceDiscount({
-    lines: [
-      { lineTotal: 20.025, qty: 1 },
-      { lineTotal: 13.35, qty: 2 },
-    ],
-    invoiceDiscount: 0,
-    invoiceTax: 10.005,
-    pricesIncludeTax: false,
-    digits: 2,
-  }), /INVALID_INVOICE_ALLOCATION/);
+  assert.throws(
+    () =>
+      allocateInvoiceDiscount({
+        lines: [
+          { lineTotal: 20.025, qty: 1 },
+          { lineTotal: 13.35, qty: 2 },
+        ],
+        invoiceDiscount: 0,
+        invoiceTax: 10.005,
+        pricesIncludeTax: false,
+        digits: 2,
+      }),
+    /INVALID_INVOICE_ALLOCATION/,
+  );
 
   // Omitting digits fails closed instead of silently defaulting to 2.
-  assert.throws(() => (allocateInvoiceDiscount as any)({
-    lines: [
-      { lineTotal: 20.025, qty: 1 },
-      { lineTotal: 13.35, qty: 2 },
-    ],
-    invoiceDiscount: 0,
-    invoiceTax: 10.005,
-    pricesIncludeTax: false,
-  }), /INVALID_INVOICE_ALLOCATION/);
+  assert.throws(
+    () =>
+      (allocateInvoiceDiscount as any)({
+        lines: [
+          { lineTotal: 20.025, qty: 1 },
+          { lineTotal: 13.35, qty: 2 },
+        ],
+        invoiceDiscount: 0,
+        invoiceTax: 10.005,
+        pricesIncludeTax: false,
+      }),
+    /INVALID_INVOICE_ALLOCATION/,
+  );
 
   // Finer-than-book inputs fail closed at digits 3.
-  assert.throws(() => allocateInvoiceDiscount({
-    lines: [{ lineTotal: 10.0085, qty: 1 }],
-    invoiceDiscount: 0,
-    invoiceTax: 0,
-    pricesIncludeTax: false,
-    digits: 3,
-  }), /INVALID_INVOICE_ALLOCATION/);
+  assert.throws(
+    () =>
+      allocateInvoiceDiscount({
+        lines: [{ lineTotal: 10.0085, qty: 1 }],
+        invoiceDiscount: 0,
+        invoiceTax: 0,
+        pricesIncludeTax: false,
+        digits: 3,
+      }),
+    /INVALID_INVOICE_ALLOCATION/,
+  );
 
   // 2-decimal behaviour unchanged: the last line absorbs the remainder.
   const twoDp = allocateInvoiceDiscount({

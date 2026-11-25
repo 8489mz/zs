@@ -39,8 +39,22 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 const PIN = '2468';
 const ADMIN_PASSWORD = 'admin-pass';
 
-const cashier = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 2, username: 'cashier-a', permissions: ['canEditInvoices'] } as unknown as AuthContext;
-const admin = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'boss', permissions: [] } as unknown as AuthContext;
+const cashier = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'cashier',
+  userId: 2,
+  username: 'cashier-a',
+  permissions: ['canEditInvoices'],
+} as unknown as AuthContext;
+const admin = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'boss',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -65,23 +79,51 @@ async function seedUsers(db: Kysely<Database>, pinValue: string | null): Promise
     await (db as any).insertInto('settings').values({ tenant_id: 't1', key: 'managerPin', value: pinValue }).execute();
   }
   const record = await createPasswordRecord(ADMIN_PASSWORD);
-  await (db as any).insertInto('users').values({
-    id: 1, tenant_id: 't1', username: 'boss', role: 'admin', is_active: true,
-    password_hash: record.hash, password_salt: record.salt,
-  }).execute();
-  await (db as any).insertInto('users').values({
-    id: 2, tenant_id: 't1', username: 'cashier-a', role: 'cashier', is_active: true,
-    password_hash: record.hash, password_salt: record.salt,
-  }).execute();
-  await (db as any).insertInto('users').values({
-    id: 3, tenant_id: 't1', username: 'ex-admin', role: 'admin', is_active: false,
-    password_hash: record.hash, password_salt: record.salt,
-  }).execute();
+  await (db as any)
+    .insertInto('users')
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      username: 'boss',
+      role: 'admin',
+      is_active: true,
+      password_hash: record.hash,
+      password_salt: record.salt,
+    })
+    .execute();
+  await (db as any)
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: 't1',
+      username: 'cashier-a',
+      role: 'cashier',
+      is_active: true,
+      password_hash: record.hash,
+      password_salt: record.salt,
+    })
+    .execute();
+  await (db as any)
+    .insertInto('users')
+    .values({
+      id: 3,
+      tenant_id: 't1',
+      username: 'ex-admin',
+      role: 'admin',
+      is_active: false,
+      password_hash: record.hash,
+      password_salt: record.salt,
+    })
+    .execute();
 }
 
 async function expectCode(promise: Promise<unknown>, code: string): Promise<void> {
   let caught: unknown;
-  try { await promise; } catch (error) { caught = error; }
+  try {
+    await promise;
+  } catch (error) {
+    caught = error;
+  }
   assert.ok(caught, `expected rejection with ${code}`);
   assert.equal((caught as { code?: string }).code, code);
 }
@@ -138,15 +180,43 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedUsers(db, JSON.stringify(PIN));
-      await (db as any).insertInto('purchases').values({ id: 1, tenant_id: 't1', account_id: 'a1', doc_no: 'P1', supplier_id: 9, status: 'posted', lifecycle_status: 'posted' }).execute();
-      await (db as any).insertInto('purchases').values({ id: 2, tenant_id: 't1', account_id: 'a1', doc_no: 'P2', supplier_id: 9, status: 'cancelled', lifecycle_status: 'posted' }).execute();
+      await (db as any)
+        .insertInto('purchases')
+        .values({
+          id: 1,
+          tenant_id: 't1',
+          account_id: 'a1',
+          doc_no: 'P1',
+          supplier_id: 9,
+          status: 'posted',
+          lifecycle_status: 'posted',
+        })
+        .execute();
+      await (db as any)
+        .insertInto('purchases')
+        .values({
+          id: 2,
+          tenant_id: 't1',
+          account_id: 'a1',
+          doc_no: 'P2',
+          supplier_id: 9,
+          status: 'cancelled',
+          lifecycle_status: 'posted',
+        })
+        .execute();
       const svc = makeWriteService(db);
       const editPayload = { editReason: 'fix', items: [], supplierId: 9 } as any;
 
       await expectCode(svc.updatePurchase(1, editPayload, cashier), 'MANAGER_AUTH_REQUIRED');
       await expectCode(svc.updatePurchase(1, { ...editPayload, managerPin: '0000' }, cashier), 'MANAGER_AUTH_INVALID');
-      await expectCode(svc.updatePurchase(1, { ...editPayload, managerPin: PIN }, cashier), 'POSTED_PURCHASE_EDIT_FORBIDDEN');
-      await expectCode(svc.updatePurchase(1, { ...editPayload, managerPin: ADMIN_PASSWORD }, cashier), 'POSTED_PURCHASE_EDIT_FORBIDDEN');
+      await expectCode(
+        svc.updatePurchase(1, { ...editPayload, managerPin: PIN }, cashier),
+        'POSTED_PURCHASE_EDIT_FORBIDDEN',
+      );
+      await expectCode(
+        svc.updatePurchase(1, { ...editPayload, managerPin: ADMIN_PASSWORD }, cashier),
+        'POSTED_PURCHASE_EDIT_FORBIDDEN',
+      );
       await expectCode(svc.updatePurchase(1, editPayload, admin), 'POSTED_PURCHASE_EDIT_FORBIDDEN');
       await expectCode(svc.updatePurchase(1, { ...editPayload, managerPin: '0000' }, admin), 'MANAGER_AUTH_INVALID');
 

@@ -43,8 +43,22 @@ stubbed as in the purchase-return specs):
   refund by a cashier with no credential succeeds.
 */
 
-const ADMIN = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
-const CASHIER = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 2, username: 'cashier', permissions: [] } as unknown as AuthContext;
+const ADMIN = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
+const CASHIER = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'cashier',
+  userId: 2,
+  username: 'cashier',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -168,35 +182,62 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 4100, 4300, 5100, 5190, 5200, 5300, 7100]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-      [code, 't1', String(code), code === 1150 || code === 2120]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      String(code),
+      code === 1150 || code === 2120,
+    ]);
   }
   return { pg, db };
 }
 
 function makeServices(db: Kysely<Database>): ReturnsService {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auditStub = { log: async () => undefined, logWithExecutor: async () => undefined };
   const idempotencyStub = { check: async () => null, commitOperation: async () => undefined };
-  return new ReturnsService(db as any, new TransactionHelper(), auditStub as any, posting as any, idempotencyStub as any);
+  return new ReturnsService(
+    db as any,
+    new TransactionHelper(),
+    auditStub as any,
+    posting as any,
+    idempotencyStub as any,
+  );
 }
 
 async function seedSaleFixture(db: Kysely<Database>, opts: { threshold?: number }): Promise<void> {
   await sql`INSERT INTO settings VALUES ('t1', 'currency', 'EGP')`.execute(db);
   await sql`INSERT INTO settings VALUES ('t1', 'managerPin', '"2468"')`.execute(db);
   if (opts.threshold !== undefined) {
-    await sql`INSERT INTO settings VALUES ('t1', 'posLargeCashRefundThreshold', ${JSON.stringify(opts.threshold)})`.execute(db);
+    await sql`INSERT INTO settings VALUES ('t1', 'posLargeCashRefundThreshold', ${JSON.stringify(opts.threshold)})`.execute(
+      db,
+    );
   }
   const adminRecord = await createPasswordRecord('admin-pass');
-  await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${adminRecord.hash}, ${adminRecord.salt}, true)`.execute(db);
+  await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${adminRecord.hash}, ${adminRecord.salt}, true)`.execute(
+    db,
+  );
   await sql`INSERT INTO users VALUES (2, 't1', 'cashier', 1, 'cashier', '', '', true)`.execute(db);
   await sql`INSERT INTO cashier_shifts VALUES (1, 't1', 'a1', 'SHIFT-1', 2, 'open', 1, 0, NOW())`.execute(db);
-  await sql`INSERT INTO products VALUES (10, 't1', 'a1', 'Widget', '', '', '', 100, 0, 10, true, false, NOW())`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty, updated_at) VALUES ('t1', 'a1', 10, 1, 1, 100, 0, NOW())`.execute(db);
-  await sql`INSERT INTO sales VALUES (1, 't1', 'a1', 'S-1', NULL, 'posted', 1000, 1000, 0, 0, 0, 1000, false, 'cash', 'cash', 1, 1, 1, NOW())`.execute(db);
-  await sql`INSERT INTO sale_items VALUES (1, 't1', 'a1', 1, 10, 'Widget', 10, 100, 1000, 100, 1000, 0, 0, 10, 1, NULL)`.execute(db);
-  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount, created_at) VALUES ('t1', 'a1', 1, 'cash', 1000, NOW())`.execute(db);
+  await sql`INSERT INTO products VALUES (10, 't1', 'a1', 'Widget', '', '', '', 100, 0, 10, true, false, NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty, updated_at) VALUES ('t1', 'a1', 10, 1, 1, 100, 0, NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO sales VALUES (1, 't1', 'a1', 'S-1', NULL, 'posted', 1000, 1000, 0, 0, 0, 1000, false, 'cash', 'cash', 1, 1, 1, NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO sale_items VALUES (1, 't1', 'a1', 1, 10, 'Widget', 10, 100, 1000, 100, 1000, 0, 0, 10, 1, NULL)`.execute(
+    db,
+  );
+  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount, created_at) VALUES ('t1', 'a1', 1, 'cash', 1000, NOW())`.execute(
+    db,
+  );
 }
 
 async function returnCount(db: Kysely<Database>): Promise<number> {
@@ -211,14 +252,22 @@ async function main(): Promise<void> {
     try {
       await seedSaleFixture(db, {});
       const svc = makeServices(db);
-      const result = await svc.createReturn({
-        type: 'sale', invoiceId: 1, note: 'customer changed mind',
-        items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 1 }],
-        settlementMode: 'refund', refundMethod: 'cash',
-      } as never, CASHIER) as unknown as { ok: boolean };
+      const result = (await svc.createReturn(
+        {
+          type: 'sale',
+          invoiceId: 1,
+          note: 'customer changed mind',
+          items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 1 }],
+          settlementMode: 'refund',
+          refundMethod: 'cash',
+        } as never,
+        CASHIER,
+      )) as unknown as { ok: boolean };
       assert.equal(result.ok, true);
       assert.equal(await returnCount(db), 1);
-      const treasury = await sql<{ amount: string }>`SELECT amount FROM treasury_transactions WHERE txn_type = 'sale_return_refund'`.execute(db);
+      const treasury = await sql<{
+        amount: string;
+      }>`SELECT amount FROM treasury_transactions WHERE txn_type = 'sale_return_refund'`.execute(db);
       assert.equal(Number(treasury.rows[0].amount), -100);
     } finally {
       await db.destroy();
@@ -233,19 +282,32 @@ async function main(): Promise<void> {
       await seedSaleFixture(db, {});
       const svc = makeServices(db);
       await assert.rejects(
-        svc.createReturn({
-          type: 'sale', invoiceId: 1, note: 'bulk return',
-          items: [{ productId: 10, productName: 'Widget', qty: 6, saleItemId: 1 }],
-          settlementMode: 'refund', refundMethod: 'cash',
-        } as never, CASHIER),
+        svc.createReturn(
+          {
+            type: 'sale',
+            invoiceId: 1,
+            note: 'bulk return',
+            items: [{ productId: 10, productName: 'Widget', qty: 6, saleItemId: 1 }],
+            settlementMode: 'refund',
+            refundMethod: 'cash',
+          } as never,
+          CASHIER,
+        ),
         (error: any) => error.code === 'MANAGER_AUTH_REQUIRED',
       );
       assert.equal(await returnCount(db), 0);
-      const result = await svc.createReturn({
-        type: 'sale', invoiceId: 1, note: 'bulk return', managerPin: '2468',
-        items: [{ productId: 10, productName: 'Widget', qty: 6, saleItemId: 1 }],
-        settlementMode: 'refund', refundMethod: 'cash',
-      } as never, CASHIER) as unknown as { ok: boolean };
+      const result = (await svc.createReturn(
+        {
+          type: 'sale',
+          invoiceId: 1,
+          note: 'bulk return',
+          managerPin: '2468',
+          items: [{ productId: 10, productName: 'Widget', qty: 6, saleItemId: 1 }],
+          settlementMode: 'refund',
+          refundMethod: 'cash',
+        } as never,
+        CASHIER,
+      )) as unknown as { ok: boolean };
       assert.equal(result.ok, true);
       assert.equal(await returnCount(db), 1);
     } finally {
@@ -259,11 +321,18 @@ async function main(): Promise<void> {
     try {
       await seedSaleFixture(db, {});
       const svc = makeServices(db);
-      const result = await svc.createReturn({
-        type: 'sale', invoiceId: 1, note: 'bulk return', managerPin: 'admin-pass',
-        items: [{ productId: 10, productName: 'Widget', qty: 6, saleItemId: 1 }],
-        settlementMode: 'refund', refundMethod: 'cash',
-      } as never, CASHIER) as unknown as { ok: boolean };
+      const result = (await svc.createReturn(
+        {
+          type: 'sale',
+          invoiceId: 1,
+          note: 'bulk return',
+          managerPin: 'admin-pass',
+          items: [{ productId: 10, productName: 'Widget', qty: 6, saleItemId: 1 }],
+          settlementMode: 'refund',
+          refundMethod: 'cash',
+        } as never,
+        CASHIER,
+      )) as unknown as { ok: boolean };
       assert.equal(result.ok, true);
     } finally {
       await db.destroy();
@@ -277,11 +346,17 @@ async function main(): Promise<void> {
       await seedSaleFixture(db, {});
       const svc = makeServices(db);
       await assert.rejects(
-        svc.createReturn({
-          type: 'sale', invoiceId: 1, note: 'at threshold',
-          items: [{ productId: 10, productName: 'Widget', qty: 5, saleItemId: 1 }],
-          settlementMode: 'refund', refundMethod: 'cash',
-        } as never, CASHIER),
+        svc.createReturn(
+          {
+            type: 'sale',
+            invoiceId: 1,
+            note: 'at threshold',
+            items: [{ productId: 10, productName: 'Widget', qty: 5, saleItemId: 1 }],
+            settlementMode: 'refund',
+            refundMethod: 'cash',
+          } as never,
+          CASHIER,
+        ),
         (error: any) => error.code === 'MANAGER_AUTH_REQUIRED',
       );
       assert.equal(await returnCount(db), 0);
@@ -296,11 +371,17 @@ async function main(): Promise<void> {
     try {
       await seedSaleFixture(db, { threshold: 700 });
       const svc = makeServices(db);
-      const result = await svc.createReturn({
-        type: 'sale', invoiceId: 1, note: 'below raised threshold',
-        items: [{ productId: 10, productName: 'Widget', qty: 6, saleItemId: 1 }],
-        settlementMode: 'refund', refundMethod: 'cash',
-      } as never, CASHIER) as unknown as { ok: boolean };
+      const result = (await svc.createReturn(
+        {
+          type: 'sale',
+          invoiceId: 1,
+          note: 'below raised threshold',
+          items: [{ productId: 10, productName: 'Widget', qty: 6, saleItemId: 1 }],
+          settlementMode: 'refund',
+          refundMethod: 'cash',
+        } as never,
+        CASHIER,
+      )) as unknown as { ok: boolean };
       assert.equal(result.ok, true);
       assert.equal(await returnCount(db), 1);
     } finally {

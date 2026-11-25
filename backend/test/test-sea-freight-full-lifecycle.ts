@@ -70,7 +70,10 @@ async function runSeaFreightLifecycleTest() {
     const inquiry = await freightService.createInquiry(auth, inquiryDto);
     console.log(`  -> Created Inquiry #${inquiry.inquiry_number} (ID: ${inquiry.id})`);
     assert(Boolean(inquiry.id), 'Inquiry ID must exist');
-    assert(/^INQ-\d{6}-\d{4}$/.test(inquiry.inquiry_number), `Inquiry number must follow INQ-YYMMDD-XXXX formula, got: ${inquiry.inquiry_number}`);
+    assert(
+      /^INQ-\d{6}-\d{4}$/.test(inquiry.inquiry_number),
+      `Inquiry number must follow INQ-YYMMDD-XXXX formula, got: ${inquiry.inquiry_number}`,
+    );
     assert(inquiry.status === 'received', 'Initial status must be "received"');
     assert(inquiry.transport_mode === 'sea', 'Transport mode must be "sea"');
     assert(Number(inquiry.container_count) === 2, 'Container count must be 2');
@@ -80,7 +83,7 @@ async function runSeaFreightLifecycleTest() {
     // STEP 2: Convert Inquiry to Maritime RFQ (تحويل الاستفسار إلى طلب تسعير خطوط)
     // -------------------------------------------------------------------------
     console.log('[STEP 2] Converting Inquiry to Line RFQ (طلب تسعير الخطوط)...');
-    
+
     // Fetch available shipping lines for tenant
     const lines = await db
       .selectFrom('shipping_lines')
@@ -90,13 +93,16 @@ async function runSeaFreightLifecycleTest() {
       .execute();
 
     const targetLineIds = lines.map((l) => Number(l.id));
-    console.log(`  -> Targeting ${lines.length} carriers:`, lines.map(l => `${l.name_en} (${l.code})`).join(', '));
+    console.log(`  -> Targeting ${lines.length} carriers:`, lines.map((l) => `${l.name_en} (${l.code})`).join(', '));
     assert(targetLineIds.length > 0, 'Must have carrier shipping lines to target');
 
     const rfq = await freightService.convertInquiryToRfq(auth, String(inquiry.id), targetLineIds);
     console.log(`  -> Created RFQ #${rfq.rfq_number} (ID: ${rfq.id})`);
     assert(Boolean(rfq.id), 'RFQ ID must exist');
-    assert(/^RFQ-\d{6}-\d{4}$/.test(rfq.rfq_number), `RFQ number must follow RFQ-YYMMDD-XXXX formula, got: ${rfq.rfq_number}`);
+    assert(
+      /^RFQ-\d{6}-\d{4}$/.test(rfq.rfq_number),
+      `RFQ number must follow RFQ-YYMMDD-XXXX formula, got: ${rfq.rfq_number}`,
+    );
     assert(rfq.transport_mode === 'sea', 'RFQ transport mode must be preserved as "sea"');
     assert(String(rfq.inquiry_id) === String(inquiry.id), 'RFQ must be linked to source inquiry');
 
@@ -276,10 +282,16 @@ async function runSeaFreightLifecycleTest() {
 
     console.log(`  -> Created Quotation #${quote.quotation_number} (ID: ${quote.id})`);
     assert(Boolean(quote.id), 'Quotation ID must exist');
-    assert(/^QUO-\d{6}-\d{4}$/.test(quote.quotation_number), `Quotation number must follow QUO-YYMMDD-XXXX formula, got: ${quote.quotation_number}`);
+    assert(
+      /^QUO-\d{6}-\d{4}$/.test(quote.quotation_number),
+      `Quotation number must follow QUO-YYMMDD-XXXX formula, got: ${quote.quotation_number}`,
+    );
     assert(Number(quote.base_cost) === totalBaseCost, 'Base cost matches');
     assert(Number(quote.final_total) === totalBaseCost + totalMargin, 'Final total includes margin');
-    assert(Math.round(Number(quote.final_total_local)) === Math.round((totalBaseCost + totalMargin) * exchangeRate), 'Final total local equals total * exchange rate');
+    assert(
+      Math.round(Number(quote.final_total_local)) === Math.round((totalBaseCost + totalMargin) * exchangeRate),
+      'Final total local equals total * exchange rate',
+    );
     console.log('  -> Quote Amounts:', {
       baseUSD: quote.base_cost,
       marginUSD: quote.margin_value,
@@ -296,7 +308,10 @@ async function runSeaFreightLifecycleTest() {
     const job = await freightService.autoConvertQuotationToJob(auth, String(quote.id));
     console.log(`  -> Created Job #${job.job_number} (ID: ${job.id})`);
     assert(Boolean(job.id), 'Job ID must exist');
-    assert(/^JOB-\d{6}-\d{4}$/.test(job.job_number), `Job number must follow JOB-YYMMDD-XXXX formula, got: ${job.job_number}`);
+    assert(
+      /^JOB-\d{6}-\d{4}$/.test(job.job_number),
+      `Job number must follow JOB-YYMMDD-XXXX formula, got: ${job.job_number}`,
+    );
     assert(job.status === 'active', 'Initial Job status must be "active"');
     assert(job.milestone_status === 'BOOK', 'Initial sea freight milestone must be "BOOK"');
     assert(job.shipping_line_name === mscBid.shipping_line_name, 'Assigned carrier must match awarded bid');
@@ -341,22 +356,69 @@ async function runSeaFreightLifecycleTest() {
 
     const finalInquiry = await freightService.getInquiryById(auth, String(inquiry.id));
     assert(finalInquiry.status === 'converted_to_job', 'Inquiry status must be "converted_to_job"');
-    console.log('  [PASS] STEP 7 PASSED: Job created, cost center opened, containers allocated, lifecycle statuses updated.\n');
+    console.log(
+      '  [PASS] STEP 7 PASSED: Job created, cost center opened, containers allocated, lifecycle statuses updated.\n',
+    );
 
     // -------------------------------------------------------------------------
     // STEP 8: Container Tracking & DCSA Standard Milestones
     // -------------------------------------------------------------------------
     console.log('[STEP 8] Progressing DCSA Sea Freight Milestones (Tracking & Operations)...');
     const seaMilestones: Array<{ key: DcsaMilestoneKey; title: string; loc: string; notes: string }> = [
-      { key: 'GTI', title: 'دخول بوابة الميناء (Gate In)', loc: 'Shanghai Terminal Gate 4', notes: 'دخلت الحاويات ساحة التصدير بميناء شنغهاي' },
-      { key: 'LOAD', title: 'التحميل على السفينة (Loaded on Vessel)', loc: 'Shanghai Berth 2', notes: 'تم شحن الحاويات على متن السفينة MSC ISABELLA' },
-      { key: 'DEPT', title: 'مغادرة ميناء الشحن (Vessel Departure)', loc: 'East China Sea', notes: 'أبحرت السفينة بالرحلة رقم 2610W باتجاه ميناء الإسكندرية' },
-      { key: 'ARRI', title: 'وصول ميناء الوجهة (Vessel Arrival)', loc: 'Alexandria Outer Anchorage', notes: 'وصلت السفينة لغاطس ميناء الإسكندرية' },
-      { key: 'DISC', title: 'التفريغ على الرصيف (Discharged at POD)', loc: 'Alexandria Container Terminal', notes: 'تم تفريغ الحاويات وبدء سريان فترة السماح 14 يوم' },
-      { key: 'CUST', title: 'الإفراج الجمركي (Customs Cleared)', loc: 'Alexandria Customs Authority', notes: 'تم إنهاء الكشف والمعاينة والإفراج الجمركي بموجب شهادة الوارد' },
-      { key: 'GTO', title: 'خروج الحاويات من الميناء (Gate Out)', loc: 'Alexandria Port Gate 27', notes: 'تم إصدار إذن التسليم وخروج الشاحنات بالحاويات من الميناء' },
-      { key: 'DLVR', title: 'التسليم للمستودع (Cargo Delivered)', loc: 'Alexandria Industrial Zone Warehouse', notes: 'تم وصول وتفريغ البضائع بمستودع العميل واستلام أصل بوليصة التسليم POD' },
-      { key: 'RETN', title: 'إرجاع الحاويات الفارغة (Empty Returned)', loc: 'MSC Empty Depot Dekheila', notes: 'تم إعادة الحاويات الفارغة بحالة سليمة لساحة الخط الملاحي واسترداد إيصال الإرجاع' },
+      {
+        key: 'GTI',
+        title: 'دخول بوابة الميناء (Gate In)',
+        loc: 'Shanghai Terminal Gate 4',
+        notes: 'دخلت الحاويات ساحة التصدير بميناء شنغهاي',
+      },
+      {
+        key: 'LOAD',
+        title: 'التحميل على السفينة (Loaded on Vessel)',
+        loc: 'Shanghai Berth 2',
+        notes: 'تم شحن الحاويات على متن السفينة MSC ISABELLA',
+      },
+      {
+        key: 'DEPT',
+        title: 'مغادرة ميناء الشحن (Vessel Departure)',
+        loc: 'East China Sea',
+        notes: 'أبحرت السفينة بالرحلة رقم 2610W باتجاه ميناء الإسكندرية',
+      },
+      {
+        key: 'ARRI',
+        title: 'وصول ميناء الوجهة (Vessel Arrival)',
+        loc: 'Alexandria Outer Anchorage',
+        notes: 'وصلت السفينة لغاطس ميناء الإسكندرية',
+      },
+      {
+        key: 'DISC',
+        title: 'التفريغ على الرصيف (Discharged at POD)',
+        loc: 'Alexandria Container Terminal',
+        notes: 'تم تفريغ الحاويات وبدء سريان فترة السماح 14 يوم',
+      },
+      {
+        key: 'CUST',
+        title: 'الإفراج الجمركي (Customs Cleared)',
+        loc: 'Alexandria Customs Authority',
+        notes: 'تم إنهاء الكشف والمعاينة والإفراج الجمركي بموجب شهادة الوارد',
+      },
+      {
+        key: 'GTO',
+        title: 'خروج الحاويات من الميناء (Gate Out)',
+        loc: 'Alexandria Port Gate 27',
+        notes: 'تم إصدار إذن التسليم وخروج الشاحنات بالحاويات من الميناء',
+      },
+      {
+        key: 'DLVR',
+        title: 'التسليم للمستودع (Cargo Delivered)',
+        loc: 'Alexandria Industrial Zone Warehouse',
+        notes: 'تم وصول وتفريغ البضائع بمستودع العميل واستلام أصل بوليصة التسليم POD',
+      },
+      {
+        key: 'RETN',
+        title: 'إرجاع الحاويات الفارغة (Empty Returned)',
+        loc: 'MSC Empty Depot Dekheila',
+        notes: 'تم إعادة الحاويات الفارغة بحالة سليمة لساحة الخط الملاحي واسترداد إيصال الإرجاع',
+      },
     ];
 
     for (const m of seaMilestones) {
@@ -373,20 +435,25 @@ async function runSeaFreightLifecycleTest() {
       .orderBy('id', 'asc')
       .execute();
 
-    assert(recordedMilestones.length === 1 + seaMilestones.length, `Expected 10 total milestones (1 initial BOOK + 9 progression), got: ${recordedMilestones.length}`);
+    assert(
+      recordedMilestones.length === 1 + seaMilestones.length,
+      `Expected 10 total milestones (1 initial BOOK + 9 progression), got: ${recordedMilestones.length}`,
+    );
     console.log('  [PASS] STEP 8 PASSED: Full DCSA standard lifecycle milestones recorded successfully.\n');
 
     // -------------------------------------------------------------------------
     // STEP 9: Demurrage Radar & Container Return Deadlines Verification
     // -------------------------------------------------------------------------
     console.log('[STEP 9] Verifying Demurrage Radar (رادار فترات السماح وغرامات الأرضيات)...');
-    
+
     // Simulate return date on containers to ensure Demurrage calculation works accurately
     const containerList = await freightService.getContainers(auth, { search: job.job_number });
     assert(containerList.length === 2, `Expected 2 containers returned by filter, got: ${containerList.length}`);
-    
+
     for (const c of containerList) {
-      console.log(`  -> Container ${c.container_number}: Free Days=${c.free_days}, Overdue=${c.is_overdue}, Deposit=${c.deposit_amount} ${c.deposit_currency}`);
+      console.log(
+        `  -> Container ${c.container_number}: Free Days=${c.free_days}, Overdue=${c.is_overdue}, Deposit=${c.deposit_amount} ${c.deposit_currency}`,
+      );
       assert(c.free_days === 14, 'Container free days must be 14');
     }
 
@@ -397,7 +464,9 @@ async function runSeaFreightLifecycleTest() {
       emptyReturnedAt: returnDate,
     });
 
-    const refreshedContainer = (await freightService.getContainers(auth, { search: firstContainer.container_number }))[0];
+    const refreshedContainer = (
+      await freightService.getContainers(auth, { search: firstContainer.container_number })
+    )[0];
     assert(Boolean(refreshedContainer.empty_returned_at), 'empty_returned_at must be populated');
     assert(refreshedContainer.deposit_status === 'not_required', 'deposit_status must be not_required');
     console.log('  [PASS] STEP 9 PASSED: Container return & deadlines validated.\n');
@@ -409,7 +478,8 @@ async function runSeaFreightLifecycleTest() {
     await freightService.updateJob(auth, String(job.id), {
       status: 'completed',
       deliveryOrderReleased: true,
-      notes: 'تمت دورة الشحن البحري بنجاح تام: من استفسار العميل إلى التسليم وإرجاع الحاويات وإغلاق الملف التشغيلي والمالي.',
+      notes:
+        'تمت دورة الشحن البحري بنجاح تام: من استفسار العميل إلى التسليم وإرجاع الحاويات وإغلاق الملف التشغيلي والمالي.',
     });
 
     const finalJob = await freightService.getJobById(auth, String(job.id));
@@ -428,7 +498,6 @@ async function runSeaFreightLifecycleTest() {
     console.log('========================================================================');
     console.log('  ALL 10 PHASES OF INTERNATIONAL SEA FREIGHT PASSED 100% WITH SUCCESS!');
     console.log('========================================================================\n');
-
   } catch (err: any) {
     console.error('[FAIL] E2E SEA FREIGHT TEST FAILED:', err?.message || err);
     console.error(err?.stack);

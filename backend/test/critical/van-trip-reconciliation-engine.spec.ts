@@ -103,39 +103,42 @@ assert.equal(discrepancyTrip.goodsEquationDiscrepancy, 500);
 // 2. reconcileVanStockAudit - Physical Stock Count Reconciliation
 // =========================================================================
 
-const stockAudit = reconcileVanStockAudit([
-  {
-    productId: 101,
-    productName: 'Product A (Balanced)',
-    systemQty: 10,
-    countedQty: 10,
-    costPrice: 25,
-    retailPrice: 40,
-  },
-  {
-    productId: 102,
-    productName: 'Product B (Shortage 2 pcs)',
-    systemQty: 20,
-    countedQty: 18,
-    costPrice: 50,
-    retailPrice: 80,
-  },
-  {
-    productId: 103,
-    productName: 'Product C (Overage 1 pc)',
-    systemQty: 5,
-    countedQty: 6,
-    costPrice: 30,
-    retailPrice: 45,
-  },
-], 2);
+const stockAudit = reconcileVanStockAudit(
+  [
+    {
+      productId: 101,
+      productName: 'Product A (Balanced)',
+      systemQty: 10,
+      countedQty: 10,
+      costPrice: 25,
+      retailPrice: 40,
+    },
+    {
+      productId: 102,
+      productName: 'Product B (Shortage 2 pcs)',
+      systemQty: 20,
+      countedQty: 18,
+      costPrice: 50,
+      retailPrice: 80,
+    },
+    {
+      productId: 103,
+      productName: 'Product C (Overage 1 pc)',
+      systemQty: 5,
+      countedQty: 6,
+      costPrice: 30,
+      retailPrice: 45,
+    },
+  ],
+  2,
+);
 
 assert.equal(stockAudit.totalSystemItems, 3);
 assert.equal(stockAudit.auditedItemsCount, 3);
 assert.equal(stockAudit.varianceItemsCount, 2);
 assert.equal(stockAudit.hasStockDiscrepancy, true);
 assert.equal(stockAudit.totalStockShortageCost, 100); // 2 * 50
-assert.equal(stockAudit.totalStockOverageCost, 30);   // 1 * 30
+assert.equal(stockAudit.totalStockOverageCost, 30); // 1 * 30
 assert.equal(stockAudit.netStockVarianceCost, -70);
 
 const shortageItem = stockAudit.itemVariances.find((iv) => iv.productId === 102);
@@ -149,15 +152,18 @@ assert.equal(overageItem?.varianceQty, 1);
 assert.equal(overageItem?.overageCost, 30);
 
 // Default non-audited item stays balanced
-const unAudited = reconcileVanStockAudit([
-  {
-    productId: 104,
-    productName: 'Product D',
-    systemQty: 15,
-    costPrice: 10,
-    retailPrice: 15,
-  },
-], 2);
+const unAudited = reconcileVanStockAudit(
+  [
+    {
+      productId: 104,
+      productName: 'Product D',
+      systemQty: 15,
+      costPrice: 10,
+      retailPrice: 15,
+    },
+  ],
+  2,
+);
 assert.equal(unAudited.auditedItemsCount, 0);
 assert.equal(unAudited.hasStockDiscrepancy, false);
 assert.equal(unAudited.totalStockShortageCost, 0);
@@ -376,7 +382,7 @@ const expenseTrip = reconcileTripFinancials({
   returnsAmount: 0,
   cashRefunds: 0,
   tripExpenses: 500, // 350 fuel + 150 tolls
-  countedCash: 4500,  // Expected: 4000 + 1000 - 0 - 500 = 4500
+  countedCash: 4500, // Expected: 4000 + 1000 - 0 - 500 = 4500
   remainingVanStockValue: 4000,
 });
 assert.equal(expenseTrip.totalTripExpenses, 500);
@@ -590,4 +596,3 @@ assert.equal(expHighApproved.reasonCode, 'SUPERVISOR_APPROVED');
 assert.equal(expHighApproved.projectedTripExpenses, 630);
 
 console.log('[OK] All VanTripReconciliationEngine critical unit tests passed 100% successfully.');
-

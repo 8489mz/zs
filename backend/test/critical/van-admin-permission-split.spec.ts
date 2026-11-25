@@ -85,8 +85,7 @@ function makeGuard(): PermissionsGuard {
     new Reflector(),
     new PermissionService(),
     {
-      hasFeature: (planId: string | undefined) =>
-        planId === 'plan_ultimate' || planId === 'plan_omnichannel',
+      hasFeature: (planId: string | undefined) => planId === 'plan_ultimate' || planId === 'plan_omnichannel',
     } as never,
     {} as never,
   );
@@ -150,7 +149,7 @@ async function main(): Promise<void> {
     assert.equal(
       Reflect.getMetadata(REQUIRED_FEATURE_KEY, VanSalesAdminController),
       'deliveryReps',
-      'VanSalesAdminController must keep @RequireFeature(\'deliveryReps\') at class level',
+      "VanSalesAdminController must keep @RequireFeature('deliveryReps') at class level",
     );
     for (const method of handlerMethods) {
       if (method === 'pushRepShortagesToPayroll') continue;
@@ -296,16 +295,25 @@ async function main(): Promise<void> {
       await pg.exec(`
         CREATE TABLE users (id bigint PRIMARY KEY, role text NOT NULL, permissions_json jsonb NOT NULL DEFAULT '[]'::jsonb);
       `);
-      await anyDb.insertInto('users').values([
-        { id: 1, role: 'admin', permissions_json: JSON.stringify(['deliveryReps', 'sales']) },
-        { id: 2, role: 'cashier', permissions_json: JSON.stringify(['deliveryReps', 'sales']) },
-        { id: 3, role: 'admin', permissions_json: JSON.stringify(['sales']) },
-        { id: 4, role: 'admin', permissions_json: JSON.stringify(['deliveryReps', 'deliveryRepsAdmin']) },
-        { id: 5, role: 'super_admin', permissions_json: JSON.stringify(['deliveryReps']) },
-      ]).execute();
+      await anyDb
+        .insertInto('users')
+        .values([
+          { id: 1, role: 'admin', permissions_json: JSON.stringify(['deliveryReps', 'sales']) },
+          { id: 2, role: 'cashier', permissions_json: JSON.stringify(['deliveryReps', 'sales']) },
+          { id: 3, role: 'admin', permissions_json: JSON.stringify(['sales']) },
+          { id: 4, role: 'admin', permissions_json: JSON.stringify(['deliveryReps', 'deliveryRepsAdmin']) },
+          { id: 5, role: 'super_admin', permissions_json: JSON.stringify(['deliveryReps']) },
+        ])
+        .execute();
       const readPerms = async (id: number): Promise<string[]> => {
-        const row = await anyDb.selectFrom('users').select('permissions_json').where('id', '=', id).executeTakeFirstOrThrow();
-        return JSON.parse(typeof row.permissions_json === 'string' ? row.permissions_json : JSON.stringify(row.permissions_json));
+        const row = await anyDb
+          .selectFrom('users')
+          .select('permissions_json')
+          .where('id', '=', id)
+          .executeTakeFirstOrThrow();
+        return JSON.parse(
+          typeof row.permissions_json === 'string' ? row.permissions_json : JSON.stringify(row.permissions_json),
+        );
       };
       await deliveryRepsAdminBackfill.up(db);
       assert.deepEqual((await readPerms(1)).sort(), ['deliveryReps', 'deliveryRepsAdmin', 'sales'].sort());
@@ -340,13 +348,50 @@ async function main(): Promise<void> {
         CREATE TABLE currency_exchange_rates (tenant_id text, currency_code text, is_base boolean, exchange_rate numeric);
       `);
       await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-      await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 }).execute();
-      await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, display_name: 'Sys', username: 'sys' }).execute();
-      await anyDb.insertInto('van_sales_trips').values([
-        { id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OWN, van_location_id: 10, source_warehouse_id: 10, status: 'open', settlement_status: 'open' },
-        { id: 2, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OTHER, van_location_id: 10, source_warehouse_id: 10, status: 'open', settlement_status: 'open' },
-      ]).execute();
-      await anyDb.insertInto('van_trip_expenses').values({ tenant_id: TENANT, account_id: ACCOUNT, trip_id: 1, expense_type: 'fuel', amount: 42, created_by_user_id: 1 }).execute();
+      await anyDb
+        .insertInto('currency_exchange_rates')
+        .values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 })
+        .execute();
+      await anyDb
+        .insertInto('users')
+        .values({ id: 1, tenant_id: TENANT, display_name: 'Sys', username: 'sys' })
+        .execute();
+      await anyDb
+        .insertInto('van_sales_trips')
+        .values([
+          {
+            id: 1,
+            tenant_id: TENANT,
+            account_id: ACCOUNT,
+            rep_id: REP_OWN,
+            van_location_id: 10,
+            source_warehouse_id: 10,
+            status: 'open',
+            settlement_status: 'open',
+          },
+          {
+            id: 2,
+            tenant_id: TENANT,
+            account_id: ACCOUNT,
+            rep_id: REP_OTHER,
+            van_location_id: 10,
+            source_warehouse_id: 10,
+            status: 'open',
+            settlement_status: 'open',
+          },
+        ])
+        .execute();
+      await anyDb
+        .insertInto('van_trip_expenses')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          trip_id: 1,
+          expense_type: 'fuel',
+          amount: 42,
+          created_by_user_id: 1,
+        })
+        .execute();
       const postingStub = {
         postSale: async () => undefined,
         clearPostingFailure: async () => undefined,
@@ -412,7 +457,8 @@ async function main(): Promise<void> {
 
   // 9. This spec is wired into BOTH critical lists (309 specs, identical order).
   {
-    const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+    const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+      .specs as string[];
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));

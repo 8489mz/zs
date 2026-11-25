@@ -66,8 +66,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const ADMIN = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['accounts', 'purchases'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['accounts', 'purchases'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -107,21 +112,65 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   for (const [id, code, accountType] of [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'],
-    [1185, '1185', 'asset'], [2110, '2110', 'liability'],
-    [6600, '6600', 'expense'], [6700, '6700', 'expense'], [6900, '6900', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1185, '1185', 'asset'],
+    [2110, '2110', 'liability'],
+    [6600, '6600', 'expense'],
+    [6700, '6700', 'expense'],
+    [6900, '6900', 'expense'],
   ] as Array<[number, string, string]>) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: accountType, normal_balance: 'debit', is_active: true }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id,
+        tenant_id: TENANT,
+        code,
+        name_ar: code,
+        account_type: accountType,
+        normal_balance: 'debit',
+        is_active: true,
+      })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, supplier_payable_account_id: 2110,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'الفرع الرئيسي', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'المخزن الرئيسي', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      supplier_payable_account_id: 2110,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'الفرع الرئيسي', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'المخزن الرئيسي',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): {
@@ -151,7 +200,11 @@ function buildServices(db: Kysely<Database>): {
 }
 
 /* Journal lines of one posted entry, keyed by account code. */
-async function journalLinesByCode(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
+async function journalLinesByCode(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
   const anyDb = db as any;
   const rows = await anyDb
     .selectFrom('journal_entry_lines as l')
@@ -168,31 +221,54 @@ async function journalLinesByCode(db: Kysely<Database>, sourceType: string, sour
 
 async function supplierBalance(db: Kysely<Database>, supplierId: number): Promise<number> {
   const anyDb = db as any;
-  const row = await anyDb.selectFrom('suppliers').select('balance').where('id', '=', supplierId).executeTakeFirstOrThrow();
+  const row = await anyDb
+    .selectFrom('suppliers')
+    .select('balance')
+    .where('id', '=', supplierId)
+    .executeTakeFirstOrThrow();
   return Number(row.balance);
 }
 
 async function outstandingAdvances(db: Kysely<Database>, supplierId: number): Promise<number> {
   const anyDb = db as any;
-  const rows = await anyDb.selectFrom('supplier_payments').select(['amount', 'applied_amount']).where('supplier_id', '=', supplierId).where('is_advance', '=', true).execute();
+  const rows = await anyDb
+    .selectFrom('supplier_payments')
+    .select(['amount', 'applied_amount'])
+    .where('supplier_id', '=', supplierId)
+    .where('is_advance', '=', true)
+    .execute();
   return rows.reduce((sum: number, row: any) => sum + (Number(row.amount || 0) - Number(row.applied_amount || 0)), 0);
 }
 
 async function expectReject(promise: Promise<unknown>, code: string): Promise<void> {
   let caught: any = null;
-  try { await promise; } catch (err) { caught = err; }
+  try {
+    await promise;
+  } catch (err) {
+    caught = err;
+  }
   assert.ok(caught, `expected rejection with ${code}, got success`);
-  assert.equal(String((caught as any).code || ''), code, `expected ${code}, got ${(caught as any).code}: ${(caught as any).message}`);
+  assert.equal(
+    String((caught as any).code || ''),
+    code,
+    `expected ${code}, got ${(caught as any).code}: ${(caught as any).message}`,
+  );
 }
 
 async function advance(db: Kysely<Database>, supplierId: number, amount: number): Promise<number> {
   const { write } = buildServices(db);
   const result = await write.createSupplierPayment(
-    { supplierId, amount, isAdvance: true, paymentChannel: 'cash' } as any, ADMIN,
+    { supplierId, amount, isAdvance: true, paymentChannel: 'cash' } as any,
+    ADMIN,
   );
   assert.equal((result as any).ok, true);
   const anyDb = db as any;
-  const payment = await anyDb.selectFrom('supplier_payments').select('id').where('supplier_id', '=', supplierId).orderBy('id', 'desc').executeTakeFirstOrThrow();
+  const payment = await anyDb
+    .selectFrom('supplier_payments')
+    .select('id')
+    .where('supplier_id', '=', supplierId)
+    .orderBy('id', 'desc')
+    .executeTakeFirstOrThrow();
   return Number(payment.id);
 }
 
@@ -203,22 +279,42 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد عادي', phone: '020', balance: 0, is_active: true, supplier_type: 'supplier', overdraft_limit: null }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد عادي',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+          supplier_type: 'supplier',
+          overdraft_limit: null,
+        })
+        .execute();
       const { write } = buildServices(db);
       const result = await write.createSupplierPayment(
-        { supplierId: 1, amount: 10000, isAdvance: true, paymentChannel: 'cash' } as any, ADMIN,
+        { supplierId: 1, amount: 10000, isAdvance: true, paymentChannel: 'cash' } as any,
+        ADMIN,
       );
       assert.equal((result as any).ok, true);
       assert.equal(await supplierBalance(db, 1), 0, 'an advance must not touch the payable');
       assert.equal(await outstandingAdvances(db, 1), 10000);
-      const payment = await anyDb.selectFrom('supplier_payments').select(['is_advance', 'amount']).executeTakeFirstOrThrow();
+      const payment = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['is_advance', 'amount'])
+        .executeTakeFirstOrThrow();
       assert.equal((payment as any).is_advance, true);
       const lines = await journalLinesByCode(db, 'supplier_payment', 1);
       assert.deepEqual(lines, [
         { code: '1110', debit: 0, credit: 10000 },
         { code: '1185', debit: 10000, credit: 0 },
       ]);
-      const ledger = await anyDb.selectFrom('supplier_ledger').select(['entry_type', 'amount', 'balance_after']).execute();
+      const ledger = await anyDb
+        .selectFrom('supplier_ledger')
+        .select(['entry_type', 'amount', 'balance_after'])
+        .execute();
       assert.equal(ledger.length, 1, 'one zero-amount marker row, no settlement row');
       assert.equal(ledger[0].entry_type, 'supplier_advance');
       assert.equal(Number(ledger[0].amount), 0);
@@ -235,18 +331,43 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'فري لانس', phone: '020', balance: 0, is_active: true, supplier_type: 'freelancer', overdraft_limit: 5000 }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'فري لانس',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+          supplier_type: 'freelancer',
+          overdraft_limit: 5000,
+        })
+        .execute();
       const { write } = buildServices(db);
-      await write.createSupplierPayment({ supplierId: 1, amount: 1000, isAdvance: true, paymentChannel: 'cash' } as any, ADMIN);
-      await write.createSupplierPayment({ supplierId: 1, amount: 500, isAdvance: true, paymentChannel: 'cash' } as any, ADMIN);
+      await write.createSupplierPayment(
+        { supplierId: 1, amount: 1000, isAdvance: true, paymentChannel: 'cash' } as any,
+        ADMIN,
+      );
+      await write.createSupplierPayment(
+        { supplierId: 1, amount: 500, isAdvance: true, paymentChannel: 'cash' } as any,
+        ADMIN,
+      );
       assert.equal(await outstandingAdvances(db, 1), 1500);
       assert.equal(await supplierBalance(db, 1), 0);
       await expectReject(
-        write.createSupplierPayment({ supplierId: 1, amount: 4000, isAdvance: true, paymentChannel: 'cash' } as any, ADMIN),
+        write.createSupplierPayment(
+          { supplierId: 1, amount: 4000, isAdvance: true, paymentChannel: 'cash' } as any,
+          ADMIN,
+        ),
         'SUPPLIER_ADVANCE_OVER_LIMIT',
       );
       assert.equal(await outstandingAdvances(db, 1), 1500, 'a rejected advance writes nothing');
-      await write.createSupplierPayment({ supplierId: 1, amount: 3500, isAdvance: true, paymentChannel: 'cash' } as any, ADMIN);
+      await write.createSupplierPayment(
+        { supplierId: 1, amount: 3500, isAdvance: true, paymentChannel: 'cash' } as any,
+        ADMIN,
+      );
       assert.equal(await outstandingAdvances(db, 1), 5000, 'advances up to exactly the limit are accepted');
       assert.equal(await supplierBalance(db, 1), 0);
     } finally {
@@ -261,19 +382,55 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'فري لانس', phone: '020', balance: 0, is_active: true, supplier_type: 'freelancer', overdraft_limit: 5000 }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'فري لانس',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+          supplier_type: 'freelancer',
+          overdraft_limit: 5000,
+        })
+        .execute();
       const { write, reports } = buildServices(db);
-      await write.createSupplierPayment({ supplierId: 1, amount: 1000, isAdvance: true, paymentChannel: 'cash' } as any, ADMIN);
-      await write.createSupplierPayment({ supplierId: 1, amount: 500, isAdvance: true, paymentChannel: 'cash' } as any, ADMIN);
+      await write.createSupplierPayment(
+        { supplierId: 1, amount: 1000, isAdvance: true, paymentChannel: 'cash' } as any,
+        ADMIN,
+      );
+      await write.createSupplierPayment(
+        { supplierId: 1, amount: 500, isAdvance: true, paymentChannel: 'cash' } as any,
+        ADMIN,
+      );
       const statement: any = await reports.supplierLedger(1, {} as never, ADMIN);
       assert.equal(statement.supplier.balance, 0);
       const markers = (statement.entries as any[]).filter((entry) => entry.type === 'supplier_advance');
       assert.equal(markers.length, 2, 'both advances visible as statement rows');
-      assert.deepEqual(markers.map((entry) => entry.advanceAmount), [1000, 500]);
-      assert.deepEqual(markers.map((entry) => entry.amount), [0, 0], 'marker rows carry amount 0 so ledger sums still equal the balance');
-      assert.deepEqual(markers.map((entry) => entry.balanceAfter), [0, 0]);
-      assert.ok(markers.every((entry) => String(entry.createdAt || '').length > 0), 'marker rows carry their date+time');
-      assert.equal(Number(statement.summary?.totalDebits ?? 0), 0, 'zero-amount markers must not inflate statement totals');
+      assert.deepEqual(
+        markers.map((entry) => entry.advanceAmount),
+        [1000, 500],
+      );
+      assert.deepEqual(
+        markers.map((entry) => entry.amount),
+        [0, 0],
+        'marker rows carry amount 0 so ledger sums still equal the balance',
+      );
+      assert.deepEqual(
+        markers.map((entry) => entry.balanceAfter),
+        [0, 0],
+      );
+      assert.ok(
+        markers.every((entry) => String(entry.createdAt || '').length > 0),
+        'marker rows carry their date+time',
+      );
+      assert.equal(
+        Number(statement.summary?.totalDebits ?? 0),
+        0,
+        'zero-amount markers must not inflate statement totals',
+      );
       assert.equal(Number(statement.summary?.totalCredits ?? 0), 0);
       assert.equal(Number(statement.summary?.closingBalance ?? 0), 0);
       assert.equal(Number(statement.summary?.openAdvanceBalance ?? 0), 1500);
@@ -289,16 +446,33 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'فري لانس', phone: '020', balance: 0, is_active: true, supplier_type: 'freelancer', overdraft_limit: 5000 }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'فري لانس',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+          supplier_type: 'freelancer',
+          overdraft_limit: 5000,
+        })
+        .execute();
       const { bills, write } = buildServices(db);
       const advanceId1 = await advance(db, 1, 1000);
       const advanceId2 = await advance(db, 1, 500);
       const billResult: any = await bills.createSupplierBill(
-        { supplierId: 1, lines: [{ description: 'أتعاب شهر نوفمبر', accountId: 6900, amount: 5000 }] } as any, ADMIN,
+        { supplierId: 1, lines: [{ description: 'أتعاب شهر نوفمبر', accountId: 6900, amount: 5000 }] } as any,
+        ADMIN,
       );
       assert.equal(billResult.ok, true);
       assert.equal(Number(billResult.bill.total), 5000);
-      assert.deepEqual(billResult.appliedAdvances, [{ paymentId: advanceId1, amount: 1000 }, { paymentId: advanceId2, amount: 500 }]);
+      assert.deepEqual(billResult.appliedAdvances, [
+        { paymentId: advanceId1, amount: 1000 },
+        { paymentId: advanceId2, amount: 500 },
+      ]);
       assert.equal(await supplierBalance(db, 1), 3500, 'bill 5,000 minus auto-applied 1,500');
       assert.equal(await outstandingAdvances(db, 1), 0);
       const applyLines1 = await journalLinesByCode(db, 'supplier_advance_application', advanceId1);
@@ -311,18 +485,32 @@ async function main(): Promise<void> {
         { code: '1185', debit: 0, credit: 500 },
         { code: '2110', debit: 500, credit: 0 },
       ]);
-      const ledger = await anyDb.selectFrom('supplier_ledger').select(['entry_type', 'amount', 'balance_after']).orderBy('id', 'asc').execute();
-      assert.deepEqual(ledger.map((row: any) => [row.entry_type, Number(row.amount), Number(row.balance_after)]), [
-        ['supplier_advance', 0, 0],
-        ['supplier_advance', 0, 0],
-        ['supplier_bill', 5000, 5000],
-        ['supplier_advance_application', -1000, 4000],
-        ['supplier_advance_application', -500, 3500],
-      ]);
-      const settle = await write.createSupplierPayment({ supplierId: 1, amount: 3500, paymentChannel: 'cash' } as any, ADMIN);
+      const ledger = await anyDb
+        .selectFrom('supplier_ledger')
+        .select(['entry_type', 'amount', 'balance_after'])
+        .orderBy('id', 'asc')
+        .execute();
+      assert.deepEqual(
+        ledger.map((row: any) => [row.entry_type, Number(row.amount), Number(row.balance_after)]),
+        [
+          ['supplier_advance', 0, 0],
+          ['supplier_advance', 0, 0],
+          ['supplier_bill', 5000, 5000],
+          ['supplier_advance_application', -1000, 4000],
+          ['supplier_advance_application', -500, 3500],
+        ],
+      );
+      const settle = await write.createSupplierPayment(
+        { supplierId: 1, amount: 3500, paymentChannel: 'cash' } as any,
+        ADMIN,
+      );
       assert.equal((settle as any).ok, true);
       assert.equal(await supplierBalance(db, 1), 0);
-      const payment = await anyDb.selectFrom('supplier_payments').select(['is_advance']).orderBy('id', 'desc').executeTakeFirstOrThrow();
+      const payment = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['is_advance'])
+        .orderBy('id', 'desc')
+        .executeTakeFirstOrThrow();
       assert.equal((payment as any).is_advance, false, 'the final 3,500 is a settlement, not an advance');
     } finally {
       await db.destroy();
@@ -336,20 +524,55 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد توريدات', phone: '020', balance: 0, is_active: true, supplier_type: 'supplier', overdraft_limit: null }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد توريدات',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+          supplier_type: 'supplier',
+          overdraft_limit: null,
+        })
+        .execute();
       const { bills, write, schedules } = buildServices(db);
-      await bills.createSupplierBill({ supplierId: 1, lines: [
-        { description: 'برنامج محاسبة', accountId: 6600, amount: 6000 },
-        { description: 'كرتونة ورق', accountId: 6700, amount: 2500 },
-        { description: 'كابلات', accountId: 6900, amount: 1500 },
-      ] } as any, ADMIN);
-      const direct = await write.createSupplierPayment({ supplierId: 1, amount: 2000, paymentChannel: 'cash' } as any, ADMIN);
+      await bills.createSupplierBill(
+        {
+          supplierId: 1,
+          lines: [
+            { description: 'برنامج محاسبة', accountId: 6600, amount: 6000 },
+            { description: 'كرتونة ورق', accountId: 6700, amount: 2500 },
+            { description: 'كابلات', accountId: 6900, amount: 1500 },
+          ],
+        } as any,
+        ADMIN,
+      );
+      const direct = await write.createSupplierPayment(
+        { supplierId: 1, amount: 2000, paymentChannel: 'cash' } as any,
+        ADMIN,
+      );
       assert.equal((direct as any).ok, true);
       assert.equal(await supplierBalance(db, 1), 8000, 'direct payment settles 10,000 -> 8,000 with no schedule');
-      const created: any = await schedules.createForSupplier(1, { mode: 'count', scheduleAmount: 8000, installmentCount: 2, firstDueDate: '2026-11-15', intervalDays: 30 } as any, ADMIN);
+      const created: any = await schedules.createForSupplier(
+        1,
+        {
+          mode: 'count',
+          scheduleAmount: 8000,
+          installmentCount: 2,
+          firstDueDate: '2026-11-15',
+          intervalDays: 30,
+        } as any,
+        ADMIN,
+      );
       const rows = created.schedules as any[];
       assert.equal(rows.length, 2, 'two installments scheduled against the bill payable, purchase_id null');
-      assert.ok(rows.every((row: any) => row.purchaseId === ''), 'schedule rows carry no purchase');
+      assert.ok(
+        rows.every((row: any) => row.purchaseId === ''),
+        'schedule rows carry no purchase',
+      );
       const firstId = Number(rows[0].id);
       const paid: any = await schedules.payInstallment(firstId, { paymentChannel: 'cash' } as any, ADMIN);
       assert.equal(Number(paid.schedules[0].paidAmount), 4000, 'first installment fully paid');
@@ -366,20 +589,45 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'فري لانس', phone: '020', balance: 0, is_active: true, supplier_type: 'supplier', overdraft_limit: null }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'فري لانس',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+          supplier_type: 'supplier',
+          overdraft_limit: null,
+        })
+        .execute();
       const { partners } = buildServices(db);
       const listedDefault: any = await partners.listSuppliers({}, ADMIN);
       const defaultRow = (listedDefault.suppliers as any[]).find((s) => String(s.id) === '1');
       assert.equal(defaultRow.supplierType, 'supplier', 'a plain supplier lists as supplier');
       assert.equal(defaultRow.overdraftLimit, null, 'no limit lists as null (uncapped)');
-      const updated: any = await partners.updateSupplier(1, { name: 'فري لانس', supplierType: 'freelancer', overdraftLimit: 5000 } as any, ADMIN);
+      const updated: any = await partners.updateSupplier(
+        1,
+        { name: 'فري لانس', supplierType: 'freelancer', overdraftLimit: 5000 } as any,
+        ADMIN,
+      );
       assert.equal(updated.ok, true);
-      const row = await anyDb.selectFrom('suppliers').select(['supplier_type', 'overdraft_limit']).where('id', '=', 1).executeTakeFirstOrThrow();
+      const row = await anyDb
+        .selectFrom('suppliers')
+        .select(['supplier_type', 'overdraft_limit'])
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal((row as any).supplier_type, 'freelancer');
       assert.equal(Number((row as any).overdraft_limit), 5000);
       const listedUpdated: any = await partners.listSuppliers({}, ADMIN);
       const updatedRow = (listedUpdated.suppliers as any[]).find((s) => String(s.id) === '1');
-      assert.equal(updatedRow.supplierType, 'freelancer', 'listSuppliers must return the stored type (the edit form resets from the list)');
+      assert.equal(
+        updatedRow.supplierType,
+        'freelancer',
+        'listSuppliers must return the stored type (the edit form resets from the list)',
+      );
       assert.equal(Number(updatedRow.overdraftLimit), 5000, 'listSuppliers must return the stored limit');
       await expectReject(
         partners.updateSupplier(1, { name: 'فري لانس', supplierType: 'employee' } as any, ADMIN),
@@ -395,7 +643,11 @@ async function main(): Promise<void> {
       );
       const cleared: any = await partners.updateSupplier(1, { name: 'فري لانس', overdraftLimit: null } as any, ADMIN);
       assert.equal(cleared.ok, true);
-      const clearedRow = await anyDb.selectFrom('suppliers').select('overdraft_limit').where('id', '=', 1).executeTakeFirstOrThrow();
+      const clearedRow = await anyDb
+        .selectFrom('suppliers')
+        .select('overdraft_limit')
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal((clearedRow as any).overdraft_limit, null, 'null clears the limit back to uncapped');
       const listedCleared: any = await partners.listSuppliers({}, ADMIN);
       const clearedListedRow = (listedCleared.suppliers as any[]).find((s) => String(s.id) === '1');
@@ -404,7 +656,9 @@ async function main(): Promise<void> {
     } finally {
       await db.destroy();
     }
-    console.log('  updateSupplier type + limit accepted, bad type / negative limit rejected, balance still forbidden passed');
+    console.log(
+      '  updateSupplier type + limit accepted, bad type / negative limit rejected, balance still forbidden passed',
+    );
   }
 
   // 7. INV id must appear exactly once in ARCHITECTURE_INVARIANTS.md.

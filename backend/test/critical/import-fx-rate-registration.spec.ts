@@ -128,7 +128,10 @@ function makeServices(db: Kysely<Database>): { accounting: any; importSales: any
 const auth: any = { tenantId: 't1', accountId: 't1', role: 'admin', permissions: ['accounting'] };
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -190,10 +193,18 @@ async function main(): Promise<void> {
       assert.equal(Number(res.currency.exchange_rate), 60, 'The registered rate is stored');
       const acquisition: any = await importSales.recordFxAcquisition('t1', 1, trialDto());
       assert.equal(acquisition.currency, 'USD', 'Currency is stored normalised');
-      assert.equal(Number(acquisition.effective_exchange_rate), 60, 'Rate is the live registered rate, never derived from amounts');
+      assert.equal(
+        Number(acquisition.effective_exchange_rate),
+        60,
+        'Rate is the live registered rate, never derived from amounts',
+      );
       assert.equal(Number(acquisition.egp_cost), 600000, 'EGP cost is foreignAmount x live rate (10,000 x 60)');
       assert.ok(acquisition.journal_entry_id, 'The journal is linked on the acquisition row');
-      const entry: any = await (db as any).selectFrom('journal_entries').selectAll().where('id', '=', acquisition.journal_entry_id).executeTakeFirstOrThrow();
+      const entry: any = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('id', '=', acquisition.journal_entry_id)
+        .executeTakeFirstOrThrow();
       assert.equal(entry.source_type, 'import_fx_acquisition');
       assert.equal(Number(entry.source_id), Number(acquisition.serial_id));
       const lines = await journalLines(db, acquisition.journal_entry_id);
@@ -208,7 +219,11 @@ async function main(): Promise<void> {
       assert.equal(Number(src.credit), 600000, 'Source cash 1110 is credited');
       const legs: any[] = await (db as any).selectFrom('treasury_transactions').selectAll().execute();
       assert.equal(legs.length, 2, 'Two treasury legs');
-      assert.equal(legs.reduce((s: number, l: any) => s + Number(l.amount), 0), 0, 'Treasury legs net to zero in EGP book value');
+      assert.equal(
+        legs.reduce((s: number, l: any) => s + Number(l.amount), 0),
+        0,
+        'Treasury legs net to zero in EGP book value',
+      );
     } finally {
       await db.destroy();
     }
@@ -221,10 +236,24 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const { accounting, importSales } = makeServices(db);
-      await accounting.upsertCurrency({ currencyCode: 'USD', currencyName: 'الدولار الأمريكي', exchangeRate: 60 }, auth);
-      const updated: any = await accounting.upsertCurrency({ currencyCode: 'usd', currencyName: 'الدولار الأمريكي', exchangeRate: 55 }, auth);
-      assert.equal(Number(updated.currency.exchange_rate), 55, 'The re-registered rate overwrites in place (code normalised)');
-      assert.equal(await countRows(db, 'currency_exchange_rates'), 2, 'Still one row per currency (EGP + USD), never two USD buckets');
+      await accounting.upsertCurrency(
+        { currencyCode: 'USD', currencyName: 'الدولار الأمريكي', exchangeRate: 60 },
+        auth,
+      );
+      const updated: any = await accounting.upsertCurrency(
+        { currencyCode: 'usd', currencyName: 'الدولار الأمريكي', exchangeRate: 55 },
+        auth,
+      );
+      assert.equal(
+        Number(updated.currency.exchange_rate),
+        55,
+        'The re-registered rate overwrites in place (code normalised)',
+      );
+      assert.equal(
+        await countRows(db, 'currency_exchange_rates'),
+        2,
+        'Still one row per currency (EGP + USD), never two USD buckets',
+      );
       const acquisition: any = await importSales.recordFxAcquisition('t1', 1, trialDto());
       assert.equal(Number(acquisition.effective_exchange_rate), 55, 'The next arrangement reads the updated rate');
       assert.equal(Number(acquisition.egp_cost), 550000, 'EGP cost follows the updated rate (10,000 x 55)');
@@ -254,7 +283,11 @@ async function main(): Promise<void> {
         /رمز العملة مطلوب/,
         'A two-letter code is rejected',
       );
-      assert.equal(await countRows(db, 'currency_exchange_rates'), 1, 'Only the seeded EGP row exists after the rejections');
+      assert.equal(
+        await countRows(db, 'currency_exchange_rates'),
+        1,
+        'Only the seeded EGP row exists after the rejections',
+      );
     } finally {
       await db.destroy();
     }
@@ -268,42 +301,63 @@ async function main(): Promise<void> {
     );
     assert.ok(forexPage.includes('forexApi.upsertCurrency'), 'The currencies screen calls the registration endpoint');
     assert.ok(forexPage.includes('currencyCode: rateCurrency'), 'Registration sends the selected currency code');
-    assert.ok(forexPage.includes('exchangeRate: rate'), 'Registration sends the admin-entered rate (never an invented one)');
-    assert.ok(forexPage.includes("invalidateQueries({ queryKey: ['forex-currencies'] })"), 'Registration refreshes the listed rates');
-    assert.ok(forexPage.includes("invalidateQueries({ queryKey: ['accounting-currencies'] })"), 'Registration refreshes the treasury rate read');
+    assert.ok(
+      forexPage.includes('exchangeRate: rate'),
+      'Registration sends the admin-entered rate (never an invented one)',
+    );
+    assert.ok(
+      forexPage.includes("invalidateQueries({ queryKey: ['forex-currencies'] })"),
+      'Registration refreshes the listed rates',
+    );
+    assert.ok(
+      forexPage.includes("invalidateQueries({ queryKey: ['accounting-currencies'] })"),
+      'Registration refreshes the treasury rate read',
+    );
 
     const treasuryPage = readFileSync(
       resolve(__dirname, '../../../frontend/src/features/import-sales/ImportFxTreasuryManager.tsx'),
       'utf8',
     );
-    assert.ok(treasuryPage.includes("navigate('/accounting/forex')"), 'With no live rate the dialog navigates to the currencies screen');
+    assert.ok(
+      treasuryPage.includes("navigate('/accounting/forex')"),
+      'With no live rate the dialog navigates to the currencies screen',
+    );
     assert.ok(treasuryPage.includes('تسجيل سعر الصرف'), 'The dialog offers the registration action by name');
-    assert.ok(treasuryPage.includes('تقييم العملات وفروق الصرف'), 'The blocked toast names the real screen path, not an unfindable one');
+    assert.ok(
+      treasuryPage.includes('تقييم العملات وفروق الصرف'),
+      'The blocked toast names the real screen path, not an unfindable one',
+    );
 
     const accountingRoutes = readFileSync(
       resolve(__dirname, '../../../frontend/src/features/accounting/routes.tsx'),
       'utf8',
     );
-    assert.ok(accountingRoutes.includes("keywords: ['سعر الصرف'"), 'The forex nav item carries a "سعر الصرف" search keyword');
-
-    const access = readFileSync(
-      resolve(__dirname, '../../../frontend/src/app/router/access.ts'),
-      'utf8',
+    assert.ok(
+      accountingRoutes.includes("keywords: ['سعر الصرف'"),
+      'The forex nav item carries a "سعر الصرف" search keyword',
     );
-    assert.ok(access.includes('export function matchesNavigationSearch'), 'One shared search predicate exists for navigation items');
+
+    const access = readFileSync(resolve(__dirname, '../../../frontend/src/app/router/access.ts'), 'utf8');
+    assert.ok(
+      access.includes('export function matchesNavigationSearch'),
+      'One shared search predicate exists for navigation items',
+    );
     assert.ok(access.includes('item.keywords'), 'The predicate matches item keywords, not just the label');
 
     const globalSearch = readFileSync(
       resolve(__dirname, '../../../frontend/src/shared/components/GlobalSearchModal.tsx'),
       'utf8',
     );
-    assert.ok(globalSearch.includes('matchesNavigationSearch(item, normalizedQuery)'), 'Global search matches through the shared predicate');
-
-    const appShell = readFileSync(
-      resolve(__dirname, '../../../frontend/src/shared/layout/app-shell.tsx'),
-      'utf8',
+    assert.ok(
+      globalSearch.includes('matchesNavigationSearch(item, normalizedQuery)'),
+      'Global search matches through the shared predicate',
     );
-    assert.ok(appShell.includes('matchesNavigationSearch(item, normalizedSidebarQuery)'), 'Sidebar search matches through the shared predicate');
+
+    const appShell = readFileSync(resolve(__dirname, '../../../frontend/src/shared/layout/app-shell.tsx'), 'utf8');
+    assert.ok(
+      appShell.includes('matchesNavigationSearch(item, normalizedSidebarQuery)'),
+      'Sidebar search matches through the shared predicate',
+    );
   }
 }
 

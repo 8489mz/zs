@@ -131,31 +131,93 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>, currency: string): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: currency }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('van_sales_trips').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true })
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' })
+    .execute();
 }
 
-async function seedProduct(db: Kysely<Database>, id: number, retail: number, cost: number, vanQty: number): Promise<void> {
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  retail: number,
+  cost: number,
+  vanQty: number,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({ id, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${id}`, stock_qty: vanQty, cost_price: cost, retail_price: retail, credit_price: 0, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Product ${id}`,
+      stock_qty: vanQty,
+      cost_price: cost,
+      retail_price: retail,
+      credit_price: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -164,36 +226,71 @@ function buildService(db: Kysely<Database>): VanSalesService {
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   return service;
 }
 
 async function saleRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll().where('id', '=', id).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', id)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function saleItems(db: Kysely<Database>, saleId: number): Promise<any[]> {
-  return (db as any).selectFrom('sale_items').selectAll().where('sale_id', '=', saleId).where('tenant_id', '=', TENANT).execute();
+  return (db as any)
+    .selectFrom('sale_items')
+    .selectAll()
+    .where('sale_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .execute();
 }
 
-async function journalLines(db: Kysely<Database>, saleId: number): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+async function journalLines(
+  db: Kysely<Database>,
+  saleId: number,
+): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('journal_entries', 'journal_entries.id', 'journal_entry_lines.journal_entry_id')
     .select(['journal_entry_lines.account_id', 'journal_entry_lines.debit', 'journal_entry_lines.credit'])
     .where('journal_entries.source_type', '=', 'sale')
     .where('journal_entries.source_id', '=', saleId)
     .where('journal_entries.tenant_id', '=', TENANT)
-    .execute() as unknown as Array<Record<string, unknown>>;
+    .execute()) as unknown as Array<Record<string, unknown>>;
   return rows.map((r) => ({ accountId: Number(r.account_id), debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
-function lineFor(lines: Array<{ accountId: number; debit: number; credit: number }>, accountId: number): { debit: number; credit: number } {
-  const found = lines.filter((l) => l.accountId === accountId).reduce((acc, l) => ({ debit: acc.debit + l.debit, credit: acc.credit + l.credit }), { debit: 0, credit: 0 });
+function lineFor(
+  lines: Array<{ accountId: number; debit: number; credit: number }>,
+  accountId: number,
+): { debit: number; credit: number } {
+  const found = lines
+    .filter((l) => l.accountId === accountId)
+    .reduce((acc, l) => ({ debit: acc.debit + l.debit, credit: acc.credit + l.credit }), { debit: 0, credit: 0 });
   return found;
 }
 
@@ -206,7 +303,8 @@ async function main(): Promise<void> {
       await seedProduct(db, 101, 10.125, 4.005, 10);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 3 }],
       });
       assert.equal(res.total, 30.375);
@@ -224,8 +322,13 @@ async function main(): Promise<void> {
       assert.equal(lineFor(lines, 4100).credit, 30.375); // revenue
       assert.equal(lineFor(lines, 5100).debit, 12.015); // COGS 3 x 4.005
       assert.equal(lineFor(lines, 1140).credit, 12.015); // inventory
-      assert.equal(lines.reduce((s, l) => s + l.debit, 0), lines.reduce((s, l) => s + l.credit, 0));
-    } finally { await db.destroy(); }
+      assert.equal(
+        lines.reduce((s, l) => s + l.debit, 0),
+        lines.reduce((s, l) => s + l.credit, 0),
+      );
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. KWD percent offer: 20.25 -10% = 18.225, savings 2.025, qty 2.
@@ -234,10 +337,14 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db, 'KWD');
       await seedProduct(db, 102, 20.25, 5, 10);
-      await (db as any).insertInto('product_offers').values({ product_id: 102, offer_type: 'percent', value: 10, min_qty: 1, tenant_id: TENANT, is_active: true }).execute();
+      await (db as any)
+        .insertInto('product_offers')
+        .values({ product_id: 102, offer_type: 'percent', value: 10, min_qty: 1, tenant_id: TENANT, is_active: true })
+        .execute();
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 102, qty: 2 }],
       });
       assert.equal(res.total, 36.45);
@@ -252,7 +359,9 @@ async function main(): Promise<void> {
       assert.equal(lineFor(lines, 1130).debit, 36.45);
       assert.equal(lineFor(lines, 4300).debit, 4.05);
       assert.equal(lineFor(lines, 4100).credit, 40.5);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. EGP 2dp identity + absolute 0.05 tolerance: client 100.15 accepted.
@@ -263,13 +372,16 @@ async function main(): Promise<void> {
       await seedProduct(db, 103, 100.12, 50, 10);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 103, qty: 1, unitPrice: 100.15 }],
       });
       assert.equal(res.total, 100.15);
       const items = await saleItems(db, res.saleId);
       assert.equal(Number(items[0].unit_price), 100.15);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 4. Absolute tolerance enforced: client 100.06 (0.06 below) needs a PIN.
@@ -281,14 +393,23 @@ async function main(): Promise<void> {
       const service = buildService(db);
       await assert.rejects(
         service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 103, qty: 1, unitPrice: 100.06 }],
         }),
-        (err: any) => String(err?.message || err).includes('PRICE_DISCOUNT_REQUIRES_SUPERVISOR_PIN') || String(err?.code || '').includes('PRICE_DISCOUNT_REQUIRES_SUPERVISOR_PIN'),
+        (err: any) =>
+          String(err?.message || err).includes('PRICE_DISCOUNT_REQUIRES_SUPERVISOR_PIN') ||
+          String(err?.code || '').includes('PRICE_DISCOUNT_REQUIRES_SUPERVISOR_PIN'),
       );
-      const count = await (db as any).selectFrom('sales').select(sql`count(*)`.as('c')).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow() as any;
+      const count = (await (db as any)
+        .selectFrom('sales')
+        .select(sql`count(*)`.as('c'))
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(count.c), 0);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 5. KWD split: 30.375 split into cash 10.125 + credit 20.25 exactly.
@@ -297,25 +418,51 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db, 'KWD');
       await seedProduct(db, 101, 10.125, 4.005, 10);
-      await (db as any).insertInto('customers').values({ id: 7, tenant_id: TENANT, account_id: ACCOUNT, name: 'Credit Customer', balance: 0, credit_limit: 1000, customer_type: 'credit', metadata: '{}', is_active: true }).execute();
+      await (db as any)
+        .insertInto('customers')
+        .values({
+          id: 7,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Credit Customer',
+          balance: 0,
+          credit_limit: 1000,
+          customer_type: 'credit',
+          metadata: '{}',
+          is_active: true,
+        })
+        .execute();
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'split', paidAmount: 10.125, customerId: 7,
+        tripId: 1,
+        paymentMethod: 'split',
+        paidAmount: 10.125,
+        customerId: 7,
         items: [{ productId: 101, qty: 3 }],
       });
       assert.equal(res.cashPaid, 10.125);
       assert.equal(res.creditOwed, 20.25);
       assert.equal(Number((await saleRow(db, res.saleId)).total), 30.375);
-      const cust = await (db as any).selectFrom('customers').select('balance').where('id', '=', 7).executeTakeFirstOrThrow() as any;
+      const cust = (await (db as any)
+        .selectFrom('customers')
+        .select('balance')
+        .where('id', '=', 7)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(cust.balance), 20.25);
-      const ledger = await (db as any).selectFrom('customer_ledger').select(['amount', 'balance_after']).where('reference_id', '=', res.saleId).executeTakeFirstOrThrow() as any;
+      const ledger = (await (db as any)
+        .selectFrom('customer_ledger')
+        .select(['amount', 'balance_after'])
+        .where('reference_id', '=', res.saleId)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(ledger.amount), 20.25);
       assert.equal(Number(ledger.balance_after), 20.25);
       const lines = await journalLines(db, res.saleId);
       // Split journal: rep-cash portion 10.125 + customer receivable 20.25.
       assert.equal(lineFor(lines, 1130).debit, 30.375);
       assert.equal(lineFor(lines, 4100).credit, 30.375);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 6. KWD cash discount at book digits: 5.005 off 30.375 leaves 25.37.
@@ -326,7 +473,9 @@ async function main(): Promise<void> {
       await seedProduct(db, 101, 10.125, 4.005, 10);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', cashDiscountAmount: 5.005,
+        tripId: 1,
+        paymentMethod: 'cash',
+        cashDiscountAmount: 5.005,
         items: [{ productId: 101, qty: 3 }],
       });
       assert.equal(res.total, 25.37);
@@ -335,7 +484,9 @@ async function main(): Promise<void> {
       assert.equal(lineFor(lines, 1130).debit, 25.37);
       assert.equal(lineFor(lines, 4300).debit, 5.005);
       assert.equal(lineFor(lines, 4100).credit, 30.375);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 7. Fail closed on currency mismatch: settings KWD, base rate EGP.
@@ -343,19 +494,30 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedFoundation(db, 'KWD');
-      await (db as any).updateTable('currency_exchange_rates').set({ currency_code: 'EGP' }).where('tenant_id', '=', TENANT).execute();
+      await (db as any)
+        .updateTable('currency_exchange_rates')
+        .set({ currency_code: 'EGP' })
+        .where('tenant_id', '=', TENANT)
+        .execute();
       await seedProduct(db, 101, 10.125, 4.005, 10);
       const service = buildService(db);
       await assert.rejects(
         service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 1 }],
         }),
         (err: any) => String(err?.message || err).includes('عملة الأساس'),
       );
-      const count = await (db as any).selectFrom('sales').select(sql`count(*)`.as('c')).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow() as any;
+      const count = (await (db as any)
+        .selectFrom('sales')
+        .select(sql`count(*)`.as('c'))
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(count.c), 0);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 8. Source pin: trx-handle digits + book-digits derivation in the

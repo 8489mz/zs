@@ -105,7 +105,11 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<any> }> {
   return { pg, db };
 }
 
-async function columnScale(db: Kysely<any>, table: string, column: string): Promise<{ precision: number; scale: number }> {
+async function columnScale(
+  db: Kysely<any>,
+  table: string,
+  column: string,
+): Promise<{ precision: number; scale: number }> {
   const { rows } = await sql<{ numeric_precision: number | null; numeric_scale: number | null }>`
     SELECT numeric_precision, numeric_scale
     FROM information_schema.columns
@@ -120,7 +124,11 @@ async function columnScale(db: Kysely<any>, table: string, column: string): Prom
 async function assertScales(db: Kysely<any>, precision: number, scale: number, label: string): Promise<void> {
   for (const [table, column] of COLUMNS) {
     const got = await columnScale(db, table, column);
-    assert.equal(got.precision, precision, `${label}: ${table}.${column} precision must be ${precision}, got ${got.precision}`);
+    assert.equal(
+      got.precision,
+      precision,
+      `${label}: ${table}.${column} precision must be ${precision}, got ${got.precision}`,
+    );
     assert.equal(got.scale, scale, `${label}: ${table}.${column} scale must be ${scale}, got ${got.scale}`);
   }
 }
@@ -142,7 +150,9 @@ async function main(): Promise<void> {
 
     // 2. Pre-migration pin — the truncation this migration removes:
     // 100.125 stores as 100.13 on the 15,2 schema.
-    await sql`INSERT INTO "import_container_deposits" (id, tenant_id, shipment_id, container_no, deposit_amount_egp) VALUES ('dep-old', 't1', 'ship-1', 'MSCU-TEST-001', 100.125)`.execute(db);
+    await sql`INSERT INTO "import_container_deposits" (id, tenant_id, shipment_id, container_no, deposit_amount_egp) VALUES ('dep-old', 't1', 'ship-1', 'MSCU-TEST-001', 100.125)`.execute(
+      db,
+    );
     assert.equal(
       await readAmount(db, 'import_container_deposits', 'deposit_amount_egp', 'dep-old'),
       '100.13',
@@ -168,18 +178,48 @@ async function main(): Promise<void> {
     // 6. A 3dp value round-trips exactly on every one of the five
     // columns after the migration (must FAIL on the unpatched
     // schema, where it stores as 100.13).
-    await sql`INSERT INTO "import_container_deposits" (id, tenant_id, shipment_id, container_no, deposit_amount_egp, refunded_amount_egp, deductions_amount_egp) VALUES ('dep-1', 't1', 'ship-1', 'MSCU-TEST-001', 100.125, 50.125, 0.125)`.execute(db);
-    await sql`INSERT INTO "import_container_refund_events" (id, tenant_id, deposit_id, refunded_amount_egp, deductions_amount_egp) VALUES ('evt-1', 't1', 'dep-1', 50.125, 0.125)`.execute(db);
-    assert.equal(await readAmount(db, 'import_container_deposits', 'deposit_amount_egp', 'dep-1'), '100.125', 'deposit_amount_egp must round-trip 100.125 exactly');
-    assert.equal(await readAmount(db, 'import_container_deposits', 'refunded_amount_egp', 'dep-1'), '50.125', 'deposits refunded_amount_egp must round-trip 50.125 exactly');
-    assert.equal(await readAmount(db, 'import_container_deposits', 'deductions_amount_egp', 'dep-1'), '0.125', 'deposits deductions_amount_egp must round-trip 0.125 exactly');
-    assert.equal(await readAmount(db, 'import_container_refund_events', 'refunded_amount_egp', 'evt-1'), '50.125', 'events refunded_amount_egp must round-trip 50.125 exactly');
-    assert.equal(await readAmount(db, 'import_container_refund_events', 'deductions_amount_egp', 'evt-1'), '0.125', 'events deductions_amount_egp must round-trip 0.125 exactly');
+    await sql`INSERT INTO "import_container_deposits" (id, tenant_id, shipment_id, container_no, deposit_amount_egp, refunded_amount_egp, deductions_amount_egp) VALUES ('dep-1', 't1', 'ship-1', 'MSCU-TEST-001', 100.125, 50.125, 0.125)`.execute(
+      db,
+    );
+    await sql`INSERT INTO "import_container_refund_events" (id, tenant_id, deposit_id, refunded_amount_egp, deductions_amount_egp) VALUES ('evt-1', 't1', 'dep-1', 50.125, 0.125)`.execute(
+      db,
+    );
+    assert.equal(
+      await readAmount(db, 'import_container_deposits', 'deposit_amount_egp', 'dep-1'),
+      '100.125',
+      'deposit_amount_egp must round-trip 100.125 exactly',
+    );
+    assert.equal(
+      await readAmount(db, 'import_container_deposits', 'refunded_amount_egp', 'dep-1'),
+      '50.125',
+      'deposits refunded_amount_egp must round-trip 50.125 exactly',
+    );
+    assert.equal(
+      await readAmount(db, 'import_container_deposits', 'deductions_amount_egp', 'dep-1'),
+      '0.125',
+      'deposits deductions_amount_egp must round-trip 0.125 exactly',
+    );
+    assert.equal(
+      await readAmount(db, 'import_container_refund_events', 'refunded_amount_egp', 'evt-1'),
+      '50.125',
+      'events refunded_amount_egp must round-trip 50.125 exactly',
+    );
+    assert.equal(
+      await readAmount(db, 'import_container_refund_events', 'deductions_amount_egp', 'evt-1'),
+      '0.125',
+      'events deductions_amount_egp must round-trip 0.125 exactly',
+    );
 
     // 7. Value-preserving widening: a pre-existing 2dp value is
     // unchanged by the migration (100.13 reads back as 100.130).
-    await sql`INSERT INTO "import_container_deposits" (id, tenant_id, shipment_id, container_no, deposit_amount_egp) VALUES ('dep-2', 't1', 'ship-1', 'MSCU-TEST-002', 100.13)`.execute(db);
-    assert.equal(await readAmount(db, 'import_container_deposits', 'deposit_amount_egp', 'dep-2'), '100.130', 'a pre-existing 100.13 must read back as 100.130 after widening');
+    await sql`INSERT INTO "import_container_deposits" (id, tenant_id, shipment_id, container_no, deposit_amount_egp) VALUES ('dep-2', 't1', 'ship-1', 'MSCU-TEST-002', 100.13)`.execute(
+      db,
+    );
+    assert.equal(
+      await readAmount(db, 'import_container_deposits', 'deposit_amount_egp', 'dep-2'),
+      '100.130',
+      'a pre-existing 100.13 must read back as 100.130 after widening',
+    );
   } finally {
     await db.destroy();
   }
@@ -188,13 +228,21 @@ async function main(): Promise<void> {
   // is the highest on disk (0341/0342 landed after 0340), and no
   // migration other than the two creators (0238, 0241), the
   // serial-id change (0306) and this one ever touches either table.
-  const files = fs.readdirSync(MIGRATIONS_DIR).filter((n) => n.endsWith('.ts') && !n.endsWith('.d.ts')).sort();
+  const files = fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((n) => n.endsWith('.ts') && !n.endsWith('.d.ts'))
+    .sort();
   assert.ok(files.includes(MIGRATION_FILE), 'the 0337 migration file must exist in the migrations directory');
-  assert.equal(files[files.length - 1], HIGHEST_MIGRATION_FILE, 'the 0342 migration must be the highest-numbered migration on disk');
+  assert.equal(
+    files[files.length - 1],
+    HIGHEST_MIGRATION_FILE,
+    'the 0342 migration must be the highest-numbered migration on disk',
+  );
   const touching: string[] = [];
   for (const file of files) {
     const src = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-    if (src.includes('import_container_deposits') || src.includes('import_container_refund_events')) touching.push(file);
+    if (src.includes('import_container_deposits') || src.includes('import_container_refund_events'))
+      touching.push(file);
   }
   assert.deepEqual(
     touching.map((f) => f.slice(0, 13)),
@@ -204,8 +252,12 @@ async function main(): Promise<void> {
 
   // 9. Wiring + invariant: this spec is in the critical list and
   // the invariant entry exists exactly once.
-  const specs = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'backend', 'scripts', 'critical-specs.json'), 'utf8')).specs as string[];
-  assert.ok(specs.includes('test/critical/import-deposit-amount-3dp.spec.ts'), 'this spec must be wired into test:critical');
+  const specs = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'backend', 'scripts', 'critical-specs.json'), 'utf8'))
+    .specs as string[];
+  assert.ok(
+    specs.includes('test/critical/import-deposit-amount-3dp.spec.ts'),
+    'this spec must be wired into test:critical',
+  );
   const invariants = fs.readFileSync(path.join(REPO_ROOT, 'ARCHITECTURE_INVARIANTS.md'), 'utf8');
   assert.equal(
     invariants.split('INV-IMPORT-DEPOSIT-AMOUNT-3DP').length - 1,

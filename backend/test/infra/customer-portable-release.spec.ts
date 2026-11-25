@@ -4,11 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 
 /* eslint-disable @typescript-eslint/no-require-imports -- the targets are untyped repo-root .cjs scripts (no .d.ts can live beside them from this checkout); the `as {...}` casts below give them their shapes. */
-const {
-  copyDirectoryFiltered,
-  isExcludedPortablePath,
-} = require('../../../scripts/customer-portable-release.cjs') as {
-  copyDirectoryFiltered: (sourceDir: string, targetDir: string, options?: { exclude?: (relPath: string) => boolean }) => void;
+const { copyDirectoryFiltered, isExcludedPortablePath } = require('../../../scripts/customer-portable-release.cjs') as {
+  copyDirectoryFiltered: (
+    sourceDir: string,
+    targetDir: string,
+    options?: { exclude?: (relPath: string) => boolean },
+  ) => void;
   isExcludedPortablePath: (relPath: string) => boolean;
 };
 const { verifyPortableRelease } = require('../../../scripts/verify-customer-portable-release.cjs') as {
@@ -72,10 +73,7 @@ async function run(): Promise<void> {
     assert.equal(verifyPortableRelease(releaseRoot).ok, true);
 
     writeFile(releaseRoot, 'config/.env.offline');
-    assert.throws(
-      () => verifyPortableRelease(releaseRoot),
-      /forbidden local\/generated files: config\/\.env\.offline/,
-    );
+    assert.throws(() => verifyPortableRelease(releaseRoot), /forbidden local\/generated files: config\/\.env\.offline/);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

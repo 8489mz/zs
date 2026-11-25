@@ -43,12 +43,27 @@ function minorUnits(value: number, digits: 2 | 3): number {
   return Math.round(value * 10 ** digits);
 }
 
-function allocatedSums(lines: { lineTotal: number; qty: number }[], invoiceDiscount: number, invoiceTax: number, pricesIncludeTax: boolean, digits: 2 | 3) {
+function allocatedSums(
+  lines: { lineTotal: number; qty: number }[],
+  invoiceDiscount: number,
+  invoiceTax: number,
+  pricesIncludeTax: boolean,
+  digits: 2 | 3,
+) {
   const allocated = allocateInvoiceDiscount({ lines, invoiceDiscount, invoiceTax, pricesIncludeTax, digits });
   return {
-    discount: minorUnits(allocated.reduce((sum, line) => sum + line.allocatedDiscount, 0), digits),
-    tax: minorUnits(allocated.reduce((sum, line) => sum + line.allocatedTax, 0), digits),
-    net: minorUnits(allocated.reduce((sum, line) => sum + line.netLineTotal, 0), digits),
+    discount: minorUnits(
+      allocated.reduce((sum, line) => sum + line.allocatedDiscount, 0),
+      digits,
+    ),
+    tax: minorUnits(
+      allocated.reduce((sum, line) => sum + line.allocatedTax, 0),
+      digits,
+    ),
+    net: minorUnits(
+      allocated.reduce((sum, line) => sum + line.netLineTotal, 0),
+      digits,
+    ),
     allocated,
   };
 }
@@ -63,10 +78,17 @@ function main(): void {
     assert.equal(raw.total, 76.004);
     // The old behaviour: the raw tax straight into allocation throws.
     assert.throws(
-      () => allocateInvoiceDiscount({
-        lines: [{ lineTotal: 50, qty: 1 }, { lineTotal: 50, qty: 1 }],
-        invoiceDiscount: 33.33, invoiceTax: raw.taxAmount, pricesIncludeTax: false, digits: 2,
-      }),
+      () =>
+        allocateInvoiceDiscount({
+          lines: [
+            { lineTotal: 50, qty: 1 },
+            { lineTotal: 50, qty: 1 },
+          ],
+          invoiceDiscount: 33.33,
+          invoiceTax: raw.taxAmount,
+          pricesIncludeTax: false,
+          digits: 2,
+        }),
       /INVALID_INVOICE_ALLOCATION/,
     );
     const booked = roundSaleInvoiceTotals(raw, 2);
@@ -75,8 +97,14 @@ function main(): void {
     const itemOnly = roundSaleInvoiceTotals(computeInvoiceTotals(100, 33.33, 14, false, 0, 0, 0), 2);
     assert.equal(itemOnly.taxAmount, 9.33);
     const sums = allocatedSums(
-      [{ lineTotal: 50, qty: 1 }, { lineTotal: 50, qty: 1 }],
-      33.33, itemOnly.taxAmount, false, 2,
+      [
+        { lineTotal: 50, qty: 1 },
+        { lineTotal: 50, qty: 1 },
+      ],
+      33.33,
+      itemOnly.taxAmount,
+      false,
+      2,
     );
     assert.equal(sums.discount, 3333);
     assert.equal(sums.tax, 933);
@@ -92,8 +120,14 @@ function main(): void {
     assert.equal(booked.taxAmount, 10.005);
     assert.equal(booked.total, 76.705);
     const sums = allocatedSums(
-      [{ lineTotal: 33.35, qty: 1 }, { lineTotal: 33.35, qty: 1 }],
-      0, booked.taxAmount, false, 3,
+      [
+        { lineTotal: 33.35, qty: 1 },
+        { lineTotal: 33.35, qty: 1 },
+      ],
+      0,
+      booked.taxAmount,
+      false,
+      3,
     );
     assert.equal(sums.tax, 10005);
     assert.equal(sums.net, 66700);
@@ -105,10 +139,14 @@ function main(): void {
     const raw = computeInvoiceTotals(100, 0, 14, true);
     assert.equal(raw.taxAmount, 12.281);
     assert.throws(
-      () => allocateInvoiceDiscount({
-        lines: [{ lineTotal: 100, qty: 1 }],
-        invoiceDiscount: 0, invoiceTax: raw.taxAmount, pricesIncludeTax: true, digits: 2,
-      }),
+      () =>
+        allocateInvoiceDiscount({
+          lines: [{ lineTotal: 100, qty: 1 }],
+          invoiceDiscount: 0,
+          invoiceTax: raw.taxAmount,
+          pricesIncludeTax: true,
+          digits: 2,
+        }),
       /INVALID_INVOICE_ALLOCATION/,
     );
     const booked = roundSaleInvoiceTotals(raw, 2);
@@ -128,8 +166,15 @@ function main(): void {
     assert.equal(booked.taxAmount, 0);
     assert.equal(booked.total, 290);
     const allocated = allocateInvoiceDiscount({
-      lines: [{ lineTotal: 100, qty: 1 }, { lineTotal: 100, qty: 1 }, { lineTotal: 100, qty: 1 }],
-      invoiceDiscount: 10, invoiceTax: 0, pricesIncludeTax: false, digits: 2,
+      lines: [
+        { lineTotal: 100, qty: 1 },
+        { lineTotal: 100, qty: 1 },
+        { lineTotal: 100, qty: 1 },
+      ],
+      invoiceDiscount: 10,
+      invoiceTax: 0,
+      pricesIncludeTax: false,
+      digits: 2,
     });
     assert.deepEqual(
       allocated.map((line) => minorUnits(line.allocatedDiscount, 2)),
@@ -152,31 +197,23 @@ function main(): void {
   // Case 6 — non-finite inputs fail closed through the canonical
   // rounder; they are never coerced to 0 at this seam.
   {
-    assert.throws(
-      () => roundSaleInvoiceTotals({ taxAmount: Number.NaN, total: 1 }, 2),
-      /Non-finite/,
-    );
-    assert.throws(
-      () => roundSaleInvoiceTotals({ taxAmount: 1, total: Number.POSITIVE_INFINITY }, 2),
-      /Non-finite/,
-    );
+    assert.throws(() => roundSaleInvoiceTotals({ taxAmount: Number.NaN, total: 1 }, 2), /Non-finite/);
+    assert.throws(() => roundSaleInvoiceTotals({ taxAmount: 1, total: Number.POSITIVE_INFINITY }, 2), /Non-finite/);
   }
 
   // Case 7 — source pin: both call sites in the sale writer use the
   // seam (two computeInvoiceTotals calls per site, create + edit),
   // and the shared totals util is still the one imported.
   {
-    const source = readFileSync(
-      resolve(__dirname, '../../src/modules/sales/services/sales-write.service.ts'),
-      'utf8',
-    );
+    const source = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-write.service.ts'), 'utf8');
     const seamCalls = source.split('roundSaleInvoiceTotals(').length - 1;
-    assert.equal(seamCalls, 4, 'roundSaleInvoiceTotals must wrap all four computeInvoiceTotals calls in the sale writer');
-    assert.ok(source.includes("import { computeInvoiceTotals } from '../../../common/utils/invoice-totals'"));
-    const helper = readFileSync(
-      resolve(__dirname, '../../src/modules/sales/helpers/sales-write.helper.ts'),
-      'utf8',
+    assert.equal(
+      seamCalls,
+      4,
+      'roundSaleInvoiceTotals must wrap all four computeInvoiceTotals calls in the sale writer',
     );
+    assert.ok(source.includes("import { computeInvoiceTotals } from '../../../common/utils/invoice-totals'"));
+    const helper = readFileSync(resolve(__dirname, '../../src/modules/sales/helpers/sales-write.helper.ts'), 'utf8');
     assert.ok(helper.includes('export function roundSaleInvoiceTotals'));
   }
 
@@ -185,7 +222,11 @@ function main(): void {
   // tree; the clean-worktree verification re-checks the applied tree).
   {
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-SALE-TAX-BOOK-DIGITS-PRE-ROUND').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-SALE-TAX-BOOK-DIGITS-PRE-ROUND').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
   }
 
   console.log('Sale tax book-digits pre-round tests passed');

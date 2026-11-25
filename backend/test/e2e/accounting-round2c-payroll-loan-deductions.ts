@@ -23,7 +23,7 @@ async function main() {
   const pgPort = process.env.PG_PORT || '5433';
   const pgDb = process.env.PG_DB || 'zs_dev';
   pg = new Client({
-    connectionString: process.env.DATABASE_URL || `postgres://postgres:postgres@127.0.0.1:${pgPort}/${pgDb}`
+    connectionString: process.env.DATABASE_URL || `postgres://postgres:postgres@127.0.0.1:${pgPort}/${pgDb}`,
   });
   await pg.connect();
 
@@ -40,7 +40,7 @@ async function main() {
       hireDate: '2026-01-01',
       departmentId: 1,
       jobTitleId: 1,
-      compensationType: 'monthly'
+      compensationType: 'monthly',
     });
     return (empRes as any)?.id || (empRes as any)?.employees?.[0]?.id;
   };
@@ -53,7 +53,7 @@ async function main() {
       issueDate: '2026-01-01',
       firstDueDate: '2026-02-01',
       loanType: 'loan',
-      repaymentMode: mode
+      repaymentMode: mode,
     });
     const id = (res as any)?.id || (res as any)?.loans?.[0]?.id;
     await admin.post(`/api/hr/loans/${id}/approve`, {});
@@ -73,14 +73,30 @@ async function main() {
     const run1Res = await admin.post('/api/hr/payroll-runs', { periodMonth: genPeriod() });
     const run1Id = (run1Res as any)?.run?.id || (run1Res as any)?.id;
     await admin.post(`/api/hr/payroll-runs/${run1Id}/review`, {});
-    await pg.query(`UPDATE hr_payroll_run_items SET loan_deduction_amount = 1000 WHERE run_id = $1 AND employee_id = $2`, [run1Id, emp1]);
+    await pg.query(
+      `UPDATE hr_payroll_run_items SET loan_deduction_amount = 1000 WHERE run_id = $1 AND employee_id = $2`,
+      [run1Id, emp1],
+    );
     await admin.post(`/api/hr/payroll-runs/${run1Id}/approve`, {});
 
-    const loanNextCheck   = await pg.query(`SELECT status, remaining_amount FROM hr_employee_loans WHERE id = $1`, [loanNextId]);
-    const allocCheck1     = await pg.query(`SELECT count(*) as c FROM hr_payroll_loan_deduction_allocations WHERE payroll_run_id = $1`, [run1Id]);
-    const ledgerCheck1    = await pg.query(`SELECT count(*) as c FROM hr_employee_ledger WHERE reference_type = 'hr_payroll_loan_deduction' AND employee_id = $1`, [emp1]);
-    const treasuryCheck1  = await pg.query(`SELECT count(*) as c FROM treasury_transactions WHERE reference_type = 'hr_payroll_loan_deduction'`);
-    const journalCheck1   = await pg.query(`SELECT count(*) as c FROM journal_entries WHERE source_type = 'hr_payroll_accrual' AND source_id = $1`, [run1Id]);
+    const loanNextCheck = await pg.query(`SELECT status, remaining_amount FROM hr_employee_loans WHERE id = $1`, [
+      loanNextId,
+    ]);
+    const allocCheck1 = await pg.query(
+      `SELECT count(*) as c FROM hr_payroll_loan_deduction_allocations WHERE payroll_run_id = $1`,
+      [run1Id],
+    );
+    const ledgerCheck1 = await pg.query(
+      `SELECT count(*) as c FROM hr_employee_ledger WHERE reference_type = 'hr_payroll_loan_deduction' AND employee_id = $1`,
+      [emp1],
+    );
+    const treasuryCheck1 = await pg.query(
+      `SELECT count(*) as c FROM treasury_transactions WHERE reference_type = 'hr_payroll_loan_deduction'`,
+    );
+    const journalCheck1 = await pg.query(
+      `SELECT count(*) as c FROM journal_entries WHERE source_type = 'hr_payroll_accrual' AND source_id = $1`,
+      [run1Id],
+    );
 
     const passNext =
       loanNextCheck.rows[0].status === 'repaid' &&
@@ -90,9 +106,19 @@ async function main() {
       Number(treasuryCheck1.rows[0].c) === 0 &&
       Number(journalCheck1.rows[0].c) === 1;
 
-    logResult('PAY_LOAN_NEXT_1', passNext ? 'PASS' : 'FAIL',
+    logResult(
+      'PAY_LOAN_NEXT_1',
+      passNext ? 'PASS' : 'FAIL',
       '1 allocation, 1 ledger, 0 treasury, repaid, 0 remaining',
-      JSON.stringify({ status: loanNextCheck.rows[0].status, remaining: loanNextCheck.rows[0].remaining_amount, alloc: allocCheck1.rows[0].c, ledger: ledgerCheck1.rows[0].c, treasury: treasuryCheck1.rows[0].c, journal: journalCheck1.rows[0].c }));
+      JSON.stringify({
+        status: loanNextCheck.rows[0].status,
+        remaining: loanNextCheck.rows[0].remaining_amount,
+        alloc: allocCheck1.rows[0].c,
+        ledger: ledgerCheck1.rows[0].c,
+        treasury: treasuryCheck1.rows[0].c,
+        journal: journalCheck1.rows[0].c,
+      }),
+    );
 
     // ── PAY_LOAN_MONTHLY_1 ───────────────────────────────────────
     const emp2 = await createEmp();
@@ -101,20 +127,35 @@ async function main() {
     const run2Res = await admin.post('/api/hr/payroll-runs', { periodMonth: genPeriod() });
     const run2Id = (run2Res as any)?.run?.id || (run2Res as any)?.id;
     await admin.post(`/api/hr/payroll-runs/${run2Id}/review`, {});
-    await pg.query(`UPDATE hr_payroll_run_items SET loan_deduction_amount = 1000 WHERE run_id = $1 AND employee_id = $2`, [run2Id, emp2]);
+    await pg.query(
+      `UPDATE hr_payroll_run_items SET loan_deduction_amount = 1000 WHERE run_id = $1 AND employee_id = $2`,
+      [run2Id, emp2],
+    );
     await admin.post(`/api/hr/payroll-runs/${run2Id}/approve`, {});
 
-    const loanMonthlyCheck = await pg.query(`SELECT status, remaining_amount FROM hr_employee_loans WHERE id = $1`, [loanMonthlyId]);
-    const allocCheck2      = await pg.query(`SELECT count(*) as c FROM hr_payroll_loan_deduction_allocations WHERE payroll_run_id = $1`, [run2Id]);
+    const loanMonthlyCheck = await pg.query(`SELECT status, remaining_amount FROM hr_employee_loans WHERE id = $1`, [
+      loanMonthlyId,
+    ]);
+    const allocCheck2 = await pg.query(
+      `SELECT count(*) as c FROM hr_payroll_loan_deduction_allocations WHERE payroll_run_id = $1`,
+      [run2Id],
+    );
 
     const passMonthly =
       loanMonthlyCheck.rows[0].status === 'partially_repaid' &&
       Number(loanMonthlyCheck.rows[0].remaining_amount) === 1000 &&
       Number(allocCheck2.rows[0].c) === 1;
 
-    logResult('PAY_LOAN_MONTHLY_1', passMonthly ? 'PASS' : 'FAIL',
+    logResult(
+      'PAY_LOAN_MONTHLY_1',
+      passMonthly ? 'PASS' : 'FAIL',
       'partially_repaid, 1000 remaining, 1 allocation',
-      JSON.stringify({ status: loanMonthlyCheck.rows[0].status, remaining: loanMonthlyCheck.rows[0].remaining_amount, alloc: allocCheck2.rows[0].c }));
+      JSON.stringify({
+        status: loanMonthlyCheck.rows[0].status,
+        remaining: loanMonthlyCheck.rows[0].remaining_amount,
+        alloc: allocCheck2.rows[0].c,
+      }),
+    );
 
     // ── PAY_LOAN_MANUAL_IGNORE ───────────────────────────────────
     const emp3 = await createEmp();
@@ -125,33 +166,54 @@ async function main() {
     await admin.post(`/api/hr/payroll-runs/${run3Id}/review`, {});
     await admin.post(`/api/hr/payroll-runs/${run3Id}/approve`, {});
 
-    const loanManualCheck = await pg.query(`SELECT status, remaining_amount FROM hr_employee_loans WHERE id = $1`, [loanManualId]);
-    const allocCheck3     = await pg.query(`SELECT count(*) as c FROM hr_payroll_loan_deduction_allocations WHERE payroll_run_id = $1`, [run3Id]);
+    const loanManualCheck = await pg.query(`SELECT status, remaining_amount FROM hr_employee_loans WHERE id = $1`, [
+      loanManualId,
+    ]);
+    const allocCheck3 = await pg.query(
+      `SELECT count(*) as c FROM hr_payroll_loan_deduction_allocations WHERE payroll_run_id = $1`,
+      [run3Id],
+    );
 
     const passManual =
       loanManualCheck.rows[0].status === 'paid' &&
       Number(loanManualCheck.rows[0].remaining_amount) === 1000 &&
       Number(allocCheck3.rows[0].c) === 0;
 
-    logResult('PAY_LOAN_MANUAL_IGNORE', passManual ? 'PASS' : 'FAIL',
+    logResult(
+      'PAY_LOAN_MANUAL_IGNORE',
+      passManual ? 'PASS' : 'FAIL',
       'paid, 1000 remaining, 0 allocation',
-      JSON.stringify({ status: loanManualCheck.rows[0].status, remaining: loanManualCheck.rows[0].remaining_amount, alloc: allocCheck3.rows[0].c }));
+      JSON.stringify({
+        status: loanManualCheck.rows[0].status,
+        remaining: loanManualCheck.rows[0].remaining_amount,
+        alloc: allocCheck3.rows[0].c,
+      }),
+    );
 
     // ── PAY_LOAN_DUP_LOCK ────────────────────────────────────────
     // run1Id is already 'approved' – re-approving should return HR_PAYROLL_APPROVE_LOCKED
     const dupRes = await admin.post(`/api/hr/payroll-runs/${run1Id}/approve`, {}, 400);
     const dupCode = (dupRes as any)?.error?.code || (dupRes as any)?.code;
-    const allocCheckDup   = await pg.query(`SELECT count(*) as c FROM hr_payroll_loan_deduction_allocations WHERE payroll_run_id = $1`, [run1Id]);
-    const journalCheckDup = await pg.query(`SELECT count(*) as c FROM journal_entries WHERE source_type = 'hr_payroll_accrual' AND source_id = $1`, [run1Id]);
+    const allocCheckDup = await pg.query(
+      `SELECT count(*) as c FROM hr_payroll_loan_deduction_allocations WHERE payroll_run_id = $1`,
+      [run1Id],
+    );
+    const journalCheckDup = await pg.query(
+      `SELECT count(*) as c FROM journal_entries WHERE source_type = 'hr_payroll_accrual' AND source_id = $1`,
+      [run1Id],
+    );
 
     const passDup =
       dupCode === 'HR_PAYROLL_APPROVE_LOCKED' &&
       Number(allocCheckDup.rows[0].c) === 1 &&
       Number(journalCheckDup.rows[0].c) === 1;
 
-    logResult('PAY_LOAN_DUP_LOCK', passDup ? 'PASS' : 'FAIL',
+    logResult(
+      'PAY_LOAN_DUP_LOCK',
+      passDup ? 'PASS' : 'FAIL',
       'HR_PAYROLL_APPROVE_LOCKED, 1 allocation, 1 journal',
-      JSON.stringify({ code: dupCode, alloc: allocCheckDup.rows[0].c, journal: journalCheckDup.rows[0].c }));
+      JSON.stringify({ code: dupCode, alloc: allocCheckDup.rows[0].c, journal: journalCheckDup.rows[0].c }),
+    );
 
     // ── PAY_LOAN_MISMATCH_ROLLBACK ───────────────────────────────
     const emp4 = await createEmp();
@@ -160,12 +222,20 @@ async function main() {
     const run4Res = await admin.post('/api/hr/payroll-runs', { periodMonth: genPeriod() });
     const run4Id = (run4Res as any)?.run?.id || (run4Res as any)?.id;
     await admin.post(`/api/hr/payroll-runs/${run4Id}/review`, {});
-    await pg.query(`UPDATE hr_payroll_run_items SET loan_deduction_amount = 1000 WHERE run_id = $1 AND employee_id = $2`, [run4Id, emp4]);
+    await pg.query(
+      `UPDATE hr_payroll_run_items SET loan_deduction_amount = 1000 WHERE run_id = $1 AND employee_id = $2`,
+      [run4Id, emp4],
+    );
 
     const misRes = await admin.post(`/api/hr/payroll-runs/${run4Id}/approve`, {}, 400);
     const misCode = (misRes as any)?.error?.code || (misRes as any)?.code;
-    const loanMisCheck = await pg.query(`SELECT status, remaining_amount FROM hr_employee_loans WHERE id = $1`, [loanMisId]);
-    const allocCheckMis = await pg.query(`SELECT count(*) as c FROM hr_payroll_loan_deduction_allocations WHERE payroll_run_id = $1`, [run4Id]);
+    const loanMisCheck = await pg.query(`SELECT status, remaining_amount FROM hr_employee_loans WHERE id = $1`, [
+      loanMisId,
+    ]);
+    const allocCheckMis = await pg.query(
+      `SELECT count(*) as c FROM hr_payroll_loan_deduction_allocations WHERE payroll_run_id = $1`,
+      [run4Id],
+    );
 
     const passMis =
       misCode === 'HR_PAYROLL_LOAN_ALLOCATION_MISMATCH' &&
@@ -173,10 +243,17 @@ async function main() {
       Number(loanMisCheck.rows[0].remaining_amount) === 500 &&
       Number(allocCheckMis.rows[0].c) === 0;
 
-    logResult('PAY_LOAN_MISMATCH_ROLLBACK', passMis ? 'PASS' : 'FAIL',
+    logResult(
+      'PAY_LOAN_MISMATCH_ROLLBACK',
+      passMis ? 'PASS' : 'FAIL',
       'HR_PAYROLL_LOAN_ALLOCATION_MISMATCH, rollback everything',
-      JSON.stringify({ code: misCode, status: loanMisCheck.rows[0].status, remaining: loanMisCheck.rows[0].remaining_amount, alloc: allocCheckMis.rows[0].c }));
-
+      JSON.stringify({
+        code: misCode,
+        status: loanMisCheck.rows[0].status,
+        remaining: loanMisCheck.rows[0].remaining_amount,
+        alloc: allocCheckMis.rows[0].c,
+      }),
+    );
   } catch (err: any) {
     console.error('Unhandled Error:', err?.response?.data || err?.message || err);
   } finally {

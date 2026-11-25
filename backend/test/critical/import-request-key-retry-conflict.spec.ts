@@ -103,7 +103,10 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -121,16 +124,26 @@ async function transfer(db: Kysely<Database>, service: any, key: string): Promis
 }
 
 async function readPiPaid(db: Kysely<Database>): Promise<number> {
-  const pi: any = await (db as any).selectFrom('import_proforma_invoices').select('paid_amount_foreign').where('id', '=', 'pi-a').executeTakeFirstOrThrow();
+  const pi: any = await (db as any)
+    .selectFrom('import_proforma_invoices')
+    .select('paid_amount_foreign')
+    .where('id', '=', 'pi-a')
+    .executeTakeFirstOrThrow();
   return Number(pi.paid_amount_foreign);
 }
 
 async function readSupplierBalance(db: Kysely<Database>): Promise<number> {
-  const s: any = await (db as any).selectFrom('suppliers').select('balance').where('id', '=', 1).executeTakeFirstOrThrow();
+  const s: any = await (db as any)
+    .selectFrom('suppliers')
+    .select('balance')
+    .where('id', '=', 1)
+    .executeTakeFirstOrThrow();
   return Number(s.balance);
 }
 
-async function journalTotals(db: Kysely<Database>): Promise<{ entries: number; lines: number; debits: number; credits: number }> {
+async function journalTotals(
+  db: Kysely<Database>,
+): Promise<{ entries: number; lines: number; debits: number; credits: number }> {
   const entries = await countRows(db, 'journal_entries');
   const lines: any[] = await (db as any).selectFrom('journal_entry_lines').select(['debit', 'credit']).execute();
   return {
@@ -159,7 +172,11 @@ async function main(): Promise<void> {
       assert.equal(je.lines, 2, 'Two journal lines: Dr supplier AP / Cr bank, no forex variance at the contract rate');
       assert.equal(je.debits, 50000, 'Journal debits are 50,000 EGP');
       assert.equal(je.credits, 50000, 'Journal credits are 50,000 EGP');
-      assert.equal(await countRows(db, 'treasury_transactions'), 1, 'One treasury transaction after the first transfer');
+      assert.equal(
+        await countRows(db, 'treasury_transactions'),
+        1,
+        'One treasury transaction after the first transfer',
+      );
       assert.equal(await countRows(db, 'supplier_ledger'), 1, 'One supplier ledger row after the first transfer');
       assert.equal(await readPiPaid(db), 1000, 'PI paid is 1,000 foreign after the first transfer');
       assert.equal(await readSupplierBalance(db), -50000, 'Supplier balance is -50,000 EGP after the first transfer');
@@ -167,7 +184,10 @@ async function main(): Promise<void> {
       await assert.rejects(
         async () => transfer(db, service, 'reqkey-retry-1'),
         (err: any) => {
-          assert.ok(err instanceof ConflictException, `Expected ConflictException, got ${err?.constructor?.name}: ${err?.message}`);
+          assert.ok(
+            err instanceof ConflictException,
+            `Expected ConflictException, got ${err?.constructor?.name}: ${err?.message}`,
+          );
           assert.equal(err.getStatus(), 409, 'A same-key retry after success is HTTP 409 Conflict');
           assert.ok(
             String(err.message || '').includes(docNo),
@@ -184,10 +204,18 @@ async function main(): Promise<void> {
       assert.equal(jeAfterRetry.lines, 2, 'Still two journal lines after the rejected retry');
       assert.equal(jeAfterRetry.debits, 50000, 'Journal debits unchanged after the rejected retry');
       assert.equal(jeAfterRetry.credits, 50000, 'Journal credits unchanged after the rejected retry');
-      assert.equal(await countRows(db, 'treasury_transactions'), 1, 'Still one treasury transaction after the rejected retry');
+      assert.equal(
+        await countRows(db, 'treasury_transactions'),
+        1,
+        'Still one treasury transaction after the rejected retry',
+      );
       assert.equal(await countRows(db, 'supplier_ledger'), 1, 'Still one supplier ledger row after the rejected retry');
       assert.equal(await readPiPaid(db), 1000, 'PI paid is still 1,000 foreign: the retry rolled its PI update back');
-      assert.equal(await readSupplierBalance(db), -50000, 'Supplier balance is still -50,000 EGP after the rejected retry');
+      assert.equal(
+        await readSupplierBalance(db),
+        -50000,
+        'Supplier balance is still -50,000 EGP after the rejected retry',
+      );
 
       const second = await transfer(db, service, 'reqkey-retry-2');
       assert.equal(second.success, true, 'The same payload with a fresh key must post');
@@ -198,7 +226,11 @@ async function main(): Promise<void> {
       assert.equal(jeAfterSecond.debits, 100000, 'Journal debits are 100,000 EGP after two transfers');
       assert.equal(jeAfterSecond.credits, 100000, 'Journal credits are 100,000 EGP after two transfers');
       assert.equal(await readPiPaid(db), 2000, 'PI paid is 2,000 foreign after the fresh-key transfer');
-      assert.equal(await readSupplierBalance(db), -100000, 'Supplier balance is -100,000 EGP after the fresh-key transfer');
+      assert.equal(
+        await readSupplierBalance(db),
+        -100000,
+        'Supplier balance is -100,000 EGP after the fresh-key transfer',
+      );
     } finally {
       await db.destroy();
     }
@@ -212,7 +244,10 @@ async function main(): Promise<void> {
       await assert.rejects(
         async () => transfer(db, service, ''),
         (err: any) => {
-          assert.ok(err instanceof BadRequestException, `Expected BadRequestException, got ${err?.constructor?.name}: ${err?.message}`);
+          assert.ok(
+            err instanceof BadRequestException,
+            `Expected BadRequestException, got ${err?.constructor?.name}: ${err?.message}`,
+          );
           assert.equal(err.getStatus(), 400, 'A missing request key is HTTP 400');
           return true;
         },
@@ -229,4 +264,7 @@ async function main(): Promise<void> {
   console.log('Import request-key retry-conflict tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

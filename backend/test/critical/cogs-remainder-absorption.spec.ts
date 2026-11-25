@@ -82,8 +82,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makePosting(db: Kysely<Database>): AccountingPostingService {
@@ -101,39 +107,93 @@ async function seedSale(
   items: Array<{ productId: number; qty: number; costPrice: number }>,
   remaining: Array<{ productId: number; qty: number }>,
 ): Promise<void> {
-  await db.insertInto('sales' as never).values({
-    id: saleId, tenant_id: 't1', doc_no: `S-${saleId}`, customer_id: null, subtotal: total, discount: 0,
-    tax_amount: 0, total, paid_amount: total, store_credit_used: 0, exchange_return_id: null,
-    branch_id: null, location_id: null, created_by: 1, created_at: new Date(), delivery_fee: 0,
-    delivery_fee_mode: null, service_charge: 0, tip_amount: 0, prices_include_tax: false,
-    sale_origin: 'pos', payment_type: 'cash', collection_status: 'paid',
-  } as never).execute();
+  await db
+    .insertInto('sales' as never)
+    .values({
+      id: saleId,
+      tenant_id: 't1',
+      doc_no: `S-${saleId}`,
+      customer_id: null,
+      subtotal: total,
+      discount: 0,
+      tax_amount: 0,
+      total,
+      paid_amount: total,
+      store_credit_used: 0,
+      exchange_return_id: null,
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+      created_at: new Date(),
+      delivery_fee: 0,
+      delivery_fee_mode: null,
+      service_charge: 0,
+      tip_amount: 0,
+      prices_include_tax: false,
+      sale_origin: 'pos',
+      payment_type: 'cash',
+      collection_status: 'paid',
+    } as never)
+    .execute();
   for (const [index, item] of items.entries()) {
-    await db.insertInto('sale_items' as never).values({
-      id: saleId * 10 + index, sale_id: saleId, tenant_id: 't1', product_id: item.productId,
-      qty: item.qty, cost_price: item.costPrice,
-    } as never).execute();
+    await db
+      .insertInto('sale_items' as never)
+      .values({
+        id: saleId * 10 + index,
+        sale_id: saleId,
+        tenant_id: 't1',
+        product_id: item.productId,
+        qty: item.qty,
+        cost_price: item.costPrice,
+      } as never)
+      .execute();
   }
-  await db.insertInto('sale_payments' as never).values({
-    sale_id: saleId, tenant_id: 't1', payment_channel: 'cash', amount: total,
-  } as never).execute();
+  await db
+    .insertInto('sale_payments' as never)
+    .values({
+      sale_id: saleId,
+      tenant_id: 't1',
+      payment_channel: 'cash',
+      amount: total,
+    } as never)
+    .execute();
   for (const stock of remaining) {
-    await db.insertInto('product_location_stock' as never).values({
-      tenant_id: 't1', account_id: 'a1', product_id: stock.productId, branch_id: null,
-      location_id: null, qty: stock.qty, reserved_qty: 0,
-    } as never).execute();
+    await db
+      .insertInto('product_location_stock' as never)
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: stock.productId,
+        branch_id: null,
+        location_id: null,
+        qty: stock.qty,
+        reserved_qty: 0,
+      } as never)
+      .execute();
   }
 }
 
-async function cogsAndInventoryFor(db: Kysely<Database>, saleId: number): Promise<{ cogs: number; inventory: number; totalDebit: number; totalCredit: number }> {
-  const entries = await (db as any).selectFrom('journal_entries').select(['id'])
-    .where('source_type', '=', 'sale').where('source_id', '=', saleId).execute() as Array<{ id: number }>;
+async function cogsAndInventoryFor(
+  db: Kysely<Database>,
+  saleId: number,
+): Promise<{ cogs: number; inventory: number; totalDebit: number; totalCredit: number }> {
+  const entries = (await (db as any)
+    .selectFrom('journal_entries')
+    .select(['id'])
+    .where('source_type', '=', 'sale')
+    .where('source_id', '=', saleId)
+    .execute()) as Array<{ id: number }>;
   assert.equal(entries.length, 1, `expected exactly one sale journal for sale ${saleId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('accounting_accounts', 'accounting_accounts.id', 'journal_entry_lines.account_id')
-    .select(['accounting_accounts.code as code', 'journal_entry_lines.debit as debit', 'journal_entry_lines.credit as credit'])
+    .select([
+      'accounting_accounts.code as code',
+      'journal_entry_lines.debit as debit',
+      'journal_entry_lines.credit as credit',
+    ])
     .where('journal_entry_id', '=', entries[0].id)
-    .execute() as Array<{ code: string; debit: string; credit: string }>;
+    .execute()) as Array<{ code: string; debit: string; credit: string }>;
   const byCode = new Map(rows.map((row) => [row.code, { debit: Number(row.debit), credit: Number(row.credit) }]));
   return {
     cogs: Number(byCode.get('5100')?.debit || 0),
@@ -157,14 +217,20 @@ async function main(): Promise<void> {
     assert.equal(cogsResidualAmount([{ qtySold: 10, unitCost: 15.3125, qtyRemaining: 0 }], 2), 153.13);
     assert.equal(cogsResidualAmount([{ qtySold: 1, unitCost: 10.0005, qtyRemaining: 1 }], 3), 10);
     assert.equal(
-      cogsResidualAmount([
-        { qtySold: 10, unitCost: 15.3125, qtyRemaining: 6 },
-        { qtySold: 2, unitCost: 20, qtyRemaining: 3 },
-      ], 2),
+      cogsResidualAmount(
+        [
+          { qtySold: 10, unitCost: 15.3125, qtyRemaining: 6 },
+          { qtySold: 2, unitCost: 20, qtyRemaining: 3 },
+        ],
+        2,
+      ),
       193.12,
     );
     assert.throws(() => cogsResidualAmount([{ qtySold: 1, unitCost: Number.NaN, qtyRemaining: 1 }], 2), /Non-finite/);
-    assert.throws(() => cogsResidualAmount([{ qtySold: 1, unitCost: 1, qtyRemaining: 1 }], 4 as never), /Invalid book digits/);
+    assert.throws(
+      () => cogsResidualAmount([{ qtySold: 1, unitCost: 1, qtyRemaining: 1 }], 4 as never),
+      /Invalid book digits/,
+    );
   }
 
   // Case 2: postSale (EGP) — the diagnosed half-unit split.
@@ -223,13 +289,19 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 400, [
-        { productId: 100, qty: 10, costPrice: 15.3125 },
-        { productId: 200, qty: 2, costPrice: 20 },
-      ], [
-        { productId: 100, qty: 6 },
-        { productId: 200, qty: 3 },
-      ]);
+      await seedSale(
+        db,
+        1,
+        400,
+        [
+          { productId: 100, qty: 10, costPrice: 15.3125 },
+          { productId: 200, qty: 2, costPrice: 20 },
+        ],
+        [
+          { productId: 100, qty: 6 },
+          { productId: 200, qty: 3 },
+        ],
+      );
       await postSaleOn(db, 1);
       const posted = await cogsAndInventoryFor(db, 1);
       assert.equal(posted.cogs, 193.12);

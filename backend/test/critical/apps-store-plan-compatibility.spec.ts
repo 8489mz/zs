@@ -199,29 +199,58 @@ async function main(): Promise<void> {
       },
       adminAuth('t-ult-retail', null),
     );
-    assert.equal(adminSaved.weightedBarcodePrefix, '24', 'operational barcode settings remain writable by tenant admin');
+    assert.equal(
+      adminSaved.weightedBarcodePrefix,
+      '24',
+      'operational barcode settings remain writable by tenant admin',
+    );
     assert.equal(adminSaved.invoicePrefix, 'OPS', 'operational invoice prefix remains writable by tenant admin');
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'vanSalesModuleEnabled'), undefined, 'tenant admin cannot enable vanSalesModuleEnabled');
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'weightedBarcodeEnabled'), undefined, 'tenant admin cannot enable weightedBarcodeEnabled');
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'clothingModuleEnabled'), undefined, 'tenant admin cannot enable clothingModuleEnabled');
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'comboModuleEnabled'), undefined, 'tenant admin cannot enable comboModuleEnabled');
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'posModuleEnabled'), undefined, 'tenant admin cannot alter posModuleEnabled');
+    assert.equal(
+      await rawSetting(anyDb, 't-ult-retail', 'vanSalesModuleEnabled'),
+      undefined,
+      'tenant admin cannot enable vanSalesModuleEnabled',
+    );
+    assert.equal(
+      await rawSetting(anyDb, 't-ult-retail', 'weightedBarcodeEnabled'),
+      undefined,
+      'tenant admin cannot enable weightedBarcodeEnabled',
+    );
+    assert.equal(
+      await rawSetting(anyDb, 't-ult-retail', 'clothingModuleEnabled'),
+      undefined,
+      'tenant admin cannot enable clothingModuleEnabled',
+    );
+    assert.equal(
+      await rawSetting(anyDb, 't-ult-retail', 'comboModuleEnabled'),
+      undefined,
+      'tenant admin cannot enable comboModuleEnabled',
+    );
+    assert.equal(
+      await rawSetting(anyDb, 't-ult-retail', 'posModuleEnabled'),
+      undefined,
+      'tenant admin cannot alter posModuleEnabled',
+    );
 
     // 2) Active SaaS impersonation session (impersonatedBy = 1) CAN turn modules ON and OFF
     const impOn = await settingsService.saveSettings(
       { deliveryRepsModuleEnabled: true, vanSalesModuleEnabled: true },
       adminAuth('t-ult-retail', 1),
     );
-    assert.equal(impOn.deliveryRepsModuleEnabled, true, 'impersonating platform admin can enable deliveryRepsModuleEnabled');
+    assert.equal(
+      impOn.deliveryRepsModuleEnabled,
+      true,
+      'impersonating platform admin can enable deliveryRepsModuleEnabled',
+    );
     assert.equal(impOn.vanSalesModuleEnabled, true, 'impersonating platform admin can enable vanSalesModuleEnabled');
 
-    const impOff = await settingsService.saveSettings(
-      { vanSalesModuleEnabled: false },
-      adminAuth('t-ult-retail', 1),
-    );
+    const impOff = await settingsService.saveSettings({ vanSalesModuleEnabled: false }, adminAuth('t-ult-retail', 1));
     assert.equal(impOff.vanSalesModuleEnabled, false, 'impersonating platform admin can disable vanSalesModuleEnabled');
     assert.equal(await rawSetting(anyDb, 't-ult-retail', 'vanSalesModuleEnabled'), 'false');
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'), 'true', 'deliveryReps remains active when vanSales is turned off');
+    assert.equal(
+      await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'),
+      'true',
+      'deliveryReps remains active when vanSales is turned off',
+    );
 
     // 3) SaaS Admin syncTenantModuleSettingsForPlan turns OFF accidental vanSales while keeping deliveryReps ON
     await anyDb
@@ -230,21 +259,40 @@ async function main(): Promise<void> {
       .onConflict((oc: any) => oc.columns(['tenant_id', 'key']).doUpdateSet({ value: 'true' }))
       .execute();
     await saasAdminService.syncTenantModuleSettingsForPlan('t-ult-retail', 'plan_ultimate', []);
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'vanSalesModuleEnabled'), 'false', 'SaaS Admin sync must switch off accidental vanSales on non-wholesale vertical');
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'), 'true', 'SaaS Admin sync keeps plan-included deliveryReps active');
+    assert.equal(
+      await rawSetting(anyDb, 't-ult-retail', 'vanSalesModuleEnabled'),
+      'false',
+      'SaaS Admin sync must switch off accidental vanSales on non-wholesale vertical',
+    );
+    assert.equal(
+      await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'),
+      'true',
+      'SaaS Admin sync keeps plan-included deliveryReps active',
+    );
 
     // And explicitly adding vanSales / excluding deliveryReps in SaaS Admin works cleanly
-    await saasAdminService.syncTenantModuleSettingsForPlan('t-ult-retail', 'plan_ultimate', ['vanSales', '-deliveryReps']);
+    await saasAdminService.syncTenantModuleSettingsForPlan('t-ult-retail', 'plan_ultimate', [
+      'vanSales',
+      '-deliveryReps',
+    ]);
     assert.equal(await rawSetting(anyDb, 't-ult-retail', 'vanSalesModuleEnabled'), 'true');
     assert.equal(await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'), 'false');
 
     // 4) Non-POS verticals retain their profile (never flip POS on via generic sales flag)
     const svcSettings = await settingsService.getSettings(adminAuth('t-services-ult'));
-    assert.equal(svcSettings.posModuleEnabled, false, 'services profile must not auto-enable POS from legacy sales flag');
+    assert.equal(
+      svcSettings.posModuleEnabled,
+      false,
+      'services profile must not auto-enable POS from legacy sales flag',
+    );
     assert.equal(svcSettings.servicesModuleEnabled, true, 'services profile keeps servicesModuleEnabled enabled');
 
     const vanSettings = await settingsService.getSettings(adminAuth('t-van-ult'));
-    assert.equal(vanSettings.posModuleEnabled, false, 'wholesale_van profile must not auto-enable POS from legacy sales flag');
+    assert.equal(
+      vanSettings.posModuleEnabled,
+      false,
+      'wholesale_van profile must not auto-enable POS from legacy sales flag',
+    );
     assert.equal(vanSettings.vanSalesModuleEnabled, true, 'wholesale_van profile keeps vanSalesModuleEnabled enabled');
 
     // 5) PlanFeatureService supports tiered band plans & omnichannel
@@ -280,14 +328,8 @@ async function main(): Promise<void> {
       ['sales', 'inventory'],
     );
     assert.equal(maxBranchesL2, 3, 'tier_band1_L2 fallback branch cap should be 3');
-    assert.equal(
-      resolveUserLimit({ hasActiveSubscription: false, tenantPlanId: 'tier_band2_L2', isTrial: false }),
-      6,
-    );
-    assert.equal(
-      resolveUserLimit({ hasActiveSubscription: false, tenantPlanId: 'tier_band3_L3', isTrial: false }),
-      25,
-    );
+    assert.equal(resolveUserLimit({ hasActiveSubscription: false, tenantPlanId: 'tier_band2_L2', isTrial: false }), 6);
+    assert.equal(resolveUserLimit({ hasActiveSubscription: false, tenantPlanId: 'tier_band3_L3', isTrial: false }), 25);
     assert.equal(
       resolveUserLimit({ hasActiveSubscription: false, tenantPlanId: 'plan_ultimate', isTrial: false }),
       null,

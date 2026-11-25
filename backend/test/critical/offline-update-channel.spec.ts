@@ -60,10 +60,7 @@ async function main(): Promise<void> {
     offlineUpdateManifestUrl(),
     'https://raw.githubusercontent.com/8489mx/zsupdates/main/releases/manifest-latest.json',
   );
-  assert.equal(
-    offlineUpdateReleasesApiUrl(),
-    'https://api.github.com/repos/8489mx/zsupdates/releases/latest',
-  );
+  assert.equal(offlineUpdateReleasesApiUrl(), 'https://api.github.com/repos/8489mx/zsupdates/releases/latest');
   assert.equal(
     offlineUpdateReleaseDownloadUrl('1.2.3', 'patch-1.2.3.zip'),
     'https://github.com/8489mx/zsupdates/releases/download/v1.2.3/patch-1.2.3.zip',
@@ -72,7 +69,11 @@ async function main(): Promise<void> {
     offlineUpdateReleaseDownloadUrl('v1.2.3', 'Z-ERP-Patch-v1.2.3.zip'),
     'https://github.com/8489mx/zsupdates/releases/download/v1.2.3/Z-ERP-Patch-v1.2.3.zip',
   );
-  for (const url of [offlineUpdateManifestUrl(), offlineUpdateReleasesApiUrl(), offlineUpdateReleaseDownloadUrl('1.2.3', 'x.zip')]) {
+  for (const url of [
+    offlineUpdateManifestUrl(),
+    offlineUpdateReleasesApiUrl(),
+    offlineUpdateReleaseDownloadUrl('1.2.3', 'x.zip'),
+  ]) {
     noOldChannel(url, 'builder URL');
   }
 
@@ -121,10 +122,7 @@ async function main(): Promise<void> {
     assert.ok(fromApi, 'API fallback path must resolve');
     assert.equal(fromApi!.version, '1.5.0');
     noOldChannel(fromApi!.patchUrl, 'API download URL');
-    assert.equal(
-      fromApi!.patchUrl,
-      'https://github.com/8489mx/zsupdates/releases/download/v1.5.0/patch-1.5.0.zip',
-    );
+    assert.equal(fromApi!.patchUrl, 'https://github.com/8489mx/zsupdates/releases/download/v1.5.0/patch-1.5.0.zip');
 
     // 3c. Explicit manifest patchUrl is honoured verbatim.
     globalThis.fetch = (async () => ({
@@ -135,7 +133,9 @@ async function main(): Promise<void> {
     assert.equal(explicit!.patchUrl, 'https://mirror.example.com/custom.zip');
 
     // 3d. Both sources unreachable -> null, never a throw.
-    globalThis.fetch = (async () => { throw new Error('offline'); }) as never;
+    globalThis.fetch = (async () => {
+      throw new Error('offline');
+    }) as never;
     assert.equal(await service.fetchGitHubLatestRelease(), null);
   } finally {
     globalThis.fetch = realFetch;
@@ -150,10 +150,7 @@ async function main(): Promise<void> {
   assert.throws(() => assertTrustedOfflineUpdatePackage(Buffer.alloc(0), digest), /empty/);
 
   // 5. Source pins: release generator + frontend hook carry no old-channel URL.
-  const script = fs.readFileSync(
-    path.resolve(__dirname, '../../scripts/generate-release-package.ts'),
-    'utf8',
-  );
+  const script = fs.readFileSync(path.resolve(__dirname, '../../scripts/generate-release-package.ts'), 'utf8');
   assert.ok(script.includes('8489mx/zsupdates'), 'release generator must write zsupdates patch URLs');
   assert.ok(!script.includes('8489mx/zs/'), 'release generator must not reference the old channel');
   const hook = fs.readFileSync(

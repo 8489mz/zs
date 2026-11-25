@@ -105,10 +105,14 @@ const MANAGER_PIN = '1234';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-a', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-a',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
-
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -182,57 +186,163 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
   // R7-D: the freelance-courier fee credits 2115 on postSale. Seed
   // it as a liability (the type resolveSystemAccountByCode enforces)
   // instead of relying on the auto-create, whose insert needs
   // normal_balance / is_system columns this harness does not carry.
-  await anyDb.insertInto('accounting_accounts').values({ id: 2115, tenant_id: TENANT, code: '2115', name_ar: '2115', is_active: true, is_tax: false, account_type: 'liability', account_group: 'payable' }).execute();
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 7, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer Seven',
-    balance: 0, credit_limit: 0, is_credit_blocked: false, is_active: true,
-  }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_accounts')
+    .values({
+      id: 2115,
+      tenant_id: TENANT,
+      code: '2115',
+      name_ar: '2115',
+      is_active: true,
+      is_tax: false,
+      account_type: 'liability',
+      account_group: 'payable',
+    })
+    .execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer Seven',
+      balance: 0,
+      credit_limit: 0,
+      is_credit_blocked: false,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep One',
+      is_active: true,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
-function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer: CashDrawerService; posting: AccountingPostingService; reps: DeliveryRepsService } {
+function buildServices(db: Kysely<Database>): {
+  sales: SalesWriteService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+  reps: DeliveryRepsService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -247,8 +357,16 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const planFeatures = { hasFeature: (_planId: any, _extra: any, feature: string) => feature === 'pos' };
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const reps = new DeliveryRepsService(db, audit, posting, finance);
@@ -259,9 +377,15 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
 function posPayload(total: number, overrides: Record<string, unknown> = {}): any {
   return {
     items: [{ productId: 101, qty: 1, price: total, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
     payments: [{ paymentChannel: 'cash', amount: total }],
-    tenderedAmount: total, branchId: 1, locationId: 10, source: 'pos',
+    tenderedAmount: total,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
     ...overrides,
   };
 }
@@ -269,50 +393,87 @@ function posPayload(total: number, overrides: Record<string, unknown> = {}): any
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
   const created: any = await service.createSale(payload, auth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
 async function saleRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales').select(['payment_type', 'total', 'paid_amount', 'table_number', 'order_type'])
-    .where('id', '=', id).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .select(['payment_type', 'total', 'paid_amount', 'table_number', 'order_type'])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
 }
 
 async function ledgerRows(db: Kysely<Database>, customerId: number): Promise<any[]> {
-  return (db as any).selectFrom('customer_ledger').select(['amount', 'reference_id'])
-    .where('customer_id', '=', customerId).execute();
+  return (db as any)
+    .selectFrom('customer_ledger')
+    .select(['amount', 'reference_id'])
+    .where('customer_id', '=', customerId)
+    .execute();
 }
 
 // R7-D helpers: the full sale row, its payment rows, treasury rows,
 // and one journal's legs summed per account code.
 async function saleFullRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales')
-    .select(['payment_type', 'payment_channel', 'collection_status', 'paid_amount', 'total', 'delivery_rep_id', 'delivery_status', 'delivery_fee', 'delivery_fee_mode'])
-    .where('id', '=', id).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .select([
+      'payment_type',
+      'payment_channel',
+      'collection_status',
+      'paid_amount',
+      'total',
+      'delivery_rep_id',
+      'delivery_status',
+      'delivery_fee',
+      'delivery_fee_mode',
+    ])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
 }
 
 async function paymentRows(db: Kysely<Database>, saleId: number): Promise<any[]> {
-  return (db as any).selectFrom('sale_payments').select(['payment_channel', 'amount'])
-    .where('sale_id', '=', saleId).execute();
+  return (db as any)
+    .selectFrom('sale_payments')
+    .select(['payment_channel', 'amount'])
+    .where('sale_id', '=', saleId)
+    .execute();
 }
 
 async function treasuryRows(db: Kysely<Database>): Promise<any[]> {
   return (db as any).selectFrom('treasury_transactions').select(['txn_type', 'amount']).execute();
 }
 
-async function journalByCode(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Map<string, { debit: number; credit: number }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute();
+async function journalByCode(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Map<string, { debit: number; credit: number }>> {
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute();
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines as l')
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines as l')
     .innerJoin('accounting_accounts as a', 'a.id', 'l.account_id')
     .select(['a.code as code', 'l.debit as debit', 'l.credit as credit'])
-    .where('l.journal_entry_id', '=', Number(entries[0].id)).execute();
+    .where('l.journal_entry_id', '=', Number(entries[0].id))
+    .execute();
   const byCode = new Map<string, { debit: number; credit: number }>();
   for (const row of rows) {
     const code = String((row as any).code);
     const prev = byCode.get(code) || { debit: 0, credit: 0 };
-    byCode.set(code, { debit: prev.debit + Number((row as any).debit || 0), credit: prev.credit + Number((row as any).credit || 0) });
+    byCode.set(code, {
+      debit: prev.debit + Number((row as any).debit || 0),
+      credit: prev.credit + Number((row as any).credit || 0),
+    });
   }
   return byCode;
 }
@@ -321,9 +482,19 @@ async function journalByCode(db: Kysely<Database>, sourceType: string, sourceId:
 function codPayload(overrides: Record<string, unknown> = {}): any {
   return {
     items: [{ productId: 101, qty: 5, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [], tenderedAmount: 0, branchId: 1, locationId: 10, source: 'pos',
-    customerId: 7, orderType: 'delivery', collectionStatus: 'cod', deliveryRepId: 1,
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [],
+    tenderedAmount: 0,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
+    customerId: 7,
+    orderType: 'delivery',
+    collectionStatus: 'cod',
+    deliveryRepId: 1,
     deliveryFee: 30,
     ...overrides,
   };
@@ -331,11 +502,32 @@ function codPayload(overrides: Record<string, unknown> = {}): any {
 
 function heldPayload(tableNumber: string, overrides: Record<string, unknown> = {}): any {
   return {
-    items: [{ productId: 101, name: 'Widget 101', qty: 1, price: 100, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail' }],
-    customerId: null, paymentType: 'cash', paymentChannel: 'cash',
-    cashAmount: 0, cardAmount: 0, transferAmount: 0, discount: 0, deliveryFee: 0,
-    note: '', search: '', priceType: 'retail', branchId: 1, locationId: 10,
-    orderType: 'dine_in', tableNumber,
+    items: [
+      {
+        productId: 101,
+        name: 'Widget 101',
+        qty: 1,
+        price: 100,
+        unitName: 'قطعة',
+        unitMultiplier: 1,
+        priceType: 'retail',
+      },
+    ],
+    customerId: null,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    cashAmount: 0,
+    cardAmount: 0,
+    transferAmount: 0,
+    discount: 0,
+    deliveryFee: 0,
+    note: '',
+    search: '',
+    priceType: 'retail',
+    branchId: 1,
+    locationId: 10,
+    orderType: 'dine_in',
+    tableNumber,
     ...overrides,
   };
 }
@@ -363,14 +555,21 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
       await assert.rejects(
-        createAndGetId(sales, posPayload(100, {
-          customerId: 7,
-          payments: [{ paymentChannel: 'cash', amount: 50 }],
-          tenderedAmount: 50,
-        }), cashierAuth),
+        createAndGetId(
+          sales,
+          posPayload(100, {
+            customerId: 7,
+            payments: [{ paymentChannel: 'cash', amount: 50 }],
+            tenderedAmount: 50,
+          }),
+          cashierAuth,
+        ),
         (err: any) => err && err.code === 'INVALID_PAID_AMOUNT',
       );
-      const count = await (db as any).selectFrom('sales').select(sql`count(*)`.as('n')).executeTakeFirst();
+      const count = await (db as any)
+        .selectFrom('sales')
+        .select(sql`count(*)`.as('n'))
+        .executeTakeFirst();
       assert.equal(Number((count as any).n), 0, 'no sale is written');
     } finally {
       await db.destroy();
@@ -385,10 +584,17 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, posPayload(100, {
-        customerId: 7, paymentType: 'credit', paymentChannel: 'credit', payments: [],
-        tenderedAmount: 0,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        posPayload(100, {
+          customerId: 7,
+          paymentType: 'credit',
+          paymentChannel: 'credit',
+          payments: [],
+          tenderedAmount: 0,
+        }),
+        cashierAuth,
+      );
       const row = await saleRow(db, saleId);
       assert.equal(row.payment_type, 'credit', 'explicit credit posts as credit');
     } finally {
@@ -406,16 +612,20 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
       await assert.rejects(
-        createAndGetId(sales, posPayload(100, {
-          paymentChannel: 'card',
-          payments: [
-            { paymentChannel: 'card', amount: 90 },
-            { paymentChannel: 'cash', amount: 10 },
-          ],
-          tenderedAmount: 10,
-          terminalAuthCode: 'AUTH-1',
-          terminalApprovedAmount: 100,
-        }), cashierAuth),
+        createAndGetId(
+          sales,
+          posPayload(100, {
+            paymentChannel: 'card',
+            payments: [
+              { paymentChannel: 'card', amount: 90 },
+              { paymentChannel: 'cash', amount: 10 },
+            ],
+            tenderedAmount: 10,
+            terminalAuthCode: 'AUTH-1',
+            terminalApprovedAmount: 100,
+          }),
+          cashierAuth,
+        ),
         (err: any) => err && err.code === 'TERMINAL_AMOUNT_MISMATCH' && err.statusCode === 422,
       );
     } finally {
@@ -430,13 +640,17 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, posPayload(100, {
-        paymentChannel: 'card',
-        payments: [{ paymentChannel: 'card', amount: 100 }],
-        tenderedAmount: 0,
-        terminalAuthCode: 'AUTH-1',
-        terminalApprovedAmount: 100,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        posPayload(100, {
+          paymentChannel: 'card',
+          payments: [{ paymentChannel: 'card', amount: 100 }],
+          tenderedAmount: 0,
+          terminalAuthCode: 'AUTH-1',
+          terminalApprovedAmount: 100,
+        }),
+        cashierAuth,
+      );
       assert.ok(saleId > 0, 'the matching terminal sale posts');
     } finally {
       await db.destroy();
@@ -467,7 +681,11 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, posPayload(100, { orderType: 'dine_in', tableNumber: 'T1' }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        posPayload(100, { orderType: 'dine_in', tableNumber: 'T1' }),
+        cashierAuth,
+      );
       const row = await saleRow(db, saleId);
       assert.equal(row.table_number, 'T1', 'the table number is stored');
     } finally {
@@ -490,9 +708,15 @@ async function main(): Promise<void> {
         (err: any) => err && err.code === 'HELD_DRAFT_TABLE_OCCUPIED' && err.statusCode === 409,
       );
       const second: any = await sales.saveHeldSale(heldPayload('T2'), cashierAuth);
-      assert.ok(Array.isArray(second?.heldSales) && second.heldSales.some((h: any) => h.tableNumber === 'T2'), 'a different table still holds');
+      assert.ok(
+        Array.isArray(second?.heldSales) && second.heldSales.some((h: any) => h.tableNumber === 'T2'),
+        'a different table still holds',
+      );
       const blank: any = await sales.saveHeldSale(heldPayload(''), cashierAuth);
-      assert.ok(Array.isArray(blank?.heldSales) && blank.heldSales.some((h: any) => !h.tableNumber), 'a hold without a table still holds');
+      assert.ok(
+        Array.isArray(blank?.heldSales) && blank.heldSales.some((h: any) => !h.tableNumber),
+        'a hold without a table still holds',
+      );
     } finally {
       await db.destroy();
     }
@@ -511,10 +735,17 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
       await assert.rejects(
-        createAndGetId(sales, posPayload(100, {
-          orderType: 'delivery', collectionStatus: 'cod', deliveryRepId: 1,
-          payments: [{ paymentChannel: 'cash', amount: 50 }], tenderedAmount: 50,
-        }), cashierAuth),
+        createAndGetId(
+          sales,
+          posPayload(100, {
+            orderType: 'delivery',
+            collectionStatus: 'cod',
+            deliveryRepId: 1,
+            payments: [{ paymentChannel: 'cash', amount: 50 }],
+            tenderedAmount: 50,
+          }),
+          cashierAuth,
+        ),
         (err: any) => err && err.code === 'CUSTOMER_REQUIRED_FOR_CREDIT',
       );
     } finally {
@@ -531,10 +762,18 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, posPayload(100, {
-        customerId: 7, orderType: 'delivery', collectionStatus: 'cod', deliveryRepId: 1,
-        payments: [{ paymentChannel: 'cash', amount: 50 }], tenderedAmount: 50,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        posPayload(100, {
+          customerId: 7,
+          orderType: 'delivery',
+          collectionStatus: 'cod',
+          deliveryRepId: 1,
+          payments: [{ paymentChannel: 'cash', amount: 50 }],
+          tenderedAmount: 50,
+        }),
+        cashierAuth,
+      );
       const row = await saleRow(db, saleId);
       assert.equal(row.payment_type, 'cash', 'COD + customer stays cash, never reclassified to credit');
       const legs = await ledgerRows(db, 7);
@@ -557,7 +796,11 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
       await assert.rejects(
-        createAndGetId(sales, posPayload(100, { discount: 100, payments: [], tenderedAmount: 0, managerPin: '1234' }), cashierAuth),
+        createAndGetId(
+          sales,
+          posPayload(100, { discount: 100, payments: [], tenderedAmount: 0, managerPin: '1234' }),
+          cashierAuth,
+        ),
         (err: any) => err && err.code === 'ZERO_TOTAL_SALE',
       );
     } finally {
@@ -574,10 +817,17 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       const { sales } = buildServices(db);
       await assert.rejects(
-        createAndGetId(sales, posPayload(100, {
-          customerId: 7, paymentType: 'credit', paymentChannel: 'credit', payments: [],
-          tenderedAmount: 0,
-        }), cashierAuth),
+        createAndGetId(
+          sales,
+          posPayload(100, {
+            customerId: 7,
+            paymentType: 'credit',
+            paymentChannel: 'credit',
+            payments: [],
+            tenderedAmount: 0,
+          }),
+          cashierAuth,
+        ),
         (err: any) => err && err.code === 'OPEN_SHIFT_REQUIRED',
       );
     } finally {
@@ -599,12 +849,22 @@ async function main(): Promise<void> {
         (err: any) => err && err.code === 'MANAGER_AUTH_REQUIRED',
       );
       await assert.rejects(
-        createAndGetId(sales, {
-          items: [{ productId: 101, qty: 1, price: 90, priceType: 'retail', unitMultiplier: 1 }],
-          discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-          payments: [{ paymentChannel: 'cash', amount: 90 }],
-          tenderedAmount: 90, branchId: 1, locationId: 10, source: 'pos',
-        }, cashierAuth),
+        createAndGetId(
+          sales,
+          {
+            items: [{ productId: 101, qty: 1, price: 90, priceType: 'retail', unitMultiplier: 1 }],
+            discount: 0,
+            taxRate: 0,
+            paymentType: 'cash',
+            paymentChannel: 'cash',
+            payments: [{ paymentChannel: 'cash', amount: 90 }],
+            tenderedAmount: 90,
+            branchId: 1,
+            locationId: 10,
+            source: 'pos',
+          },
+          cashierAuth,
+        ),
         (err: any) => err && err.code === 'MANAGER_AUTH_REQUIRED',
       );
     } finally {
@@ -622,17 +882,35 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const codId = await createAndGetId(sales, posPayload(100, {
-        source: 'dashboard', customerId: 7, orderType: 'delivery',
-        collectionStatus: 'cod', deliveryRepId: 1,
-        payments: [{ paymentChannel: 'cash', amount: 50 }], tenderedAmount: 50,
-      }), cashierAuth);
+      const codId = await createAndGetId(
+        sales,
+        posPayload(100, {
+          source: 'dashboard',
+          customerId: 7,
+          orderType: 'delivery',
+          collectionStatus: 'cod',
+          deliveryRepId: 1,
+          payments: [{ paymentChannel: 'cash', amount: 50 }],
+          tenderedAmount: 50,
+        }),
+        cashierAuth,
+      );
       assert.equal((await saleRow(db, codId)).payment_type, 'credit', 'dashboard COD conversion still flips to credit');
-      const partialId = await createAndGetId(sales, posPayload(100, {
-        source: 'dashboard', customerId: 7,
-        payments: [{ paymentChannel: 'cash', amount: 50 }], tenderedAmount: 50,
-      }), cashierAuth);
-      assert.equal((await saleRow(db, partialId)).payment_type, 'credit', 'dashboard underpaid conversion still flips to credit');
+      const partialId = await createAndGetId(
+        sales,
+        posPayload(100, {
+          source: 'dashboard',
+          customerId: 7,
+          payments: [{ paymentChannel: 'cash', amount: 50 }],
+          tenderedAmount: 50,
+        }),
+        cashierAuth,
+      );
+      assert.equal(
+        (await saleRow(db, partialId)).payment_type,
+        'credit',
+        'dashboard underpaid conversion still flips to credit',
+      );
     } finally {
       await db.destroy();
     }
@@ -658,7 +936,12 @@ async function main(): Promise<void> {
   // 15. R7-D pure engine: the suppressFallback flag stops the
   // invented leg, and the helper decides it from delivery + status.
   await check('R7-D tender fallback suppression is a pure engine decision', async () => {
-    const base = { paymentType: 'cash' as const, payments: [], collectibleTotal: 500, fallbackChannel: 'cash' as const };
+    const base = {
+      paymentType: 'cash' as const,
+      payments: [],
+      collectibleTotal: 500,
+      fallbackChannel: 'cash' as const,
+    };
     const suppressed = allocateSaleTenders({ ...base, suppressFallback: true });
     assert.deepEqual(suppressed.payments, [], 'a suppressed fallback invents no leg');
     assert.equal(suppressed.appliedAmount, 0, 'a suppressed fallback applies nothing');
@@ -668,13 +951,34 @@ async function main(): Promise<void> {
     assert.equal(kept.appliedAmount, 500, 'the fallback leg covers the full total');
     // The helper: COD and unstated-status deliveries suppress; explicit
     // prepaid deliveries, non-deliveries and credit sales do not.
-    assert.equal(shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: 'cod', paymentType: 'cash' }), true);
-    assert.equal(shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: null, paymentType: 'cash' }), true);
-    assert.equal(shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: undefined, paymentType: 'cash' }), true);
-    assert.equal(shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: 'prepaid_online', paymentType: 'cash' }), false);
-    assert.equal(shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: 'prepaid_by_rep', paymentType: 'cash' }), false);
-    assert.equal(shouldSuppressTenderFallback({ orderType: 'takeaway', collectionStatus: 'cod', paymentType: 'cash' }), false);
-    assert.equal(shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: 'cod', paymentType: 'credit' }), false);
+    assert.equal(
+      shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: 'cod', paymentType: 'cash' }),
+      true,
+    );
+    assert.equal(
+      shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: null, paymentType: 'cash' }),
+      true,
+    );
+    assert.equal(
+      shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: undefined, paymentType: 'cash' }),
+      true,
+    );
+    assert.equal(
+      shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: 'prepaid_online', paymentType: 'cash' }),
+      false,
+    );
+    assert.equal(
+      shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: 'prepaid_by_rep', paymentType: 'cash' }),
+      false,
+    );
+    assert.equal(
+      shouldSuppressTenderFallback({ orderType: 'takeaway', collectionStatus: 'cod', paymentType: 'cash' }),
+      false,
+    );
+    assert.equal(
+      shouldSuppressTenderFallback({ orderType: 'delivery', collectionStatus: 'cod', paymentType: 'credit' }),
+      false,
+    );
   });
 
   // 16. R7-D createSale: a no-legs COD delivery posts as an unpaid
@@ -742,7 +1046,8 @@ async function main(): Promise<void> {
       assert.equal(settlement.get('2115')?.debit, 30, 'the courier fee payable is relieved');
       assert.equal(settlement.get('1130')?.credit, 530, 'the receivable is cleared in full');
       const legs = await ledgerRows(db, 7);
-      const net = legs.filter((leg) => Number(leg.reference_id) === saleId)
+      const net = legs
+        .filter((leg) => Number(leg.reference_id) === saleId)
         .reduce((sum, leg) => sum + Number(leg.amount || 0), 0);
       assert.equal(net, 0, 'the customer ledger nets to zero after settlement');
     } finally {
@@ -779,9 +1084,14 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, codPayload({
-        payments: [{ paymentChannel: 'cash', amount: 200 }], tenderedAmount: 200,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        codPayload({
+          payments: [{ paymentChannel: 'cash', amount: 200 }],
+          tenderedAmount: 200,
+        }),
+        cashierAuth,
+      );
       const row = await saleFullRow(db, saleId);
       assert.equal(Number(row.paid_amount), 200, 'only the typed 200 is paid');
       const payments = await paymentRows(db, saleId);
@@ -813,7 +1123,10 @@ async function main(): Promise<void> {
         createAndGetId(sales, codPayload({ customerId: null }), cashierAuth),
         (err: any) => err && err.code === 'CUSTOMER_REQUIRED_FOR_CREDIT',
       );
-      const count = await (db as any).selectFrom('sales').select(sql`count(*)`.as('n')).executeTakeFirst();
+      const count = await (db as any)
+        .selectFrom('sales')
+        .select(sql`count(*)`.as('n'))
+        .executeTakeFirst();
       assert.equal(Number((count as any).n), 0, 'no sale is written');
     } finally {
       await db.destroy();
@@ -852,11 +1165,20 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, posPayload(100, {
-        source: 'dashboard', customerId: 7, orderType: 'delivery',
-        collectionStatus: 'prepaid_online', deliveryRepId: 1,
-        paymentChannel: 'card', payments: [], tenderedAmount: 0,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        posPayload(100, {
+          source: 'dashboard',
+          customerId: 7,
+          orderType: 'delivery',
+          collectionStatus: 'prepaid_online',
+          deliveryRepId: 1,
+          paymentChannel: 'card',
+          payments: [],
+          tenderedAmount: 0,
+        }),
+        cashierAuth,
+      );
       const row = await saleFullRow(db, saleId);
       assert.equal(Number(row.paid_amount), 100, 'the prepaid delivery is fully paid');
       assert.equal(row.payment_channel, 'card', 'the fallback leg rides the declared card channel');
@@ -917,12 +1239,17 @@ async function main(): Promise<void> {
       const { sales } = buildServices(db);
       const saleId = await createAndGetId(sales, posPayload(100, { customerId: 7 }), cashierAuth);
       const before = await paymentRows(db, saleId);
-      const edited: any = await sales.updateSale(saleId, posPayload(100, {
-        customerId: 7,
-        payments: [{ paymentChannel: 'cash', amount: 50 }], tenderedAmount: 50,
-        editReason: 'تصحيح المبلغ بعد مراجعة العميل',
-        managerPin: '1234',
-      }), cashierAuth);
+      const edited: any = await sales.updateSale(
+        saleId,
+        posPayload(100, {
+          customerId: 7,
+          payments: [{ paymentChannel: 'cash', amount: 50 }],
+          tenderedAmount: 50,
+          editReason: 'تصحيح المبلغ بعد مراجعة العميل',
+          managerPin: '1234',
+        }),
+        cashierAuth,
+      );
       assert.equal(edited?.ok, true, 'the edit succeeds — the payload legs are ignored');
       assert.deepEqual(await paymentRows(db, saleId), before, 'the stored legs are byte-identical');
       const row = await saleFullRow(db, saleId);
@@ -974,11 +1301,19 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      const saleId = await createAndGetId(sales, posPayload(100, {
-        customerId: 7, paymentType: 'credit', paymentChannel: 'credit',
-        payments: [], tenderedAmount: 0,
-        orderType: 'delivery', deliveryRepId: 1,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        posPayload(100, {
+          customerId: 7,
+          paymentType: 'credit',
+          paymentChannel: 'credit',
+          payments: [],
+          tenderedAmount: 0,
+          orderType: 'delivery',
+          deliveryRepId: 1,
+        }),
+        cashierAuth,
+      );
       const row = await saleRow(db, saleId);
       assert.equal(row.payment_type, 'credit', 'explicit credit posts as credit');
       assert.equal(Number(row.paid_amount), 0, 'the credit sale is unpaid');

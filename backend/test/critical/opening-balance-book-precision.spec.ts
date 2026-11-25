@@ -57,33 +57,69 @@ async function main(): Promise<void> {
       },
     };
     const svc: any = new PartnersService(db as any, {} as any, fakePosting);
-    const authKwd = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
-    const authEgp = { tenantId: 't2', accountId: 'a2', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+    const authKwd = {
+      tenantId: 't1',
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      permissions: [],
+    } as unknown as AuthContext;
+    const authEgp = {
+      tenantId: 't2',
+      accountId: 'a2',
+      role: 'admin',
+      userId: 1,
+      permissions: [],
+    } as unknown as AuthContext;
 
     // KWD (3dp): the third decimal survives everywhere.
     await svc.addCustomerOpeningBalance(1, 100.125, authKwd, db);
-    const kwdLedger: any = await db.selectFrom('customer_ledger' as any).selectAll().where('customer_id', '=', 1).executeTakeFirst();
+    const kwdLedger: any = await db
+      .selectFrom('customer_ledger' as any)
+      .selectAll()
+      .where('customer_id', '=', 1)
+      .executeTakeFirst();
     assert.equal(Number(kwdLedger.amount), 100.125);
     assert.equal(Number(kwdLedger.balance_after), 100.125);
-    const kwdCustomer: any = await db.selectFrom('customers' as any).selectAll().where('id', '=', 1).executeTakeFirst();
+    const kwdCustomer: any = await db
+      .selectFrom('customers' as any)
+      .selectAll()
+      .where('id', '=', 1)
+      .executeTakeFirst();
     assert.equal(Number(kwdCustomer.balance), 100.125);
     assert.equal(posted.customer, 100.125);
 
     await svc.addSupplierOpeningBalance(1, 50.125, authKwd, db);
-    const kwdSupLedger: any = await db.selectFrom('supplier_ledger' as any).selectAll().where('supplier_id', '=', 1).executeTakeFirst();
+    const kwdSupLedger: any = await db
+      .selectFrom('supplier_ledger' as any)
+      .selectAll()
+      .where('supplier_id', '=', 1)
+      .executeTakeFirst();
     assert.equal(Number(kwdSupLedger.amount), 50.125);
-    const kwdSupplier: any = await db.selectFrom('suppliers' as any).selectAll().where('id', '=', 1).executeTakeFirst();
+    const kwdSupplier: any = await db
+      .selectFrom('suppliers' as any)
+      .selectAll()
+      .where('id', '=', 1)
+      .executeTakeFirst();
     assert.equal(Number(kwdSupplier.balance), 50.125);
     assert.equal(posted.supplier, 50.125);
 
     // EGP (2dp): behavior unchanged — 100.125 rounds to 100.13.
     await svc.addCustomerOpeningBalance(2, 100.125, authEgp, db);
-    const egpLedger: any = await db.selectFrom('customer_ledger' as any).selectAll().where('customer_id', '=', 2).executeTakeFirst();
+    const egpLedger: any = await db
+      .selectFrom('customer_ledger' as any)
+      .selectAll()
+      .where('customer_id', '=', 2)
+      .executeTakeFirst();
     assert.equal(Number(egpLedger.amount), 100.13);
 
     // Zero writes nothing.
     await svc.addCustomerOpeningBalance(3, 0, authKwd, db);
-    const zeroRows: any[] = await db.selectFrom('customer_ledger' as any).selectAll().where('customer_id', '=', 3).execute();
+    const zeroRows: any[] = await db
+      .selectFrom('customer_ledger' as any)
+      .selectAll()
+      .where('customer_id', '=', 3)
+      .execute();
     assert.equal(zeroRows.length, 0);
 
     console.log('Opening balance book precision tests passed.');

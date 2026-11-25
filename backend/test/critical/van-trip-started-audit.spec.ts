@@ -72,17 +72,54 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Warehouse', code: 'WH', is_active: true, location_type: 'branch_stock' }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van', code: 'VAN_4', is_active: true, location_type: 'van_stock' }).execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Warehouse',
+      code: 'WH',
+      is_active: true,
+      location_type: 'branch_stock',
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van',
+      code: 'VAN_4',
+      is_active: true,
+      location_type: 'van_stock',
+    })
+    .execute();
 }
 
 async function seedRep(db: Kysely<Database>, repId: number, phone: string | null): Promise<void> {
-  await (db as any).insertInto('delivery_representatives').values({
-    id: repId, tenant_id: TENANT, account_id: ACCOUNT, name: `Rep ${repId}`,
-    phone, vehicle_plate: null, van_location_id: 10, employee_id: null, national_id: null,
-  }).execute();
+  await (db as any)
+    .insertInto('delivery_representatives')
+    .values({
+      id: repId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Rep ${repId}`,
+      phone,
+      vehicle_plate: null,
+      van_location_id: 10,
+      employee_id: null,
+      national_id: null,
+    })
+    .execute();
 }
 
 async function auditRows(db: Kysely<Database>, eventCode: string): Promise<any[]> {
@@ -105,8 +142,13 @@ function buildVanService(db: Kysely<Database>): any {
   };
   service.recordSuspicionEvent = async () => undefined;
   service.resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-    permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'admin',
+    role: 'admin',
+    permissions: ['deliveryReps', 'accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   return service;
 }
@@ -142,12 +184,24 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await seedRep(db, REP_ID, REP_PHONE);
-      await (db as any).insertInto('users').values({
-        id: 77, tenant_id: TENANT, username: REP_PHONE, display_name: 'Rep 4',
-        phone: REP_PHONE, pin: null, pin_hash: null, permissions_json: null,
-        default_branch_id: 1, role: 'driver', password_hash: null,
-        password_salt: null, is_active: true,
-      }).execute();
+      await (db as any)
+        .insertInto('users')
+        .values({
+          id: 77,
+          tenant_id: TENANT,
+          username: REP_PHONE,
+          display_name: 'Rep 4',
+          phone: REP_PHONE,
+          pin: null,
+          pin_hash: null,
+          permissions_json: null,
+          default_branch_id: 1,
+          role: 'driver',
+          password_hash: null,
+          password_salt: null,
+          is_active: true,
+        })
+        .execute();
       const service = buildVanService(db);
       const opened = await service.openTripAndLoad(REP_ID, TENANT, ACCOUNT, { items: [] });
       assert.equal(opened.ok, true, 'the trip opens');
@@ -191,15 +245,15 @@ async function main(): Promise<void> {
       auditSource.includes("VAN_TRIP_STARTED: 'VAN_TRIP_STARTED'"),
       'AUDIT_EVENT_CODES declares VAN_TRIP_STARTED',
     );
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/trip-open-load.service.ts'), 'utf8');
+    const vanSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/trip-open-load.service.ts'),
+      'utf8',
+    );
     assert.ok(
       vanSource.includes('eventCode: AUDIT_EVENT_CODES.VAN_TRIP_STARTED'),
       'openTripAndLoad writes the trip-started audit row',
     );
-    assert.ok(
-      vanSource.includes('INV-VAN-TRIP-STARTED-AUDIT'),
-      'van-sales names the invariant',
-    );
+    assert.ok(vanSource.includes('INV-VAN-TRIP-STARTED-AUDIT'), 'van-sales names the invariant');
     console.log('  source pins passed');
   }
 

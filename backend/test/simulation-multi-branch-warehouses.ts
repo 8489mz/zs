@@ -5,7 +5,11 @@ import { Kysely, PostgresDialect, sql } from 'kysely';
 import { Database } from '../src/database/database.types';
 import { TransactionHelper } from '../src/database/helpers/transaction.helper';
 import { resolvePgSslConfig, toBoolean } from '../src/database/ssl.util';
-import { applyStockDelta, previewConsumableStockQty, relocateStockBetweenLocations } from '../src/common/utils/location-stock-ledger';
+import {
+  applyStockDelta,
+  previewConsumableStockQty,
+  relocateStockBetweenLocations,
+} from '../src/common/utils/location-stock-ledger';
 
 async function createTestDb(): Promise<Kysely<Database>> {
   const pool = new Pool({
@@ -44,89 +48,120 @@ async function runSimulation() {
     // الخطوة 0: تهيئة التينانت والمستخدم الافتراضي
     // -------------------------------------------------------------
     console.log('📌 [الخطوة 0] إنشاء بيئة العمل والمستأجر التجريبي...');
-    await db.insertInto('tenants').values({
-      id: tenantId,
-      slug: `sim-${timestamp}`,
-      business_name: 'شركة المحاكاة للتجارة والتوزيع',
-      owner_name: 'المدير العام',
-      owner_phone: '01000000000',
-      status: 'active',
-      trial_starts_at: new Date(),
-      trial_ends_at: new Date(Date.now() + 30 * 24 * 3600 * 1000),
-      activated_at: new Date(),
-    } as any).execute();
+    await db
+      .insertInto('tenants')
+      .values({
+        id: tenantId,
+        slug: `sim-${timestamp}`,
+        business_name: 'شركة المحاكاة للتجارة والتوزيع',
+        owner_name: 'المدير العام',
+        owner_phone: '01000000000',
+        status: 'active',
+        trial_starts_at: new Date(),
+        trial_ends_at: new Date(Date.now() + 30 * 24 * 3600 * 1000),
+        activated_at: new Date(),
+      } as any)
+      .execute();
 
-    const user = await db.insertInto('users').values({
-      tenant_id: tenantId,
-      account_id: accountId,
-      username: `admin_${timestamp}`,
-      display_name: 'مدير النظام',
-      password_hash: 'hashed',
-      password_salt: 'salt',
-      role: 'super_admin',
-      is_active: true,
-      permissions_json: JSON.stringify(['all']),
-      must_change_password: false,
-      failed_login_count: 0,
-    } as any).returning(['id']).executeTakeFirstOrThrow();
+    const user = await db
+      .insertInto('users')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        username: `admin_${timestamp}`,
+        display_name: 'مدير النظام',
+        password_hash: 'hashed',
+        password_salt: 'salt',
+        role: 'super_admin',
+        is_active: true,
+        permissions_json: JSON.stringify(['all']),
+        must_change_password: false,
+        failed_login_count: 0,
+      } as any)
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
     const userId = Number(user.id);
 
     // -------------------------------------------------------------
     // الخطوة 1: إنشاء الفرعين ومخازن صالة العرض والـ 10 مخازن التخزينية
     // -------------------------------------------------------------
     console.log('📌 [الخطوة 1] إنشاء الفروع والمواقع المخزنية:');
-    
+
     // الفرع 1
-    const br1 = await db.insertInto('branches').values({
-      tenant_id: tenantId,
-      account_id: accountId,
-      name: 'فرع 1 - المعادي',
-      code: 'BR-MAADI',
-      sales_stock_mode: 'single_location',
-      allow_external_sales_stock: false,
-      is_active: true,
-    } as any).returning(['id']).executeTakeFirstOrThrow();
+    const br1 = await db
+      .insertInto('branches')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        name: 'فرع 1 - المعادي',
+        code: 'BR-MAADI',
+        sales_stock_mode: 'single_location',
+        allow_external_sales_stock: false,
+        is_active: true,
+      } as any)
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
     const branch1Id = Number(br1.id);
 
     // الفرع 2
-    const br2 = await db.insertInto('branches').values({
-      tenant_id: tenantId,
-      account_id: accountId,
-      name: 'فرع 2 - المهندسين',
-      code: 'BR-MOHAND',
-      sales_stock_mode: 'single_location',
-      allow_external_sales_stock: false,
-      is_active: true,
-    } as any).returning(['id']).executeTakeFirstOrThrow();
+    const br2 = await db
+      .insertInto('branches')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        name: 'فرع 2 - المهندسين',
+        code: 'BR-MOHAND',
+        sales_stock_mode: 'single_location',
+        allow_external_sales_stock: false,
+        is_active: true,
+      } as any)
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
     const branch2Id = Number(br2.id);
 
     // مخزون صالة فرع 1
-    const bStock1 = await db.insertInto('stock_locations').values({
-      tenant_id: tenantId,
-      account_id: accountId,
-      name: 'مخزون صالة فرع المعادي (رصيد البيع)',
-      code: 'LOC-BR1-STOCK',
-      branch_id: branch1Id,
-      location_type: 'branch_stock',
-      is_active: true,
-    } as any).returning(['id']).executeTakeFirstOrThrow();
+    const bStock1 = await db
+      .insertInto('stock_locations')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        name: 'مخزون صالة فرع المعادي (رصيد البيع)',
+        code: 'LOC-BR1-STOCK',
+        branch_id: branch1Id,
+        location_type: 'branch_stock',
+        is_active: true,
+      } as any)
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
     const branchStockLoc1Id = Number(bStock1.id);
 
     // مخزون صالة فرع 2
-    const bStock2 = await db.insertInto('stock_locations').values({
-      tenant_id: tenantId,
-      account_id: accountId,
-      name: 'مخزون صالة فرع المهندسين (رصيد البيع)',
-      code: 'LOC-BR2-STOCK',
-      branch_id: branch2Id,
-      location_type: 'branch_stock',
-      is_active: true,
-    } as any).returning(['id']).executeTakeFirstOrThrow();
+    const bStock2 = await db
+      .insertInto('stock_locations')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        name: 'مخزون صالة فرع المهندسين (رصيد البيع)',
+        code: 'LOC-BR2-STOCK',
+        branch_id: branch2Id,
+        location_type: 'branch_stock',
+        is_active: true,
+      } as any)
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
     const branchStockLoc2Id = Number(bStock2.id);
 
     // ربط المخزن الافتراضي بكل فرع
-    await db.updateTable('branches').set({ default_stock_location_id: branchStockLoc1Id }).where('id', '=', branch1Id).execute();
-    await db.updateTable('branches').set({ default_stock_location_id: branchStockLoc2Id }).where('id', '=', branch2Id).execute();
+    await db
+      .updateTable('branches')
+      .set({ default_stock_location_id: branchStockLoc1Id })
+      .where('id', '=', branch1Id)
+      .execute();
+    await db
+      .updateTable('branches')
+      .set({ default_stock_location_id: branchStockLoc2Id })
+      .where('id', '=', branch2Id)
+      .execute();
 
     // إنشاء 10 مخازن تخزينية منفصلة (نوعها internal_warehouse)
     const warehouseIds: number[] = [];
@@ -144,15 +179,19 @@ async function runSimulation() {
     ];
 
     for (let i = 0; i < 10; i++) {
-      const wh = await db.insertInto('stock_locations').values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        name: warehouseNames[i],
-        code: `WH-${i + 1}`,
-        branch_id: null,
-        location_type: 'internal_warehouse',
-        is_active: true,
-      } as any).returning(['id']).executeTakeFirstOrThrow();
+      const wh = await db
+        .insertInto('stock_locations')
+        .values({
+          tenant_id: tenantId,
+          account_id: accountId,
+          name: warehouseNames[i],
+          code: `WH-${i + 1}`,
+          branch_id: null,
+          location_type: 'internal_warehouse',
+          is_active: true,
+        } as any)
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
       warehouseIds.push(Number(wh.id));
     }
 
@@ -164,40 +203,52 @@ async function runSimulation() {
     // الخطوة 2: إنشاء الصنف والمورد والعميل
     // -------------------------------------------------------------
     console.log('\n📌 [الخطوة 2] إنشاء الصنف والمورد:');
-    const prod = await db.insertInto('products').values({
-      tenant_id: tenantId,
-      account_id: accountId,
-      name: 'تيشيرت قطن فاخر 100%',
-      barcode: `TSHIRT-${timestamp}`,
-      cost_price: 100,
-      retail_price: 250,
-      wholesale_price: 200,
-      stock_qty: 0,
-      min_stock_qty: 10,
-      item_type: 'product',
-      item_kind: 'standard',
-      is_active: true,
-    } as any).returning(['id']).executeTakeFirstOrThrow();
+    const prod = await db
+      .insertInto('products')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        name: 'تيشيرت قطن فاخر 100%',
+        barcode: `TSHIRT-${timestamp}`,
+        cost_price: 100,
+        retail_price: 250,
+        wholesale_price: 200,
+        stock_qty: 0,
+        min_stock_qty: 10,
+        item_type: 'product',
+        item_kind: 'standard',
+        is_active: true,
+      } as any)
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
     const productId = Number(prod.id);
 
-    const sup = await db.insertInto('suppliers').values({
-      tenant_id: tenantId,
-      account_id: accountId,
-      name: 'مصنع الغزل والنسيج الحديث',
-      phone: '01011111111',
-      balance: 0,
-      is_active: true,
-    } as any).returning(['id']).executeTakeFirstOrThrow();
+    const sup = await db
+      .insertInto('suppliers')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        name: 'مصنع الغزل والنسيج الحديث',
+        phone: '01011111111',
+        balance: 0,
+        is_active: true,
+      } as any)
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
     const supplierId = Number(sup.id);
 
-    const cust = await db.insertInto('customers').values({
-      tenant_id: tenantId,
-      account_id: accountId,
-      name: 'عميل تجزئة كريم',
-      phone: '01022222222',
-      balance: 0,
-      is_active: true,
-    } as any).returning(['id']).executeTakeFirstOrThrow();
+    const cust = await db
+      .insertInto('customers')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        name: 'عميل تجزئة كريم',
+        phone: '01022222222',
+        balance: 0,
+        is_active: true,
+      } as any)
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
     const customerId = Number(cust.id);
 
     console.log(`   ✅ تم إنشاء المنتج: "تيشيرت قطن فاخر" (#${productId}) برصيد ابتدائي 0.`);
@@ -232,10 +283,31 @@ async function runSimulation() {
     }
 
     // التحقق من الأرصدة
-    const prodAfterPurchases = await db.selectFrom('products').select(['stock_qty']).where('id', '=', productId).executeTakeFirstOrThrow();
-    const wh1Stock = await previewConsumableStockQty(db, { productId, locationId: warehouseIds[0], tenantId, accountId });
-    const b1StockBefore = await previewConsumableStockQty(db, { productId, branchId: branch1Id, locationId: branchStockLoc1Id, tenantId, accountId });
-    const b2StockBefore = await previewConsumableStockQty(db, { productId, branchId: branch2Id, locationId: branchStockLoc2Id, tenantId, accountId });
+    const prodAfterPurchases = await db
+      .selectFrom('products')
+      .select(['stock_qty'])
+      .where('id', '=', productId)
+      .executeTakeFirstOrThrow();
+    const wh1Stock = await previewConsumableStockQty(db, {
+      productId,
+      locationId: warehouseIds[0],
+      tenantId,
+      accountId,
+    });
+    const b1StockBefore = await previewConsumableStockQty(db, {
+      productId,
+      branchId: branch1Id,
+      locationId: branchStockLoc1Id,
+      tenantId,
+      accountId,
+    });
+    const b2StockBefore = await previewConsumableStockQty(db, {
+      productId,
+      branchId: branch2Id,
+      locationId: branchStockLoc2Id,
+      tenantId,
+      accountId,
+    });
 
     console.log(`   📊 إجمالي رصيد الصنف العام في الشركة: ${prodAfterPurchases.stock_qty} قطعة (100 + 9*50 = 550)`);
     console.log(`   📊 رصيد المخزن 1: ${wh1Stock} قطعة`);
@@ -252,7 +324,7 @@ async function runSimulation() {
     // الخطوة 4: اختبار منع التسريب (Leakage Test)
     // -------------------------------------------------------------
     console.log('\n📌 [الخطوة 4] اختبار التسريب: محاولة بيع 10 قطع من فرع 1 ورصيد الفرع صفر:');
-    
+
     // عند فحص الرصيد المتاح لكاشير فرع 1:
     const availableForPosBranch1 = await previewConsumableStockQty(db, {
       productId,
@@ -301,23 +373,27 @@ async function runSimulation() {
     // الخطوة 5: تحويل مخزني رسمي من المخزن 1 إلى فرع المعادي
     // -------------------------------------------------------------
     console.log('\n📌 [الخطوة 5] إجراء إذن تحويل مخزني: 20 قطعة من (المخزن 1) إلى (مخزون صالة فرع المعادي):');
-    
+
     await db.transaction().execute(async (trx) => {
       // 1. إنشاء مستند التحويل
-      const trDoc = await trx.insertInto('stock_transfers').values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        doc_no: `TR-001`,
-        from_location_id: warehouseIds[0],
-        to_location_id: branchStockLoc1Id,
-        from_branch_id: null,
-        to_branch_id: branch1Id,
-        status: 'received',
-        note: 'تغذية افتتاح فرع المعادي',
-        created_by: userId,
-        received_by: userId,
-        received_at: new Date(),
-      } as any).returning(['id']).executeTakeFirstOrThrow();
+      const trDoc = await trx
+        .insertInto('stock_transfers')
+        .values({
+          tenant_id: tenantId,
+          account_id: accountId,
+          doc_no: `TR-001`,
+          from_location_id: warehouseIds[0],
+          to_location_id: branchStockLoc1Id,
+          from_branch_id: null,
+          to_branch_id: branch1Id,
+          status: 'received',
+          note: 'تغذية افتتاح فرع المعادي',
+          created_by: userId,
+          received_by: userId,
+          received_at: new Date(),
+        } as any)
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
 
       // 2. تحويل رسمي عبر الليدجر
       await relocateStockBetweenLocations(trx, {
@@ -332,9 +408,26 @@ async function runSimulation() {
       });
     });
 
-    const wh1AfterTransfer = await previewConsumableStockQty(db, { productId, locationId: warehouseIds[0], tenantId, accountId });
-    const b1AfterTransfer = await previewConsumableStockQty(db, { productId, branchId: branch1Id, locationId: branchStockLoc1Id, tenantId, accountId });
-    const b2AfterTransfer = await previewConsumableStockQty(db, { productId, branchId: branch2Id, locationId: branchStockLoc2Id, tenantId, accountId });
+    const wh1AfterTransfer = await previewConsumableStockQty(db, {
+      productId,
+      locationId: warehouseIds[0],
+      tenantId,
+      accountId,
+    });
+    const b1AfterTransfer = await previewConsumableStockQty(db, {
+      productId,
+      branchId: branch1Id,
+      locationId: branchStockLoc1Id,
+      tenantId,
+      accountId,
+    });
+    const b2AfterTransfer = await previewConsumableStockQty(db, {
+      productId,
+      branchId: branch2Id,
+      locationId: branchStockLoc2Id,
+      tenantId,
+      accountId,
+    });
 
     console.log(`   📊 رصيد المخزن 1 بعد التحويل: ${wh1AfterTransfer} قطعة (100 - 20 = 80)`);
     console.log(`   📊 رصيد صالة فرع المعادي بعد الاستلام: ${b1AfterTransfer} قطعة`);
@@ -363,41 +456,63 @@ async function runSimulation() {
       });
 
       // تسجيل الفاتورة
-      const saleInsert = await trx.insertInto('sales').values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        doc_no: 'INV-MAADI-001',
-        customer_id: customerId,
-        branch_id: branch1Id,
-        location_id: branchStockLoc1Id,
-        payment_type: 'cash',
-        payment_channel: 'cash',
-        subtotal: 15 * 250,
-        total: 15 * 250,
-        paid_amount: 15 * 250,
-        tendered_amount: 15 * 250,
-        change_amount: 0,
-        status: 'posted',
-        created_by: userId,
-      } as any).returning(['id']).executeTakeFirstOrThrow();
+      const saleInsert = await trx
+        .insertInto('sales')
+        .values({
+          tenant_id: tenantId,
+          account_id: accountId,
+          doc_no: 'INV-MAADI-001',
+          customer_id: customerId,
+          branch_id: branch1Id,
+          location_id: branchStockLoc1Id,
+          payment_type: 'cash',
+          payment_channel: 'cash',
+          subtotal: 15 * 250,
+          total: 15 * 250,
+          paid_amount: 15 * 250,
+          tendered_amount: 15 * 250,
+          change_amount: 0,
+          status: 'posted',
+          created_by: userId,
+        } as any)
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
 
-      await trx.insertInto('sale_items').values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        sale_id: Number(saleInsert.id),
-        product_id: productId,
-        product_name: 'تيشيرت قطن فاخر 100%',
-        qty: 15,
-        unit_price: 250,
-        line_total: 15 * 250,
-        cost_price: 100,
-        price_type: 'retail',
-      } as any).execute();
+      await trx
+        .insertInto('sale_items')
+        .values({
+          tenant_id: tenantId,
+          account_id: accountId,
+          sale_id: Number(saleInsert.id),
+          product_id: productId,
+          product_name: 'تيشيرت قطن فاخر 100%',
+          qty: 15,
+          unit_price: 250,
+          line_total: 15 * 250,
+          cost_price: 100,
+          price_type: 'retail',
+        } as any)
+        .execute();
     });
 
-    const b1AfterSale = await previewConsumableStockQty(db, { productId, branchId: branch1Id, locationId: branchStockLoc1Id, tenantId, accountId });
-    const wh1AfterSale = await previewConsumableStockQty(db, { productId, locationId: warehouseIds[0], tenantId, accountId });
-    const globalProdAfterSale = await db.selectFrom('products').select(['stock_qty']).where('id', '=', productId).executeTakeFirstOrThrow();
+    const b1AfterSale = await previewConsumableStockQty(db, {
+      productId,
+      branchId: branch1Id,
+      locationId: branchStockLoc1Id,
+      tenantId,
+      accountId,
+    });
+    const wh1AfterSale = await previewConsumableStockQty(db, {
+      productId,
+      locationId: warehouseIds[0],
+      tenantId,
+      accountId,
+    });
+    const globalProdAfterSale = await db
+      .selectFrom('products')
+      .select(['stock_qty'])
+      .where('id', '=', productId)
+      .executeTakeFirstOrThrow();
 
     console.log(`   📊 رصيد صالة فرع المعادي بعد البيع: ${b1AfterSale} قطع (20 - 15 = 5)`);
     console.log(`   📊 رصيد المخزن 1: ${wh1AfterSale} قطعة (لم ينقص أي شيء إضافي: 80)`);
@@ -439,42 +554,70 @@ async function runSimulation() {
         allowNegative: false,
       });
 
-      const saleInsert2 = await trx.insertInto('sales').values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        doc_no: 'INV-MOHAND-001',
-        customer_id: customerId,
-        branch_id: branch2Id,
-        location_id: branchStockLoc2Id,
-        payment_type: 'cash',
-        payment_channel: 'cash',
-        subtotal: 20 * 250,
-        total: 20 * 250,
-        paid_amount: 20 * 250,
-        tendered_amount: 20 * 250,
-        change_amount: 0,
-        status: 'posted',
-        created_by: userId,
-      } as any).returning(['id']).executeTakeFirstOrThrow();
+      const saleInsert2 = await trx
+        .insertInto('sales')
+        .values({
+          tenant_id: tenantId,
+          account_id: accountId,
+          doc_no: 'INV-MOHAND-001',
+          customer_id: customerId,
+          branch_id: branch2Id,
+          location_id: branchStockLoc2Id,
+          payment_type: 'cash',
+          payment_channel: 'cash',
+          subtotal: 20 * 250,
+          total: 20 * 250,
+          paid_amount: 20 * 250,
+          tendered_amount: 20 * 250,
+          change_amount: 0,
+          status: 'posted',
+          created_by: userId,
+        } as any)
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
 
-      await trx.insertInto('sale_items').values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        sale_id: Number(saleInsert2.id),
-        product_id: productId,
-        product_name: 'تيشيرت قطن فاخر 100%',
-        qty: 20,
-        unit_price: 250,
-        line_total: 20 * 250,
-        cost_price: 100,
-        price_type: 'retail',
-      } as any).execute();
+      await trx
+        .insertInto('sale_items')
+        .values({
+          tenant_id: tenantId,
+          account_id: accountId,
+          sale_id: Number(saleInsert2.id),
+          product_id: productId,
+          product_name: 'تيشيرت قطن فاخر 100%',
+          qty: 20,
+          unit_price: 250,
+          line_total: 20 * 250,
+          cost_price: 100,
+          price_type: 'retail',
+        } as any)
+        .execute();
     });
 
-    const b1Final = await previewConsumableStockQty(db, { productId, branchId: branch1Id, locationId: branchStockLoc1Id, tenantId, accountId });
-    const b2Final = await previewConsumableStockQty(db, { productId, branchId: branch2Id, locationId: branchStockLoc2Id, tenantId, accountId });
-    const wh5Final = await previewConsumableStockQty(db, { productId, locationId: warehouseIds[4], tenantId, accountId });
-    const globalFinal = await db.selectFrom('products').select(['stock_qty']).where('id', '=', productId).executeTakeFirstOrThrow();
+    const b1Final = await previewConsumableStockQty(db, {
+      productId,
+      branchId: branch1Id,
+      locationId: branchStockLoc1Id,
+      tenantId,
+      accountId,
+    });
+    const b2Final = await previewConsumableStockQty(db, {
+      productId,
+      branchId: branch2Id,
+      locationId: branchStockLoc2Id,
+      tenantId,
+      accountId,
+    });
+    const wh5Final = await previewConsumableStockQty(db, {
+      productId,
+      locationId: warehouseIds[4],
+      tenantId,
+      accountId,
+    });
+    const globalFinal = await db
+      .selectFrom('products')
+      .select(['stock_qty'])
+      .where('id', '=', productId)
+      .executeTakeFirstOrThrow();
 
     console.log(`   📊 رصيد فرع 1 (المعادي): ${b1Final} قطع (لم يتأثر ببيع فرع المهندسين)`);
     console.log(`   📊 رصيد فرع 2 (المهندسين): ${b2Final} قطع (30 استلام - 20 بيع = 10)`);
@@ -502,24 +645,43 @@ async function runSimulation() {
         accountId,
       });
 
-      await trx.insertInto('return_documents').values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        doc_no: 'RET-MAADI-001',
-        return_type: 'sale',
-        branch_id: branch1Id,
-        location_id: branchStockLoc1Id,
-        settlement_mode: 'refund_cash',
-        refund_method: 'cash',
-        total: 2 * 250,
-        note: 'مرتجع عميل فرع المعادي',
-        created_by: userId,
-      } as any).execute();
+      await trx
+        .insertInto('return_documents')
+        .values({
+          tenant_id: tenantId,
+          account_id: accountId,
+          doc_no: 'RET-MAADI-001',
+          return_type: 'sale',
+          branch_id: branch1Id,
+          location_id: branchStockLoc1Id,
+          settlement_mode: 'refund_cash',
+          refund_method: 'cash',
+          total: 2 * 250,
+          note: 'مرتجع عميل فرع المعادي',
+          created_by: userId,
+        } as any)
+        .execute();
     });
 
-    const b1AfterReturn = await previewConsumableStockQty(db, { productId, branchId: branch1Id, locationId: branchStockLoc1Id, tenantId, accountId });
-    const b2AfterReturn = await previewConsumableStockQty(db, { productId, branchId: branch2Id, locationId: branchStockLoc2Id, tenantId, accountId });
-    const globalAfterReturn = await db.selectFrom('products').select(['stock_qty']).where('id', '=', productId).executeTakeFirstOrThrow();
+    const b1AfterReturn = await previewConsumableStockQty(db, {
+      productId,
+      branchId: branch1Id,
+      locationId: branchStockLoc1Id,
+      tenantId,
+      accountId,
+    });
+    const b2AfterReturn = await previewConsumableStockQty(db, {
+      productId,
+      branchId: branch2Id,
+      locationId: branchStockLoc2Id,
+      tenantId,
+      accountId,
+    });
+    const globalAfterReturn = await db
+      .selectFrom('products')
+      .select(['stock_qty'])
+      .where('id', '=', productId)
+      .executeTakeFirstOrThrow();
 
     console.log(`   📊 رصيد فرع المعادي بعد المرتجع: ${b1AfterReturn} قطع (5 + 2 = 7)`);
     console.log(`   📊 رصيد فرع المهندسين: ${b2AfterReturn} قطع (ثابت 10)`);
@@ -549,7 +711,7 @@ async function runSimulation() {
     console.log(`   📦 المخزن 9 (المنصورة):          50 قطعة`);
     console.log(`   📦 المخزن 10 (الإسماعيلية):      50 قطعة`);
     console.log('   -------------------------------------------------------------');
-    const totalInWarehouses = 80 + 50*8 + 20; // 500
+    const totalInWarehouses = 80 + 50 * 8 + 20; // 500
     const totalInBranches = b1AfterReturn + b2AfterReturn; // 17
     const grandCalculatedTotal = totalInWarehouses + totalInBranches; // 517
     console.log(`   ∑ إجمالي البضاعة في الـ 10 مخازن: ${totalInWarehouses} قطعة`);
@@ -559,7 +721,6 @@ async function runSimulation() {
 
     assert.equal(grandCalculatedTotal, 517, 'المطابقة الحسابية الإجمالية يجب أن تكون 517');
     console.log('\n🎉 اكتملت جميع مراحل المحاكاة بنجاح 100% بدون أي خطأ أو تسريب!');
-
   } finally {
     // تنظيف بيانات الاختبار للحفاظ على نظافة قاعدة البيانات
     console.log('\n🧹 جاري تنظيف بيانات المستأجر التجريبي...');

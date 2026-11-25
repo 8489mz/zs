@@ -84,8 +84,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const ADMIN = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -169,48 +174,147 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   for (const [id, code] of [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'], [1150, '1150'],
-    [2110, '2110'], [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
-    [5190, '5190'], [5200, '5200'], [5300, '5300'], [7100, '7100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [1150, '1150'],
+    [2110, '2110'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
+    [5190, '5190'],
+    [5200, '5200'],
+    [5300, '5300'],
+    [7100, '7100'],
   ] as Array<[number, string]>) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: code === '1150' || code === '2120' }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id,
+        tenant_id: TENANT,
+        code,
+        name_ar: code,
+        is_active: true,
+        is_tax: code === '1150' || code === '2120',
+      })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, supplier_payable_account_id: 2110, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 150,
-    wholesale_price: 150, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'عميل اختبار', phone: '010',
-    balance: 0, credit_limit: 0, is_credit_blocked: false, store_credit_balance: 0,
-    loyalty_points: 0, is_active: true,
-  }).execute();
-  await anyDb.insertInto('suppliers').values({
-    id: 1, tenant_id: TENANT, name: 'مورد اختبار', phone: '020', balance: 0, is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      supplier_payable_account_id: 2110,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 150,
+      wholesale_price: 150,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'عميل اختبار',
+      phone: '010',
+      balance: 0,
+      credit_limit: 0,
+      is_credit_blocked: false,
+      store_credit_balance: 0,
+      loyalty_points: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('suppliers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      name: 'مورد اختبار',
+      phone: '020',
+      balance: 0,
+      is_active: true,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: '2026-01-01T00:00:00.000Z',
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
+    .execute();
 }
 
 function buildSalesService(db: Kysely<Database>): SalesWriteService {
@@ -228,8 +332,16 @@ function buildSalesService(db: Kysely<Database>): SalesWriteService {
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
   return new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
 }
 
@@ -241,7 +353,13 @@ function buildReturnsService(db: Kysely<Database>): ReturnsService {
   const posting = new AccountingPostingService(foundation);
   const auditStub = { log: async () => undefined, logWithExecutor: async () => undefined };
   const idempotencyStub = { check: async () => null, commitOperation: async () => undefined };
-  return new ReturnsService(db as any, new TransactionHelper(), auditStub as any, posting as any, idempotencyStub as any);
+  return new ReturnsService(
+    db as any,
+    new TransactionHelper(),
+    auditStub as any,
+    posting as any,
+    idempotencyStub as any,
+  );
 }
 
 function buildReportsService(db: Kysely<Database>): ReportsSummaryService {
@@ -251,8 +369,11 @@ function buildReportsService(db: Kysely<Database>): ReportsSummaryService {
 function salePayload(total: number, extra: Record<string, unknown>): any {
   return {
     items: [{ productId: 101, qty: 1, price: total, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0,
-    branchId: 1, locationId: 10, source: 'dashboard',
+    discount: 0,
+    taxRate: 0,
+    branchId: 1,
+    locationId: 10,
+    source: 'dashboard',
     ...extra,
   };
 }
@@ -260,14 +381,26 @@ function salePayload(total: number, extra: Record<string, unknown>): any {
 async function createSaleId(service: SalesWriteService, payload: any): Promise<number> {
   const created: any = await service.createSale(payload, ADMIN);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
-type LedgerRow = { amount: number; balance_after: number; entry_type: string; reference_type: string; reference_id: number };
+type LedgerRow = {
+  amount: number;
+  balance_after: number;
+  entry_type: string;
+  reference_type: string;
+  reference_id: number;
+};
 
 async function customerLedgerRows(db: Kysely<Database>, customerId: number): Promise<LedgerRow[]> {
-  const rows = await sql<LedgerRow>`SELECT amount, balance_after, entry_type, reference_type, reference_id FROM customer_ledger WHERE customer_id = ${customerId} AND tenant_id = ${TENANT} ORDER BY id ASC`.execute(db);
+  const rows =
+    await sql<LedgerRow>`SELECT amount, balance_after, entry_type, reference_type, reference_id FROM customer_ledger WHERE customer_id = ${customerId} AND tenant_id = ${TENANT} ORDER BY id ASC`.execute(
+      db,
+    );
   return rows.rows.map((row) => ({
     amount: Number(row.amount),
     balance_after: Number(row.balance_after),
@@ -293,38 +426,82 @@ async function main(): Promise<void> {
       const returns = buildReturnsService(db);
       const reports = buildReportsService(db);
 
-      const saleId = await createSaleId(sales, salePayload(150, {
-        customerId: 1, paymentType: 'cash', paymentChannel: 'card',
-        payments: [{ paymentChannel: 'card', amount: 150 }],
-        tenderedAmount: 0,
-      }));
+      const saleId = await createSaleId(
+        sales,
+        salePayload(150, {
+          customerId: 1,
+          paymentType: 'cash',
+          paymentChannel: 'card',
+          payments: [{ paymentChannel: 'card', amount: 150 }],
+          tenderedAmount: 0,
+        }),
+      );
       assert.deepEqual(await customerLedgerRows(db, 1), [
         { amount: 150, balance_after: 150, entry_type: 'sale_paid', reference_type: 'sale', reference_id: saleId },
-        { amount: -150, balance_after: 0, entry_type: 'customer_payment', reference_type: 'sale', reference_id: saleId },
+        {
+          amount: -150,
+          balance_after: 0,
+          entry_type: 'customer_payment',
+          reference_type: 'sale',
+          reference_id: saleId,
+        },
       ]);
       assert.equal(await customerBalance(db, 1), 0);
 
       const itemRow = await sql<{ id: number }>`SELECT id FROM sale_items WHERE sale_id = ${saleId}`.execute(db);
-      const result = await returns.createReturn({
-        type: 'sale', invoiceId: saleId, note: 'customer changed mind',
-        items: [{ productId: 101, productName: 'Widget 101', qty: 1, saleItemId: Number(itemRow.rows[0].id) }],
-        settlementMode: 'refund', refundMethod: 'card',
-      } as never, ADMIN) as unknown as { ok: boolean; id: number };
+      const result = (await returns.createReturn(
+        {
+          type: 'sale',
+          invoiceId: saleId,
+          note: 'customer changed mind',
+          items: [{ productId: 101, productName: 'Widget 101', qty: 1, saleItemId: Number(itemRow.rows[0].id) }],
+          settlementMode: 'refund',
+          refundMethod: 'card',
+        } as never,
+        ADMIN,
+      )) as unknown as { ok: boolean; id: number };
       assert.equal(result.ok, true);
       assert.deepEqual(await customerLedgerRows(db, 1), [
         { amount: 150, balance_after: 150, entry_type: 'sale_paid', reference_type: 'sale', reference_id: saleId },
-        { amount: -150, balance_after: 0, entry_type: 'customer_payment', reference_type: 'sale', reference_id: saleId },
-        { amount: -150, balance_after: -150, entry_type: 'sale_return', reference_type: 'return_document', reference_id: Number(result.id) },
-        { amount: 150, balance_after: 0, entry_type: 'sale_return_refund', reference_type: 'return_document', reference_id: Number(result.id) },
+        {
+          amount: -150,
+          balance_after: 0,
+          entry_type: 'customer_payment',
+          reference_type: 'sale',
+          reference_id: saleId,
+        },
+        {
+          amount: -150,
+          balance_after: -150,
+          entry_type: 'sale_return',
+          reference_type: 'return_document',
+          reference_id: Number(result.id),
+        },
+        {
+          amount: 150,
+          balance_after: 0,
+          entry_type: 'sale_return_refund',
+          reference_type: 'return_document',
+          reference_id: Number(result.id),
+        },
       ]);
       assert.equal(await customerBalance(db, 1), 0);
 
       const statement: any = await reports.customerLedger(1, {} as never, ADMIN);
       const entries = statement.entries as any[];
       assert.equal(entries.length, 4, 'the statement shows the paid invoice and its return');
-      assert.deepEqual(entries.map((entry) => entry.amount), [150, -150, -150, 150]);
-      assert.deepEqual(entries.map((entry) => entry.balanceAfter), [150, 0, -150, 0]);
-      assert.deepEqual(entries.map((entry) => entry.type), ['sale_paid', 'customer_payment', 'sale_return', 'sale_return_refund']);
+      assert.deepEqual(
+        entries.map((entry) => entry.amount),
+        [150, -150, -150, 150],
+      );
+      assert.deepEqual(
+        entries.map((entry) => entry.balanceAfter),
+        [150, 0, -150, 0],
+      );
+      assert.deepEqual(
+        entries.map((entry) => entry.type),
+        ['sale_paid', 'customer_payment', 'sale_return', 'sale_return_refund'],
+      );
       assert.equal((statement.summary as any).totalEntries, 4);
       assert.equal(Number((statement.summary as any).closingBalance), 0);
     } finally {
@@ -339,11 +516,16 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const sales = buildSalesService(db);
-      const saleId = await createSaleId(sales, salePayload(150, {
-        customerId: 1, paymentType: 'credit', paymentChannel: 'card',
-        payments: [],
-        tenderedAmount: 0,
-      }));
+      const saleId = await createSaleId(
+        sales,
+        salePayload(150, {
+          customerId: 1,
+          paymentType: 'credit',
+          paymentChannel: 'card',
+          payments: [],
+          tenderedAmount: 0,
+        }),
+      );
       assert.deepEqual(await customerLedgerRows(db, 1), [
         { amount: 150, balance_after: 150, entry_type: 'sale_credit', reference_type: 'sale', reference_id: saleId },
       ]);
@@ -361,11 +543,16 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 1);
       const sales = buildSalesService(db);
-      const saleId = await createSaleId(sales, salePayload(150, {
-        customerId: 1, paymentType: 'cash', paymentChannel: 'cash',
-        payments: [{ paymentChannel: 'cash', amount: 50 }],
-        tenderedAmount: 50,
-      }));
+      const saleId = await createSaleId(
+        sales,
+        salePayload(150, {
+          customerId: 1,
+          paymentType: 'cash',
+          paymentChannel: 'cash',
+          payments: [{ paymentChannel: 'cash', amount: 50 }],
+          tenderedAmount: 50,
+        }),
+      );
       assert.deepEqual(await customerLedgerRows(db, 1), [
         { amount: 100, balance_after: 100, entry_type: 'sale_credit', reference_type: 'sale', reference_id: saleId },
       ]);
@@ -388,18 +575,40 @@ async function main(): Promise<void> {
       const anyDb = db as any;
       // Rows exactly as purchases-write posts them: a credit purchase
       // writes +total 'purchase_credit'; a payment writes -amount.
-      await anyDb.insertInto('supplier_ledger').values({
-        tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 1,
-        entry_type: 'purchase_credit', amount: 1000, balance_after: 1000,
-        note: 'فاتورة شراء PUR-1', reference_type: 'purchase', reference_id: 1,
-        branch_id: 1, location_id: 10, created_by: 1,
-      }).execute();
-      await anyDb.insertInto('supplier_ledger').values({
-        tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 1,
-        entry_type: 'supplier_payment', amount: -400, balance_after: 600,
-        note: 'دفع إلى مورد اختبار', reference_type: 'supplier_payment', reference_id: 1,
-        branch_id: 1, location_id: 10, created_by: 1,
-      }).execute();
+      await anyDb
+        .insertInto('supplier_ledger')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          supplier_id: 1,
+          entry_type: 'purchase_credit',
+          amount: 1000,
+          balance_after: 1000,
+          note: 'فاتورة شراء PUR-1',
+          reference_type: 'purchase',
+          reference_id: 1,
+          branch_id: 1,
+          location_id: 10,
+          created_by: 1,
+        })
+        .execute();
+      await anyDb
+        .insertInto('supplier_ledger')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          supplier_id: 1,
+          entry_type: 'supplier_payment',
+          amount: -400,
+          balance_after: 600,
+          note: 'دفع إلى مورد اختبار',
+          reference_type: 'supplier_payment',
+          reference_id: 1,
+          branch_id: 1,
+          location_id: 10,
+          created_by: 1,
+        })
+        .execute();
       await anyDb.updateTable('suppliers').set({ balance: 600 }).where('id', '=', 1).execute();
 
       const statement: any = await reports.supplierLedger(1, {} as never, ADMIN);
@@ -430,32 +639,63 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       const reports = buildReportsService(db);
       const anyDb = db as any;
-      await anyDb.insertInto('supplier_ledger').values([
-        {
-          tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 1,
-          entry_type: 'opening_balance', amount: -1000, balance_after: -1000,
-          note: 'رصيد افتتاحي', reference_type: 'supplier', reference_id: 1,
-          branch_id: 1, location_id: 10, created_by: 1,
-          created_at: new Date('2026-08-01T10:00:00.000Z'),
-        },
-        {
-          tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 1,
-          entry_type: 'purchase_credit', amount: 2500, balance_after: 1500,
-          note: 'فاتورة شراء قديمة', reference_type: 'purchase', reference_id: 2,
-          branch_id: 1, location_id: 10, created_by: 1,
-          created_at: new Date('2026-09-05T10:00:00.000Z'),
-        },
-        {
-          tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 1,
-          entry_type: 'supplier_payment', amount: -500, balance_after: 1000,
-          note: 'دفعة تسوية', reference_type: 'supplier_payment', reference_id: 3,
-          branch_id: 1, location_id: 10, created_by: 1,
-          created_at: new Date(),
-        },
-      ]).execute();
+      await anyDb
+        .insertInto('supplier_ledger')
+        .values([
+          {
+            tenant_id: TENANT,
+            account_id: ACCOUNT,
+            supplier_id: 1,
+            entry_type: 'opening_balance',
+            amount: -1000,
+            balance_after: -1000,
+            note: 'رصيد افتتاحي',
+            reference_type: 'supplier',
+            reference_id: 1,
+            branch_id: 1,
+            location_id: 10,
+            created_by: 1,
+            created_at: new Date('2026-08-01T10:00:00.000Z'),
+          },
+          {
+            tenant_id: TENANT,
+            account_id: ACCOUNT,
+            supplier_id: 1,
+            entry_type: 'purchase_credit',
+            amount: 2500,
+            balance_after: 1500,
+            note: 'فاتورة شراء قديمة',
+            reference_type: 'purchase',
+            reference_id: 2,
+            branch_id: 1,
+            location_id: 10,
+            created_by: 1,
+            created_at: new Date('2026-09-05T10:00:00.000Z'),
+          },
+          {
+            tenant_id: TENANT,
+            account_id: ACCOUNT,
+            supplier_id: 1,
+            entry_type: 'supplier_payment',
+            amount: -500,
+            balance_after: 1000,
+            note: 'دفعة تسوية',
+            reference_type: 'supplier_payment',
+            reference_id: 3,
+            branch_id: 1,
+            location_id: 10,
+            created_by: 1,
+            created_at: new Date(),
+          },
+        ])
+        .execute();
       await anyDb.updateTable('suppliers').set({ balance: 1000 }).where('id', '=', 1).execute();
 
-      const fullStatement: any = await reports.supplierLedger(1, { from: '2000-01-01T00:00:00.000Z', pageSize: 200 } as never, ADMIN);
+      const fullStatement: any = await reports.supplierLedger(
+        1,
+        { from: '2000-01-01T00:00:00.000Z', pageSize: 200 } as never,
+        ADMIN,
+      );
       assert.equal((fullStatement.entries as any[]).length, 3);
       assert.equal((fullStatement.summary as any).openingBalance, 0);
       assert.equal((fullStatement.summary as any).totalCredits, 2500);

@@ -58,7 +58,10 @@ const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permis
 
 const PRODUCT_COUNT = 2000;
 
-interface LoggedQuery { sql: string; ms: number }
+interface LoggedQuery {
+  sql: string;
+  ms: number;
+}
 
 async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<Database>; queries: LoggedQuery[] }> {
   const pg = new PGlite();
@@ -88,16 +91,21 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seed(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('stock_locations' as never).values([
-    { id: 1, tenant_id: 't1', account_id: 'a1', name: 'Main', is_active: true },
-    { id: 2, tenant_id: 't1', account_id: 'a1', name: 'Branch', is_active: true },
-  ] as never).execute();
-  await db.insertInto('product_categories' as never).values([
-    { id: 1, tenant_id: 't1', account_id: 'a1', name: 'General', is_active: true },
-  ] as never).execute();
-  await db.insertInto('suppliers' as never).values([
-    { id: 1, tenant_id: 't1', account_id: 'a1', name: 'Supplier One', is_active: true },
-  ] as never).execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values([
+      { id: 1, tenant_id: 't1', account_id: 'a1', name: 'Main', is_active: true },
+      { id: 2, tenant_id: 't1', account_id: 'a1', name: 'Branch', is_active: true },
+    ] as never)
+    .execute();
+  await db
+    .insertInto('product_categories' as never)
+    .values([{ id: 1, tenant_id: 't1', account_id: 'a1', name: 'General', is_active: true }] as never)
+    .execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values([{ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Supplier One', is_active: true }] as never)
+    .execute();
 
   // Deterministic integer pattern so the expected summary is exact:
   // cost = (i % 7) + 1, retail = cost + 2, stock = i % 5, min = 3.
@@ -108,40 +116,106 @@ async function seed(db: Kysely<Database>): Promise<void> {
   for (let i = 1; i <= PRODUCT_COUNT; i++) {
     const cost = (i % 7) + 1;
     rows.push({
-      id: i, tenant_id: 't1', account_id: 'a1',
-      name: `Product ${i}`, name_en: `Product ${i}`, barcode: `BC${i}`, sku: `SKU${i}`,
+      id: i,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: `Product ${i}`,
+      name_en: `Product ${i}`,
+      barcode: `BC${i}`,
+      sku: `SKU${i}`,
       catalog_updated_at: new Date('2026-11-01T00:00:00.000Z'),
-      item_type: 'product', item_kind: 'standard', style_code: null, color: null, size: null,
-      bin_location: null, track_serials: false, category_id: 1, supplier_id: 1,
-      cost_price: cost, retail_price: cost + 2, wholesale_price: cost + 1,
-      credit_price: cost + 2, consumer_price: cost + 2, min_selling_price: cost,
-      stock_qty: i % 5, min_stock_qty: 3,
-      default_location_id: 1, notes: '', metadata: { icon: 'box' },
-      is_active: i <= 1998, calories: null, allergens: null,
-      is_spicy: false, is_vegetarian: false, is_gluten_free: false,
+      item_type: 'product',
+      item_kind: 'standard',
+      style_code: null,
+      color: null,
+      size: null,
+      bin_location: null,
+      track_serials: false,
+      category_id: 1,
+      supplier_id: 1,
+      cost_price: cost,
+      retail_price: cost + 2,
+      wholesale_price: cost + 1,
+      credit_price: cost + 2,
+      consumer_price: cost + 2,
+      min_selling_price: cost,
+      stock_qty: i % 5,
+      min_stock_qty: 3,
+      default_location_id: 1,
+      notes: '',
+      metadata: { icon: 'box' },
+      is_active: i <= 1998,
+      calories: null,
+      allergens: null,
+      is_spicy: false,
+      is_vegetarian: false,
+      is_gluten_free: false,
     });
   }
   for (let s = 0; s < rows.length; s += 400) {
-    await db.insertInto('products' as never).values(rows.slice(s, s + 400) as never).execute();
+    await db
+      .insertInto('products' as never)
+      .values(rows.slice(s, s + 400) as never)
+      .execute();
   }
   const stockRows: Record<string, unknown>[] = [];
   for (let i = 1; i <= PRODUCT_COUNT; i++) {
-    stockRows.push({ id: i, tenant_id: 't1', account_id: 'a1', product_id: i, location_id: 1, branch_id: null, qty: i % 5, reserved_qty: 0 });
+    stockRows.push({
+      id: i,
+      tenant_id: 't1',
+      account_id: 'a1',
+      product_id: i,
+      location_id: 1,
+      branch_id: null,
+      qty: i % 5,
+      reserved_qty: 0,
+    });
   }
   for (let s = 0; s < stockRows.length; s += 400) {
-    await db.insertInto('product_location_stock' as never).values(stockRows.slice(s, s + 400) as never).execute();
+    await db
+      .insertInto('product_location_stock' as never)
+      .values(stockRows.slice(s, s + 400) as never)
+      .execute();
   }
   const offers: Record<string, unknown>[] = [];
   for (let i = 1; i <= 5; i++) {
-    offers.push({ id: i, tenant_id: 't1', account_id: 'a1', product_id: i, offer_type: 'discount', value: 5, start_date: '2026-01-01', end_date: '2027-01-01', min_qty: 1, is_active: true });
+    offers.push({
+      id: i,
+      tenant_id: 't1',
+      account_id: 'a1',
+      product_id: i,
+      offer_type: 'discount',
+      value: 5,
+      start_date: '2026-01-01',
+      end_date: '2027-01-01',
+      min_qty: 1,
+      is_active: true,
+    });
   }
-  offers.push({ id: 6, tenant_id: 't1', account_id: 'a1', product_id: 6, offer_type: 'discount', value: 5, start_date: '2026-01-01', end_date: '2027-01-01', min_qty: 1, is_active: false });
-  await db.insertInto('product_offers' as never).values(offers as never).execute();
+  offers.push({
+    id: 6,
+    tenant_id: 't1',
+    account_id: 'a1',
+    product_id: 6,
+    offer_type: 'discount',
+    value: 5,
+    start_date: '2026-01-01',
+    end_date: '2027-01-01',
+    min_qty: 1,
+    is_active: false,
+  });
+  await db
+    .insertInto('product_offers' as never)
+    .values(offers as never)
+    .execute();
   const prices: Record<string, unknown>[] = [];
   for (let i = 1; i <= 5; i++) {
     prices.push({ id: i, tenant_id: 't1', account_id: 'a1', product_id: i, customer_id: 1, price: 10 + i });
   }
-  await db.insertInto('product_customer_prices' as never).values(prices as never).execute();
+  await db
+    .insertInto('product_customer_prices' as never)
+    .values(prices as never)
+    .execute();
 }
 
 function expectedSummary(): Record<string, number> {
@@ -157,34 +231,48 @@ function expectedSummary(): Record<string, number> {
     cost += stock * c;
     sale += stock * (c + 2);
   }
-  return { totalProducts: 1998, lowStockCount: low, outOfStockCount: out, inventoryCost: cost, inventorySaleValue: sale, activeOffersCount: 5, customerPriceCount: 5 };
+  return {
+    totalProducts: 1998,
+    lowStockCount: low,
+    outOfStockCount: out,
+    inventoryCost: cost,
+    inventorySaleValue: sale,
+    activeOffersCount: 5,
+    customerPriceCount: 5,
+  };
 }
 
 async function main(): Promise<void> {
   const { pg, db, queries } = await makeDb();
   try {
     await seed(db);
-    const service = new CatalogProductService(
-      db,
-      {} as never,
-      { assertLocationScope: async () => null } as never,
-    );
+    const service = new CatalogProductService(db, {} as never, { assertLocationScope: async () => null } as never);
 
     // MEASUREMENT (logged, not asserted): the listAll-style loop the
     // frontend runs on every catalog-needing page — sequential page
     // requests of 1000 rows over the seeded catalog.
     const t0 = Date.now();
-    const first = await service.listProducts({ page: 1, pageSize: 1000 }, auth) as { products: unknown[]; pagination: { totalPages: number } };
-    const second = await service.listProducts({ page: 2, pageSize: 1000 }, auth) as { products: unknown[]; pagination: { totalPages: number } };
+    const first = (await service.listProducts({ page: 1, pageSize: 1000 }, auth)) as {
+      products: unknown[];
+      pagination: { totalPages: number };
+    };
+    const second = (await service.listProducts({ page: 2, pageSize: 1000 }, auth)) as {
+      products: unknown[];
+      pagination: { totalPages: number };
+    };
     const loopMs = Date.now() - t0;
     const productSelects = queries.filter((q) => /from\s+"products"/i.test(q.sql));
-    console.log(`[measure] listAll-style loop: 2 sequential page requests took ${loopMs}ms; products-table SELECTs in the loop: ${productSelects.length}; products SELECT SQL has LIMIT: ${productSelects.some((q) => /limit\s+\$\d+/i.test(q.sql))}`);
-    console.log(`[measure] page 1 rows: ${(first.products as unknown[]).length}, page 2 rows: ${(second.products as unknown[]).length}, totalPages: ${first.pagination.totalPages}`);
+    console.log(
+      `[measure] listAll-style loop: 2 sequential page requests took ${loopMs}ms; products-table SELECTs in the loop: ${productSelects.length}; products SELECT SQL has LIMIT: ${productSelects.some((q) => /limit\s+\$\d+/i.test(q.sql))}`,
+    );
+    console.log(
+      `[measure] page 1 rows: ${(first.products as unknown[]).length}, page 2 rows: ${(second.products as unknown[]).length}, totalPages: ${first.pagination.totalPages}`,
+    );
     queries.length = 0;
 
     // PIN 1 — one page request reads one page, not the catalog: the
     // products SELECT carries a LIMIT. (Fails at base.)
-    const page = await service.listProducts({ page: 1, pageSize: 20 }, auth) as {
+    const page = (await service.listProducts({ page: 1, pageSize: 20 }, auth)) as {
       products: Array<Record<string, unknown>>;
       pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
       summary: Record<string, number | null>;
@@ -212,22 +300,32 @@ async function main(): Promise<void> {
     assert.equal(page.summary.outOfStockCount, expected.outOfStockCount, 'summary.outOfStockCount');
     assert.equal(Number(page.summary.inventoryCost), expected.inventoryCost, 'summary.inventoryCost');
     assert.equal(Number(page.summary.inventorySaleValue), expected.inventorySaleValue, 'summary.inventorySaleValue');
-    assert.equal(page.summary.activeOffersCount, expected.activeOffersCount, 'summary.activeOffersCount (inactive offer must not count)');
+    assert.equal(
+      page.summary.activeOffersCount,
+      expected.activeOffersCount,
+      'summary.activeOffersCount (inactive offer must not count)',
+    );
     assert.equal(page.summary.customerPriceCount, expected.customerPriceCount, 'summary.customerPriceCount');
 
     // PIN 2 — walking all pages returns the whole catalog exactly once.
     const seen: number[] = [];
     const totalPages = page.pagination.totalPages;
     for (let p = 1; p <= totalPages; p++) {
-      const res = await service.listProducts({ page: p, pageSize: 20 }, auth) as { products: Array<Record<string, unknown>> };
+      const res = (await service.listProducts({ page: p, pageSize: 20 }, auth)) as {
+        products: Array<Record<string, unknown>>;
+      };
       for (const row of res.products) seen.push(Number(row.id));
     }
     assert.equal(seen.length, 1998, 'all pages together must return 1998 rows');
     assert.equal(new Set(seen).size, 1998, 'no duplicated product across pages');
-    assert.deepEqual(seen, Array.from({ length: 1998 }, (_, k) => 1998 - k), 'pages walk the catalog in id-desc order with no gaps');
+    assert.deepEqual(
+      seen,
+      Array.from({ length: 1998 }, (_, k) => 1998 - k),
+      'pages walk the catalog in id-desc order with no gaps',
+    );
 
     // PIN 3 — the slow path is preserved for filtered requests.
-    const searched = await service.listProducts({ page: 1, pageSize: 20, q: 'Product 42' }, auth) as {
+    const searched = (await service.listProducts({ page: 1, pageSize: 20, q: 'Product 42' }, auth)) as {
       products: Array<Record<string, unknown>>;
       pagination: { totalItems: number };
     };
@@ -236,7 +334,7 @@ async function main(): Promise<void> {
       searched.products.every((p) => String(p.name).includes('42')),
       'every searched row must match the query',
     );
-    const low = await service.listProducts({ page: 1, pageSize: 20, view: 'low' }, auth) as {
+    const low = (await service.listProducts({ page: 1, pageSize: 20, view: 'low' }, auth)) as {
       products: Array<Record<string, unknown>>;
       pagination: { totalItems: number };
     };
@@ -245,7 +343,7 @@ async function main(): Promise<void> {
       low.products.every((p) => Number(p.stock) <= Number(p.minStock)),
       'every low-view row must be at or below its minimum stock',
     );
-    const archived = await service.listProducts({ page: 1, pageSize: 20, view: 'archived' }, auth) as {
+    const archived = (await service.listProducts({ page: 1, pageSize: 20, view: 'archived' }, auth)) as {
       products: Array<Record<string, unknown>>;
       pagination: { totalItems: number };
     };

@@ -1,8 +1,5 @@
 import { strict as assert } from 'node:assert';
-import {
-  escapeHtml,
-  sanitizeRedirectPath,
-} from '../../src/modules/tenant-subscription/sandbox-checkout-render.util';
+import { escapeHtml, sanitizeRedirectPath } from '../../src/modules/tenant-subscription/sandbox-checkout-render.util';
 
 // Regression coverage for invariant SBX-1 (ARCHITECTURE_INVARIANTS.md section 4).
 //

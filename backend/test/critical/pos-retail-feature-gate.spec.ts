@@ -107,7 +107,9 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 const loadFrontendModule = new Function('specifier', 'return import(specifier)') as (s: string) => Promise<any>;
 async function loadPosAvailability(): Promise<any> {
-  return loadFrontendModule(pathToFileURL(resolve(__dirname, '../../../frontend/src/features/pos/lib/pos-availability.ts')).href);
+  return loadFrontendModule(
+    pathToFileURL(resolve(__dirname, '../../../frontend/src/features/pos/lib/pos-availability.ts')).href,
+  );
 }
 async function loadVerticalScope(): Promise<any> {
   // The barrel (vertical-scope.ts) re-exports from extensionless relative
@@ -115,8 +117,16 @@ async function loadVerticalScope(): Promise<any> {
   // load the two slices the spec needs directly by their explicit .ts URLs.
   // Each slice is runtime dependency-free (its only import is `import type`,
   // erased by Node's type stripping), so the dynamic import keeps working.
-  const f1 = await loadFrontendModule(pathToFileURL(resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope/resolve-current-vertical.ts')).href);
-  const f2 = await loadFrontendModule(pathToFileURL(resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope/is-route-allowed-in-vertical.ts')).href);
+  const f1 = await loadFrontendModule(
+    pathToFileURL(
+      resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope/resolve-current-vertical.ts'),
+    ).href,
+  );
+  const f2 = await loadFrontendModule(
+    pathToFileURL(
+      resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope/is-route-allowed-in-vertical.ts'),
+    ).href,
+  );
   return { ...f1, ...f2 };
 }
 
@@ -131,24 +141,49 @@ const configStub = { get: () => undefined } as never;
  * 0035 (after 0030/0034 merged): plan_ultimate 21 rows, no 'pos';
  * 0035 plan_basic 4 rows; 0149 tier_band1_L2 level-2 OPERATIONS rows. */
 const PLAN_ULTIMATE_FEATURES = [
-  'catalog', 'sales', 'sessions', 'cashDrawer', 'purchases', 'inventory',
-  'reports', 'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing',
-  'restaurant', 'accounting', 'fixed_assets', 'installments',
-  'taxIntegration', 'vat_declaration', 'manufacturing', 'import', 'pharmacy',
+  'catalog',
+  'sales',
+  'sessions',
+  'cashDrawer',
+  'purchases',
+  'inventory',
+  'reports',
+  'hr',
+  'deliveryReps',
+  'loyalty',
+  'maintenance',
+  'clothing',
+  'restaurant',
+  'accounting',
+  'fixed_assets',
+  'installments',
+  'taxIntegration',
+  'vat_declaration',
+  'manufacturing',
+  'import',
+  'pharmacy',
 ];
 const PLAN_BASIC_FEATURES = ['catalog', 'sales', 'sessions', 'cashDrawer'];
-const TIER_BAND1_L2_FEATURES = [
-  'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments',
-];
+const TIER_BAND1_L2_FEATURES = ['purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments'];
 
 const superAdminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec-root', username: 'root', role: 'super_admin',
-  permissions: [], tenantId: 'zs', accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec-root',
+  username: 'root',
+  role: 'super_admin',
+  permissions: [],
+  tenantId: 'zs',
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const tenantAdminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec-admin', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice', 'canManageSettings'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec-admin',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice', 'canManageSettings'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -226,46 +261,167 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   return { pg, db };
 }
 
-async function seedFoundation(db: Kysely<Database>, activity: string, planId: string, planFeatures: string[], seedMarker = true): Promise<void> {
+async function seedFoundation(
+  db: Kysely<Database>,
+  activity: string,
+  planId: string,
+  planFeatures: string[],
+  seedMarker = true,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('tenants').values({
-    id: TENANT, slug: 'spec-tenant', business_name: 'Spec Tenant', status: 'active',
-    activity_type: activity, plan_id: planId, extra_features: '[]',
-  }).execute();
-  await anyDb.insertInto('tenant_subscriptions').values({
-    tenant_id: TENANT, plan_id: 1, status: 'active', ends_at: '2099-01-01T00:00:00.000Z',
-  }).execute();
+  await anyDb
+    .insertInto('tenants')
+    .values({
+      id: TENANT,
+      slug: 'spec-tenant',
+      business_name: 'Spec Tenant',
+      status: 'active',
+      activity_type: activity,
+      plan_id: planId,
+      extra_features: '[]',
+    })
+    .execute();
+  await anyDb
+    .insertInto('tenant_subscriptions')
+    .values({
+      tenant_id: TENANT,
+      plan_id: 1,
+      status: 'active',
+      ends_at: '2099-01-01T00:00:00.000Z',
+    })
+    .execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, username: 'admin', display_name: 'Admin', role: 'admin', permissions_json: '["sales","canEditPrice","canManageSettings"]', password_hash: '', password_salt: '', must_change_password: false, is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, username: 'cashier', display_name: 'Cashier', role: 'cashier', permissions_json: '["sales","cashDrawer"]', password_hash: '', password_salt: '', must_change_password: false, is_active: true }).execute();
-  await anyDb.insertInto('sessions').values({ id: 'sess-admin', user_id: 1, tenant_id: TENANT, account_id: ACCOUNT, expires_at: '2099-01-01T00:00:00.000Z' }).execute();
-  await anyDb.insertInto('sessions').values({ id: 'sess-cashier', user_id: 2, tenant_id: TENANT, account_id: ACCOUNT, expires_at: '2099-01-01T00:00:00.000Z' }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      username: 'admin',
+      display_name: 'Admin',
+      role: 'admin',
+      permissions_json: '["sales","canEditPrice","canManageSettings"]',
+      password_hash: '',
+      password_salt: '',
+      must_change_password: false,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      username: 'cashier',
+      display_name: 'Cashier',
+      role: 'cashier',
+      permissions_json: '["sales","cashDrawer"]',
+      password_hash: '',
+      password_salt: '',
+      must_change_password: false,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('sessions')
+    .values({
+      id: 'sess-admin',
+      user_id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      expires_at: '2099-01-01T00:00:00.000Z',
+    })
+    .execute();
+  await anyDb
+    .insertInto('sessions')
+    .values({
+      id: 'sess-cashier',
+      user_id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      expires_at: '2099-01-01T00:00:00.000Z',
+    })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
   // The seeded plan rows, exactly as the migrations seed them, plus the
   // marker that proves the PlanFeatureService cache (not the fallback)
   // drives the decision. tier_band1_L1 seeds ZERO rows by design
@@ -277,11 +433,22 @@ async function seedFoundation(db: Kysely<Database>, activity: string, planId: st
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
 interface Services {
@@ -308,13 +475,30 @@ function buildServices(db: Kysely<Database>): Services {
   const planFeatures = new PlanFeatureService(db);
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const session = new SessionService(db, configStub, audit, authCache);
   const settings = new SettingsService(db, audit, authCache);
   const provisioning = new TrialTenantProvisioningService(db);
-  const saasAdmin = new SaasAdminService(db, audit, provisioning, configStub, session, {} as never, settings, authCache);
+  const saasAdmin = new SaasAdminService(
+    db,
+    audit,
+    provisioning,
+    configStub,
+    session,
+    {} as never,
+    settings,
+    authCache,
+  );
   return { sales, planFeatures, session, settings, saasAdmin };
 }
 
@@ -331,9 +515,15 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<void
 function posPayload(): any {
   return {
     items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
-    branchId: 1, locationId: 10, source: 'pos',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: 100 }],
+    tenderedAmount: 100,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
   };
 }
 
@@ -358,7 +548,12 @@ interface Agreement {
  * real frontend resolveCurrentVertical on that tenant + settings. */
 async function readAgreement(db: Kysely<Database>, svc: Services, auth: AuthContext): Promise<Agreement> {
   const backendAllowed = svc.planFeatures.hasFeature(
-    auth.planId, auth.extraFeatures, 'pos', auth.pillar, auth.activityType, auth.featureOverrides,
+    auth.planId,
+    auth.extraFeatures,
+    'pos',
+    auth.pillar,
+    auth.activityType,
+    auth.featureOverrides,
   );
   const settings: any = await svc.settings.getSettings(tenantAdminAuth);
   const { getPosAvailability } = await loadPosAvailability();
@@ -389,7 +584,14 @@ async function freshCase(
     if (seedMarker) {
       const probeAuth = await resolveAdminAuth(svc);
       assert.equal(
-        svc.planFeatures.hasFeature(probeAuth.planId, probeAuth.extraFeatures, MARKER, probeAuth.pillar, probeAuth.activityType, probeAuth.featureOverrides),
+        svc.planFeatures.hasFeature(
+          probeAuth.planId,
+          probeAuth.extraFeatures,
+          MARKER,
+          probeAuth.pillar,
+          probeAuth.activityType,
+          probeAuth.featureOverrides,
+        ),
         true,
         `plan_features cache must be loaded from seeded rows for ${activity}/${planId}`,
       );
@@ -412,7 +614,11 @@ async function assertAgreement(
   assert.equal(agreement.backendAllowed, expectedAvailable, `${label}: backend gate must be ${expectedAvailable}`);
   assert.equal(agreement.frontendAvailable, expectedAvailable, `${label}: page decision must be ${expectedAvailable}`);
   assert.equal(agreement.frontendAvailable, agreement.backendAllowed, `${label}: page and backend must agree`);
-  assert.equal(agreement.featuresIncludePos, expectedAvailable, `${label}: tenant.features must ${expectedAvailable ? 'include' : 'exclude'} 'pos'`);
+  assert.equal(
+    agreement.featuresIncludePos,
+    expectedAvailable,
+    `${label}: tenant.features must ${expectedAvailable ? 'include' : 'exclude'} 'pos'`,
+  );
   assert.equal(agreement.vertical, expectedVertical, `${label}: sidebar vertical must be ${expectedVertical}`);
 }
 
@@ -420,38 +626,193 @@ async function assertAgreement(
  * wholesale_van / warehousing / services (subVertical early-return),
  * import_export + manufacturing (settings + sidebar force POS off),
  * contracting / maritime_freight (pillar rules). */
-const MATRIX: Array<{ activity: string; planId: string; features: string[]; expected: boolean; vertical: string; seedMarker?: boolean }> = [
-  { activity: 'clothing', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'retail_general' },
-  { activity: 'retail_general', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'retail_general' },
-  { activity: 'pharmacy', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'pharmacy' },
-  { activity: 'restaurant', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'restaurant' },
-  { activity: 'supermarket', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'retail_general' },
-  { activity: 'spices', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'retail_general' },
-  { activity: 'perfumes', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'retail_general' },
-  { activity: 'auto_parts', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'retail_general' },
-  { activity: 'appliances_installments', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'retail_general' },
-  { activity: 'maintenance', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'maintenance' },
-  { activity: 'ecommerce', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: true, vertical: 'retail_general' },
-  { activity: 'clothing', planId: 'plan_basic', features: PLAN_BASIC_FEATURES, expected: true, vertical: 'retail_general' },
-  { activity: 'clothing', planId: 'tier_band1_L2', features: TIER_BAND1_L2_FEATURES, expected: true, vertical: 'retail_general' },
-  { activity: 'clothing', planId: 'tier_band1_L1', features: [], expected: true, vertical: 'retail_general', seedMarker: false },
-  { activity: 'retail_general', planId: 'tier_band1_L1', features: [], expected: true, vertical: 'retail_general', seedMarker: false },
-  { activity: 'wholesale_van', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: false, vertical: 'wholesale_van' },
-  { activity: 'warehousing', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: false, vertical: 'warehousing' },
-  { activity: 'services', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: false, vertical: 'services' },
-  { activity: 'import_export', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: false, vertical: 'import_export' },
-  { activity: 'contracting', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: false, vertical: 'contracting' },
-  { activity: 'maritime_freight', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: false, vertical: 'maritime' },
-  { activity: 'manufacturing', planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, expected: false, vertical: 'manufacturing' },
+const MATRIX: Array<{
+  activity: string;
+  planId: string;
+  features: string[];
+  expected: boolean;
+  vertical: string;
+  seedMarker?: boolean;
+}> = [
+  {
+    activity: 'clothing',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'retail_general',
+  },
+  {
+    activity: 'retail_general',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'retail_general',
+  },
+  {
+    activity: 'pharmacy',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'pharmacy',
+  },
+  {
+    activity: 'restaurant',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'restaurant',
+  },
+  {
+    activity: 'supermarket',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'retail_general',
+  },
+  {
+    activity: 'spices',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'retail_general',
+  },
+  {
+    activity: 'perfumes',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'retail_general',
+  },
+  {
+    activity: 'auto_parts',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'retail_general',
+  },
+  {
+    activity: 'appliances_installments',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'retail_general',
+  },
+  {
+    activity: 'maintenance',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'maintenance',
+  },
+  {
+    activity: 'ecommerce',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: true,
+    vertical: 'retail_general',
+  },
+  {
+    activity: 'clothing',
+    planId: 'plan_basic',
+    features: PLAN_BASIC_FEATURES,
+    expected: true,
+    vertical: 'retail_general',
+  },
+  {
+    activity: 'clothing',
+    planId: 'tier_band1_L2',
+    features: TIER_BAND1_L2_FEATURES,
+    expected: true,
+    vertical: 'retail_general',
+  },
+  {
+    activity: 'clothing',
+    planId: 'tier_band1_L1',
+    features: [],
+    expected: true,
+    vertical: 'retail_general',
+    seedMarker: false,
+  },
+  {
+    activity: 'retail_general',
+    planId: 'tier_band1_L1',
+    features: [],
+    expected: true,
+    vertical: 'retail_general',
+    seedMarker: false,
+  },
+  {
+    activity: 'wholesale_van',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: false,
+    vertical: 'wholesale_van',
+  },
+  {
+    activity: 'warehousing',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: false,
+    vertical: 'warehousing',
+  },
+  {
+    activity: 'services',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: false,
+    vertical: 'services',
+  },
+  {
+    activity: 'import_export',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: false,
+    vertical: 'import_export',
+  },
+  {
+    activity: 'contracting',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: false,
+    vertical: 'contracting',
+  },
+  {
+    activity: 'maritime_freight',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: false,
+    vertical: 'maritime',
+  },
+  {
+    activity: 'manufacturing',
+    planId: 'plan_ultimate',
+    features: PLAN_ULTIMATE_FEATURES,
+    expected: false,
+    vertical: 'manufacturing',
+  },
 ];
 
 const POS_PROFILES = [
-  'retail_general', 'pharmacy', 'restaurant', 'maintenance', 'auto_parts',
-  'clothing', 'ecommerce', 'supermarket', 'appliances_installments', 'spices', 'perfumes',
+  'retail_general',
+  'pharmacy',
+  'restaurant',
+  'maintenance',
+  'auto_parts',
+  'clothing',
+  'ecommerce',
+  'supermarket',
+  'appliances_installments',
+  'spices',
+  'perfumes',
 ];
 const BLOCKED_PROFILES = [
-  'wholesale_van', 'warehousing', 'services', 'import_export',
-  'contracting', 'maritime_freight', 'manufacturing',
+  'wholesale_van',
+  'warehousing',
+  'services',
+  'import_export',
+  'contracting',
+  'maritime_freight',
+  'manufacturing',
 ];
 
 async function main(): Promise<void> {
@@ -488,9 +849,15 @@ async function main(): Promise<void> {
   // 1. The agreement matrix: page, backend gate, tenant.features and
   // sidebar vertical agree on every activity, against seeded rows.
   for (const row of MATRIX) {
-    await freshCase(row.activity, row.planId, row.features, async (db, svc) => {
-      await assertAgreement(db, svc, `${row.activity}/${row.planId}`, row.expected, row.vertical);
-    }, { seedMarker: row.seedMarker });
+    await freshCase(
+      row.activity,
+      row.planId,
+      row.features,
+      async (db, svc) => {
+        await assertAgreement(db, svc, `${row.activity}/${row.planId}`, row.expected, row.vertical);
+      },
+      { seedMarker: row.seedMarker },
+    );
   }
   console.log('  1. agreement matrix (22 activities x page/gate/features/vertical) — passed');
 
@@ -506,22 +873,39 @@ async function main(): Promise<void> {
       { planId: 'plan_basic', features: PLAN_BASIC_FEATURES, seedMarker: true },
       { planId: 'plan_ultimate', features: PLAN_ULTIMATE_FEATURES, seedMarker: true },
     ]) {
-      await freshCase(activity, plan.planId, plan.features, async (db, svc) => {
-        const auth = await resolveAdminAuth(svc);
-        await expectCode(svc.sales.createSale(posPayload(), auth), 'OPEN_SHIFT_REQUIRED');
-        await seedShift(db, 1, 1);
-        const created: any = await svc.sales.createSale(posPayload(), auth);
-        const saleId = Number(created?.sale?.id);
-        assert.ok(saleId > 0, `${activity}/${plan.planId}: POS sale must post`);
-        const sale = await (db as any).selectFrom('sales').select(['total', 'status']).where('id', '=', saleId).executeTakeFirstOrThrow();
-        assert.equal(Number(sale.total), 100, `${activity}/${plan.planId}: sale total 100`);
-        assert.equal(String(sale.status), 'posted', `${activity}/${plan.planId}: sale posted`);
-        const stock = await (db as any).selectFrom('product_location_stock').select('qty').where('product_id', '=', 101).where('location_id', '=', 10).executeTakeFirstOrThrow();
-        assert.equal(Number(stock.qty), 99, `${activity}/${plan.planId}: stock deducted by 1`);
-      }, { seedMarker: plan.seedMarker });
+      await freshCase(
+        activity,
+        plan.planId,
+        plan.features,
+        async (db, svc) => {
+          const auth = await resolveAdminAuth(svc);
+          await expectCode(svc.sales.createSale(posPayload(), auth), 'OPEN_SHIFT_REQUIRED');
+          await seedShift(db, 1, 1);
+          const created: any = await svc.sales.createSale(posPayload(), auth);
+          const saleId = Number(created?.sale?.id);
+          assert.ok(saleId > 0, `${activity}/${plan.planId}: POS sale must post`);
+          const sale = await (db as any)
+            .selectFrom('sales')
+            .select(['total', 'status'])
+            .where('id', '=', saleId)
+            .executeTakeFirstOrThrow();
+          assert.equal(Number(sale.total), 100, `${activity}/${plan.planId}: sale total 100`);
+          assert.equal(String(sale.status), 'posted', `${activity}/${plan.planId}: sale posted`);
+          const stock = await (db as any)
+            .selectFrom('product_location_stock')
+            .select('qty')
+            .where('product_id', '=', 101)
+            .where('location_id', '=', 10)
+            .executeTakeFirstOrThrow();
+          assert.equal(Number(stock.qty), 99, `${activity}/${plan.planId}: stock deducted by 1`);
+        },
+        { seedMarker: plan.seedMarker },
+      );
     }
   }
-  console.log('  2. full POS sales post for clothing + retail_general on tier_band1_L1 / plan_basic / plan_ultimate — passed');
+  console.log(
+    '  2. full POS sales post for clothing + retail_general on tier_band1_L1 / plan_basic / plan_ultimate — passed',
+  );
 
   // 3. The real refusal, wholesale_van + seeded rows, no override:
   // 403 before any branch/stock validation, nothing written.
@@ -529,7 +913,11 @@ async function main(): Promise<void> {
     const auth = await resolveAdminAuth(svc);
     await expectCode(svc.sales.createSale(posPayload(), auth), 'POS_FEATURE_NOT_AVAILABLE');
     assert.equal((await (db as any).selectFrom('sales').select('id').execute()).length, 0, 'no sale row written');
-    const stock = await (db as any).selectFrom('product_location_stock').select('qty').where('product_id', '=', 101).executeTakeFirstOrThrow();
+    const stock = await (db as any)
+      .selectFrom('product_location_stock')
+      .select('qty')
+      .where('product_id', '=', 101)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(stock.qty), 100, 'stock untouched');
   });
   console.log('  3. wholesale_van POS sale refused, nothing written — passed');
@@ -539,12 +927,16 @@ async function main(): Promise<void> {
   // app-shell block — the dashboard/mobile paths carry it — so the
   // vertical stays wholesale_van here; only page/gate/features agree).
   await freshCase('wholesale_van', 'plan_ultimate', PLAN_ULTIMATE_FEATURES, async (db, svc) => {
-    await svc.saasAdmin.updateTenantPlan(TENANT, {
-      featureOverrides: [
-        { featureCode: 'pos', granted: true, reason: 'wholesale client sells retail from warehouse' },
-        { featureCode: 'cashDrawer', granted: true, reason: 'wholesale client sells retail from warehouse' },
-      ],
-    }, superAdminAuth);
+    await svc.saasAdmin.updateTenantPlan(
+      TENANT,
+      {
+        featureOverrides: [
+          { featureCode: 'pos', granted: true, reason: 'wholesale client sells retail from warehouse' },
+          { featureCode: 'cashDrawer', granted: true, reason: 'wholesale client sells retail from warehouse' },
+        ],
+      },
+      superAdminAuth,
+    );
     const auth = await resolveAdminAuth(svc);
     assert.deepEqual(auth.featureOverrides, { pos: true, cashDrawer: true }, 'resolved auth carries the overrides');
     const agreement = await readAgreement(db, svc, auth);
@@ -561,9 +953,13 @@ async function main(): Promise<void> {
   // 5. The super-admin hide still closes retail: every layer agrees
   // false, and the sale is refused.
   await freshCase('clothing', 'plan_ultimate', PLAN_ULTIMATE_FEATURES, async (db, svc) => {
-    await svc.saasAdmin.updateTenantPlan(TENANT, {
-      featureOverrides: [{ featureCode: 'pos', granted: false, reason: 'hide POS for this tenant' }],
-    }, superAdminAuth);
+    await svc.saasAdmin.updateTenantPlan(
+      TENANT,
+      {
+        featureOverrides: [{ featureCode: 'pos', granted: false, reason: 'hide POS for this tenant' }],
+      },
+      superAdminAuth,
+    );
     const auth = await resolveAdminAuth(svc);
     assert.deepEqual(auth.featureOverrides, { pos: false }, 'resolved auth carries the hide');
     const agreement = await readAgreement(db, svc, auth);
@@ -583,31 +979,71 @@ async function main(): Promise<void> {
     const { isRouteAllowedInVertical } = await loadVerticalScope();
     // (a) Hide: clothing + super-admin hide of 'pos' (case 5 setup).
     await freshCase('clothing', 'plan_ultimate', PLAN_ULTIMATE_FEATURES, async (db, svc) => {
-      await svc.saasAdmin.updateTenantPlan(TENANT, {
-        featureOverrides: [{ featureCode: 'pos', granted: false, reason: 'hide POS for this tenant' }],
-      }, superAdminAuth);
+      await svc.saasAdmin.updateTenantPlan(
+        TENANT,
+        {
+          featureOverrides: [{ featureCode: 'pos', granted: false, reason: 'hide POS for this tenant' }],
+        },
+        superAdminAuth,
+      );
       const auth = await resolveAdminAuth(svc);
       const agreement = await readAgreement(db, svc, auth);
       assert.equal(agreement.featuresIncludePos, false, 'clothing+hide: tenant.features excludes pos');
-      assert.equal(isRouteAllowedInVertical('retail_general', 'pos', undefined, agreement.tenantFeatures), false, 'clothing+hide: /pos route refused');
-      assert.equal(isRouteAllowedInVertical('retail_general', 'pos/new', undefined, agreement.tenantFeatures), false, 'clothing+hide: /pos subroute refused');
+      assert.equal(
+        isRouteAllowedInVertical('retail_general', 'pos', undefined, agreement.tenantFeatures),
+        false,
+        'clothing+hide: /pos route refused',
+      );
+      assert.equal(
+        isRouteAllowedInVertical('retail_general', 'pos/new', undefined, agreement.tenantFeatures),
+        false,
+        'clothing+hide: /pos subroute refused',
+      );
       // The drawer follows its own feature: 'cashDrawer' is still granted here, so its route stays open.
-      assert.equal(isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, agreement.tenantFeatures), true, 'clothing+hide pos only: cash-drawer route stays open (cashDrawer still granted)');
-      assert.equal(isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, ['sales', 'catalog']), false, 'cash-drawer route closes when the list lacks cashDrawer');
-      assert.equal(isRouteAllowedInVertical('retail_general', 'pos', undefined, ['sales', 'catalog', 'cashDrawer']), false, 'pos route closes when the list lacks pos even with cashDrawer');
+      assert.equal(
+        isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, agreement.tenantFeatures),
+        true,
+        'clothing+hide pos only: cash-drawer route stays open (cashDrawer still granted)',
+      );
+      assert.equal(
+        isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, ['sales', 'catalog']),
+        false,
+        'cash-drawer route closes when the list lacks cashDrawer',
+      );
+      assert.equal(
+        isRouteAllowedInVertical('retail_general', 'pos', undefined, ['sales', 'catalog', 'cashDrawer']),
+        false,
+        'pos route closes when the list lacks pos even with cashDrawer',
+      );
     });
     // (b) Grant: clothing with 'pos' in the list → route open (P10 escape intact).
     await freshCase('clothing', 'plan_ultimate', PLAN_ULTIMATE_FEATURES, async (db, svc) => {
       const auth = await resolveAdminAuth(svc);
       const agreement = await readAgreement(db, svc, auth);
       assert.equal(agreement.featuresIncludePos, true, 'clothing: tenant.features includes pos');
-      assert.equal(isRouteAllowedInVertical('retail_general', 'pos', undefined, agreement.tenantFeatures), true, 'clothing: /pos route open');
-      assert.equal(isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, agreement.tenantFeatures), true, 'clothing: cash-drawer route open');
+      assert.equal(
+        isRouteAllowedInVertical('retail_general', 'pos', undefined, agreement.tenantFeatures),
+        true,
+        'clothing: /pos route open',
+      );
+      assert.equal(
+        isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, agreement.tenantFeatures),
+        true,
+        'clothing: cash-drawer route open',
+      );
     });
     // (c) Legacy: an empty or missing list keeps the retail default.
-    assert.equal(isRouteAllowedInVertical('retail_general', 'pos', undefined, []), true, 'legacy empty list: /pos route open');
+    assert.equal(
+      isRouteAllowedInVertical('retail_general', 'pos', undefined, []),
+      true,
+      'legacy empty list: /pos route open',
+    );
     assert.equal(isRouteAllowedInVertical('retail_general', 'pos'), true, 'legacy no list: /pos route open');
-    assert.equal(isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, []), true, 'legacy empty list: cash-drawer route open');
+    assert.equal(
+      isRouteAllowedInVertical('retail_general', 'cash-drawer', undefined, []),
+      true,
+      'legacy empty list: cash-drawer route open',
+    );
   }
   console.log('  6. route closes on hide, opens on grant, legacy empty list unchanged — passed');
 
@@ -615,20 +1051,48 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale/load-sale-context.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/create-sale/load-sale-context.ts'),
+      'utf8',
+    );
     assert.ok(serviceSource.includes('POS_FEATURE_NOT_AVAILABLE'), 'create-sale carries the POS feature gate');
-    const settingsSource = readFileSync(resolve(__dirname, '../../src/modules/settings/settings/settings-reads.ts'), 'utf8');
-    assert.ok(!settingsSource.includes("primaryActivity = 'retail_general';\n      } else if ((primaryActivity === 'services'"), 'no services->retail_general rewrite left in getSettings');
-    assert.ok(settingsSource.includes("subVertical === 'manufacturing'"), 'manufacturing settings branch matches the profile subVertical (the pillar check was dead)');
-    const verticalSource = readFileSync(resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope/resolve-current-vertical.ts'), 'utf8');
-    assert.ok(verticalSource.includes("tenant?.features?.includes('pos')"), 'sidebar vertical promotes services only on a real pos feature');
-    assert.ok(!verticalSource.includes("tenant?.plan_id === 'plan_ultimate'"), 'no plan_ultimate promotion left in the sidebar vertical');
+    const settingsSource = readFileSync(
+      resolve(__dirname, '../../src/modules/settings/settings/settings-reads.ts'),
+      'utf8',
+    );
+    assert.ok(
+      !settingsSource.includes("primaryActivity = 'retail_general';\n      } else if ((primaryActivity === 'services'"),
+      'no services->retail_general rewrite left in getSettings',
+    );
+    assert.ok(
+      settingsSource.includes("subVertical === 'manufacturing'"),
+      'manufacturing settings branch matches the profile subVertical (the pillar check was dead)',
+    );
+    const verticalSource = readFileSync(
+      resolve(__dirname, '../../../frontend/src/shared/verticals/vertical-scope/resolve-current-vertical.ts'),
+      'utf8',
+    );
+    assert.ok(
+      verticalSource.includes("tenant?.features?.includes('pos')"),
+      'sidebar vertical promotes services only on a real pos feature',
+    );
+    assert.ok(
+      !verticalSource.includes("tenant?.plan_id === 'plan_ultimate'"),
+      'no plan_ultimate promotion left in the sidebar vertical',
+    );
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('- INV-POS-RETAIL-FEATURE-GATE ').length - 1, 1, 'invariant entry exists exactly once');
+    assert.equal(
+      invariants.split('- INV-POS-RETAIL-FEATURE-GATE ').length - 1,
+      1,
+      'invariant entry exists exactly once',
+    );
   }
   console.log('  7. source + invariant pins passed');
 
   console.log('pos-retail-feature-gate: OK');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

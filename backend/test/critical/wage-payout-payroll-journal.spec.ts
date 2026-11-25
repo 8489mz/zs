@@ -63,7 +63,10 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const service = new HrService(
@@ -147,13 +150,20 @@ async function main(): Promise<void> {
       INSERT INTO hr_payroll_run_items VALUES (2,'t1',8,1,5000.125,'approved',NULL,NULL,NULL,NULL,NULL,NULL,NULL);
     `);
     for (const code of [1110, 1120, 1160, 2140]) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), '']);
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        '',
+      ]);
     }
     const count = async (table: string): Promise<number> => {
       const r = await pg.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM ${table}`);
       return Number(r.rows[0].c);
     };
-    const journalLines = async (entryId: number): Promise<Array<{ account_id: number; debit: string; credit: string }>> => {
+    const journalLines = async (
+      entryId: number,
+    ): Promise<Array<{ account_id: number; debit: string; credit: string }>> => {
       const r = await pg.query<{ account_id: number; debit: string; credit: string }>(
         'SELECT account_id, debit::text, credit::text FROM journal_entry_lines WHERE journal_entry_id=$1 ORDER BY id',
         [entryId],
@@ -172,10 +182,14 @@ async function main(): Promise<void> {
     assert.ok(Number(wage.journalEntryId) > 0);
     assert.equal(await count('hr_employee_loans'), 0);
     assert.equal(await count('hr_employee_loan_installments'), 0);
-    const item = await pg.query<{ status: string; journal_entry_id: number }>('SELECT status, journal_entry_id FROM hr_payroll_run_items WHERE id=2');
+    const item = await pg.query<{ status: string; journal_entry_id: number }>(
+      'SELECT status, journal_entry_id FROM hr_payroll_run_items WHERE id=2',
+    );
     assert.equal(item.rows[0].status, 'paid');
     assert.equal(Number(item.rows[0].journal_entry_id), Number(wage.journalEntryId));
-    const entries = await pg.query<{ source_type: string; source_id: number }>('SELECT source_type, source_id FROM journal_entries');
+    const entries = await pg.query<{ source_type: string; source_id: number }>(
+      'SELECT source_type, source_id FROM journal_entries',
+    );
     assert.equal(entries.rows.length, 1);
     assert.equal(entries.rows[0].source_type, 'hr_payroll_item_payment');
     assert.equal(Number(entries.rows[0].source_id), 2);
@@ -185,13 +199,20 @@ async function main(): Promise<void> {
     assert.equal(Number(lines[0].debit), 5000.125);
     assert.equal(lines[1].account_id, 1110);
     assert.equal(Number(lines[1].credit), 5000.125);
-    const ledger = await pg.query<{ entry_type: string; reference_type: string; reference_id: number; balance_after: string }>('SELECT entry_type, reference_type, reference_id, balance_after::text FROM hr_employee_ledger');
+    const ledger = await pg.query<{
+      entry_type: string;
+      reference_type: string;
+      reference_id: number;
+      balance_after: string;
+    }>('SELECT entry_type, reference_type, reference_id, balance_after::text FROM hr_employee_ledger');
     assert.equal(ledger.rows.length, 1);
     assert.equal(ledger.rows[0].entry_type, 'wage_payout');
     assert.equal(ledger.rows[0].reference_type, 'hr_payroll_run_item');
     assert.equal(Number(ledger.rows[0].reference_id), 2);
     assert.equal(Number(ledger.rows[0].balance_after), 0);
-    const shift = await pg.query<{ expected_cash: string }>('SELECT expected_cash::text FROM cashier_shifts WHERE id=1');
+    const shift = await pg.query<{ expected_cash: string }>(
+      'SELECT expected_cash::text FROM cashier_shifts WHERE id=1',
+    );
     assert.equal(Number(shift.rows[0].expected_cash), 4999.875);
     const treasury = await pg.query<{ amount: string }>('SELECT amount::text FROM treasury_transactions');
     assert.equal(treasury.rows.length, 1);
@@ -199,10 +220,11 @@ async function main(): Promise<void> {
 
     // 2. Partial amount: fail-closed, zero writes.
     await assert.rejects(
-      () => service.createQuickCashAdvance(
-        { employeeId: 1, amount: 4000, notes: 'صرف جزئي', actionType: 'wage_payout', shiftId: 1 },
-        auth,
-      ),
+      () =>
+        service.createQuickCashAdvance(
+          { employeeId: 1, amount: 4000, notes: 'صرف جزئي', actionType: 'wage_payout', shiftId: 1 },
+          auth,
+        ),
       /HR_WAGE_PAYOUT_AMOUNT_MISMATCH/,
     );
     assert.equal(await count('journal_entries'), 1);
@@ -212,10 +234,11 @@ async function main(): Promise<void> {
 
     // 3. No approved item: fail-closed.
     await assert.rejects(
-      () => service.createQuickCashAdvance(
-        { employeeId: 3, amount: 100, notes: 'صرف بلا بند', actionType: 'wage_payout', shiftId: 1 },
-        auth,
-      ),
+      () =>
+        service.createQuickCashAdvance(
+          { employeeId: 3, amount: 100, notes: 'صرف بلا بند', actionType: 'wage_payout', shiftId: 1 },
+          auth,
+        ),
       /HR_WAGE_PAYOUT_NO_APPROVED_ITEM/,
     );
     assert.equal(await count('journal_entries'), 1);
@@ -229,7 +252,9 @@ async function main(): Promise<void> {
     assert.ok(Number(advance.loanId) > 0);
     assert.equal(await count('hr_employee_loans'), 1);
     assert.equal(await count('hr_employee_loan_installments'), 1);
-    const loanJournal = await pg.query<{ id: number }>("SELECT id FROM journal_entries WHERE source_type='hr_employee_loan_disbursement'");
+    const loanJournal = await pg.query<{ id: number }>(
+      "SELECT id FROM journal_entries WHERE source_type='hr_employee_loan_disbursement'",
+    );
     assert.equal(loanJournal.rows.length, 1);
     const loanLines = await journalLines(Number(loanJournal.rows[0].id));
     assert.equal(loanLines[0].account_id, 1160);
@@ -239,10 +264,11 @@ async function main(): Promise<void> {
 
     // 5. 4-decimal amount on a 3-decimal tenant: rejected at the gate.
     await assert.rejects(
-      () => service.createQuickCashAdvance(
-        { employeeId: 2, amount: 5000.1255, notes: 'مبلغ بدقة زائدة', actionType: 'advance', shiftId: 1 },
-        auth,
-      ),
+      () =>
+        service.createQuickCashAdvance(
+          { employeeId: 2, amount: 5000.1255, notes: 'مبلغ بدقة زائدة', actionType: 'advance', shiftId: 1 },
+          auth,
+        ),
       /HR_AMOUNT_INVALID/,
     );
 

@@ -88,8 +88,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: code } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: code } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makePosting(db: Kysely<Database>): AccountingPostingService {
@@ -101,7 +107,12 @@ function makePosting(db: Kysely<Database>): AccountingPostingService {
 }
 
 async function storedLines(db: Kysely<Database>, entryId: number): Promise<Array<{ debit: number; credit: number }>> {
-  const rows = await (db as any).selectFrom('journal_entry_lines').select(['debit', 'credit']).where('journal_entry_id', '=', entryId).orderBy('id').execute() as unknown as Array<{ debit: string; credit: string }>;
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['debit', 'credit'])
+    .where('journal_entry_id', '=', entryId)
+    .orderBy('id')
+    .execute()) as unknown as Array<{ debit: string; credit: string }>;
   return rows.map((row) => ({ debit: Number(row.debit), credit: Number(row.credit) }));
 }
 
@@ -119,12 +130,34 @@ async function main(): Promise<void> {
       const info = await pg.query<{ column_name: string; numeric_precision: string; numeric_scale: string }>(
         `SELECT column_name, numeric_precision::text, numeric_scale::text FROM information_schema.columns WHERE table_name='journal_entry_lines' AND column_name IN ('debit','credit') ORDER BY column_name`,
       );
-      assert.deepEqual(info.rows.map((r) => [r.column_name, Number(r.numeric_precision), Number(r.numeric_scale)]), [['credit', 15, 3], ['debit', 15, 3]]);
-      const kept = await pg.query<{ debit: string; credit: string }>('SELECT debit::text, credit::text FROM journal_entry_lines ORDER BY id');
-      assert.deepEqual(kept.rows.map((r) => [Number(r.debit), Number(r.credit)]), [[100, 0], [0, 10]]);
+      assert.deepEqual(
+        info.rows.map((r) => [r.column_name, Number(r.numeric_precision), Number(r.numeric_scale)]),
+        [
+          ['credit', 15, 3],
+          ['debit', 15, 3],
+        ],
+      );
+      const kept = await pg.query<{ debit: string; credit: string }>(
+        'SELECT debit::text, credit::text FROM journal_entry_lines ORDER BY id',
+      );
+      assert.deepEqual(
+        kept.rows.map((r) => [Number(r.debit), Number(r.credit)]),
+        [
+          [100, 0],
+          [0, 10],
+        ],
+      );
       await pg.exec(`INSERT INTO journal_entry_lines (debit, credit) VALUES (30.375, 0), (0, 30.375)`);
-      const kept2 = await pg.query<{ debit: string; credit: string }>('SELECT debit::text, credit::text FROM journal_entry_lines ORDER BY id DESC LIMIT 2');
-      assert.deepEqual(kept2.rows.map((r) => [Number(r.debit), Number(r.credit)]), [[0, 30.375], [30.375, 0]]);
+      const kept2 = await pg.query<{ debit: string; credit: string }>(
+        'SELECT debit::text, credit::text FROM journal_entry_lines ORDER BY id DESC LIMIT 2',
+      );
+      assert.deepEqual(
+        kept2.rows.map((r) => [Number(r.debit), Number(r.credit)]),
+        [
+          [0, 30.375],
+          [30.375, 0],
+        ],
+      );
       // Idempotent: a second run is a no-op.
       await widenMigration.up(db as any);
       const info2 = await pg.query<{ numeric_scale: string }>(
@@ -143,19 +176,22 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'KWD');
       await widenMigration.up(db as any);
       const posting = makePosting(db);
-      const entryId = await posting.postDomainJournal(db as any, {
-        sourceType: 'manual_journal',
-        sourceId: 1,
-        tenantId: 't1',
-        accountId: 'a1',
-        entryDate: new Date('2026-10-15'),
-        description: 'journal scale proof',
-        createdBy: 1,
-        lines: [
-          { accountId: 10, description: 'cash', debit: 30.375, credit: 0, partnerType: 'none', partnerId: null },
-          { accountId: 20, description: 'cogs', debit: 0, credit: 30.375, partnerType: 'none', partnerId: null },
-        ],
-      } as never);
+      const entryId = await posting.postDomainJournal(
+        db as any,
+        {
+          sourceType: 'manual_journal',
+          sourceId: 1,
+          tenantId: 't1',
+          accountId: 'a1',
+          entryDate: new Date('2026-10-15'),
+          description: 'journal scale proof',
+          createdBy: 1,
+          lines: [
+            { accountId: 10, description: 'cash', debit: 30.375, credit: 0, partnerType: 'none', partnerId: null },
+            { accountId: 20, description: 'cogs', debit: 0, credit: 30.375, partnerType: 'none', partnerId: null },
+          ],
+        } as never,
+      );
       assert.deepEqual(await storedLines(db, entryId), [
         { debit: 30.375, credit: 0 },
         { debit: 0, credit: 30.375 },
@@ -172,19 +208,22 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'EGP');
       await widenMigration.up(db as any);
       const posting = makePosting(db);
-      const entryId = await posting.postDomainJournal(db as any, {
-        sourceType: 'manual_journal',
-        sourceId: 2,
-        tenantId: 't1',
-        accountId: 'a1',
-        entryDate: new Date('2026-10-15'),
-        description: 'journal scale identity',
-        createdBy: 1,
-        lines: [
-          { accountId: 10, description: 'cash', debit: 100.12, credit: 0, partnerType: 'none', partnerId: null },
-          { accountId: 20, description: 'cogs', debit: 0, credit: 100.12, partnerType: 'none', partnerId: null },
-        ],
-      } as never);
+      const entryId = await posting.postDomainJournal(
+        db as any,
+        {
+          sourceType: 'manual_journal',
+          sourceId: 2,
+          tenantId: 't1',
+          accountId: 'a1',
+          entryDate: new Date('2026-10-15'),
+          description: 'journal scale identity',
+          createdBy: 1,
+          lines: [
+            { accountId: 10, description: 'cash', debit: 100.12, credit: 0, partnerType: 'none', partnerId: null },
+            { accountId: 20, description: 'cogs', debit: 0, credit: 100.12, partnerType: 'none', partnerId: null },
+          ],
+        } as never,
+      );
       assert.deepEqual(await storedLines(db, entryId), [
         { debit: 100.12, credit: 0 },
         { debit: 0, credit: 100.12 },
@@ -196,7 +235,10 @@ async function main(): Promise<void> {
 
   // Case 4: source pin — the migration targets exactly debit/credit at scale 3.
   {
-    const migrationSource = readFileSync(resolve(__dirname, '../../src/database/migrations/2040000000277_journal_entry_lines_minor_unit_precision.ts'), 'utf8');
+    const migrationSource = readFileSync(
+      resolve(__dirname, '../../src/database/migrations/2040000000277_journal_entry_lines_minor_unit_precision.ts'),
+      'utf8',
+    );
     assert.ok(migrationSource.includes("'journal_entry_lines', 'debit', 3"));
     assert.ok(migrationSource.includes("'journal_entry_lines', 'credit', 3"));
     assert.ok(!migrationSource.includes("'journal_entries'"), 'the migration must widen lines only, never headers');

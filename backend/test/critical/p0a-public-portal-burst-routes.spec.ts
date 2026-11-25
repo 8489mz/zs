@@ -16,7 +16,10 @@ function run() {
     'api/public/freight-tracking/rfq/:id/bid',
     'api/public/carrier-quote/rfq/:id/bid',
   ]) {
-    assert.ok(source.includes(`{ path: '${route}', method: RequestMethod.POST }`), `Missing public burst limit: ${route}`);
+    assert.ok(
+      source.includes(`{ path: '${route}', method: RequestMethod.POST }`),
+      `Missing public burst limit: ${route}`,
+    );
   }
 }
 run();

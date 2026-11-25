@@ -97,16 +97,37 @@ async function main(): Promise<void> {
     (service as any).ensureUniqueUsername = async () => undefined;
     (service as any).ensureUniquePhone = async () => undefined;
     (service as any).getPlanLimitForTenant = async () => ({
-      maxUsers: null, isUnlimited: true, isLimitReached: false,
-      activeUsersCount: 0, planName: 'spec', planCode: null,
+      maxUsers: null,
+      isUnlimited: true,
+      isLimitReached: false,
+      activeUsersCount: 0,
+      planName: 'spec',
+      planCode: null,
     });
 
-    async function seedUser(id: number, tenantId: string, username: string, role: string, permissions: string[]): Promise<void> {
-      await anyDb.insertInto('users').values({
-        id, username, phone: `010000000${String(id).padStart(2, '0')}`, password_hash: 'x', password_salt: 'y',
-        role, is_active: true, permissions_json: JSON.stringify(permissions),
-        display_name: username, tenant_id: tenantId, account_id: ACCOUNT,
-      }).execute();
+    async function seedUser(
+      id: number,
+      tenantId: string,
+      username: string,
+      role: string,
+      permissions: string[],
+    ): Promise<void> {
+      await anyDb
+        .insertInto('users')
+        .values({
+          id,
+          username,
+          phone: `010000000${String(id).padStart(2, '0')}`,
+          password_hash: 'x',
+          password_salt: 'y',
+          role,
+          is_active: true,
+          permissions_json: JSON.stringify(permissions),
+          display_name: username,
+          tenant_id: tenantId,
+          account_id: ACCOUNT,
+        })
+        .execute();
     }
     async function readUser(id: number): Promise<any> {
       return anyDb.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
@@ -121,7 +142,11 @@ async function main(): Promise<void> {
       return body;
     }
     function createPayload(username: string, role: string, permissions?: string[]): any {
-      return { ...payload(username, role, permissions), password: 'Str0ng!Pass9', phone: `010000009${String(Math.floor(Math.random() * 90) + 10)}` };
+      return {
+        ...payload(username, role, permissions),
+        password: 'Str0ng!Pass9',
+        phone: `010000009${String(Math.floor(Math.random() * 90) + 10)}`,
+      };
     }
 
     await anyDb.insertInto('tenants').values({ id: TENANT, plan_id: null, status: 'active' }).execute();

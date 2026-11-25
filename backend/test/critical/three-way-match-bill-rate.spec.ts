@@ -31,7 +31,9 @@ import { GoodsReceiptService } from '../../src/modules/purchases/services/goods-
 function engineInput(overrides: Record<string, any> = {}): any {
   return {
     poItems: [{ id: 11, productId: 1, qty: 2, unitCost: 100 }],
-    grnLines: [{ id: 21, grnId: 55, poItemId: 11, productId: 1, receivedQty: 2, acceptedQty: 2, rejectedQty: 0, unitCost: 100 }],
+    grnLines: [
+      { id: 21, grnId: 55, poItemId: 11, productId: 1, receivedQty: 2, acceptedQty: 2, rejectedQty: 0, unitCost: 100 },
+    ],
     invoiceItems: [{ id: 1, poItemId: 11, grnLineId: 21, productId: 1, qty: 2, unitCost: 100 }],
     minorUnits: 2,
     vatRate: 0.14,
@@ -61,7 +63,18 @@ async function main(): Promise<void> {
       vatRate: 0.14,
       pricesIncludeTax: true,
       poItems: [{ id: 11, productId: 1, qty: 1, unitCost: 114 }],
-      grnLines: [{ id: 21, grnId: 55, poItemId: 11, productId: 1, receivedQty: 1, acceptedQty: 1, rejectedQty: 0, unitCost: 114 }],
+      grnLines: [
+        {
+          id: 21,
+          grnId: 55,
+          poItemId: 11,
+          productId: 1,
+          receivedQty: 1,
+          acceptedQty: 1,
+          rejectedQty: 0,
+          unitCost: 114,
+        },
+      ],
       invoiceItems: [{ id: 1, poItemId: 11, grnLineId: 21, productId: 1, qty: 1, unitCost: 114 }],
     }),
   );
@@ -103,8 +116,7 @@ async function main(): Promise<void> {
             if (col === 'key') key = String(val);
             return originalWhere();
           };
-          builder.executeTakeFirst = async () =>
-            key === 'currency' ? { value: '"EGP"' } : { value: '2' };
+          builder.executeTakeFirst = async () => (key === 'currency' ? { value: '"EGP"' } : { value: '2' });
           return builder;
         }
         if (table === 'purchase_orders') {
@@ -136,7 +148,16 @@ async function main(): Promise<void> {
         if (table === 'goods_receipt_lines') {
           return chainable(table, {
             execute: async () => [
-              { id: 21, grn_id: 55, purchase_order_item_id: 11, product_id: 1, received_qty: 2, accepted_qty: 2, rejected_qty: 0, unit_cost: poUnitCost },
+              {
+                id: 21,
+                grn_id: 55,
+                purchase_order_item_id: 11,
+                product_id: 1,
+                received_qty: 2,
+                accepted_qty: 2,
+                rejected_qty: 0,
+                unit_cost: poUnitCost,
+              },
             ],
           });
         }
@@ -153,7 +174,15 @@ async function main(): Promise<void> {
       {} as any,
       {} as any,
     );
-    const auth = { userId: 99, role: 'admin', tenantId: 't1', accountId: 'a1', sessionId: 's', username: 'u', permissions: [] as string[] };
+    const auth = {
+      userId: 99,
+      role: 'admin',
+      tenantId: 't1',
+      accountId: 'a1',
+      sessionId: 's',
+      username: 'u',
+      permissions: [] as string[],
+    };
     return service.verifyPurchaseThreeWayMatch(5, {}, auth);
   }
 
@@ -169,22 +198,14 @@ async function main(): Promise<void> {
   const exclusiveItems = [{ id: 1, po_item_id: 11, grn_line_id: 21, product_id: 1, qty: 2, unit_cost: 100 }];
 
   // Bill at 5%: gate reports 5% VAT, not 14%.
-  const billFive: any = await drive(
-    { ...basePurchase, tax_rate: 5, prices_include_tax: false },
-    exclusiveItems,
-    100,
-  );
+  const billFive: any = await drive({ ...basePurchase, tax_rate: 5, prices_include_tax: false }, exclusiveItems, 100);
   assert.equal(billFive.totalVat, 10);
   assert.equal(billFive.totalAccountsPayable, 210);
   assert.equal(billFive.overallStatus, 'matched');
   assert.equal(billFive.isValidForPosting, true);
 
   // Exempt bill: zero VAT.
-  const billZero: any = await drive(
-    { ...basePurchase, tax_rate: 0, prices_include_tax: false },
-    exclusiveItems,
-    100,
-  );
+  const billZero: any = await drive({ ...basePurchase, tax_rate: 0, prices_include_tax: false }, exclusiveItems, 100);
   assert.equal(billZero.totalVat, 0);
   assert.equal(billZero.totalAccountsPayable, 200);
 

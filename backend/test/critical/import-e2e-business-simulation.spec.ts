@@ -1003,8 +1003,22 @@ async function runBusinessSimulation() {
   // STEP 2: ADD 2 PARTNERS WITH CAPITAL & PROFIT SHARES
   // -------------------------------------------------------------
   console.log('Step 2: Adding Partners & Equity Shares...');
-  const p1 = await importService.createPartner(tenantId, userId, 'م. طارق العشري (شريك ممول)', 60, 1500000, String(accounts['1120']));
-  const p2 = await importService.createPartner(tenantId, userId, 'أ. حسام فؤاد (شريك إداري وتشغيلي)', 40, 500000, String(accounts['1110']));
+  const p1 = await importService.createPartner(
+    tenantId,
+    userId,
+    'م. طارق العشري (شريك ممول)',
+    60,
+    1500000,
+    String(accounts['1120']),
+  );
+  const p2 = await importService.createPartner(
+    tenantId,
+    userId,
+    'أ. حسام فؤاد (شريك إداري وتشغيلي)',
+    40,
+    500000,
+    String(accounts['1110']),
+  );
 
   await importService.setProjectPartners(tenantId, project.id, [
     { partnerId: p1.id, capitalShare: 1500000, profitPercentage: 60 },
@@ -1121,7 +1135,7 @@ async function runBusinessSimulation() {
     tenantId,
     userId,
     String(supplier.id),
-    'تم التحقق من الآيبان والسويفت كود عبر خطاب رسمي من بنك الصين في نينغبو'
+    'تم التحقق من الآيبان والسويفت كود عبر خطاب رسمي من بنك الصين في نينغبو',
   );
 
   // Large transfers (base-currency normalised) require a bound maker-checker
@@ -1136,7 +1150,13 @@ async function runBusinessSimulation() {
       requested_by: userId,
       created_by: userId,
       status: 'approved',
-      request_payload: JSON.stringify({ amount: 13500, currency: 'USD', supplierId: String(supplier.id), proformaInvoiceId: conversionResult.proformaId, projectId: project.id }),
+      request_payload: JSON.stringify({
+        amount: 13500,
+        currency: 'USD',
+        supplierId: String(supplier.id),
+        proformaInvoiceId: conversionResult.proformaId,
+        projectId: project.id,
+      }),
     })
     .returning('id')
     .executeTakeFirstOrThrow();
@@ -1186,7 +1206,13 @@ async function runBusinessSimulation() {
       requested_by: userId,
       created_by: userId,
       status: 'approved',
-      request_payload: JSON.stringify({ amount: 31500, currency: 'USD', supplierId: String(supplier.id), proformaInvoiceId: conversionResult.proformaId, projectId: project.id }),
+      request_payload: JSON.stringify({
+        amount: 31500,
+        currency: 'USD',
+        supplierId: String(supplier.id),
+        proformaInvoiceId: conversionResult.proformaId,
+        projectId: project.id,
+      }),
     })
     .returning('id')
     .executeTakeFirstOrThrow();
@@ -1427,26 +1453,33 @@ async function runBusinessSimulation() {
   let prematureCancelBlocked = false;
   try {
     await importService.cancelContainerPreorder(tenantId, returnable.id, 'طلب العميل');
-  } catch { prematureCancelBlocked = true; }
+  } catch {
+    prematureCancelBlocked = true;
+  }
   assert.equal(prematureCancelBlocked, true, 'Unsettled customer liability cannot be silently cancelled.');
   const partialRefund = await importService.refundContainerPreorder(tenantId, userId, returnable.id, {
-    amountEgp: 400, idempotencyKey: 'test-booking-refund-partial-01',
+    amountEgp: 400,
+    idempotencyKey: 'test-booking-refund-partial-01',
   });
   assert.equal(partialRefund.success, true);
   await assert.rejects(
-    () => importService.refundContainerPreorder(tenantId, userId, returnable.id, {
-      amountEgp: 400, idempotencyKey: 'test-booking-refund-partial-01',
-    }),
+    () =>
+      importService.refundContainerPreorder(tenantId, userId, returnable.id, {
+        amountEgp: 400,
+        idempotencyKey: 'test-booking-refund-partial-01',
+      }),
     /مفتاح|مسجل بالفعل/,
   );
   await importService.refundContainerPreorder(tenantId, userId, returnable.id, {
-    amountEgp: 600, idempotencyKey: 'test-booking-refund-final-02',
+    amountEgp: 600,
+    idempotencyKey: 'test-booking-refund-final-02',
   });
   await importService.cancelContainerPreorder(tenantId, returnable.id, 'تم رد العربون بالكامل');
-  const customerRefundTotal = await db.selectFrom('treasury_transactions')
+  const customerRefundTotal = await db
+    .selectFrom('treasury_transactions')
     .select([sql<number>`coalesce(sum(amount),0)`.as('total')])
-    .where('tenant_id','=',tenantId)
-    .where('txn_type','=','import_customer_advance_refund')
+    .where('tenant_id', '=', tenantId)
+    .where('txn_type', '=', 'import_customer_advance_refund')
     .executeTakeFirstOrThrow();
   assert.equal(Number(customerRefundTotal.total), -1000);
   console.log('PASS: Customer advances refunded in two reconciled, idempotent transactions.');
@@ -1521,7 +1554,11 @@ async function runBusinessSimulation() {
   assert.equal(refundedDeposit.refund_status, 'refunded');
   assert.equal(Number(refundedDeposit.deductions_amount_egp), 2000);
 
-  const updatedShipment = await (db as any).selectFrom('import_shipments').selectAll().where('id', '=', shipment.id).executeTakeFirstOrThrow();
+  const updatedShipment = await (db as any)
+    .selectFrom('import_shipments')
+    .selectAll()
+    .where('id', '=', shipment.id)
+    .executeTakeFirstOrThrow();
   assert.equal(updatedShipment.container_status, 'empty_returned');
   console.log('PASS: Container marked empty_returned; 38,000 EGP refunded and 2,000 EGP detention expensed.');
 
@@ -1534,7 +1571,9 @@ async function runBusinessSimulation() {
   assert.equal(autopsy.operational.totalUnitsReceived, 1500);
   assert.ok(autopsy.landedCosts.totalLandedCostEgp > 0);
   assert.equal(autopsy.operational.containerStatus, 'empty_returned');
-  console.log(`PASS: Container Autopsy Sheet generated: Total Landed Cost = ${autopsy.landedCosts.totalLandedCostEgp} EGP, Units = ${autopsy.operational.totalUnitsReceived}`);
+  console.log(
+    `PASS: Container Autopsy Sheet generated: Total Landed Cost = ${autopsy.landedCosts.totalLandedCostEgp} EGP, Units = ${autopsy.operational.totalUnitsReceived}`,
+  );
 
   // -------------------------------------------------------------
   // STEP 18: MAKER-CHECKER GOVERNANCE WORKFLOW
@@ -1588,9 +1627,12 @@ async function runBusinessSimulation() {
   // -------------------------------------------------------------
   console.log('Step 20: Testing Audited Pre-Closure Audit Gates...');
   const auditClosureApproval = await importService.createApprovalRequest(tenantId, userId, {
-    actionType: 'project_closure', referenceId: project.id,
+    actionType: 'project_closure',
+    referenceId: project.id,
   });
-  await importService.decideApprovalRequest(tenantId, Number(auditor.id), auditClosureApproval.id, { decision: 'approved' });
+  await importService.decideApprovalRequest(tenantId, Number(auditor.id), auditClosureApproval.id, {
+    decision: 'approved',
+  });
   // Gate 1: Project cannot close while customs broker has unliquidated advance (10,000 EGP remaining)
   let brokerGateTriggered = false;
   try {
@@ -1600,7 +1642,7 @@ async function runBusinessSimulation() {
     assert.match(
       err.message,
       /عهدة مخلص معلقة/,
-      `Expected unliquidated broker advance error message, got: ${err.message}`
+      `Expected unliquidated broker advance error message, got: ${err.message}`,
     );
   }
   assert.ok(brokerGateTriggered, 'Pre-closure audit must strictly reject closure with active broker advance!');
@@ -1637,7 +1679,7 @@ async function runBusinessSimulation() {
     assert.match(
       err.message,
       /تأمين حاوية معلق/,
-      `Expected pending container deposit error message, got: ${err.message}`
+      `Expected pending container deposit error message, got: ${err.message}`,
     );
   }
   assert.ok(depositGateTriggered, 'Pre-closure audit must strictly reject closure with pending container deposit!');
@@ -1658,11 +1700,16 @@ async function runBusinessSimulation() {
   // checker verifies each expense against its own approval.
   for (const exp of [exp1, exp2, exp3]) {
     const verifyApproval = await importService.createApprovalRequest(tenantId, userId, {
-      actionType: 'broker_expense_verification', referenceId: exp.id,
+      actionType: 'broker_expense_verification',
+      referenceId: exp.id,
       requestPayload: { brokerExpenseId: exp.id, amount: Number(exp.amount_egp) },
     });
-    await importService.decideApprovalRequest(tenantId, Number(auditor.id), verifyApproval.id, { decision: 'approved' });
-    await importService.verifyBrokerExpense(tenantId, Number(auditor.id), exp.id, { approvalRequestId: verifyApproval.id });
+    await importService.decideApprovalRequest(tenantId, Number(auditor.id), verifyApproval.id, {
+      decision: 'approved',
+    });
+    await importService.verifyBrokerExpense(tenantId, Number(auditor.id), exp.id, {
+      approvalRequestId: verifyApproval.id,
+    });
   }
   console.log('PASS: Broker expenses independently verified under maker-checker control.');
 
@@ -1672,11 +1719,7 @@ async function runBusinessSimulation() {
     await importService.closeProject(tenantId, userId, project.id, auditClosureApproval.id);
   } catch (err: any) {
     unsoldLotsGateTriggered = true;
-    assert.match(
-      err.message,
-      /رصيد مخزني غير مباع بالباتش/,
-      `Expected unsold lots error message, got: ${err.message}`
-    );
+    assert.match(err.message, /رصيد مخزني غير مباع بالباتش/, `Expected unsold lots error message, got: ${err.message}`);
   }
   assert.ok(unsoldLotsGateTriggered, 'Pre-closure audit must strictly reject closure with unsold inventory lots!');
   console.log('PASS: Gate 3 blocked closure: Unsold inventory remaining in lots detected.');
@@ -1754,7 +1797,9 @@ async function runBusinessSimulation() {
     .where('product_id', '=', Number(productA.id))
     .executeTakeFirstOrThrow();
   assert.equal(Number(lotAfterPos.remaining_quantity), 950);
-  console.log(`PASS: Retail POS sale allocated from lot (remaining: ${lotAfterPos.remaining_quantity}, margin: ${posAllocations[0].gross_margin_egp} EGP).`);
+  console.log(
+    `PASS: Retail POS sale allocated from lot (remaining: ${lotAfterPos.remaining_quantity}, margin: ${posAllocations[0].gross_margin_egp} EGP).`,
+  );
 
   // -------------------------------------------------------------
   // STEP 22: WHOLESALE CREDIT SALE (FULFILLING IN-TRANSIT PRE-ORDER)
@@ -1855,11 +1900,7 @@ async function runBusinessSimulation() {
     })
     .execute();
 
-  await db
-    .updateTable('sales')
-    .set({ paid_amount: 720000 })
-    .where('id', '=', Number(wsSale.id))
-    .execute();
+  await db.updateTable('sales').set({ paid_amount: 720000 }).where('id', '=', Number(wsSale.id)).execute();
 
   const finalSaleRecord = await db
     .selectFrom('sales')
@@ -1969,11 +2010,7 @@ async function runBusinessSimulation() {
   assert.equal(Number(lotDuringErr.remaining_quantity), 500); // 560 - 60 = 500
 
   // Now cancel the sale invoice
-  await db
-    .updateTable('sales')
-    .set({ status: 'cancelled' })
-    .where('id', '=', Number(erroneousSale.id))
-    .execute();
+  await db.updateTable('sales').set({ status: 'cancelled' }).where('id', '=', Number(erroneousSale.id)).execute();
 
   await db.transaction().execute(async (trx) => {
     await restoreImportLotsFromCancelledSale(trx, {
@@ -1999,7 +2036,9 @@ async function runBusinessSimulation() {
     .where('allocation_type', '=', 'cancellation')
     .executeTakeFirstOrThrow();
   assert.equal(Number(reversalAlloc.quantity), -60);
-  console.log(`PASS: Sale cancellation reversed 60 units back to lot (remaining: ${lotAfterCancel.remaining_quantity}).`);
+  console.log(
+    `PASS: Sale cancellation reversed 60 units back to lot (remaining: ${lotAfterCancel.remaining_quantity}).`,
+  );
 
   // -------------------------------------------------------------
   // STEP 26: POST-SALES LATE SHIPMENT EXPENSE ALLOCATION (IAS 2 SPLIT)
@@ -2019,10 +2058,19 @@ async function runBusinessSimulation() {
 
   assert.ok(latePostSaleExp.success);
   assert.ok(latePostSaleExp.allocation.lateCogsAdjustmentEgp > 0, 'Must allocate portion to COGS for sold units');
-  assert.ok(latePostSaleExp.allocation.lateInventoryAdjustmentEgp > 0, 'Must allocate portion to Inventory for on-hand units');
-  const sumSplit = Number((latePostSaleExp.allocation.lateCogsAdjustmentEgp + latePostSaleExp.allocation.lateInventoryAdjustmentEgp).toFixed(2));
+  assert.ok(
+    latePostSaleExp.allocation.lateInventoryAdjustmentEgp > 0,
+    'Must allocate portion to Inventory for on-hand units',
+  );
+  const sumSplit = Number(
+    (latePostSaleExp.allocation.lateCogsAdjustmentEgp + latePostSaleExp.allocation.lateInventoryAdjustmentEgp).toFixed(
+      2,
+    ),
+  );
   assert.equal(sumSplit, 20000, 'Sum of COGS and Inventory adjustments must equal total late expense');
-  console.log(`PASS: IAS 2 late expense split mathematically exact: COGS = ${latePostSaleExp.allocation.lateCogsAdjustmentEgp} EGP, Inventory = ${latePostSaleExp.allocation.lateInventoryAdjustmentEgp} EGP.`);
+  console.log(
+    `PASS: IAS 2 late expense split mathematically exact: COGS = ${latePostSaleExp.allocation.lateCogsAdjustmentEgp} EGP, Inventory = ${latePostSaleExp.allocation.lateInventoryAdjustmentEgp} EGP.`,
+  );
 
   // -------------------------------------------------------------
   // STEP 27: MULTI-PROJECT SHARED PRODUCT PROFIT ISOLATION
@@ -2094,11 +2142,21 @@ async function runBusinessSimulation() {
     .returningAll()
     .executeTakeFirstOrThrow();
 
-  const sharedSaleItem = await (db as any).insertInto('sale_items').values({
-    tenant_id: tenantId, account_id: 'tenant-e2e', sale_id: Number(p1Sale.id),
-    product_id: Number(productA.id), product_name: productA.name,
-    qty: 100, unit_price: 1850, line_total: 185000, cost_price: 1250,
-  }).returning('id').executeTakeFirstOrThrow();
+  const sharedSaleItem = await (db as any)
+    .insertInto('sale_items')
+    .values({
+      tenant_id: tenantId,
+      account_id: 'tenant-e2e',
+      sale_id: Number(p1Sale.id),
+      product_id: Number(productA.id),
+      product_name: productA.name,
+      qty: 100,
+      unit_price: 1850,
+      line_total: 185000,
+      cost_price: 1250,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
   await db.transaction().execute(async (trx) => {
     await allocateSaleFromImportLots(trx, {
       tenantId,
@@ -2129,19 +2187,25 @@ async function runBusinessSimulation() {
     tenantId,
     new Date('2026-01-01'),
     new Date('2026-12-31'),
-    project.id
+    project.id,
   );
   const p2Profit = await importService.generatePeriodProfitReport(
     tenantId,
     new Date('2026-01-01'),
     new Date('2026-12-31'),
-    project2.id
+    project2.id,
   );
 
   assert.equal(p1Profit.data.profitAttributionVerified, true);
   assert.ok(p1Profit.data.grossSalesRevenue > 0, 'Project 1 must reflect its allocated sales');
-  assert.equal(p2Profit.data.grossSalesRevenue, 0, 'Project 2 must have 0 sales despite sharing the same product catalog ID');
-  console.log('PASS: Shared product profit strictly isolated across multiple import projects via lot allocation tracking.');
+  assert.equal(
+    p2Profit.data.grossSalesRevenue,
+    0,
+    'Project 2 must have 0 sales despite sharing the same product catalog ID',
+  );
+  console.log(
+    'PASS: Shared product profit strictly isolated across multiple import projects via lot allocation tracking.',
+  );
 
   // -------------------------------------------------------------
   // STEP 28: LIQUIDATE ALL REMAINING PROJECT 1 LOTS TO ZERO
@@ -2188,9 +2252,12 @@ async function runBusinessSimulation() {
     ])
     .execute();
 
-  const bulkSaleLines = await (db as any).selectFrom('sale_items')
-    .select(['id', 'product_id']).where('tenant_id', '=', tenantId)
-    .where('sale_id', '=', Number(bulkClearanceSale.id)).execute();
+  const bulkSaleLines = await (db as any)
+    .selectFrom('sale_items')
+    .select(['id', 'product_id'])
+    .where('tenant_id', '=', tenantId)
+    .where('sale_id', '=', Number(bulkClearanceSale.id))
+    .execute();
   const bulkItemA = bulkSaleLines.find((line: any) => Number(line.product_id) === Number(productA.id));
   const bulkItemB = bulkSaleLines.find((line: any) => Number(line.product_id) === Number(productB.id));
   assert.ok(bulkItemA && bulkItemB, 'Each imported sale must have a real sale line for source attribution');
@@ -2227,13 +2294,13 @@ async function runBusinessSimulation() {
     tenantId,
     new Date('2026-01-01'),
     new Date('2026-12-31'),
-    project.id
+    project.id,
   );
   assert.equal(finalProfitReport.data.profitAttributionVerified, true);
   const netPool = finalProfitReport.data.netProfitPool;
   assert.ok(netPool > 0, 'Net profit pool must be positive');
 
-  const p1ExpectedShare = Number((netPool * 0.60).toFixed(2));
+  const p1ExpectedShare = Number((netPool * 0.6).toFixed(2));
 
   // Negative test 1: Missing Maker-Checker approval must be strictly rejected
   let missingApprovalBlocked = false;
@@ -2241,7 +2308,11 @@ async function runBusinessSimulation() {
     await importService.recordPartnerPayout(tenantId, userId, p1.id, 50000);
   } catch (err: any) {
     missingApprovalBlocked = true;
-    assert.match(err.message, /Maker-Checker|approvalRequestId/, `Expected missing approval rejection, got: ${err.message}`);
+    assert.match(
+      err.message,
+      /Maker-Checker|approvalRequestId/,
+      `Expected missing approval rejection, got: ${err.message}`,
+    );
   }
   assert.ok(missingApprovalBlocked, 'Payout without Maker-Checker approval must be strictly rejected!');
   console.log('PASS: Payout without Maker-Checker approval strictly blocked by governance gate.');
@@ -2250,10 +2321,14 @@ async function runBusinessSimulation() {
   let projectFreeApprovalBlocked = false;
   try {
     await importService.createApprovalRequest(tenantId, userId, {
-      actionType: 'partner_distribution', referenceId: p1.id,
+      actionType: 'partner_distribution',
+      referenceId: p1.id,
       requestPayload: { partnerId: p1.id, amount: 100000 },
     });
-  } catch (err: any) { projectFreeApprovalBlocked = true; assert.match(err.message, /المشروع|يتطلب/); }
+  } catch (err: any) {
+    projectFreeApprovalBlocked = true;
+    assert.match(err.message, /المشروع|يتطلب/);
+  }
   assert.ok(projectFreeApprovalBlocked, 'Payout approvals must be project-specific');
 
   // Negative test 2: Overpaying beyond partner share must be rejected by profit ceiling gate
@@ -2274,7 +2349,7 @@ async function runBusinessSimulation() {
     assert.match(
       err.message,
       /تتجاوز المستحق المعتمد للشريك|تتجاوز صافي أرباح الشريك|الحد الأقصى|لا يكفي/,
-      `Expected profit share cap rejection, got: ${err.message}`
+      `Expected profit share cap rejection, got: ${err.message}`,
     );
   }
   assert.ok(overpayBlocked, 'Payout exceeding partner allocated profit share must be strictly rejected!');
@@ -2291,13 +2366,7 @@ async function runBusinessSimulation() {
     decision: 'approved',
   });
 
-  const payoutResult = await importService.recordPartnerPayout(
-    tenantId,
-    userId,
-    p1.id,
-    100000,
-    payoutApproval.id
-  );
+  const payoutResult = await importService.recordPartnerPayout(tenantId, userId, p1.id, 100000, payoutApproval.id);
   assert.ok(payoutResult.success);
 
   const updatedP1 = await db
@@ -2316,7 +2385,7 @@ async function runBusinessSimulation() {
     assert.match(
       err.message,
       /تم استهلاكه|تم تنفيذها مسبقاً|executed/,
-      `Expected single-use approval rejection, got: ${err.message}`
+      `Expected single-use approval rejection, got: ${err.message}`,
     );
   }
   assert.ok(reuseBlocked, 'Re-using already executed Maker-Checker approval must be strictly rejected!');
@@ -2352,17 +2421,16 @@ async function runBusinessSimulation() {
 
   // Project closure must never bypass an independent Maker-Checker approval.
   let unauthorizedClosureBlocked = false;
-  try { await importService.closeProject(tenantId, userId, project.id); }
-  catch (err: any) { unauthorizedClosureBlocked = true; assert.match(err.message, /Maker-Checker|موافقة/); }
+  try {
+    await importService.closeProject(tenantId, userId, project.id);
+  } catch (err: any) {
+    unauthorizedClosureBlocked = true;
+    assert.match(err.message, /Maker-Checker|موافقة/);
+  }
   assert.ok(unauthorizedClosureBlocked, 'Project closure without approval must be rejected');
 
   // 4. Execute final closure
-  const finalClosure = await importService.closeProject(
-    tenantId,
-    userId,
-    project.id,
-    closeApproval.id
-  );
+  const finalClosure = await importService.closeProject(tenantId, userId, project.id, closeApproval.id);
   assert.ok(finalClosure.success);
   assert.ok(finalClosure.closureData);
 
@@ -2398,7 +2466,9 @@ async function runBusinessSimulation() {
   }
   assert.ok(partnerEditBlocked, 'Modifying partners on closed project must be rejected');
 
-  console.log('PASS: Final project closure verified with 100% audited settlement, frozen autopsy and post-closure immunity.');
+  console.log(
+    'PASS: Final project closure verified with 100% audited settlement, frozen autopsy and post-closure immunity.',
+  );
 
   console.log('\n=== ALL 30 END-TO-END STEPS PASSED WITH 100% OPERATIONAL & MATHEMATICAL INTEGRITY ===');
 }

@@ -62,27 +62,54 @@ async function setupDb(): Promise<{ pg: PGlite; db: Kysely<Database>; service: S
       payment_type text DEFAULT 'cash', collection_status text, status text DEFAULT 'posted');
     CREATE TABLE sale_items (id bigint PRIMARY KEY, tenant_id text, sale_id bigint, product_id bigint, qty numeric, cost_price numeric);
   `);
-  const accountTypes: Record<number, string> = { 2110: 'liability', 2120: 'liability', 2150: 'liability', 4300: 'contra_revenue', 5100: 'expense' };
+  const accountTypes: Record<number, string> = {
+    2110: 'liability',
+    2120: 'liability',
+    2150: 'liability',
+    4300: 'contra_revenue',
+    5100: 'expense',
+  };
   for (const code of [1110, 1120, 1130, 1140, 2110, 2120, 2150, 4100, 4300, 5100]) {
-    await sql`INSERT INTO accounting_accounts (id, tenant_id, code, is_tax, account_type) VALUES (${code}, 't1', ${String(code)}, false, ${accountTypes[code] || 'asset'})`.execute(db);
+    await sql`INSERT INTO accounting_accounts (id, tenant_id, code, is_tax, account_type) VALUES (${code}, 't1', ${String(code)}, false, ${accountTypes[code] || 'asset'})`.execute(
+      db,
+    );
   }
-  await sql`INSERT INTO accounting_settings VALUES (1, 't1', 1110, 1120, 1130, 2110, 1140, 4100, 4300, 5100, 2120, 1150, NULL, NULL, NULL, NULL, NULL, NULL)`.execute(db);
+  await sql`INSERT INTO accounting_settings VALUES (1, 't1', 1110, 1120, 1130, 2110, 1140, 4100, 4300, 5100, 2120, 1150, NULL, NULL, NULL, NULL, NULL, NULL)`.execute(
+    db,
+  );
   await sql`INSERT INTO settings VALUES ('t1', 'currency', 'EGP')`.execute(db);
   await sql`INSERT INTO currency_exchange_rates VALUES ('t1', 'EGP', true, 1)`.execute(db);
 
   // Double-counted sale 1 (matching sale journal + stale edit journal),
   // clean sale 2 — the engine spec's pinned fixture.
-  await sql`INSERT INTO sales(id, tenant_id, doc_no, subtotal, discount, tax_amount, total, paid_amount) VALUES (1, 't1', 'S1', 100, 10, 14, 104, 104)`.execute(db);
+  await sql`INSERT INTO sales(id, tenant_id, doc_no, subtotal, discount, tax_amount, total, paid_amount) VALUES (1, 't1', 'S1', 100, 10, 14, 104, 104)`.execute(
+    db,
+  );
   await sql`INSERT INTO sale_items VALUES (1, 't1', 1, 10, 2, 30)`.execute(db);
-  await sql`INSERT INTO journal_entries(id, tenant_id, account_id, source_type, source_id, status, entry_no, entry_date) VALUES (1, 't1', 't1:main', 'sale', 1, 'posted', 'JE-1', NOW())`.execute(db);
-  await sql`INSERT INTO journal_entry_lines(journal_entry_id, tenant_id, account_id, debit, credit) VALUES (1, 't1', 1110, 104, 0), (1, 't1', 4100, 0, 100), (1, 't1', 4300, 10, 0), (1, 't1', 2120, 0, 14), (1, 't1', 5100, 60, 0), (1, 't1', 1140, 0, 60)`.execute(db);
-  await sql`INSERT INTO journal_entries(id, tenant_id, account_id, source_type, source_id, status, entry_no, entry_date) VALUES (2, 't1', 't1:main', 'sale_edit', 1, 'posted', 'JE-2', NOW())`.execute(db);
-  await sql`INSERT INTO journal_entry_lines(journal_entry_id, tenant_id, account_id, debit, credit) VALUES (2, 't1', 1110, 150, 0), (2, 't1', 4100, 0, 150)`.execute(db);
-  await sql`INSERT INTO sales(id, tenant_id, doc_no, subtotal, discount, tax_amount, total) VALUES (2, 't1', 'S2', 50, 0, 7, 57)`.execute(db);
-  await sql`INSERT INTO journal_entries(id, tenant_id, account_id, source_type, source_id, status, entry_no, entry_date) VALUES (3, 't1', 't1:main', 'sale', 2, 'posted', 'JE-3', NOW())`.execute(db);
+  await sql`INSERT INTO journal_entries(id, tenant_id, account_id, source_type, source_id, status, entry_no, entry_date) VALUES (1, 't1', 't1:main', 'sale', 1, 'posted', 'JE-1', NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO journal_entry_lines(journal_entry_id, tenant_id, account_id, debit, credit) VALUES (1, 't1', 1110, 104, 0), (1, 't1', 4100, 0, 100), (1, 't1', 4300, 10, 0), (1, 't1', 2120, 0, 14), (1, 't1', 5100, 60, 0), (1, 't1', 1140, 0, 60)`.execute(
+    db,
+  );
+  await sql`INSERT INTO journal_entries(id, tenant_id, account_id, source_type, source_id, status, entry_no, entry_date) VALUES (2, 't1', 't1:main', 'sale_edit', 1, 'posted', 'JE-2', NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO journal_entry_lines(journal_entry_id, tenant_id, account_id, debit, credit) VALUES (2, 't1', 1110, 150, 0), (2, 't1', 4100, 0, 150)`.execute(
+    db,
+  );
+  await sql`INSERT INTO sales(id, tenant_id, doc_no, subtotal, discount, tax_amount, total) VALUES (2, 't1', 'S2', 50, 0, 7, 57)`.execute(
+    db,
+  );
+  await sql`INSERT INTO journal_entries(id, tenant_id, account_id, source_type, source_id, status, entry_no, entry_date) VALUES (3, 't1', 't1:main', 'sale', 2, 'posted', 'JE-3', NOW())`.execute(
+    db,
+  );
   await sql`SELECT setval(pg_get_serial_sequence('journal_entries', 'id'), 10)`.execute(db);
 
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new SaleEditRemediationService(db, posting);
   return { pg, db, service };
@@ -94,7 +121,9 @@ async function journalCount(db: Kysely<Database>): Promise<number> {
 }
 
 async function staleJournal(db: Kysely<Database>): Promise<{ reversed_by_entry_id: number | null }> {
-  const res = await sql<{ reversed_by_entry_id: number | null }>`SELECT reversed_by_entry_id FROM journal_entries WHERE id = 2`.execute(db);
+  const res = await sql<{
+    reversed_by_entry_id: number | null;
+  }>`SELECT reversed_by_entry_id FROM journal_entries WHERE id = 2`.execute(db);
   return res.rows[0];
 }
 
@@ -120,10 +149,26 @@ async function main(): Promise<void> {
   {
     const { db, service } = await setupDb();
     try {
-      await assert.rejects(() => service.apply(AUTH, { saleIds: [1], confirm: false }), /confirmation/, 'confirm:false must throw');
-      await assert.rejects(() => service.apply(AUTH, { saleIds: [1], confirm: undefined }), /confirmation/, 'missing confirm must throw');
-      await assert.rejects(() => service.apply(AUTH, { saleIds: [], confirm: true }), /non-empty/, 'empty saleIds must throw');
-      await assert.rejects(() => service.apply(AUTH, { saleIds: [0], confirm: true }), /positive integers/, 'non-positive saleId must throw');
+      await assert.rejects(
+        () => service.apply(AUTH, { saleIds: [1], confirm: false }),
+        /confirmation/,
+        'confirm:false must throw',
+      );
+      await assert.rejects(
+        () => service.apply(AUTH, { saleIds: [1], confirm: undefined }),
+        /confirmation/,
+        'missing confirm must throw',
+      );
+      await assert.rejects(
+        () => service.apply(AUTH, { saleIds: [], confirm: true }),
+        /non-empty/,
+        'empty saleIds must throw',
+      );
+      await assert.rejects(
+        () => service.apply(AUTH, { saleIds: [0], confirm: true }),
+        /positive integers/,
+        'non-positive saleId must throw',
+      );
       assert.equal(await journalCount(db), 3, 'rejected applies wrote nothing');
       const clean = await service.apply(AUTH, { saleIds: [2], confirm: true, runId: 'run-clean' });
       assert.deepEqual(clean.unmatchedSaleIds, [2], 'clean sale is unmatched');
@@ -164,6 +209,12 @@ async function main(): Promise<void> {
 }
 
 main().then(
-  () => { console.log('sale-edit-remediation-wiring.spec: ok'); process.exit(0); },
-  (err) => { console.error(err); process.exit(1); },
+  () => {
+    console.log('sale-edit-remediation-wiring.spec: ok');
+    process.exit(0);
+  },
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
 );

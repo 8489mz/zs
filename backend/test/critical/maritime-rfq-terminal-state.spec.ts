@@ -61,15 +61,26 @@ async function main(): Promise<void> {
     `);
 
     const bidOf = async (id: number): Promise<any> => {
-      const row = await db.selectFrom('maritime_rfq_bids' as any).selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+      const row = await db
+        .selectFrom('maritime_rfq_bids' as any)
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
       return row as any;
     };
     const rfqStatus = async (id: number): Promise<string> => {
-      const row = await db.selectFrom('maritime_rfqs' as any).select('status').where('id', '=', id).executeTakeFirstOrThrow();
+      const row = await db
+        .selectFrom('maritime_rfqs' as any)
+        .select('status')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
       return String((row as any).status);
     };
     const bidCount = async (): Promise<number> => {
-      const rows = await db.selectFrom('maritime_rfq_bids' as any).selectAll().execute();
+      const rows = await db
+        .selectFrom('maritime_rfq_bids' as any)
+        .selectAll()
+        .execute();
       return rows.length;
     };
     const bidDto = (rfqId: string) => ({

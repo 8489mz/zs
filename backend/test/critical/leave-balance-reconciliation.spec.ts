@@ -44,7 +44,10 @@ import { Database } from '../../src/database/database.types';
 import { HrService } from '../../src/modules/hr/hr.service';
 import { EmployeePortalService } from '../../src/modules/hr/employee-portal.service';
 import { TransactionHelper } from '../../src/database/helpers/transaction.helper';
-import { deductibleApprovedLeaveDays, shouldDeductLeaveFromBalance } from '../../src/modules/hr/engines/leave-balance.engine';
+import {
+  deductibleApprovedLeaveDays,
+  shouldDeductLeaveFromBalance,
+} from '../../src/modules/hr/engines/leave-balance.engine';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const AUTH = {
@@ -71,8 +74,14 @@ async function requestId(pg: PGlite, employeeId: number): Promise<number> {
   return Number(res.rows[0].id);
 }
 
-async function profileUsed(pg: PGlite, hr: HrService, employeeId: number): Promise<{ used: number; remaining: number }> {
-  const profile = (await hr.getEmployeeProfile(employeeId, AUTH)) as { employee: { annualLeaveBalance: number; usedAnnualLeaves: number } };
+async function profileUsed(
+  pg: PGlite,
+  hr: HrService,
+  employeeId: number,
+): Promise<{ used: number; remaining: number }> {
+  const profile = (await hr.getEmployeeProfile(employeeId, AUTH)) as {
+    employee: { annualLeaveBalance: number; usedAnnualLeaves: number };
+  };
   return {
     used: profile.employee.usedAnnualLeaves,
     remaining: profile.employee.annualLeaveBalance - profile.employee.usedAnnualLeaves,
@@ -100,7 +109,14 @@ async function insertApprovedLeave(
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const hr = new HrService(db, new TransactionHelper(), { log: async () => {} } as never, {} as never, {} as never, undefined);
+  const hr = new HrService(
+    db,
+    new TransactionHelper(),
+    { log: async () => {} } as never,
+    {} as never,
+    {} as never,
+    undefined,
+  );
   const portal = new EmployeePortalService(db as never);
 
   try {
@@ -147,16 +163,36 @@ async function main(): Promise<void> {
     // 6. The shared rule, pinned directly (annual identity is one word
     // in every branch).
     assert.equal(
-      shouldDeductLeaveFromBalance({ deductsFromBalance: false, leaveTypeId: 4, leaveTypeCode: 'regular', leaveTypeName: 'إجازة اعتيادية' }),
-      true, 'a type named اعتيادية is annual even with the flag off',
+      shouldDeductLeaveFromBalance({
+        deductsFromBalance: false,
+        leaveTypeId: 4,
+        leaveTypeCode: 'regular',
+        leaveTypeName: 'إجازة اعتيادية',
+      }),
+      true,
+      'a type named اعتيادية is annual even with the flag off',
     );
     assert.equal(
-      shouldDeductLeaveFromBalance({ deductsFromBalance: false, leaveTypeId: 9, leaveTypeCode: null, leaveTypeName: null, leaveTypeText: 'إجازة سنوية' }),
-      true, 'a request text holding the annual type name deducts when the type row join misses',
+      shouldDeductLeaveFromBalance({
+        deductsFromBalance: false,
+        leaveTypeId: 9,
+        leaveTypeCode: null,
+        leaveTypeName: null,
+        leaveTypeText: 'إجازة سنوية',
+      }),
+      true,
+      'a request text holding the annual type name deducts when the type row join misses',
     );
     assert.equal(
-      shouldDeductLeaveFromBalance({ deductsFromBalance: false, leaveTypeId: 2, leaveTypeCode: 'sick', leaveTypeName: 'إجازة مرضية', leaveTypeText: 'إجازة مرضية' }),
-      false, 'a sick type with the flag off does not deduct',
+      shouldDeductLeaveFromBalance({
+        deductsFromBalance: false,
+        leaveTypeId: 2,
+        leaveTypeCode: 'sick',
+        leaveTypeName: 'إجازة مرضية',
+        leaveTypeText: 'إجازة مرضية',
+      }),
+      false,
+      'a sick type with the flag off does not deduct',
     );
     assert.equal(
       deductibleApprovedLeaveDays([
@@ -164,7 +200,8 @@ async function main(): Promise<void> {
         { daysCount: 3, leaveTypeId: 2, leaveTypeCode: 'sick', leaveTypeName: 'إجازة مرضية' },
         { daysCount: 1, leaveTypeId: 3, leaveTypeCode: 'training', leaveTypeName: 'تدريب', deductsFromBalance: true },
       ]),
-      3, 'the reconcile sums deductible approved days only (2 annual + 1 flag-on training, sick excluded)',
+      3,
+      'the reconcile sums deductible approved days only (2 annual + 1 flag-on training, sick excluded)',
     );
 
     // 1. The reported case: an approved 2-day annual leave whose
@@ -175,13 +212,20 @@ async function main(): Promise<void> {
     assert.equal(e1.used, 2, 'profile must read used 2 for the already-approved annual leave');
     assert.equal(e1.remaining, 19, 'profile remaining must be 19, not 21');
     const listed = (await hr.listEmployees({}, AUTH)) as { employees: { id: string; usedAnnualLeaves: number }[] };
-    assert.equal(listed.employees.find((row) => row.id === '1')?.usedAnnualLeaves, 2, 'employee list must read the same used 2');
+    assert.equal(
+      listed.employees.find((row) => row.id === '1')?.usedAnnualLeaves,
+      2,
+      'employee list must read the same used 2',
+    );
     const portalE1 = (await portal.getLeaves(1, 't1')) as { balances: { usedDays: number; remainingDays: number }[] };
     assert.equal(portalE1.balances[0]?.usedDays, 2, 'portal must read used 2');
     assert.equal(portalE1.balances[0]?.remainingDays, 19, 'portal remaining must be 19');
 
     // 2. Forward path: approving a 2-day annual leave deducts 2 days.
-    await hr.createLeaveRequest({ employeeId: 2, leaveTypeId: 1, startDate: '2026-11-08', endDate: '2026-11-09' } as never, AUTH);
+    await hr.createLeaveRequest(
+      { employeeId: 2, leaveTypeId: 1, startDate: '2026-11-08', endDate: '2026-11-09' } as never,
+      AUTH,
+    );
     assert.equal(await storedUsed(pg, 2), 0, 'creating the request must not move the balance');
     await hr.approveLeaveRequest(await requestId(pg, 2), {} as never, AUTH);
     assert.equal(await storedUsed(pg, 2), 2, 'approving the 2-day annual leave must move used 0 -> 2');
@@ -189,7 +233,10 @@ async function main(): Promise<void> {
     assert.equal(e2.remaining, 19, 'profile remaining must be 19 after approval');
 
     // 3. A non-deducting type never deducts.
-    await hr.createLeaveRequest({ employeeId: 3, leaveTypeId: 2, startDate: '2026-11-08', endDate: '2026-11-10' } as never, AUTH);
+    await hr.createLeaveRequest(
+      { employeeId: 3, leaveTypeId: 2, startDate: '2026-11-08', endDate: '2026-11-10' } as never,
+      AUTH,
+    );
     await hr.approveLeaveRequest(await requestId(pg, 3), {} as never, AUTH);
     assert.equal(await storedUsed(pg, 3), 0, 'approving a sick leave must not move the balance');
     const e3 = await profileUsed(pg, hr, 3);
@@ -218,14 +265,21 @@ async function main(): Promise<void> {
     // 4 (guard). E1 already used 2 reconciled days (remaining 19):
     // a 20-day annual request must be refused, not approved on the
     // stale stored counter (which still says 21 remaining).
-    await hr.createLeaveRequest({ employeeId: 1, leaveTypeId: 1, startDate: '2026-11-10', endDate: '2026-11-29' } as never, AUTH);
+    await hr.createLeaveRequest(
+      { employeeId: 1, leaveTypeId: 1, startDate: '2026-11-10', endDate: '2026-11-29' } as never,
+      AUTH,
+    );
     let guardError: unknown = null;
     try {
       await hr.approveLeaveRequest(await requestId(pg, 1), {} as never, AUTH);
     } catch (error) {
       guardError = error;
     }
-    assert.equal((guardError as { code?: string } | null)?.code, 'HR_LEAVE_INSUFFICIENT_BALANCE', 'approving 20 days against 19 remaining must fail closed');
+    assert.equal(
+      (guardError as { code?: string } | null)?.code,
+      'HR_LEAVE_INSUFFICIENT_BALANCE',
+      'approving 20 days against 19 remaining must fail closed',
+    );
     assert.equal(await storedUsed(pg, 1), 0, 'a refused approval must not move the stored counter');
 
     // 2 (cancel). Cancelling the approved annual leave releases it.

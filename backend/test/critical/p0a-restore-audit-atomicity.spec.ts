@@ -13,5 +13,8 @@ const cacheInvalidation = method.indexOf('this.authCache.invalidateTenant(');
 assert.ok(snapshot > orphanGuard && snapshot < transactionClose, 'snapshot insert must be in restore transaction');
 assert.ok(cacheInvalidation > transactionClose, 'auth caches must invalidate only after commit');
 assert.match(method.slice(snapshot, transactionClose), /\.execute\(trx\)/, 'record write must use same transaction');
-assert.ok(!method.slice(transactionClose).includes('insert into backup_snapshots'), 'no failing snapshot write after commit');
+assert.ok(
+  !method.slice(transactionClose).includes('insert into backup_snapshots'),
+  'no failing snapshot write after commit',
+);
 console.log('p0a-restore-audit-atomicity: source transaction boundary verified');

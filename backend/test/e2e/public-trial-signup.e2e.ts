@@ -41,4 +41,7 @@ async function main(): Promise<void> {
   console.log('public trial signup e2e passed');
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

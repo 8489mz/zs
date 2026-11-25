@@ -146,57 +146,69 @@ async function runSimulation() {
           partnerId: null,
           branchId,
           locationId: mainLocationId,
-        }
-      ]
+        },
+      ],
     });
     console.log(`✅ تم إضافة رأس مال افتتاحي للخزينة بمبلغ 50000.`);
 
     // ═══ 2. Expense Creation ═══
     console.log('\n--- 2. إضافة المصروفات (Expense Creation) ---');
-    
-    const expenseRes1 = await treasuryService.createExpense({
-      title: 'أدوات مكتبية وقرطاسية',
-      amount: 1500,
-      date: new Date().toISOString(),
-      note: 'مشتريات مكتبية للفرع',
-      branchId,
-      locationId: mainLocationId,
-      requestKey: randomUUID(),
-    }, auth);
+
+    const expenseRes1 = await treasuryService.createExpense(
+      {
+        title: 'أدوات مكتبية وقرطاسية',
+        amount: 1500,
+        date: new Date().toISOString(),
+        note: 'مشتريات مكتبية للفرع',
+        branchId,
+        locationId: mainLocationId,
+        requestKey: randomUUID(),
+      },
+      auth,
+    );
     console.log(`✅ تم إنشاء مصروف بنجاح (#${expenseRes1.expenseId}) بمبلغ 1500.`);
 
-    const expenseRes2 = await treasuryService.createExpense({
-      title: 'صيانة معدات',
-      amount: 3500,
-      date: new Date().toISOString(),
-      note: 'صيانة دورية',
-      branchId,
-      locationId: mainLocationId,
-      requestKey: randomUUID(),
-    }, auth);
+    const expenseRes2 = await treasuryService.createExpense(
+      {
+        title: 'صيانة معدات',
+        amount: 3500,
+        date: new Date().toISOString(),
+        note: 'صيانة دورية',
+        branchId,
+        locationId: mainLocationId,
+        requestKey: randomUUID(),
+      },
+      auth,
+    );
     console.log(`✅ تم إنشاء مصروف بنجاح (#${expenseRes2.expenseId}) بمبلغ 3500.`);
 
     // ═══ 3. Treasury Transfer ═══
     console.log('\n--- 3. التحويلات النقدية (Treasury Transfer) ---');
     const transferRequestKey = randomUUID();
-    const transferRes = await treasuryService.createTransfer({
-      fromAccountId: cashAccountId,
-      toAccountId: bankAccountId,
-      amount: 10000,
-      requestKey: transferRequestKey,
-      note: 'إيداع بنكي من الخزينة'
-    }, auth);
+    const transferRes = await treasuryService.createTransfer(
+      {
+        fromAccountId: cashAccountId,
+        toAccountId: bankAccountId,
+        amount: 10000,
+        requestKey: transferRequestKey,
+        note: 'إيداع بنكي من الخزينة',
+      },
+      auth,
+    );
     console.log(`✅ تم تحويل مبلغ 10000 من الخزينة إلى البنك بنجاح.`);
 
     // ═══ 4. Transfer Idempotency ═══
     console.log('\n--- 4. اختبار تكرار التحويل (Transfer Idempotency) ---');
-    const idempotentRes = await treasuryService.createTransfer({
-      fromAccountId: cashAccountId,
-      toAccountId: bankAccountId,
-      amount: 10000,
-      requestKey: transferRequestKey,
-      note: 'إيداع بنكي من الخزينة'
-    }, auth);
+    const idempotentRes = await treasuryService.createTransfer(
+      {
+        fromAccountId: cashAccountId,
+        toAccountId: bankAccountId,
+        amount: 10000,
+        requestKey: transferRequestKey,
+        note: 'إيداع بنكي من الخزينة',
+      },
+      auth,
+    );
     if (transferRes.transferId !== idempotentRes.transferId) {
       throw new Error('Idempotency failed: generated a new transfer ID for the same request key');
     }
@@ -205,31 +217,37 @@ async function runSimulation() {
     // ═══ 5. Transfer Conflict ═══
     console.log('\n--- 5. اختبار تعارض التحويل (Transfer Conflict) ---');
     try {
-      await treasuryService.createTransfer({
-        fromAccountId: cashAccountId,
-        toAccountId: bankAccountId,
-        amount: 20000, // Different amount
-        requestKey: transferRequestKey,
-      }, auth);
+      await treasuryService.createTransfer(
+        {
+          fromAccountId: cashAccountId,
+          toAccountId: bankAccountId,
+          amount: 20000, // Different amount
+          requestKey: transferRequestKey,
+        },
+        auth,
+      );
       throw new Error('Expected conflict error not thrown');
     } catch (e: any) {
       if (e.code !== 'TRANSFER_IDEMPOTENCY_MISMATCH') {
-         // If error code varies, it's fine as long as it's an error.
-         console.log(`✅ تم رفض التحويل لتعارض البيانات بنفس الرمز (Conflict). رسالة الخطأ: ${e.message}`);
+        // If error code varies, it's fine as long as it's an error.
+        console.log(`✅ تم رفض التحويل لتعارض البيانات بنفس الرمز (Conflict). رسالة الخطأ: ${e.message}`);
       } else {
-         console.log(`✅ تم رفض التحويل لتعارض البيانات بنفس الرمز (Conflict).`);
+        console.log(`✅ تم رفض التحويل لتعارض البيانات بنفس الرمز (Conflict).`);
       }
     }
 
     // ═══ 6. Insufficient Balance ═══
     console.log('\n--- 6. اختبار الرصيد غير الكافي (Insufficient Balance) ---');
     try {
-      await treasuryService.createTransfer({
-        fromAccountId: bankAccountId,
-        toAccountId: cashAccountId,
-        amount: 20000, // Available in bank is 10000
-        requestKey: randomUUID(),
-      }, auth);
+      await treasuryService.createTransfer(
+        {
+          fromAccountId: bankAccountId,
+          toAccountId: cashAccountId,
+          amount: 20000, // Available in bank is 10000
+          requestKey: randomUUID(),
+        },
+        auth,
+      );
       throw new Error('Expected insufficient balance error not thrown');
     } catch (e: any) {
       console.log(`✅ تم رفض التحويل لعدم كفاية الرصيد. رسالة الخطأ: ${e.message}`);
@@ -238,12 +256,15 @@ async function runSimulation() {
     // ═══ 7. Same Account Transfer ═══
     console.log('\n--- 7. اختبار التحويل لنفس الحساب (Same Account Transfer) ---');
     try {
-      await treasuryService.createTransfer({
-        fromAccountId: cashAccountId,
-        toAccountId: cashAccountId,
-        amount: 1000,
-        requestKey: randomUUID(),
-      }, auth);
+      await treasuryService.createTransfer(
+        {
+          fromAccountId: cashAccountId,
+          toAccountId: cashAccountId,
+          amount: 1000,
+          requestKey: randomUUID(),
+        },
+        auth,
+      );
       throw new Error('Expected same account transfer error not thrown');
     } catch (e: any) {
       console.log(`✅ تم رفض التحويل لأن الحساب المحول منه هو نفس المحول إليه.`);
@@ -298,7 +319,7 @@ async function runSimulation() {
         ${auth.tenantId}, ${auth.accountId}, ${'منتج مباع ' + simUid}, ${'PRD' + simUid}, 'product', 1000.00, 2500.00, 2500.00, 0, true, NOW(), NOW()
       ) RETURNING id
     `.execute(db);
-    
+
     await sql`
       INSERT INTO sale_items (
         tenant_id, account_id, sale_id, product_id, product_name, qty, unit_price, cost_price, line_total, unit_name, unit_multiplier, price_type, notes, modifiers
@@ -315,7 +336,7 @@ async function runSimulation() {
       )
     `.execute(db);
 
-    await db.transaction().execute(trx => accountingPosting.postSale(trx, saleId, auth));
+    await db.transaction().execute((trx) => accountingPosting.postSale(trx, saleId, auth));
     console.log(`✅ تم تسجيل وترحيل مبيعات نقدية بمبلغ 2500 بنجاح.`);
 
     // ═══ 11. End-to-End Cash Flow ═══
@@ -372,7 +393,6 @@ async function runSimulation() {
     }
     console.log(`✅ توازن القيود: إجمالي المدين = ${totalDebits} | إجمالي الدائن = ${totalCredits}`);
     console.log(`✅ المحاكاة المتكاملة للسيولة النقدية والمصروفات تمت بنجاح!`);
-
   } finally {
     // ═══ 12. Cleanup ═══
     console.log('\n--- 12. التنظيف واستعادة حالة قواعد البيانات (Cleanup) ---');
@@ -396,7 +416,7 @@ async function runSimulation() {
   }
 }
 
-runSimulation().catch(err => {
+runSimulation().catch((err) => {
   console.error('❌ فشل تشغيل المحاكاة (Simulation Failed):');
   console.error(err);
   process.exit(1);

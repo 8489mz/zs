@@ -29,7 +29,7 @@ console.log('--- Starting Package Barcode Engine Tests ---');
   const tareWeight = 15.0; // 15kg pallet tare
   const directItems = [
     { quantity: 10, unitWeightKg: 0.5 }, // 5kg
-    { quantity: 2, unitWeightKg: 2.5 },  // 5kg
+    { quantity: 2, unitWeightKg: 2.5 }, // 5kg
   ];
   const childGrossWeights = [25.0, 30.5]; // 55.5kg
 
@@ -47,9 +47,7 @@ console.log('--- Starting Package Barcode Engine Tests ---');
     packageNumber: 'PAL-260930-0001',
     packageType: 'pallet',
     status: 'sealed',
-    items: [
-      { productId: 101, productName: 'Loose Cable', quantity: 5, unitName: 'متر' },
-    ],
+    items: [{ productId: 101, productName: 'Loose Cable', quantity: 5, unitName: 'متر' }],
     children: [
       {
         id: 'pkg_box_1',

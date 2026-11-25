@@ -109,35 +109,101 @@ async function seed(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'KWD' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'KWD', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'KWD', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   // account_type matters: resolveSystemAccountByCode rejects a
   // dedicated code (5300 must be 'expense') whose stored type does
   // not match — the same requirement postDamagedStock relies on.
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [4100, '4100', 'revenue'], [5100, '5100', 'expense'], [5300, '5300', 'expense'],
+    [1110, '1110', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [4100, '4100', 'revenue'],
+    [5100, '5100', 'expense'],
+    [5300, '5300', 'expense'],
   ];
   for (const [id, code, accountType] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: accountType, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: accountType, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, cogs_account_id: 5100,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: VAN_LOC }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: VAN_LOC, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: DAMAGED_LOC, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Damaged', location_type: 'damaged', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: REP, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', phone: null, van_location_id: VAN_LOC }).execute();
-  await anyDb.insertInto('van_sales_trips').values({
-    id: TRIP_OPEN, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP,
-    van_location_id: VAN_LOC, source_warehouse_id: VAN_LOC, status: 'open', settlement_status: 'open',
-  }).execute();
-  await anyDb.insertInto('van_sales_trips').values({
-    id: TRIP_SETTLED, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP,
-    van_location_id: VAN_LOC, source_warehouse_id: VAN_LOC, status: 'settled', settlement_status: 'settled',
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      cogs_account_id: 5100,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: VAN_LOC })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: VAN_LOC,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van',
+      location_type: 'van',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: DAMAGED_LOC,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Damaged',
+      location_type: 'damaged',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: REP, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', phone: null, van_location_id: VAN_LOC })
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({
+      id: TRIP_OPEN,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: REP,
+      van_location_id: VAN_LOC,
+      source_warehouse_id: VAN_LOC,
+      status: 'open',
+      settlement_status: 'open',
+    })
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({
+      id: TRIP_SETTLED,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: REP,
+      van_location_id: VAN_LOC,
+      source_warehouse_id: VAN_LOC,
+      status: 'settled',
+      settlement_status: 'settled',
+    })
+    .execute();
   // Damaged products (odd ids) hold no van stock; replacements (even
   // ids) hold 10 units in the van. Costs carry a third decimal so a
   // 2-decimal rounding anywhere in the path fails the assertions.
@@ -152,19 +218,45 @@ async function seed(db: Kysely<Database>): Promise<void> {
     [108, 'Replacement H', 3.0, 9.0, 10],
   ];
   for (const [id, name, cost, retail, stock] of products) {
-    await anyDb.insertInto('products').values({
-      id, tenant_id: TENANT, account_id: ACCOUNT, name,
-      cost_price: cost, retail_price: retail, stock_qty: stock, is_active: true,
-    }).execute();
+    await anyDb
+      .insertInto('products')
+      .values({
+        id,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name,
+        cost_price: cost,
+        retail_price: retail,
+        stock_qty: stock,
+        is_active: true,
+      })
+      .execute();
     if (stock > 0) {
-      await anyDb.insertInto('product_location_stock').values({
-        tenant_id: TENANT, account_id: ACCOUNT, product_id: id, branch_id: 1, location_id: VAN_LOC, qty: stock,
-      }).execute();
+      await anyDb
+        .insertInto('product_location_stock')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          product_id: id,
+          branch_id: 1,
+          location_id: VAN_LOC,
+          qty: stock,
+        })
+        .execute();
     }
   }
-  await anyDb.insertInto('customers').values({ id: 201, tenant_id: TENANT, account_id: ACCOUNT, name: 'Cust One', balance: 0 }).execute();
-  await anyDb.insertInto('customers').values({ id: 202, tenant_id: TENANT, account_id: ACCOUNT, name: 'Cust Two', balance: 50 }).execute();
-  await anyDb.insertInto('customers').values({ id: 203, tenant_id: TENANT, account_id: ACCOUNT, name: 'Cust Three', balance: 0 }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({ id: 201, tenant_id: TENANT, account_id: ACCOUNT, name: 'Cust One', balance: 0 })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({ id: 202, tenant_id: TENANT, account_id: ACCOUNT, name: 'Cust Two', balance: 50 })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({ id: 203, tenant_id: TENANT, account_id: ACCOUNT, name: 'Cust Three', balance: 0 })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): { van: VanSalesService } {
@@ -178,40 +270,71 @@ function buildServices(db: Kysely<Database>): { van: VanSalesService } {
 }
 
 async function swapJournal(db: Kysely<Database>, swapId: number): Promise<Array<Record<string, any>>> {
-  return (db as any).selectFrom('journal_entries').selectAll()
-    .where('source_type', '=', 'van_damaged_swap').where('source_id', '=', swapId).execute();
+  return (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', 'van_damaged_swap')
+    .where('source_id', '=', swapId)
+    .execute();
 }
 
-async function journalLeg(db: Kysely<Database>, entryId: number, accountId: number, side: 'debit' | 'credit'): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entry_lines')
-    .select([side]).where('journal_entry_id', '=', entryId).where('account_id', '=', accountId).execute();
+async function journalLeg(
+  db: Kysely<Database>,
+  entryId: number,
+  accountId: number,
+  side: 'debit' | 'credit',
+): Promise<number> {
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select([side])
+    .where('journal_entry_id', '=', entryId)
+    .where('account_id', '=', accountId)
+    .execute();
   return rows.reduce((sum: number, row: any) => sum + Number(row[side] || 0), 0);
 }
 
 async function journalTotals(db: Kysely<Database>, entryId: number): Promise<{ debit: number; credit: number }> {
-  const rows = await (db as any).selectFrom('journal_entry_lines').select(['debit', 'credit'])
-    .where('journal_entry_id', '=', entryId).execute();
-  const summed = rows.reduce((acc: { debit: number; credit: number }, row: any) => ({
-    debit: acc.debit + Number(row.debit || 0),
-    credit: acc.credit + Number(row.credit || 0),
-  }), { debit: 0, credit: 0 });
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['debit', 'credit'])
+    .where('journal_entry_id', '=', entryId)
+    .execute();
+  const summed = rows.reduce(
+    (acc: { debit: number; credit: number }, row: any) => ({
+      debit: acc.debit + Number(row.debit || 0),
+      credit: acc.credit + Number(row.credit || 0),
+    }),
+    { debit: 0, credit: 0 },
+  );
   return { debit: Number(summed.debit.toFixed(3)), credit: Number(summed.credit.toFixed(3)) };
 }
 
 async function locationQty(db: Kysely<Database>, locationId: number, productId: number): Promise<number> {
-  const row = await (db as any).selectFrom('product_location_stock').select(['qty'])
-    .where('location_id', '=', locationId).where('product_id', '=', productId).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('product_location_stock')
+    .select(['qty'])
+    .where('location_id', '=', locationId)
+    .where('product_id', '=', productId)
+    .executeTakeFirst();
   return Number(row?.qty || 0);
 }
 
 async function customerBalance(db: Kysely<Database>, customerId: number): Promise<number> {
-  const row = await (db as any).selectFrom('customers').select(['balance']).where('id', '=', customerId).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('customers')
+    .select(['balance'])
+    .where('id', '=', customerId)
+    .executeTakeFirst();
   return Number(row?.balance || 0);
 }
 
 async function ledgerRows(db: Kysely<Database>, swapId: number): Promise<Array<Record<string, any>>> {
-  return (db as any).selectFrom('customer_ledger').selectAll()
-    .where('reference_type', '=', 'van_swap').where('reference_id', '=', swapId).execute();
+  return (db as any)
+    .selectFrom('customer_ledger')
+    .selectAll()
+    .where('reference_type', '=', 'van_swap')
+    .where('reference_id', '=', swapId)
+    .execute();
 }
 
 async function swapRows(db: Kysely<Database>): Promise<Array<Record<string, any>>> {
@@ -267,9 +390,18 @@ async function main(): Promise<void> {
 
     // 2. Negative priceDiff: the customer is owed the difference.
     {
-      const result = await van.executeDamagedSwap(REP, TENANT, ACCOUNT, swapPayload({
-        customerId: 202, damagedProductId: 103, damagedQty: 1, replacementProductId: 104, replacementQty: 1,
-      }));
+      const result = await van.executeDamagedSwap(
+        REP,
+        TENANT,
+        ACCOUNT,
+        swapPayload({
+          customerId: 202,
+          damagedProductId: 103,
+          damagedQty: 1,
+          replacementProductId: 104,
+          replacementQty: 1,
+        }),
+      );
       assert.equal(result.ok, true);
       assert.equal(result.priceDifference, -2);
       const entries = await swapJournal(db, result.swapId);
@@ -298,15 +430,23 @@ async function main(): Promise<void> {
     // 3. Retry with the same clientTxId executes once.
     {
       const payload = swapPayload({
-        customerId: 203, damagedProductId: 105, damagedQty: 1,
-        replacementProductId: 106, replacementQty: 1, clientTxId: 'swap-retry-1',
+        customerId: 203,
+        damagedProductId: 105,
+        damagedQty: 1,
+        replacementProductId: 106,
+        replacementQty: 1,
+        clientTxId: 'swap-retry-1',
       });
       const first = await van.executeDamagedSwap(REP, TENANT, ACCOUNT, payload);
       const second = await van.executeDamagedSwap(REP, TENANT, ACCOUNT, payload);
       assert.equal(second.swapId, first.swapId, 'the retry returns the original swap');
       assert.equal(second.priceDifference, first.priceDifference);
       assert.equal(second.damagedProductName, first.damagedProductName);
-      assert.equal((await swapRows(db)).filter((row: any) => String(row.notes || '').includes('[tx:swap-retry-1]')).length, 1, 'one swap row for the retried tx');
+      assert.equal(
+        (await swapRows(db)).filter((row: any) => String(row.notes || '').includes('[tx:swap-retry-1]')).length,
+        1,
+        'one swap row for the retried tx',
+      );
       assert.equal((await swapJournal(db, first.swapId)).length, 1, 'one journal for the retried swap');
       assert.equal(await customerBalance(db, 203), 1, 'the balance moved once, not twice');
       assert.equal((await ledgerRows(db, first.swapId)).length, 1, 'one ledger row for the retried swap');
@@ -318,7 +458,10 @@ async function main(): Promise<void> {
     {
       await assert.rejects(
         van.executeDamagedSwap(REP, TENANT, ACCOUNT, swapPayload({ tripId: TRIP_SETTLED, customerId: 201 })),
-        (err: any) => { assert.equal(err.code, 'INVALID_TRIP'); return true; },
+        (err: any) => {
+          assert.equal(err.code, 'INVALID_TRIP');
+          return true;
+        },
       );
       console.log('  closed-trip refusal passed');
     }
@@ -327,7 +470,10 @@ async function main(): Promise<void> {
     {
       await assert.rejects(
         van.executeDamagedSwap(REP, TENANT, ACCOUNT, swapPayload({ damagedQty: 0, customerId: 201 })),
-        (err: any) => { assert.equal(err.code, 'INVALID_QUANTITY'); return true; },
+        (err: any) => {
+          assert.equal(err.code, 'INVALID_QUANTITY');
+          return true;
+        },
       );
       console.log('  zero-qty refusal passed');
     }
@@ -335,9 +481,17 @@ async function main(): Promise<void> {
     // 6. Swap with no customer: cost legs only, no receivable leg.
     {
       const before = (await swapRows(db)).length;
-      const result = await van.executeDamagedSwap(REP, TENANT, ACCOUNT, swapPayload({
-        damagedProductId: 107, damagedQty: 1, replacementProductId: 108, replacementQty: 1,
-      }));
+      const result = await van.executeDamagedSwap(
+        REP,
+        TENANT,
+        ACCOUNT,
+        swapPayload({
+          damagedProductId: 107,
+          damagedQty: 1,
+          replacementProductId: 108,
+          replacementQty: 1,
+        }),
+      );
       assert.equal(result.ok, true);
       assert.equal(result.priceDifference, 1);
       const rows = await swapRows(db);
@@ -365,7 +519,10 @@ async function main(): Promise<void> {
       await (db as any).deleteFrom('stock_locations').where('id', '=', DAMAGED_LOC).execute();
       await assert.rejects(
         van.executeDamagedSwap(REP, TENANT, ACCOUNT, swapPayload({ customerId: 201 })),
-        (err: any) => { assert.equal(err.code, 'SWAP_REJECTED'); return true; },
+        (err: any) => {
+          assert.equal(err.code, 'SWAP_REJECTED');
+          return true;
+        },
       );
       assert.equal((await swapRows(db)).length, before, 'no swap row was written');
       assert.equal(await locationQty(db, VAN_LOC, 102), vanBefore, 'no stock moved on the refused swap');
@@ -379,16 +536,31 @@ async function main(): Promise<void> {
       const { readFileSync } = await import('node:fs');
       const { resolve } = await import('node:path');
       const here = __dirname;
-      const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
+      const postingSource = readFileSync(
+        resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'),
+        'utf8',
+      );
       assert.ok(postingSource.includes('postVanDamagedSwap'), 'the swap journal is posted by postVanDamagedSwap');
       // File #63 split: the journal source type moved to the S1 slice.
-      const s1Source = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-damaged-swap.slice.ts'), 'utf8');
+      const s1Source = readFileSync(
+        resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-damaged-swap.slice.ts'),
+        'utf8',
+      );
       assert.ok(s1Source.includes("'van_damaged_swap'"), 'the journal source is van_damaged_swap');
       // File #67 split: the swap source moved to the S2 slice.
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-collections-and-swaps/execute-damaged-swap.slice.ts'), 'utf8');
+      const vanSource = readFileSync(
+        resolve(
+          here,
+          '../../src/modules/delivery-reps/services/van-collections-and-swaps/execute-damaged-swap.slice.ts',
+        ),
+        'utf8',
+      );
       assert.ok(vanSource.includes('postVanDamagedSwap'), 'executeDamagedSwap posts through postVanDamagedSwap');
       assert.ok(vanSource.includes("'swap_price_adjustment'"), 'the ledger row uses swap_price_adjustment');
-      assert.ok(vanSource.includes("location_type', '=', 'damaged'"), 'the damaged qty is routed to the damaged location');
+      assert.ok(
+        vanSource.includes("location_type', '=', 'damaged'"),
+        'the damaged qty is routed to the damaged location',
+      );
       assert.ok(vanSource.includes('findSwapByClientTxId'), 'the swap checks clientTxId before executing');
       console.log('  source pins passed');
     }

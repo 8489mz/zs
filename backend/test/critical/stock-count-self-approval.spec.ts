@@ -57,25 +57,76 @@ import { InventoryCountService } from '../../src/modules/inventory/services/inve
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
 // t2: single-admin tenant (sole admin id 10, cashier id 11).
-const SOLE_ADMIN = { tenantId: 't2', accountId: 'a2', role: 'admin', userId: 10, username: 'soleadmin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
-const T2_CASHIER = { tenantId: 't2', accountId: 'a2', role: 'cashier', userId: 11, username: 'cashier2', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const SOLE_ADMIN = {
+  tenantId: 't2',
+  accountId: 'a2',
+  role: 'admin',
+  userId: 10,
+  username: 'soleadmin',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
+const T2_CASHIER = {
+  tenantId: 't2',
+  accountId: 'a2',
+  role: 'cashier',
+  userId: 11,
+  username: 'cashier2',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 // t1: multi-admin tenant (admin1 id 1, admin2 id 3, cashier id 2) —
 // the control that the escape does not leak into dual control.
-const ADMIN1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin1', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const ADMIN1 = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin1',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 
-async function seedProduct(db: Kysely<Database>, tenantId: string, accountId: string, branchId: number, locationId: number, id: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, ${tenantId}, ${accountId}, ${`Product ${id}`}, 100, 0, 10, true, false)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES (${tenantId}, ${accountId}, ${id}, ${branchId}, ${locationId}, 100, 0)`.execute(db);
+async function seedProduct(
+  db: Kysely<Database>,
+  tenantId: string,
+  accountId: string,
+  branchId: number,
+  locationId: number,
+  id: number,
+): Promise<void> {
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, ${tenantId}, ${accountId}, ${`Product ${id}`}, 100, 0, 10, true, false)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES (${tenantId}, ${accountId}, ${id}, ${branchId}, ${locationId}, 100, 0)`.execute(
+    db,
+  );
 }
 
-async function seedSession(db: Kysely<Database>, tenantId: string, accountId: string, branchId: number, locationId: number, sessionId: number, productId: number, expected: number, counted: number, countedBy: number): Promise<void> {
-  await sql`INSERT INTO stock_count_sessions (id, tenant_id, account_id, doc_no, branch_id, location_id, status, note, counted_by, created_at, updated_at) VALUES (${sessionId}, ${tenantId}, ${accountId}, ${`ZSC-${sessionId}`}, ${branchId}, ${locationId}, 'draft', '', ${countedBy}, NOW(), NOW())`.execute(db);
-  await sql`INSERT INTO stock_count_items (tenant_id, account_id, session_id, product_id, product_name, expected_qty, counted_qty, variance_qty, reason, note, counted_serials, batch_counts) VALUES (${tenantId}, ${accountId}, ${sessionId}, ${productId}, ${`Product ${productId}`}, ${expected}, ${counted}, ${Number((counted - expected).toFixed(3))}, 'shortage found', '', null, null)`.execute(db);
+async function seedSession(
+  db: Kysely<Database>,
+  tenantId: string,
+  accountId: string,
+  branchId: number,
+  locationId: number,
+  sessionId: number,
+  productId: number,
+  expected: number,
+  counted: number,
+  countedBy: number,
+): Promise<void> {
+  await sql`INSERT INTO stock_count_sessions (id, tenant_id, account_id, doc_no, branch_id, location_id, status, note, counted_by, created_at, updated_at) VALUES (${sessionId}, ${tenantId}, ${accountId}, ${`ZSC-${sessionId}`}, ${branchId}, ${locationId}, 'draft', '', ${countedBy}, NOW(), NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO stock_count_items (tenant_id, account_id, session_id, product_id, product_name, expected_qty, counted_qty, variance_qty, reason, note, counted_serials, batch_counts) VALUES (${tenantId}, ${accountId}, ${sessionId}, ${productId}, ${`Product ${productId}`}, ${expected}, ${counted}, ${Number((counted - expected).toFixed(3))}, 'shortage found', '', null, null)`.execute(
+    db,
+  );
 }
 
 async function expectCode(promise: Promise<unknown>, code: string): Promise<void> {
   let caught: unknown;
-  try { await promise; } catch (error) { caught = error; }
+  try {
+    await promise;
+  } catch (error) {
+    caught = error;
+  }
   assert.ok(caught, `expected rejection with ${code}`);
   assert.equal((caught as { code?: string }).code, code);
 }
@@ -83,7 +134,10 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<void
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new InventoryCountService(
     db as never,
@@ -140,16 +194,31 @@ async function main(): Promise<void> {
     // Approval fixtures: the sole admin's password, the two t1 admin
     // passwords, and the shared manager PIN (same value both tenants).
     const soleRecord = await createPasswordRecord('sole-pass');
-    await sql`UPDATE users SET password_hash = ${soleRecord.hash}, password_salt = ${soleRecord.salt} WHERE id = 10`.execute(db);
+    await sql`UPDATE users SET password_hash = ${soleRecord.hash}, password_salt = ${soleRecord.salt} WHERE id = 10`.execute(
+      db,
+    );
     const admin1Record = await createPasswordRecord('admin1-pass');
-    await sql`UPDATE users SET password_hash = ${admin1Record.hash}, password_salt = ${admin1Record.salt} WHERE id = 1`.execute(db);
+    await sql`UPDATE users SET password_hash = ${admin1Record.hash}, password_salt = ${admin1Record.salt} WHERE id = 1`.execute(
+      db,
+    );
     const admin2Record = await createPasswordRecord('admin2-pass');
-    await sql`UPDATE users SET password_hash = ${admin2Record.hash}, password_salt = ${admin2Record.salt} WHERE id = 3`.execute(db);
+    await sql`UPDATE users SET password_hash = ${admin2Record.hash}, password_salt = ${admin2Record.salt} WHERE id = 3`.execute(
+      db,
+    );
     await sql`INSERT INTO settings VALUES ('t1', 'managerPin', '"2468"'), ('t2', 'managerPin', '"2468"')`.execute(db);
 
-    async function sessionState(db: Kysely<Database>, id: number): Promise<{ status: string; approvedBy: number | null }> {
-      const row = await sql<{ status: string; approved_by: number | null }>`SELECT status, approved_by FROM stock_count_sessions WHERE id = ${id}`.execute(db);
-      return { status: row.rows[0].status, approvedBy: row.rows[0].approved_by == null ? null : Number(row.rows[0].approved_by) };
+    async function sessionState(
+      db: Kysely<Database>,
+      id: number,
+    ): Promise<{ status: string; approvedBy: number | null }> {
+      const row = await sql<{
+        status: string;
+        approved_by: number | null;
+      }>`SELECT status, approved_by FROM stock_count_sessions WHERE id = ${id}`.execute(db);
+      return {
+        status: row.rows[0].status,
+        approvedBy: row.rows[0].approved_by == null ? null : Number(row.rows[0].approved_by),
+      };
     }
 
     // Case (a): single-admin tenant — the sole admin counted AND posts
@@ -161,7 +230,9 @@ async function main(): Promise<void> {
     const selfApproved = await sessionState(db, 401);
     assert.equal(selfApproved.status, 'posted');
     assert.equal(selfApproved.approvedBy, 10);
-    const loc101 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 101 AND location_id = 2`.execute(db);
+    const loc101 = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE product_id = 101 AND location_id = 2`.execute(db);
     assert.equal(Number(loc101.rows[0].qty), 85);
 
     // Case (b): single-admin tenant — a cashier counted, the sole
@@ -195,7 +266,9 @@ async function main(): Promise<void> {
     const selfApprovedMulti = await sessionState(db, 404);
     assert.equal(selfApprovedMulti.status, 'posted');
     assert.equal(selfApprovedMulti.approvedBy, 1);
-    const loc104 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 104 AND location_id = 1`.execute(db);
+    const loc104 = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE product_id = 104 AND location_id = 1`.execute(db);
     assert.equal(Number(loc104.rows[0].qty), 85);
 
     // Case (e): multi-admin tenant — a different admin's password
@@ -218,10 +291,17 @@ async function main(): Promise<void> {
     assert.equal(zeroVariance.approvedBy, null);
 
     // Source + invariant pins.
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/inventory/services/inventory-count.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../src/modules/inventory/services/inventory-count.service.ts'),
+      'utf8',
+    );
     assert.ok(serviceSource.includes('INV-STOCK-COUNT-SELF-APPROVAL'), 'service documents self-approval');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('- INV-STOCK-COUNT-SELF-APPROVAL ').length - 1, 1, 'invariant entry exists exactly once');
+    assert.equal(
+      invariants.split('- INV-STOCK-COUNT-SELF-APPROVAL ').length - 1,
+      1,
+      'invariant entry exists exactly once',
+    );
 
     console.log('stock count self approval checks passed (6 cases)');
   } finally {

@@ -27,7 +27,18 @@ import { resolveSaleTaxRate } from '../../src/modules/sales/engines/sale-tax-rat
 
 function chainable(terminal: Record<string, any>) {
   const builder: any = {};
-  for (const key of ['selectAll', 'select', 'where', 'forUpdate', 'leftJoin', 'innerJoin', 'orderBy', 'limit', 'onRef', 'on']) {
+  for (const key of [
+    'selectAll',
+    'select',
+    'where',
+    'forUpdate',
+    'leftJoin',
+    'innerJoin',
+    'orderBy',
+    'limit',
+    'onRef',
+    'on',
+  ]) {
     builder[key] = (...args: any[]) => {
       if ((key === 'leftJoin' || key === 'innerJoin') && typeof args[1] === 'function') args[1](builder);
       return builder;
@@ -47,7 +58,9 @@ function buildService(settingsRows: any[]) {
     }),
     selectFrom: (table: string) => {
       if (table === 'accounting_settings') {
-        return chainable({ executeTakeFirst: async () => ({ lock_date_all: null, lock_date_non_adviser: null, lock_date_tax: null }) });
+        return chainable({
+          executeTakeFirst: async () => ({ lock_date_all: null, lock_date_non_adviser: null, lock_date_tax: null }),
+        });
       }
       if (table === 'accounting_fiscal_periods') {
         return chainable({ executeTakeFirst: async () => null });
@@ -64,19 +77,34 @@ function buildService(settingsRows: any[]) {
       if (table === 'customers') {
         return chainable({
           executeTakeFirst: async () => ({
-            id: 21, name: 'Customer', balance: 0, credit_limit: 0,
-            store_credit_balance: 0, loyalty_points: 0,
-            is_credit_blocked: false, credit_block_reason: null,
+            id: 21,
+            name: 'Customer',
+            balance: 0,
+            credit_limit: 0,
+            store_credit_balance: 0,
+            loyalty_points: 0,
+            is_credit_blocked: false,
+            credit_block_reason: null,
           }),
         });
       }
       if (table === 'products as p') {
         return chainable({
-          execute: async () => [{
-            id: 1, name: 'Widget', name_en: null, stock_qty: 100, reserved_qty: 0,
-            retail_price: 100, wholesale_price: 90, cost_price: 60,
-            min_selling_price: 0, item_type: 'product', bom_id: null,
-          }],
+          execute: async () => [
+            {
+              id: 1,
+              name: 'Widget',
+              name_en: null,
+              stock_qty: 100,
+              reserved_qty: 0,
+              retail_price: 100,
+              wholesale_price: 90,
+              cost_price: 60,
+              min_selling_price: 0,
+              item_type: 'product',
+              bom_id: null,
+            },
+          ],
         });
       }
       if (table === 'product_offers') {
@@ -84,9 +112,15 @@ function buildService(settingsRows: any[]) {
       }
       throw new Error(`unexpected (query|write) ${table}: the tax gate must run before it`);
     },
-    insertInto: () => { throw new Error('unexpected write: the tax gate must run before any write'); },
-    updateTable: () => { throw new Error('unexpected write: the tax gate must run before any write'); },
-    deleteFrom: () => { throw new Error('unexpected write: the tax gate must run before any write'); },
+    insertInto: () => {
+      throw new Error('unexpected write: the tax gate must run before any write');
+    },
+    updateTable: () => {
+      throw new Error('unexpected write: the tax gate must run before any write');
+    },
+    deleteFrom: () => {
+      throw new Error('unexpected write: the tax gate must run before any write');
+    },
   };
   const service = Object.create(SalesWriteService.prototype);
   service.db = {};
@@ -109,7 +143,15 @@ function salePayload(tenantId: string, taxRate?: number): { payload: any; auth: 
     pricesIncludeTax: false,
   };
   if (taxRate !== undefined) payload.taxRate = taxRate;
-  const auth: any = { userId: 1, tenantId, accountId: 'a1', role: 'admin', permissions: [], sessionId: 'x', username: 't' };
+  const auth: any = {
+    userId: 1,
+    tenantId,
+    accountId: 'a1',
+    role: 'admin',
+    permissions: [],
+    sessionId: 'x',
+    username: 't',
+  };
   return { payload, auth };
 }
 
@@ -187,4 +229,7 @@ async function main() {
   console.log('Sale tax rate enforcement tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

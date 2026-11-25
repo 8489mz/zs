@@ -61,7 +61,15 @@ import { resetTenantStockToZero } from '../../src/common/utils/location-stock-le
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const GUARD_SCRIPT = path.join(REPO_ROOT, 'backend', 'scripts', 'check-architecture-guardrails.cjs');
 const LEDGER = path.join(REPO_ROOT, 'backend', 'src', 'common', 'utils', 'location-stock-ledger.ts');
-const DEMO_DATA = path.join(REPO_ROOT, 'backend', 'src', 'modules', 'settings', 'services', 'settings-demo-data.service.ts');
+const DEMO_DATA = path.join(
+  REPO_ROOT,
+  'backend',
+  'src',
+  'modules',
+  'settings',
+  'services',
+  'settings-demo-data.service.ts',
+);
 
 const REMOVED_FILES = [
   'backend/src/modules/maintenance/maintenance.service.ts',
@@ -131,11 +139,15 @@ async function main(): Promise<void> {
     'tradein must still route stock through applyStockDelta',
   );
   assert.ok(
-    read('backend/src/modules/import-sales/services/import-receipt-posting.service.ts').includes('applyStockDelta(trx,'),
+    read('backend/src/modules/import-sales/services/import-receipt-posting.service.ts').includes(
+      'applyStockDelta(trx,',
+    ),
     'import receipt posting must still route stock through applyStockDelta',
   );
   assert.ok(
-    read('backend/src/modules/import-sales/services/import-container-preorders.service.ts').includes('applyStockDelta(trx as any,'),
+    read('backend/src/modules/import-sales/services/import-container-preorders.service.ts').includes(
+      'applyStockDelta(trx as any,',
+    ),
     'import container preorders must still route stock through applyStockDelta',
   );
 
@@ -146,15 +158,22 @@ async function main(): Promise<void> {
     await pg.exec(`
       CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, stock_qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, updated_at timestamptz);
     `);
-    await (db as any).insertInto('products').values([
-      { id: 1, tenant_id: 't1', account_id: 'a1', name: 'A', stock_qty: 10, reserved_qty: 2 },
-      { id: 2, tenant_id: 't1', account_id: 'a1', name: 'B', stock_qty: 0, reserved_qty: 5 },
-      { id: 3, tenant_id: 't1', account_id: 'a1', name: 'C', stock_qty: 7.5, reserved_qty: 0 },
-      { id: 4, tenant_id: 't2', account_id: 'a2', name: 'Other tenant', stock_qty: 9, reserved_qty: 1 },
-    ]).execute();
+    await (db as any)
+      .insertInto('products')
+      .values([
+        { id: 1, tenant_id: 't1', account_id: 'a1', name: 'A', stock_qty: 10, reserved_qty: 2 },
+        { id: 2, tenant_id: 't1', account_id: 'a1', name: 'B', stock_qty: 0, reserved_qty: 5 },
+        { id: 3, tenant_id: 't1', account_id: 'a1', name: 'C', stock_qty: 7.5, reserved_qty: 0 },
+        { id: 4, tenant_id: 't2', account_id: 'a2', name: 'Other tenant', stock_qty: 9, reserved_qty: 1 },
+      ])
+      .execute();
     const zeroed = await resetTenantStockToZero(db as any, 't1');
     assert.equal(zeroed, 3, 'the helper reports the 3 zeroed products of the tenant');
-    const rows: any[] = await (db as any).selectFrom('products').select(['id', 'tenant_id', 'stock_qty', 'reserved_qty']).orderBy('id', 'asc').execute();
+    const rows: any[] = await (db as any)
+      .selectFrom('products')
+      .select(['id', 'tenant_id', 'stock_qty', 'reserved_qty'])
+      .orderBy('id', 'asc')
+      .execute();
     for (const row of rows.filter((r: any) => r.tenant_id === 't1')) {
       assert.equal(Number(row.stock_qty), 0, `product ${row.id} stock_qty is zeroed`);
       assert.equal(Number(row.reserved_qty), 0, `product ${row.id} reserved_qty is zeroed`);

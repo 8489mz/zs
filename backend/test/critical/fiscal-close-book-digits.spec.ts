@@ -111,37 +111,85 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string, baseCode?: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: code } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: baseCode ?? code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: code } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: baseCode ?? code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 async function seedYear(db: Kysely<Database>, id: number): Promise<void> {
-  await db.insertInto('accounting_fiscal_years' as never).values({
-    id, tenant_id: 't1', name: 'FY2025', code: 'FY25',
-    start_date: '2025-01-01', end_date: '2025-12-31', status: 'open',
-    closing_entry_id: null, net_profit_loss: null, total_revenue: null, total_expense: null,
-    retained_earnings_account_id: null, closed_at: null, closed_by: null, closing_notes: null,
-    updated_at: new Date(),
-  } as never).execute();
+  await db
+    .insertInto('accounting_fiscal_years' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      name: 'FY2025',
+      code: 'FY25',
+      start_date: '2025-01-01',
+      end_date: '2025-12-31',
+      status: 'open',
+      closing_entry_id: null,
+      net_profit_loss: null,
+      total_revenue: null,
+      total_expense: null,
+      retained_earnings_account_id: null,
+      closed_at: null,
+      closed_by: null,
+      closing_notes: null,
+      updated_at: new Date(),
+    } as never)
+    .execute();
 }
 
 async function seedPostedEntry(
   db: Kysely<Database>,
   lines: Array<{ accountId: number; debit: number; credit: number }>,
 ): Promise<number> {
-  const inserted = await db.insertInto('journal_entries' as never).values({
-    tenant_id: 't1', account_id: 'a1', entry_no: 'JE-SEED', dedup_key: null,
-    entry_date: '2025-06-15', description: 'seed', source_type: 'sale', source_id: 1,
-    status: 'posted', branch_id: null, location_id: null, created_by: 1, posted_by: 1,
-    posted_at: new Date(), reversal_of_entry_id: null, reversed_by_entry_id: null, updated_at: new Date(),
-  } as never).returning('id' as never).executeTakeFirstOrThrow() as unknown as { id: number };
+  const inserted = (await db
+    .insertInto('journal_entries' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 'a1',
+      entry_no: 'JE-SEED',
+      dedup_key: null,
+      entry_date: '2025-06-15',
+      description: 'seed',
+      source_type: 'sale',
+      source_id: 1,
+      status: 'posted',
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+      posted_by: 1,
+      posted_at: new Date(),
+      reversal_of_entry_id: null,
+      reversed_by_entry_id: null,
+      updated_at: new Date(),
+    } as never)
+    .returning('id' as never)
+    .executeTakeFirstOrThrow()) as unknown as { id: number };
   const entryId = Number((inserted as any).id);
   for (const line of lines) {
-    await db.insertInto('journal_entry_lines' as never).values({
-      tenant_id: 't1', journal_entry_id: entryId, account_id: line.accountId, cost_center_id: null,
-      description: 'seed', debit: line.debit, credit: line.credit,
-      partner_type: 'none', partner_id: null, branch_id: null, location_id: null,
-    } as never).execute();
+    await db
+      .insertInto('journal_entry_lines' as never)
+      .values({
+        tenant_id: 't1',
+        journal_entry_id: entryId,
+        account_id: line.accountId,
+        cost_center_id: null,
+        description: 'seed',
+        debit: line.debit,
+        credit: line.credit,
+        partner_type: 'none',
+        partner_id: null,
+        branch_id: null,
+        location_id: null,
+      } as never)
+      .execute();
   }
   return entryId;
 }
@@ -156,20 +204,24 @@ function buildService(db: Kysely<Database>): FiscalYearService {
   return new FiscalYearService(db, posting);
 }
 
-async function closingLines(db: Kysely<Database>): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+async function closingLines(
+  db: Kysely<Database>,
+): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('journal_entries', 'journal_entries.id', 'journal_entry_lines.journal_entry_id')
     .select(['journal_entry_lines.account_id', 'journal_entry_lines.debit', 'journal_entry_lines.credit'])
     .where('journal_entries.source_type', '=', 'fiscal_year_closing')
-    .execute() as unknown as Array<Record<string, unknown>>;
+    .execute()) as unknown as Array<Record<string, unknown>>;
   return rows.map((r) => ({ accountId: Number(r.account_id), debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
 async function accountNet(db: Kysely<Database>, accountId: number): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .select(['debit', 'credit'])
     .where('account_id', '=', accountId)
-    .execute() as unknown as Array<Record<string, unknown>>;
+    .execute()) as unknown as Array<Record<string, unknown>>;
   return rows.reduce((sum, r) => sum + Number(r.debit) - Number(r.credit), 0);
 }
 
@@ -192,18 +244,30 @@ async function main(): Promise<void> {
       assert.equal(preview.netProfitLoss, 100.125);
       assert.deepEqual(
         preview.proposedClosingLines.map((l) => [l.accountId, l.debit, l.credit]),
-        [[10, 200.25, 0], [20, 0, 100.125], [30, 0, 100.125]],
+        [
+          [10, 200.25, 0],
+          [20, 0, 100.125],
+          [30, 0, 100.125],
+        ],
       );
       await service.executeFiscalYearClose(auth, 1, {});
       const lines = await closingLines(db);
       assert.equal(lines.length, 3, 'closing entry must have exactly the 3 close lines, no 7290 plug');
       assert.deepEqual(
         lines.map((l) => [l.accountId, l.debit, l.credit]).sort((a, b) => a[0] - b[0]),
-        [[10, 200.25, 0], [20, 0, 100.125], [30, 0, 100.125]],
+        [
+          [10, 200.25, 0],
+          [20, 0, 100.125],
+          [30, 0, 100.125],
+        ],
       );
       assert.equal(await accountNet(db, 10), 0, 'revenue account must be zeroed exactly');
       assert.equal(await accountNet(db, 20), 0, 'expense account must be zeroed exactly');
-      const fy = await db.selectFrom('accounting_fiscal_years').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      const fy = await db
+        .selectFrom('accounting_fiscal_years')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal((fy as any).status, 'closed');
       assert.equal(Number((fy as any).net_profit_loss), 100.125);
       assert.equal(Number((fy as any).total_revenue), 200.25);
@@ -227,7 +291,10 @@ async function main(): Promise<void> {
       const lines = await closingLines(db);
       assert.deepEqual(
         lines.map((l) => [l.accountId, l.debit, l.credit]).sort((a, b) => a[0] - b[0]),
-        [[10, 100.12, 0], [30, 0, 100.12]],
+        [
+          [10, 100.12, 0],
+          [30, 0, 100.12],
+        ],
       );
     } finally {
       await db.destroy();
@@ -251,11 +318,12 @@ async function main(): Promise<void> {
       // close slice and calls its own previewFiscalYearClose, so a stub on
       // the facade never reaches it (the split moved the call inside).
       (service as any).close.previewFiscalYearClose = async () => stale;
-      await assert.rejects(
-        () => service.executeFiscalYearClose(auth, 1, {}),
-        /تغير رصيد/,
-      );
-      const fy = await db.selectFrom('accounting_fiscal_years').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      await assert.rejects(() => service.executeFiscalYearClose(auth, 1, {}), /تغير رصيد/);
+      const fy = await db
+        .selectFrom('accounting_fiscal_years')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal((fy as any).status, 'open');
       assert.equal((await closingLines(db)).length, 0, 'no closing entry may be created on drift');
     } finally {
@@ -273,7 +341,11 @@ async function main(): Promise<void> {
       const service = buildService(db);
       await assert.rejects(() => service.previewFiscalYearClose(auth, 1), /عملة الأساس/);
       await assert.rejects(() => service.executeFiscalYearClose(auth, 1, {}), /عملة الأساس/);
-      const fy = await db.selectFrom('accounting_fiscal_years').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      const fy = await db
+        .selectFrom('accounting_fiscal_years')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal((fy as any).status, 'open');
       assert.equal((await closingLines(db)).length, 0);
     } finally {
@@ -285,8 +357,14 @@ async function main(): Promise<void> {
   // handle and keeps no 2dp computation or tolerance band. The
   // private toMoney helper remains only for list/get shaping.
   {
-    const facade = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/fiscal-year.service.ts'), 'utf8');
-    const source = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/fiscal-year-close.service.ts'), 'utf8');
+    const facade = readFileSync(
+      resolve(__dirname, '../../src/modules/accounting/services/fiscal-year.service.ts'),
+      'utf8',
+    );
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/accounting/services/fiscal-year-close.service.ts'),
+      'utf8',
+    );
     const start = source.indexOf('async previewFiscalYearClose(');
     assert.ok(start > 0);
     const body = source.slice(start);

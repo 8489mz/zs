@@ -4,8 +4,12 @@ import { SessionService } from '../../src/core/auth/services/session.service';
 
 async function run(): Promise<void> {
   const user = {
-    id: 10, username: 'manager', role: 'admin', permissions_json: '[]',
-    tenant_id: 'merchant-a', account_id: 'merchant-a:main',
+    id: 10,
+    username: 'manager',
+    role: 'admin',
+    permissions_json: '[]',
+    tenant_id: 'merchant-a',
+    account_id: 'merchant-a:main',
   };
   const trace: string[] = [];
   let isActive = true;
@@ -16,7 +20,10 @@ async function run(): Promise<void> {
         where: () => ({
           where: () => ({
             forUpdate: () => ({
-              executeTakeFirst: async () => { trace.push('locked-user'); return { is_active: isActive, locked_until: null }; },
+              executeTakeFirst: async () => {
+                trace.push('locked-user');
+                return { is_active: isActive, locked_until: null };
+              },
             }),
           }),
         }),
@@ -26,7 +33,9 @@ async function run(): Promise<void> {
       set: () => ({
         where: () => ({
           where: () => ({
-            execute: async () => { trace.push('update-user'); },
+            execute: async () => {
+              trace.push('update-user');
+            },
           }),
         }),
       }),
@@ -44,8 +53,14 @@ async function run(): Promise<void> {
     transaction: () => ({
       execute: async (callback: (transaction: any) => Promise<unknown>) => {
         trace.push('begin');
-        try { const result = await callback(trx); trace.push('commit'); return result; }
-        catch (error) { trace.push('rollback'); throw error; }
+        try {
+          const result = await callback(trx);
+          trace.push('commit');
+          return result;
+        } catch (error) {
+          trace.push('rollback');
+          throw error;
+        }
       },
     }),
   };
@@ -67,4 +82,7 @@ async function run(): Promise<void> {
   assert.ok(result.sessionId);
   assert.deepEqual(trace, ['begin', 'locked-user', 'update-user', 'insert-session', 'commit']);
 }
-run().catch((error) => { console.error(error); process.exitCode = 1; });
+run().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -161,7 +161,10 @@ function refundDto(overrides: Record<string, unknown> = {}): any {
   };
 }
 
-async function refundJournalLines(db: Kysely<Database>, tenant: string): Promise<Array<{ account_id: number; debit: number; credit: number }>> {
+async function refundJournalLines(
+  db: Kysely<Database>,
+  tenant: string,
+): Promise<Array<{ account_id: number; debit: number; credit: number }>> {
   const rows = await sql<{ account_id: string; debit: string; credit: string }>`
     SELECT l.account_id, l.debit, l.credit FROM journal_entry_lines l
     JOIN journal_entries e ON e.id = l.journal_entry_id
@@ -181,12 +184,19 @@ async function main(): Promise<void> {
       const service = makeService(db);
       const deposit = await service.recordContainerDeposit('t-kwd', 1, depositDto({ depositAmountEgp: 100.125 }));
       assert.equal(Number(deposit.deposit_amount_egp), 100.125, 'KWD deposit records 100.125 exactly');
-      const updated = await service.recordContainerReturnAndRefund('t-kwd', 1, deposit.id, refundDto({ refundedAmountEgp: 50.125, deductionsAmountEgp: 0 }));
+      const updated = await service.recordContainerReturnAndRefund(
+        't-kwd',
+        1,
+        deposit.id,
+        refundDto({ refundedAmountEgp: 50.125, deductionsAmountEgp: 0 }),
+      );
       assert.equal(updated.refund_status, 'partially_refunded', 'A half refund leaves the deposit partially refunded');
       assert.equal(Number(updated.refunded_amount_egp), 50.125, 'KWD deposit row records refunded 50.125, not 50.13');
       assert.equal(Number(updated.deductions_amount_egp), 0, 'KWD deposit row records deductions 0');
       const kwdRemaining =
-        Number(updated.deposit_amount_egp) - Number(updated.refunded_amount_egp) - Number(updated.deductions_amount_egp);
+        Number(updated.deposit_amount_egp) -
+        Number(updated.refunded_amount_egp) -
+        Number(updated.deductions_amount_egp);
       assert.ok(
         Math.abs(kwdRemaining - 50) < 1e-9,
         `KWD remaining balance must be 50.000 after a 50.125 refund of 100.125, got ${kwdRemaining}`,
@@ -199,11 +209,18 @@ async function main(): Promise<void> {
         ],
         'KWD refund JE is Dr bank 50.125 / Cr container-deposit asset 50.125',
       );
-      const events = await db.selectFrom('import_container_refund_events').select(['refunded_amount_egp', 'deductions_amount_egp']).execute();
+      const events = await db
+        .selectFrom('import_container_refund_events')
+        .select(['refunded_amount_egp', 'deductions_amount_egp'])
+        .execute();
       assert.equal(events.length, 1, 'One refund event is recorded');
       assert.equal(Number(events[0].refunded_amount_egp), 50.125, 'KWD refund event records 50.125, not 50.13');
       assert.equal(Number(events[0].deductions_amount_egp), 0, 'KWD refund event records deductions 0');
-      const treasury = await db.selectFrom('treasury_transactions').select(['amount', 'txn_type']).where('txn_type', '=', 'import_container_refund').execute();
+      const treasury = await db
+        .selectFrom('treasury_transactions')
+        .select(['amount', 'txn_type'])
+        .where('txn_type', '=', 'import_container_refund')
+        .execute();
       assert.equal(treasury.length, 1, 'One refund treasury row is recorded');
       assert.equal(Number(treasury[0].amount), 50.125, 'KWD refund treasury row pays 50.125');
     } finally {
@@ -227,7 +244,11 @@ async function main(): Promise<void> {
         refundDto({ idempotencyKey: 'refund-2', refundedAmountEgp: 100, deductionsAmountEgp: 0.125 }),
       );
       assert.equal(Number(updated.refunded_amount_egp), 100, 'KWD split deposit row records refunded 100.000');
-      assert.equal(Number(updated.deductions_amount_egp), 0.125, 'KWD split deposit row records deductions 0.125, not 0.13');
+      assert.equal(
+        Number(updated.deductions_amount_egp),
+        0.125,
+        'KWD split deposit row records deductions 0.125, not 0.13',
+      );
       assert.deepEqual(
         await refundJournalLines(db, 't-kwd'),
         [
@@ -237,9 +258,16 @@ async function main(): Promise<void> {
         ],
         'KWD split refund JE is Dr bank 100 + Dr expense 0.125 / Cr container-deposit asset 100.125',
       );
-      const events = await db.selectFrom('import_container_refund_events').select(['refunded_amount_egp', 'deductions_amount_egp']).execute();
+      const events = await db
+        .selectFrom('import_container_refund_events')
+        .select(['refunded_amount_egp', 'deductions_amount_egp'])
+        .execute();
       assert.equal(Number(events[0].refunded_amount_egp), 100, 'KWD split event records refunded 100.000');
-      assert.equal(Number(events[0].deductions_amount_egp), 0.125, 'KWD split event records deductions 0.125, not 0.13');
+      assert.equal(
+        Number(events[0].deductions_amount_egp),
+        0.125,
+        'KWD split event records deductions 0.125, not 0.13',
+      );
     } finally {
       await db.destroy();
     }
@@ -254,10 +282,17 @@ async function main(): Promise<void> {
       const service = makeService(db);
       const deposit = await service.recordContainerDeposit('t-egp', 1, depositDto({ depositAmountEgp: 100.12 }));
       assert.equal(Number(deposit.deposit_amount_egp), 100.12, 'EGP deposit records 100.12');
-      const updated = await service.recordContainerReturnAndRefund('t-egp', 1, deposit.id, refundDto({ refundedAmountEgp: 50.12, deductionsAmountEgp: 0 }));
+      const updated = await service.recordContainerReturnAndRefund(
+        't-egp',
+        1,
+        deposit.id,
+        refundDto({ refundedAmountEgp: 50.12, deductionsAmountEgp: 0 }),
+      );
       assert.equal(Number(updated.refunded_amount_egp), 50.12, 'EGP deposit row records refunded 50.12');
       const egpRemaining =
-        Number(updated.deposit_amount_egp) - Number(updated.refunded_amount_egp) - Number(updated.deductions_amount_egp);
+        Number(updated.deposit_amount_egp) -
+        Number(updated.refunded_amount_egp) -
+        Number(updated.deductions_amount_egp);
       assert.ok(
         Math.abs(egpRemaining - 50) < 1e-9,
         `EGP remaining balance must be 50.00 after a 50.12 refund of 100.12, got ${egpRemaining}`,
@@ -281,22 +316,39 @@ async function main(): Promise<void> {
   // test:critical and the invariant entry exists exactly once.
   {
     const serviceSrc = fs.readFileSync(
-      path.join(REPO_ROOT, 'backend', 'src', 'modules', 'import-sales', 'services', 'import-container-deposits.service.ts'),
+      path.join(
+        REPO_ROOT,
+        'backend',
+        'src',
+        'modules',
+        'import-sales',
+        'services',
+        'import-container-deposits.service.ts',
+      ),
       'utf8',
     );
-    const stripped = serviceSrc
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/(^|\s)\/\/.*$/gm, '$1');
+    const stripped = serviceSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
     const toFixed2 = (stripped.match(/\.toFixed\(\s*2\s*\)/g) || []).length;
-    assert.equal(toFixed2, 1, `the service must keep exactly 1 hardcoded 2dp rounding site (the ROI percentage), got ${toFixed2}`);
-    assert.ok(stripped.includes('roiPercentage: Number(roiPercentage.toFixed(2))'), 'the single remaining 2dp site must be the ROI percentage');
+    assert.equal(
+      toFixed2,
+      1,
+      `the service must keep exactly 1 hardcoded 2dp rounding site (the ROI percentage), got ${toFixed2}`,
+    );
+    assert.ok(
+      stripped.includes('roiPercentage: Number(roiPercentage.toFixed(2))'),
+      'the single remaining 2dp site must be the ROI percentage',
+    );
     assert.equal(
       (stripped.match(/currencyMoneyDigits\('EGP'\)/g) || []).length,
       0,
       'no EGP-digits rounder may remain in the service — autopsy money sites round at tenant digits',
     );
-    const specs = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'backend', 'scripts', 'critical-specs.json'), 'utf8')).specs as string[];
-    assert.ok(specs.includes('test/critical/residual-rounding-deposits.spec.ts'), 'this spec must be wired into test:critical');
+    const specs = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'backend', 'scripts', 'critical-specs.json'), 'utf8'))
+      .specs as string[];
+    assert.ok(
+      specs.includes('test/critical/residual-rounding-deposits.spec.ts'),
+      'this spec must be wired into test:critical',
+    );
     const invariants = fs.readFileSync(path.join(REPO_ROOT, 'ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(
       invariants.split('INV-RESIDUAL-ROUNDING-DEPOSITS').length - 1,

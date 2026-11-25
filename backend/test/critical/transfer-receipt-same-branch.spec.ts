@@ -52,40 +52,82 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { InventoryTransferService } from '../../src/modules/inventory/services/inventory-transfer.service';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 
 async function seedProduct(db: Kysely<Database>, id: number, qty: number, cost: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(db);
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(
+    db,
+  );
 }
 
-async function makeSameBranchTransfer(service: InventoryTransferService, productId: number, qty: number): Promise<number> {
-  const res = await service.createStockTransfer({ fromLocationId: 1, toBranchId: 1, items: [{ productId, qty }] } as never, AUTH) as any;
+async function makeSameBranchTransfer(
+  service: InventoryTransferService,
+  productId: number,
+  qty: number,
+): Promise<number> {
+  const res = (await service.createStockTransfer(
+    { fromLocationId: 1, toBranchId: 1, items: [{ productId, qty }] } as never,
+    AUTH,
+  )) as any;
   return Number(res.transferId);
 }
 
-async function makeCrossLocationTransfer(service: InventoryTransferService, productId: number, qty: number): Promise<number> {
-  const res = await service.createStockTransfer({ fromLocationId: 1, toLocationId: 2, items: [{ productId, qty }] } as never, AUTH) as any;
+async function makeCrossLocationTransfer(
+  service: InventoryTransferService,
+  productId: number,
+  qty: number,
+): Promise<number> {
+  const res = (await service.createStockTransfer(
+    { fromLocationId: 1, toLocationId: 2, items: [{ productId, qty }] } as never,
+    AUTH,
+  )) as any;
   return Number(res.transferId);
 }
 
 async function transferItemId(db: Kysely<Database>, transferId: number, productId: number): Promise<number> {
-  const row = await sql<{ id: number }>`SELECT id FROM stock_transfer_items WHERE transfer_id = ${transferId} AND product_id = ${productId}`.execute(db);
+  const row = await sql<{
+    id: number;
+  }>`SELECT id FROM stock_transfer_items WHERE transfer_id = ${transferId} AND product_id = ${productId}`.execute(db);
   return Number(row.rows[0].id);
 }
 
-async function transferRow(db: Kysely<Database>, transferId: number): Promise<{ status: string; to_location_id: number | null; from_location_id: number }> {
-  const row = await sql<{ status: string; to_location_id: number | null; from_location_id: number }>`SELECT status, to_location_id, from_location_id FROM stock_transfers WHERE id = ${transferId}`.execute(db);
+async function transferRow(
+  db: Kysely<Database>,
+  transferId: number,
+): Promise<{ status: string; to_location_id: number | null; from_location_id: number }> {
+  const row = await sql<{
+    status: string;
+    to_location_id: number | null;
+    from_location_id: number;
+  }>`SELECT status, to_location_id, from_location_id FROM stock_transfers WHERE id = ${transferId}`.execute(db);
   return row.rows[0];
 }
 
 async function locationQty(db: Kysely<Database>, productId: number, locationId: number): Promise<number> {
-  const row = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = ${locationId}`.execute(db);
+  const row = await sql<{
+    qty: string;
+  }>`SELECT qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = ${locationId}`.execute(
+    db,
+  );
   return row.rows.length ? Number(row.rows[0].qty) : 0;
 }
 
 async function transitQty(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await sql<{ qty: string }>`SELECT b.qty FROM product_location_stock b JOIN stock_locations l ON l.id = b.location_id WHERE b.product_id = ${productId} AND l.location_type = 'in_transit'`.execute(db);
+  const row = await sql<{
+    qty: string;
+  }>`SELECT b.qty FROM product_location_stock b JOIN stock_locations l ON l.id = b.location_id WHERE b.product_id = ${productId} AND l.location_type = 'in_transit'`.execute(
+    db,
+  );
   return row.rows.length ? Number(row.rows[0].qty) : 0;
 }
 
@@ -97,7 +139,10 @@ async function globalQty(db: Kysely<Database>, productId: number): Promise<numbe
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new InventoryTransferService(
     db as never,
@@ -147,7 +192,9 @@ async function main(): Promise<void> {
 
     // The production CHECK constraint must be present, or the case below
     // would pass vacuously even with the bug still in the service.
-    const constraint = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM pg_constraint WHERE conname = 'stock_transfers_location_diff'`.execute(db);
+    const constraint = await sql<{
+      n: string;
+    }>`SELECT COUNT(*) AS n FROM pg_constraint WHERE conname = 'stock_transfers_location_diff'`.execute(db);
     assert.equal(Number(constraint.rows[0].n), 1);
 
     // Case 1: same-branch transfer (live ZTR-261105-2497 shape): 7 on hand,
@@ -172,15 +219,28 @@ async function main(): Promise<void> {
     assert.equal(await locationQty(db, 11, 1), 7);
     assert.equal(await transitQty(db, 11), 0);
     assert.equal(await globalQty(db, 11), 7);
-    const outMov = await sql<{ before_qty: string; after_qty: string }>`SELECT before_qty, after_qty FROM stock_movements WHERE reference_id = ${t1} AND movement_type = 'transfer_transit_out'`.execute(db);
+    const outMov = await sql<{
+      before_qty: string;
+      after_qty: string;
+    }>`SELECT before_qty, after_qty FROM stock_movements WHERE reference_id = ${t1} AND movement_type = 'transfer_transit_out'`.execute(
+      db,
+    );
     assert.equal(outMov.rows.length, 1);
     assert.equal(Number(outMov.rows[0].before_qty), 2);
     assert.equal(Number(outMov.rows[0].after_qty), 0);
-    const inMov = await sql<{ before_qty: string; after_qty: string }>`SELECT before_qty, after_qty FROM stock_movements WHERE reference_id = ${t1} AND movement_type = 'transfer_receive'`.execute(db);
+    const inMov = await sql<{
+      before_qty: string;
+      after_qty: string;
+    }>`SELECT before_qty, after_qty FROM stock_movements WHERE reference_id = ${t1} AND movement_type = 'transfer_receive'`.execute(
+      db,
+    );
     assert.equal(inMov.rows.length, 1);
     assert.equal(Number(inMov.rows[0].before_qty), 5);
     assert.equal(Number(inMov.rows[0].after_qty), 7);
-    const item1 = await sql<{ received_qty: string; variance_qty: string }>`SELECT received_qty, variance_qty FROM stock_transfer_items WHERE id = ${t1item}`.execute(db);
+    const item1 = await sql<{
+      received_qty: string;
+      variance_qty: string;
+    }>`SELECT received_qty, variance_qty FROM stock_transfer_items WHERE id = ${t1item}`.execute(db);
     assert.equal(Number(item1.rows[0].received_qty), 2);
     assert.equal(Number(item1.rows[0].variance_qty), 0);
 

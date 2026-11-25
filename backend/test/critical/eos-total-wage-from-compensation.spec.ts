@@ -102,7 +102,13 @@ async function main(): Promise<void> {
     const service = new EndOfServiceService(db as never, {} as never, {} as never);
     const preview = (employeeId: number) =>
       service.calculateSettlementPreview(
-        { employeeId, terminationDate: '2026-01-01', terminationReason: 'resignation', lawType: 'saudi', pendingSalaryAmount: 0 },
+        {
+          employeeId,
+          terminationDate: '2026-01-01',
+          terminationReason: 'resignation',
+          lawType: 'saudi',
+          pendingSalaryAmount: 0,
+        },
         AUTH,
       );
 
@@ -122,7 +128,11 @@ async function main(): Promise<void> {
       reason: 'resignation',
       minorUnits: 2,
     });
-    assert.equal(withPackage.gratuity.gratuityAmount, expected.gratuityAmount, 'gratuity must be computed on the derived total wage');
+    assert.equal(
+      withPackage.gratuity.gratuityAmount,
+      expected.gratuityAmount,
+      'gratuity must be computed on the derived total wage',
+    );
 
     // 2. No package: base salary alone, unchanged behaviour.
     const noPackage: any = await preview(2);

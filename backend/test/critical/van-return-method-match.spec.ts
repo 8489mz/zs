@@ -120,8 +120,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: '"EGP"' } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: '"EGP"' } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): { posting: AccountingPostingService; returns: VanReturnsService } {
@@ -154,47 +160,150 @@ async function seedWorld(
   },
 ): Promise<void> {
   await seedCurrency(db);
-  await db.insertInto('stock_locations' as never).values([
-    { id: 900, tenant_id: 't1', account_id: 'a1', name: 'Van', branch_id: null, location_type: 'van_stock', is_active: true },
-    { id: 901, tenant_id: 't1', account_id: 'a1', name: 'Damaged', branch_id: null, location_type: 'damaged', is_active: true },
-  ] as never).execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values([
+      {
+        id: 900,
+        tenant_id: 't1',
+        account_id: 'a1',
+        name: 'Van',
+        branch_id: null,
+        location_type: 'van_stock',
+        is_active: true,
+      },
+      {
+        id: 901,
+        tenant_id: 't1',
+        account_id: 'a1',
+        name: 'Damaged',
+        branch_id: null,
+        location_type: 'damaged',
+        is_active: true,
+      },
+    ] as never)
+    .execute();
   const postSaleStock = opts.postSaleStock ?? 94;
-  await db.insertInto('products' as never).values({
-    id: 100, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: postSaleStock, reserved_qty: 0, cost_price: 6,
-  } as never).execute();
-  await db.insertInto('product_location_stock' as never).values({
-    tenant_id: 't1', account_id: 'a1', product_id: 100, branch_id: null, location_id: 900, qty: postSaleStock, reserved_qty: 0,
-  } as never).execute();
-  await db.insertInto('customers' as never).values({
-    id: 5, tenant_id: 't1', account_id: 'a1', name: 'Shop', balance: opts.sale.customerBalance ?? 0,
-  } as never).execute();
-  await db.insertInto('van_sales_trips' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', status: 'open', van_location_id: 900,
-    source_warehouse_id: null, rep_id: 7, cash_collected: opts.tripCash ?? 1000, cash_refunds: 0, returns_amount: 0,
-  } as never).execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 100,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Widget',
+      stock_qty: postSaleStock,
+      reserved_qty: 0,
+      cost_price: 6,
+    } as never)
+    .execute();
+  await db
+    .insertInto('product_location_stock' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 'a1',
+      product_id: 100,
+      branch_id: null,
+      location_id: 900,
+      qty: postSaleStock,
+      reserved_qty: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('customers' as never)
+    .values({
+      id: 5,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Shop',
+      balance: opts.sale.customerBalance ?? 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('van_sales_trips' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      status: 'open',
+      van_location_id: 900,
+      source_warehouse_id: null,
+      rep_id: 7,
+      cash_collected: opts.tripCash ?? 1000,
+      cash_refunds: 0,
+      returns_amount: 0,
+    } as never)
+    .execute();
   const sale = opts.sale;
   const qty = sale.qty ?? 10;
   const unitPrice = sale.unitPrice ?? 20;
-  await db.insertInto('sales' as never).values({
-    id: 1, tenant_id: 't1', doc_no: 'S-1', customer_id: 5, subtotal: sale.total,
-    discount: 0, tax_amount: 0, total: sale.total, paid_amount: sale.paidAmount ?? 0, store_credit_used: 0,
-    exchange_return_id: null, branch_id: null, location_id: null, created_by: 1, created_at: new Date(),
-    delivery_fee: 0, delivery_fee_mode: null, service_charge: 0, tip_amount: 0, prices_include_tax: false,
-    sale_origin: 'van', payment_type: sale.paymentMethod,
-    collection_status: sale.paymentMethod === 'cash' || sale.paymentMethod === 'split' ? 'prepaid_by_rep' : (sale.paymentMethod === 'credit' ? null : 'settled_to_bank'),
-    status: 'posted', delivery_rep_id: 7, van_trip_id: 1,
-  } as never).execute();
-  await db.insertInto('sale_items' as never).values({
-    id: 10, sale_id: 1, tenant_id: 't1', product_id: 100, product_name: 'Widget', qty,
-    line_total: qty * unitPrice, cost_price: 6,
-    unit_multiplier: 1, modifiers: JSON.stringify([]),
-  } as never).execute();
+  await db
+    .insertInto('sales' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      doc_no: 'S-1',
+      customer_id: 5,
+      subtotal: sale.total,
+      discount: 0,
+      tax_amount: 0,
+      total: sale.total,
+      paid_amount: sale.paidAmount ?? 0,
+      store_credit_used: 0,
+      exchange_return_id: null,
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+      created_at: new Date(),
+      delivery_fee: 0,
+      delivery_fee_mode: null,
+      service_charge: 0,
+      tip_amount: 0,
+      prices_include_tax: false,
+      sale_origin: 'van',
+      payment_type: sale.paymentMethod,
+      collection_status:
+        sale.paymentMethod === 'cash' || sale.paymentMethod === 'split'
+          ? 'prepaid_by_rep'
+          : sale.paymentMethod === 'credit'
+            ? null
+            : 'settled_to_bank',
+      status: 'posted',
+      delivery_rep_id: 7,
+      van_trip_id: 1,
+    } as never)
+    .execute();
+  await db
+    .insertInto('sale_items' as never)
+    .values({
+      id: 10,
+      sale_id: 1,
+      tenant_id: 't1',
+      product_id: 100,
+      product_name: 'Widget',
+      qty,
+      line_total: qty * unitPrice,
+      cost_price: 6,
+      unit_multiplier: 1,
+      modifiers: JSON.stringify([]),
+    } as never)
+    .execute();
   if (sale.ledgerCredit != null) {
-    await db.insertInto('customer_ledger' as never).values({
-      customer_id: 5, entry_type: 'sale_credit', amount: sale.ledgerCredit, balance_after: sale.customerBalance ?? 0,
-      note: 'split sale credit leg', reference_type: 'sale', reference_id: 1,
-      van_trip_id: 1, tenant_id: 't1', account_id: 'a1', created_by: 1,
-    } as never).execute();
+    await db
+      .insertInto('customer_ledger' as never)
+      .values({
+        customer_id: 5,
+        entry_type: 'sale_credit',
+        amount: sale.ledgerCredit,
+        balance_after: sale.customerBalance ?? 0,
+        note: 'split sale credit leg',
+        reference_type: 'sale',
+        reference_id: 1,
+        van_trip_id: 1,
+        tenant_id: 't1',
+        account_id: 'a1',
+        created_by: 1,
+      } as never)
+      .execute();
   }
 }
 
@@ -208,17 +317,37 @@ async function seedReturn(
     items: Array<{ productId: number; qty: number; unitPrice: number; saleItemId?: number }>;
   },
 ): Promise<void> {
-  await db.insertInto('van_field_returns' as never).values({
-    id: returnId, tenant_id: 't1', account_id: 'a1', doc_no: `FR-${returnId}`, trip_id: 1, rep_id: 7,
-    customer_id: 5, sale_id: opts.saleId, status: 'pending_approval', return_reason: 'customer_request',
-    refund_method: opts.refundMethod, total_amount: opts.totalAmount, items_json: JSON.stringify(opts.items),
-    notes: null, rejection_reason: null, approved_by: null, approved_at: null,
-  } as never).execute();
+  await db
+    .insertInto('van_field_returns' as never)
+    .values({
+      id: returnId,
+      tenant_id: 't1',
+      account_id: 'a1',
+      doc_no: `FR-${returnId}`,
+      trip_id: 1,
+      rep_id: 7,
+      customer_id: 5,
+      sale_id: opts.saleId,
+      status: 'pending_approval',
+      return_reason: 'customer_request',
+      refund_method: opts.refundMethod,
+      total_amount: opts.totalAmount,
+      items_json: JSON.stringify(opts.items),
+      notes: null,
+      rejection_reason: null,
+      approved_by: null,
+      approved_at: null,
+    } as never)
+    .execute();
 }
 
 async function submitReturn(
   returns: VanReturnsService,
-  opts: { saleId?: number | null; refundMethod?: 'credit' | 'cash'; items: Array<{ productId: number; qty: number; unitPrice: number; saleItemId?: number }> },
+  opts: {
+    saleId?: number | null;
+    refundMethod?: 'credit' | 'cash';
+    items: Array<{ productId: number; qty: number; unitPrice: number; saleItemId?: number }>;
+  },
 ): Promise<{ ok: boolean; returnDocNo: string; returnId: number; status: string; totalAmount: number }> {
   return returns.submitFieldReturn(7, 't1', 'a1', {
     tripId: 1,
@@ -235,13 +364,27 @@ async function customerBalance(db: Kysely<Database>): Promise<number> {
   return Number(row?.balance || 0);
 }
 
-async function tripRow(db: Kysely<Database>): Promise<{ cashCollected: number; cashRefunds: number; returnsAmount: number }> {
-  const row = await (db as any).selectFrom('van_sales_trips').select(['cash_collected', 'cash_refunds', 'returns_amount']).where('id', '=', 1).executeTakeFirstOrThrow();
-  return { cashCollected: Number(row.cash_collected || 0), cashRefunds: Number(row.cash_refunds || 0), returnsAmount: Number(row.returns_amount || 0) };
+async function tripRow(
+  db: Kysely<Database>,
+): Promise<{ cashCollected: number; cashRefunds: number; returnsAmount: number }> {
+  const row = await (db as any)
+    .selectFrom('van_sales_trips')
+    .select(['cash_collected', 'cash_refunds', 'returns_amount'])
+    .where('id', '=', 1)
+    .executeTakeFirstOrThrow();
+  return {
+    cashCollected: Number(row.cash_collected || 0),
+    cashRefunds: Number(row.cash_refunds || 0),
+    returnsAmount: Number(row.returns_amount || 0),
+  };
 }
 
 async function returnStatus(db: Kysely<Database>, returnId: number): Promise<string> {
-  const row = await (db as any).selectFrom('van_field_returns').select(['status']).where('id', '=', returnId).executeTakeFirstOrThrow();
+  const row = await (db as any)
+    .selectFrom('van_field_returns')
+    .select(['status'])
+    .where('id', '=', returnId)
+    .executeTakeFirstOrThrow();
   return String(row.status);
 }
 
@@ -255,14 +398,24 @@ async function journalByCode(
   sourceType: string,
   sourceId: number,
 ): Promise<Map<string, { debit: number; credit: number; partnerType: string | null }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select(['id'])
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute() as Array<{ id: number }>;
+  const entries = (await (db as any)
+    .selectFrom('journal_entries')
+    .select(['id'])
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute()) as Array<{ id: number }>;
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('accounting_accounts', 'accounting_accounts.id', 'journal_entry_lines.account_id')
-    .select(['accounting_accounts.code as code', 'journal_entry_lines.debit as debit', 'journal_entry_lines.credit as credit', 'journal_entry_lines.partner_type as partnerType'])
+    .select([
+      'accounting_accounts.code as code',
+      'journal_entry_lines.debit as debit',
+      'journal_entry_lines.credit as credit',
+      'journal_entry_lines.partner_type as partnerType',
+    ])
     .where('journal_entry_id', '=', entries[0].id)
-    .execute() as Array<{ code: string; debit: string; credit: string; partnerType: string | null }>;
+    .execute()) as Array<{ code: string; debit: string; credit: string; partnerType: string | null }>;
   const byCode = new Map<string, { debit: number; credit: number; partnerType: string | null }>();
   for (const row of rows) {
     byCode.set(row.code, { debit: Number(row.debit), credit: Number(row.credit), partnerType: row.partnerType });
@@ -274,7 +427,11 @@ async function journalByCode(
 }
 
 async function journalCount(db: Kysely<Database>, sourceType: string): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entries').select(['id']).where('source_type', '=', sourceType).execute();
+  const rows = await (db as any)
+    .selectFrom('journal_entries')
+    .select(['id'])
+    .where('source_type', '=', sourceType)
+    .execute();
   return rows.length;
 }
 
@@ -288,7 +445,11 @@ async function main(): Promise<void> {
       const { returns } = makeServices(db);
       await seedWorld(db, { sale: { paymentMethod: 'credit', total: 200, customerBalance: 200 } });
       await assert.rejects(
-        () => submitReturn(returns, { refundMethod: 'cash', items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }] }),
+        () =>
+          submitReturn(returns, {
+            refundMethod: 'cash',
+            items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
+          }),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
         'a cash refund on a credit sale must be refused at submit',
       );
@@ -308,7 +469,12 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, { sale: { paymentMethod: 'credit', total: 200, customerBalance: 200 } });
-      await seedReturn(db, 1, { saleId: 1, refundMethod: 'cash', totalAmount: 40, items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }] });
+      await seedReturn(db, 1, {
+        saleId: 1,
+        refundMethod: 'cash',
+        totalAmount: 40,
+        items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
+      });
       await assert.rejects(
         () => returns.approveFieldReturn('t1', 'a1', 1, 1),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
@@ -331,11 +497,20 @@ async function main(): Promise<void> {
       const { returns } = makeServices(db);
       await seedWorld(db, { sale: { paymentMethod: 'cash', total: 200, customerBalance: 0 } });
       await assert.rejects(
-        () => submitReturn(returns, { refundMethod: 'credit', items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }] }),
+        () =>
+          submitReturn(returns, {
+            refundMethod: 'credit',
+            items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
+          }),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
         'a credit refund on a cash sale must be refused at submit',
       );
-      await seedReturn(db, 1, { saleId: 1, refundMethod: 'credit', totalAmount: 40, items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }] });
+      await seedReturn(db, 1, {
+        saleId: 1,
+        refundMethod: 'credit',
+        totalAmount: 40,
+        items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
+      });
       await assert.rejects(
         () => returns.approveFieldReturn('t1', 'a1', 1, 1),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
@@ -356,7 +531,10 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, { sale: { paymentMethod: 'cash', total: 200, customerBalance: 0 } });
-      const submitted = await submitReturn(returns, { refundMethod: 'cash', items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }] });
+      const submitted = await submitReturn(returns, {
+        refundMethod: 'cash',
+        items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
+      });
       assert.equal(submitted.status, 'pending_approval');
       assert.equal(submitted.totalAmount, 40);
       const approved = await returns.approveFieldReturn('t1', 'a1', submitted.returnId, 1);
@@ -383,7 +561,10 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, { sale: { paymentMethod: 'credit', total: 200, customerBalance: 200 } });
-      const submitted = await submitReturn(returns, { refundMethod: 'credit', items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }] });
+      const submitted = await submitReturn(returns, {
+        refundMethod: 'credit',
+        items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
+      });
       assert.equal(submitted.status, 'pending_approval');
       const approved = await returns.approveFieldReturn('t1', 'a1', submitted.returnId, 1);
       assert.equal(approved.status, 'approved');
@@ -393,8 +574,12 @@ async function main(): Promise<void> {
       assert.equal(ret.get('1130')?.partnerType, 'customer', 'a credit refund reduces the customer receivable');
       assert.equal(await customerBalance(db), 160, 'the receivable falls by the refunded amount');
       assert.equal((await tripRow(db)).cashCollected, 1000, 'a credit refund must not move trip cash');
-      const ledger = await (db as any).selectFrom('customer_ledger').select(['amount', 'balance_after'])
-        .where('reference_type', '=', 'van_field_return').where('reference_id', '=', submitted.returnId).executeTakeFirst();
+      const ledger = await (db as any)
+        .selectFrom('customer_ledger')
+        .select(['amount', 'balance_after'])
+        .where('reference_type', '=', 'van_field_return')
+        .where('reference_id', '=', submitted.returnId)
+        .executeTakeFirst();
       assert.equal(Number(ledger?.amount), -40);
       assert.equal(Number(ledger?.balance_after), 160);
     } finally {
@@ -409,14 +594,24 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       const { returns } = makeServices(db);
-      await seedWorld(db, { sale: { paymentMethod: 'split', total: 120, qty: 6, customerBalance: 40, ledgerCredit: 40 } });
+      await seedWorld(db, {
+        sale: { paymentMethod: 'split', total: 120, qty: 6, customerBalance: 40, ledgerCredit: 40 },
+      });
       await assert.rejects(
-        () => submitReturn(returns, { refundMethod: 'cash', items: [{ productId: 100, qty: 5, unitPrice: 20, saleItemId: 10 }] }),
+        () =>
+          submitReturn(returns, {
+            refundMethod: 'cash',
+            items: [{ productId: 100, qty: 5, unitPrice: 20, saleItemId: 10 }],
+          }),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
         'a 100 cash refund exceeds the 80 cash leg of the split sale',
       );
       await assert.rejects(
-        () => submitReturn(returns, { refundMethod: 'credit', items: [{ productId: 100, qty: 3, unitPrice: 20, saleItemId: 10 }] }),
+        () =>
+          submitReturn(returns, {
+            refundMethod: 'credit',
+            items: [{ productId: 100, qty: 3, unitPrice: 20, saleItemId: 10 }],
+          }),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
         'a 60 credit refund exceeds the 40 credit leg of the split sale',
       );
@@ -432,14 +627,22 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       const { returns } = makeServices(db);
-      await seedWorld(db, { sale: { paymentMethod: 'split', total: 120, qty: 6, customerBalance: 40, ledgerCredit: 40 } });
-      const cashSub = await submitReturn(returns, { refundMethod: 'cash', items: [{ productId: 100, qty: 4, unitPrice: 20, saleItemId: 10 }] });
+      await seedWorld(db, {
+        sale: { paymentMethod: 'split', total: 120, qty: 6, customerBalance: 40, ledgerCredit: 40 },
+      });
+      const cashSub = await submitReturn(returns, {
+        refundMethod: 'cash',
+        items: [{ productId: 100, qty: 4, unitPrice: 20, saleItemId: 10 }],
+      });
       await returns.approveFieldReturn('t1', 'a1', cashSub.returnId, 1);
       const cashJournal = await journalByCode(db, 'van_field_return', cashSub.returnId);
       assert.equal(cashJournal.get('1130')?.partnerType, 'none');
       assert.equal(await customerBalance(db), 40, 'the cash leg must not touch the customer balance');
       assert.equal((await tripRow(db)).cashCollected, 920);
-      const creditSub = await submitReturn(returns, { refundMethod: 'credit', items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }] });
+      const creditSub = await submitReturn(returns, {
+        refundMethod: 'credit',
+        items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
+      });
       await returns.approveFieldReturn('t1', 'a1', creditSub.returnId, 1);
       const creditJournal = await journalByCode(db, 'van_field_return', creditSub.returnId);
       assert.equal(creditJournal.get('1130')?.partnerType, 'customer');
@@ -457,10 +660,20 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       const { returns } = makeServices(db);
-      await seedWorld(db, { sale: { paymentMethod: 'split', total: 120, qty: 6, customerBalance: 40, ledgerCredit: 40 } });
-      const first = await submitReturn(returns, { refundMethod: 'cash', items: [{ productId: 100, qty: 4, unitPrice: 20, saleItemId: 10 }] });
+      await seedWorld(db, {
+        sale: { paymentMethod: 'split', total: 120, qty: 6, customerBalance: 40, ledgerCredit: 40 },
+      });
+      const first = await submitReturn(returns, {
+        refundMethod: 'cash',
+        items: [{ productId: 100, qty: 4, unitPrice: 20, saleItemId: 10 }],
+      });
       await returns.approveFieldReturn('t1', 'a1', first.returnId, 1);
-      await seedReturn(db, 99, { saleId: 1, refundMethod: 'cash', totalAmount: 20, items: [{ productId: 100, qty: 1, unitPrice: 20, saleItemId: 10 }] });
+      await seedReturn(db, 99, {
+        saleId: 1,
+        refundMethod: 'cash',
+        totalAmount: 20,
+        items: [{ productId: 100, qty: 1, unitPrice: 20, saleItemId: 10 }],
+      });
       await assert.rejects(
         () => returns.approveFieldReturn('t1', 'a1', 99, 1),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
@@ -481,32 +694,64 @@ async function main(): Promise<void> {
       const { posting, returns } = makeServices(db);
       await seedWorld(db, { sale: { paymentMethod: 'card', total: 200, paidAmount: 200, customerBalance: 0 } });
       await assert.rejects(
-        () => submitReturn(returns, { refundMethod: 'cash', items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }] }),
+        () =>
+          submitReturn(returns, {
+            refundMethod: 'cash',
+            items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
+          }),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
         'a cash refund on a bank-settled card sale must be refused',
       );
       await assert.rejects(
-        () => submitReturn(returns, { refundMethod: 'credit', items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }] }),
+        () =>
+          submitReturn(returns, {
+            refundMethod: 'credit',
+            items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
+          }),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
         'a credit refund on a bank-settled card sale must be refused',
       );
       await assert.rejects(
-        () => db.transaction().execute(async (trx) => {
-          await posting.postVanFieldReturn(trx as any, 99, {
-            customerId: 5, totalAmount: 40, refundMethod: 'cash',
-            items: [], branchId: null, locationId: 900, saleId: 1, isDamaged: false,
-          }, auth);
-        }),
+        () =>
+          db.transaction().execute(async (trx) => {
+            await posting.postVanFieldReturn(
+              trx as any,
+              99,
+              {
+                customerId: 5,
+                totalAmount: 40,
+                refundMethod: 'cash',
+                items: [],
+                branchId: null,
+                locationId: 900,
+                saleId: 1,
+                isDamaged: false,
+              },
+              auth,
+            );
+          }),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
         'the posting boundary must refuse a cash refund on a card sale',
       );
       await assert.rejects(
-        () => db.transaction().execute(async (trx) => {
-          await posting.postVanFieldReturn(trx as any, 99, {
-            customerId: 5, totalAmount: 40, refundMethod: 'credit',
-            items: [], branchId: null, locationId: 900, saleId: 1, isDamaged: false,
-          }, auth);
-        }),
+        () =>
+          db.transaction().execute(async (trx) => {
+            await posting.postVanFieldReturn(
+              trx as any,
+              99,
+              {
+                customerId: 5,
+                totalAmount: 40,
+                refundMethod: 'credit',
+                items: [],
+                branchId: null,
+                locationId: 900,
+                saleId: 1,
+                isDamaged: false,
+              },
+              auth,
+            );
+          }),
         (err: any) => err.code === 'REFUND_METHOD_MISMATCH',
         'the posting boundary must refuse a credit refund on a card sale',
       );
@@ -523,7 +768,12 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, { sale: { paymentMethod: 'credit', total: 200, customerBalance: 30 } });
-      await seedReturn(db, 1, { saleId: 1, refundMethod: 'credit', totalAmount: 100, items: [{ productId: 100, qty: 5, unitPrice: 20, saleItemId: 10 }] });
+      await seedReturn(db, 1, {
+        saleId: 1,
+        refundMethod: 'credit',
+        totalAmount: 100,
+        items: [{ productId: 100, qty: 5, unitPrice: 20, saleItemId: 10 }],
+      });
       await assert.rejects(
         () => returns.approveFieldReturn('t1', 'a1', 1, 1),
         (err: any) => err.code === 'REFUND_EXCEEDS_CUSTOMER_BALANCE',
@@ -545,7 +795,12 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, { sale: { paymentMethod: 'credit', total: 200, customerBalance: 10 } });
-      await seedReturn(db, 1, { saleId: null, refundMethod: 'credit', totalAmount: 40, items: [{ productId: 100, qty: 2, unitPrice: 20 }] });
+      await seedReturn(db, 1, {
+        saleId: null,
+        refundMethod: 'credit',
+        totalAmount: 40,
+        items: [{ productId: 100, qty: 2, unitPrice: 20 }],
+      });
       await assert.rejects(
         () => returns.approveFieldReturn('t1', 'a1', 1, 1),
         (err: any) => err.code === 'REFUND_EXCEEDS_CUSTOMER_BALANCE',
@@ -565,7 +820,12 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, { sale: { paymentMethod: 'credit', total: 200, customerBalance: 10 } });
-      await seedReturn(db, 1, { saleId: null, refundMethod: 'cash', totalAmount: 40, items: [{ productId: 100, qty: 2, unitPrice: 20 }] });
+      await seedReturn(db, 1, {
+        saleId: null,
+        refundMethod: 'cash',
+        totalAmount: 40,
+        items: [{ productId: 100, qty: 2, unitPrice: 20 }],
+      });
       const approved = await returns.approveFieldReturn('t1', 'a1', 1, 1);
       assert.equal(approved.status, 'approved');
       assert.equal(await customerBalance(db), 10, 'an unlinked cash refund must not touch the customer balance');
@@ -578,17 +838,32 @@ async function main(): Promise<void> {
   // Case 10: source pins.
   {
     const here = __dirname;
-    const legsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/refund-legs-cluster.slice.ts'), 'utf8');
+    const legsSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-returns/refund-legs-cluster.slice.ts'),
+      'utf8',
+    );
     assert.ok(legsSource.includes('resolveSaleRefundLegs'), 'the leg resolution must exist');
     assert.ok(legsSource.includes('assertRefundMethodCoveredByLegs'), 'the leg assertion must exist');
     assert.ok(legsSource.includes('REFUND_METHOD_MISMATCH'), 'the named mismatch refusal must exist');
-    assert.ok(legsSource.includes('REFUND_SALE_LEGS_UNVERIFIABLE'), 'the fail-closed unverifiable-legs refusal must exist');
-    const approveSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'), 'utf8');
+    assert.ok(
+      legsSource.includes('REFUND_SALE_LEGS_UNVERIFIABLE'),
+      'the fail-closed unverifiable-legs refusal must exist',
+    );
+    const approveSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'),
+      'utf8',
+    );
     assert.ok(approveSource.includes('REFUND_EXCEEDS_CUSTOMER_BALANCE'), 'the named balance-floor refusal must exist');
     // File #63 split: the refund-method guard moved to the S8 slice.
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-field-return.slice.ts'), 'utf8');
+    const postingSource = readFileSync(
+      resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-field-return.slice.ts'),
+      'utf8',
+    );
     assert.ok(postingSource.includes('REFUND_METHOD_MISMATCH'), 'the posting boundary must refuse a mismatched refund');
-    assert.ok(postingSource.includes('INV-VAN-RETURN-METHOD-MATCH'), 'the posting guard must be marked with the invariant id');
+    assert.ok(
+      postingSource.includes('INV-VAN-RETURN-METHOD-MATCH'),
+      'the posting guard must be marked with the invariant id',
+    );
   }
 
   console.log('Van field-return refund-method match tests passed');

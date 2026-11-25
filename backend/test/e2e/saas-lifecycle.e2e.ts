@@ -6,8 +6,10 @@ async function main() {
   const newTenantOwner = new E2EClient();
 
   // Use the isolated E2E platform administrator prepared by the test harness.
-  await saasAdmin.login(process.env.E2E_USERNAME || process.env.DEFAULT_ADMIN_USERNAME || 'owner',
-    process.env.E2E_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || '');
+  await saasAdmin.login(
+    process.env.E2E_USERNAME || process.env.DEFAULT_ADMIN_USERNAME || 'owner',
+    process.env.E2E_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || '',
+  );
 
   // 4. Create Trial Tenant
   const uniqueStr = Date.now().toString();
@@ -25,16 +27,18 @@ async function main() {
     activityType: 'retail',
     username: ownerUsername,
     password: ownerPassword,
-    days: 14
+    days: 14,
   };
 
   const tenantRes = await saasAdmin.post('/api/saas-admin/tenants/trial', createTenantPayload);
-  assert.ok(tenantRes.tenant && tenantRes.tenant.id, `Tenant should be created. Response: ${JSON.stringify(tenantRes)}`);
+  assert.ok(
+    tenantRes.tenant && tenantRes.tenant.id,
+    `Tenant should be created. Response: ${JSON.stringify(tenantRes)}`,
+  );
   assert.strictEqual(tenantRes.tenant.status, 'trial');
   const tenantId = tenantRes.tenant.id;
   let deleted = false;
   try {
-
     // 5. Login as the new owner
     console.log(`Logging in as new tenant owner: ${ownerUsername}...`);
     await newTenantOwner.login(ownerUsername, ownerPassword);
@@ -68,50 +72,62 @@ async function main() {
           barcode: barcode1,
           isBaseUnit: true,
           isSaleUnit: true,
-          isPurchaseUnit: true
-        }
-      ]
+          isPurchaseUnit: true,
+        },
+      ],
     });
 
     // 7. Extend Trial
     console.log('Extending trial...');
     const extendRes = await saasAdmin.post(`/api/saas-admin/tenants/${tenantId}/extend-trial`, {
-      days: 7
+      days: 7,
     });
     assert.ok(extendRes.ok, 'Extend trial should succeed');
 
     // 8. Suspend Tenant
     console.log('Suspending tenant...');
     const suspendRes = await saasAdmin.post(`/api/saas-admin/tenants/${tenantId}/suspend`, {
-      reason: 'Administrative suspension'
+      reason: 'Administrative suspension',
     });
     assert.ok(suspendRes.ok);
 
     // Verify owner cannot perform protected operations
     console.log('Verifying suspended tenant operations...');
     const barcodeFail = `B-FAIL-${Date.now()}`;
-    const failProdRes = await newTenantOwner.post('/api/products', {
-      name: 'Fail Product',
-      categoryId: Number(catId),
-      barcode: barcodeFail,
-      costPrice: 10,
-      retailPrice: 20,
-      wholesalePrice: 15,
-      minStock: 0,
-      stock: 0,
-      units: [
-        {
-          name: 'قطعة',
-          multiplier: 1,
-          barcode: barcodeFail,
-          isBaseUnit: true,
-          isSaleUnit: true,
-          isPurchaseUnit: true
-        }
-      ]
-    }, 401);
+    const failProdRes = await newTenantOwner.post(
+      '/api/products',
+      {
+        name: 'Fail Product',
+        categoryId: Number(catId),
+        barcode: barcodeFail,
+        costPrice: 10,
+        retailPrice: 20,
+        wholesalePrice: 15,
+        minStock: 0,
+        stock: 0,
+        units: [
+          {
+            name: 'قطعة',
+            multiplier: 1,
+            barcode: barcodeFail,
+            isBaseUnit: true,
+            isSaleUnit: true,
+            isPurchaseUnit: true,
+          },
+        ],
+      },
+      401,
+    );
     assert.strictEqual(failProdRes.statusCode, 401);
-    assert.ok(failProdRes.error.message.includes('غير مصرح') || failProdRes.error.message.includes('suspended') || failProdRes.error.message.includes('Tenant is not active') || failProdRes.error.message.includes('Inactive tenant') || failProdRes.error.message.includes('غير مفعل') || failProdRes.error.message.includes('معلق'), 'Should reject operation on suspended tenant');
+    assert.ok(
+      failProdRes.error.message.includes('غير مصرح') ||
+        failProdRes.error.message.includes('suspended') ||
+        failProdRes.error.message.includes('Tenant is not active') ||
+        failProdRes.error.message.includes('Inactive tenant') ||
+        failProdRes.error.message.includes('غير مفعل') ||
+        failProdRes.error.message.includes('معلق'),
+      'Should reject operation on suspended tenant',
+    );
 
     // 10. Activate Tenant
     console.log('Activating tenant...');
@@ -122,14 +138,14 @@ async function main() {
         name: `Pro Plan ${Date.now()}`,
         code: `PRO_${Date.now()}`,
         price: 100,
-        billingPeriodMonths: 1
+        billingPeriodMonths: 1,
       });
       planId = planRes.id;
     }
 
     const activateRes = await saasAdmin.post(`/api/saas-admin/tenants/${tenantId}/activate`, {
       planId: planId,
-      durationMonths: 1
+      durationMonths: 1,
     });
     assert.ok(activateRes.ok);
 
@@ -152,15 +168,15 @@ async function main() {
           barcode: barcodeSucc,
           isBaseUnit: true,
           isSaleUnit: true,
-          isPurchaseUnit: true
-        }
-      ]
+          isPurchaseUnit: true,
+        },
+      ],
     });
 
     // 11. Expire Tenant
     console.log('Expiring tenant...');
     const expireRes = await saasAdmin.post(`/api/saas-admin/tenants/${tenantId}/expire`, {
-      reason: 'Subscription ended'
+      reason: 'Subscription ended',
     });
     assert.ok(expireRes.ok);
 
@@ -168,7 +184,7 @@ async function main() {
     console.log('Renewing tenant...');
     const renewRes = await saasAdmin.post(`/api/saas-admin/tenants/${tenantId}/renew`, {
       planId: planId,
-      durationMonths: 1
+      durationMonths: 1,
     });
     assert.ok(renewRes.ok);
 

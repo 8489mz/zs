@@ -5,19 +5,19 @@ function run(): void {
   const event1: any = {
     request: {
       headers: {
-        'authorization': 'Bearer supersecret',
-        'cookie': 'session=123',
+        authorization: 'Bearer supersecret',
+        cookie: 'session=123',
         'session-id': 'xyz',
         'csrf-token': 'token',
-        'x-safe-header': 'safe'
-      }
-    }
+        'x-safe-header': 'safe',
+      },
+    },
   };
-  
+
   const headers = event1.request.headers;
   const sensitiveHeaders = ['authorization', 'cookie', 'session-id', 'csrf-token'];
   for (const key of Object.keys(headers)) {
-    if (sensitiveHeaders.some(h => key.toLowerCase().includes(h))) {
+    if (sensitiveHeaders.some((h) => key.toLowerCase().includes(h))) {
       headers[key] = '[REDACTED]';
     }
   }
@@ -37,9 +37,9 @@ function run(): void {
         connectionString: 'db://user:pass@host',
         smtpPassword: '123',
         db_url: 'xyz',
-        safeField: 'hello'
-      }
-    }
+        safeField: 'hello',
+      },
+    },
   };
 
   if (event2.request?.data) {
@@ -48,14 +48,13 @@ function run(): void {
       if (data && typeof data === 'object') {
         const sensitiveKeys = ['password', 'token', 'secret', 'connection', 'smtp', 'db'];
         for (const key of Object.keys(data)) {
-          if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
+          if (sensitiveKeys.some((sk) => key.toLowerCase().includes(sk))) {
             data[key] = '[REDACTED]';
           }
         }
         event2.request.data = typeof event2.request.data === 'string' ? JSON.stringify(data) : data;
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   assert.strictEqual(event2.request.data.password, '[REDACTED]');

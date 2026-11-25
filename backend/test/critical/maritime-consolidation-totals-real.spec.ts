@@ -95,7 +95,10 @@ async function main(): Promise<void> {
     const parent5 = await parentRow(5);
     assert.equal(Number(parent5.gross_weight_kg), 100);
     assert.equal(Number(parent5.total_cbm), 1);
-    assert.ok(Math.abs(Number(parent5.volumetric_weight_kg) - 1000000 / 6000) < 1e-9, 'volumetric = 1 CBM at the 6000 divisor');
+    assert.ok(
+      Math.abs(Number(parent5.volumetric_weight_kg) - 1000000 / 6000) < 1e-9,
+      'volumetric = 1 CBM at the 6000 divisor',
+    );
     assert.equal(Number(parent5.chargeable_weight_kg), 167, 'chargeable rounds up to the next 0.5 kg');
 
     // 4. Missing parent: no-op, not an error.
@@ -108,17 +111,35 @@ async function main(): Promise<void> {
     // the job-close slice, createConsolidationSubJob in the
     // consolidation-documents slice — per-slice reads (file #8
     // opening-digits precedent).
-    const jobsCore = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-jobs-core.service.ts'), 'utf8');
-    const jobClose = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-job-close.service.ts'), 'utf8');
-    const consolidationDocs = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-consolidation-documents.service.ts'), 'utf8');
+    const jobsCore = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-jobs-core.service.ts'),
+      'utf8',
+    );
+    const jobClose = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-job-close.service.ts'),
+      'utf8',
+    );
+    const consolidationDocs = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-consolidation-documents.service.ts'),
+      'utf8',
+    );
     const createStart = jobsCore.indexOf('async createJob(');
     const createEnd = jobsCore.indexOf('async autoConvertQuotationToJob(');
-    assert.ok(jobsCore.slice(createStart, createEnd).includes('syncConsolidationParentTotals'), 'createJob must sync the parent');
+    assert.ok(
+      jobsCore.slice(createStart, createEnd).includes('syncConsolidationParentTotals'),
+      'createJob must sync the parent',
+    );
     const updateStart = jobClose.indexOf('async updateJob(');
     const updateEnd = jobClose.indexOf('async getQuotationCharges(');
-    assert.ok(jobClose.slice(updateStart, updateEnd).includes('syncConsolidationParentTotals'), 'updateJob must sync the parent');
+    assert.ok(
+      jobClose.slice(updateStart, updateEnd).includes('syncConsolidationParentTotals'),
+      'updateJob must sync the parent',
+    );
     const subJobStart = consolidationDocs.indexOf('async createConsolidationSubJob(');
-    assert.ok(consolidationDocs.slice(subJobStart, subJobStart + 1500).includes('createJob('), 'sub-job creation must funnel through createJob');
+    assert.ok(
+      consolidationDocs.slice(subJobStart, subJobStart + 1500).includes('createJob('),
+      'sub-job creation must funnel through createJob',
+    );
 
     console.log('maritime consolidation totals real checks passed');
   } finally {

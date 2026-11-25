@@ -132,7 +132,10 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -140,16 +143,35 @@ async function journalLines(db: Kysely<Database>, entryId: number): Promise<any[
   return (db as any).selectFrom('journal_entry_lines').selectAll().where('journal_entry_id', '=', entryId).execute();
 }
 
-async function insertApproval(db: Kysely<Database>, id: string, actionType: string, referenceId: string, payload: any): Promise<void> {
-  await db.insertInto('import_approval_requests' as never).values({
-    id, tenant_id: 't1', module: 'import', action_type: actionType,
-    reference_id: referenceId, requested_by: 99, created_by: 99, status: 'approved',
-    request_payload: JSON.stringify(payload),
-  } as never).execute();
+async function insertApproval(
+  db: Kysely<Database>,
+  id: string,
+  actionType: string,
+  referenceId: string,
+  payload: any,
+): Promise<void> {
+  await db
+    .insertInto('import_approval_requests' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      module: 'import',
+      action_type: actionType,
+      reference_id: referenceId,
+      requested_by: 99,
+      created_by: 99,
+      status: 'approved',
+      request_payload: JSON.stringify(payload),
+    } as never)
+    .execute();
 }
 
 async function approvalStatus(db: Kysely<Database>, id: string): Promise<string> {
-  const row: any = await (db as any).selectFrom('import_approval_requests').select('status').where('id', '=', id).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom('import_approval_requests')
+    .select('status')
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
   return row.status;
 }
 
@@ -166,16 +188,29 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const acquisition: any = await service.recordFxAcquisition('t1', 1, {
-        currency: 'usd', foreignAmount: 10000, egpCost: 500000,
-        acquisitionDate: '2026-01-10', source: 'bank',
-        bankAccountId: '24', sourceAccountId: '27', notes: 'auction',
+        currency: 'usd',
+        foreignAmount: 10000,
+        egpCost: 500000,
+        acquisitionDate: '2026-01-10',
+        source: 'bank',
+        bankAccountId: '24',
+        sourceAccountId: '27',
+        notes: 'auction',
       });
       assert.equal(acquisition.currency, 'USD', 'Currency is stored normalised');
-      assert.equal(Number(acquisition.effective_exchange_rate), 50, 'Rate is the live registered rate, not computed from the amounts');
+      assert.equal(
+        Number(acquisition.effective_exchange_rate),
+        50,
+        'Rate is the live registered rate, not computed from the amounts',
+      );
       assert.ok(acquisition.journal_entry_id, 'The journal is linked on the acquisition row');
       assert.ok(Number(acquisition.serial_id) > 0, 'The serial exists for journal/treasury references');
       assert.equal(acquisition.supplier_payment_id, null, 'Unlinked by default');
-      const entry: any = await (db as any).selectFrom('journal_entries').selectAll().where('id', '=', acquisition.journal_entry_id).executeTakeFirstOrThrow();
+      const entry: any = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('id', '=', acquisition.journal_entry_id)
+        .executeTakeFirstOrThrow();
       assert.equal(entry.source_type, 'import_fx_acquisition');
       assert.equal(Number(entry.source_id), Number(acquisition.serial_id));
       const lines = await journalLines(db, acquisition.journal_entry_id);
@@ -190,9 +225,17 @@ async function main(): Promise<void> {
       assert.equal(Number(src.credit), 500000, 'Source is credited');
       const legs: any[] = await (db as any).selectFrom('treasury_transactions').selectAll().execute();
       assert.equal(legs.length, 2, 'Two treasury legs');
-      assert.equal(legs.reduce((s: number, l: any) => s + Number(l.amount), 0), 0, 'Treasury legs net to zero in EGP book value');
-      assert.ok(legs.some((l: any) => Number(l.amount) === 500000 && Number(l.reference_id) === Number(acquisition.serial_id)));
-      assert.ok(legs.some((l: any) => Number(l.amount) === -500000 && Number(l.reference_id) === Number(acquisition.serial_id)));
+      assert.equal(
+        legs.reduce((s: number, l: any) => s + Number(l.amount), 0),
+        0,
+        'Treasury legs net to zero in EGP book value',
+      );
+      assert.ok(
+        legs.some((l: any) => Number(l.amount) === 500000 && Number(l.reference_id) === Number(acquisition.serial_id)),
+      );
+      assert.ok(
+        legs.some((l: any) => Number(l.amount) === -500000 && Number(l.reference_id) === Number(acquisition.serial_id)),
+      );
       assert.ok(legs.every((l: any) => l.txn_type === 'import_fx_acquisition'));
     } finally {
       await db.destroy();
@@ -205,15 +248,28 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      await db.insertInto('import_fx_acquisitions' as never).values({
-        tenant_id: 't1', currency: 'usd', foreign_amount: 5000, egp_cost: 250000,
-        effective_exchange_rate: 50, acquisition_date: '2026-01-05', source: 'bank',
-        bank_account_id: 24, notes: 'legacy memo row',
-      } as never).execute();
+      await db
+        .insertInto('import_fx_acquisitions' as never)
+        .values({
+          tenant_id: 't1',
+          currency: 'usd',
+          foreign_amount: 5000,
+          egp_cost: 250000,
+          effective_exchange_rate: 50,
+          acquisition_date: '2026-01-05',
+          source: 'bank',
+          bank_account_id: 24,
+          notes: 'legacy memo row',
+        } as never)
+        .execute();
       await service.recordFxAcquisition('t1', 1, {
-        currency: 'USD', foreignAmount: 10000, egpCost: 500000,
-        acquisitionDate: '2026-01-10', source: 'bank',
-        bankAccountId: '24', sourceAccountId: '27',
+        currency: 'USD',
+        foreignAmount: 10000,
+        egpCost: 500000,
+        acquisitionDate: '2026-01-10',
+        source: 'bank',
+        bankAccountId: '24',
+        sourceAccountId: '27',
       });
       const portfolio: any = await service.getFxPortfolio('t1');
       assert.deepEqual(Object.keys(portfolio.portfolio), ['USD'], 'One bucket, not two');
@@ -237,13 +293,18 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const base = {
-        currency: 'USD', foreignAmount: 10000, egpCost: 500000,
-        acquisitionDate: '2026-01-10', source: 'bank',
-        bankAccountId: '24', sourceAccountId: '27',
+        currency: 'USD',
+        foreignAmount: 10000,
+        egpCost: 500000,
+        acquisitionDate: '2026-01-10',
+        source: 'bank',
+        bankAccountId: '24',
+        sourceAccountId: '27',
       };
       await expectReject(
         service.recordFxAcquisition('t1', 1, { ...base, exchangeRate: 99 }),
-        /IMPORT_FX_RATE_MISMATCH/, 'A mismatched supplied rate must fail closed',
+        /IMPORT_FX_RATE_MISMATCH/,
+        'A mismatched supplied rate must fail closed',
       );
       assert.equal(await countRows(db, 'import_fx_acquisitions'), 0, 'Nothing written on rejection');
       assert.equal(await countRows(db, 'journal_entries'), 0);
@@ -263,18 +324,23 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const base = {
-        currency: 'USD', foreignAmount: 10000, egpCost: 500000,
-        acquisitionDate: '2026-01-10', source: 'bank',
+        currency: 'USD',
+        foreignAmount: 10000,
+        egpCost: 500000,
+        acquisitionDate: '2026-01-10',
+        source: 'bank',
       };
       await expectReject(
         service.recordFxAcquisition('t1', 1, { ...base, bankAccountId: '24', sourceAccountId: '24' }),
-        /IMPORT_FX_SAME_ACCOUNT/, 'Moving money to itself is rejected',
+        /IMPORT_FX_SAME_ACCOUNT/,
+        'Moving money to itself is rejected',
       );
       assert.equal(await countRows(db, 'import_fx_acquisitions'), 0);
       await (db as any).updateTable('accounting_settings').set({ bank_account_id: 24 }).where('id', '=', 1).execute();
       await expectReject(
         service.recordFxAcquisition('t1', 1, { ...base, bankAccountId: '24' }),
-        /IMPORT_FX_SAME_ACCOUNT/, 'A single-account caller hits the same fail-closed, never a silent default',
+        /IMPORT_FX_SAME_ACCOUNT/,
+        'A single-account caller hits the same fail-closed, never a silent default',
       );
       assert.equal(await countRows(db, 'import_fx_acquisitions'), 0);
     } finally {
@@ -288,30 +354,53 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      await db.insertInto('supplier_payments' as never).values({
-        id: 900, tenant_id: 't1', currency: 'eur', amount_foreign: 5000,
-      } as never).execute();
+      await db
+        .insertInto('supplier_payments' as never)
+        .values({
+          id: 900,
+          tenant_id: 't1',
+          currency: 'eur',
+          amount_foreign: 5000,
+        } as never)
+        .execute();
       const linked: any = await service.recordFxAcquisition('t1', 1, {
-        currency: 'EUR', foreignAmount: 5000, egpCost: 250000,
-        acquisitionDate: '2026-01-10', source: 'bank',
-        bankAccountId: '24', sourceAccountId: '27', transferId: 900,
+        currency: 'EUR',
+        foreignAmount: 5000,
+        egpCost: 250000,
+        acquisitionDate: '2026-01-10',
+        source: 'bank',
+        bankAccountId: '24',
+        sourceAccountId: '27',
+        transferId: 900,
       });
       assert.equal(Number(linked.supplier_payment_id), 900, 'The link is recorded');
       await expectReject(
         service.recordFxAcquisition('t1', 1, {
-          currency: 'USD', foreignAmount: 5000, egpCost: 250000,
-          acquisitionDate: '2026-01-10', source: 'bank',
-          bankAccountId: '24', sourceAccountId: '27', transferId: 900,
+          currency: 'USD',
+          foreignAmount: 5000,
+          egpCost: 250000,
+          acquisitionDate: '2026-01-10',
+          source: 'bank',
+          bankAccountId: '24',
+          sourceAccountId: '27',
+          transferId: 900,
         }),
-        /IMPORT_FX_TRANSFER_CURRENCY_MISMATCH/, 'A currency-mismatched link fails closed',
+        /IMPORT_FX_TRANSFER_CURRENCY_MISMATCH/,
+        'A currency-mismatched link fails closed',
       );
       await expectReject(
         service.recordFxAcquisition('t1', 1, {
-          currency: 'USD', foreignAmount: 5000, egpCost: 250000,
-          acquisitionDate: '2026-01-10', source: 'bank',
-          bankAccountId: '24', sourceAccountId: '27', transferId: 999,
+          currency: 'USD',
+          foreignAmount: 5000,
+          egpCost: 250000,
+          acquisitionDate: '2026-01-10',
+          source: 'bank',
+          bankAccountId: '24',
+          sourceAccountId: '27',
+          transferId: 999,
         }),
-        /غير تابعة للمنشأة/, 'An unknown transfer fails closed',
+        /غير تابعة للمنشأة/,
+        'An unknown transfer fails closed',
       );
       assert.equal(await countRows(db, 'import_fx_acquisitions'), 1, 'Only the valid link wrote a row');
     } finally {
@@ -327,30 +416,66 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const trip: any = await service.createSourcingTrip('t1', {
-        projectId: 'proj-1', tripTitle: 'Canton Fair', destinationCity: 'Guangzhou',
-        startDate: '2026-01-15', endDate: '2026-01-20', budgetEgp: 20000, actualCostEgp: 30000,
+        projectId: 'proj-1',
+        tripTitle: 'Canton Fair',
+        destinationCity: 'Guangzhou',
+        startDate: '2026-01-15',
+        endDate: '2026-01-20',
+        budgetEgp: 20000,
+        actualCostEgp: 30000,
       });
       assert.equal(trip.journal_entry_id, null, 'A new trip is an unposted estimate');
       await expectReject(
-        service.postSourcingTripExpense('t1', 1, trip.id, { approvalRequestId: '', supplierId: 1, expenseAccountId: 28 }),
-        /موافقة Maker-Checker/, 'No token, no posting',
+        service.postSourcingTripExpense('t1', 1, trip.id, {
+          approvalRequestId: '',
+          supplierId: 1,
+          expenseAccountId: 28,
+        }),
+        /موافقة Maker-Checker/,
+        'No token, no posting',
       );
       assert.equal(await countRows(db, 'journal_entries'), 0);
-      await insertApproval(db, 'tok-1', 'sourcing_trip_expense', trip.id, { tripId: trip.id, amount: 30000, supplierId: 1 });
+      await insertApproval(db, 'tok-1', 'sourcing_trip_expense', trip.id, {
+        tripId: trip.id,
+        amount: 30000,
+        supplierId: 1,
+      });
       await expectReject(
-        service.postSourcingTripExpense('t1', 1, trip.id, { approvalRequestId: 'tok-1', supplierId: 1, expenseAccountId: 24 }),
-        /حساب مصروف/, 'A non-expense account fails closed',
+        service.postSourcingTripExpense('t1', 1, trip.id, {
+          approvalRequestId: 'tok-1',
+          supplierId: 1,
+          expenseAccountId: 24,
+        }),
+        /حساب مصروف/,
+        'A non-expense account fails closed',
       );
       assert.equal(await approvalStatus(db, 'tok-1'), 'approved', 'The token is not consumed on a validation failure');
       await expectReject(
-        service.postSourcingTripExpense('t1', 1, trip.id, { approvalRequestId: 'tok-1', supplierId: 999, expenseAccountId: 28 }),
-        /غير تابع للمنشأة/, 'An unknown supplier fails closed',
+        service.postSourcingTripExpense('t1', 1, trip.id, {
+          approvalRequestId: 'tok-1',
+          supplierId: 999,
+          expenseAccountId: 28,
+        }),
+        /غير تابع للمنشأة/,
+        'An unknown supplier fails closed',
       );
-      assert.equal(await approvalStatus(db, 'tok-1'), 'approved', 'The token survives the second validation failure too');
-      const posted: any = await service.postSourcingTripExpense('t1', 1, trip.id, { approvalRequestId: 'tok-1', supplierId: 1, expenseAccountId: 28 });
+      assert.equal(
+        await approvalStatus(db, 'tok-1'),
+        'approved',
+        'The token survives the second validation failure too',
+      );
+      const posted: any = await service.postSourcingTripExpense('t1', 1, trip.id, {
+        approvalRequestId: 'tok-1',
+        supplierId: 1,
+        expenseAccountId: 28,
+      });
       assert.ok(posted.journal_entry_id, 'The trip is linked to its journal');
       assert.equal(await approvalStatus(db, 'tok-1'), 'executed', 'The token is consumed exactly once, on success');
-      const entry: any = await (db as any).selectFrom('journal_entries').selectAll().where('id', '=', posted.journal_entry_id).executeTakeFirstOrThrow();
+      const entry: any = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('id', '=', posted.journal_entry_id)
+        .executeTakeFirstOrThrow();
       assert.equal(entry.source_type, 'import_sourcing_trip_expense');
       const lines = await journalLines(db, posted.journal_entry_id);
       assert.equal(lines.length, 2);
@@ -363,16 +488,29 @@ async function main(): Promise<void> {
       assert.equal(await countRows(db, 'expenses'), 1, 'Exactly one expenses mirror row');
       const expenseRow: any = await (db as any).selectFrom('expenses').selectAll().executeTakeFirstOrThrow();
       assert.equal(Number(expenseRow.amount), 30000);
-      const supplier: any = await (db as any).selectFrom('suppliers').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      const supplier: any = await (db as any)
+        .selectFrom('suppliers')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(supplier.balance), 30000, 'The supplier subledger mirrors the payable');
       const ledger: any[] = await (db as any).selectFrom('supplier_ledger').selectAll().execute();
       assert.equal(ledger.length, 1);
       assert.equal(Number(ledger[0].amount), 30000);
       assert.equal(ledger[0].reference_type, 'journal_entry');
-      await insertApproval(db, 'tok-2', 'sourcing_trip_expense', trip.id, { tripId: trip.id, amount: 30000, supplierId: 1 });
+      await insertApproval(db, 'tok-2', 'sourcing_trip_expense', trip.id, {
+        tripId: trip.id,
+        amount: 30000,
+        supplierId: 1,
+      });
       await expectReject(
-        service.postSourcingTripExpense('t1', 1, trip.id, { approvalRequestId: 'tok-2', supplierId: 1, expenseAccountId: 28 }),
-        /تم ترحيل مصروف هذه الرحلة مسبقاً/, 'A second posting conflicts',
+        service.postSourcingTripExpense('t1', 1, trip.id, {
+          approvalRequestId: 'tok-2',
+          supplierId: 1,
+          expenseAccountId: 28,
+        }),
+        /تم ترحيل مصروف هذه الرحلة مسبقاً/,
+        'A second posting conflicts',
       );
       assert.equal(await countRows(db, 'journal_entries'), 1, 'No second journal');
     } finally {
@@ -387,13 +525,30 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const trip: any = await service.createSourcingTrip('t1', {
-        projectId: 'proj-1', tripTitle: 'Canton Fair', destinationCity: 'Guangzhou',
-        startDate: '2026-01-15', endDate: '2026-01-20', budgetEgp: 20000, actualCostEgp: 30000,
+        projectId: 'proj-1',
+        tripTitle: 'Canton Fair',
+        destinationCity: 'Guangzhou',
+        startDate: '2026-01-15',
+        endDate: '2026-01-20',
+        budgetEgp: 20000,
+        actualCostEgp: 30000,
       });
       const before: any = await service.generatePeriodProfitReport('t1', '2026-01-01', '2026-12-31', 'proj-1');
-      assert.equal(Number(before.data.totalExpenses), 0, 'An unposted estimate is a memo, excluded from financial reports');
-      await insertApproval(db, 'tok-1', 'sourcing_trip_expense', trip.id, { tripId: trip.id, amount: 30000, supplierId: 1 });
-      await service.postSourcingTripExpense('t1', 1, trip.id, { approvalRequestId: 'tok-1', supplierId: 1, expenseAccountId: 28 });
+      assert.equal(
+        Number(before.data.totalExpenses),
+        0,
+        'An unposted estimate is a memo, excluded from financial reports',
+      );
+      await insertApproval(db, 'tok-1', 'sourcing_trip_expense', trip.id, {
+        tripId: trip.id,
+        amount: 30000,
+        supplierId: 1,
+      });
+      await service.postSourcingTripExpense('t1', 1, trip.id, {
+        approvalRequestId: 'tok-1',
+        supplierId: 1,
+        expenseAccountId: 28,
+      });
       const after: any = await service.generatePeriodProfitReport('t1', '2026-01-01', '2026-12-31', 'proj-1');
       assert.equal(Number(after.data.totalExpenses), 30000, 'The posted expense is counted exactly once — never twice');
       assert.equal(await countRows(db, 'journal_entries'), 1, 'One journal for the trip');
@@ -411,10 +566,14 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await expectReject(
         service.recordFxAcquisition('t1', 1, {
-          currency: 'USD', foreignAmount: 10000, egpCost: 500000,
-          acquisitionDate: '2026-01-10', source: 'bank',
+          currency: 'USD',
+          foreignAmount: 10000,
+          egpCost: 500000,
+          acquisitionDate: '2026-01-10',
+          source: 'bank',
         }),
-        /حساب/, 'No account anywhere must fail closed',
+        /حساب/,
+        'No account anywhere must fail closed',
       );
       assert.equal(await countRows(db, 'import_fx_acquisitions'), 0);
       assert.equal(await countRows(db, 'journal_entries'), 0);

@@ -19,17 +19,24 @@ const originalSaleItems = [
 
 // أ. إرجاع مباشر بربط صريح بسطر الفاتورة
 assert.equal(calculateSalesReturnCost([{ product_id: 7, sale_item_id: 12, qty: 2 }], originalSaleItems), 36);
-assert.equal(calculateSalesReturnCost([
-  { product_id: 7, sale_item_id: 11, qty: 1 },
-  { product_id: 7, sale_item_id: 12, qty: 1 },
-  { product_id: 8, sale_item_id: 13, qty: 3 },
-  { product_id: 9, sale_item_id: 14, qty: 5 },
-], originalSaleItems), 10 + 18 + 150 + 0);
+assert.equal(
+  calculateSalesReturnCost(
+    [
+      { product_id: 7, sale_item_id: 11, qty: 1 },
+      { product_id: 7, sale_item_id: 12, qty: 1 },
+      { product_id: 8, sale_item_id: 13, qty: 3 },
+      { product_id: 9, sale_item_id: 14, qty: 5 },
+    ],
+    originalSaleItems,
+  ),
+  10 + 18 + 150 + 0,
+);
 
 // ب. تكلفة محفوظة مسبقاً في سطر المرتجع (تتجاوز الحساب التلقائي بأمان)
-assert.equal(calculateSalesReturnCost([
-  { product_id: 7, sale_item_id: 11, qty: 2, cost_price: 12.5 },
-], originalSaleItems), 25);
+assert.equal(
+  calculateSalesReturnCost([{ product_id: 7, sale_item_id: 11, qty: 2, cost_price: 12.5 }], originalSaleItems),
+  25,
+);
 
 // ج. إرجاع بدون sale_item_id عندما تكون تكلفة الصنف متطابقة في كل سطوره
 const uniformCostSaleItems = [
@@ -41,30 +48,42 @@ assert.equal(calculateSalesReturnCost([{ product_id: 15, sale_item_id: null, qty
 // د. منع الغموض الحسابي عندما تختلف التكلفة بين أسطر نفس الصنف
 assert.throws(
   () => calculateSalesReturnCost([{ product_id: 7, sale_item_id: null, qty: 1 }], originalSaleItems),
-  /Ambiguous/
+  /Ambiguous/,
 );
 
 // هـ. منع الإرجاع لسطر فاتورة غير موجود
 assert.throws(
   () => calculateSalesReturnCost([{ product_id: 7, sale_item_id: 999, qty: 1 }], originalSaleItems),
-  /missing/
+  /missing/,
 );
 
 // هـ-2. لا يجوز للتكلفة المحفوظة تجاوز فحص مرجع سطر البيع الأصلي.
 assert.throws(
   () => calculateSalesReturnCost([{ product_id: 8, sale_item_id: 11, qty: 1, cost_price: 50 }], originalSaleItems),
-  /mismatched/
+  /mismatched/,
 );
 assert.throws(
   () => calculateSalesReturnCost([{ product_id: 7, sale_item_id: 999, qty: 1, cost_price: 10 }], originalSaleItems),
-  /missing/
+  /missing/,
 );
-assert.equal(calculateSalesReturnCost([{ product_id: 7, sale_item_id: 11, qty: 2, cost_price: 12.5 }], originalSaleItems), 25);
+assert.equal(
+  calculateSalesReturnCost([{ product_id: 7, sale_item_id: 11, qty: 2, cost_price: 12.5 }], originalSaleItems),
+  25,
+);
 
 // و. منع كميات سالبة أو صفرية أو غير صالحة
-assert.throws(() => calculateSalesReturnCost([{ product_id: 7, sale_item_id: 11, qty: 0 }], originalSaleItems), /Invalid sales return cost line/);
-assert.throws(() => calculateSalesReturnCost([{ product_id: 7, sale_item_id: 11, qty: -2 }], originalSaleItems), /Invalid sales return cost line/);
-assert.throws(() => calculateSalesReturnCost([{ product_id: -1, sale_item_id: 11, qty: 1 }], originalSaleItems), /Invalid sales return cost line/);
+assert.throws(
+  () => calculateSalesReturnCost([{ product_id: 7, sale_item_id: 11, qty: 0 }], originalSaleItems),
+  /Invalid sales return cost line/,
+);
+assert.throws(
+  () => calculateSalesReturnCost([{ product_id: 7, sale_item_id: 11, qty: -2 }], originalSaleItems),
+  /Invalid sales return cost line/,
+);
+assert.throws(
+  () => calculateSalesReturnCost([{ product_id: -1, sale_item_id: 11, qty: 1 }], originalSaleItems),
+  /Invalid sales return cost line/,
+);
 
 console.log('✓ 1. اختبارات حساب تكلفة المرتجع وحظر الغموض (calculateSalesReturnCost) اجتازت بنجاح');
 
@@ -84,10 +103,10 @@ assert.equal(refundExchange.refundAmount, 70);
 assert.equal(refundExchange.collectibleAmount, 0);
 
 // ج. قيمة البديل أكبر من المرتجع -> تحصيل فارق من العميل
-const collectExchange = settlePosExchange(100, 260.50);
+const collectExchange = settlePosExchange(100, 260.5);
 assert.equal(collectExchange.appliedCredit, 100);
 assert.equal(collectExchange.refundAmount, 0);
-assert.equal(collectExchange.collectibleAmount, 160.50);
+assert.equal(collectExchange.collectibleAmount, 160.5);
 
 // د. منع مدخلات سالبة أو غير محددة
 assert.throws(() => settlePosExchange(-10, 100), /EXCHANGE_AMOUNT_INVALID/);
@@ -163,17 +182,21 @@ assert.deepEqual(debtReversalRefund, [
 ]);
 
 // هـ. رصيد متجر (Store Credit): يتطلب وجود عميل
-assert.throws(() => allocateRefundTenders({
-  requested: 'store_credit',
-  amount: 30,
-  originalCashPaid: 50,
-  originalNonCashPaid: 0,
-  originalDebt: 0,
-  previousCashRefunded: 0,
-  previousNonCashRefunded: 0,
-  previousDebtReversed: 0,
-  hasCustomer: false,
-}), /REFUND_CUSTOMER_REQUIRED/);
+assert.throws(
+  () =>
+    allocateRefundTenders({
+      requested: 'store_credit',
+      amount: 30,
+      originalCashPaid: 50,
+      originalNonCashPaid: 0,
+      originalDebt: 0,
+      previousCashRefunded: 0,
+      previousNonCashRefunded: 0,
+      previousDebtReversed: 0,
+      hasCustomer: false,
+    }),
+  /REFUND_CUSTOMER_REQUIRED/,
+);
 
 const storeCreditSuccess = allocateRefundTenders({
   requested: 'store_credit',
@@ -206,34 +229,41 @@ const overrideSuccess = allocateRefundTenders({
 assert.deepEqual(overrideSuccess, [{ tender: 'cash', amount: 100 }]);
 
 // حظر التجاوز إن كان السبب فارغاً؛ كلمة واحدة واضحة تُقبل
-assert.throws(() => allocateRefundTenders({
-  requested: 'cash',
-  amount: 100,
-  originalCashPaid: 0,
-  originalNonCashPaid: 100,
-  originalDebt: 0,
-  previousCashRefunded: 0,
-  previousNonCashRefunded: 0,
-  previousDebtReversed: 0,
-  hasCustomer: false,
-  override: true,
-  overrideReason: '',
-}), /REFUND_OVERRIDE_REASON_REQUIRED/);
+assert.throws(
+  () =>
+    allocateRefundTenders({
+      requested: 'cash',
+      amount: 100,
+      originalCashPaid: 0,
+      originalNonCashPaid: 100,
+      originalDebt: 0,
+      previousCashRefunded: 0,
+      previousNonCashRefunded: 0,
+      previousDebtReversed: 0,
+      hasCustomer: false,
+      override: true,
+      overrideReason: '',
+    }),
+  /REFUND_OVERRIDE_REASON_REQUIRED/,
+);
 
 // كلمة واحدة واضحة تُقبل سبباً للتجاوز
-assert.deepEqual(allocateRefundTenders({
-  requested: 'cash',
-  amount: 100,
-  originalCashPaid: 0,
-  originalNonCashPaid: 100,
-  originalDebt: 0,
-  previousCashRefunded: 0,
-  previousNonCashRefunded: 0,
-  previousDebtReversed: 0,
-  hasCustomer: false,
-  override: true,
-  overrideReason: 'قصير',
-}), [{ tender: 'cash', amount: 100 }]);
+assert.deepEqual(
+  allocateRefundTenders({
+    requested: 'cash',
+    amount: 100,
+    originalCashPaid: 0,
+    originalNonCashPaid: 100,
+    originalDebt: 0,
+    previousCashRefunded: 0,
+    previousNonCashRefunded: 0,
+    previousDebtReversed: 0,
+    hasCustomer: false,
+    override: true,
+    overrideReason: 'قصير',
+  }),
+  [{ tender: 'cash', amount: 100 }],
+);
 
 console.log('✓ 3. اختبارات حماية وسائل الاسترداد والاعتماد الإداري (allocateRefundTenders) اجتازت بنجاح');
 
@@ -255,19 +285,23 @@ const allocated = allocateInvoiceDiscount({
 });
 assert.equal(allocated.length, 3);
 const totalAllocatedDiscount = allocated.reduce((sum, l) => sum + l.allocatedDiscount, 0);
-assert.equal(Number(totalAllocatedDiscount.toFixed(2)), 10.00);
+assert.equal(Number(totalAllocatedDiscount.toFixed(2)), 10.0);
 assert.equal(allocated[0].allocatedDiscount, 3.33);
 assert.equal(allocated[1].allocatedDiscount, 3.33);
 assert.equal(allocated[2].allocatedDiscount, 3.34); // السطر الأخير يمتص باقي السنتات بدقة
 
 // التحقق من حظر خصم أكبر من إجمالي الفاتورة
-assert.throws(() => allocateInvoiceDiscount({
-  lines: discountLines,
-  invoiceDiscount: 350,
-  invoiceTax: 0,
-  pricesIncludeTax: false,
-  digits: 2,
-}), /INVALID_INVOICE_ALLOCATION/);
+assert.throws(
+  () =>
+    allocateInvoiceDiscount({
+      lines: discountLines,
+      invoiceDiscount: 350,
+      invoiceTax: 0,
+      pricesIncludeTax: false,
+      digits: 2,
+    }),
+  /INVALID_INVOICE_ALLOCATION/,
+);
 
 console.log('✓ 4. اختبارات التوزيع الرياضي العادل للخصومات والضرائب (allocateInvoiceDiscount) اجتازت بنجاح');
 
@@ -276,16 +310,28 @@ console.log('  كافة اختبارات محركات نقاط البيع وال
 console.log('=============================================================================\n');
 
 const kwdReceivableRefund = allocateRefundTenders({
-  requested: 'cash', amount: 0.001, originalCashPaid: 0,
-  originalNonCashPaid: 0, originalDebt: 0.001,
-  previousCashRefunded: 0, previousNonCashRefunded: 0, previousDebtReversed: 0,
-  hasCustomer: true, digits: 3,
+  requested: 'cash',
+  amount: 0.001,
+  originalCashPaid: 0,
+  originalNonCashPaid: 0,
+  originalDebt: 0.001,
+  previousCashRefunded: 0,
+  previousNonCashRefunded: 0,
+  previousDebtReversed: 0,
+  hasCustomer: true,
+  digits: 3,
 });
 assert.deepEqual(kwdReceivableRefund, [{ tender: 'receivable', amount: 0.001 }]);
 const kwdCashRefund = allocateRefundTenders({
-  requested: 'cash', amount: 0.002, originalCashPaid: 0.003,
-  originalNonCashPaid: 0, originalDebt: 0,
-  previousCashRefunded: 0, previousNonCashRefunded: 0, previousDebtReversed: 0,
-  hasCustomer: true, digits: 3,
+  requested: 'cash',
+  amount: 0.002,
+  originalCashPaid: 0.003,
+  originalNonCashPaid: 0,
+  originalDebt: 0,
+  previousCashRefunded: 0,
+  previousNonCashRefunded: 0,
+  previousDebtReversed: 0,
+  hasCustomer: true,
+  digits: 3,
 });
 assert.deepEqual(kwdCashRefund, [{ tender: 'cash', amount: 0.002 }]);

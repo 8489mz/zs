@@ -3,7 +3,10 @@ import { strict as assert } from 'node:assert';
 import { REQUIRED_ANY_PERMISSIONS_KEY } from '../../src/core/auth/decorators/permissions.decorator';
 import { ImportSalesController } from '../../src/modules/import-sales/import-sales.controller';
 import { calculateImportFeasibility } from '../../src/modules/import-sales/engines/import-feasibility.engine';
-import { calculateLandedCostBreakdown, calculateDemurrageRisk } from '../../src/modules/import-sales/engines/import-landed-cost.engine';
+import {
+  calculateLandedCostBreakdown,
+  calculateDemurrageRisk,
+} from '../../src/modules/import-sales/engines/import-landed-cost.engine';
 
 /**
  * IMPORT-OPS-1 … IMPORT-OPS-6 — الضوابط الرقابية والحسابية لمنظومة الاستيراد والتجارة الدولية.
@@ -66,8 +69,14 @@ function testFeasibilityEngine(): void {
   assert.ok(result.scenarios.base, 'Base scenario must exist');
   assert.ok(result.scenarios.best, 'Best scenario must exist');
   assert.ok(result.scenarios.worst, 'Worst scenario must exist');
-  assert.ok(result.scenarios.best.expectedNetProfitEgp > result.scenarios.base.expectedNetProfitEgp, 'Best scenario profit must exceed base');
-  assert.ok(result.scenarios.base.expectedNetProfitEgp > result.scenarios.worst.expectedNetProfitEgp, 'Base scenario profit must exceed worst');
+  assert.ok(
+    result.scenarios.best.expectedNetProfitEgp > result.scenarios.base.expectedNetProfitEgp,
+    'Best scenario profit must exceed base',
+  );
+  assert.ok(
+    result.scenarios.base.expectedNetProfitEgp > result.scenarios.worst.expectedNetProfitEgp,
+    'Base scenario profit must exceed worst',
+  );
 }
 
 function testMultiModalLandedCostAllocation(): void {
@@ -136,14 +145,20 @@ function testDemurrageRiskCalculation(): void {
   assert.equal(arrivedResult.isOverdue, true);
   assert.equal(arrivedResult.estimatedFeesEgp, 30000);
   const returnedResult = calculateDemurrageRisk({
-    arrivalDate: pastDate, freeDays: 14, ratePerDayUsd: 100,
-    exchangeRate: 50, status: 'empty_returned',
+    arrivalDate: pastDate,
+    freeDays: 14,
+    ratePerDayUsd: 100,
+    exchangeRate: 50,
+    status: 'empty_returned',
   });
   assert.equal(returnedResult.isOverdue, false);
   assert.equal(returnedResult.estimatedFeesEgp, 0);
   const noFreeDays = calculateDemurrageRisk({
-    arrivalDate: pastDate, freeDays: 0, ratePerDayUsd: 100,
-    exchangeRate: 50, status: 'Arrived',
+    arrivalDate: pastDate,
+    freeDays: 0,
+    ratePerDayUsd: 100,
+    exchangeRate: 50,
+    status: 'Arrived',
   });
   assert.equal(noFreeDays.overdueDays, 20);
 }
@@ -178,7 +193,10 @@ function testNewRouteGuards(): void {
   for (const m of operationsGuarded) {
     const perms = Reflect.getMetadata(REQUIRED_ANY_PERMISSIONS_KEY, controllerProto[m]);
     assert.ok(perms, `Method ${m} must have permission guard`);
-    assert.ok(perms.includes('accounting') || perms.includes('purchases'), `Method ${m} must require purchases or accounting`);
+    assert.ok(
+      perms.includes('accounting') || perms.includes('purchases'),
+      `Method ${m} must require purchases or accounting`,
+    );
   }
 }
 

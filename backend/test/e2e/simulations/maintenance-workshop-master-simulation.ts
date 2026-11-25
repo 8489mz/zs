@@ -44,8 +44,19 @@ async function runMaintenanceWorkshopMasterSimulation() {
 
   const tx = new TransactionHelper();
   const audit = new AuditService(db);
-  const maintenanceService = new MaintenanceService(db, tx, audit, new AccountingPostingService(new AccountingTenantFoundationService()), new AccountingTenantFoundationService());
-  const tradeInService = new TradeInService(db, tx, audit, new AccountingPostingService(new AccountingTenantFoundationService()));
+  const maintenanceService = new MaintenanceService(
+    db,
+    tx,
+    audit,
+    new AccountingPostingService(new AccountingTenantFoundationService()),
+    new AccountingTenantFoundationService(),
+  );
+  const tradeInService = new TradeInService(
+    db,
+    tx,
+    audit,
+    new AccountingPostingService(new AccountingTenantFoundationService()),
+  );
   const fleetService = new VanFleetService(db);
 
   const tenantId = 'zs';
@@ -147,21 +158,24 @@ async function runMaintenanceWorkshopMasterSimulation() {
     // -------------------------------------------------------------------------
     console.log('[STEP 2] Creating Maintenance Ticket with Advance Cash Deposit...');
     const advanceAmount = 400;
-    const ticketCreateRes = await maintenanceService.createTicket({
-      customerName: 'م. أحمد الشناوي - شركة المقاولات الحديثة',
-      customerPhone: '01012345678',
-      deviceBrand: 'Apple',
-      deviceModel: 'iPhone 14 Pro Max',
-      serialNumber: `IMEI-3589410928374-${uniqueSuffix}`,
-      passcode: '998877',
-      problemDescription: 'كسر بالشاشة الخارجية وتفريغ شحن سريع',
-      deviceCondition: 'خدوش سطحية بالهيكل الخلفي بدون كسور',
-      expectedCost: 1600,
-      finalCost: 1600,
-      advancePayment: advanceAmount,
-      warrantyDays: 60,
-      locationId,
-    }, auth);
+    const ticketCreateRes = await maintenanceService.createTicket(
+      {
+        customerName: 'م. أحمد الشناوي - شركة المقاولات الحديثة',
+        customerPhone: '01012345678',
+        deviceBrand: 'Apple',
+        deviceModel: 'iPhone 14 Pro Max',
+        serialNumber: `IMEI-3589410928374-${uniqueSuffix}`,
+        passcode: '998877',
+        problemDescription: 'كسر بالشاشة الخارجية وتفريغ شحن سريع',
+        deviceCondition: 'خدوش سطحية بالهيكل الخلفي بدون كسور',
+        expectedCost: 1600,
+        finalCost: 1600,
+        advancePayment: advanceAmount,
+        warrantyDays: 60,
+        locationId,
+      },
+      auth,
+    );
 
     assert(ticketCreateRes.ok === true, 'Ticket creation must succeed');
     const ticketId = Number(ticketCreateRes.id);
@@ -182,7 +196,10 @@ async function runMaintenanceWorkshopMasterSimulation() {
       .executeTakeFirst();
 
     assert(Boolean(advanceTxn), 'Advance payment must create a treasury revenue transaction');
-    assert(Number(advanceTxn.amount) === advanceAmount, `Treasury amount must be ${advanceAmount}, got: ${advanceTxn.amount}`);
+    assert(
+      Number(advanceTxn.amount) === advanceAmount,
+      `Treasury amount must be ${advanceAmount}, got: ${advanceTxn.amount}`,
+    );
     console.log(`  -> Verified Treasury Advance Revenue: ${advanceTxn.amount} EGP recorded atomically.`);
     console.log('  [PASS] STEP 2 PASSED: Ticket created and advance payment secured.\n');
 
@@ -193,23 +210,32 @@ async function runMaintenanceWorkshopMasterSimulation() {
     const listRes = await maintenanceService.listTickets(auth, { q: 'الشناوي' });
     const listedTicket = listRes.tickets.find((t) => t.id === String(ticketId));
     assert(Boolean(listedTicket), 'Ticket must be found in listing');
-    assert(listedTicket?.passcode === '******', `Passcode in ticket listing must be masked with '******', got: ${listedTicket?.passcode}`);
+    assert(
+      listedTicket?.passcode === '******',
+      `Passcode in ticket listing must be masked with '******', got: ${listedTicket?.passcode}`,
+    );
     console.log(`  -> Verified Passcode Masked in List View: "${listedTicket?.passcode}"`);
 
     // Direct fetch must reveal actual passcode for authorized technician
     const singleTicketRes = await maintenanceService.getTicket(ticketId, auth);
     assert(singleTicketRes.ticket.passcode === '998877', 'Single ticket details must expose passcode for technician');
-    console.log(`  -> Verified Authorized Technician Detail View reveals original passcode: "${singleTicketRes.ticket.passcode}"`);
+    console.log(
+      `  -> Verified Authorized Technician Detail View reveals original passcode: "${singleTicketRes.ticket.passcode}"`,
+    );
     console.log('  [PASS] STEP 3 PASSED: Passcode privacy & security verified.\n');
 
     // -------------------------------------------------------------------------
     // STEP 4: Diagnostic Inspection Status Transition
     // -------------------------------------------------------------------------
     console.log('[STEP 4] Updating Ticket Status to Inspection (inspecting)...');
-    await maintenanceService.updateTicketStatus(ticketId, {
-      status: 'inspecting',
-      technicianNotes: 'تم فحص اللوحة الأم سليمة — تحتاج استبدال شاشة وتغيير بطارية',
-    }, auth);
+    await maintenanceService.updateTicketStatus(
+      ticketId,
+      {
+        status: 'inspecting',
+        technicianNotes: 'تم فحص اللوحة الأم سليمة — تحتاج استبدال شاشة وتغيير بطارية',
+      },
+      auth,
+    );
 
     const ticketAfterInspection = await maintenanceService.getTicket(ticketId, auth);
     assert(ticketAfterInspection.ticket.status === 'inspecting', 'Ticket status must be inspecting');
@@ -222,14 +248,18 @@ async function runMaintenanceWorkshopMasterSimulation() {
     console.log('[STEP 5] Testing Shortage Defense Guard on Excessive Spare Part Request...');
     let shortageBlocked = false;
     try {
-      await maintenanceService.addPart(ticketId, {
-        productId: screenPartId,
-        productName: 'شاشة أصلية سوبر أموليد',
-        qty: 999, // only 10 available
-        unitPrice: 1100,
-        unitCost: 500,
-        locationId,
-      }, auth);
+      await maintenanceService.addPart(
+        ticketId,
+        {
+          productId: screenPartId,
+          productName: 'شاشة أصلية سوبر أموليد',
+          qty: 999, // only 10 available
+          unitPrice: 1100,
+          unitCost: 500,
+          locationId,
+        },
+        auth,
+      );
     } catch (err: any) {
       shortageBlocked = true;
       console.log(`  -> Shortage Guard correctly blocked request: [${err.code || err.name}] ${err.message}`);
@@ -251,25 +281,33 @@ async function runMaintenanceWorkshopMasterSimulation() {
     // -------------------------------------------------------------------------
     console.log('[STEP 6] Consuming Authorized Spare Parts for Ticket...');
     // 1. Add Screen (qty: 1, price: 1100)
-    const partScreenRes = await maintenanceService.addPart(ticketId, {
-      productId: screenPartId,
-      productName: 'شاشة أصلية سوبر أموليد',
-      qty: 1,
-      unitPrice: 1100,
-      unitCost: 500,
-      locationId,
-    }, auth);
+    const partScreenRes = await maintenanceService.addPart(
+      ticketId,
+      {
+        productId: screenPartId,
+        productName: 'شاشة أصلية سوبر أموليد',
+        qty: 1,
+        unitPrice: 1100,
+        unitCost: 500,
+        locationId,
+      },
+      auth,
+    );
     assert(partScreenRes.ok === true, 'Screen part addition must succeed');
 
     // 2. Add Battery (qty: 1, price: 350)
-    const partBatteryRes = await maintenanceService.addPart(ticketId, {
-      productId: batteryPartId,
-      productName: 'بطارية ليثيوم بوليمر 5000mAh',
-      qty: 1,
-      unitPrice: 350,
-      unitCost: 180,
-      locationId,
-    }, auth);
+    const partBatteryRes = await maintenanceService.addPart(
+      ticketId,
+      {
+        productId: batteryPartId,
+        productName: 'بطارية ليثيوم بوليمر 5000mAh',
+        qty: 1,
+        unitPrice: 350,
+        unitCost: 180,
+        locationId,
+      },
+      auth,
+    );
     assert(partBatteryRes.ok === true, 'Battery part addition must succeed');
 
     // Verify Stock deductions
@@ -323,7 +361,10 @@ async function runMaintenanceWorkshopMasterSimulation() {
       .where('location_id', '=', locationId)
       .where('product_id', '=', batteryPartId)
       .executeTakeFirst();
-    assert(Number(batteryStockRestored?.qty) === 15, `Battery stock must be restored to 15, got: ${batteryStockRestored?.qty}`);
+    assert(
+      Number(batteryStockRestored?.qty) === 15,
+      `Battery stock must be restored to 15, got: ${batteryStockRestored?.qty}`,
+    );
     console.log(`  -> Verified Battery Stock safely restored: 14 -> ${batteryStockRestored?.qty} Units`);
 
     // Verify return movement row
@@ -344,17 +385,23 @@ async function runMaintenanceWorkshopMasterSimulation() {
     // -------------------------------------------------------------------------
     console.log('[STEP 8] Marking Ticket as Repaired (repaired)...');
     const finalRepairCost = 1450; // 1100 screen + 350 labor
-    await maintenanceService.updateTicketStatus(ticketId, {
-      status: 'repaired',
-      finalCost: finalRepairCost,
-      technicianNotes: 'تم تركيب الشاشة الأصلية ومعايرة ألوان TrueTone بنجاح',
-    }, auth);
+    await maintenanceService.updateTicketStatus(
+      ticketId,
+      {
+        status: 'repaired',
+        finalCost: finalRepairCost,
+        technicianNotes: 'تم تركيب الشاشة الأصلية ومعايرة ألوان TrueTone بنجاح',
+      },
+      auth,
+    );
 
     const ticketRepaired = await maintenanceService.getTicket(ticketId, auth);
     assert(ticketRepaired.ticket.status === 'repaired', 'Status must be repaired');
     assert(Boolean(ticketRepaired.ticket.repairedAt), 'repairedAt timestamp must be set');
     assert(Number(ticketRepaired.ticket.finalCost) === finalRepairCost, 'Final cost must match 1450 EGP');
-    console.log(`  -> Ticket Status: [${ticketRepaired.ticket.status}], Repaired At: ${ticketRepaired.ticket.repairedAt}`);
+    console.log(
+      `  -> Ticket Status: [${ticketRepaired.ticket.status}], Repaired At: ${ticketRepaired.ticket.repairedAt}`,
+    );
     console.log('  [PASS] STEP 8 PASSED: Repair completion confirmed.\n');
 
     // -------------------------------------------------------------------------
@@ -363,10 +410,14 @@ async function runMaintenanceWorkshopMasterSimulation() {
     console.log('[STEP 9] Handing Over Device & Collecting Remaining Balance into Treasury...');
     // Final Cost = 1450 EGP, Advance = 400 EGP, Remaining to collect = 1050 EGP
     const remainingToCollect = finalRepairCost - advanceAmount;
-    await maintenanceService.updateTicketStatus(ticketId, {
-      status: 'delivered',
-      collectedAmount: remainingToCollect,
-    }, auth);
+    await maintenanceService.updateTicketStatus(
+      ticketId,
+      {
+        status: 'delivered',
+        collectedAmount: remainingToCollect,
+      },
+      auth,
+    );
 
     const ticketDelivered = await maintenanceService.getTicket(ticketId, auth);
     assert(ticketDelivered.ticket.status === 'delivered', 'Status must be delivered');
@@ -386,30 +437,38 @@ async function runMaintenanceWorkshopMasterSimulation() {
 
     assert(Boolean(finalTxn), `Must record remaining collection of ${remainingToCollect} EGP in treasury`);
     console.log(`  -> Handover Completed at: ${ticketDelivered.ticket.deliveredAt}`);
-    console.log(`  -> Verified Final Collection in Treasury: ${finalTxn.amount} EGP collected (Total 400 + 1050 = 1450 EGP).`);
+    console.log(
+      `  -> Verified Final Collection in Treasury: ${finalTxn.amount} EGP collected (Total 400 + 1050 = 1450 EGP).`,
+    );
     console.log('  [PASS] STEP 9 PASSED: Delivery and treasury revenue settled.\n');
 
     // -------------------------------------------------------------------------
     // STEP 10: Trade-In (شراء المستعمل واستبدال الأجهزة) Workflow
     // -------------------------------------------------------------------------
     console.log('[STEP 10] Testing Trade-In Used Hardware Intake & Catalog Integration...');
-    const tradeinRes = await tradeInService.createTransaction({
-      sellerName: 'كابتن محمود الغندور',
-      sellerPhone: '01234567890',
-      sellerNationalId: '29508140102554',
-      deviceBrand: 'Samsung',
-      deviceModel: 'Galaxy S23 Ultra 256GB Phantom Black',
-      serialNumber: `R5CW-${uniqueSuffix}`,
-      agreedPurchasePrice: 18500,
-      deviceConditionState: 'like_new',
-      deviceConditionNotes: 'بطارية 96% بحالة ممتازة وبدون أي خدوش ومع الكرتونة',
-      autoAddToInventory: true,
-      locationId,
-      paymentMethod: 'cash',
-    }, auth);
+    const tradeinRes = await tradeInService.createTransaction(
+      {
+        sellerName: 'كابتن محمود الغندور',
+        sellerPhone: '01234567890',
+        sellerNationalId: '29508140102554',
+        deviceBrand: 'Samsung',
+        deviceModel: 'Galaxy S23 Ultra 256GB Phantom Black',
+        serialNumber: `R5CW-${uniqueSuffix}`,
+        agreedPurchasePrice: 18500,
+        deviceConditionState: 'like_new',
+        deviceConditionNotes: 'بطارية 96% بحالة ممتازة وبدون أي خدوش ومع الكرتونة',
+        autoAddToInventory: true,
+        locationId,
+        paymentMethod: 'cash',
+      },
+      auth,
+    );
 
     assert(tradeinRes.ok === true, 'Trade-in transaction must succeed');
-    assert(Boolean(tradeinRes.docNo.startsWith('TRD-')), `Trade-in docNo must follow TRD-YYMMDD-XXXX format, got: ${tradeinRes.docNo}`);
+    assert(
+      Boolean(tradeinRes.docNo.startsWith('TRD-')),
+      `Trade-in docNo must follow TRD-YYMMDD-XXXX format, got: ${tradeinRes.docNo}`,
+    );
     console.log(`  -> Created Trade-In Record #${tradeinRes.docNo} (ID: ${tradeinRes.id})`);
 
     // Verify Used Product added to catalog via getTransaction
@@ -424,8 +483,13 @@ async function runMaintenanceWorkshopMasterSimulation() {
       .executeTakeFirst();
 
     assert(Boolean(usedProduct), 'Used product must exist in products table');
-    assert(Number(usedProduct.cost_price) === 18500, `Used product cost must match agreed price 18500, got: ${usedProduct.cost_price}`);
-    console.log(`  -> Created Used Product in Catalog: [ID: ${usedProduct.id}] "${usedProduct.name}" (Cost: ${usedProduct.cost_price} EGP)`);
+    assert(
+      Number(usedProduct.cost_price) === 18500,
+      `Used product cost must match agreed price 18500, got: ${usedProduct.cost_price}`,
+    );
+    console.log(
+      `  -> Created Used Product in Catalog: [ID: ${usedProduct.id}] "${usedProduct.name}" (Cost: ${usedProduct.cost_price} EGP)`,
+    );
 
     // Verify Stock increased by 1
     const usedStock = await (db as any)
@@ -449,7 +513,10 @@ async function runMaintenanceWorkshopMasterSimulation() {
       .executeTakeFirst();
 
     assert(Boolean(tradeinExpenseTxn), 'Treasury expense transaction must be recorded for trade-in purchase');
-    assert(Math.abs(Number(tradeinExpenseTxn.amount)) === 18500, `Treasury expense amount must be 18500, got: ${tradeinExpenseTxn.amount}`);
+    assert(
+      Math.abs(Number(tradeinExpenseTxn.amount)) === 18500,
+      `Treasury expense amount must be 18500, got: ${tradeinExpenseTxn.amount}`,
+    );
     console.log(`  -> Verified Treasury Expense Disbursed: ${tradeinExpenseTxn.amount} EGP paid to seller.`);
     console.log('  [PASS] STEP 10 PASSED: Trade-in device purchase and inventory integration verified.\n');
 
@@ -491,7 +558,9 @@ async function runMaintenanceWorkshopMasterSimulation() {
 
     assert(oilRes.ok === true, 'Oil change recording must succeed');
     assert(oilRes.nextDueOdometer === 80000, `Next due odometer must be 80,000 Km, got: ${oilRes.nextDueOdometer}`);
-    console.log(`  -> Recorded Oil Change: Next Due at ${oilRes.nextDueOdometer} Km (Alert Threshold: ${oilRes.alertKmBefore} Km)`);
+    console.log(
+      `  -> Recorded Oil Change: Next Due at ${oilRes.nextDueOdometer} Km (Alert Threshold: ${oilRes.alertKmBefore} Km)`,
+    );
 
     // Scenario A: Vehicle travels to 79,600 Km (mremaining 400 Km <= 500 Km alert threshold) -> WARNING ALERT
     await (db as any)
@@ -505,7 +574,9 @@ async function runMaintenanceWorkshopMasterSimulation() {
     const oilWarnAlert = warningAlertsRes.alerts.find((a) => a.vehicleId === vehicleId && a.type === 'oil_change');
     assert(Boolean(oilWarnAlert), 'Warning alert must trigger when within threshold');
     assert(oilWarnAlert?.severity === 'warning', `Alert severity must be warning, got: ${oilWarnAlert?.severity}`);
-    console.log(`  -> [Alert Triggered] Severity: [${oilWarnAlert?.severity}] - "${oilWarnAlert?.title}" (${oilWarnAlert?.description})`);
+    console.log(
+      `  -> [Alert Triggered] Severity: [${oilWarnAlert?.severity}] - "${oilWarnAlert?.title}" (${oilWarnAlert?.description})`,
+    );
 
     // Scenario B: Vehicle travels to 80,250 Km (exceeded 80,000 Km by 250 Km) -> CRITICAL ALERT
     await (db as any)
@@ -519,7 +590,9 @@ async function runMaintenanceWorkshopMasterSimulation() {
     const oilCritAlert = criticalAlertsRes.alerts.find((a) => a.vehicleId === vehicleId && a.type === 'oil_change');
     assert(Boolean(oilCritAlert), 'Critical alert must trigger when overdue');
     assert(oilCritAlert?.severity === 'critical', `Alert severity must be critical, got: ${oilCritAlert?.severity}`);
-    console.log(`  -> [Alert Triggered] Severity: [${oilCritAlert?.severity}] - "${oilCritAlert?.title}" (${oilCritAlert?.description})`);
+    console.log(
+      `  -> [Alert Triggered] Severity: [${oilCritAlert?.severity}] - "${oilCritAlert?.title}" (${oilCritAlert?.description})`,
+    );
     console.log('  [PASS] STEP 11 PASSED: Proactive fleet maintenance alerts validated.\n');
 
     // -------------------------------------------------------------------------
@@ -527,25 +600,32 @@ async function runMaintenanceWorkshopMasterSimulation() {
     // -------------------------------------------------------------------------
     console.log('[STEP 12] Testing Ticket Deletion Safety Net & Spare Part Restoration...');
     // Create temporary ticket
-    const tempTicketRes = await maintenanceService.createTicket({
-      customerName: 'عميل اختبار الحذف',
-      customerPhone: '01111111111',
-      deviceModel: 'جهاز اختباري',
-      problemDescription: 'فحص الحذف',
-      locationId,
-    }, auth);
+    const tempTicketRes = await maintenanceService.createTicket(
+      {
+        customerName: 'عميل اختبار الحذف',
+        customerPhone: '01111111111',
+        deviceModel: 'جهاز اختباري',
+        problemDescription: 'فحص الحذف',
+        locationId,
+      },
+      auth,
+    );
 
     const tempTicketId = Number(tempTicketRes.id);
 
     // Consume 1 Screen part: Screen stock was 9, now becomes 8
-    await maintenanceService.addPart(tempTicketId, {
-      productId: screenPartId,
-      productName: 'شاشة أصلية سوبر أموليد',
-      qty: 1,
-      unitPrice: 1100,
-      unitCost: 500,
-      locationId,
-    }, auth);
+    await maintenanceService.addPart(
+      tempTicketId,
+      {
+        productId: screenPartId,
+        productName: 'شاشة أصلية سوبر أموليد',
+        qty: 1,
+        unitPrice: 1100,
+        unitCost: 500,
+        locationId,
+      },
+      auth,
+    );
 
     const screenStockBeforeDelete = await (db as any)
       .selectFrom('product_location_stock')
@@ -554,7 +634,10 @@ async function runMaintenanceWorkshopMasterSimulation() {
       .where('location_id', '=', locationId)
       .where('product_id', '=', screenPartId)
       .executeTakeFirst();
-    assert(Number(screenStockBeforeDelete?.qty) === 8, `Stock before delete must be 8, got: ${screenStockBeforeDelete?.qty}`);
+    assert(
+      Number(screenStockBeforeDelete?.qty) === 8,
+      `Stock before delete must be 8, got: ${screenStockBeforeDelete?.qty}`,
+    );
 
     // Now delete ticket
     await maintenanceService.deleteTicket(tempTicketId, auth);
@@ -567,7 +650,10 @@ async function runMaintenanceWorkshopMasterSimulation() {
       .where('location_id', '=', locationId)
       .where('product_id', '=', screenPartId)
       .executeTakeFirst();
-    assert(Number(screenStockAfterDelete?.qty) === 9, `Screen stock must be restored to 9 after ticket deletion, got: ${screenStockAfterDelete?.qty}`);
+    assert(
+      Number(screenStockAfterDelete?.qty) === 9,
+      `Screen stock must be restored to 9 after ticket deletion, got: ${screenStockAfterDelete?.qty}`,
+    );
     console.log(`  -> Screen Stock safely restored on ticket deletion: 8 -> ${screenStockAfterDelete?.qty} Units`);
 
     // Verify ticket no longer exists

@@ -109,21 +109,29 @@ import { buildPreparedSaleItem, roundSaleInvoiceTotals } from '../../src/modules
 import { computeInvoiceTotals } from '../../src/common/utils/invoice-totals';
 import { allocateInvoiceDiscount } from '../../src/modules/sales/engines/invoice-discount.engine';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 /** Recomputes the sale totals from a captured conversion payload through the real seam. */
 function seamTotals(payload: any, digits: 2 | 3, taxRate: number) {
   const normalized = normalizeSalePayload(payload);
   const prepared = normalized.items.map((item) =>
-    buildPreparedSaleItem(
-      { id: item.productId, name: 'P', stock_qty: 1000, cost_price: 10 } as any,
-      item,
-      { moneyDigits: digits },
-    ),
+    buildPreparedSaleItem({ id: item.productId, name: 'P', stock_qty: 1000, cost_price: 10 } as any, item, {
+      moneyDigits: digits,
+    }),
   );
   const subtotal = prepared.reduce((sum, item) => sum + item.lineTotal, 0);
   const totals = roundSaleInvoiceTotals(computeInvoiceTotals(subtotal, normalized.discount, taxRate, false), digits);
-  const itemOnlyTax = roundSaleInvoiceTotals(computeInvoiceTotals(subtotal, normalized.discount, taxRate, false), digits).taxAmount;
+  const itemOnlyTax = roundSaleInvoiceTotals(
+    computeInvoiceTotals(subtotal, normalized.discount, taxRate, false),
+    digits,
+  ).taxAmount;
   const allocated = allocateInvoiceDiscount({
     lines: prepared.map((item) => ({ lineTotal: item.lineTotal, qty: item.qty })),
     invoiceDiscount: normalized.discount,
@@ -147,7 +155,10 @@ async function main() {
       CREATE TABLE operation_executions (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, idempotency_key text NOT NULL, operation_type text NOT NULL, status text NOT NULL, request_hash text NOT NULL, document_id text, response_payload text, error_code text, created_at timestamptz NOT NULL DEFAULT NOW(), updated_at timestamptz NOT NULL DEFAULT NOW(), completed_at timestamptz);
     `);
 
-    await db.insertInto('branches').values({ id: 1, tenant_id: 't1', default_stock_location_id: 10 } as any).execute();
+    await db
+      .insertInto('branches')
+      .values({ id: 1, tenant_id: 't1', default_stock_location_id: 10 } as any)
+      .execute();
 
     let calls = 0;
     let lastPayload: any = null;
@@ -161,50 +172,138 @@ async function main() {
     const orders = new SalesOrdersService(db as any, stubSalesWrite);
     const quotations = new QuotationsService(db as any, stubSalesWrite);
 
-    async function seedOrder(id: number, rows: Array<{ quantity: number; unitPrice: number; discount: number; total: number }>, discountAmount: number, totalAmount: number, taxAmount = 0): Promise<void> {
-      await db.insertInto('sales_orders').values({ id, tenant_id: 't1', account_id: 'a1', order_number: `SO-${id}`, customer_name: 'Cust', branch_id: 1, discount_amount: discountAmount, tax_amount: taxAmount, total_amount: totalAmount, status: 'confirmed' } as any).execute();
+    async function seedOrder(
+      id: number,
+      rows: Array<{ quantity: number; unitPrice: number; discount: number; total: number }>,
+      discountAmount: number,
+      totalAmount: number,
+      taxAmount = 0,
+    ): Promise<void> {
+      await db
+        .insertInto('sales_orders')
+        .values({
+          id,
+          tenant_id: 't1',
+          account_id: 'a1',
+          order_number: `SO-${id}`,
+          customer_name: 'Cust',
+          branch_id: 1,
+          discount_amount: discountAmount,
+          tax_amount: taxAmount,
+          total_amount: totalAmount,
+          status: 'confirmed',
+        } as any)
+        .execute();
       for (const row of rows) {
-        await db.insertInto('sales_order_items').values({ tenant_id: 't1', account_id: 'a1', sales_order_id: id, product_id: 1, quantity: row.quantity, unit_price: row.unitPrice, discount: row.discount, total: row.total } as any).execute();
+        await db
+          .insertInto('sales_order_items')
+          .values({
+            tenant_id: 't1',
+            account_id: 'a1',
+            sales_order_id: id,
+            product_id: 1,
+            quantity: row.quantity,
+            unit_price: row.unitPrice,
+            discount: row.discount,
+            total: row.total,
+          } as any)
+          .execute();
       }
     }
 
-    async function seedQuotation(id: number, rows: Array<{ quantity: number; unitPrice: number; discount: number; total: number }>, discountAmount: number, totalAmount: number): Promise<void> {
-      await db.insertInto('quotations').values({ id, tenant_id: 't1', account_id: 'a1', quotation_number: `Q-${id}`, customer_name: 'Cust', branch_id: 1, discount_amount: discountAmount, total_amount: totalAmount, status: 'draft' } as any).execute();
+    async function seedQuotation(
+      id: number,
+      rows: Array<{ quantity: number; unitPrice: number; discount: number; total: number }>,
+      discountAmount: number,
+      totalAmount: number,
+    ): Promise<void> {
+      await db
+        .insertInto('quotations')
+        .values({
+          id,
+          tenant_id: 't1',
+          account_id: 'a1',
+          quotation_number: `Q-${id}`,
+          customer_name: 'Cust',
+          branch_id: 1,
+          discount_amount: discountAmount,
+          total_amount: totalAmount,
+          status: 'draft',
+        } as any)
+        .execute();
       for (const row of rows) {
-        await db.insertInto('quotation_items').values({ tenant_id: 't1', account_id: 'a1', quotation_id: id, product_id: 1, quantity: row.quantity, unit_price: row.unitPrice, discount: row.discount, total: row.total } as any).execute();
+        await db
+          .insertInto('quotation_items')
+          .values({
+            tenant_id: 't1',
+            account_id: 'a1',
+            quotation_id: id,
+            product_id: 1,
+            quantity: row.quantity,
+            unit_price: row.unitPrice,
+            discount: row.discount,
+            total: row.total,
+          } as any)
+          .execute();
       }
     }
 
     // 1. Sales order, line discounts only: 2x50-5=95 and 1x30-5=25.
     // Gross 130, line discounts 10, header 0; net 120 + 14% tax 16.80 = 136.80.
-    await seedOrder(1, [
-      { quantity: 2, unitPrice: 50, discount: 5, total: 95 },
-      { quantity: 1, unitPrice: 30, discount: 5, total: 25 },
-    ], 10, 136.8, 16.8);
+    await seedOrder(
+      1,
+      [
+        { quantity: 2, unitPrice: 50, discount: 5, total: 95 },
+        { quantity: 1, unitPrice: 30, discount: 5, total: 25 },
+      ],
+      10,
+      136.8,
+      16.8,
+    );
     const ok1 = await orders.convertToSale(1, AUTH);
     assert.equal(Number((ok1 as any).saleId), 99);
     assert.equal(calls, 1);
-    assert.deepEqual(lastPayload.items.map((item: any) => item.lineDiscount), [5, 5]);
+    assert.deepEqual(
+      lastPayload.items.map((item: any) => item.lineDiscount),
+      [5, 5],
+    );
     assert.equal(lastPayload.discount, 0);
     assert.equal('discount' in lastPayload.items[0], false);
     const seam1 = seamTotals({ ...lastPayload, taxRate: 14, pricesIncludeTax: false }, 2, 14);
     assert.equal(seam1.subtotal, 120);
     assert.equal(seam1.taxAmount, 16.8);
     assert.equal(seam1.total, 136.8);
-    assert.deepEqual(seam1.allocated.map((line) => line.netLineTotal), [95, 25]);
-    assert.deepEqual(seam1.allocated.map((line) => line.allocatedTax), [13.3, 3.5]);
-    assert.equal(seam1.allocated.reduce((sum, line) => sum + line.netLineTotal + line.allocatedTax, 0), 136.8);
+    assert.deepEqual(
+      seam1.allocated.map((line) => line.netLineTotal),
+      [95, 25],
+    );
+    assert.deepEqual(
+      seam1.allocated.map((line) => line.allocatedTax),
+      [13.3, 3.5],
+    );
+    assert.equal(
+      seam1.allocated.reduce((sum, line) => sum + line.netLineTotal + line.allocatedTax, 0),
+      136.8,
+    );
 
     // 2. Quotation, line + global: 3x20-6=54 and 2x40-0=80; header 11 = 6 line + 5 global.
     // Net 134 - 5 = 129 + 14% tax 18.06 = 147.06.
-    await seedQuotation(1, [
-      { quantity: 3, unitPrice: 20, discount: 6, total: 54 },
-      { quantity: 2, unitPrice: 40, discount: 0, total: 80 },
-    ], 11, 147.06);
+    await seedQuotation(
+      1,
+      [
+        { quantity: 3, unitPrice: 20, discount: 6, total: 54 },
+        { quantity: 2, unitPrice: 40, discount: 0, total: 80 },
+      ],
+      11,
+      147.06,
+    );
     const ok2 = await quotations.convertToSale(1, AUTH);
     assert.equal(Number((ok2 as any).saleId), 99);
     assert.equal(calls, 2);
-    assert.deepEqual(lastPayload.items.map((item: any) => item.lineDiscount), [6, 0]);
+    assert.deepEqual(
+      lastPayload.items.map((item: any) => item.lineDiscount),
+      [6, 0],
+    );
     assert.equal(lastPayload.discount, 5);
     const seam2 = seamTotals({ ...lastPayload, taxRate: 14, pricesIncludeTax: false }, 2, 14);
     assert.equal(seam2.subtotal, 134);
@@ -216,23 +315,35 @@ async function main() {
     await seedOrder(2, [{ quantity: 1, unitPrice: 100, discount: 0, total: 100 }], 7, 106.02, 13.02);
     await orders.convertToSale(2, AUTH);
     assert.equal(calls, 3);
-    assert.deepEqual(lastPayload.items.map((item: any) => item.lineDiscount), [0]);
+    assert.deepEqual(
+      lastPayload.items.map((item: any) => item.lineDiscount),
+      [0],
+    );
     assert.equal(lastPayload.discount, 7);
     const seam3 = seamTotals({ ...lastPayload, taxRate: 14, pricesIncludeTax: false }, 2, 14);
     assert.equal(seam3.total, 106.02);
 
     // 4. Mismatch: line discounts 10 but header amount 0 — fails closed,
     // createSale is not called, the order returns to 'confirmed'.
-    await seedOrder(3, [
-      { quantity: 2, unitPrice: 50, discount: 5, total: 95 },
-      { quantity: 1, unitPrice: 30, discount: 5, total: 25 },
-    ], 0, 136.8);
+    await seedOrder(
+      3,
+      [
+        { quantity: 2, unitPrice: 50, discount: 5, total: 95 },
+        { quantity: 1, unitPrice: 30, discount: 5, total: 25 },
+      ],
+      0,
+      136.8,
+    );
     await assert.rejects(
       () => orders.convertToSale(3, AUTH),
       (error: any) => error.code === 'CONVERSION_DISCOUNT_MISMATCH',
     );
     assert.equal(calls, 3);
-    const status4 = await db.selectFrom('sales_orders').select(['status', 'sale_id']).where('id', '=', 3).executeTakeFirstOrThrow();
+    const status4 = await db
+      .selectFrom('sales_orders')
+      .select(['status', 'sale_id'])
+      .where('id', '=', 3)
+      .executeTakeFirstOrThrow();
     assert.equal(String(status4.status), 'confirmed');
     assert.equal(status4.sale_id, null);
 
@@ -251,14 +362,23 @@ async function main() {
     const ok6 = await quotations.convertToSale(2, AUTH);
     assert.equal(Number((ok6 as any).saleId), 99);
     assert.equal(calls, 4);
-    assert.deepEqual(lastPayload.items.map((item: any) => item.lineDiscount), [5]);
+    assert.deepEqual(
+      lastPayload.items.map((item: any) => item.lineDiscount),
+      [5],
+    );
     assert.equal(lastPayload.discount, 0);
     const seam6 = seamTotals({ ...lastPayload, taxRate: 14, pricesIncludeTax: false }, 2, 14);
     assert.equal(seam6.total, 51.3);
 
     // 7. 3dp seam: 1 x 20.025 - 5.005 = 15.02; 10% tax 1.502; total 16.522.
     const seam7 = seamTotals(
-      { branchId: 1, items: [{ productId: 1, qty: 1, price: 20.025, lineDiscount: 5.005 }], discount: 0, taxRate: 10, pricesIncludeTax: false },
+      {
+        branchId: 1,
+        items: [{ productId: 1, qty: 1, price: 20.025, lineDiscount: 5.005 }],
+        discount: 0,
+        taxRate: 10,
+        pricesIncludeTax: false,
+      },
       3,
       10,
     );

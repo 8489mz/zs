@@ -148,16 +148,59 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      await (db as any).insertInto('import_sourcing_trips').values([
-        { id: 'trip-a', tenant_id: 't1', project_id: 'proj-1', trip_title: 'Jan visit', destination_city: 'Shenzhen', start_date: '2026-01-10', end_date: '2026-01-15' },
-        { id: 'trip-b', tenant_id: 't1', project_id: 'proj-1', trip_title: 'Mar visit', destination_city: 'Guangzhou', start_date: '2026-03-05', end_date: '2026-03-09' },
-        { id: 'trip-c', tenant_id: 't1', project_id: 'proj-2', trip_title: 'Feb visit', destination_city: 'Yiwu', start_date: '2026-02-01', end_date: '2026-02-04' },
-        { id: 'trip-d', tenant_id: 't2', project_id: 'proj-1', trip_title: 'Other tenant', destination_city: 'Beijing', start_date: '2026-04-01', end_date: '2026-04-03' },
-      ]).execute();
+      await (db as any)
+        .insertInto('import_sourcing_trips')
+        .values([
+          {
+            id: 'trip-a',
+            tenant_id: 't1',
+            project_id: 'proj-1',
+            trip_title: 'Jan visit',
+            destination_city: 'Shenzhen',
+            start_date: '2026-01-10',
+            end_date: '2026-01-15',
+          },
+          {
+            id: 'trip-b',
+            tenant_id: 't1',
+            project_id: 'proj-1',
+            trip_title: 'Mar visit',
+            destination_city: 'Guangzhou',
+            start_date: '2026-03-05',
+            end_date: '2026-03-09',
+          },
+          {
+            id: 'trip-c',
+            tenant_id: 't1',
+            project_id: 'proj-2',
+            trip_title: 'Feb visit',
+            destination_city: 'Yiwu',
+            start_date: '2026-02-01',
+            end_date: '2026-02-04',
+          },
+          {
+            id: 'trip-d',
+            tenant_id: 't2',
+            project_id: 'proj-1',
+            trip_title: 'Other tenant',
+            destination_city: 'Beijing',
+            start_date: '2026-04-01',
+            end_date: '2026-04-03',
+          },
+        ])
+        .execute();
       const all: any[] = await service.listSourcingTrips('t1');
-      assert.deepEqual(all.map((t: any) => t.id), ['trip-b', 'trip-c', 'trip-a'], 'Newest start_date first');
+      assert.deepEqual(
+        all.map((t: any) => t.id),
+        ['trip-b', 'trip-c', 'trip-a'],
+        'Newest start_date first',
+      );
       const filtered: any[] = await service.listSourcingTrips('t1', 'proj-1');
-      assert.deepEqual(filtered.map((t: any) => t.id), ['trip-b', 'trip-a'], 'Project filter keeps only that project');
+      assert.deepEqual(
+        filtered.map((t: any) => t.id),
+        ['trip-b', 'trip-a'],
+        'Project filter keeps only that project',
+      );
     } finally {
       await db.destroy();
     }
@@ -169,17 +212,54 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      await (db as any).insertInto('import_qc_inspections').values([
-        { id: 'qc-1', tenant_id: 't1', project_id: 'proj-1', shipment_id: 'sh-1', stage: 'pre_shipment', inspection_date: '2026-01-20', status: 'passed' },
-        { id: 'qc-2', tenant_id: 't1', project_id: 'proj-1', shipment_id: 'sh-2', stage: 'production', inspection_date: '2026-02-10', status: 'passed' },
-        { id: 'qc-3', tenant_id: 't1', project_id: 'proj-2', shipment_id: 'sh-1', stage: 'receiving', inspection_date: '2026-03-01', status: 'failed' },
-      ]).execute();
+      await (db as any)
+        .insertInto('import_qc_inspections')
+        .values([
+          {
+            id: 'qc-1',
+            tenant_id: 't1',
+            project_id: 'proj-1',
+            shipment_id: 'sh-1',
+            stage: 'pre_shipment',
+            inspection_date: '2026-01-20',
+            status: 'passed',
+          },
+          {
+            id: 'qc-2',
+            tenant_id: 't1',
+            project_id: 'proj-1',
+            shipment_id: 'sh-2',
+            stage: 'production',
+            inspection_date: '2026-02-10',
+            status: 'passed',
+          },
+          {
+            id: 'qc-3',
+            tenant_id: 't1',
+            project_id: 'proj-2',
+            shipment_id: 'sh-1',
+            stage: 'receiving',
+            inspection_date: '2026-03-01',
+            status: 'failed',
+          },
+        ])
+        .execute();
       const all: any[] = await service.listQcInspections('t1');
-      assert.deepEqual(all.map((q: any) => q.id), ['qc-3', 'qc-2', 'qc-1'], 'Newest inspection first');
+      assert.deepEqual(
+        all.map((q: any) => q.id),
+        ['qc-3', 'qc-2', 'qc-1'],
+        'Newest inspection first',
+      );
       const byProject: any[] = await service.listQcInspections('t1', 'proj-1');
-      assert.deepEqual(byProject.map((q: any) => q.id), ['qc-2', 'qc-1']);
+      assert.deepEqual(
+        byProject.map((q: any) => q.id),
+        ['qc-2', 'qc-1'],
+      );
       const byShipment: any[] = await service.listQcInspections('t1', undefined, 'sh-1');
-      assert.deepEqual(byShipment.map((q: any) => q.id), ['qc-3', 'qc-1']);
+      assert.deepEqual(
+        byShipment.map((q: any) => q.id),
+        ['qc-3', 'qc-1'],
+      );
     } finally {
       await db.destroy();
     }
@@ -197,8 +277,14 @@ async function main(): Promise<void> {
         assert.ok(s.name_ar, 'Every sector has an Arabic name');
         assert.ok(s.name_en, 'Every sector has an English name');
       }
-      assert.ok(sectors.some((s: any) => s.id === 'electronics_it'), 'Electronics/IT sector present');
-      assert.ok(sectors.some((s: any) => s.id === 'commercial_vehicles_spare_parts'), 'Truck parts sector present');
+      assert.ok(
+        sectors.some((s: any) => s.id === 'electronics_it'),
+        'Electronics/IT sector present',
+      );
+      assert.ok(
+        sectors.some((s: any) => s.id === 'commercial_vehicles_spare_parts'),
+        'Truck parts sector present',
+      );
     } finally {
       await db.destroy();
     }

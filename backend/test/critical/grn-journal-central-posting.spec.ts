@@ -52,7 +52,14 @@ import { GoodsReceiptService } from '../../src/modules/purchases/services/goods-
 import { PurchasesFinanceService } from '../../src/modules/purchases/services/purchases-finance.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
-const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'tester', permissions: [] } as unknown as AuthContext;
+const auth = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'tester',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -157,60 +164,146 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 2125, 4100, 5100, 5190, 7290]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-      [code, 't1', String(code), code === 1150 || code === 2120]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      String(code),
+      code === 1150 || code === 2120,
+    ]);
   }
   return { pg, db };
 }
 
 async function seedCurrency(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: 'EGP' } as never).execute();
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'timezone', value: 'Africa/Cairo' } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: 'EGP' } as never)
+    .execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'timezone', value: 'Africa/Cairo' } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeGrnService(db: Kysely<Database>): GoodsReceiptService {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const finance = new PurchasesFinanceService();
   return new GoodsReceiptService(db as any, posting as any, finance as any);
 }
 
 async function seedBase(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('branches' as never).values({ id: 5, tenant_id: 't1', default_stock_location_id: 1 } as never).execute();
-  await db.insertInto('stock_locations' as never).values({ id: 1, tenant_id: 't1', branch_id: 5, name: 'Main' } as never).execute();
-  await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier', balance: 0 } as never).execute();
-  await db.insertInto('products' as never).values({
-    id: 10, tenant_id: 't1', account_id: 'a1', name: 'Widget 10',
-    stock_qty: 0, reserved_qty: 0, cost_price: 10, track_serials: false,
-  } as never).execute();
+  await db
+    .insertInto('branches' as never)
+    .values({ id: 5, tenant_id: 't1', default_stock_location_id: 1 } as never)
+    .execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values({ id: 1, tenant_id: 't1', branch_id: 5, name: 'Main' } as never)
+    .execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({ id: 9, tenant_id: 't1', name: 'Supplier', balance: 0 } as never)
+    .execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 10,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Widget 10',
+      stock_qty: 0,
+      reserved_qty: 0,
+      cost_price: 10,
+      track_serials: false,
+    } as never)
+    .execute();
 }
 
 async function seedPo(db: Kysely<Database>, quantity: number): Promise<void> {
-  await db.insertInto('purchase_orders' as never).values({
-    id: 7, tenant_id: 't1', account_id: 'a1', order_number: 'PO-7', supplier_id: 9,
-    supplier_name: 'Supplier', warehouse_id: 1, subtotal: quantity * 10, tax_amount: 0, discount_amount: 0,
-    total_amount: quantity * 10, status: 'confirmed', updated_at: new Date('2026-10-01'),
-  } as never).execute();
-  await db.insertInto('purchase_order_items' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', purchase_order_id: 7, product_id: 10,
-    product_name: 'Widget 10', unit_name: 'piece', quantity, received_quantity: 0,
-    unit_cost: 10, tax_rate: 0, discount: 0, total: quantity * 10,
-  } as never).execute();
+  await db
+    .insertInto('purchase_orders' as never)
+    .values({
+      id: 7,
+      tenant_id: 't1',
+      account_id: 'a1',
+      order_number: 'PO-7',
+      supplier_id: 9,
+      supplier_name: 'Supplier',
+      warehouse_id: 1,
+      subtotal: quantity * 10,
+      tax_amount: 0,
+      discount_amount: 0,
+      total_amount: quantity * 10,
+      status: 'confirmed',
+      updated_at: new Date('2026-10-01'),
+    } as never)
+    .execute();
+  await db
+    .insertInto('purchase_order_items' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      purchase_order_id: 7,
+      product_id: 10,
+      product_name: 'Widget 10',
+      unit_name: 'piece',
+      quantity,
+      received_quantity: 0,
+      unit_cost: 10,
+      tax_rate: 0,
+      discount: 0,
+      total: quantity * 10,
+    } as never)
+    .execute();
 }
 
-async function seedGrn(db: Kysely<Database>, grnId: number, accepted: number, rejected: number, unitCost: number): Promise<void> {
-  await db.insertInto('goods_receipt_notes' as never).values({
-    id: grnId, tenant_id: 't1', account_id: 'a1', doc_no: `GRN-${grnId}`, purchase_order_id: 7,
-    supplier_id: 9, location_id: 1, received_at: new Date('2026-10-01T08:00:00.000Z'),
-    received_by: 1, status: 'draft',
-  } as never).execute();
-  await db.insertInto('goods_receipt_lines' as never).values({
-    id: grnId, tenant_id: 't1', account_id: 'a1', grn_id: grnId,
-    purchase_order_item_id: 1, product_id: 10,
-    ordered_qty: accepted + rejected, received_qty: accepted + rejected,
-    accepted_qty: accepted, rejected_qty: rejected, unit_cost: unitCost,
-  } as never).execute();
+async function seedGrn(
+  db: Kysely<Database>,
+  grnId: number,
+  accepted: number,
+  rejected: number,
+  unitCost: number,
+): Promise<void> {
+  await db
+    .insertInto('goods_receipt_notes' as never)
+    .values({
+      id: grnId,
+      tenant_id: 't1',
+      account_id: 'a1',
+      doc_no: `GRN-${grnId}`,
+      purchase_order_id: 7,
+      supplier_id: 9,
+      location_id: 1,
+      received_at: new Date('2026-10-01T08:00:00.000Z'),
+      received_by: 1,
+      status: 'draft',
+    } as never)
+    .execute();
+  await db
+    .insertInto('goods_receipt_lines' as never)
+    .values({
+      id: grnId,
+      tenant_id: 't1',
+      account_id: 'a1',
+      grn_id: grnId,
+      purchase_order_item_id: 1,
+      product_id: 10,
+      ordered_qty: accepted + rejected,
+      received_qty: accepted + rejected,
+      accepted_qty: accepted,
+      rejected_qty: rejected,
+      unit_cost: unitCost,
+    } as never)
+    .execute();
 }
 
 async function readJournal(db: Kysely<Database>): Promise<any> {
@@ -259,7 +352,11 @@ async function main(): Promise<void> {
         assert.equal(Number(line.branch_id), 5, 'every line carries the branch');
         assert.equal(Number(line.location_id), 1, 'every line carries the location');
       }
-      const product = await (db as any).selectFrom('products').select('stock_qty').where('id', '=', 10).executeTakeFirstOrThrow();
+      const product = await (db as any)
+        .selectFrom('products')
+        .select('stock_qty')
+        .where('id', '=', 10)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.stock_qty), 3, 'goods enter stock');
     } finally {
       await db.destroy();
@@ -276,7 +373,10 @@ async function main(): Promise<void> {
       await seedGrn(db, 1, 3, 0, 33.375);
       const grn = makeGrnService(db);
       await grn.postGoodsReceipt(1, auth);
-      const movement = await (db as any).selectFrom('stock_movements').select(['qty', 'unit_cost', 'total_cost', 'branch_id', 'location_id']).executeTakeFirstOrThrow();
+      const movement = await (db as any)
+        .selectFrom('stock_movements')
+        .select(['qty', 'unit_cost', 'total_cost', 'branch_id', 'location_id'])
+        .executeTakeFirstOrThrow();
       assert.equal(Number(movement.qty), 3);
       assert.equal(Number(movement.unit_cost), 33.375, 'unit cost stays raw');
       assert.equal(Number(movement.total_cost), 100.13, 'movement total at book digits, not toFixed(4) 100.125');
@@ -303,7 +403,11 @@ async function main(): Promise<void> {
       await assert.rejects(() => grn.postGoodsReceipt(1, auth), /مسبقاً/, 'double posting is rejected');
       const journals = await (db as any).selectFrom('journal_entries').select('id').execute();
       assert.equal(journals.length, 1, 'exactly one journal after the rejected repost');
-      const product = await (db as any).selectFrom('products').select('stock_qty').where('id', '=', 10).executeTakeFirstOrThrow();
+      const product = await (db as any)
+        .selectFrom('products')
+        .select('stock_qty')
+        .where('id', '=', 10)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.stock_qty), 3, 'stock is not doubled');
     } finally {
       await db.destroy();
@@ -324,7 +428,11 @@ async function main(): Promise<void> {
       assert.equal(result.grniJournalEntryId, null, 'no journal when nothing was accepted');
       const journals = await (db as any).selectFrom('journal_entries').select('id').execute();
       assert.equal(journals.length, 0);
-      const product = await (db as any).selectFrom('products').select('stock_qty').where('id', '=', 10).executeTakeFirstOrThrow();
+      const product = await (db as any)
+        .selectFrom('products')
+        .select('stock_qty')
+        .where('id', '=', 10)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.stock_qty), 0, 'no stock enters');
     } finally {
       await db.destroy();
@@ -334,13 +442,20 @@ async function main(): Promise<void> {
   // Case 5: source + invariant pins (presence only — no last-line pin).
   {
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/purchases/services/goods-receipt-post.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/purchases/services/goods-receipt-post.service.ts'),
+      'utf8',
+    );
     assert.ok(serviceSource.includes('postDomainJournal'), 'postGoodsReceipt posts through the central boundary');
     assert.ok(serviceSource.includes('stockMovementTotal'), 'movement total uses the single book-digits computation');
     assert.ok(!serviceSource.includes('JRN-TMP-GRN'), 'no direct temporary-number journal insert remains');
     assert.ok(serviceSource.includes('INV-GRN-JOURNAL-CENTRAL-POSTING'), 'postGoodsReceipt names the invariant');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-GRN-JOURNAL-CENTRAL-POSTING').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-GRN-JOURNAL-CENTRAL-POSTING').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
     console.log('  source + invariant pins passed');
   }
 

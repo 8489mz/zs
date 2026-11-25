@@ -40,28 +40,69 @@ async function makeDb(): Promise<Kysely<Database>> {
   return db;
 }
 
-async function seedCase(db: Kysely<Database>, opts: { arrivalRate: number; pricingRate: number | null }): Promise<void> {
-  await db.insertInto('products' as never).values({
-    id: 5, tenant_id: 't1', account_id: 't1', name: 'Widget', cost_price: 500,
-    retail_price: 600, wholesale_price: 550, supplier_id: 11, category_id: 21,
-    stock_qty: 10, reserved_qty: 0, catalog_updated_at: new Date(), updated_at: new Date(),
-  } as never).execute();
-  await db.insertInto('import_projects' as never).values({
-    id: 'proj-1', tenant_id: 't1', supplier_id: 99,
-  } as never).execute();
-  await db.insertInto('product_categories' as never).values({
-    id: 22, tenant_id: 't1', name: 'قطع غيار شاحنات ونقل ثقيل',
-  } as never).execute();
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', exchange_rate_at_arrival: opts.arrivalRate,
-    pricing_exchange_rate: opts.pricingRate, project_id: 'proj-1', supplier_id: 99,
-    container_number: 'MSCU-1',
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'item-1', tenant_id: 't1', shipment_id: 'sh-1', product_id: 5,
-    landed_cost_egp: 700, factory_unit_price_usd: 10,
-    target_retail_margin: 20, target_wholesale_margin: 5,
-  } as never).execute();
+async function seedCase(
+  db: Kysely<Database>,
+  opts: { arrivalRate: number; pricingRate: number | null },
+): Promise<void> {
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 5,
+      tenant_id: 't1',
+      account_id: 't1',
+      name: 'Widget',
+      cost_price: 500,
+      retail_price: 600,
+      wholesale_price: 550,
+      supplier_id: 11,
+      category_id: 21,
+      stock_qty: 10,
+      reserved_qty: 0,
+      catalog_updated_at: new Date(),
+      updated_at: new Date(),
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_projects' as never)
+    .values({
+      id: 'proj-1',
+      tenant_id: 't1',
+      supplier_id: 99,
+    } as never)
+    .execute();
+  await db
+    .insertInto('product_categories' as never)
+    .values({
+      id: 22,
+      tenant_id: 't1',
+      name: 'قطع غيار شاحنات ونقل ثقيل',
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      exchange_rate_at_arrival: opts.arrivalRate,
+      pricing_exchange_rate: opts.pricingRate,
+      project_id: 'proj-1',
+      supplier_id: 99,
+      container_number: 'MSCU-1',
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'item-1',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 5,
+      landed_cost_egp: 700,
+      factory_unit_price_usd: 10,
+      target_retail_margin: 20,
+      target_wholesale_margin: 5,
+    } as never)
+    .execute();
 }
 
 async function readProduct(db: Kysely<Database>): Promise<any> {
@@ -123,4 +164,7 @@ async function main(): Promise<void> {
   console.log('Import apply-prices no-WAC-overwrite tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

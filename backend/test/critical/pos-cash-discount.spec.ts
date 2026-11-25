@@ -65,8 +65,13 @@ const ACCOUNT = 'a-pos-cash-discount';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 // Cashier WITHOUT canEditPrice: a sent price that differs from the
@@ -74,8 +79,13 @@ const adminAuth: AuthContext = {
 // so case (e) posting at 80 / 90 proves the half-wholesale tier
 // derivation instead of the admin's price freedom.
 const cashierAuth: AuthContext = {
-  userId: 3, sessionId: 'spec-b', username: 'cashier-b', role: 'cashier',
-  permissions: ['sales', 'canDiscount'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 3,
+  sessionId: 'spec-b',
+  username: 'cashier-b',
+  role: 'cashier',
+  permissions: ['sales', 'canDiscount'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -147,58 +157,161 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
   // Product 101 carries the half-wholesale tier (80); product 102
   // has NO half-wholesale price, so the tier must fall back to its
   // wholesale price (90). Both retail at 100.
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 90, half_wholesale_price: 80, credit_price: 0,
-    min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('products').values({
-    id: 102, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 102',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 90, half_wholesale_price: null, credit_price: 0,
-    min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 102, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 90,
+      half_wholesale_price: 80,
+      credit_price: 0,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 102,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 102',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 90,
+      half_wholesale_price: null,
+      credit_price: 0,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 102,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
   // Customer 201 is half-wholesale typed; 202 is an ordinary
   // retail customer (credit + COD cases).
-  await anyDb.insertInto('customers').values({
-    id: 201, tenant_id: TENANT, account_id: ACCOUNT, name: 'Half Wholesale Customer',
-    customer_type: 'half_wholesale', is_active: true,
-  }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 202, tenant_id: TENANT, account_id: ACCOUNT, name: 'Retail Customer',
-    customer_type: 'retail', is_active: true,
-  }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van Rep One', phone: '01000000001', is_van_rep: true }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 201,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Half Wholesale Customer',
+      customer_type: 'half_wholesale',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 202,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Retail Customer',
+      customer_type: 'retail',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Van Rep One',
+      phone: '01000000001',
+      is_van_rep: true,
+    })
+    .execute();
 }
 
 async function seedSetting(db: Kysely<Database>, key: string, value: string): Promise<void> {
@@ -206,14 +319,29 @@ async function seedSetting(db: Kysely<Database>, key: string, value: string): Pr
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
-function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer: CashDrawerService; posting: AccountingPostingService } {
+function buildServices(db: Kysely<Database>): {
+  sales: SalesWriteService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -228,8 +356,16 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   return { sales, drawer, posting };
@@ -252,14 +388,23 @@ function salePayload(opts: {
   deliveryRepId?: number;
 }): any {
   const payload: any = {
-    items: opts.items.map((item) => ({ productId: item.productId, qty: item.qty, price: item.price, priceType: 'retail', unitMultiplier: 1, lineDiscount: item.lineDiscount || 0 })),
+    items: opts.items.map((item) => ({
+      productId: item.productId,
+      qty: item.qty,
+      price: item.price,
+      priceType: 'retail',
+      unitMultiplier: 1,
+      lineDiscount: item.lineDiscount || 0,
+    })),
     discount: opts.discount || 0,
-    taxRate: (opts.taxRate === undefined) ? 0 : opts.taxRate,
+    taxRate: opts.taxRate === undefined ? 0 : opts.taxRate,
     paymentType: opts.paymentType || 'cash',
     paymentChannel: opts.paymentChannel || 'cash',
     payments: opts.payments || [],
     tenderedAmount: opts.tenderedAmount || 0,
-    branchId: 1, locationId: 10, source: 'dashboard',
+    branchId: 1,
+    locationId: 10,
+    source: 'dashboard',
   };
   if (opts.customerId) payload.customerId = opts.customerId;
   if (opts.expectedTotal !== undefined) payload.expectedTotal = opts.expectedTotal;
@@ -295,11 +440,15 @@ async function main(): Promise<void> {
       await seedSetting(db, 'cashDiscountPercent', '5');
       await seedShift(db, 1, 1);
       const { sales } = buildServices(db);
-      const created: any = await sales.createSale(salePayload({
-        items: [{ productId: 101, qty: 1, price: 100, lineDiscount: 4 }],
-        discount: 4,
-        payments: [{ paymentChannel: 'cash', amount: 92 }], tenderedAmount: 92,
-      }), adminAuth);
+      const created: any = await sales.createSale(
+        salePayload({
+          items: [{ productId: 101, qty: 1, price: 100, lineDiscount: 4 }],
+          discount: 4,
+          payments: [{ paymentChannel: 'cash', amount: 92 }],
+          tenderedAmount: 92,
+        }),
+        adminAuth,
+      );
       const saleId = Number(created?.sale?.id);
       assert.ok(saleId > 0, 'cash sale with discounts must create the sale');
       const row = await readSale(db, saleId);
@@ -331,11 +480,15 @@ async function main(): Promise<void> {
       await seedSetting(db, 'cashDiscountPercent', '5');
       await seedShift(db, 1, 1);
       const { sales } = buildServices(db);
-      const created: any = await sales.createSale(salePayload({
-        items: [{ productId: 101, qty: 1, price: 100 }],
-        payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
-        expectedTotal: 100,
-      }), adminAuth);
+      const created: any = await sales.createSale(
+        salePayload({
+          items: [{ productId: 101, qty: 1, price: 100 }],
+          payments: [{ paymentChannel: 'cash', amount: 100 }],
+          tenderedAmount: 100,
+          expectedTotal: 100,
+        }),
+        adminAuth,
+      );
       const saleId = Number(created?.sale?.id);
       assert.ok(saleId > 0, 'plain cash sale must create the sale');
       const row = await readSale(db, saleId);
@@ -360,10 +513,14 @@ async function main(): Promise<void> {
       await seedSetting(db, 'cashDiscountPercent', '5');
       await seedShift(db, 1, 1);
       const { sales } = buildServices(db);
-      const created: any = await sales.createSale(salePayload({
-        items: [{ productId: 101, qty: 1, price: 100 }],
-        paymentType: 'credit', customerId: 202,
-      }), adminAuth);
+      const created: any = await sales.createSale(
+        salePayload({
+          items: [{ productId: 101, qty: 1, price: 100 }],
+          paymentType: 'credit',
+          customerId: 202,
+        }),
+        adminAuth,
+      );
       const saleId = Number(created?.sale?.id);
       assert.ok(saleId > 0, 'credit sale must create the sale');
       const row = await readSale(db, saleId);
@@ -386,10 +543,14 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 1);
       const { sales } = buildServices(db);
-      const created: any = await sales.createSale(salePayload({
-        items: [{ productId: 101, qty: 1, price: 100 }],
-        payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
-      }), adminAuth);
+      const created: any = await sales.createSale(
+        salePayload({
+          items: [{ productId: 101, qty: 1, price: 100 }],
+          payments: [{ paymentChannel: 'cash', amount: 100 }],
+          tenderedAmount: 100,
+        }),
+        adminAuth,
+      );
       const saleId = Number(created?.sale?.id);
       assert.ok(saleId > 0, 'cash sale with unset setting must create the sale');
       const row = await readSale(db, saleId);
@@ -416,14 +577,18 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedShift(db, 1, 3);
       const { sales } = buildServices(db);
-      const created: any = await sales.createSale(salePayload({
-        items: [
-          { productId: 101, qty: 1, price: 80 },
-          { productId: 102, qty: 1, price: 90 },
-        ],
-        customerId: 201,
-        payments: [{ paymentChannel: 'cash', amount: 170 }], tenderedAmount: 170,
-      }), cashierAuth);
+      const created: any = await sales.createSale(
+        salePayload({
+          items: [
+            { productId: 101, qty: 1, price: 80 },
+            { productId: 102, qty: 1, price: 90 },
+          ],
+          customerId: 201,
+          payments: [{ paymentChannel: 'cash', amount: 170 }],
+          tenderedAmount: 170,
+        }),
+        cashierAuth,
+      );
       const saleId = Number(created?.sale?.id);
       assert.ok(saleId > 0, 'half-wholesale sale must create the sale');
       const row = await readSale(db, saleId);
@@ -451,11 +616,14 @@ async function main(): Promise<void> {
       await seedSetting(db, 'cashDiscountPercent', '5');
       await seedShift(db, 1, 1);
       const { sales } = buildServices(db);
-      const created: any = await sales.createSale(salePayload({
-        items: [{ productId: 101, qty: 1, price: 100 }],
-        paymentChannel: 'card',
-        payments: [{ paymentChannel: 'card', amount: 100 }],
-      }), adminAuth);
+      const created: any = await sales.createSale(
+        salePayload({
+          items: [{ productId: 101, qty: 1, price: 100 }],
+          paymentChannel: 'card',
+          payments: [{ paymentChannel: 'card', amount: 100 }],
+        }),
+        adminAuth,
+      );
       const saleId = Number(created?.sale?.id);
       assert.ok(saleId > 0, 'card sale must create the sale');
       const row = await readSale(db, saleId);
@@ -480,12 +648,18 @@ async function main(): Promise<void> {
       await seedSetting(db, 'cashDiscountPercent', '5');
       await seedShift(db, 1, 1);
       const { sales } = buildServices(db);
-      const created: any = await sales.createSale(salePayload({
-        items: [{ productId: 101, qty: 1, price: 100 }],
-        customerId: 202,
-        orderType: 'delivery', collectionStatus: 'cod', deliveryRepId: 10,
-        payments: [{ paymentChannel: 'cash', amount: 50 }], tenderedAmount: 50,
-      }), adminAuth);
+      const created: any = await sales.createSale(
+        salePayload({
+          items: [{ productId: 101, qty: 1, price: 100 }],
+          customerId: 202,
+          orderType: 'delivery',
+          collectionStatus: 'cod',
+          deliveryRepId: 10,
+          payments: [{ paymentChannel: 'cash', amount: 50 }],
+          tenderedAmount: 50,
+        }),
+        adminAuth,
+      );
       const saleId = Number(created?.sale?.id);
       assert.ok(saleId > 0, 'COD delivery must create the sale');
       const row = await readSale(db, saleId);
@@ -510,11 +684,15 @@ async function main(): Promise<void> {
       await seedSetting(db, 'taxRate', '14');
       await seedShift(db, 1, 1);
       const { sales } = buildServices(db);
-      const created: any = await sales.createSale(salePayload({
-        items: [{ productId: 101, qty: 1, price: 100 }],
-        taxRate: 14,
-        payments: [{ paymentChannel: 'cash', amount: 114 }], tenderedAmount: 114,
-      }), adminAuth);
+      const created: any = await sales.createSale(
+        salePayload({
+          items: [{ productId: 101, qty: 1, price: 100 }],
+          taxRate: 14,
+          payments: [{ paymentChannel: 'cash', amount: 114 }],
+          tenderedAmount: 114,
+        }),
+        adminAuth,
+      );
       const saleId = Number(created?.sale?.id);
       assert.ok(saleId > 0, 'taxed cash sale must create the sale');
       const row = await readSale(db, saleId);
@@ -533,4 +711,7 @@ async function main(): Promise<void> {
   console.log('pos-cash-discount: OK');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

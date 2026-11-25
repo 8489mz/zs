@@ -6,7 +6,12 @@
  * env-or-Cairo fallback, never UTC.
  */
 import { strict as assert } from 'node:assert';
-import { buildLastNDays, dateKey, getBusinessDayBounds, getDefaultBusinessTimezone } from '../../src/modules/reports/helpers/reports-range.helper';
+import {
+  buildLastNDays,
+  dateKey,
+  getBusinessDayBounds,
+  getDefaultBusinessTimezone,
+} from '../../src/modules/reports/helpers/reports-range.helper';
 
 const saleAt2330Utc = new Date('2026-04-08T23:30:00.000Z');
 

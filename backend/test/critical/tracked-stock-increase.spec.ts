@@ -30,7 +30,14 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
  * and the in-transit direct-write ban is unchanged.
  */
 
-const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const auth = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -95,7 +102,10 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 function makeService(db: Kysely<Database>): InventoryAdjustmentService {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   return new InventoryAdjustmentService(
     db as never,
@@ -108,20 +118,39 @@ function makeService(db: Kysely<Database>): InventoryAdjustmentService {
   );
 }
 
-async function seedProduct(db: Kysely<Database>, id: number, stock: number, cost: number, trackSerials: boolean, drug: boolean): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${stock}, 0, ${cost}, true, ${trackSerials})`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${stock}, 0)`.execute(db);
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  stock: number,
+  cost: number,
+  trackSerials: boolean,
+  drug: boolean,
+): Promise<void> {
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${stock}, 0, ${cost}, true, ${trackSerials})`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${stock}, 0)`.execute(
+    db,
+  );
   if (drug) await sql`INSERT INTO pharmacy_drugs (id, tenant_id, product_id) VALUES (${id}, 't1', ${id})`.execute(db);
 }
 
 async function readStock(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await (db as any).selectFrom('products').select('stock_qty').where('id', '=', productId).executeTakeFirstOrThrow();
+  const row = await (db as any)
+    .selectFrom('products')
+    .select('stock_qty')
+    .where('id', '=', productId)
+    .executeTakeFirstOrThrow();
   return Number(row.stock_qty);
 }
 
 async function expectCode(promise: Promise<unknown>, code: string): Promise<void> {
   let caught: unknown;
-  try { await promise; } catch (error) { caught = error; }
+  try {
+    await promise;
+  } catch (error) {
+    caught = error;
+  }
   assert.ok(caught, `expected rejection with ${code}`);
   assert.equal((caught as { code?: string }).code, code);
 }
@@ -133,12 +162,23 @@ async function main(): Promise<void> {
     try {
       await seedProduct(db, 10, 0, 10, true, false);
       const service = makeService(db);
-      await service.createInventoryAdjustment({
-        productId: 10, locationId: 1, branchId: 1, actionType: 'add', qty: 2,
-        reason: 'found units', serials: ['SN-1', 'SN-2'],
-      } as any, auth);
+      await service.createInventoryAdjustment(
+        {
+          productId: 10,
+          locationId: 1,
+          branchId: 1,
+          actionType: 'add',
+          qty: 2,
+          reason: 'found units',
+          serials: ['SN-1', 'SN-2'],
+        } as any,
+        auth,
+      );
       assert.equal(await readStock(db, 10), 2);
-      const serials = await (db as any).selectFrom('product_serials').select(['serial_number', 'status', 'location_id']).execute();
+      const serials = await (db as any)
+        .selectFrom('product_serials')
+        .select(['serial_number', 'status', 'location_id'])
+        .execute();
       assert.deepEqual(serials.map((s: any) => s.serial_number).sort(), ['SN-1', 'SN-2']);
       assert.ok(serials.every((s: any) => s.status === 'in_stock' && Number(s.location_id) === 1));
       const movements = await (db as any).selectFrom('stock_movements').select(['qty', 'total_cost']).execute();
@@ -157,9 +197,20 @@ async function main(): Promise<void> {
     try {
       await seedProduct(db, 10, 0, 10, true, false);
       const service = makeService(db);
-      await expectCode(service.createInventoryAdjustment({
-        productId: 10, locationId: 1, branchId: 1, actionType: 'add', qty: 2, reason: 'found units',
-      } as any, auth), 'ADJUSTMENT_TRACKED_INCREASE_UNDOCUMENTED');
+      await expectCode(
+        service.createInventoryAdjustment(
+          {
+            productId: 10,
+            locationId: 1,
+            branchId: 1,
+            actionType: 'add',
+            qty: 2,
+            reason: 'found units',
+          } as any,
+          auth,
+        ),
+        'ADJUSTMENT_TRACKED_INCREASE_UNDOCUMENTED',
+      );
       assert.equal(await readStock(db, 10), 0);
       assert.equal((await (db as any).selectFrom('product_serials').select('id').execute()).length, 0);
     } finally {
@@ -172,12 +223,25 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedProduct(db, 10, 1, 10, true, false);
-      await sql`INSERT INTO product_serials (tenant_id, account_id, product_id, serial_number, status, branch_id, location_id, cost_price) VALUES ('t1', 'a1', 10, 'SN-1', 'in_stock', 1, 1, 10)`.execute(db);
+      await sql`INSERT INTO product_serials (tenant_id, account_id, product_id, serial_number, status, branch_id, location_id, cost_price) VALUES ('t1', 'a1', 10, 'SN-1', 'in_stock', 1, 1, 10)`.execute(
+        db,
+      );
       const service = makeService(db);
-      await expectCode(service.createInventoryAdjustment({
-        productId: 10, locationId: 1, branchId: 1, actionType: 'add', qty: 1,
-        reason: 'found units', serials: ['sn-1'],
-      } as any, auth), 'ADJUSTMENT_SERIAL_DUPLICATE');
+      await expectCode(
+        service.createInventoryAdjustment(
+          {
+            productId: 10,
+            locationId: 1,
+            branchId: 1,
+            actionType: 'add',
+            qty: 1,
+            reason: 'found units',
+            serials: ['sn-1'],
+          } as any,
+          auth,
+        ),
+        'ADJUSTMENT_SERIAL_DUPLICATE',
+      );
       assert.equal(await readStock(db, 10), 1);
     } finally {
       await db.destroy();
@@ -189,15 +253,31 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedProduct(db, 11, 5, 10, false, true);
-      const batch = await sql<{ id: number }>`INSERT INTO pharmacy_batches (tenant_id, account_id, product_id, drug_id, batch_number, expiry_date, quantity, unit_cost, location_id, status) VALUES ('t1', 'a1', 11, 11, 'B-1', '2030-01-01', 5, 10, 1, 'active') RETURNING id`.execute(db);
+      const batch = await sql<{
+        id: number;
+      }>`INSERT INTO pharmacy_batches (tenant_id, account_id, product_id, drug_id, batch_number, expiry_date, quantity, unit_cost, location_id, status) VALUES ('t1', 'a1', 11, 11, 'B-1', '2030-01-01', 5, 10, 1, 'active') RETURNING id`.execute(
+        db,
+      );
       const batchId = Number(batch.rows[0].id);
       const service = makeService(db);
-      await service.createInventoryAdjustment({
-        productId: 11, locationId: 1, branchId: 1, actionType: 'add', qty: 3,
-        reason: 'extra delivery', batchAllocations: [{ batchId, qty: 3 }],
-      } as any, auth);
+      await service.createInventoryAdjustment(
+        {
+          productId: 11,
+          locationId: 1,
+          branchId: 1,
+          actionType: 'add',
+          qty: 3,
+          reason: 'extra delivery',
+          batchAllocations: [{ batchId, qty: 3 }],
+        } as any,
+        auth,
+      );
       assert.equal(await readStock(db, 11), 8);
-      const row = await (db as any).selectFrom('pharmacy_batches').select('quantity').where('id', '=', batchId).executeTakeFirstOrThrow();
+      const row = await (db as any)
+        .selectFrom('pharmacy_batches')
+        .select('quantity')
+        .where('id', '=', batchId)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(row.quantity), 8);
     } finally {
       await db.destroy();
@@ -210,12 +290,23 @@ async function main(): Promise<void> {
     try {
       await seedProduct(db, 11, 0, 10, false, true);
       const service = makeService(db);
-      await service.createInventoryAdjustment({
-        productId: 11, locationId: 1, branchId: 1, actionType: 'add', qty: 4,
-        reason: 'new delivery', batchAllocations: [{ batchNumber: 'B-NEW', expiryDate: '2030-06-01', qty: 4 }],
-      } as any, auth);
+      await service.createInventoryAdjustment(
+        {
+          productId: 11,
+          locationId: 1,
+          branchId: 1,
+          actionType: 'add',
+          qty: 4,
+          reason: 'new delivery',
+          batchAllocations: [{ batchNumber: 'B-NEW', expiryDate: '2030-06-01', qty: 4 }],
+        } as any,
+        auth,
+      );
       assert.equal(await readStock(db, 11), 4);
-      const rows = await (db as any).selectFrom('pharmacy_batches').select(['batch_number', 'quantity', 'status']).execute();
+      const rows = await (db as any)
+        .selectFrom('pharmacy_batches')
+        .select(['batch_number', 'quantity', 'status'])
+        .execute();
       assert.equal(rows.length, 1);
       assert.equal(rows[0].batch_number, 'B-NEW');
       assert.equal(Number(rows[0].quantity), 4);
@@ -230,13 +321,28 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedProduct(db, 11, 5, 10, false, true);
-      const batch = await sql<{ id: number }>`INSERT INTO pharmacy_batches (tenant_id, account_id, product_id, drug_id, batch_number, expiry_date, quantity, unit_cost, location_id, status) VALUES ('t1', 'a1', 11, 11, 'B-OLD', '2020-01-01', 5, 10, 1, 'active') RETURNING id`.execute(db);
+      const batch = await sql<{
+        id: number;
+      }>`INSERT INTO pharmacy_batches (tenant_id, account_id, product_id, drug_id, batch_number, expiry_date, quantity, unit_cost, location_id, status) VALUES ('t1', 'a1', 11, 11, 'B-OLD', '2020-01-01', 5, 10, 1, 'active') RETURNING id`.execute(
+        db,
+      );
       const batchId = Number(batch.rows[0].id);
       const service = makeService(db);
-      await expectCode(service.createInventoryAdjustment({
-        productId: 11, locationId: 1, branchId: 1, actionType: 'add', qty: 2,
-        reason: 'extra delivery', batchAllocations: [{ batchId, qty: 2 }],
-      } as any, auth), 'ADJUSTMENT_BATCH_NOT_AVAILABLE');
+      await expectCode(
+        service.createInventoryAdjustment(
+          {
+            productId: 11,
+            locationId: 1,
+            branchId: 1,
+            actionType: 'add',
+            qty: 2,
+            reason: 'extra delivery',
+            batchAllocations: [{ batchId, qty: 2 }],
+          } as any,
+          auth,
+        ),
+        'ADJUSTMENT_BATCH_NOT_AVAILABLE',
+      );
       assert.equal(await readStock(db, 11), 5);
     } finally {
       await db.destroy();
@@ -249,10 +355,21 @@ async function main(): Promise<void> {
     try {
       await seedProduct(db, 10, 0, 10, true, false);
       const service = makeService(db);
-      await expectCode(service.createInventoryAdjustment({
-        productId: 10, locationId: 2, branchId: 1, actionType: 'add', qty: 1,
-        reason: 'transit write', serials: ['SN-9'],
-      } as any, auth), 'IN_TRANSIT_LOCATION_RESTRICTED');
+      await expectCode(
+        service.createInventoryAdjustment(
+          {
+            productId: 10,
+            locationId: 2,
+            branchId: 1,
+            actionType: 'add',
+            qty: 1,
+            reason: 'transit write',
+            serials: ['SN-9'],
+          } as any,
+          auth,
+        ),
+        'IN_TRANSIT_LOCATION_RESTRICTED',
+      );
       assert.equal(await readStock(db, 10), 0);
     } finally {
       await db.destroy();
@@ -264,14 +381,28 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedProduct(db, 10, 2, 10, true, false);
-      await sql`INSERT INTO product_serials (tenant_id, account_id, product_id, serial_number, status, branch_id, location_id, cost_price) VALUES ('t1', 'a1', 10, 'SN-1', 'in_stock', 1, 1, 10), ('t1', 'a1', 10, 'SN-2', 'in_stock', 1, 1, 10)`.execute(db);
+      await sql`INSERT INTO product_serials (tenant_id, account_id, product_id, serial_number, status, branch_id, location_id, cost_price) VALUES ('t1', 'a1', 10, 'SN-1', 'in_stock', 1, 1, 10), ('t1', 'a1', 10, 'SN-2', 'in_stock', 1, 1, 10)`.execute(
+        db,
+      );
       const service = makeService(db);
-      await service.createInventoryAdjustment({
-        productId: 10, locationId: 1, branchId: 1, actionType: 'deduct', qty: 1,
-        reason: 'damaged', serials: ['SN-1'],
-      } as any, auth);
+      await service.createInventoryAdjustment(
+        {
+          productId: 10,
+          locationId: 1,
+          branchId: 1,
+          actionType: 'deduct',
+          qty: 1,
+          reason: 'damaged',
+          serials: ['SN-1'],
+        } as any,
+        auth,
+      );
       assert.equal(await readStock(db, 10), 1);
-      const row = await (db as any).selectFrom('product_serials').select('status').where('serial_number', '=', 'SN-1').executeTakeFirstOrThrow();
+      const row = await (db as any)
+        .selectFrom('product_serials')
+        .select('status')
+        .where('serial_number', '=', 'SN-1')
+        .executeTakeFirstOrThrow();
       assert.equal(row.status, 'scrapped');
     } finally {
       await db.destroy();

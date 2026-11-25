@@ -43,8 +43,13 @@ const TENANT = 'tenant-a';
 const ACCOUNT = 'account-a';
 
 const AUTH = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: [],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -72,36 +77,228 @@ async function seed(db: Kysely<Database>): Promise<void> {
   // the tenant to UTC so the series buckets hold under the tenant-day
   // rule (INV-SINGLE-SERVER-CLOCK-TENANT-TZ). Tenant-day bucketing
   // itself is pinned by reports-tenant-day.spec.ts.
-  await anyDb.insertInto('settings').values([
-    { tenant_id: TENANT, key: 'timezone', value: '"UTC"' },
-  ]).execute();
-  await anyDb.insertInto('sales').values([
-    { id: 1, tenant_id: TENANT, account_id: ACCOUNT, total: 1000, tax_amount: 100, discount: 0, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-01T10:00:00.000Z', status: 'posted' },
-    { id: 2, tenant_id: TENANT, account_id: ACCOUNT, total: 500, tax_amount: 50, discount: 20, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-02T10:00:00.000Z', status: 'posted' },
-    { id: 3, tenant_id: TENANT, account_id: ACCOUNT, total: 300, tax_amount: 0, discount: 0, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-04T10:00:00.000Z', status: 'posted' },
-    // Must not move any point: draft, other tenant, out of range.
-    { id: 4, tenant_id: TENANT, account_id: ACCOUNT, total: 999, tax_amount: 0, discount: 0, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-02T10:00:00.000Z', status: 'draft' },
-    { id: 5, tenant_id: 'tenant-b', account_id: ACCOUNT, total: 9999, tax_amount: 0, discount: 0, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-01T10:00:00.000Z', status: 'posted' },
-    { id: 6, tenant_id: TENANT, account_id: ACCOUNT, total: 888, tax_amount: 0, discount: 0, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-06-02T10:00:00.000Z', status: 'posted' },
-  ]).execute();
-  await anyDb.insertInto('services').values([
-    { id: 1, tenant_id: TENANT, account_id: ACCOUNT, amount: 75, branch_id: 1, location_id: 1, created_by: 1, service_date: '2026-04-01T10:00:00.000Z', is_active: true },
-    { id: 2, tenant_id: TENANT, account_id: ACCOUNT, amount: 120, branch_id: 1, location_id: 1, created_by: 1, service_date: '2026-04-03T10:00:00.000Z', is_active: true },
-    { id: 3, tenant_id: TENANT, account_id: ACCOUNT, amount: 999, branch_id: 1, location_id: 1, created_by: 1, service_date: '2026-04-02T10:00:00.000Z', is_active: false },
-  ]).execute();
-  await anyDb.insertInto('purchases').values([
-    { id: 1, tenant_id: TENANT, account_id: ACCOUNT, total: 700, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-01T10:00:00.000Z', status: 'posted' },
-    { id: 2, tenant_id: TENANT, account_id: ACCOUNT, total: 200, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-03T10:00:00.000Z', status: 'posted' },
-    { id: 3, tenant_id: TENANT, account_id: ACCOUNT, total: 999, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-02T10:00:00.000Z', status: 'draft' },
-  ]).execute();
-  await anyDb.insertInto('return_documents').values([
-    { id: 1, tenant_id: TENANT, account_id: ACCOUNT, return_type: 'sale', total: 80, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-02T10:00:00.000Z' },
-    { id: 2, tenant_id: TENANT, account_id: ACCOUNT, return_type: 'sale', total: 40, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-04T10:00:00.000Z' },
-    { id: 3, tenant_id: TENANT, account_id: ACCOUNT, return_type: 'purchase', total: 50, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-03T10:00:00.000Z' },
-  ]).execute();
-  await anyDb.insertInto('return_items').values([
-    { tenant_id: TENANT, return_document_id: 1, sale_item_id: null, product_id: 1, qty: 1, cost_price: 0, allocated_tax: 8 },
-  ]).execute();
+  await anyDb
+    .insertInto('settings')
+    .values([{ tenant_id: TENANT, key: 'timezone', value: '"UTC"' }])
+    .execute();
+  await anyDb
+    .insertInto('sales')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 1000,
+        tax_amount: 100,
+        discount: 0,
+        delivery_fee: 0,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-01T10:00:00.000Z',
+        status: 'posted',
+      },
+      {
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 500,
+        tax_amount: 50,
+        discount: 20,
+        delivery_fee: 0,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-02T10:00:00.000Z',
+        status: 'posted',
+      },
+      {
+        id: 3,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 300,
+        tax_amount: 0,
+        discount: 0,
+        delivery_fee: 0,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-04T10:00:00.000Z',
+        status: 'posted',
+      },
+      // Must not move any point: draft, other tenant, out of range.
+      {
+        id: 4,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 999,
+        tax_amount: 0,
+        discount: 0,
+        delivery_fee: 0,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-02T10:00:00.000Z',
+        status: 'draft',
+      },
+      {
+        id: 5,
+        tenant_id: 'tenant-b',
+        account_id: ACCOUNT,
+        total: 9999,
+        tax_amount: 0,
+        discount: 0,
+        delivery_fee: 0,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-01T10:00:00.000Z',
+        status: 'posted',
+      },
+      {
+        id: 6,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 888,
+        tax_amount: 0,
+        discount: 0,
+        delivery_fee: 0,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-06-02T10:00:00.000Z',
+        status: 'posted',
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('services')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        amount: 75,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        service_date: '2026-04-01T10:00:00.000Z',
+        is_active: true,
+      },
+      {
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        amount: 120,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        service_date: '2026-04-03T10:00:00.000Z',
+        is_active: true,
+      },
+      {
+        id: 3,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        amount: 999,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        service_date: '2026-04-02T10:00:00.000Z',
+        is_active: false,
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('purchases')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 700,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-01T10:00:00.000Z',
+        status: 'posted',
+      },
+      {
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 200,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-03T10:00:00.000Z',
+        status: 'posted',
+      },
+      {
+        id: 3,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 999,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-02T10:00:00.000Z',
+        status: 'draft',
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('return_documents')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        return_type: 'sale',
+        total: 80,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-02T10:00:00.000Z',
+      },
+      {
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        return_type: 'sale',
+        total: 40,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-04T10:00:00.000Z',
+      },
+      {
+        id: 3,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        return_type: 'purchase',
+        total: 50,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-03T10:00:00.000Z',
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('return_items')
+    .values([
+      {
+        tenant_id: TENANT,
+        return_document_id: 1,
+        sale_item_id: null,
+        product_id: 1,
+        qty: 1,
+        cost_price: 0,
+        allocated_tax: 8,
+      },
+    ])
+    .execute();
 }
 
 function sum(points: Array<{ sales: number; purchases: number }>, key: 'sales' | 'purchases'): number {
@@ -117,13 +314,22 @@ async function main(): Promise<void> {
     buckets: ['2026-04-01', '2026-04-02', '2026-04-03'],
     granularity: 'day',
     dayComponents: ['2026-04-01', '2026-04-02', '2026-04-03'].map((bucket) => ({
-      bucket, salesTotal: 0.125, salesTax: 0, servicesTotal: 0,
-      saleReturns: 0, saleReturnTax: 0, purchasesTotal: 0, purchaseReturns: 0,
+      bucket,
+      salesTotal: 0.125,
+      salesTax: 0,
+      servicesTotal: 0,
+      saleReturns: 0,
+      saleReturnTax: 0,
+      purchasesTotal: 0,
+      purchaseReturns: 0,
     })),
     netSalesTotal: 0.38,
     netPurchasesTotal: 0,
   });
-  assert.deepEqual(remainderPoints.map((point) => point.sales), [0.13, 0.13, 0.12]);
+  assert.deepEqual(
+    remainderPoints.map((point) => point.sales),
+    [0.13, 0.13, 0.12],
+  );
   assert.equal(sum(remainderPoints, 'sales'), 0.38);
   assert.equal(sum(remainderPoints, 'purchases'), 0);
 

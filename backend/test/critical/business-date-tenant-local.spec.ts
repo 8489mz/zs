@@ -57,10 +57,7 @@ import { assertAutomatedJournalPeriodOpen } from '../../src/modules/accounting/a
 import { AccountingService } from '../../src/modules/accounting/accounting.service';
 import { resolveBusinessDateKey } from '../../src/modules/accounting/engines/accounting-date.engine';
 import { generateDailySequenceNumber } from '../../src/modules/delivery-reps/services/van-common.util';
-import {
-  formatDailyDocumentNumber,
-  getDailyDocumentPrefix,
-} from '../../src/common/utils/document-number.util';
+import { formatDailyDocumentNumber, getDailyDocumentPrefix } from '../../src/common/utils/document-number.util';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const CAIRO = 't-cairo';
@@ -99,21 +96,48 @@ async function main(): Promise<void> {
 
     async function seedTenant(tenantId: string, timezone: string | null, taxAccountId: number): Promise<void> {
       if (timezone) {
-        await anyDb.insertInto('settings').values({
-          tenant_id: tenantId, account_id: ACCOUNT, key: 'timezone', value: JSON.stringify(timezone),
-        }).execute();
+        await anyDb
+          .insertInto('settings')
+          .values({
+            tenant_id: tenantId,
+            account_id: ACCOUNT,
+            key: 'timezone',
+            value: JSON.stringify(timezone),
+          })
+          .execute();
       }
-      await anyDb.insertInto('accounting_settings').values({
-        id: 1, tenant_id: tenantId, sales_tax_account_id: taxAccountId, purchase_tax_account_id: taxAccountId,
-        lock_date_all: LOCK_DAY, lock_date_non_adviser: null, lock_date_tax: LOCK_DAY,
-      }).execute();
-      await anyDb.insertInto('accounting_fiscal_periods').values({
-        tenant_id: tenantId, status: 'closed', name: 'Oct 2026', period_number: 10,
-        start_date: '2026-10-01', end_date: LOCK_DAY,
-      }).execute();
-      await anyDb.insertInto('accounting_accounts').values({
-        id: taxAccountId, tenant_id: tenantId, code: '2210', is_tax: true,
-      }).execute();
+      await anyDb
+        .insertInto('accounting_settings')
+        .values({
+          id: 1,
+          tenant_id: tenantId,
+          sales_tax_account_id: taxAccountId,
+          purchase_tax_account_id: taxAccountId,
+          lock_date_all: LOCK_DAY,
+          lock_date_non_adviser: null,
+          lock_date_tax: LOCK_DAY,
+        })
+        .execute();
+      await anyDb
+        .insertInto('accounting_fiscal_periods')
+        .values({
+          tenant_id: tenantId,
+          status: 'closed',
+          name: 'Oct 2026',
+          period_number: 10,
+          start_date: '2026-10-01',
+          end_date: LOCK_DAY,
+        })
+        .execute();
+      await anyDb
+        .insertInto('accounting_accounts')
+        .values({
+          id: taxAccountId,
+          tenant_id: tenantId,
+          code: '2210',
+          is_tax: true,
+        })
+        .execute();
     }
 
     await seedTenant(CAIRO, 'Africa/Cairo', 7);
@@ -145,7 +169,15 @@ async function main(): Promise<void> {
 
     // 6. Daily sequence numbers under the tenant's business day.
     const cairoNo = await db.transaction().execute(async (trx) => {
-      const n = await generateDailySequenceNumber(trx as any, db, 'van_load_requisitions', 'doc_no', 'REQ', CAIRO, FROZEN);
+      const n = await generateDailySequenceNumber(
+        trx as any,
+        db,
+        'van_load_requisitions',
+        'doc_no',
+        'REQ',
+        CAIRO,
+        FROZEN,
+      );
       await (trx as any).insertInto('van_load_requisitions').values({ tenant_id: CAIRO, doc_no: n }).execute();
       return n;
     });

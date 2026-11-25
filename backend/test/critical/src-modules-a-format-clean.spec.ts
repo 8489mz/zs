@@ -49,15 +49,7 @@ import * as fs from 'node:fs';
 import * as path from 'path';
 
 const BACKEND = path.resolve(__dirname, '../..');
-const MODULES = [
-  'accounting',
-  'sales',
-  'purchases',
-  'inventory',
-  'returns',
-  'catalog',
-  'tax-integration',
-];
+const MODULES = ['accounting', 'sales', 'purchases', 'inventory', 'returns', 'catalog', 'tax-integration'];
 
 /** Files prettier --write would grow past the file-size cap. */
 const EXCLUDED = [

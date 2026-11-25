@@ -35,7 +35,11 @@ import { Database } from '../../src/database/database.types';
 import { exchangeRateAsOf } from '../../src/modules/accounting/exchange-rate-history';
 import { up, down } from '../../src/database/migrations/2040000000270_exchange_rate_history';
 
-async function historyRows(pg: PGlite, tenant: string, code: string): Promise<Array<{ exchange_rate: string; effective_from: Date }>> {
+async function historyRows(
+  pg: PGlite,
+  tenant: string,
+  code: string,
+): Promise<Array<{ exchange_rate: string; effective_from: Date }>> {
   const res = await pg.query<{ exchange_rate: string; effective_from: Date }>(
     `SELECT exchange_rate, effective_from FROM currency_exchange_rate_history WHERE tenant_id = $1 AND currency_code = $2 ORDER BY id`,
     [tenant, code],
@@ -72,8 +76,12 @@ async function main(): Promise<void> {
     await assert.rejects(exchangeRateAsOf(db, 't1', 'EUR', '2026-09-01'), /No exchange rate was registered/);
 
     // Trigger: insert, genuine update, name-only update.
-    await pg.exec(`INSERT INTO currency_exchange_rates (tenant_id, currency_code, currency_name, exchange_rate) VALUES ('t1','USD','Dollar',48)`);
-    await pg.exec(`UPDATE currency_exchange_rates SET exchange_rate = 50, updated_at = NOW() WHERE tenant_id = 't1' AND currency_code = 'USD'`);
+    await pg.exec(
+      `INSERT INTO currency_exchange_rates (tenant_id, currency_code, currency_name, exchange_rate) VALUES ('t1','USD','Dollar',48)`,
+    );
+    await pg.exec(
+      `UPDATE currency_exchange_rates SET exchange_rate = 50, updated_at = NOW() WHERE tenant_id = 't1' AND currency_code = 'USD'`,
+    );
     const usd = await historyRows(pg, 't1', 'USD');
     assert.equal(usd.length, 2);
     assert.equal(Number(usd[0].exchange_rate), 48);
@@ -84,9 +92,14 @@ async function main(): Promise<void> {
     assert.equal(await exchangeRateAsOf(db, 't1', 'USD', first), 48);
     assert.equal(await exchangeRateAsOf(db, 't1', 'USD', new Date(second.getTime() - 1)), 48);
     assert.equal(await exchangeRateAsOf(db, 't1', 'USD', second), 50);
-    await assert.rejects(exchangeRateAsOf(db, 't1', 'USD', new Date(first.getTime() - 1)), /No exchange rate was registered/);
+    await assert.rejects(
+      exchangeRateAsOf(db, 't1', 'USD', new Date(first.getTime() - 1)),
+      /No exchange rate was registered/,
+    );
 
-    await pg.exec(`UPDATE currency_exchange_rates SET currency_name = 'US Dollar' WHERE tenant_id = 't1' AND currency_code = 'USD'`);
+    await pg.exec(
+      `UPDATE currency_exchange_rates SET currency_name = 'US Dollar' WHERE tenant_id = 't1' AND currency_code = 'USD'`,
+    );
     assert.equal((await historyRows(pg, 't1', 'USD')).length, 2);
 
     await down(db as never);

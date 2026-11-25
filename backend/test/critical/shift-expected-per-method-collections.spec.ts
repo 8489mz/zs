@@ -49,20 +49,49 @@ const codeOf = (error: unknown): string => (error as { code?: string })?.code ||
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
-  const manager2 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 2, username: 'manager2', permissions: [] } as unknown as AuthContext;
-  const cashier3 = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 3, username: 'cashier3', permissions: [] } as unknown as AuthContext;
+  const manager2 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 2,
+    username: 'manager2',
+    permissions: [],
+  } as unknown as AuthContext;
+  const cashier3 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'cashier',
+    userId: 3,
+    username: 'cashier3',
+    permissions: [],
+  } as unknown as AuthContext;
 
   const shiftRow = async (id: number) => {
-    const r = await pg.query<{ status: string; close_note: string; counted_cash: string | null; variance: string | null; expected_cash: string; closed_by: string | null; closed_at: string | null }>(
-      'SELECT status, close_note, counted_cash, variance, expected_cash, closed_by, closed_at FROM cashier_shifts WHERE id=$1', [id]);
+    const r = await pg.query<{
+      status: string;
+      close_note: string;
+      counted_cash: string | null;
+      variance: string | null;
+      expected_cash: string;
+      closed_by: string | null;
+      closed_at: string | null;
+    }>(
+      'SELECT status, close_note, counted_cash, variance, expected_cash, closed_by, closed_at FROM cashier_shifts WHERE id=$1',
+      [id],
+    );
     return r.rows[0];
   };
   const shiftIdOf = async (opener: number): Promise<number> => {
     const r = await pg.query<{ id: string }>(
-      'SELECT id FROM cashier_shifts WHERE opened_by=$1 ORDER BY id DESC LIMIT 1', [opener]);
+      'SELECT id FROM cashier_shifts WHERE opened_by=$1 ORDER BY id DESC LIMIT 1',
+      [opener],
+    );
     return Number(r.rows[0].id);
   };
 
@@ -127,11 +156,24 @@ async function main() {
       INSERT INTO accounting_settings VALUES
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
     `);
-    for (const [code, type] of [[1110, 'asset'], [7110, 'revenue'], [7210, 'expense'], [1135, 'asset']] as const) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), type]);
+    for (const [code, type] of [
+      [1110, 'asset'],
+      [7110, 'revenue'],
+      [7210, 'expense'],
+      [1135, 'asset'],
+    ] as const) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        type,
+      ]);
     }
     const passwords: Record<number, string> = { 2: 'pw-manager-2', 3: 'pw-cashier-3' };
-    for (const [id, role, branch] of [[2, 'admin', null], [3, 'cashier', 1]] as const) {
+    for (const [id, role, branch] of [
+      [2, 'admin', null],
+      [3, 'cashier', 1],
+    ] as const) {
       const rec = await createPasswordRecord(passwords[id as number]);
       await pg.query(
         'INSERT INTO users(id,tenant_id,username,role,is_active,password_hash,password_salt,default_branch_id) VALUES ($1,$2,$3,$4,true,$5,$6,$7)',
@@ -150,10 +192,24 @@ async function main() {
       VALUES (101,'t1','a1','','takeaway','posted','instapay','instapay',395,395,1,3,now())`);
     await pg.query(`INSERT INTO customer_payments(id,tenant_id,account_id,amount,payment_channel,created_by,created_at,branch_id)
       VALUES (101,'t1','a1',100,'instapay',3,now(),1)`);
-    await drawer.closeCashierShift(shift1, { countedCash: 100, instapayDeclaredTotal: 495, instapayOperationCount: 2, instapayDetails: [{ amount: 395 }, { amount: 100 }], managerPin: 'pw-cashier-3' }, cashier3);
+    await drawer.closeCashierShift(
+      shift1,
+      {
+        countedCash: 100,
+        instapayDeclaredTotal: 495,
+        instapayOperationCount: 2,
+        instapayDetails: [{ amount: 395 }, { amount: 100 }],
+        managerPin: 'pw-cashier-3',
+      },
+      cashier3,
+    );
     assert.equal((await shiftRow(shift1)).status, 'pending_review', 'a cashier-opener shift must await review');
     await drawer.reviewCashierShiftClose(shift1, { decision: 'approve', note: 'مطابق' }, manager2);
-    assert.equal((await shiftRow(shift1)).status, 'closed', 'declaring the full InstaPay 495 (POS 395 + receipt 100) must approve clean with a short note');
+    assert.equal(
+      (await shiftRow(shift1)).status,
+      'closed',
+      'declaring the full InstaPay 495 (POS 395 + receipt 100) must approve clean with a short note',
+    );
 
     // ---------- 2. The same figures declared POS-only must mismatch. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
@@ -162,15 +218,33 @@ async function main() {
       VALUES (102,'t1','a1','','takeaway','posted','instapay','instapay',395,395,1,3,now())`);
     await pg.query(`INSERT INTO customer_payments(id,tenant_id,account_id,amount,payment_channel,created_by,created_at,branch_id)
       VALUES (102,'t1','a1',100,'instapay',3,now(),1)`);
-    await drawer.closeCashierShift(shift2, { countedCash: 100, instapayDeclaredTotal: 395, instapayOperationCount: 1, instapayDetails: [{ amount: 395 }], managerPin: 'pw-cashier-3' }, cashier3);
+    await drawer.closeCashierShift(
+      shift2,
+      {
+        countedCash: 100,
+        instapayDeclaredTotal: 395,
+        instapayOperationCount: 1,
+        instapayDetails: [{ amount: 395 }],
+        managerPin: 'pw-cashier-3',
+      },
+      cashier3,
+    );
     assert.equal((await shiftRow(shift2)).status, 'pending_review');
     await assert.rejects(
       drawer.reviewCashierShiftClose(shift2, { decision: 'approve', note: '' }, manager2),
       (err: unknown) => codeOf(err) === 'SHIFT_REVIEW_NOTE_REQUIRED',
       'declaring POS-only 395 against a computed 495 must demand a review note (delta -100, countDelta -1)',
     );
-    await drawer.reviewCashierShiftClose(shift2, { decision: 'approve', note: 'التحصيل الخارجي 100 سجل خارج نقاط البيع' }, manager2);
-    assert.equal((await shiftRow(shift2)).status, 'closed', 'a long review note must approve the genuine -100 mismatch');
+    await drawer.reviewCashierShiftClose(
+      shift2,
+      { decision: 'approve', note: 'التحصيل الخارجي 100 سجل خارج نقاط البيع' },
+      manager2,
+    );
+    assert.equal(
+      (await shiftRow(shift2)).status,
+      'closed',
+      'a long review note must approve the genuine -100 mismatch',
+    );
 
     // ---------- 3. Visa: POS card sale 200 + non-POS card receipt 50. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
@@ -179,9 +253,23 @@ async function main() {
       VALUES (103,'t1','a1','','takeaway','posted','card','card',200,200,1,3,now())`);
     await pg.query(`INSERT INTO customer_payments(id,tenant_id,account_id,amount,payment_channel,created_by,created_at,branch_id)
       VALUES (103,'t1','a1',50,'card',3,now(),1)`);
-    await drawer.closeCashierShift(shift3, { countedCash: 100, cardDeclaredTotal: 250, cardOperationCount: 2, cardDetails: [{ amount: 200 }, { amount: 50 }], managerPin: 'pw-cashier-3' }, cashier3);
+    await drawer.closeCashierShift(
+      shift3,
+      {
+        countedCash: 100,
+        cardDeclaredTotal: 250,
+        cardOperationCount: 2,
+        cardDetails: [{ amount: 200 }, { amount: 50 }],
+        managerPin: 'pw-cashier-3',
+      },
+      cashier3,
+    );
     await drawer.reviewCashierShiftClose(shift3, { decision: 'approve', note: 'مطابق' }, manager2);
-    assert.equal((await shiftRow(shift3)).status, 'closed', 'declaring the full card 250 (POS 200 + receipt 50) must approve clean with a short note');
+    assert.equal(
+      (await shiftRow(shift3)).status,
+      'closed',
+      'declaring the full card 250 (POS 200 + receipt 50) must approve clean with a short note',
+    );
 
     // ---------- 4. Cash regression + hydrated per-channel row. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
@@ -190,21 +278,40 @@ async function main() {
       VALUES (104,'t1','a1','','takeaway','posted','cash','cash',100,100,1,3,now())`);
     await pg.query(`INSERT INTO customer_payments(id,tenant_id,account_id,amount,payment_channel,created_by,created_at,branch_id)
       VALUES (104,'t1','a1',50,'cash',3,now(),1)`);
-    assert.equal(await drawer.computeShiftExpectedCash(shift4, cashier3), 250, 'expected cash must stay opening 100 + POS cash 100 + receipt 50');
-    const listing = await drawer.listCashierShifts({}, cashier3) as { cashierShifts: Array<Record<string, unknown>> };
+    assert.equal(
+      await drawer.computeShiftExpectedCash(shift4, cashier3),
+      250,
+      'expected cash must stay opening 100 + POS cash 100 + receipt 50',
+    );
+    const listing = (await drawer.listCashierShifts({}, cashier3)) as { cashierShifts: Array<Record<string, unknown>> };
     const row4 = listing.cashierShifts.find((row) => String(row.id) === String(shift4));
-    assert.equal(Number(row4?.customerCollectionsTotal || 0), 50, 'the hydrated row must still expose the cash collections total');
+    assert.equal(
+      Number(row4?.customerCollectionsTotal || 0),
+      50,
+      'the hydrated row must still expose the cash collections total',
+    );
     const byChannel4 = row4?.customerCollectionsByChannel as Record<string, number> | null;
     assert.equal(Number(byChannel4?.cash || 0), 50, 'the hydrated row must expose the cash collection per channel');
     assert.equal(Number(byChannel4?.cashCount || 0), 1, 'the hydrated row must expose the cash collection count');
     const row1 = listing.cashierShifts.find((row) => String(row.id) === String(shift1));
     const byChannel1 = row1?.customerCollectionsByChannel as Record<string, number> | null;
-    assert.equal(Number(byChannel1?.instapay || 0), 100, 'the closed InstaPay shift row must expose its receipt per channel');
-    assert.equal(Number(byChannel1?.instapayCount || 0), 1, 'the closed InstaPay shift row must expose its receipt count');
+    assert.equal(
+      Number(byChannel1?.instapay || 0),
+      100,
+      'the closed InstaPay shift row must expose its receipt per channel',
+    );
+    assert.equal(
+      Number(byChannel1?.instapayCount || 0),
+      1,
+      'the closed InstaPay shift row must expose its receipt count',
+    );
     assert.equal(Number(byChannel1?.card || 0), 0, 'a channel with no receipts must read 0, not null');
   } finally {
     await db.destroy();
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

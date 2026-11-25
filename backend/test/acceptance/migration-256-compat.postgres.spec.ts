@@ -13,8 +13,10 @@ async function main(): Promise<void> {
   assert.ok(raw, 'ACCEPTANCE_DATABASE_URL is required');
   const url = new URL(raw);
   assert.ok(['127.0.0.1', 'localhost'].includes(url.hostname), 'Only local disposable PostgreSQL is allowed');
-  assert.ok(['/zs_p0c_branch_first_test', '/zs_p0c_main_first_test'].includes(url.pathname),
-    'Refusing to inspect a non-P0-C disposable database');
+  assert.ok(
+    ['/zs_p0c_branch_first_test', '/zs_p0c_main_first_test'].includes(url.pathname),
+    'Refusing to inspect a non-P0-C disposable database',
+  );
   const db = new Client({ connectionString: raw });
   await db.connect();
   try {
@@ -26,12 +28,18 @@ async function main(): Promise<void> {
       '2040000000256_sync_tenant_subscriptions_plan_and_upgrade_pro_users',
     ];
     const result = await db.query<{ name: string }>(
-      'SELECT name FROM kysely_migration WHERE name = ANY($1::text[]) ORDER BY name', [names]);
-    const actual = result.rows.map(row => row.name);
-    const expected = (mode === 'branch-only' ? names.slice(0, 4)
-      : mode === 'main-only' ? names.slice(4) : names).sort();
-    assert.deepEqual(actual, expected,
-      'Both original migration identities must be preserved; neither may be renamed or substituted');
+      'SELECT name FROM kysely_migration WHERE name = ANY($1::text[]) ORDER BY name',
+      [names],
+    );
+    const actual = result.rows.map((row) => row.name);
+    const expected = (
+      mode === 'branch-only' ? names.slice(0, 4) : mode === 'main-only' ? names.slice(4) : names
+    ).sort();
+    assert.deepEqual(
+      actual,
+      expected,
+      'Both original migration identities must be preserved; neither may be renamed or substituted',
+    );
 
     if (mode !== 'main-only') {
       for (const [table, column, minScale] of [
@@ -42,15 +50,19 @@ async function main(): Promise<void> {
       ] as const) {
         const { rows } = await db.query<{ numeric_scale: number }>(
           'SELECT numeric_scale FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=$1 AND column_name=$2',
-          [table, column]);
+          [table, column],
+        );
         assert.equal(rows.length, 1, 'Missing currency evidence column: ' + table + '.' + column);
-        assert.ok(Number(rows[0].numeric_scale) >= minScale,
-          'Precision migration was recorded without widening ' + table + '.' + column);
+        assert.ok(
+          Number(rows[0].numeric_scale) >= minScale,
+          'Precision migration was recorded without widening ' + table + '.' + column,
+        );
       }
     }
     if (mode !== 'branch-only') {
       const plans = await db.query<{ code: string; max_users: number | null }>(
-        "SELECT code, max_users FROM saas_plans WHERE code IN ('PRO','ULTIMATE')");
+        "SELECT code, max_users FROM saas_plans WHERE code IN ('PRO','ULTIMATE')",
+      );
       for (const p of plans.rows) {
         if (p.code === 'PRO') assert.equal(Number(p.max_users), 10);
         if (p.code === 'ULTIMATE') assert.equal(p.max_users, null);
@@ -61,4 +73,7 @@ async function main(): Promise<void> {
     await db.end();
   }
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

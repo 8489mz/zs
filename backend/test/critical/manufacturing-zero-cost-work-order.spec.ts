@@ -48,43 +48,90 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { ManufacturingService } from '../../src/modules/manufacturing/services/manufacturing.service';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function seedProduct(db: Kysely<Database>, id: number, qty: number, cost: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials, default_location_id) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false, 1)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(db);
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials, default_location_id) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false, 1)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(
+    db,
+  );
 }
 
-async function seedBom(db: Kysely<Database>, bomId: number, fgId: number, compId: number, qty: number, overhead: number): Promise<void> {
-  await sql`INSERT INTO manufacturing_boms (id, product_id, quantity, overhead_cost, expected_cost, is_active, tenant_id, account_id) VALUES (${bomId}, ${fgId}, 1, ${overhead}, 0, true, 't1', 'a1')`.execute(db);
-  await sql`INSERT INTO manufacturing_bom_lines (bom_id, component_product_id, quantity, unit_name, unit_multiplier, waste_percentage, expected_cost) VALUES (${bomId}, ${compId}, ${qty}, 'unit', 1, 0, 0)`.execute(db);
+async function seedBom(
+  db: Kysely<Database>,
+  bomId: number,
+  fgId: number,
+  compId: number,
+  qty: number,
+  overhead: number,
+): Promise<void> {
+  await sql`INSERT INTO manufacturing_boms (id, product_id, quantity, overhead_cost, expected_cost, is_active, tenant_id, account_id) VALUES (${bomId}, ${fgId}, 1, ${overhead}, 0, true, 't1', 'a1')`.execute(
+    db,
+  );
+  await sql`INSERT INTO manufacturing_bom_lines (bom_id, component_product_id, quantity, unit_name, unit_multiplier, waste_percentage, expected_cost) VALUES (${bomId}, ${compId}, ${qty}, 'unit', 1, 0, 0)`.execute(
+    db,
+  );
 }
 
 async function seedWorkOrder(db: Kysely<Database>, id: number, bomId: number, qty: number): Promise<void> {
-  await sql`INSERT INTO manufacturing_work_orders (id, bom_id, status, quantity_to_produce, produced_quantity, source_location_id, destination_location_id, total_cost, note, created_by, tenant_id, account_id) VALUES (${id}, ${bomId}, 'draft', ${qty}, 0, 1, 1, 0, '', 1, 't1', 'a1')`.execute(db);
+  await sql`INSERT INTO manufacturing_work_orders (id, bom_id, status, quantity_to_produce, produced_quantity, source_location_id, destination_location_id, total_cost, note, created_by, tenant_id, account_id) VALUES (${id}, ${bomId}, 'draft', ${qty}, 0, 1, 1, 0, '', 1, 't1', 'a1')`.execute(
+    db,
+  );
 }
 
 async function journalEntries(db: Kysely<Database>, workOrderId: number): Promise<number> {
-  const rows = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM journal_entries WHERE source_type = 'manufacturing_work_order' AND source_id = ${workOrderId}`.execute(db);
+  const rows = await sql<{
+    n: string;
+  }>`SELECT COUNT(*) AS n FROM journal_entries WHERE source_type = 'manufacturing_work_order' AND source_id = ${workOrderId}`.execute(
+    db,
+  );
   return Number(rows.rows[0].n);
 }
 
-async function journalLines(db: Kysely<Database>, workOrderId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
-  const rows = await sql<{ code: string; debit: string; credit: string }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'manufacturing_work_order' AND e.source_id = ${workOrderId} ORDER BY l.id`.execute(db);
+async function journalLines(
+  db: Kysely<Database>,
+  workOrderId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
+  const rows = await sql<{
+    code: string;
+    debit: string;
+    credit: string;
+  }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'manufacturing_work_order' AND e.source_id = ${workOrderId} ORDER BY l.id`.execute(
+    db,
+  );
   return rows.rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
 async function scopedQty(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = 1`.execute(db);
+  const row = await sql<{
+    qty: string;
+  }>`SELECT qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = 1`.execute(db);
   return row.rows.length ? Number(row.rows[0].qty) : 0;
 }
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
-  const service = new ManufacturingService(db as never, new TransactionHelper(), new AuditService(db as never), posting);
+  const service = new ManufacturingService(
+    db as never,
+    new TransactionHelper(),
+    new AuditService(db as never),
+    posting,
+  );
 
   try {
     await pg.exec(`
@@ -131,7 +178,10 @@ async function main(): Promise<void> {
     assert.equal(await scopedQty(db, 1), 2);
     assert.equal(await scopedQty(db, 2), 8);
     assert.equal(await journalEntries(db, 1), 0);
-    const wo1 = await sql<{ total_cost: string; status: string }>`SELECT total_cost, status FROM manufacturing_work_orders WHERE id = 1`.execute(db);
+    const wo1 = await sql<{
+      total_cost: string;
+      status: string;
+    }>`SELECT total_cost, status FROM manufacturing_work_orders WHERE id = 1`.execute(db);
     assert.equal(Number(wo1.rows[0].total_cost), 0);
     assert.equal(wo1.rows[0].status, 'done');
 
@@ -152,8 +202,12 @@ async function main(): Promise<void> {
     await seedProduct(db, 6, 10, 10);
     await seedBom(db, 3, 5, 6, 1, 0);
     await seedWorkOrder(db, 3, 3, 1);
-    await sql`UPDATE manufacturing_work_orders SET total_cost = 5, status = 'done', completed_at = NOW() WHERE id = 3`.execute(db);
-    await sql`INSERT INTO manufacturing_wo_consumptions (tenant_id, account_id, work_order_id, component_product_id, quantity_consumed, unit_cost, line_total) VALUES ('t1', 'a1', 3, 6, 1, 10, 10)`.execute(db);
+    await sql`UPDATE manufacturing_work_orders SET total_cost = 5, status = 'done', completed_at = NOW() WHERE id = 3`.execute(
+      db,
+    );
+    await sql`INSERT INTO manufacturing_wo_consumptions (tenant_id, account_id, work_order_id, component_product_id, quantity_consumed, unit_cost, line_total) VALUES ('t1', 'a1', 3, 6, 1, 10, 10)`.execute(
+      db,
+    );
     await assert.rejects(
       posting.postManufacturingWorkOrder(db as never, 3, AUTH),
       (err: any) => err && err.code === 'MANUFACTURING_COST_MISMATCH' && err.statusCode === 409,

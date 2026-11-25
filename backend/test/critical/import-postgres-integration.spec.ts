@@ -837,23 +837,42 @@ async function runTests() {
   // Fixture-only bound approval for large transfers (base-currency
   // normalised threshold): created with a full binding payload, then
   // marked approved exactly like approvedClosure above.
-  const approvedTransfer = async (opts: { supplierId: string; amount: number; proformaInvoiceId?: string; projectId?: string }) => {
+  const approvedTransfer = async (opts: {
+    supplierId: string;
+    amount: number;
+    proformaInvoiceId?: string;
+    projectId?: string;
+  }) => {
     const request = await service.createApprovalRequest(tenantId, userId, {
-      actionType: 'large_transfer', referenceId: opts.supplierId,
-      requestPayload: { amount: opts.amount, currency: 'USD', supplierId: opts.supplierId, proformaInvoiceId: opts.proformaInvoiceId, projectId: opts.projectId },
+      actionType: 'large_transfer',
+      referenceId: opts.supplierId,
+      requestPayload: {
+        amount: opts.amount,
+        currency: 'USD',
+        supplierId: opts.supplierId,
+        proformaInvoiceId: opts.proformaInvoiceId,
+        projectId: opts.projectId,
+      },
     });
-    await db.updateTable('import_approval_requests').set({ status: 'approved', approved_by: userId, decided_at: new Date() })
-      .where('id', '=', request.id).execute();
+    await db
+      .updateTable('import_approval_requests')
+      .set({ status: 'approved', approved_by: userId, decided_at: new Date() })
+      .where('id', '=', request.id)
+      .execute();
     return request.id;
   };
 
   // Fixture-only approval arrangement for unrelated close-project guard tests.
   const approvedClosure = async (projectId: string) => {
     const request = await service.createApprovalRequest(tenantId, userId, {
-      actionType: 'project_closure', referenceId: projectId,
+      actionType: 'project_closure',
+      referenceId: projectId,
     });
-    await db.updateTable('import_approval_requests').set({ status: 'approved', approved_by: userId, decided_at: new Date() })
-      .where('id', '=', request.id).execute();
+    await db
+      .updateTable('import_approval_requests')
+      .set({ status: 'approved', approved_by: userId, decided_at: new Date() })
+      .where('id', '=', request.id)
+      .execute();
     return request.id;
   };
 
@@ -956,18 +975,14 @@ async function runTests() {
       rejected = true;
       assert.ok(
         err.message.includes('غير مسددة بالكامل') || err.message.includes('رصيد مستحق غير مسوّى'),
-        `Unexpected rejection error: ${err.message}`
+        `Unexpected rejection error: ${err.message}`,
       );
     }
     assert.ok(rejected, 'closeProject must reject projects with unsettled purchase invoice liabilities');
     console.log('PASS: closeProject correctly rejected closure due to unsettled purchase invoice.');
 
     // 1-B: Settle the purchase invoice in full
-    await db
-      .updateTable('purchases')
-      .set({ paid_amount: 25000 })
-      .where('id', '=', unpaidPur.id)
-      .execute();
+    await db.updateTable('purchases').set({ paid_amount: 25000 }).where('id', '=', unpaidPur.id).execute();
 
     // Attempt closure again: MUST SUCCEED
     const closeRes = await service.closeProject(tenantId, userId, projectId, await approvedClosure(projectId));
@@ -1008,7 +1023,7 @@ async function runTests() {
       amountForeign: 2000,
       amountEgp: 100000,
       currency: 'USD',
-      exchangeRateContract: 49.00, // 2000 * 49 = 98000 contract value -> 2000 EGP forex loss
+      exchangeRateContract: 49.0, // 2000 * 49 = 98000 contract value -> 2000 EGP forex loss
       notes: 'Dynamic COA resolution verification',
       idempotencyKey: 'IDEMP-TEST-2',
     });
@@ -1059,13 +1074,27 @@ async function runTests() {
   {
     const supplierA = await db
       .insertInto('suppliers')
-      .values({ tenant_id: tenantId, name: 'Supplier A Global', phone: '111', address: 'China', balance: 0, is_active: true })
+      .values({
+        tenant_id: tenantId,
+        name: 'Supplier A Global',
+        phone: '111',
+        address: 'China',
+        balance: 0,
+        is_active: true,
+      })
       .returning('id')
       .executeTakeFirstOrThrow();
 
     const supplierB = await db
       .insertInto('suppliers')
-      .values({ tenant_id: tenantId, name: 'Supplier B Overseas', phone: '222', address: 'China', balance: 0, is_active: true })
+      .values({
+        tenant_id: tenantId,
+        name: 'Supplier B Overseas',
+        phone: '222',
+        address: 'China',
+        balance: 0,
+        is_active: true,
+      })
       .returning('id')
       .executeTakeFirstOrThrow();
 
@@ -1158,7 +1187,12 @@ async function runTests() {
     try {
       await service.recordForeignTransfer(tenantId, userId, {
         supplierId: String(supplierA.id),
-        approvalRequestId: await approvedTransfer({ supplierId: String(supplierA.id), amount: 3500, proformaInvoiceId: proforma.id, projectId: projectA.id }),
+        approvalRequestId: await approvedTransfer({
+          supplierId: String(supplierA.id),
+          amount: 3500,
+          proformaInvoiceId: proforma.id,
+          projectId: projectA.id,
+        }),
         amountForeign: 3500, // Overpayment!
         amountEgp: 175000,
         currency: 'USD',
@@ -1175,12 +1209,17 @@ async function runTests() {
     // 3-E: Successful legitimate transfer paying remainder exactly
     const transferSuccess = await service.recordForeignTransfer(tenantId, userId, {
       supplierId: String(supplierA.id),
-      approvalRequestId: await approvedTransfer({ supplierId: String(supplierA.id), amount: 3000, proformaInvoiceId: proforma.id, projectId: projectA.id }),
+      approvalRequestId: await approvedTransfer({
+        supplierId: String(supplierA.id),
+        amount: 3000,
+        proformaInvoiceId: proforma.id,
+        projectId: projectA.id,
+      }),
       projectId: projectA.id,
       amountForeign: 3000,
       amountEgp: 153000,
       currency: 'USD',
-      exchangeRateContract: 50.00, // 3000 * 50 = 150000 -> 3000 EGP forex loss
+      exchangeRateContract: 50.0, // 3000 * 50 = 150000 -> 3000 EGP forex loss
       proformaInvoiceId: proforma.id,
       bankAccountId: accounts['1120'], // Real bank account
       idempotencyKey: 'IDEMP-PROFORMA-3E',
@@ -1201,7 +1240,11 @@ async function runTests() {
     try {
       await service.recordForeignTransfer(tenantId, userId, {
         supplierId: String(supplierA.id),
-        approvalRequestId: await approvedTransfer({ supplierId: String(supplierA.id), amount: 3000, projectId: projectA.id }),
+        approvalRequestId: await approvedTransfer({
+          supplierId: String(supplierA.id),
+          amount: 3000,
+          projectId: projectA.id,
+        }),
         projectId: projectA.id,
         amountForeign: 3000,
         amountEgp: 153000,
@@ -1212,7 +1255,7 @@ async function runTests() {
       rejectedDuplicate = true;
       assert.ok(
         err.message.includes('مفتاح عدم التكرار') || err.message.includes('Idempotency Key'),
-        `Unexpected error: ${err.message}`
+        `Unexpected error: ${err.message}`,
       );
     }
     assert.ok(rejectedDuplicate, 'Must reject duplicate transfer submission with identical idempotency key');
@@ -1292,17 +1335,26 @@ async function runTests() {
         product_id: product.id,
         quantity: 100,
         received_quantity: 100,
-        factory_unit_price_usd: 8.00,
+        factory_unit_price_usd: 8.0,
         landed_cost_egp: 400,
       })
-      .returning('id').executeTakeFirstOrThrow();
-    await db.insertInto('import_inventory_lots').values({
-      tenant_id: tenantId, lot_number: 'EXP-LOT-01',
-      shipment_id: shipment.id, shipment_item_id: lateItem.id,
-      product_id: product.id, location_id: null,
-      initial_quantity: 100, remaining_quantity: 40,
-      unit_landed_cost_egp: 400, status: 'active',
-    } as any).execute();
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('import_inventory_lots')
+      .values({
+        tenant_id: tenantId,
+        lot_number: 'EXP-LOT-01',
+        shipment_id: shipment.id,
+        shipment_item_id: lateItem.id,
+        product_id: product.id,
+        location_id: null,
+        initial_quantity: 100,
+        remaining_quantity: 40,
+        unit_landed_cost_egp: 400,
+        status: 'active',
+      } as any)
+      .execute();
 
     const res = await service.processLateShipmentExpense(tenantId, userId, shipment.id, {
       title: 'Late Detention & Terminal Charges',
@@ -1414,11 +1466,7 @@ async function runTests() {
       })
       .execute();
 
-    const calculation = await service.calculateCustomsTax(
-      tenantId,
-      '8481.80.90',
-      100000
-    );
+    const calculation = await service.calculateCustomsTax(tenantId, '8481.80.90', 100000);
 
     assert.strictEqual(calculation.customsDuty, 5000);
     assert.strictEqual(calculation.vatAmount, 14700);
@@ -1434,7 +1482,14 @@ async function runTests() {
   {
     const supplier = await db
       .insertInto('suppliers')
-      .values({ tenant_id: tenantId, name: 'Negative Test Supplier', phone: '999', address: 'China', balance: 0, is_active: true })
+      .values({
+        tenant_id: tenantId,
+        name: 'Negative Test Supplier',
+        phone: '999',
+        address: 'China',
+        balance: 0,
+        is_active: true,
+      })
       .returning('id')
       .executeTakeFirstOrThrow();
 
@@ -1444,26 +1499,58 @@ async function runTests() {
       .returning('id')
       .executeTakeFirstOrThrow();
 
-    await db.insertInto('import_inventory_receipts').values({ tenant_id: tenantId, shipment_id: shipment.id, state: 'posted' }).execute();
+    await db
+      .insertInto('import_inventory_receipts')
+      .values({ tenant_id: tenantId, shipment_id: shipment.id, state: 'posted' })
+      .execute();
 
     const product = await db
       .insertInto('products')
-      .values({ tenant_id: tenantId, name: 'Negative Test Item', retail_price: 100, cost_price: 50, stock_qty: 10, min_stock_qty: 0, wholesale_price: 80, is_active: true })
+      .values({
+        tenant_id: tenantId,
+        name: 'Negative Test Item',
+        retail_price: 100,
+        cost_price: 50,
+        stock_qty: 10,
+        min_stock_qty: 0,
+        wholesale_price: 80,
+        is_active: true,
+      })
       .returning('id')
       .executeTakeFirstOrThrow();
 
-    await db.insertInto('product_location_stock').values({ tenant_id: tenantId, product_id: product.id, qty: 10, reserved_qty: 0 }).execute();
-    const negativeItem = await db.insertInto('import_shipment_items').values({
-      tenant_id: tenantId, shipment_id: shipment.id, product_id: product.id,
-      quantity: 10, received_quantity: 10, factory_unit_price_usd: 5, landed_cost_egp: 50,
-    }).returning('id').executeTakeFirstOrThrow();
-    await db.insertInto('import_inventory_lots').values({
-      tenant_id: tenantId, lot_number: 'NEG-LOT-01',
-      shipment_id: shipment.id, shipment_item_id: negativeItem.id,
-      product_id: product.id, location_id: null,
-      initial_quantity: 10, remaining_quantity: 10,
-      unit_landed_cost_egp: 50, status: 'active',
-    } as any).execute();
+    await db
+      .insertInto('product_location_stock')
+      .values({ tenant_id: tenantId, product_id: product.id, qty: 10, reserved_qty: 0 })
+      .execute();
+    const negativeItem = await db
+      .insertInto('import_shipment_items')
+      .values({
+        tenant_id: tenantId,
+        shipment_id: shipment.id,
+        product_id: product.id,
+        quantity: 10,
+        received_quantity: 10,
+        factory_unit_price_usd: 5,
+        landed_cost_egp: 50,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('import_inventory_lots')
+      .values({
+        tenant_id: tenantId,
+        lot_number: 'NEG-LOT-01',
+        shipment_id: shipment.id,
+        shipment_item_id: negativeItem.id,
+        product_id: product.id,
+        location_id: null,
+        initial_quantity: 10,
+        remaining_quantity: 10,
+        unit_landed_cost_egp: 50,
+        status: 'active',
+      } as any)
+      .execute();
 
     // Negative 7-A: Supplier ID passed as GL account rejected
     let supplierAsGlRejected = false;
@@ -1476,7 +1563,10 @@ async function runTests() {
       });
     } catch (err: any) {
       supplierAsGlRejected = true;
-      assert.ok(err.message.includes('غير موجود في دليل حسابات'), `Expected non-existent account error, got: ${err.message}`);
+      assert.ok(
+        err.message.includes('غير موجود في دليل حسابات'),
+        `Expected non-existent account error, got: ${err.message}`,
+      );
     }
     assert.ok(supplierAsGlRejected, 'Non-existent account passed as GL account must be rejected');
 
@@ -1494,8 +1584,9 @@ async function runTests() {
     } catch (err: any) {
       expenseAsBankRejected = true;
       assert.ok(
-        err.message.includes('غير صالح') && (err.message.includes('الأصول') || err.message.includes('bank') || err.message.includes('البنك')),
-        `Expected bank type rejection, got: ${err.message}`
+        err.message.includes('غير صالح') &&
+          (err.message.includes('الأصول') || err.message.includes('bank') || err.message.includes('البنك')),
+        `Expected bank type rejection, got: ${err.message}`,
       );
     }
     assert.ok(expenseAsBankRejected, 'Expense account passed as bank account must be rejected');
@@ -1522,7 +1613,7 @@ async function runTests() {
       lockedPeriodRejected = true;
       assert.ok(
         err.message.includes('الفترة المحاسبية مقفلة') || err.code === 'ACCOUNTING_PERIOD_LOCKED',
-        `Expected period lock rejection, got: ${err.message}`
+        `Expected period lock rejection, got: ${err.message}`,
       );
     }
     assert.ok(lockedPeriodRejected, 'Must reject foreign transfer posting in locked accounting period');
@@ -1548,7 +1639,10 @@ async function runTests() {
       .returning('id')
       .executeTakeFirstOrThrow();
 
-    await db.insertInto('import_inventory_receipts').values({ tenant_id: tenantId, shipment_id: shipLink.id, state: 'posted' }).execute();
+    await db
+      .insertInto('import_inventory_receipts')
+      .values({ tenant_id: tenantId, shipment_id: shipLink.id, state: 'posted' })
+      .execute();
 
     // 1. Unlinked unpaid purchase invoice (import_project_id is null)
     const unlinkedPur = await db
@@ -1577,7 +1671,11 @@ async function runTests() {
     console.log('PASS: Unlinked unpaid purchase invoice does not block unrelated project closure.');
 
     // Re-open project for link test
-    await db.updateTable('import_projects').set({ status: 'active', closure_data: null, closure_date: null }).where('id', '=', prjLink.id).execute();
+    await db
+      .updateTable('import_projects')
+      .set({ status: 'active', closure_data: null, closure_date: null })
+      .where('id', '=', prjLink.id)
+      .execute();
 
     // 2. Now link the unpaid purchase invoice to this import project
     await db.updateTable('purchases').set({ import_project_id: prjLink.id }).where('id', '=', unlinkedPur.id).execute();
@@ -1638,7 +1736,7 @@ async function runTests() {
       duplicateRejected = true;
       assert.ok(
         err.message.includes('مفتاح عدم التكرار') || err.message.includes('Idempotency Key'),
-        `Expected idempotency rejection, got: ${err.message}`
+        `Expected idempotency rejection, got: ${err.message}`,
       );
     }
     assert.ok(duplicateRejected, 'Must reject duplicate transfer submission with identical idempotency key');
@@ -1760,7 +1858,7 @@ async function runTests() {
       tenantId,
       new Date('2026-01-01'),
       new Date('2026-12-31'),
-      prjP01.id
+      prjP01.id,
     );
 
     assert.strictEqual(profitRepP01.data.grossSalesRevenue, 92500);
@@ -1771,13 +1869,17 @@ async function runTests() {
     assert.strictEqual(profitRepP01.data.netCogs, 50000);
     assert.strictEqual(profitRepP01.data.grossProfit, 24000);
     assert.notStrictEqual(profitRepP01.data.grossProfit, 36000);
-    console.log('PASS: Period profit report correctly calculated 24,000 gross profit (50 sold @ 1850, 10 returned, cost 1250).');
+    console.log(
+      'PASS: Period profit report correctly calculated 24,000 gross profit (50 sold @ 1850, 10 returned, cost 1250).',
+    );
 
     const autopsyP01 = await service.getContainerAutopsySheet(tenantId, shpP01.id);
     assert.strictEqual(autopsyP01.salesAndInventory.invoicedSalesEgp, 74000);
     assert.strictEqual(autopsyP01.profitability.cogsSoldUnitsEgp, 50000);
     assert.strictEqual(autopsyP01.profitability.realizedGrossTradingMarginEgp, 24000);
-    console.log('PASS: Container Autopsy Sheet reflects gross trading margin of 24,000 EGP (operating and posted costs excluded).');
+    console.log(
+      'PASS: Container Autopsy Sheet reflects gross trading margin of 24,000 EGP (operating and posted costs excluded).',
+    );
 
     // =========================================================================
     // Test 9: Cumulative Container Deposit Partial Refunds & Zero-Balance Guard (P0-4)
@@ -1805,25 +1907,43 @@ async function runTests() {
     });
     assert.ok(ref1.id);
 
-    const depRow1 = await db.selectFrom('import_container_deposits').selectAll().where('id', '=', depositId).executeTakeFirstOrThrow();
+    const depRow1 = await db
+      .selectFrom('import_container_deposits')
+      .selectAll()
+      .where('id', '=', depositId)
+      .executeTakeFirstOrThrow();
     assert.strictEqual(Number(depRow1.refunded_amount_egp), 20000);
-    const event1 = await db.selectFrom('import_container_refund_events').selectAll()
-      .where('tenant_id', '=', tenantId).where('deposit_id', '=', depositId)
-      .where('idempotency_key', '=', 'refund-a').executeTakeFirstOrThrow();
+    const event1 = await db
+      .selectFrom('import_container_refund_events')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('deposit_id', '=', depositId)
+      .where('idempotency_key', '=', 'refund-a')
+      .executeTakeFirstOrThrow();
     assert.ok(event1.journal_entry_id, 'Refund event must link to its own posted journal');
-    const treasuryRefund1 = await db.selectFrom('treasury_transactions').selectAll()
-      .where('tenant_id', '=', tenantId).where('reference_type', '=', 'import_container_refund')
-      .where('reference_id', '=', Number(event1.serial_id)).executeTakeFirstOrThrow();
+    const treasuryRefund1 = await db
+      .selectFrom('treasury_transactions')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('reference_type', '=', 'import_container_refund')
+      .where('reference_id', '=', Number(event1.serial_id))
+      .executeTakeFirstOrThrow();
     assert.strictEqual(Number(treasuryRefund1.amount), 20000, 'Actual refunded cash must be traceable in treasury');
     let repeatedKeyBlocked = false;
     try {
       await service.recordContainerReturnAndRefund(tenantId, userId, depositId, {
-        idempotencyKey: 'refund-a', actualReturnDate: '2026-03-10', refundedAmountEgp: 20000,
+        idempotencyKey: 'refund-a',
+        actualReturnDate: '2026-03-10',
+        refundedAmountEgp: 20000,
       });
-    } catch (err: any) { repeatedKeyBlocked = true; assert.match(err.message, /المفتاح|مسبق/); }
+    } catch (err: any) {
+      repeatedKeyBlocked = true;
+      assert.match(err.message, /المفتاح|مسبق/);
+    }
     assert.ok(repeatedKeyBlocked, 'Retry with the same refund request key must not credit cash twice');
     assert.strictEqual(Number(depRow1.deductions_amount_egp), 5000);
-    const remaining1 = Number(depRow1.deposit_amount_egp) - Number(depRow1.refunded_amount_egp) - Number(depRow1.deductions_amount_egp);
+    const remaining1 =
+      Number(depRow1.deposit_amount_egp) - Number(depRow1.refunded_amount_egp) - Number(depRow1.deductions_amount_egp);
     assert.strictEqual(remaining1, 15000);
     assert.strictEqual(depRow1.refund_status, 'partially_refunded');
 
@@ -1832,7 +1952,7 @@ async function runTests() {
     try {
       await service.recordContainerReturnAndRefund(tenantId, userId, depositId, {
         idempotencyKey: 'refund-over',
-      actualReturnDate: '2026-03-12',
+        actualReturnDate: '2026-03-12',
         refundedAmountEgp: 20000,
       });
     } catch (err: any) {
@@ -1849,10 +1969,15 @@ async function runTests() {
     });
     assert.ok(ref2.id);
 
-    const depRow2 = await db.selectFrom('import_container_deposits').selectAll().where('id', '=', depositId).executeTakeFirstOrThrow();
+    const depRow2 = await db
+      .selectFrom('import_container_deposits')
+      .selectAll()
+      .where('id', '=', depositId)
+      .executeTakeFirstOrThrow();
     assert.strictEqual(Number(depRow2.refunded_amount_egp), 35000);
     assert.strictEqual(Number(depRow2.deductions_amount_egp), 5000);
-    const remaining2 = Number(depRow2.deposit_amount_egp) - Number(depRow2.refunded_amount_egp) - Number(depRow2.deductions_amount_egp);
+    const remaining2 =
+      Number(depRow2.deposit_amount_egp) - Number(depRow2.refunded_amount_egp) - Number(depRow2.deductions_amount_egp);
     assert.strictEqual(remaining2, 0);
     assert.strictEqual(depRow2.refund_status, 'refunded');
 
@@ -1861,15 +1986,17 @@ async function runTests() {
     try {
       await service.recordContainerReturnAndRefund(tenantId, userId, depositId, {
         idempotencyKey: 'refund-duplicate',
-      actualReturnDate: '2026-03-16',
+        actualReturnDate: '2026-03-16',
         refundedAmountEgp: 1000,
       });
     } catch (err: any) {
       duplicateRefundBlocked = true;
       console.log('ACTUAL DUPLICATE REFUND ERROR:', err?.message || err);
       assert.ok(
-        err.message.includes('تمت تسويته واسترداده بالكامل مسبقاً') || err.message.includes('مسبقاً') || err.message.includes('تكرار'),
-        `Unexpected error: ${err.message}`
+        err.message.includes('تمت تسويته واسترداده بالكامل مسبقاً') ||
+          err.message.includes('مسبقاً') ||
+          err.message.includes('تكرار'),
+        `Unexpected error: ${err.message}`,
       );
     }
     assert.ok(duplicateRefundBlocked, 'Must block subsequent refunds when container deposit is fully settled');
@@ -1977,8 +2104,16 @@ async function runTests() {
       ],
     });
 
-    const checkLot1 = await db.selectFrom('import_inventory_lots').selectAll().where('id', '=', lot1.id).executeTakeFirstOrThrow();
-    const checkLot2 = await db.selectFrom('import_inventory_lots').selectAll().where('id', '=', lot2.id).executeTakeFirstOrThrow();
+    const checkLot1 = await db
+      .selectFrom('import_inventory_lots')
+      .selectAll()
+      .where('id', '=', lot1.id)
+      .executeTakeFirstOrThrow();
+    const checkLot2 = await db
+      .selectFrom('import_inventory_lots')
+      .selectAll()
+      .where('id', '=', lot2.id)
+      .executeTakeFirstOrThrow();
     assert.strictEqual(Number(checkLot1.remaining_quantity), 20, 'Lot 1 in Warehouse 1 must remain untouched');
     assert.strictEqual(Number(checkLot2.remaining_quantity), 15, 'Lot 2 in Warehouse 2 must be deducted to 15');
 
@@ -1990,7 +2125,11 @@ async function runTests() {
       productId: Number(prodP16.id),
       returnQty: 5,
     });
-    const checkLot2R1 = await db.selectFrom('import_inventory_lots').selectAll().where('id', '=', lot2.id).executeTakeFirstOrThrow();
+    const checkLot2R1 = await db
+      .selectFrom('import_inventory_lots')
+      .selectAll()
+      .where('id', '=', lot2.id)
+      .executeTakeFirstOrThrow();
     assert.strictEqual(Number(checkLot2R1.remaining_quantity), 20, 'Lot 2 must be restored to 20');
 
     // Second partial return: 5 units
@@ -2001,7 +2140,11 @@ async function runTests() {
       productId: Number(prodP16.id),
       returnQty: 5,
     });
-    const checkLot2R2 = await db.selectFrom('import_inventory_lots').selectAll().where('id', '=', lot2.id).executeTakeFirstOrThrow();
+    const checkLot2R2 = await db
+      .selectFrom('import_inventory_lots')
+      .selectAll()
+      .where('id', '=', lot2.id)
+      .executeTakeFirstOrThrow();
     assert.strictEqual(Number(checkLot2R2.remaining_quantity), 25, 'Lot 2 must be restored to 25');
 
     // Third partial return: requesting 10 units (only 5 units remaining unreturned from the 15 sold)
@@ -2012,9 +2155,19 @@ async function runTests() {
       productId: Number(prodP16.id),
       returnQty: 10,
     });
-    const checkLot2R3 = await db.selectFrom('import_inventory_lots').selectAll().where('id', '=', lot2.id).executeTakeFirstOrThrow();
-    assert.strictEqual(Number(checkLot2R3.remaining_quantity), 30, 'Lot 2 must only be restored up to initial 30 units (no over-restoration)');
-    console.log('PASS: Multi-location lot matching and multiple partial returns with alreadyRestored tracking verified.');
+    const checkLot2R3 = await db
+      .selectFrom('import_inventory_lots')
+      .selectAll()
+      .where('id', '=', lot2.id)
+      .executeTakeFirstOrThrow();
+    assert.strictEqual(
+      Number(checkLot2R3.remaining_quantity),
+      30,
+      'Lot 2 must only be restored up to initial 30 units (no over-restoration)',
+    );
+    console.log(
+      'PASS: Multi-location lot matching and multiple partial returns with alreadyRestored tracking verified.',
+    );
   }
 
   console.log('\n--- ALL AUDITED POSTGRESQL (PGLITE) INTEGRATION AUDITS PASSED (100%) ---');

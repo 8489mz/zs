@@ -149,53 +149,73 @@ async function makeDb(opts: {
   `);
   const creatorRole = opts.creatorRole ?? 'admin';
   const creatorId = opts.creatorId ?? 1;
-  await db.insertInto('users').values({ id: creatorId, tenant_id: TENANT, role: creatorRole, is_active: true } as any).execute();
+  await db
+    .insertInto('users')
+    .values({ id: creatorId, tenant_id: TENANT, role: creatorRole, is_active: true } as any)
+    .execute();
   const second = opts.secondUser ?? 'none';
   if (second === 'active-admin' || second === 'inactive-admin') {
-    await db.insertInto('users').values({ id: 2, tenant_id: TENANT, role: 'admin', is_active: second === 'active-admin' } as any).execute();
+    await db
+      .insertInto('users')
+      .values({ id: 2, tenant_id: TENANT, role: 'admin', is_active: second === 'active-admin' } as any)
+      .execute();
   }
   if (second === 'other-tenant-admin') {
-    await db.insertInto('users').values({ id: 2, tenant_id: 't2', role: 'admin', is_active: true } as any).execute();
+    await db
+      .insertInto('users')
+      .values({ id: 2, tenant_id: 't2', role: 'admin', is_active: true } as any)
+      .execute();
   }
   if (second === 'active-cashier') {
-    await db.insertInto('users').values({ id: 2, tenant_id: TENANT, role: 'cashier', is_active: true } as any).execute();
+    await db
+      .insertInto('users')
+      .values({ id: 2, tenant_id: TENANT, role: 'cashier', is_active: true } as any)
+      .execute();
   }
   // A cashier creator still needs the tenant's admin present for
   // case 5 to prove the role leg (not the tenant-size leg) refuses.
   if (creatorRole === 'cashier') {
-    await db.insertInto('users').values({ id: 4, tenant_id: TENANT, role: 'admin', is_active: true } as any).execute();
+    await db
+      .insertInto('users')
+      .values({ id: 4, tenant_id: TENANT, role: 'admin', is_active: true } as any)
+      .execute();
   }
-  await db.insertInto('maritime_carrier_invoices').values({
-    id: 1,
-    tenant_id: TENANT,
-    job_id: 1,
-    shipping_line_id: null,
-    carrier_name: 'Maersk',
-    invoice_number: 'INV-1',
-    invoice_date: '2026-11-24',
-    currency: 'USD',
-    total_invoiced_amount: 1150.5,
-    ocean_freight: 1000,
-    thc_charges: 100,
-    baf_charges: 50,
-    detention_demurrage: 0,
-    other_charges: 0.5,
-    rate_card_id: null,
-    contracted_amount: 1000,
-    variance_amount: VARIANCE,
-    variance_pct: 15.05,
-    audit_status: opts.auditStatus ?? 'overcharge',
-    override_approved_by: opts.auditStatus === 'approved_override' ? creatorId : null,
-    override_approved_at: null,
-    override_reason: null,
-    journal_entry_id: 77,
-    payment_status: 'unpaid',
-    notes: null,
-    created_by: creatorId,
-    created_at: new Date(),
-    updated_at: new Date(),
-  } as any).execute();
-  const neverCalled = () => { throw new Error('unexpected dep call'); };
+  await db
+    .insertInto('maritime_carrier_invoices')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      job_id: 1,
+      shipping_line_id: null,
+      carrier_name: 'Maersk',
+      invoice_number: 'INV-1',
+      invoice_date: '2026-11-24',
+      currency: 'USD',
+      total_invoiced_amount: 1150.5,
+      ocean_freight: 1000,
+      thc_charges: 100,
+      baf_charges: 50,
+      detention_demurrage: 0,
+      other_charges: 0.5,
+      rate_card_id: null,
+      contracted_amount: 1000,
+      variance_amount: VARIANCE,
+      variance_pct: 15.05,
+      audit_status: opts.auditStatus ?? 'overcharge',
+      override_approved_by: opts.auditStatus === 'approved_override' ? creatorId : null,
+      override_approved_at: null,
+      override_reason: null,
+      journal_entry_id: 77,
+      payment_status: 'unpaid',
+      notes: null,
+      created_by: creatorId,
+      created_at: new Date(),
+      updated_at: new Date(),
+    } as any)
+    .execute();
+  const neverCalled = () => {
+    throw new Error('unexpected dep call');
+  };
   const service = new MaritimeFreightCarrierInvoicesService({
     db: db as any,
     accountingPosting: {} as any,
@@ -209,7 +229,15 @@ async function makeDb(opts: {
 }
 
 function authFor(userId: number, role: string): AuthContext {
-  return { userId, sessionId: 'sess', username: `u${userId}`, role, permissions: [], tenantId: TENANT, accountId: 'a1' } as AuthContext;
+  return {
+    userId,
+    sessionId: 'sess',
+    username: `u${userId}`,
+    role,
+    permissions: [],
+    tenantId: TENANT,
+    accountId: 'a1',
+  } as AuthContext;
 }
 
 async function invoiceRow(db: Kysely<Database>): Promise<any> {
@@ -236,9 +264,17 @@ async function main(): Promise<void> {
       assert.equal(out.success, true, 'the override must succeed');
       assert.equal(out.invoice.audit_status, 'approved_override', 'the invoice must move to approved_override');
       assert.equal(Number(out.invoice.override_approved_by), 1, 'override_approved_by must be the creator');
-      assert.equal(Number(out.invoice.created_by), Number(out.invoice.override_approved_by), 'creator == approver must be on the row');
+      assert.equal(
+        Number(out.invoice.created_by),
+        Number(out.invoice.override_approved_by),
+        'creator == approver must be on the row',
+      );
       assert.ok(out.invoice.override_approved_at, 'override_approved_at must be set');
-      assert.equal(Number(out.invoice.journal_entry_id), 77, 'the pre-existing journal entry must be kept, no new posting');
+      assert.equal(
+        Number(out.invoice.journal_entry_id),
+        77,
+        'the pre-existing journal entry must be kept, no new posting',
+      );
       const stored = String(out.invoice.override_reason || '');
       assert.ok(stored.startsWith(REASON), 'the supplied reason must be preserved in front of the stamp');
       assert.ok(stored.includes(STAMP_HEAD), 'the override stamp must be on the invoice row');
@@ -332,7 +368,11 @@ async function main(): Promise<void> {
 
   // 7. finance_manager creator with an active admin present -> still refused.
   await run('7 finance_manager creator with admin present still refused', async () => {
-    const { pg, db, service } = await makeDb({ creatorRole: 'finance_manager', creatorId: 5, secondUser: 'active-admin' });
+    const { pg, db, service } = await makeDb({
+      creatorRole: 'finance_manager',
+      creatorId: 5,
+      secondUser: 'active-admin',
+    });
     try {
       await assert.rejects(
         service.overrideCarrierInvoice(authFor(5, 'finance_manager'), '1', { reason: REASON }),
@@ -389,9 +429,8 @@ async function main(): Promise<void> {
   await run('11 already-approved invoice still refused by the status gate', async () => {
     const { pg, db, service } = await makeDb({ auditStatus: 'approved_override' });
     try {
-      await assert.rejects(
-        service.overrideCarrierInvoice(authFor(1, 'admin'), '1', { reason: REASON }),
-        (e: Error) => e.message.includes('ليست في انتظار مراجعة زيادة سعرية'),
+      await assert.rejects(service.overrideCarrierInvoice(authFor(1, 'admin'), '1', { reason: REASON }), (e: Error) =>
+        e.message.includes('ليست في انتظار مراجعة زيادة سعرية'),
       );
       const row = await invoiceRow(db);
       assert.equal(row.audit_status, 'approved_override');
@@ -414,7 +453,8 @@ async function main(): Promise<void> {
 
   // 13. Wiring: this spec is in both critical lists, in identical order (326 specs — this spec is the last entry).
   {
-    const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+    const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+      .specs as string[];
     const pkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
@@ -430,18 +470,45 @@ async function main(): Promise<void> {
   // comparison keeps its coercion (the P7 bigint hazard does not
   // apply here — see the header), and the engine ban is untouched.
   {
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-carrier-invoices.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-carrier-invoices.service.ts'),
+      'utf8',
+    );
     const helperSource = readFileSync(resolve(__dirname, '../../src/common/utils/manager-approval.ts'), 'utf8');
-    const engineSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/engines/freight-audit.engine.ts'), 'utf8');
-    assert.ok(serviceSource.includes('INV-SOLO-ADMIN-CARRIER-INVOICE-OVERRIDE'), 'the service names the solo-admin carrier-invoice override invariant');
+    const engineSource = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/engines/freight-audit.engine.ts'),
+      'utf8',
+    );
+    assert.ok(
+      serviceSource.includes('INV-SOLO-ADMIN-CARRIER-INVOICE-OVERRIDE'),
+      'the service names the solo-admin carrier-invoice override invariant',
+    );
     assert.ok(serviceSource.includes('isSoloAdminOverride'), 'the service consults the shared solo-admin helper');
-    assert.ok(serviceSource.includes("from '../../common/utils/manager-approval'"), 'the service imports the shared helper, it does not redefine it');
-    assert.ok(helperSource.split('export async function isSoloAdminOverride').length - 1 === 1, 'the shared helper is defined exactly once');
-    assert.ok(engineSource.includes(OLD_MSG), 'the old maker-checker refusal message is still present byte-identically in the engine');
-    assert.ok(serviceSource.includes('throw new BadRequestException(validation.error)'), 'the service still throws the engine refusal unchanged when no solo override applies');
-    assert.ok(serviceSource.includes('Number(auth.userId) === createdBy'), 'the self-check compares the coerced creator id against the actor');
+    assert.ok(
+      serviceSource.includes("from '../../common/utils/manager-approval'"),
+      'the service imports the shared helper, it does not redefine it',
+    );
+    assert.ok(
+      helperSource.split('export async function isSoloAdminOverride').length - 1 === 1,
+      'the shared helper is defined exactly once',
+    );
+    assert.ok(
+      engineSource.includes(OLD_MSG),
+      'the old maker-checker refusal message is still present byte-identically in the engine',
+    );
+    assert.ok(
+      serviceSource.includes('throw new BadRequestException(validation.error)'),
+      'the service still throws the engine refusal unchanged when no solo override applies',
+    );
+    assert.ok(
+      serviceSource.includes('Number(auth.userId) === createdBy'),
+      'the self-check compares the coerced creator id against the actor',
+    );
     assert.ok(serviceSource.includes(STAMP_HEAD), 'the service stamps the override');
-    assert.ok(engineSource.includes("String(ctx.userId) === String(ctx.invoiceCreatedBy)"), 'the engine ban keeps its String() coercion (P7 bigint hazard does not apply)');
+    assert.ok(
+      engineSource.includes('String(ctx.userId) === String(ctx.invoiceCreatedBy)'),
+      'the engine ban keeps its String() coercion (P7 bigint hazard does not apply)',
+    );
     console.log('  PASS S7 source pins');
   }
 

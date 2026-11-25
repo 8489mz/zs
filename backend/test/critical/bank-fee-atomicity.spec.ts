@@ -4,11 +4,28 @@ import { AccountingService } from '../../src/modules/accounting/accounting.servi
 const trx: any = {
   selectFrom(table: string) {
     const builder: any = {
-      innerJoin() { return builder; }, where() { return builder; },
-      select() { return builder; }, forUpdate() { return builder; },
+      innerJoin() {
+        return builder;
+      },
+      where() {
+        return builder;
+      },
+      select() {
+        return builder;
+      },
+      forUpdate() {
+        return builder;
+      },
       async executeTakeFirst() {
         if (table === 'bank_statement_lines as bsl') {
-          return { id: 1, amount: -50, line_date: '2026-10-21', description: 'Fee', account_id: 11, is_reconciled: false };
+          return {
+            id: 1,
+            amount: -50,
+            line_date: '2026-10-21',
+            description: 'Fee',
+            account_id: 11,
+            is_reconciled: false,
+          };
         }
         if (table === 'journal_entry_lines') return { id: 12 };
         if (table === 'settings') return { value: 'EGP' };
@@ -24,10 +41,14 @@ const trx: any = {
 };
 let transactions = 0;
 const db: any = {
-  transaction() { return { execute: async (fn: (trx: unknown) => Promise<unknown>) => {
-    transactions++;
-    return fn(trx);
-  } }; },
+  transaction() {
+    return {
+      execute: async (fn: (trx: unknown) => Promise<unknown>) => {
+        transactions++;
+        return fn(trx);
+      },
+    };
+  },
 };
 const service: any = new AccountingService(db, {} as any);
 let sameTransactionForBoth = false;
@@ -45,10 +66,20 @@ service.bankStatementsService.reconcileMatchInTransaction = async (passedTrx: un
 };
 (async () => {
   const auth: any = { role: 'admin', userId: 1, tenantId: 't1', accountId: 'a1', permissions: [] };
-  await assert.rejects(service.createBankFeeAdjustment({
-    statementLineId: 1, expenseAccountId: 5,
-  }, auth), /forced reconciliation failure/);
+  await assert.rejects(
+    service.createBankFeeAdjustment(
+      {
+        statementLineId: 1,
+        expenseAccountId: 5,
+      },
+      auth,
+    ),
+    /forced reconciliation failure/,
+  );
   assert.equal(transactions, 1);
   assert.equal(sameTransactionForBoth, true);
   console.log('Bank fee and reconciliation shared-transaction regressions passed');
-})().catch(err => { console.error(err); process.exitCode = 1; });
+})().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

@@ -9,8 +9,14 @@ assert.throws(() => validateDistributorInvoiceLines([{ ...valid, quantity: 0 }])
 assert.throws(() => validateDistributorInvoiceLines([{ ...valid, quantity: -1 }]), /quantity or price/);
 assert.throws(() => validateDistributorInvoiceLines([{ ...valid, bonusQuantity: -2 }]), /quantity or price/);
 assert.throws(() => validateDistributorInvoiceLines([{ ...valid, costPrice: -1 }]), /quantity or price/);
-assert.throws(() => validateDistributorInvoiceLines([{ ...valid, publicPrice: Number.POSITIVE_INFINITY }]), /non-finite/);
+assert.throws(
+  () => validateDistributorInvoiceLines([{ ...valid, publicPrice: Number.POSITIVE_INFINITY }]),
+  /non-finite/,
+);
 assert.throws(() => validateDistributorInvoiceLines([{ ...valid, quantity: Number.NaN }]), /non-finite/);
-assert.throws(() => validateDistributorInvoiceLines([{ ...valid, costPrice: null as unknown as number }]), /non-finite/);
+assert.throws(
+  () => validateDistributorInvoiceLines([{ ...valid, costPrice: null as unknown as number }]),
+  /non-finite/,
+);
 assert.throws(() => validateDistributorInvoiceLines([{ ...valid }, { ...valid, quantity: 0 }]), /quantity or price/);
 console.log('Pharmacy distributor invoice validation regressions passed');

@@ -83,7 +83,9 @@ async function main(): Promise<void> {
   const childDir = fs.mkdtempSync(path.join(__dirname, '.tmp-b6p2-'));
   const childTmp = path.join(childDir, 'cairo-check.ts');
   try {
-    fs.writeFileSync(childTmp, `import { todayTenantDate } from '../../../src/common/utils/tenant-timezone.util';
+    fs.writeFileSync(
+      childTmp,
+      `import { todayTenantDate } from '../../../src/common/utils/tenant-timezone.util';
 async function main(): Promise<void> {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (zone !== 'Africa/Cairo') { console.error('child zone is ' + zone + ', want Africa/Cairo'); process.exit(2); }
@@ -93,7 +95,8 @@ async function main(): Promise<void> {
   console.log('CAIRO-CHILD-OK');
 }
 main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
-`);
+`,
+    );
     const out = execFileSync('npx', ['ts-node', childTmp], {
       cwd: path.resolve(__dirname, '../..'),
       env: { ...process.env, TZ: 'Africa/Cairo' },
@@ -101,17 +104,33 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
       encoding: 'utf8',
     });
     assert.ok(out.includes('CAIRO-CHILD-OK'), `Cairo child must pass (got: ${out.trim()})`);
-    console.log('✓ §0 passed: the UTC slice yields the previous day under Cairo TZ; the tenant-day helpers yield the stored day');
+    console.log(
+      '✓ §0 passed: the UTC slice yields the previous day under Cairo TZ; the tenant-day helpers yield the stored day',
+    );
   } finally {
-    try { fs.unlinkSync(childTmp); } catch { /* already gone */ }
-    try { fs.rmSync(childDir, { recursive: true, force: true }); } catch { /* already gone */ }
+    try {
+      fs.unlinkSync(childTmp);
+    } catch {
+      /* already gone */
+    }
+    try {
+      fs.rmSync(childDir, { recursive: true, force: true });
+    } catch {
+      /* already gone */
+    }
   }
 
   // §A — sales-query: the "today" aggregates key on the tenant day.
   const salesQuery = read('modules/sales/services/sales-query.service.ts');
   const baseRows = fnSlice(salesQuery, 'private async fetchSaleBaseRows(', 6000);
-  assert.ok(baseRows.includes('DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'), 'fetchSaleBaseRows must key the today aggregates on DATE(s.created_at AT TIME ZONE tenantTz) = todayKey');
-  assert.ok(!baseRows.includes('s.created_at >= CURRENT_DATE'), 'fetchSaleBaseRows must no longer use s.created_at >= CURRENT_DATE');
+  assert.ok(
+    baseRows.includes('DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'),
+    'fetchSaleBaseRows must key the today aggregates on DATE(s.created_at AT TIME ZONE tenantTz) = todayKey',
+  );
+  assert.ok(
+    !baseRows.includes('s.created_at >= CURRENT_DATE'),
+    'fetchSaleBaseRows must no longer use s.created_at >= CURRENT_DATE',
+  );
   assert.ok(baseRows.includes('getTenantTimezone(this.db'), 'fetchSaleBaseRows must resolve the tenant zone');
   console.log('✓ §A passed: sales-list today aggregates key on the tenant day');
 
@@ -119,21 +138,42 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   // purchase-deadline label all key on the tenant day.
   const digest = read('modules/settings/services/daily-digest.service.ts');
   const digestMethod = fnSlice(digest, 'async generateAndSendDigest(', 14000);
-  assert.ok(digestMethod.includes('DATE(created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'), 'digest sales totals must key on the tenant day');
-  assert.ok(digestMethod.includes('DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'), 'digest top items must key on the tenant day');
-  assert.ok(digestMethod.includes('DATE(t.created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'), 'digest transfers must key on the tenant day');
+  assert.ok(
+    digestMethod.includes('DATE(created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'),
+    'digest sales totals must key on the tenant day',
+  );
+  assert.ok(
+    digestMethod.includes('DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'),
+    'digest top items must key on the tenant day',
+  );
+  assert.ok(
+    digestMethod.includes('DATE(t.created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'),
+    'digest transfers must key on the tenant day',
+  );
   assert.ok(!digestMethod.includes('>= CURRENT_DATE'), 'digest must no longer use CURRENT_DATE');
   assert.ok(digestMethod.includes('timeZone: tenantTz'), 'digest header must render in the tenant zone');
-  assert.ok(digestMethod.includes('addDaysToDayKey(todayKey'), 'digest deadline label must derive from the tenant day key');
-  assert.ok(!digestMethod.includes('deadlineDate.setDate(deadlineDate.getDate()'), 'digest deadline label must no longer derive from the host clock');
+  assert.ok(
+    digestMethod.includes('addDaysToDayKey(todayKey'),
+    'digest deadline label must derive from the tenant day key',
+  );
+  assert.ok(
+    !digestMethod.includes('deadlineDate.setDate(deadlineDate.getDate()'),
+    'digest deadline label must no longer derive from the host clock',
+  );
   console.log('✓ §B passed: digest buckets, header and deadline label key on the tenant day');
 
   // §C — storefront analytics: today_orders / today_revenue key on the
   // tenant day. getStorefrontAnalytics lives in the T9 slice (storefront split 2026-11-16).
   const storefront = read('modules/storefront/services/storefront-engagement.service.ts');
   const analytics = fnSlice(storefront, 'async getStorefrontAnalytics(', 9000);
-  assert.ok(analytics.includes('DATE(created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'), 'getStorefrontAnalytics must key today orders/revenue on DATE(created_at AT TIME ZONE tenantTz) = todayKey');
-  assert.ok(!analytics.includes('created_at >= CURRENT_DATE'), 'getStorefrontAnalytics must no longer use CURRENT_DATE');
+  assert.ok(
+    analytics.includes('DATE(created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'),
+    'getStorefrontAnalytics must key today orders/revenue on DATE(created_at AT TIME ZONE tenantTz) = todayKey',
+  );
+  assert.ok(
+    !analytics.includes('created_at >= CURRENT_DATE'),
+    'getStorefrontAnalytics must no longer use CURRENT_DATE',
+  );
   console.log('✓ §C passed: storefront today orders/revenue key on the tenant day');
 
   // ---- shared PGlite fixture for §D–§G (one db; the tenant day is
@@ -144,7 +184,11 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   const discZone = utcHour >= 10 ? 'Pacific/Kiritimati' : 'Pacific/Midway';
   const utcDay = new Date().toISOString().slice(0, 10);
   const tenantDay = todayTenantDate(discZone);
-  assert.notEqual(tenantDay, utcDay, `discordant zone ${discZone} must differ from the UTC day ${utcDay} at UTC hour ${utcHour}`);
+  assert.notEqual(
+    tenantDay,
+    utcDay,
+    `discordant zone ${discZone} must differ from the UTC day ${utcDay} at UTC hour ${utcHour}`,
+  );
   const prevDay = addDaysToDayKey(tenantDay, -1);
   const nextDay = addDaysToDayKey(tenantDay, 1);
   assert.ok(prevDay && nextDay, 'tenant day - 1 / + 1 must be valid day keys');
@@ -152,7 +196,14 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   const authFor = (tenantId: string): AuthContext =>
-    ({ tenantId, accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] }) as unknown as AuthContext;
+    ({
+      tenantId,
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      username: 'admin',
+      permissions: [],
+    }) as unknown as AuthContext;
 
   try {
     await pg.exec(`
@@ -175,30 +226,65 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     const radarSrc = read('modules/sales/services/cashier-fraud-radar.service.ts');
     const timeFilter = fnSlice(radarSrc, 'private getTimeFilter(', 1500);
     assert.ok(!timeFilter.includes("return 'CURRENT_DATE'"), "getTimeFilter must no longer return 'CURRENT_DATE'");
-    assert.ok(timeFilter.includes("NOW() - INTERVAL '7 DAYS'"), 'getTimeFilter 7d branch must stay a rolling NOW() - INTERVAL window');
-    assert.ok(timeFilter.includes("NOW() - INTERVAL '30 DAYS'"), 'getTimeFilter 30d branch must stay a rolling NOW() - INTERVAL window');
+    assert.ok(
+      timeFilter.includes("NOW() - INTERVAL '7 DAYS'"),
+      'getTimeFilter 7d branch must stay a rolling NOW() - INTERVAL window',
+    );
+    assert.ok(
+      timeFilter.includes("NOW() - INTERVAL '30 DAYS'"),
+      'getTimeFilter 30d branch must stay a rolling NOW() - INTERVAL window',
+    );
     const frag = (radar as any).getTimeFilter('today', discZone, tenantDay, 'created_at');
-    assert.ok(typeof frag !== 'string', `getTimeFilter('today') must return a SQL fragment, not the string ${JSON.stringify(frag)} (NEW-G not fixed)`);
+    assert.ok(
+      typeof frag !== 'string',
+      `getTimeFilter('today') must return a SQL fragment, not the string ${JSON.stringify(frag)} (NEW-G not fixed)`,
+    );
     const fragRows = await sql<{ id: number }>`SELECT id FROM probe_rows WHERE ${frag} ORDER BY id`.execute(db);
-    assert.deepEqual(fragRows.rows.map((r) => r.id), [1], `getTimeFilter('today') fragment must select exactly the tenant-day row, got ${JSON.stringify(fragRows.rows.map((r) => r.id))}`);
+    assert.deepEqual(
+      fragRows.rows.map((r) => r.id),
+      [1],
+      `getTimeFilter('today') fragment must select exactly the tenant-day row, got ${JSON.stringify(fragRows.rows.map((r) => r.id))}`,
+    );
     const fragAliased = (radar as any).getTimeFilter('today', discZone, tenantDay, 'p.created_at');
-    const fragAliasedRows = await sql<{ id: number }>`SELECT p.id FROM probe_rows p WHERE ${fragAliased} ORDER BY p.id`.execute(db);
-    assert.deepEqual(fragAliasedRows.rows.map((r) => r.id), [1], `aliased getTimeFilter('today') fragment must select exactly the tenant-day row, got ${JSON.stringify(fragAliasedRows.rows.map((r) => r.id))}`);
+    const fragAliasedRows = await sql<{
+      id: number;
+    }>`SELECT p.id FROM probe_rows p WHERE ${fragAliased} ORDER BY p.id`.execute(db);
+    assert.deepEqual(
+      fragAliasedRows.rows.map((r) => r.id),
+      [1],
+      `aliased getTimeFilter('today') fragment must select exactly the tenant-day row, got ${JSON.stringify(fragAliasedRows.rows.map((r) => r.id))}`,
+    );
     const frag7 = (radar as any).getTimeFilter('7days', discZone, tenantDay, 'created_at');
     assert.ok(typeof frag7 !== 'string', 'getTimeFilter(7days) must return a SQL fragment');
-    console.log('✓ §D passed: getTimeFilter returns a tenant-day fragment (unqualified + aliased); 7d/30d stay rolling windows');
+    console.log(
+      '✓ §D passed: getTimeFilter returns a tenant-day fragment (unqualified + aliased); 7d/30d stay rolling windows',
+    );
 
     // §E — fragment contrast (mechanism proof, runs on both trees):
     // OLD (CURRENT_DATE) vs NEW (tenant-day bound) on the three boundary
     // rows. NEW selects exactly the tenant-day row; OLD misses it
     // (Midway) or leaks the next day in (Kiritimati).
-    const oldRows = await sql<{ id: number }>`SELECT id FROM probe_rows WHERE created_at >= CURRENT_DATE ORDER BY id`.execute(db);
-    const newRows = await sql<{ id: number }>`SELECT id FROM probe_rows WHERE DATE(created_at AT TIME ZONE ${discZone}) = ${tenantDay} ORDER BY id`.execute(db);
+    const oldRows = await sql<{
+      id: number;
+    }>`SELECT id FROM probe_rows WHERE created_at >= CURRENT_DATE ORDER BY id`.execute(db);
+    const newRows = await sql<{
+      id: number;
+    }>`SELECT id FROM probe_rows WHERE DATE(created_at AT TIME ZONE ${discZone}) = ${tenantDay} ORDER BY id`.execute(
+      db,
+    );
     const oldIds = oldRows.rows.map((r) => r.id);
     const newIds = newRows.rows.map((r) => r.id);
-    assert.deepEqual(newIds, [1], `NEW (tenant day) must select exactly the tenant-day row, got ${JSON.stringify(newIds)}`);
+    assert.deepEqual(
+      newIds,
+      [1],
+      `NEW (tenant day) must select exactly the tenant-day row, got ${JSON.stringify(newIds)}`,
+    );
     const expectedOld = tenantDay > utcDay ? [1, 2] : [2];
-    assert.deepEqual(oldIds, expectedOld, `OLD (CURRENT_DATE) must select ${JSON.stringify(expectedOld)} at UTC hour ${utcHour}, got ${JSON.stringify(oldIds)}`);
+    assert.deepEqual(
+      oldIds,
+      expectedOld,
+      `OLD (CURRENT_DATE) must select ${JSON.stringify(expectedOld)} at UTC hour ${utcHour}, got ${JSON.stringify(oldIds)}`,
+    );
     assert.notDeepEqual(oldIds, newIds, 'OLD and NEW today-bucket sets must differ');
     console.log('✓ §E passed: OLD (CURRENT_DATE) vs NEW (tenant day) fragment contrast');
 
@@ -230,8 +316,16 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     const base = await (salesQuery as any).fetchSaleBaseRows(authFor('t-b6p2-disc'), {});
     assert.ok(base.rows.length === 3, `fetchSaleBaseRows must return all 3 sales rows, got ${base.rows.length}`);
     const firstRow = base.rows[0] as Record<string, unknown>;
-    assert.equal(Number(firstRow.agg_today_sales_count), 1, `agg_today_sales_count must be 1 (the tenant-day sale only), got ${firstRow.agg_today_sales_count}`);
-    assert.equal(Number(firstRow.agg_today_sales_total), 100, `agg_today_sales_total must be 100 (the tenant-day sale only), got ${firstRow.agg_today_sales_total}`);
+    assert.equal(
+      Number(firstRow.agg_today_sales_count),
+      1,
+      `agg_today_sales_count must be 1 (the tenant-day sale only), got ${firstRow.agg_today_sales_count}`,
+    );
+    assert.equal(
+      Number(firstRow.agg_today_sales_total),
+      100,
+      `agg_today_sales_total must be 100 (the tenant-day sale only), got ${firstRow.agg_today_sales_total}`,
+    );
     console.log('✓ §F passed: fetchSaleBaseRows today aggregates count the tenant-day sale only');
 
     // §G — storefront analytics, service-driven: the REAL
@@ -250,8 +344,16 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     `);
     const storefrontSvc = new (StorefrontService as any)(db);
     const analytics = await (storefrontSvc as any).getStorefrontAnalytics(authFor('t-b6p2-disc'));
-    assert.equal(Number(analytics.todayOrders), 1, `todayOrders must be 1 (the tenant-day order only), got ${analytics.todayOrders}`);
-    assert.equal(Number(analytics.todayRevenue), 100, `todayRevenue must be 100 (the tenant-day order only), got ${analytics.todayRevenue}`);
+    assert.equal(
+      Number(analytics.todayOrders),
+      1,
+      `todayOrders must be 1 (the tenant-day order only), got ${analytics.todayOrders}`,
+    );
+    assert.equal(
+      Number(analytics.todayRevenue),
+      100,
+      `todayRevenue must be 100 (the tenant-day order only), got ${analytics.todayRevenue}`,
+    );
     console.log('✓ §G passed: getStorefrontAnalytics today orders/revenue count the tenant-day order only');
 
     console.log('CLOCK-B6-P2 CHECKS PASSED');
@@ -260,4 +362,10 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   }
 }
 
-main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
+main().then(
+  () => process.exit(0),
+  (e) => {
+    console.error(e);
+    process.exit(1);
+  },
+);

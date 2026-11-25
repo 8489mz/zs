@@ -76,11 +76,22 @@ async function main(): Promise<void> {
     (service as any).ensureUniquePhone = async () => undefined;
 
     async function seedUser(id: number, username: string, role: string, permissions: string[]): Promise<void> {
-      await anyDb.insertInto('users').values({
-        id, username, phone: `0100000000${id}`, password_hash: 'x', password_salt: 'y',
-        role, is_active: true, permissions_json: JSON.stringify(permissions),
-        display_name: username, tenant_id: TENANT, account_id: ACCOUNT,
-      }).execute();
+      await anyDb
+        .insertInto('users')
+        .values({
+          id,
+          username,
+          phone: `0100000000${id}`,
+          password_hash: 'x',
+          password_salt: 'y',
+          role,
+          is_active: true,
+          permissions_json: JSON.stringify(permissions),
+          display_name: username,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+        })
+        .execute();
     }
     async function readUser(id: number): Promise<any> {
       return anyDb.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
@@ -111,7 +122,12 @@ async function main(): Promise<void> {
     assert.equal(after2.permissions_json, JSON.stringify(['canManageUsers']));
 
     // Case 3: a self-edit repeating the stored role and permissions succeeds.
-    const ok3 = await service.updateUser(1, payload('manager', 'cashier', ['canManageUsers'], 'Manager Renamed'), actor(1), 'sess-spec');
+    const ok3 = await service.updateUser(
+      1,
+      payload('manager', 'cashier', ['canManageUsers'], 'Manager Renamed'),
+      actor(1),
+      'sess-spec',
+    );
     assert.equal((ok3 as any).ok, true);
     const after3 = await readUser(1);
     assert.equal(after3.display_name, 'Manager Renamed');
@@ -127,11 +143,7 @@ async function main(): Promise<void> {
 
     // Case 5: the bulk sync path rejects a self-promotion entry the same way.
     await assert.rejects(
-      service.syncUsers(
-        [{ id: 1, ...payload('manager', 'admin', ['canManageUsers']) }],
-        actor(1),
-        'sess-spec',
-      ),
+      service.syncUsers([{ id: 1, ...payload('manager', 'admin', ['canManageUsers']) }], actor(1), 'sess-spec'),
       (err: any) => err && err.code === 'SELF_PROMOTION_FORBIDDEN' && err.statusCode === 403,
     );
     const after5 = await readUser(1);

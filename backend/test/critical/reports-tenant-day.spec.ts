@@ -45,8 +45,13 @@ const BOUNDARY_INSTANT = '2026-04-08T21:30:00.000Z';
 
 function authFor(tenantId: string): AuthContext {
   return {
-    userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-    permissions: [], tenantId, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'admin',
+    role: 'admin',
+    permissions: [],
+    tenantId,
+    accountId: ACCOUNT,
   } as unknown as AuthContext;
 }
 
@@ -74,16 +79,61 @@ async function main(): Promise<void> {
   try {
     const anyDb = db as any;
     // Settings values are JSON-encoded in production; the resolver parses both forms.
-    await anyDb.insertInto('settings').values([
-      { tenant_id: KUWAIT, key: 'timezone', value: '"Asia/Kuwait"' },
-      { tenant_id: CAIRO, key: 'timezone', value: '"Africa/Cairo"' },
-    ]).execute();
+    await anyDb
+      .insertInto('settings')
+      .values([
+        { tenant_id: KUWAIT, key: 'timezone', value: '"Asia/Kuwait"' },
+        { tenant_id: CAIRO, key: 'timezone', value: '"Africa/Cairo"' },
+      ])
+      .execute();
     // One posted sale per tenant at the same boundary instant.
-    await anyDb.insertInto('sales').values([
-      { id: 1, tenant_id: KUWAIT, account_id: ACCOUNT, total: 100, tax_amount: 0, discount: 0, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: BOUNDARY_INSTANT, status: 'posted' },
-      { id: 2, tenant_id: CAIRO, account_id: ACCOUNT, total: 100, tax_amount: 0, discount: 0, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: BOUNDARY_INSTANT, status: 'posted' },
-      { id: 3, tenant_id: NONE, account_id: ACCOUNT, total: 100, tax_amount: 0, discount: 0, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-08T22:30:00.000Z', status: 'posted' },
-    ]).execute();
+    await anyDb
+      .insertInto('sales')
+      .values([
+        {
+          id: 1,
+          tenant_id: KUWAIT,
+          account_id: ACCOUNT,
+          total: 100,
+          tax_amount: 0,
+          discount: 0,
+          delivery_fee: 0,
+          branch_id: 1,
+          location_id: 1,
+          created_by: 1,
+          created_at: BOUNDARY_INSTANT,
+          status: 'posted',
+        },
+        {
+          id: 2,
+          tenant_id: CAIRO,
+          account_id: ACCOUNT,
+          total: 100,
+          tax_amount: 0,
+          discount: 0,
+          delivery_fee: 0,
+          branch_id: 1,
+          location_id: 1,
+          created_by: 1,
+          created_at: BOUNDARY_INSTANT,
+          status: 'posted',
+        },
+        {
+          id: 3,
+          tenant_id: NONE,
+          account_id: ACCOUNT,
+          total: 100,
+          tax_amount: 0,
+          discount: 0,
+          delivery_fee: 0,
+          branch_id: 1,
+          location_id: 1,
+          created_by: 1,
+          created_at: '2026-04-08T22:30:00.000Z',
+          status: 'posted',
+        },
+      ])
+      .execute();
 
     // 1. Resolution: the tenant setting is honoured per tenant.
     assert.equal(await getTenantTimezone(db, KUWAIT), 'Asia/Kuwait');
@@ -101,12 +151,12 @@ async function main(): Promise<void> {
     // the tenant day, not the UTC day.
     const service = new ReportsService(db);
     const query = { from: '2026-04-08T00:00:00.000Z', to: '2026-04-09T23:59:59.999Z' };
-    const kuwait = await service.reportSummary(query as never, authFor(KUWAIT)) as any;
+    const kuwait = (await service.reportSummary(query as never, authFor(KUWAIT))) as any;
     const kuwaitPoints = (kuwait.salesPurchasesSeries?.points || []) as Array<{ date: string; sales: number }>;
     assert.equal(kuwaitPoints.find((p) => p.date === '2026-04-09')?.sales, 100);
     assert.equal(kuwaitPoints.find((p) => p.date === '2026-04-08')?.sales, 0);
 
-    const cairo = await service.reportSummary(query as never, authFor(CAIRO)) as any;
+    const cairo = (await service.reportSummary(query as never, authFor(CAIRO))) as any;
     const cairoPoints = (cairo.salesPurchasesSeries?.points || []) as Array<{ date: string; sales: number }>;
     assert.equal(cairoPoints.find((p) => p.date === '2026-04-08')?.sales, 100);
     assert.equal(cairoPoints.find((p) => p.date === '2026-04-09')?.sales, 0);
@@ -119,7 +169,7 @@ async function main(): Promise<void> {
     // same fallback the resolver uses, so it holds whatever the env is.
     const fallbackTz = process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
     const fallbackInstant = new Date('2026-04-08T22:30:00.000Z');
-    const none = await service.reportSummary(query as never, authFor(NONE)) as any;
+    const none = (await service.reportSummary(query as never, authFor(NONE))) as any;
     const nonePoints = (none.salesPurchasesSeries?.points || []) as Array<{ date: string; sales: number }>;
     const fallbackDay = dateKey(fallbackInstant, fallbackTz);
     assert.equal(nonePoints.find((p) => p.date === fallbackDay)?.sales, 100);

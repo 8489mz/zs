@@ -65,26 +65,52 @@ async function main(): Promise<void> {
 
     await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
     await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' }).execute();
-    await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 }).execute();
-    await anyDb.insertInto('delivery_representatives').values([
-      { id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One' },
-      { id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep Two' },
-    ]).execute();
-    await anyDb.insertInto('suppliers').values([
-      { id: 1, tenant_id: TENANT, name: 'Supplier One' },
-      { id: 2, tenant_id: TENANT, name: 'Supplier Two' },
-    ]).execute();
+    await anyDb
+      .insertInto('currency_exchange_rates')
+      .values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 })
+      .execute();
+    await anyDb
+      .insertInto('delivery_representatives')
+      .values([
+        { id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One' },
+        { id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep Two' },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('suppliers')
+      .values([
+        { id: 1, tenant_id: TENANT, name: 'Supplier One' },
+        { id: 2, tenant_id: TENANT, name: 'Supplier Two' },
+      ])
+      .execute();
 
     const queryService = new SalesQueryService(db, new SalesAuthorizationService(db));
     const reportsService = new ReportsService(db);
 
-    async function seedSale(docNo: string, total: number, createdAtUtc: string, repId: number | null, receivedAtUtc?: string): Promise<number> {
-      const row = await anyDb.insertInto('sales').values({
-        tenant_id: TENANT, account_id: ACCOUNT, doc_no: docNo, total, subtotal: total,
-        status: 'posted', payment_type: 'cash', payment_channel: 'cash',
-        delivery_rep_id: repId, created_at: createdAtUtc,
-        received_at: receivedAtUtc || null,
-      }).returning(['id']).executeTakeFirstOrThrow();
+    async function seedSale(
+      docNo: string,
+      total: number,
+      createdAtUtc: string,
+      repId: number | null,
+      receivedAtUtc?: string,
+    ): Promise<number> {
+      const row = await anyDb
+        .insertInto('sales')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          doc_no: docNo,
+          total,
+          subtotal: total,
+          status: 'posted',
+          payment_type: 'cash',
+          payment_channel: 'cash',
+          delivery_rep_id: repId,
+          created_at: createdAtUtc,
+          received_at: receivedAtUtc || null,
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
       return Number(row.id);
     }
 
@@ -94,11 +120,35 @@ async function main(): Promise<void> {
     const saleB = await seedSale('Z-B', 200, '2026-11-11T08:00:00Z', 1);
     const saleC = await seedSale('Z-C', 300, '2026-11-12T08:00:00Z', 2);
     const saleD = await seedSale('Z-D', 400, '2026-11-09T08:00:00Z', 1, '2026-11-13T13:00:00Z');
-    await anyDb.insertInto('purchases').values([
-      { tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 1, total: 500, status: 'posted', created_at: '2026-11-10T08:00:00Z' },
-      { tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 2, total: 700, status: 'posted', created_at: '2026-11-12T08:00:00Z' },
-      { tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 1, total: 50, status: 'posted', created_at: '2026-11-13T08:00:00Z' },
-    ]).execute();
+    await anyDb
+      .insertInto('purchases')
+      .values([
+        {
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          supplier_id: 1,
+          total: 500,
+          status: 'posted',
+          created_at: '2026-11-10T08:00:00Z',
+        },
+        {
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          supplier_id: 2,
+          total: 700,
+          status: 'posted',
+          created_at: '2026-11-12T08:00:00Z',
+        },
+        {
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          supplier_id: 1,
+          total: 50,
+          status: 'posted',
+          created_at: '2026-11-13T08:00:00Z',
+        },
+      ])
+      .execute();
 
     const docNos = (res: any): string[] => (res.sales as any[]).map((s: any) => s.docNo).sort();
 
@@ -139,7 +189,7 @@ async function main(): Promise<void> {
 
     // (g) combined report: sales by rep + purchases by supplier, one
     // response, same range — the 11-13 purchase stays outside it.
-    const combined = await reportsService.repSupplierSummary({ from: '2026-11-10', to: '2026-11-12' }, AUTH) as any;
+    const combined = (await reportsService.repSupplierSummary({ from: '2026-11-10', to: '2026-11-12' }, AUTH)) as any;
     assert.equal(String(combined.from).slice(0, 10), '2026-11-09');
     assert.ok(String(combined.from).includes('22:00:00'), 'from is the tenant-midnight instant (22:00Z)');
     const byRep = new Map<number, any>(combined.salesByRep.map((r: any) => [r.repId, r] as [number, any]));
@@ -147,7 +197,9 @@ async function main(): Promise<void> {
     assert.equal(Number(byRep.get(1).totalAmount), 300);
     assert.equal(byRep.get(2).salesCount, 1);
     assert.equal(Number(byRep.get(2).totalAmount), 300);
-    const bySup = new Map<number, any>(combined.purchasesBySupplier.map((r: any) => [r.supplierId, r] as [number, any]));
+    const bySup = new Map<number, any>(
+      combined.purchasesBySupplier.map((r: any) => [r.supplierId, r] as [number, any]),
+    );
     assert.equal(bySup.get(1).purchasesCount, 1);
     assert.equal(Number(bySup.get(1).totalAmount), 500);
     assert.equal(bySup.get(2).purchasesCount, 1);

@@ -96,7 +96,10 @@ async function insertRet(db: any, tenant: string, docNo: string): Promise<void> 
 }
 
 async function insertXfr(db: any, tenant: string, transferNo: string): Promise<void> {
-  await db.insertInto('van_stock_transfers').values({ tenant_id: tenant, account_id: 'a1', transfer_no: transferNo }).execute();
+  await db
+    .insertInto('van_stock_transfers')
+    .values({ tenant_id: tenant, account_id: 'a1', transfer_no: transferNo })
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -200,7 +203,9 @@ async function main(): Promise<void> {
       await migration.down(db as any);
       assert.equal(await indexCount(db), 0, 'down() must remove all three indexes');
       await insertReq(db, 't1', 'REQ-261108-0001');
-      const n = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM van_load_requisitions WHERE doc_no = 'REQ-261108-0001'`.execute(db);
+      const n = await sql<{
+        n: string;
+      }>`SELECT COUNT(*) AS n FROM van_load_requisitions WHERE doc_no = 'REQ-261108-0001'`.execute(db);
       assert.equal(Number(n.rows[0].n), 2, 'Without the index the duplicate lands silently (the defect)');
       // Remove the duplicate this case itself created so the final
       // up() can succeed (test teardown only — no production row).

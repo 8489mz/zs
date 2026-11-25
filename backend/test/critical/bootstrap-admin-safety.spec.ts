@@ -13,22 +13,38 @@ class FakeConfigService {
 
 class FakeUsersSelectBuilder {
   constructor(private readonly user: any) {}
-  select() { return this; }
-  where() { return this; }
-  async executeTakeFirst() { return this.user; }
+  select() {
+    return this;
+  }
+  where() {
+    return this;
+  }
+  async executeTakeFirst() {
+    return this.user;
+  }
 }
 
 class FakeSettingsSelectBuilder {
   constructor(private readonly settings: Array<{ key: string; value: string; tenant_id?: string }>) {}
-  select() { return this; }
-  where() { return this; }
-  async execute() { return this.settings; }
+  select() {
+    return this;
+  }
+  where() {
+    return this;
+  }
+  async execute() {
+    return this.settings;
+  }
 }
 
 class FakeUserBranchesSelectBuilder {
   private userId: number | null = null;
-  constructor(private readonly userBranches: Array<{ user_id: number; branch_id: number | string; tenant_id?: string }>) {}
-  select() { return this; }
+  constructor(
+    private readonly userBranches: Array<{ user_id: number; branch_id: number | string; tenant_id?: string }>,
+  ) {}
+  select() {
+    return this;
+  }
   where(column: string | unknown, _op?: string, value?: number) {
     if (column === 'user_id') this.userId = Number(value);
     return this;
@@ -40,8 +56,19 @@ class FakeUserBranchesSelectBuilder {
 
 class FakeTenantsSelectBuilder {
   private id = '';
-  constructor(private readonly tenants: Array<{ id: string; slug: string; business_name: string; status: string; trial_ends_at: Date | null; created_at: Date }>) {}
-  select() { return this; }
+  constructor(
+    private readonly tenants: Array<{
+      id: string;
+      slug: string;
+      business_name: string;
+      status: string;
+      trial_ends_at: Date | null;
+      created_at: Date;
+    }>,
+  ) {}
+  select() {
+    return this;
+  }
   where(column: string, _op: string, value: string) {
     if (column === 'id') this.id = value;
     return this;
@@ -56,7 +83,14 @@ class FakeDb {
     private readonly user: any,
     private readonly settings: Array<{ key: string; value: string; tenant_id?: string }> = [],
     private readonly userBranches: Array<{ user_id: number; branch_id: number | string; tenant_id?: string }> = [],
-    private readonly tenants: Array<{ id: string; slug: string; business_name: string; status: string; trial_ends_at: Date | null; created_at: Date }> = [],
+    private readonly tenants: Array<{
+      id: string;
+      slug: string;
+      business_name: string;
+      status: string;
+      trial_ends_at: Date | null;
+      created_at: Date;
+    }> = [],
   ) {}
   selectFrom(table: string) {
     if (table === 'users') return new FakeUsersSelectBuilder(this.user);
@@ -81,7 +115,10 @@ class FakeDb {
 }
 
 class FakeBootstrapDb {
-  constructor(private readonly hasUsers = false, private readonly existingZsUser: any = null) {}
+  constructor(
+    private readonly hasUsers = false,
+    private readonly existingZsUser: any = null,
+  ) {}
 
   getExecutor() {
     return {
@@ -142,9 +179,21 @@ async function runMePayloadSafety(): Promise<void> {
   };
 
   const service = new SessionService(
-    new FakeDb(user, [{ key: 'theme', value: 'light', tenant_id: 'tenant-test' }], [], [
-      { id: 'tenant-test', slug: 'tenant-test', business_name: 'Tenant Test', status: 'trial', trial_ends_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), created_at: new Date() },
-    ]) as any,
+    new FakeDb(
+      user,
+      [{ key: 'theme', value: 'light', tenant_id: 'tenant-test' }],
+      [],
+      [
+        {
+          id: 'tenant-test',
+          slug: 'tenant-test',
+          business_name: 'Tenant Test',
+          status: 'trial',
+          trial_ends_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+          created_at: new Date(),
+        },
+      ],
+    ) as any,
     new FakeConfigService({ DEFAULT_ADMIN_USERNAME: 'admin', DEFAULT_ADMIN_PASSWORD: defaultPassword }) as any,
     { log: async () => {} } as any,
   );
@@ -168,70 +217,58 @@ async function runMePayloadSafety(): Promise<void> {
 async function runBootstrapGuardrails(): Promise<void> {
   const baseDb = new FakeBootstrapDb() as any;
 
-  await assert.rejects(
-    async () => {
-      const service = new BootstrapAdminService(
-        baseDb,
-        new FakeConfigService({
-          ENABLE_BOOTSTRAP_ADMIN: true,
-          DEFAULT_ADMIN_USERNAME: 'admin',
-          DEFAULT_ADMIN_PASSWORD: 'ChangeMe123!',
-          NODE_ENV: 'development',
-          ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION: false,
-        }) as any,
-      );
-      await service.onApplicationBootstrap();
-    },
-    /refuses to start with the default administrator password/,
-  );
+  await assert.rejects(async () => {
+    const service = new BootstrapAdminService(
+      baseDb,
+      new FakeConfigService({
+        ENABLE_BOOTSTRAP_ADMIN: true,
+        DEFAULT_ADMIN_USERNAME: 'admin',
+        DEFAULT_ADMIN_PASSWORD: 'ChangeMe123!',
+        NODE_ENV: 'development',
+        ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION: false,
+      }) as any,
+    );
+    await service.onApplicationBootstrap();
+  }, /refuses to start with the default administrator password/);
 
-  await assert.rejects(
-    async () => {
-      const service = new BootstrapAdminService(
-        baseDb,
-        new FakeConfigService({
-          ENABLE_BOOTSTRAP_ADMIN: true,
-          DEFAULT_ADMIN_USERNAME: 'owner',
-          DEFAULT_ADMIN_PASSWORD: 'VeryStrongAdminPass123!',
-          NODE_ENV: 'production',
-          ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION: false,
-        }) as any,
-      );
-      await service.onApplicationBootstrap();
-    },
-    /blocked in production/,
-  );
+  await assert.rejects(async () => {
+    const service = new BootstrapAdminService(
+      baseDb,
+      new FakeConfigService({
+        ENABLE_BOOTSTRAP_ADMIN: true,
+        DEFAULT_ADMIN_USERNAME: 'owner',
+        DEFAULT_ADMIN_PASSWORD: 'VeryStrongAdminPass123!',
+        NODE_ENV: 'production',
+        ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION: false,
+      }) as any,
+    );
+    await service.onApplicationBootstrap();
+  }, /blocked in production/);
 
-  await assert.rejects(
-    async () => {
-      const service = new BootstrapAdminService(
-        baseDb,
-        new FakeConfigService({
-          ENABLE_BOOTSTRAP_ADMIN: true,
-          DEFAULT_ADMIN_USERNAME: 'admin',
-          DEFAULT_ADMIN_PASSWORD: 'ZsAdmin2026',
-          NODE_ENV: 'development',
-          ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION: false,
-        }) as any,
-      );
-      await service.onApplicationBootstrap();
-    },
-    /refuses to start with the default administrator password/,
-  );
+  await assert.rejects(async () => {
+    const service = new BootstrapAdminService(
+      baseDb,
+      new FakeConfigService({
+        ENABLE_BOOTSTRAP_ADMIN: true,
+        DEFAULT_ADMIN_USERNAME: 'admin',
+        DEFAULT_ADMIN_PASSWORD: 'ZsAdmin2026',
+        NODE_ENV: 'development',
+        ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION: false,
+      }) as any,
+    );
+    await service.onApplicationBootstrap();
+  }, /refuses to start with the default administrator password/);
 
-  await assert.rejects(
-    async () => {
-      const service = new BootstrapAdminService(
-        baseDb,
-        new FakeConfigService({
-          PLATFORM_SUPERADMIN_PASSWORD: 'ZsAdmin2026',
-          NODE_ENV: 'development',
-        }) as any,
-      );
-      await service.onApplicationBootstrap();
-    },
-    /Platform super-admin provisioning refuses to use published/,
-  );
+  await assert.rejects(async () => {
+    const service = new BootstrapAdminService(
+      baseDb,
+      new FakeConfigService({
+        PLATFORM_SUPERADMIN_PASSWORD: 'ZsAdmin2026',
+        NODE_ENV: 'development',
+      }) as any,
+    );
+    await service.onApplicationBootstrap();
+  }, /Platform super-admin provisioning refuses to use published/);
 
   const service = new BootstrapAdminService(
     baseDb,
@@ -270,17 +307,26 @@ async function runPlatformRoleCleanup(): Promise<void> {
   const queries: CompiledQuery[] = [];
   const db = new Kysely<any>({
     dialect,
-    log: (event) => { if (event.level === 'query') queries.push(event.query); },
+    log: (event) => {
+      if (event.level === 'query') queries.push(event.query);
+    },
   });
   try {
-    const service = new BootstrapAdminService(db, new FakeConfigService({
-      APP_MODE: 'CLOUD_SAAS', PLATFORM_TENANT_ID: 'zsystems-main',
-    }) as any);
+    const service = new BootstrapAdminService(
+      db,
+      new FakeConfigService({
+        APP_MODE: 'CLOUD_SAAS',
+        PLATFORM_TENANT_ID: 'zsystems-main',
+      }) as any,
+    );
     await (service as any).sanitizeSuperAdminRoles();
     assert.equal(queries.length, 1, 'cleanup must issue its guarded update');
     assert.match(queries[0].sql, /LOWER\(TRIM\(tenant_id\)\) NOT IN/);
-    assert.deepEqual(queries[0].parameters, ['zsystems-main', 'zs'],
-      'both the configured platform and canonical zs must survive cloud role cleanup');
+    assert.deepEqual(
+      queries[0].parameters,
+      ['zsystems-main', 'zs'],
+      'both the configured platform and canonical zs must survive cloud role cleanup',
+    );
   } finally {
     await db.destroy();
   }

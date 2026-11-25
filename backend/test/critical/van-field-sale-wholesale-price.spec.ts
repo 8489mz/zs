@@ -106,36 +106,114 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>, currency: string): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: currency }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('van_sales_trips').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true })
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' })
+    .execute();
 }
 
-async function seedProduct(db: Kysely<Database>, id: number, retail: number, wholesale: number, credit: number, cost: number, vanQty: number): Promise<void> {
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  retail: number,
+  wholesale: number,
+  credit: number,
+  cost: number,
+  vanQty: number,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({ id, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${id}`, stock_qty: vanQty, cost_price: cost, retail_price: retail, wholesale_price: wholesale, credit_price: credit, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Product ${id}`,
+      stock_qty: vanQty,
+      cost_price: cost,
+      retail_price: retail,
+      wholesale_price: wholesale,
+      credit_price: credit,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty })
+    .execute();
 }
 
 async function seedCustomer(db: Kysely<Database>, id: number, customerType: string): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('customers').values({ id, tenant_id: TENANT, account_id: ACCOUNT, name: `Customer ${id}`, balance: 0, credit_limit: 5000, customer_type: customerType, metadata: '{}', is_active: true }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Customer ${id}`,
+      balance: 0,
+      credit_limit: 5000,
+      customer_type: customerType,
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -144,17 +222,38 @@ function buildService(db: Kysely<Database>): VanSalesService {
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   return service;
 }
 
 async function saleItems(db: Kysely<Database>, saleId: number): Promise<any[]> {
-  return (db as any).selectFrom('sale_items').selectAll().where('sale_id', '=', saleId).where('tenant_id', '=', TENANT).execute();
+  return (db as any)
+    .selectFrom('sale_items')
+    .selectAll()
+    .where('sale_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -169,7 +268,9 @@ async function main(): Promise<void> {
       await seedCustomer(db, 3060, 'wholesale');
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', customerId: 3060,
+        tripId: 1,
+        paymentMethod: 'cash',
+        customerId: 3060,
         items: [{ productId: 101, qty: 2, unitPrice: 144, unitMultiplier: 12 }],
       });
       assert.equal(res.total, 240);
@@ -178,7 +279,9 @@ async function main(): Promise<void> {
       assert.equal(Number(items[0].unit_price), 120);
       assert.equal(Number(items[0].line_total), 240);
       assert.equal(items[0].pricing_tier_type, 'wholesale');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. Credit, wholesale customer, 12 pieces of B: wholesale (20) beats
@@ -192,7 +295,9 @@ async function main(): Promise<void> {
       await seedCustomer(db, 3060, 'wholesale');
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'credit', customerId: 3060,
+        tripId: 1,
+        paymentMethod: 'credit',
+        customerId: 3060,
         items: [{ productId: 102, qty: 12, unitPrice: 24 }],
       });
       assert.equal(res.total, 240);
@@ -201,9 +306,15 @@ async function main(): Promise<void> {
       assert.equal(Number(items[0].unit_price), 20);
       assert.equal(Number(items[0].line_total), 240);
       assert.equal(items[0].pricing_tier_type, 'wholesale');
-      const cust = await (db as any).selectFrom('customers').select('balance').where('id', '=', 3060).executeTakeFirstOrThrow() as any;
+      const cust = (await (db as any)
+        .selectFrom('customers')
+        .select('balance')
+        .where('id', '=', 3060)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(cust.balance), 240);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. No regression: a cash (non-wholesale) customer pays retail.
@@ -216,7 +327,9 @@ async function main(): Promise<void> {
       await seedCustomer(db, 3061, 'cash');
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', customerId: 3061,
+        tripId: 1,
+        paymentMethod: 'cash',
+        customerId: 3061,
         items: [
           { productId: 101, qty: 2, unitPrice: 144, unitMultiplier: 12 },
           { productId: 102, qty: 1, unitPrice: 24 },
@@ -233,7 +346,9 @@ async function main(): Promise<void> {
       assert.equal(Number(b.unit_price), 24);
       assert.equal(Number(b.line_total), 24);
       assert.equal(b.pricing_tier_type, 'cash');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 4. Source pin: the wholesale branch, tier and guard skip live in
@@ -241,13 +356,21 @@ async function main(): Promise<void> {
   // File #52 split: executeFieldSaleInternal now lives in the S1 slice —
   // the slice file IS the method, so the pin reads it to EOF.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts'),
+      'utf8',
+    );
     const start = source.indexOf('async executeFieldSaleInternal(');
     assert.ok(start > 0);
     const body = source.slice(start);
     assert.ok(body.includes("customerType === 'wholesale'"), 'customer_type drives the price branch');
     assert.ok(body.includes("'wholesale'"), 'wholesale pricing tier exists');
-    assert.ok(body.includes("} else if (pricingTierType === 'wholesale' || pricingTierType === 'half_wholesale' || pricingTierType === 'credit' || listApplies) {"), 'server price is authoritative for the wholesale tier');
+    assert.ok(
+      body.includes(
+        "} else if (pricingTierType === 'wholesale' || pricingTierType === 'half_wholesale' || pricingTierType === 'credit' || listApplies) {",
+      ),
+      'server price is authoritative for the wholesale tier',
+    );
   }
 
   console.log('van-field-sale-wholesale-price: all cases passed');

@@ -119,7 +119,10 @@ async function main(): Promise<void> {
     // 6. Source pin: no code reads a rejected_by field anywhere
     // in the portal service, so the status check is the only
     // guard available -- and it is present.
-    const portalSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-customer-portal.service.ts'), 'utf8');
+    const portalSource = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-customer-portal.service.ts'),
+      'utf8',
+    );
     assert.ok(!portalSource.includes('quote.rejected_by'), 'no code reads a rejected_by field');
     assert.ok(!portalSource.includes("'rejected_by'"), 'no query references a rejected_by column');
     const approveStart = portalSource.indexOf('async approveQuotation(');

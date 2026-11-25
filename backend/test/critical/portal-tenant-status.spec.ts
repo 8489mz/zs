@@ -89,30 +89,84 @@ async function main(): Promise<void> {
     const now = new Date();
     const future = new Date(now.getTime() + 30 * 24 * 3600 * 1000).toISOString();
     const past = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
-    await anyDb.insertInto('tenants').values([
-      { id: T.active, slug: 'active', business_name: 'Active', status: 'active', trial_ends_at: null },
-      { id: T.suspended, slug: 'suspended', business_name: 'Suspended', status: 'suspended', trial_ends_at: null },
-      { id: T.expired, slug: 'expired', business_name: 'Expired', status: 'expired', trial_ends_at: null },
-      { id: T.trialExpired, slug: 'trial-exp', business_name: 'TrialExp', status: 'trial', trial_ends_at: past },
-      { id: T.trialOk, slug: 'trial-ok', business_name: 'TrialOk', status: 'trial', trial_ends_at: future },
-      { id: T.noSub, slug: 'nosub', business_name: 'NoSub', status: 'active', trial_ends_at: null },
-      { id: T.grace, slug: 'grace', business_name: 'Grace', status: 'active', trial_ends_at: null },
-      { id: T.platform, slug: 'zs', business_name: 'Platform', status: 'suspended', trial_ends_at: null },
-    ]).execute();
-    await anyDb.insertInto('tenant_subscriptions').values([
-      { tenant_id: T.active, status: 'active', ends_at: future, grace_ends_at: null },
-      { tenant_id: T.suspended, status: 'active', ends_at: future, grace_ends_at: null },
-      { tenant_id: T.grace, status: 'active', ends_at: past, grace_ends_at: future },
-      { tenant_id: T.platform, status: 'active', ends_at: future, grace_ends_at: null },
-    ]).execute();
+    await anyDb
+      .insertInto('tenants')
+      .values([
+        { id: T.active, slug: 'active', business_name: 'Active', status: 'active', trial_ends_at: null },
+        { id: T.suspended, slug: 'suspended', business_name: 'Suspended', status: 'suspended', trial_ends_at: null },
+        { id: T.expired, slug: 'expired', business_name: 'Expired', status: 'expired', trial_ends_at: null },
+        { id: T.trialExpired, slug: 'trial-exp', business_name: 'TrialExp', status: 'trial', trial_ends_at: past },
+        { id: T.trialOk, slug: 'trial-ok', business_name: 'TrialOk', status: 'trial', trial_ends_at: future },
+        { id: T.noSub, slug: 'nosub', business_name: 'NoSub', status: 'active', trial_ends_at: null },
+        { id: T.grace, slug: 'grace', business_name: 'Grace', status: 'active', trial_ends_at: null },
+        { id: T.platform, slug: 'zs', business_name: 'Platform', status: 'suspended', trial_ends_at: null },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('tenant_subscriptions')
+      .values([
+        { tenant_id: T.active, status: 'active', ends_at: future, grace_ends_at: null },
+        { tenant_id: T.suspended, status: 'active', ends_at: future, grace_ends_at: null },
+        { tenant_id: T.grace, status: 'active', ends_at: past, grace_ends_at: future },
+        { tenant_id: T.platform, status: 'active', ends_at: future, grace_ends_at: null },
+      ])
+      .execute();
 
     const pin = await createPasswordRecord(PIN);
     async function seedPerson(tenantId: string, n: number, phone: string): Promise<void> {
-      await anyDb.insertInto('delivery_representatives').values({ id: n, tenant_id: tenantId, account_id: ACCOUNT, name: `Rep ${n}`, phone, is_active: true, pin_hash: pin.hash, pin_salt: pin.salt }).execute();
+      await anyDb
+        .insertInto('delivery_representatives')
+        .values({
+          id: n,
+          tenant_id: tenantId,
+          account_id: ACCOUNT,
+          name: `Rep ${n}`,
+          phone,
+          is_active: true,
+          pin_hash: pin.hash,
+          pin_salt: pin.salt,
+        })
+        .execute();
       await anyDb.insertInto('branches').values({ id: n, tenant_id: tenantId, name: 'Main' }).execute();
-      await anyDb.insertInto('hr_employees').values({ id: n, tenant_id: tenantId, account_id: ACCOUNT, employee_no: `EMP-${n}`, display_name: `Emp ${n}`, first_name: 'Emp', last_name: String(n), pin_hash: pin.hash, pin_salt: pin.salt, hire_date: '2020-01-01', status: 'active', branch_id: n, department_id: null, position_id: null }).execute();
-      await anyDb.insertInto('hr_employee_contacts').values({ tenant_id: tenantId, employee_id: n, value: phone, contact_type: 'phone' }).execute();
-      await anyDb.insertInto('customers').values({ id: n, tenant_id: tenantId, account_id: ACCOUNT, name: `Customer ${n}`, phone, company_name: '', address: '', is_active: true, portal_pin_hash: pin.hash, portal_pin_salt: pin.salt, portal_token: `magic-${n}` }).execute();
+      await anyDb
+        .insertInto('hr_employees')
+        .values({
+          id: n,
+          tenant_id: tenantId,
+          account_id: ACCOUNT,
+          employee_no: `EMP-${n}`,
+          display_name: `Emp ${n}`,
+          first_name: 'Emp',
+          last_name: String(n),
+          pin_hash: pin.hash,
+          pin_salt: pin.salt,
+          hire_date: '2020-01-01',
+          status: 'active',
+          branch_id: n,
+          department_id: null,
+          position_id: null,
+        })
+        .execute();
+      await anyDb
+        .insertInto('hr_employee_contacts')
+        .values({ tenant_id: tenantId, employee_id: n, value: phone, contact_type: 'phone' })
+        .execute();
+      await anyDb
+        .insertInto('customers')
+        .values({
+          id: n,
+          tenant_id: tenantId,
+          account_id: ACCOUNT,
+          name: `Customer ${n}`,
+          phone,
+          company_name: '',
+          address: '',
+          is_active: true,
+          portal_pin_hash: pin.hash,
+          portal_pin_salt: pin.salt,
+          portal_token: `magic-${n}`,
+        })
+        .execute();
     }
     // Distinct phones per tenant: the login paths match across tenants
     // by phone when no company scope is given.
@@ -159,17 +213,35 @@ async function main(): Promise<void> {
     await assert.rejects(freightService.verifyCustomerToken(freightToken(2, T.suspended)), codeIs('TENANT_SUSPENDED'));
 
     // 2. Suspended tenant: every fresh login rejects, including the magic link.
-    await assert.rejects(driverLoginService.driverLogin({ phone: '01000000002', pinCode: PIN }), codeIs('TENANT_SUSPENDED'));
-    await assert.rejects(employeeLoginService.login({ identifier: '01000000002', pinCode: PIN }), codeIs('TENANT_SUSPENDED'));
-    await assert.rejects(mobileLoginService.employeeLogin({ phone: '01000000002', pinCode: PIN }), codeIs('TENANT_SUSPENDED'));
-    await assert.rejects(freightLoginService.customerLogin({ phone: '01000000002', pinCode: PIN }), codeIs('TENANT_SUSPENDED'));
+    await assert.rejects(
+      driverLoginService.driverLogin({ phone: '01000000002', pinCode: PIN }),
+      codeIs('TENANT_SUSPENDED'),
+    );
+    await assert.rejects(
+      employeeLoginService.login({ identifier: '01000000002', pinCode: PIN }),
+      codeIs('TENANT_SUSPENDED'),
+    );
+    await assert.rejects(
+      mobileLoginService.employeeLogin({ phone: '01000000002', pinCode: PIN }),
+      codeIs('TENANT_SUSPENDED'),
+    );
+    await assert.rejects(
+      freightLoginService.customerLogin({ phone: '01000000002', pinCode: PIN }),
+      codeIs('TENANT_SUSPENDED'),
+    );
     await assert.rejects(freightMagicService.customerTokenLogin('magic-2'), codeIs('TENANT_SUSPENDED'));
 
     // 3. Expired, expired-trial, and active-without-subscription reject too.
     await assert.rejects(driverService.verifyDriverToken(driverToken(3, T.expired)), codeIs('TENANT_EXPIRED'));
-    await assert.rejects(driverService.verifyDriverToken(driverToken(4, T.trialExpired)), codeIs('TENANT_TRIAL_EXPIRED'));
+    await assert.rejects(
+      driverService.verifyDriverToken(driverToken(4, T.trialExpired)),
+      codeIs('TENANT_TRIAL_EXPIRED'),
+    );
     await assert.rejects(driverService.verifyDriverToken(driverToken(6, T.noSub)), codeIs('TENANT_EXPIRED'));
-    await assert.rejects(driverLoginService.driverLogin({ phone: '01000000003', pinCode: PIN }), codeIs('TENANT_EXPIRED'));
+    await assert.rejects(
+      driverLoginService.driverLogin({ phone: '01000000003', pinCode: PIN }),
+      codeIs('TENANT_EXPIRED'),
+    );
 
     // 4. Unaffected: active + subscription, trial in-window, grace
     // window, and the platform tenant all verify and log in.
@@ -191,9 +263,17 @@ async function main(): Promise<void> {
     assert.ok(okFreightLogin.token);
 
     // 5. The check is read-only: rejected rows keep their status.
-    const trialRow: any = await anyDb.selectFrom('tenants').select('status').where('id', '=', T.trialExpired).executeTakeFirstOrThrow();
+    const trialRow: any = await anyDb
+      .selectFrom('tenants')
+      .select('status')
+      .where('id', '=', T.trialExpired)
+      .executeTakeFirstOrThrow();
     assert.equal(trialRow.status, 'trial');
-    const noSubRow: any = await anyDb.selectFrom('tenants').select('status').where('id', '=', T.noSub).executeTakeFirstOrThrow();
+    const noSubRow: any = await anyDb
+      .selectFrom('tenants')
+      .select('status')
+      .where('id', '=', T.noSub)
+      .executeTakeFirstOrThrow();
     assert.equal(noSubRow.status, 'active');
 
     // 6. Cached denial survives the tenant row disappearing.

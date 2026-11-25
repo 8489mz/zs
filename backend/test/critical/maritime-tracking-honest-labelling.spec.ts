@@ -74,7 +74,10 @@ async function main(): Promise<void> {
     // method or the user-facing copy.
     // Maritime split: the tracking methods live in the tracking slice;
     // the whole-module assertions read the facade + all 20 slices.
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-tracking.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-tracking.service.ts'),
+      'utf8',
+    );
     const trackingStart = serviceSource.indexOf('async syncCarrierTracking(');
     const trackingEnd = serviceSource.indexOf('async recordCarrierApiEvent(');
     assert.ok(trackingStart > 0 && trackingEnd > trackingStart);
@@ -113,7 +116,10 @@ async function main(): Promise<void> {
     // be live carrier data.
     assert.ok(!/[^a-zA-Z]fetch\s*\(/.test(moduleSource));
 
-    const hub = readFileSync(resolve(__dirname, '../../../frontend/src/features/maritime-freight/components/CarrierTrackingHubTab.tsx'), 'utf8');
+    const hub = readFileSync(
+      resolve(__dirname, '../../../frontend/src/features/maritime-freight/components/CarrierTrackingHubTab.tsx'),
+      'utf8',
+    );
     assert.ok(!hub.includes('مزامنة لحظية') && !hub.includes('المزامنة اللحظية'));
     assert.ok(!hub.includes('خوادم الخط الملاحي'));
     assert.ok(!hub.includes('الاتصال بالسيرفر'));
@@ -121,12 +127,18 @@ async function main(): Promise<void> {
     assert.ok(hub.includes('تقديرية'));
     assert.ok(hub.includes('لا يوجد اتصال مباشر'));
 
-    const portal = readFileSync(resolve(__dirname, '../../../frontend/src/features/maritime-freight/pages/MaritimeCustomerPortalPage.tsx'), 'utf8');
+    const portal = readFileSync(
+      resolve(__dirname, '../../../frontend/src/features/maritime-freight/pages/MaritimeCustomerPortalPage.tsx'),
+      'utf8',
+    );
     assert.ok(!portal.includes('التتبع اللحظي'));
     assert.ok(!portal.includes('الشحنات اللحظية'));
     assert.ok(portal.includes('التتبع التقديري'));
 
-    const modal = readFileSync(resolve(__dirname, '../../../frontend/src/features/maritime-freight/components/JobDetailsModal.tsx'), 'utf8');
+    const modal = readFileSync(
+      resolve(__dirname, '../../../frontend/src/features/maritime-freight/components/JobDetailsModal.tsx'),
+      'utf8',
+    );
     assert.ok(!modal.includes('رابط التتبع المباشر'));
 
     console.log('maritime tracking honest labelling checks passed');

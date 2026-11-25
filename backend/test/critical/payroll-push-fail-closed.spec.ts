@@ -59,8 +59,13 @@ const PERIOD_FROM = `${TARGET_MONTH}-01`;
 const PERIOD_TO = `${TARGET_MONTH}-${String(LAST_DAY).padStart(2, '0')}`;
 
 const adminAuth: any = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['deliveryReps', 'accounting'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 };
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -109,33 +114,88 @@ function buildHrService(db: Kysely<Database>): any {
 }
 
 async function seedEmployee(db: Kysely<Database>, id: number, displayName: string): Promise<void> {
-  await (db as any).insertInto('hr_employees').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, display_name: displayName, national_id: null,
-    status: 'active', compensation_type: 'monthly', hourly_rate: 0, expected_daily_hours: 8,
-    hire_date: '2026-01-01', end_of_service_date: null, has_social_insurance: false,
-    insurance_salary: 0, has_income_tax: false, pay_frequency: 'monthly', user_id: null,
-    commission_type: null, commission_value: 0, commission_target: null, delay_policy: null,
-    approved_leave_days: 0,
-  }).execute();
-  await (db as any).insertInto('hr_employment_contracts').values({
-    id, tenant_id: TENANT, employee_id: id, base_salary: 5000, currency: 'EGP',
-    status: 'active', start_date: '2026-01-01', end_date: null,
-  }).execute();
+  await (db as any)
+    .insertInto('hr_employees')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      display_name: displayName,
+      national_id: null,
+      status: 'active',
+      compensation_type: 'monthly',
+      hourly_rate: 0,
+      expected_daily_hours: 8,
+      hire_date: '2026-01-01',
+      end_of_service_date: null,
+      has_social_insurance: false,
+      insurance_salary: 0,
+      has_income_tax: false,
+      pay_frequency: 'monthly',
+      user_id: null,
+      commission_type: null,
+      commission_value: 0,
+      commission_target: null,
+      delay_policy: null,
+      approved_leave_days: 0,
+    })
+    .execute();
+  await (db as any)
+    .insertInto('hr_employment_contracts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      employee_id: id,
+      base_salary: 5000,
+      currency: 'EGP',
+      status: 'active',
+      start_date: '2026-01-01',
+      end_date: null,
+    })
+    .execute();
 }
 
 async function seedRep(db: Kysely<Database>, repId: number, extra: Record<string, unknown> = {}): Promise<void> {
-  await (db as any).insertInto('delivery_representatives').values({
-    id: repId, tenant_id: TENANT, account_id: ACCOUNT, name: `Rep ${repId}`,
-    phone: null, vehicle_plate: null, van_location_id: 10, employee_id: null, national_id: null,
-    ...extra,
-  }).execute();
+  await (db as any)
+    .insertInto('delivery_representatives')
+    .values({
+      id: repId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Rep ${repId}`,
+      phone: null,
+      vehicle_plate: null,
+      van_location_id: 10,
+      employee_id: null,
+      national_id: null,
+      ...extra,
+    })
+    .execute();
 }
 
-async function seedSettlement(db: Kysely<Database>, id: number, repId: number, entryType: string, amount: number, status: string, notes = 'shortage'): Promise<void> {
-  await (db as any).insertInto('van_rep_financial_settlements').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: repId, trip_id: 11,
-    entry_type: entryType, amount, status, notes,
-  }).execute();
+async function seedSettlement(
+  db: Kysely<Database>,
+  id: number,
+  repId: number,
+  entryType: string,
+  amount: number,
+  status: string,
+  notes = 'shortage',
+): Promise<void> {
+  await (db as any)
+    .insertInto('van_rep_financial_settlements')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: repId,
+      trip_id: 11,
+      entry_type: entryType,
+      amount,
+      status,
+      notes,
+    })
+    .execute();
 }
 
 async function adjustments(db: Kysely<Database>): Promise<any[]> {
@@ -143,24 +203,58 @@ async function adjustments(db: Kysely<Database>): Promise<any[]> {
 }
 
 async function settlementStatus(db: Kysely<Database>, id: number): Promise<string> {
-  const row = await (db as any).selectFrom('van_rep_financial_settlements').select('status').where('id', '=', id).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('van_rep_financial_settlements')
+    .select('status')
+    .where('id', '=', id)
+    .executeTakeFirst();
   return String(row?.status || '');
 }
 
 async function seedDraftRun(db: Kysely<Database>, employeeId: number): Promise<void> {
   await (db as any).insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await (db as any).insertInto('hr_payroll_runs').values({
-    id: 7, tenant_id: TENANT, account_id: ACCOUNT, period_month: TARGET_MONTH,
-    start_date: PERIOD_FROM, end_date: PERIOD_TO, pay_frequency: 'monthly', status: 'draft',
-  }).execute();
-  await (db as any).insertInto('hr_payroll_run_items').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, run_id: 7, employee_id: employeeId, contract_id: employeeId,
-    base_salary: 0, allowance_amount: 0, deduction_amount: 0, loan_deduction_amount: 0,
-    asset_recovery_deduction_amount: 0, employee_social_insurance: 0, employer_social_insurance: 0,
-    income_tax: 0, penalty_deduction: 0, carried_forward_deduction: 0, gross_pay: 0, net_pay: 0,
-    status: 'draft', notes: '', paid_at: null, paid_by: null, payment_channel: null,
-    journal_entry_id: null,
-  }).execute();
+  await (db as any)
+    .insertInto('hr_payroll_runs')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      period_month: TARGET_MONTH,
+      start_date: PERIOD_FROM,
+      end_date: PERIOD_TO,
+      pay_frequency: 'monthly',
+      status: 'draft',
+    })
+    .execute();
+  await (db as any)
+    .insertInto('hr_payroll_run_items')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      run_id: 7,
+      employee_id: employeeId,
+      contract_id: employeeId,
+      base_salary: 0,
+      allowance_amount: 0,
+      deduction_amount: 0,
+      loan_deduction_amount: 0,
+      asset_recovery_deduction_amount: 0,
+      employee_social_insurance: 0,
+      employer_social_insurance: 0,
+      income_tax: 0,
+      penalty_deduction: 0,
+      carried_forward_deduction: 0,
+      gross_pay: 0,
+      net_pay: 0,
+      status: 'draft',
+      notes: '',
+      paid_at: null,
+      paid_by: null,
+      payment_channel: null,
+      journal_entry_id: null,
+    })
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -174,7 +268,12 @@ async function main(): Promise<void> {
       await seedSettlement(db, 401, 4, 'cash_shortage', 25, 'pending');
       await seedDraftRun(db, 9);
       const service = buildVanService(db);
-      const pushed = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [401], targetMonth: TARGET_MONTH }, adminAuth);
+      const pushed = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [401], targetMonth: TARGET_MONTH },
+        adminAuth,
+      );
       assert.equal(pushed.results[0].success, true, 'the linked push succeeds');
       assert.equal(pushed.processedCount, 1, 'one item processed');
       assert.equal(await settlementStatus(db, 401), 'pushed_to_payroll', 'the item is pushed');
@@ -190,9 +289,18 @@ async function main(): Promise<void> {
       // 'fixed' unit this throws HR_PAYROLL_DATED_ADJUSTMENT_INVALID
       // and fails the whole run build.
       const hrService = buildHrService(db);
-      await (hrService as unknown as { payrollRebuildService: { rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void> } })
-        .payrollRebuildService.rebuildPayrollRunItems(db, 7, 'draft', TENANT);
-      const item = await (db as any).selectFrom('hr_payroll_run_items').selectAll().where('id', '=', 1).executeTakeFirst();
+      await (
+        hrService as unknown as {
+          payrollRebuildService: {
+            rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void>;
+          };
+        }
+      ).payrollRebuildService.rebuildPayrollRunItems(db, 7, 'draft', TENANT);
+      const item = await (db as any)
+        .selectFrom('hr_payroll_run_items')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirst();
       assert.equal(Number(item.net_pay), 4975, 'net pay is base 5000 minus the 25 shortage');
       const applied = await adjustments(db);
       assert.equal(String(applied[0].status), 'applied', 'the adjustment is applied by the run');
@@ -211,7 +319,12 @@ async function main(): Promise<void> {
       await seedRep(db, 5, { name: 'Rep NoEmp' });
       await seedSettlement(db, 402, 5, 'cash_shortage', 40, 'pending');
       const service = buildVanService(db);
-      const pushed = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [402], targetMonth: TARGET_MONTH }, adminAuth);
+      const pushed = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [402], targetMonth: TARGET_MONTH },
+        adminAuth,
+      );
       assert.equal(pushed.results[0].success, false, 'the unlinked push is refused');
       assert.match(String(pushed.results[0].message), /غير مرتبط بموظف/, 'the refusal names the missing employee link');
       assert.equal(pushed.processedCount, 0, 'nothing processed');
@@ -229,23 +342,46 @@ async function main(): Promise<void> {
     const { db } = await makeDb();
     try {
       await seedRep(db, 6, { name: 'Rep 6' });
-      await seedSettlement(db, 403, 6, 'stock_shortage', 60, 'pushed_to_payroll', 'shortage | تم ترحيل العجز (قيد انتظار ربط الموظف)');
+      await seedSettlement(
+        db,
+        403,
+        6,
+        'stock_shortage',
+        60,
+        'pushed_to_payroll',
+        'shortage | تم ترحيل العجز (قيد انتظار ربط الموظف)',
+      );
       const service = buildVanService(db);
-      const first = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [403], targetMonth: TARGET_MONTH }, adminAuth);
+      const first = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [403], targetMonth: TARGET_MONTH },
+        adminAuth,
+      );
       assert.equal(first.results[0].success, false, 'the orphan re-push is refused while unlinked');
       assert.match(String(first.results[0].message), /غير مرتبط بموظف/, 'the refusal names the missing employee link');
       assert.equal(await settlementStatus(db, 403), 'pushed_to_payroll', 'the orphan row keeps its flipped status');
       assert.equal((await adjustments(db)).length, 0, 'still no deduction');
       await seedEmployee(db, 11, 'Rep 6');
       await (db as any).updateTable('delivery_representatives').set({ employee_id: 11 }).where('id', '=', 6).execute();
-      const second = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [403], targetMonth: TARGET_MONTH }, adminAuth);
+      const second = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [403], targetMonth: TARGET_MONTH },
+        adminAuth,
+      );
       assert.equal(second.results[0].success, true, 'the re-push succeeds once the rep is linked');
       assert.match(String(second.results[0].message), /أعيد الترحيل/, 'the re-push says it is a retry');
       const adjs = await adjustments(db);
       assert.equal(adjs.length, 1, 'exactly one payroll adjustment after the re-push');
       assert.equal(String(adjs[0].amount_type), 'money', 'the re-pushed adjustment unit is money');
       assert.equal(Number(adjs[0].amount), 60, 'the re-pushed adjustment is the shortage amount');
-      const third = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [403], targetMonth: TARGET_MONTH }, adminAuth);
+      const third = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [403], targetMonth: TARGET_MONTH },
+        adminAuth,
+      );
       assert.equal(third.results[0].success, false, 'a third push is refused');
       assert.equal((await adjustments(db)).length, 1, 'still exactly one payroll adjustment');
     } finally {
@@ -262,9 +398,19 @@ async function main(): Promise<void> {
       await seedRep(db, 4, { employee_id: 9 });
       await seedSettlement(db, 404, 4, 'cash_shortage', 25, 'pending');
       const service = buildVanService(db);
-      const first = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [404], targetMonth: TARGET_MONTH }, adminAuth);
+      const first = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [404], targetMonth: TARGET_MONTH },
+        adminAuth,
+      );
       assert.equal(first.results[0].success, true, 'the first push succeeds');
-      const second = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [404], targetMonth: TARGET_MONTH }, adminAuth);
+      const second = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [404], targetMonth: TARGET_MONTH },
+        adminAuth,
+      );
       assert.equal(second.results[0].success, false, 'the second push reports failure');
       assert.equal(second.processedCount, 0, 'nothing processed the second time');
       assert.equal((await adjustments(db)).length, 1, 'still exactly one payroll adjustment');
@@ -281,7 +427,13 @@ async function main(): Promise<void> {
   {
     // File #59 split: pushRepShortagesToPayroll moved to the S5 slice; the
     // facade keeps only a thin delegate.
-    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/push-rep-shortages-to-payroll.slice.ts'), 'utf8');
+    const vanSource = readFileSync(
+      resolve(
+        __dirname,
+        '../../src/modules/delivery-reps/services/van-rep-financial-ledger/push-rep-shortages-to-payroll.slice.ts',
+      ),
+      'utf8',
+    );
     assert.ok(vanSource.includes('INV-PAYROLL-PUSH-FAIL-CLOSED'), 'van-sales names the invariant');
     assert.ok(vanSource.includes("amount_type: 'money'"), 'the push writes the money unit');
     assert.ok(!vanSource.includes("amount_type: 'fixed'"), 'the push no longer writes the fixed unit');

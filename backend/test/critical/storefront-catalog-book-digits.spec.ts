@@ -54,18 +54,23 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 /* Stubbed-Kysely proxy: every chained call returns the same query
 object; execute/executeTakeFirst answer from rowsByTable. Mirrors
 the storefront line-total spec's harness. */
 function makeFakeDb(rowsByTable: Record<string, any[]>): any {
-  const eb: any = Object.assign(
-    (..._args: any[]) => true,
-    { or: (..._args: any[]) => true, and: (..._args: any[]) => true },
-  );
+  const eb: any = Object.assign((..._args: any[]) => true, {
+    or: (..._args: any[]) => true,
+    and: (..._args: any[]) => true,
+  });
   const makeQuery = (table: string): any => {
     const q: any = new Proxy(function () {}, {
       get(_target, prop) {
@@ -75,13 +80,19 @@ function makeFakeDb(rowsByTable: Record<string, any[]>): any {
         return (...args: any[]) => {
           for (const arg of args) {
             if (typeof arg === 'function') {
-              try { arg(eb); } catch { /* expression-builder shapes only */ }
+              try {
+                arg(eb);
+              } catch {
+                /* expression-builder shapes only */
+              }
             }
           }
           return q;
         };
       },
-      apply() { return q; },
+      apply() {
+        return q;
+      },
     });
     return q;
   };
@@ -153,9 +164,18 @@ async function makeMarketplaceDb(currency: string): Promise<{ pg: PGlite; db: Ky
     CREATE TABLE audit_logs (id bigserial PRIMARY KEY, action text, details text, event_code text, target_tenant_id text, created_by bigint, impersonated_by bigint, tenant_id text, account_id text, created_at timestamptz DEFAULT NOW());
   `);
   const anyDb = db as any;
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: currency, account_id: ACCOUNT }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('products').values({ id: 1, tenant_id: TENANT, cost_price: 10.0125, retail_price: 200 }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'currency', value: currency, account_id: ACCOUNT })
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({ id: 1, tenant_id: TENANT, cost_price: 10.0125, retail_price: 200 })
+    .execute();
   return { pg, db };
 }
 
@@ -165,35 +185,54 @@ function buildMarketplaceService(db: Kysely<Database>): MarketplaceSyncService {
 }
 
 async function readMappings(db: Kysely<Database>): Promise<any[]> {
-  const rows = await (db as any).selectFrom('settings').select(['value'])
+  const rows = await (db as any)
+    .selectFrom('settings')
+    .select(['value'])
     .where('key', '=', 'marketplace_sku_mappings')
-    .where(sql<boolean>`tenant_id = ${TENANT}`).execute();
+    .where(sql<boolean>`tenant_id = ${TENANT}`)
+    .execute();
   return JSON.parse(String(rows[0].value));
 }
 
 const REPRICING_MAPPINGS = [
   {
-    marketplace: 'amazon', marketplaceSku: 'SKU-1', productId: 1,
-    productName: 'Widget', retailPrice: 200, costPrice: 100.125,
-    repricingEnabled: true, repricingRule: 'undercut_buy_box',
-    repricingDelta: 1, buyBoxPrice: 201.626, competitorPrice: 201.626,
+    marketplace: 'amazon',
+    marketplaceSku: 'SKU-1',
+    productId: 1,
+    productName: 'Widget',
+    retailPrice: 200,
+    costPrice: 100.125,
+    repricingEnabled: true,
+    repricingRule: 'undercut_buy_box',
+    repricingDelta: 1,
+    buyBoxPrice: 201.626,
+    competitorPrice: 201.626,
   },
   {
-    marketplace: 'amazon', marketplaceSku: 'SKU-2', productId: 1,
-    productName: 'Gadget', retailPrice: 100, costPrice: 100.125,
-    repricingEnabled: true, repricingRule: 'match_buy_box',
-    buyBoxPrice: 100, competitorPrice: 100,
+    marketplace: 'amazon',
+    marketplaceSku: 'SKU-2',
+    productId: 1,
+    productName: 'Gadget',
+    retailPrice: 100,
+    costPrice: 100.125,
+    repricingEnabled: true,
+    repricingRule: 'match_buy_box',
+    buyBoxPrice: 100,
+    competitorPrice: 100,
   },
 ];
 
 const SHIPMENT = {
-  id: 'sh1', shipmentNumber: 'SH-1', marketplace: 'amazon',
-  fulfillmentCenterId: 'FC-1', totalUnits: 10, totalBoxes: 1,
-  status: 'shipped', createdAt: '2026-11-08T00:00:00.000Z',
+  id: 'sh1',
+  shipmentNumber: 'SH-1',
+  marketplace: 'amazon',
+  fulfillmentCenterId: 'FC-1',
+  totalUnits: 10,
+  totalBoxes: 1,
+  status: 'shipped',
+  createdAt: '2026-11-08T00:00:00.000Z',
   trackingNumber: 'TRK-1',
-  items: [
-    { productId: 1, marketplaceSku: 'SKU-1', productName: 'Widget', quantityShipped: 10, costPrice: 10.0125 },
-  ],
+  items: [{ productId: 1, marketplaceSku: 'SKU-1', productName: 'Widget', quantityShipped: 10, costPrice: 10.0125 }],
 };
 
 async function main(): Promise<void> {
@@ -223,10 +262,15 @@ async function main(): Promise<void> {
     const { pg, db } = await makeMarketplaceDb(currency);
     try {
       const anyDb = db as any;
-      await anyDb.insertInto('settings').values({
-        tenant_id: TENANT, key: 'marketplace_sku_mappings',
-        value: JSON.stringify(REPRICING_MAPPINGS), account_id: ACCOUNT,
-      }).execute();
+      await anyDb
+        .insertInto('settings')
+        .values({
+          tenant_id: TENANT,
+          key: 'marketplace_sku_mappings',
+          value: JSON.stringify(REPRICING_MAPPINGS),
+          account_id: ACCOUNT,
+        })
+        .execute();
       const service = buildMarketplaceService(db);
       const result = await service.runRepricingBot('amazon', adminAuth);
       assert.equal(result.totalRepriced, 2, `${currency}: both mappings must reprice`);
@@ -243,10 +287,15 @@ async function main(): Promise<void> {
     const { pg, db } = await makeMarketplaceDb('KWD');
     try {
       const anyDb = db as any;
-      await anyDb.insertInto('settings').values({
-        tenant_id: TENANT, key: 'marketplace_inbound_shipments',
-        value: JSON.stringify([SHIPMENT]), account_id: ACCOUNT,
-      }).execute();
+      await anyDb
+        .insertInto('settings')
+        .values({
+          tenant_id: TENANT,
+          key: 'marketplace_inbound_shipments',
+          value: JSON.stringify([SHIPMENT]),
+          account_id: ACCOUNT,
+        })
+        .execute();
       const service = buildMarketplaceService(db);
       const received = await service.recordShipmentReceiving(
         'sh1',

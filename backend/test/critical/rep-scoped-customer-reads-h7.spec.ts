@@ -93,54 +93,268 @@ async function main(): Promise<void> {
     const fieldExecution = new VanFieldExecutionService(db, fraudStub as never);
 
     await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-    await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 }).execute();
+    await anyDb
+      .insertInto('currency_exchange_rates')
+      .values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 })
+      .execute();
 
-    await anyDb.insertInto('delivery_representatives').values([
-      { id: REP_OWN, tenant_id: TENANT, account_id: ACCOUNT, full_name: 'Own Rep', name: 'Own Rep', phone: '01000000001', van_location_id: 10, is_active: true },
-      { id: REP_OTHER, tenant_id: TENANT, account_id: ACCOUNT, full_name: 'Other Rep', name: 'Other Rep', phone: '01000000002', van_location_id: 10, is_active: true },
-      { id: REP_NONE, tenant_id: TENANT, account_id: ACCOUNT, full_name: 'No Assign Rep', name: 'No Assign Rep', phone: '01000000003', van_location_id: 10, is_active: true },
-    ]).execute();
-    await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-    await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, display_name: 'Sys', username: 'sys', is_active: true }).execute();
+    await anyDb
+      .insertInto('delivery_representatives')
+      .values([
+        {
+          id: REP_OWN,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          full_name: 'Own Rep',
+          name: 'Own Rep',
+          phone: '01000000001',
+          van_location_id: 10,
+          is_active: true,
+        },
+        {
+          id: REP_OTHER,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          full_name: 'Other Rep',
+          name: 'Other Rep',
+          phone: '01000000002',
+          van_location_id: 10,
+          is_active: true,
+        },
+        {
+          id: REP_NONE,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          full_name: 'No Assign Rep',
+          name: 'No Assign Rep',
+          phone: '01000000003',
+          van_location_id: 10,
+          is_active: true,
+        },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('stock_locations')
+      .values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+      .execute();
+    await anyDb
+      .insertInto('users')
+      .values({ id: 1, tenant_id: TENANT, display_name: 'Sys', username: 'sys', is_active: true })
+      .execute();
 
     // Customers:
     // 100 assigned to OWN; 200 assigned to + served by OTHER; 300
     // unassigned + served by nobody; 400 served by OWN via field visit;
     // 500 served by OWN via pre-sale order; 600 served by OWN via a
     // delivered sale; 700 served by NONE via field visit (unassigned).
-    await anyDb.insertInto('customers').values([
-      { id: 100, tenant_id: TENANT, name: 'Assigned Own', phone: '011100', address: 'Addr 100', balance: 50, credit_limit: 100, is_active: true, metadata: JSON.stringify({ assigned_rep_ids: [REP_OWN] }) },
-      { id: 200, tenant_id: TENANT, name: 'Other Rep Customer', phone: '011200', address: 'Addr 200', balance: 70, credit_limit: 200, is_active: true, metadata: JSON.stringify({ assigned_rep_ids: [REP_OTHER] }) },
-      { id: 300, tenant_id: TENANT, name: 'Unassigned Stranger', phone: '011300', address: 'Addr 300', balance: 999, credit_limit: 500, is_active: true, metadata: null },
-      { id: 400, tenant_id: TENANT, name: 'Visited By Own', phone: '011400', address: 'Addr 400', balance: 10, credit_limit: 0, is_active: true, metadata: null },
-      { id: 500, tenant_id: TENANT, name: 'Ordered By Own', phone: '011500', address: 'Addr 500', balance: 20, credit_limit: 0, is_active: true, metadata: null },
-      { id: 600, tenant_id: TENANT, name: 'Sold To By Own', phone: '011600', address: 'Addr 600', balance: 30, credit_limit: 0, is_active: true, metadata: null },
-      { id: 700, tenant_id: TENANT, name: 'Visited By None', phone: '011700', address: 'Addr 700', balance: 40, credit_limit: 0, is_active: true, metadata: null },
-      { id: 800, tenant_id: TENANT, name: 'Collected From By Own', phone: '011800', address: 'Addr 800', balance: 0, credit_limit: 0, is_active: true, metadata: null },
-    ]).execute();
+    await anyDb
+      .insertInto('customers')
+      .values([
+        {
+          id: 100,
+          tenant_id: TENANT,
+          name: 'Assigned Own',
+          phone: '011100',
+          address: 'Addr 100',
+          balance: 50,
+          credit_limit: 100,
+          is_active: true,
+          metadata: JSON.stringify({ assigned_rep_ids: [REP_OWN] }),
+        },
+        {
+          id: 200,
+          tenant_id: TENANT,
+          name: 'Other Rep Customer',
+          phone: '011200',
+          address: 'Addr 200',
+          balance: 70,
+          credit_limit: 200,
+          is_active: true,
+          metadata: JSON.stringify({ assigned_rep_ids: [REP_OTHER] }),
+        },
+        {
+          id: 300,
+          tenant_id: TENANT,
+          name: 'Unassigned Stranger',
+          phone: '011300',
+          address: 'Addr 300',
+          balance: 999,
+          credit_limit: 500,
+          is_active: true,
+          metadata: null,
+        },
+        {
+          id: 400,
+          tenant_id: TENANT,
+          name: 'Visited By Own',
+          phone: '011400',
+          address: 'Addr 400',
+          balance: 10,
+          credit_limit: 0,
+          is_active: true,
+          metadata: null,
+        },
+        {
+          id: 500,
+          tenant_id: TENANT,
+          name: 'Ordered By Own',
+          phone: '011500',
+          address: 'Addr 500',
+          balance: 20,
+          credit_limit: 0,
+          is_active: true,
+          metadata: null,
+        },
+        {
+          id: 600,
+          tenant_id: TENANT,
+          name: 'Sold To By Own',
+          phone: '011600',
+          address: 'Addr 600',
+          balance: 30,
+          credit_limit: 0,
+          is_active: true,
+          metadata: null,
+        },
+        {
+          id: 700,
+          tenant_id: TENANT,
+          name: 'Visited By None',
+          phone: '011700',
+          address: 'Addr 700',
+          balance: 40,
+          credit_limit: 0,
+          is_active: true,
+          metadata: null,
+        },
+        {
+          id: 800,
+          tenant_id: TENANT,
+          name: 'Collected From By Own',
+          phone: '011800',
+          address: 'Addr 800',
+          balance: 0,
+          credit_limit: 0,
+          is_active: true,
+          metadata: null,
+        },
+      ])
+      .execute();
 
     // Trips: 1 belongs to OWN, 2 belongs to OTHER, 3 belongs to NONE.
-    await anyDb.insertInto('van_sales_trips').values([
-      { id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OWN, van_location_id: 10, source_warehouse_id: 10, status: 'open', settlement_status: 'open' },
-      { id: 2, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OTHER, van_location_id: 10, source_warehouse_id: 10, status: 'open', settlement_status: 'open' },
-      { id: 3, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_NONE, van_location_id: 10, source_warehouse_id: 10, status: 'open', settlement_status: 'open' },
-    ]).execute();
+    await anyDb
+      .insertInto('van_sales_trips')
+      .values([
+        {
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: REP_OWN,
+          van_location_id: 10,
+          source_warehouse_id: 10,
+          status: 'open',
+          settlement_status: 'open',
+        },
+        {
+          id: 2,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: REP_OTHER,
+          van_location_id: 10,
+          source_warehouse_id: 10,
+          status: 'open',
+          settlement_status: 'open',
+        },
+        {
+          id: 3,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: REP_NONE,
+          van_location_id: 10,
+          source_warehouse_id: 10,
+          status: 'open',
+          settlement_status: 'open',
+        },
+      ])
+      .execute();
 
     // Served evidence: OWN visited 400, ordered for 500, sold to 600;
     // OTHER sold to 200; NONE visited 700.
-    await anyDb.insertInto('van_field_visits').values([
-      { tenant_id: TENANT, account_id: ACCOUNT, trip_id: 1, rep_id: REP_OWN, customer_id: 400, visit_type: 'positive' },
-      { tenant_id: TENANT, account_id: ACCOUNT, trip_id: 3, rep_id: REP_NONE, customer_id: 700, visit_type: 'positive' },
-    ]).execute();
-    await anyDb.insertInto('sales_orders').values(
-      { tenant_id: TENANT, account_id: ACCOUNT, order_number: 'SO-500', customer_id: 500, customer_name: 'Ordered By Own', customer_phone: '011500', customer_address: 'Addr 500', rep_id: REP_OWN, warehouse_location_id: 10, status: 'pending', subtotal: 20, total_amount: 20 },
-    ).execute();
-    await anyDb.insertInto('sales').values([
-      { id: 60, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'INV-60', total: 30, subtotal: 30, discount: 0, paid_amount: 30, status: 'posted', payment_type: 'cash', customer_id: 600, delivery_rep_id: REP_OWN, van_trip_id: 1 },
-      { id: 70, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'INV-70', total: 70, subtotal: 70, discount: 0, paid_amount: 70, status: 'posted', payment_type: 'cash', customer_id: 200, delivery_rep_id: REP_OTHER, van_trip_id: 2 },
-    ]).execute();
+    await anyDb
+      .insertInto('van_field_visits')
+      .values([
+        {
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          trip_id: 1,
+          rep_id: REP_OWN,
+          customer_id: 400,
+          visit_type: 'positive',
+        },
+        {
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          trip_id: 3,
+          rep_id: REP_NONE,
+          customer_id: 700,
+          visit_type: 'positive',
+        },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('sales_orders')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        order_number: 'SO-500',
+        customer_id: 500,
+        customer_name: 'Ordered By Own',
+        customer_phone: '011500',
+        customer_address: 'Addr 500',
+        rep_id: REP_OWN,
+        warehouse_location_id: 10,
+        status: 'pending',
+        subtotal: 20,
+        total_amount: 20,
+      })
+      .execute();
+    await anyDb
+      .insertInto('sales')
+      .values([
+        {
+          id: 60,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          doc_no: 'INV-60',
+          total: 30,
+          subtotal: 30,
+          discount: 0,
+          paid_amount: 30,
+          status: 'posted',
+          payment_type: 'cash',
+          customer_id: 600,
+          delivery_rep_id: REP_OWN,
+          van_trip_id: 1,
+        },
+        {
+          id: 70,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          doc_no: 'INV-70',
+          total: 70,
+          subtotal: 70,
+          discount: 0,
+          paid_amount: 70,
+          status: 'posted',
+          payment_type: 'cash',
+          customer_id: 200,
+          delivery_rep_id: REP_OTHER,
+          van_trip_id: 2,
+        },
+      ])
+      .execute();
 
-    const codes = (err: any) => err && typeof err.code === 'string' ? err.code : '';
+    const codes = (err: any) => (err && typeof err.code === 'string' ? err.code : '');
     const isCode = (code: string, status: number) => (err: any) =>
       err && err.code === code && err.statusCode === status;
 
@@ -192,11 +406,21 @@ async function main(): Promise<void> {
     // Linking another rep's sale, or a sale for a different customer,
     // is refused with a specific error.
     await assert.rejects(
-      vanService.recordFieldVisit(TENANT, ACCOUNT, REP_OWN, { tripId: 1, customerId: 200, visitType: 'positive', saleId: 70 }),
+      vanService.recordFieldVisit(TENANT, ACCOUNT, REP_OWN, {
+        tripId: 1,
+        customerId: 200,
+        visitType: 'positive',
+        saleId: 70,
+      }),
       isCode('REP_SALE_NOT_OWNED', 403),
     );
     await assert.rejects(
-      vanService.recordFieldVisit(TENANT, ACCOUNT, REP_OWN, { tripId: 1, customerId: 100, visitType: 'positive', saleId: 70 }),
+      vanService.recordFieldVisit(TENANT, ACCOUNT, REP_OWN, {
+        tripId: 1,
+        customerId: 100,
+        visitType: 'positive',
+        saleId: 70,
+      }),
       isCode('VISIT_SALE_CUSTOMER_MISMATCH', 400),
     );
     // 3a. (D14) Itinerary for a rep WITH assignments: assigned + served
@@ -221,9 +445,20 @@ async function main(): Promise<void> {
     // is neither assigned nor served. The rep-scoped ledger leg
     // (byRepId[OWN]) must still return 800 in the itinerary, while the
     // unassigned customer with no activity (300) stays out.
-    await anyDb.insertInto('customer_ledger').values(
-      { tenant_id: TENANT, account_id: ACCOUNT, customer_id: 800, entry_type: 'collection', amount: 25, note: 'field collection', van_trip_id: 1, reference_id: 1, reference_type: 'van_collection' },
-    ).execute();
+    await anyDb
+      .insertInto('customer_ledger')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        customer_id: 800,
+        entry_type: 'collection',
+        amount: 25,
+        note: 'field collection',
+        van_trip_id: 1,
+        reference_id: 1,
+        reference_type: 'van_collection',
+      })
+      .execute();
     const itineraryLedger = await vanService.getDriverTodayItinerary(TENANT, REP_OWN);
     const ledgerIds = itineraryLedger.map((c: any) => Number(c.customerId)).sort((a: number, b: number) => a - b);
     assert.deepEqual(ledgerIds, [100, 400, 500, 600, 800]);
@@ -239,7 +474,12 @@ async function main(): Promise<void> {
     // including for an unassigned customer (owned trip is the scope
     // leg). It runs after the itinerary checks because recording it
     // makes customer 300 served by OWN.
-    const visit = await vanService.recordFieldVisit(TENANT, ACCOUNT, REP_OWN, { tripId: 1, customerId: 300, visitType: 'negative', negativeReason: 'shop_closed' });
+    const visit = await vanService.recordFieldVisit(TENANT, ACCOUNT, REP_OWN, {
+      tripId: 1,
+      customerId: 300,
+      visitType: 'negative',
+      negativeReason: 'shop_closed',
+    });
     assert.equal(visit.ok, true);
     assert.ok(Number(visit.visitId) > 0);
     // The refusals above left no visit row behind for the other rep.

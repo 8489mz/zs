@@ -18,8 +18,26 @@ import {
 
   const items = buildInventoryReportItems(
     [
-      { id: 10, name: 'أرز', stock_qty: 9, min_stock_qty: 12, retail_price: 15, cost_price: 10, category_name: 'بقالة', supplier_name: 'المورد أ' },
-      { id: 11, name: 'سكر', stock_qty: 0, min_stock_qty: 5, retail_price: 20, cost_price: 14, category_name: 'بقالة', supplier_name: 'المورد ب' },
+      {
+        id: 10,
+        name: 'أرز',
+        stock_qty: 9,
+        min_stock_qty: 12,
+        retail_price: 15,
+        cost_price: 10,
+        category_name: 'بقالة',
+        supplier_name: 'المورد أ',
+      },
+      {
+        id: 11,
+        name: 'سكر',
+        stock_qty: 0,
+        min_stock_qty: 5,
+        retail_price: 20,
+        cost_price: 14,
+        category_name: 'بقالة',
+        supplier_name: 'المورد ب',
+      },
     ],
     [
       { product_id: 10, location_id: 7, branch_id: 1, qty: 4, location_name: 'المخزن أ', branch_name: 'الفرع الرئيسي' },
@@ -48,9 +66,33 @@ import {
   assert.equal(inconsistent[0].locations[0].qty, 5);
 
   const { trackedLocations, highlights } = buildInventoryLocationHighlights([
-    { product_id: 10, location_id: 7, branch_id: 1, qty: 4, min_stock_qty: 6, location_name: 'المخزن أ', branch_name: 'الفرع الرئيسي' },
-    { product_id: 11, location_id: 7, branch_id: 1, qty: 0, min_stock_qty: 5, location_name: 'المخزن أ', branch_name: 'الفرع الرئيسي' },
-    { product_id: 10, location_id: 8, branch_id: 1, qty: 5, min_stock_qty: 2, location_name: 'المخزن ب', branch_name: 'الفرع الرئيسي' },
+    {
+      product_id: 10,
+      location_id: 7,
+      branch_id: 1,
+      qty: 4,
+      min_stock_qty: 6,
+      location_name: 'المخزن أ',
+      branch_name: 'الفرع الرئيسي',
+    },
+    {
+      product_id: 11,
+      location_id: 7,
+      branch_id: 1,
+      qty: 0,
+      min_stock_qty: 5,
+      location_name: 'المخزن أ',
+      branch_name: 'الفرع الرئيسي',
+    },
+    {
+      product_id: 10,
+      location_id: 8,
+      branch_id: 1,
+      qty: 5,
+      min_stock_qty: 2,
+      location_name: 'المخزن ب',
+      branch_name: 'الفرع الرئيسي',
+    },
   ]);
 
   assert.equal(trackedLocations, 2);

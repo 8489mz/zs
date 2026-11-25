@@ -40,7 +40,13 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: ['hrPayrollManage'] } as unknown as AuthContext;
+  const auth = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 1,
+    permissions: ['hrPayrollManage'],
+  } as unknown as AuthContext;
   const service = new HrService(
     db,
     new TransactionHelper(),
@@ -76,16 +82,10 @@ async function main(): Promise<void> {
     assert.match(String(exported.csvContent), /5000\.00/);
 
     // 2. No accrual journal: fail closed.
-    await assert.rejects(
-      service.generatePayrollWps(8, {}, auth),
-      /HR_PAYROLL_EXPORT_ACCRUAL_MISSING/,
-    );
+    await assert.rejects(service.generatePayrollWps(8, {}, auth), /HR_PAYROLL_EXPORT_ACCRUAL_MISSING/);
 
     // 3. Reversed accrual: fail closed with the reversal code.
-    await assert.rejects(
-      service.generatePayrollWps(9, {}, auth),
-      /HR_PAYROLL_EXPORT_ACCRUAL_REVERSED/,
-    );
+    await assert.rejects(service.generatePayrollWps(9, {}, auth), /HR_PAYROLL_EXPORT_ACCRUAL_REVERSED/);
 
     console.log('Payroll export requires accrual tests passed.');
   } finally {

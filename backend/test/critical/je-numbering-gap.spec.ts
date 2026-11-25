@@ -106,28 +106,56 @@ async function main() {
         (1, 't1', 1110, 1120, 1130, 2110, 1140, 4100, 4300, 5100, 2120, 1150, NULL, NULL, NULL, NULL, NULL, NULL);
     `);
     for (const code of [1110, 6900, 7290]) {
-      await pg.query('INSERT INTO accounting_accounts(id, tenant_id, code, is_tax) VALUES ($1, $2, $3, $4)',
-        [code, 't1', String(code), false]);
+      await pg.query('INSERT INTO accounting_accounts(id, tenant_id, code, is_tax) VALUES ($1, $2, $3, $4)', [
+        code,
+        't1',
+        String(code),
+        false,
+      ]);
     }
 
     const entryNoOf = async (id: number): Promise<string> => {
-      const row = await db.selectFrom('journal_entries').select('entry_no').where('id', '=', id).executeTakeFirstOrThrow();
+      const row = await db
+        .selectFrom('journal_entries')
+        .select('entry_no')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
       return String(row.entry_no);
     };
     const postExpense = async (sourceId: number, amount = 100): Promise<number> =>
-      inTx((trx) => posting.postDomainJournal(trx, {
-        sourceType: 'expense',
-        sourceId,
-        tenantId: 't1',
-        accountId: 'a1',
-        entryDate: ENTRY_DATE,
-        description: `expense #${sourceId}`,
-        createdBy: 1,
-        lines: [
-          { accountId: 6900, description: 'expense', debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId: null, locationId: null },
-          { accountId: 1110, description: 'cash', debit: 0, credit: amount, partnerType: 'none', partnerId: null, branchId: null, locationId: null },
-        ],
-      }));
+      inTx((trx) =>
+        posting.postDomainJournal(trx, {
+          sourceType: 'expense',
+          sourceId,
+          tenantId: 't1',
+          accountId: 'a1',
+          entryDate: ENTRY_DATE,
+          description: `expense #${sourceId}`,
+          createdBy: 1,
+          lines: [
+            {
+              accountId: 6900,
+              description: 'expense',
+              debit: amount,
+              credit: 0,
+              partnerType: 'none',
+              partnerId: null,
+              branchId: null,
+              locationId: null,
+            },
+            {
+              accountId: 1110,
+              description: 'cash',
+              debit: 0,
+              credit: amount,
+              partnerType: 'none',
+              partnerId: null,
+              branchId: null,
+              locationId: null,
+            },
+          ],
+        }),
+      );
 
     // 1. Two sequential postings take two consecutive numbers.
     const firstId = await postExpense(1);
@@ -149,15 +177,38 @@ async function main() {
           description: 'expense #99 (rolled back)',
           createdBy: 1,
           lines: [
-            { accountId: 6900, description: 'expense', debit: 100, credit: 0, partnerType: 'none', partnerId: null, branchId: null, locationId: null },
-            { accountId: 1110, description: 'cash', debit: 0, credit: 100, partnerType: 'none', partnerId: null, branchId: null, locationId: null },
+            {
+              accountId: 6900,
+              description: 'expense',
+              debit: 100,
+              credit: 0,
+              partnerType: 'none',
+              partnerId: null,
+              branchId: null,
+              locationId: null,
+            },
+            {
+              accountId: 1110,
+              description: 'cash',
+              debit: 0,
+              credit: 100,
+              partnerType: 'none',
+              partnerId: null,
+              branchId: null,
+              locationId: null,
+            },
           ],
         });
         throw new Error('simulated caller failure after posting');
       }),
       /simulated caller failure after posting/,
     );
-    const rolledBack = await db.selectFrom('journal_entries').select('id').where('source_type', '=', 'expense').where('source_id', '=', 99).execute();
+    const rolledBack = await db
+      .selectFrom('journal_entries')
+      .select('id')
+      .where('source_type', '=', 'expense')
+      .where('source_id', '=', 99)
+      .execute();
     assert.deepEqual(rolledBack, [], 'rolled-back journal row is gone');
     const thirdId = await postExpense(3);
     const thirdNo = await entryNoOf(thirdId);
@@ -176,8 +227,15 @@ async function main() {
     assert.equal(await entryNoOf(firstId), firstNo, 'first journal number is unchanged by later postings');
     assert.equal(await entryNoOf(secondId), secondNo, 'second journal number is unchanged by later postings');
     assert.equal(await entryNoOf(5000), 'JE-00005000', 'legacy journal number is unchanged by later postings');
-    const maxNo = await db.selectFrom('journal_entries').select((eb) => eb.fn.max('entry_no').as('max_no')).executeTakeFirstOrThrow();
-    assert.equal(String(maxNo.max_no), await entryNoOf(fifthId), 'highest visible number equals the last allocated number');
+    const maxNo = await db
+      .selectFrom('journal_entries')
+      .select((eb) => eb.fn.max('entry_no').as('max_no'))
+      .executeTakeFirstOrThrow();
+    assert.equal(
+      String(maxNo.max_no),
+      await entryNoOf(fifthId),
+      'highest visible number equals the last allocated number',
+    );
 
     // 5. The number is decoupled from the identity id: the first new
     // number is 5001 -- one above the legacy identity-derived maximum
@@ -188,9 +246,15 @@ async function main() {
     assert.equal(num(firstNo), 5001, 'first number starts above the legacy maximum: MAX(entry_no) + 1');
     const sixthId = await postExpense(6);
     assert.ok(sixthId < 100, 'identity id stays small');
-    assert.equal(num(await entryNoOf(sixthId)), num(await entryNoOf(fifthId)) + 1, 'number keeps counting from the highest visible number, not the id');
+    assert.equal(
+      num(await entryNoOf(sixthId)),
+      num(await entryNoOf(fifthId)) + 1,
+      'number keeps counting from the highest visible number, not the id',
+    );
 
-    console.log('je-numbering-gap: sequential numbers, rollback leaves no gap, duplicate consumes nothing, old numbers untouched, number decoupled from id');
+    console.log(
+      'je-numbering-gap: sequential numbers, rollback leaves no gap, duplicate consumes nothing, old numbers untouched, number decoupled from id',
+    );
   } finally {
     await db.destroy();
   }

@@ -63,10 +63,7 @@ async function main(): Promise<void> {
   assert.equal(lines2[0].debit, 10.13);
 
   // A both-sides line still fails closed, at any digits.
-  assert.throws(
-    () => svc.addLine([], { ...line, debit: 5, credit: 5 }, 3),
-    /INVALID_JOURNAL_LINE/,
-  );
+  assert.throws(() => svc.addLine([], { ...line, debit: 5, credit: 5 }, 3), /INVALID_JOURNAL_LINE/);
 
   console.log('Posting digits required tests passed.');
 }

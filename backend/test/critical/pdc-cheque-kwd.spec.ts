@@ -31,7 +31,10 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const inTx = <T>(fn: (trx: any) => Promise<T>): Promise<T> => db.transaction().execute(fn);
@@ -86,13 +89,27 @@ async function main() {
       INSERT INTO settings VALUES ('t1','currency','KWD');
       INSERT INTO customers VALUES (25,'t1',0);
     `);
-    for (const [code, type] of [[1110, 'asset'], [1120, 'asset'], [1121, 'asset'], [1122, 'asset'], [1130, 'asset'], [7290, 'expense']] as const) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), type]);
+    for (const [code, type] of [
+      [1110, 'asset'],
+      [1120, 'asset'],
+      [1121, 'asset'],
+      [1122, 'asset'],
+      [1130, 'asset'],
+      [7290, 'expense'],
+    ] as const) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        type,
+      ]);
     }
 
     const linesOf = async (entryId: number) => {
       const r = await pg.query<{ account_id: string; debit: string; credit: string }>(
-        'SELECT account_id, debit, credit FROM journal_entry_lines WHERE journal_entry_id=$1 ORDER BY account_id', [entryId]);
+        'SELECT account_id, debit, credit FROM journal_entry_lines WHERE journal_entry_id=$1 ORDER BY account_id',
+        [entryId],
+      );
       return r.rows.map((row) => [Number(row.account_id), Number(row.debit), Number(row.credit)] as const);
     };
 
@@ -107,20 +124,29 @@ async function main() {
     // Receive (sequence 0): Dr 1122 / Cr 1130 at exactly 100.123.
     const j1 = await inTx((trx) => posting.postPdcChequeReceive(trx, 1, auth));
     assert.equal(j1.posted, true);
-    assert.deepEqual(await linesOf(Number(j1.journalEntryId)), [[1122, 100.123, 0], [1130, 0, 100.123]]);
+    assert.deepEqual(await linesOf(Number(j1.journalEntryId)), [
+      [1122, 100.123, 0],
+      [1130, 0, 100.123],
+    ]);
 
     // Deposit (sequence 1): Dr 1121 / Cr 1122 at exactly 100.123.
     await pg.query('UPDATE accounting_cheques SET posting_sequence=1, last_action_date=$1 WHERE id=1', ['2026-10-05']);
     const j2 = await inTx((trx) => posting.postPdcChequeDeposit(trx, 1, auth));
     assert.equal(j2.posted, true);
-    assert.deepEqual(await linesOf(Number(j2.journalEntryId)), [[1121, 100.123, 0], [1122, 0, 100.123]]);
+    assert.deepEqual(await linesOf(Number(j2.journalEntryId)), [
+      [1121, 100.123, 0],
+      [1122, 0, 100.123],
+    ]);
     await pg.query("UPDATE accounting_cheques SET status='under_collection' WHERE id=1");
 
     // Bounce from under_collection (sequence 2): Dr 1130 / Cr 1121 at 100.123.
     await pg.query('UPDATE accounting_cheques SET posting_sequence=2, last_action_date=$1 WHERE id=1', ['2026-10-10']);
     const j3 = await inTx((trx) => posting.postPdcChequeBounce(trx, 1, 0, null, auth));
     assert.equal(j3.posted, true);
-    assert.deepEqual(await linesOf(Number(j3.journalEntryId)), [[1121, 0, 100.123], [1130, 100.123, 0]]);
+    assert.deepEqual(await linesOf(Number(j3.journalEntryId)), [
+      [1121, 0, 100.123],
+      [1130, 100.123, 0],
+    ]);
 
     // Whole-cycle nets to exactly zero; every journal balances exactly.
     const nets = await pg.query<{ account_id: string; net: string }>(`
@@ -128,12 +154,24 @@ async function main() {
       FROM journal_entry_lines jel JOIN journal_entries je ON je.id = jel.journal_entry_id
       WHERE je.tenant_id='t1' AND je.source_type LIKE 'pdc_cheque_%' AND je.source_id=1
       GROUP BY jel.account_id ORDER BY jel.account_id`);
-    assert.deepEqual(nets.rows.map((r) => [Number(r.account_id), Number(r.net)]), [[1121, 0], [1122, 0], [1130, 0]]);
-    const unbalanced = await pg.query(`SELECT journal_entry_id FROM journal_entry_lines GROUP BY journal_entry_id HAVING sum(debit) <> sum(credit)`);
+    assert.deepEqual(
+      nets.rows.map((r) => [Number(r.account_id), Number(r.net)]),
+      [
+        [1121, 0],
+        [1122, 0],
+        [1130, 0],
+      ],
+    );
+    const unbalanced = await pg.query(
+      `SELECT journal_entry_id FROM journal_entry_lines GROUP BY journal_entry_id HAVING sum(debit) <> sum(credit)`,
+    );
     assert.deepEqual(unbalanced.rows, []);
   } finally {
     await db.destroy();
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

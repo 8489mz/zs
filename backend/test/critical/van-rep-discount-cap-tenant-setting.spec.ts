@@ -124,67 +124,199 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('settings').values([
-    { tenant_id: TENANT, key: 'currency', value: 'EGP' },
-    { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
-  ]).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values([
-    { id: 1, tenant_id: TENANT, username: 'sys', phone: null, is_active: true },
-    { id: 2, tenant_id: TENANT, username: 'sup', phone: null, role: 'admin', is_active: true },
-  ]).execute();
+  await anyDb
+    .insertInto('settings')
+    .values([
+      { tenant_id: TENANT, key: 'currency', value: 'EGP' },
+      { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values([
+      { id: 1, tenant_id: TENANT, username: 'sys', phone: null, is_active: true },
+      { id: 2, tenant_id: TENANT, username: 'sup', phone: null, role: 'admin', is_active: true },
+    ])
+    .execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [1160, '1160', 'asset'], [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'],
-    [5100, '5100', 'expense'], [6400, '6400', 'expense'], [7100, '7100', 'revenue'], [7200, '7200', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [1160, '1160', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
+    [6400, '6400', 'expense'],
+    [7100, '7100', 'revenue'],
+    [7200, '7200', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-    lock_date_all: null, lock_date_non_adviser: null, lock_date_tax: null,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+      lock_date_all: null,
+      lock_date_non_adviser: null,
+      lock_date_tax: null,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
   // Rep 1: BOTH discounts (per-line + invoice), stored cap 0 (inert).
   // Rep 2: per-line ONLY, legacy stored cap 100 (inert).
   // Rep 3: NO discounting at all.
   // Rep 4: per-line ONLY, stored cap 0 (inert).
   const repPerms: Array<[number, Record<string, unknown>]> = [
     [1, { can_give_discount: true, can_give_invoice_discount: true, max_discount_percent: 0, can_collect_cash: true }],
-    [2, { can_give_discount: true, can_give_invoice_discount: false, max_discount_percent: 100, can_collect_cash: true }],
-    [3, { can_give_discount: false, can_give_invoice_discount: false, max_discount_percent: 0, can_collect_cash: true }],
+    [
+      2,
+      { can_give_discount: true, can_give_invoice_discount: false, max_discount_percent: 100, can_collect_cash: true },
+    ],
+    [
+      3,
+      { can_give_discount: false, can_give_invoice_discount: false, max_discount_percent: 0, can_collect_cash: true },
+    ],
     [4, { can_give_discount: true, can_give_invoice_discount: false, max_discount_percent: 0, can_collect_cash: true }],
   ];
   for (const [id, perms] of repPerms) {
-    await anyDb.insertInto('delivery_representatives').values({ id, tenant_id: TENANT, account_id: ACCOUNT, name: `Rep ${id}`, phone: null, van_location_id: 20, is_van_rep: true, permissions: JSON.stringify(perms) }).execute();
+    await anyDb
+      .insertInto('delivery_representatives')
+      .values({
+        id,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: `Rep ${id}`,
+        phone: null,
+        van_location_id: 20,
+        is_van_rep: true,
+        permissions: JSON.stringify(perms),
+      })
+      .execute();
   }
-  await anyDb.insertInto('customers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer 1', balance: 500, credit_limit: 10000, is_active: true }).execute();
-  await anyDb.insertInto('cashier_shifts').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'CS-1', opened_by: 2, opening_cash: 0, status: 'open', branch_id: null, location_id: null }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer 1',
+      balance: 500,
+      credit_limit: 10000,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'CS-1',
+      opened_by: 2,
+      opening_cash: 0,
+      status: 'open',
+      branch_id: null,
+      location_id: null,
+    })
+    .execute();
 }
 
 async function seedTrip(db: Kysely<Database>, id: number, repId = 1): Promise<void> {
-  await (db as any).insertInto('van_sales_trips').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: repId, vehicle_id: null,
-    shift_name: null, start_odometer: 100, end_odometer: null, distance_km: null,
-    van_location_id: 20, source_warehouse_id: 10, status: 'open',
-    settlement_status: 'open', loaded_amount: 0, sales_amount: 0, cash_collected: 0,
-    credit_sales: 0, returns_amount: 0, cash_refunds: 0, total_instapay_sales: 0,
-    total_instapay_collections: 0, variance: null, stock_variance_details: null, notes: null,
-    night_stock_approved_by: null, night_stock_notes: null,
-    business_day: null, submitted_per_day_cash: null,
-    opened_at: '2026-11-09T08:00:00+02:00',
-  }).execute();
+  await (db as any)
+    .insertInto('van_sales_trips')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: repId,
+      vehicle_id: null,
+      shift_name: null,
+      start_odometer: 100,
+      end_odometer: null,
+      distance_km: null,
+      van_location_id: 20,
+      source_warehouse_id: 10,
+      status: 'open',
+      settlement_status: 'open',
+      loaded_amount: 0,
+      sales_amount: 0,
+      cash_collected: 0,
+      credit_sales: 0,
+      returns_amount: 0,
+      cash_refunds: 0,
+      total_instapay_sales: 0,
+      total_instapay_collections: 0,
+      variance: null,
+      stock_variance_details: null,
+      notes: null,
+      night_stock_approved_by: null,
+      night_stock_notes: null,
+      business_day: null,
+      submitted_per_day_cash: null,
+      opened_at: '2026-11-09T08:00:00+02:00',
+    })
+    .execute();
 }
 
-async function seedProduct(db: Kysely<Database>, id: number, retail: number, cost: number, vanQty: number): Promise<void> {
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  retail: number,
+  cost: number,
+  vanQty: number,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({ id, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${id}`, stock_qty: vanQty, cost_price: cost, retail_price: retail, credit_price: 0, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Product ${id}`,
+      stock_qty: vanQty,
+      cost_price: cost,
+      retail_price: retail,
+      credit_price: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -204,16 +336,34 @@ function buildService(db: Kysely<Database>): VanSalesService {
   // radar's insert works, called outside any transaction.
   const recordedFraudEvents: any[] = [];
   const fraudStub = {
-    recordSuspicionEvent: async (params: any) => { recordedFraudEvents.push(params); },
+    recordSuspicionEvent: async (params: any) => {
+      recordedFraudEvents.push(params);
+    },
     getSummary: async () => ({}),
     getEvents: async () => [],
   };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).recordedFraudEvents = recordedFraudEvents;
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   return service;
 }
@@ -235,7 +385,7 @@ function buildLifecycle(db: Kysely<Database>): VanTripLifecycleService {
     deductVanSalePharmacyBatches: async () => [],
     moveVanInventoryBatches: async () => 0,
     deductVanSaleInventoryBatches: async () => [],
-    resolveSystemAuthContext: async () => ({ ...ADMIN, userId: 2 } as never),
+    resolveSystemAuthContext: async () => ({ ...ADMIN, userId: 2 }) as never,
     recordSuspicionEvent: async () => ({}),
     listRepServedCustomerIds: async () => new Set<number>(),
     resolveRepLinkedUserId: async () => null,
@@ -243,15 +393,30 @@ function buildLifecycle(db: Kysely<Database>): VanTripLifecycleService {
 }
 
 async function saleRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll().where('id', '=', id).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', id)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function paymentRow(db: Kysely<Database>, tripId: number): Promise<any> {
-  return (db as any).selectFrom('customer_payments').selectAll().where('van_trip_id', '=', tripId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('customer_payments')
+    .selectAll()
+    .where('van_trip_id', '=', tripId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function returnRow(db: Kysely<Database>, tripId: number): Promise<any> {
-  return (db as any).selectFrom('van_field_returns').selectAll().where('trip_id', '=', tripId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('van_field_returns')
+    .selectAll()
+    .where('trip_id', '=', tripId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function salesCount(db: Kysely<Database>): Promise<number> {
@@ -260,7 +425,12 @@ async function salesCount(db: Kysely<Database>): Promise<number> {
 }
 
 async function saleItems(db: Kysely<Database>, saleId: number): Promise<any[]> {
-  return (db as any).selectFrom('sale_items').selectAll().where('sale_id', '=', saleId).where('tenant_id', '=', TENANT).execute();
+  return (db as any)
+    .selectFrom('sale_items')
+    .selectAll()
+    .where('sale_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .execute();
 }
 
 function recordedFraud(service: VanSalesService, eventCode: string): any[] {
@@ -268,11 +438,22 @@ function recordedFraud(service: VanSalesService, eventCode: string): any[] {
 }
 
 async function auditLogEvents(db: Kysely<Database>, eventCode: string): Promise<any[]> {
-  return (db as any).selectFrom('audit_logs').selectAll().where('event_code', '=', eventCode).where('tenant_id', '=', TENANT).execute();
+  return (db as any)
+    .selectFrom('audit_logs')
+    .selectAll()
+    .where('event_code', '=', eventCode)
+    .where('tenant_id', '=', TENANT)
+    .execute();
 }
 
 async function vanStockQty(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await (db as any).selectFrom('product_location_stock').select(['qty']).where('product_id', '=', productId).where('location_id', '=', 20).where('tenant_id', '=', TENANT).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('product_location_stock')
+    .select(['qty'])
+    .where('product_id', '=', productId)
+    .where('location_id', '=', 20)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirst();
   return Number(row?.qty || 0);
 }
 
@@ -282,7 +463,10 @@ async function stockMovementsCount(db: Kysely<Database>): Promise<number> {
 }
 
 async function setCap(db: Kysely<Database>, pct: number): Promise<void> {
-  await (db as any).insertInto('settings').values({ tenant_id: TENANT, key: 'vanRepDiscountCapPercent', value: String(pct) }).execute();
+  await (db as any)
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'vanRepDiscountCapPercent', value: String(pct) })
+    .execute();
 }
 
 async function seedPin(db: Kysely<Database>, pin: string): Promise<void> {
@@ -307,9 +491,19 @@ async function main(): Promise<void> {
       assert.equal(await getVanRepDiscountCapPercent(db as any, TENANT), 5);
       await setCap(db, 10);
       assert.equal(await getVanRepDiscountCapPercent(db as any, TENANT), 10);
-      await (db as any).updateTable('settings').set({ value: '250' }).where('tenant_id', '=', TENANT).where('key', '=', 'vanRepDiscountCapPercent').execute();
+      await (db as any)
+        .updateTable('settings')
+        .set({ value: '250' })
+        .where('tenant_id', '=', TENANT)
+        .where('key', '=', 'vanRepDiscountCapPercent')
+        .execute();
       assert.equal(await getVanRepDiscountCapPercent(db as any, TENANT), 100);
-      await (db as any).updateTable('settings').set({ value: 'not-a-number' }).where('tenant_id', '=', TENANT).where('key', '=', 'vanRepDiscountCapPercent').execute();
+      await (db as any)
+        .updateTable('settings')
+        .set({ value: 'not-a-number' })
+        .where('tenant_id', '=', TENANT)
+        .where('key', '=', 'vanRepDiscountCapPercent')
+        .execute();
       assert.equal(await getVanRepDiscountCapPercent(db as any, TENANT), 5);
       // The REAL radar, called OUTSIDE any transaction: its
       // audit_logs insert works (rep 1 is seeded above, currency
@@ -317,16 +511,22 @@ async function main(): Promise<void> {
       // alert dispatch returns early).
       const radar = new VanFraudRadarService(db);
       await radar.recordSuspicionEvent({
-        tenantId: TENANT, accountId: ACCOUNT, repId: 1,
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        repId: 1,
         eventCode: 'VAN_SUSPICION_DISCOUNT_ABOVE_LIMIT',
-        titleAr: 'خصم فوق السقف', detailsAr: 'خصم 6% فوق سقف 5%',
-        amountInvolved: 60, wasBlocked: true,
+        titleAr: 'خصم فوق السقف',
+        detailsAr: 'خصم 6% فوق سقف 5%',
+        amountInvolved: 60,
+        wasBlocked: true,
       } as never);
       const rows = await auditLogEvents(db, 'VAN_SUSPICION_DISCOUNT_ABOVE_LIMIT');
       assert.equal(rows.length, 1);
       assert.equal(Number(JSON.parse(String(rows[0].details)).amountInvolved), 60);
       console.log('0. cap resolver defaults + clamp passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 1. 4% on one line passes under the default cap (5%).
@@ -338,7 +538,8 @@ async function main(): Promise<void> {
       await seedTrip(db, 1, 1);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10, lineDiscount: 40 }],
       });
       assert.equal(res.total, 960);
@@ -350,7 +551,9 @@ async function main(): Promise<void> {
       assert.equal(Number(items[0].line_discount), 40);
       assert.equal(Number(items[0].line_total), 960);
       console.log('1. 4% line passes passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. 6% on one line without PIN -> 403 + fraud event, nothing written.
@@ -364,10 +567,13 @@ async function main(): Promise<void> {
       let thrown: unknown = null;
       try {
         await service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 10, lineDiscount: 60 }],
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown, 'a 6% line without PIN must throw');
       assert.equal(errorCode(thrown), 'LINE_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN');
       assert.equal(await salesCount(db), 0);
@@ -376,7 +582,9 @@ async function main(): Promise<void> {
       const events = recordedFraud(service, 'VAN_SUSPICION_DISCOUNT_ABOVE_LIMIT');
       assert.equal(events.length, 1);
       console.log('2. 6% line refused + fraud event passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. 6% on one line with supervisor PIN -> passes.
@@ -389,7 +597,8 @@ async function main(): Promise<void> {
       await seedTrip(db, 1, 1);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10, lineDiscount: 60 }],
         supervisorOverridePin: '1234',
       });
@@ -397,7 +606,9 @@ async function main(): Promise<void> {
       assert.equal(Number(items[0].line_discount), 60);
       assert.equal(Number(items[0].line_total), 940);
       console.log('3. 6% line with PIN passes passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 4. Tenant admin raises the cap to 10 -> 6% passes without PIN.
@@ -410,12 +621,15 @@ async function main(): Promise<void> {
       await seedTrip(db, 1, 1);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10, lineDiscount: 60 }],
       });
       assert.equal(res.total, 940);
       console.log('4. cap 10 lets 6% pass passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 5. PIN path stays hashed: the stored value is a bcrypt hash,
@@ -425,7 +639,12 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await seedPin(db, '1234');
-      const stored = await (db as any).selectFrom('settings').select(['value']).where('tenant_id', '=', TENANT).where('key', '=', 'managerPin').executeTakeFirst();
+      const stored = await (db as any)
+        .selectFrom('settings')
+        .select(['value'])
+        .where('tenant_id', '=', TENANT)
+        .where('key', '=', 'managerPin')
+        .executeTakeFirst();
       assert.ok(String(stored.value).startsWith('$2b$'), 'the stored PIN must be a bcrypt hash');
       assert.notEqual(stored.value, '1234');
       await seedProduct(db, 101, 100, 50, 10);
@@ -434,11 +653,14 @@ async function main(): Promise<void> {
       let thrown: unknown = null;
       try {
         await service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 10, lineDiscount: 60 }],
           supervisorOverridePin: '9999',
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown, 'a wrong PIN must fail');
       // verifySupervisorPin maps the manager-approval failure
       // MANAGER_AUTH_INVALID to the van-facing code
@@ -446,7 +668,9 @@ async function main(): Promise<void> {
       assert.equal(errorCode(thrown), 'INVALID_SUPERVISOR_PIN');
       assert.equal(await salesCount(db), 0);
       console.log('5. PIN stays hashed passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 6. Offline sale keeps its line discount (and its timestamp).
@@ -458,7 +682,8 @@ async function main(): Promise<void> {
       await seedTrip(db, 1, 1);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10, lineDiscount: 40 }],
         offlineCreatedAt: offline3d,
       });
@@ -468,7 +693,9 @@ async function main(): Promise<void> {
       assert.equal(new Date(sale.created_at).getTime(), new Date(offline3d).getTime());
       assert.ok(sale.received_at);
       console.log('6. offline sale keeps line discount passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 7. Invoice-level discount reads the tenant cap too.
@@ -482,23 +709,29 @@ async function main(): Promise<void> {
       let thrown: unknown = null;
       try {
         await service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 10 }],
           cashDiscountAmount: 60,
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown, 'a 6% invoice discount without PIN must throw');
       assert.equal(errorCode(thrown), 'CASH_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN');
       assert.equal(await salesCount(db), 0);
       await setCap(db, 10);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10 }],
         cashDiscountAmount: 60,
       });
       assert.equal(res.total, 940);
       console.log('7. invoice discount reads tenant cap passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 8. Per-rep stored cap values are ignored: rep 2 (per-line only,
@@ -525,44 +758,57 @@ async function main(): Promise<void> {
       await seedTrip(db, 5, 4);
       const service = buildService(db);
       const ok2 = await service.executeFieldSale(2, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10, lineDiscount: 40 }],
       });
       assert.equal(ok2.total, 960);
       let thrown: unknown = null;
       try {
         await service.executeFieldSale(2, TENANT, ACCOUNT, {
-          tripId: 4, paymentMethod: 'cash',
+          tripId: 4,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 10, lineDiscount: 60 }],
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown);
       assert.equal(errorCode(thrown), 'LINE_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN');
       const ok4 = await service.executeFieldSale(4, TENANT, ACCOUNT, {
-        tripId: 2, paymentMethod: 'cash',
+        tripId: 2,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10, lineDiscount: 40 }],
       });
       assert.equal(ok4.total, 960);
       thrown = null;
       try {
         await service.executeFieldSale(4, TENANT, ACCOUNT, {
-          tripId: 5, paymentMethod: 'cash',
+          tripId: 5,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 10, lineDiscount: 60 }],
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown);
       assert.equal(errorCode(thrown), 'LINE_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN');
       thrown = null;
       try {
         await service.executeFieldSale(3, TENANT, ACCOUNT, {
-          tripId: 3, paymentMethod: 'cash',
+          tripId: 3,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 10, lineDiscount: 40 }],
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown);
       assert.equal(errorCode(thrown), 'REP_DISCOUNT_NOT_ALLOWED');
       console.log('8. per-rep stored cap ignored passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 9. Cap = 0 means no discounting: any lineDiscount > 0 -> 403,
@@ -578,19 +824,25 @@ async function main(): Promise<void> {
       let thrown: unknown = null;
       try {
         await service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 10, lineDiscount: 10 }],
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown);
       assert.equal(errorCode(thrown), 'LINE_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN');
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10 }],
       });
       assert.equal(res.total, 1000);
       console.log('9. cap 0 means no discounting passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 10. COMBINED cap (the correction): rep 1 has both channels.
@@ -612,29 +864,36 @@ async function main(): Promise<void> {
       let thrown: unknown = null;
       try {
         await service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 10, lineDiscount: 40 }],
           cashDiscountAmount: 40,
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown, 'line 4% + invoice 4% must throw without PIN');
       assert.equal(errorCode(thrown), 'CASH_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN');
       assert.equal(await salesCount(db), 0);
       const withPin = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10, lineDiscount: 40 }],
         cashDiscountAmount: 40,
         supervisorOverridePin: '1234',
       });
       assert.equal(withPin.total, 920);
       const boundary = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 2, paymentMethod: 'cash',
+        tripId: 2,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10, lineDiscount: 30 }],
         cashDiscountAmount: 20,
       });
       assert.equal(boundary.total, 950);
       console.log('10. combined cap passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 11. Per-line-only rep applying an invoice discount -> refused
@@ -650,16 +909,21 @@ async function main(): Promise<void> {
       let thrown: unknown = null;
       try {
         await service.executeFieldSale(2, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 10 }],
           cashDiscountAmount: 20,
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown);
       assert.equal(errorCode(thrown), 'REP_DISCOUNT_NOT_ALLOWED');
       assert.equal(await salesCount(db), 0);
       console.log('11. per-line-only rep refused invoice discount passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 12. Price cut + explicit line discount SUM against the cap:
@@ -678,21 +942,27 @@ async function main(): Promise<void> {
       await seedTrip(db, 2, 1);
       const service = buildService(db);
       const ok = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 10, unitPrice: 99.96, lineDiscount: 48 }],
       });
       assert.equal(ok.total, 951.6);
       let thrown: unknown = null;
       try {
         await service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 2, paymentMethod: 'cash',
+          tripId: 2,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 10, unitPrice: 99.96, lineDiscount: 52 }],
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown);
       assert.equal(errorCode(thrown), 'LINE_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN');
       console.log('12. price cut + line discount sum against cap passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   console.log('van-rep-discount-cap-tenant-setting: all cases passed');

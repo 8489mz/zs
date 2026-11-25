@@ -37,7 +37,14 @@ import { AccountingTenantFoundationService } from '../../src/modules/accounting/
 import { SettingsImportService } from '../../src/modules/settings/services/settings-import.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'super_admin', userId: 1, username: 'admin', permissions: ['settings'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'super_admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['settings'],
+} as unknown as AuthContext;
 
 async function main(): Promise<void> {
   const pg = new PGlite();
@@ -47,11 +54,7 @@ async function main(): Promise<void> {
     ensureForScope: async () => {},
   } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
-  const service = new SettingsImportService(
-    db as any,
-    { log: async () => {} } as any,
-    posting,
-  );
+  const service = new SettingsImportService(db as any, { log: async () => {} } as any, posting);
 
   try {
     await pg.exec(`
@@ -85,11 +88,15 @@ async function main(): Promise<void> {
     `);
 
     const journalCount = async (): Promise<number> => {
-      const row = await db.selectFrom('journal_entries').select(({ fn }) => fn.count<number>('id').as('n')).executeTakeFirstOrThrow();
+      const row = await db
+        .selectFrom('journal_entries')
+        .select(({ fn }) => fn.count<number>('id').as('n'))
+        .executeTakeFirstOrThrow();
       return Number(row.n);
     };
     const glInventoryBalance = async (): Promise<number> => {
-      const rows = await db.selectFrom('journal_entry_lines')
+      const rows = await db
+        .selectFrom('journal_entry_lines')
         .innerJoin('journal_entries', 'journal_entries.id', 'journal_entry_lines.journal_entry_id')
         .innerJoin('accounting_accounts', 'accounting_accounts.id', 'journal_entry_lines.account_id')
         .select(({ fn }) => fn.sum<number>(sql`journal_entry_lines.debit - journal_entry_lines.credit`).as('balance'))
@@ -99,30 +106,49 @@ async function main(): Promise<void> {
       return Number((rows as any)?.balance || 0);
     };
     const stockValue = async (): Promise<number> => {
-      const row = await db.selectFrom('products')
+      const row = await db
+        .selectFrom('products')
         .select(({ fn }) => fn.sum<number>(sql`coalesce(stock_qty, 0) * coalesce(cost_price, 0)`).as('v'))
         .where('tenant_id', '=', 't1')
         .executeTakeFirst();
       return Number((row as any)?.v || 0);
     };
     const linesOf = async (entryId: number): Promise<Array<{ code: string; debit: number; credit: number }>> => {
-      const rows = await db.selectFrom('journal_entry_lines')
+      const rows = await db
+        .selectFrom('journal_entry_lines')
         .innerJoin('accounting_accounts', 'accounting_accounts.id', 'journal_entry_lines.account_id')
-        .select(['accounting_accounts.code as code', 'journal_entry_lines.debit as debit', 'journal_entry_lines.credit as credit'])
+        .select([
+          'accounting_accounts.code as code',
+          'journal_entry_lines.debit as debit',
+          'journal_entry_lines.credit as credit',
+        ])
         .where('journal_entry_id', '=', entryId)
         .execute();
       return rows.map((r: any) => ({ code: String(r.code), debit: Number(r.debit), credit: Number(r.credit) }));
     };
     const lastJournal = async (): Promise<{ id: number; sourceType: string; sourceId: number }> => {
-      const row = await db.selectFrom('journal_entries').select(['id', 'source_type', 'source_id'])
-        .orderBy('id', 'desc').executeTakeFirstOrThrow();
+      const row = await db
+        .selectFrom('journal_entries')
+        .select(['id', 'source_type', 'source_id'])
+        .orderBy('id', 'desc')
+        .executeTakeFirstOrThrow();
       return { id: Number(row.id), sourceType: String(row.source_type), sourceId: Number(row.source_id) };
     };
 
     // 1. The live case, shrunk: 10 units at cost 50.00 imported.
-    const imported = await service.importProducts([
-      { name: 'صنف اختبار', barcode: '1001', costPrice: 50, retailPrice: 80, stockQty: 10, warehouseName: 'المخزن الرئيسي' },
-    ], AUTH);
+    const imported = await service.importProducts(
+      [
+        {
+          name: 'صنف اختبار',
+          barcode: '1001',
+          costPrice: 50,
+          retailPrice: 80,
+          stockQty: 10,
+          warehouseName: 'المخزن الرئيسي',
+        },
+      ],
+      AUTH,
+    );
     assert.equal(imported.ok, true, 'import must succeed');
     assert.equal(imported.inserted, 1, 'one product inserted');
     assert.equal(await journalCount(), 1, 'one opening-stock journal must be posted');
@@ -132,10 +158,16 @@ async function main(): Promise<void> {
     assert.equal(firstLines.length, 2, 'journal has exactly two lines');
     assert.deepEqual(
       firstLines.map((l) => [l.code, l.debit, l.credit]).sort(),
-      [['1140', 500, 0], ['3100', 0, 500]],
+      [
+        ['1140', 500, 0],
+        ['3100', 0, 500],
+      ],
       'imported opening stock debits 1140 500.00 and credits 3100 500.00',
     );
-    const movements = await db.selectFrom('stock_movements').select(['movement_type', 'qty', 'before_qty', 'after_qty', 'total_cost']).execute();
+    const movements = await db
+      .selectFrom('stock_movements')
+      .select(['movement_type', 'qty', 'before_qty', 'after_qty', 'total_cost'])
+      .execute();
     assert.equal(movements.length, 1, 'one stock movement recorded');
     assert.equal(String(movements[0].movement_type), 'opening_balance', 'movement is an opening balance');
     assert.equal(Number(movements[0].qty), 10, 'movement qty is 10');
@@ -146,67 +178,90 @@ async function main(): Promise<void> {
     assert.equal(await glInventoryBalance(), 500, 'GL 1140 equals the stock value after import');
 
     // 2. Zero-cost stock posts no journal (no financial impact).
-    await service.importProducts([
-      { name: 'صنف بلا تكلفة', barcode: '1002', costPrice: 0, retailPrice: 10, stockQty: 5, warehouseName: 'المخزن الرئيسي' },
-    ], AUTH);
+    await service.importProducts(
+      [
+        {
+          name: 'صنف بلا تكلفة',
+          barcode: '1002',
+          costPrice: 0,
+          retailPrice: 10,
+          stockQty: 5,
+          warehouseName: 'المخزن الرئيسي',
+        },
+      ],
+      AUTH,
+    );
     assert.equal(await journalCount(), 1, 'zero-cost import posts no journal');
     assert.equal(await stockValue(), 500, 'zero-cost stock adds no value');
 
     // 3. Updating an existing product still ignores its stockQty.
     // (The cost stays 50.00 here so the valuation basis does not move
     // mid-spec; a cost edit is a revaluation question, not this fix.)
-    const updated = await service.importProducts([
-      { name: 'صنف اختبار', barcode: '1001', costPrice: 50, stockQty: 99, warehouseName: 'المخزن الرئيسي' },
-    ], AUTH);
+    const updated = await service.importProducts(
+      [{ name: 'صنف اختبار', barcode: '1001', costPrice: 50, stockQty: 99, warehouseName: 'المخزن الرئيسي' }],
+      AUTH,
+    );
     assert.equal(updated.updated, 1, 'existing product updated');
-    const product = await db.selectFrom('products').select(['stock_qty', 'cost_price']).where('barcode', '=', '1001').executeTakeFirstOrThrow();
+    const product = await db
+      .selectFrom('products')
+      .select(['stock_qty', 'cost_price'])
+      .where('barcode', '=', '1001')
+      .executeTakeFirstOrThrow();
     assert.equal(Number(product.stock_qty), 10, 'existing stockQty is still ignored');
     assert.equal(await journalCount(), 1, 'update with stockQty posts no journal');
 
     // 4. Opening-stock import: raise to 14, then lower to 6.
-    const productId = Number((await db.selectFrom('products').select('id').where('barcode', '=', '1001').executeTakeFirstOrThrow()).id);
-    const raised = await service.importOpeningStock([
-      { productId, qty: 14, warehouseName: 'المخزن الرئيسي' },
-    ], AUTH);
+    const productId = Number(
+      (await db.selectFrom('products').select('id').where('barcode', '=', '1001').executeTakeFirstOrThrow()).id,
+    );
+    const raised = await service.importOpeningStock([{ productId, qty: 14, warehouseName: 'المخزن الرئيسي' }], AUTH);
     assert.equal(raised.updated, 1, 'opening stock raise applied');
     assert.equal(await journalCount(), 2, 'raise posts one journal');
     const raiseJournal = await lastJournal();
     assert.equal(raiseJournal.sourceType, 'import_opening_stock', 'raise journal source is the opening-stock import');
     assert.deepEqual(
       (await linesOf(raiseJournal.id)).map((l) => [l.code, l.debit, l.credit]).sort(),
-      [['1140', 200, 0], ['3100', 0, 200]],
+      [
+        ['1140', 200, 0],
+        ['3100', 0, 200],
+      ],
       'raise of 4 units at 50.00 debits 1140 200.00',
     );
     assert.equal(await glInventoryBalance(), 700, 'GL 1140 is 700.00 after the raise');
     assert.equal(await stockValue(), 700, 'stock value is 700.00 after the raise');
 
-    const lowered = await service.importOpeningStock([
-      { productId, qty: 6, warehouseName: 'المخزن الرئيسي' },
-    ], AUTH);
+    const lowered = await service.importOpeningStock([{ productId, qty: 6, warehouseName: 'المخزن الرئيسي' }], AUTH);
     assert.equal(lowered.updated, 1, 'opening stock lowering applied');
     assert.equal(await journalCount(), 3, 'lowering posts one journal');
     const lowerJournal = await lastJournal();
     assert.deepEqual(
       (await linesOf(lowerJournal.id)).map((l) => [l.code, l.debit, l.credit]).sort(),
-      [['1140', 0, 400], ['3100', 400, 0]],
+      [
+        ['1140', 0, 400],
+        ['3100', 400, 0],
+      ],
       'lowering by 8 units at 50.00 credits 1140 400.00 against 3100',
     );
     assert.equal(await glInventoryBalance(), 300, 'GL 1140 is 300.00 after the lowering');
     assert.equal(await stockValue(), 300, 'stock value is 300.00 after the lowering');
-    const openingMovements = await db.selectFrom('stock_movements').select(['movement_type', 'qty', 'total_cost'])
-      .where('movement_type', '=', 'opening_stock').orderBy('id', 'asc').execute();
+    const openingMovements = await db
+      .selectFrom('stock_movements')
+      .select(['movement_type', 'qty', 'total_cost'])
+      .where('movement_type', '=', 'opening_stock')
+      .orderBy('id', 'asc')
+      .execute();
     assert.equal(openingMovements.length, 2, 'two opening-stock movements recorded');
     assert.equal(Number(openingMovements[0].qty), 4, 'raise movement is +4');
     assert.equal(Number(openingMovements[1].qty), -8, 'lowering movement carries the SIGNED delta -8');
     assert.equal(Number(openingMovements[1].total_cost), -400, 'lowering movement total is -400.00');
 
     // 5. A no-change opening-stock import posts no journal.
-    await service.importOpeningStock([
-      { productId, qty: 6, warehouseName: 'المخزن الرئيسي' },
-    ], AUTH);
+    await service.importOpeningStock([{ productId, qty: 6, warehouseName: 'المخزن الرئيسي' }], AUTH);
     assert.equal(await journalCount(), 3, 'no-change import posts no journal');
 
-    console.log('import-opening-stock-gl: imported 10x50 posts Dr 1140 500 / Cr 3100 500; raise to 14 and lower to 6 track GL == stock value (700, 300); zero-cost and no-change post nothing');
+    console.log(
+      'import-opening-stock-gl: imported 10x50 posts Dr 1140 500 / Cr 3100 500; raise to 14 and lower to 6 track GL == stock value (700, 300); zero-cost and no-change post nothing',
+    );
   } finally {
     await db.destroy();
   }

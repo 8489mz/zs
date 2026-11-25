@@ -55,7 +55,12 @@ const TZ = 'Africa/Cairo';
 const HOUR = 60 * 60 * 1000;
 
 type OverviewResult = {
-  stats: { todaySalesAmount: number; todaySalesCount: number; todayPurchasesAmount: number; todayPurchasesCount: number };
+  stats: {
+    todaySalesAmount: number;
+    todaySalesCount: number;
+    todayPurchasesAmount: number;
+    todayPurchasesCount: number;
+  };
   topToday: Array<{ productId: string; name: string; qty: number; total: number }>;
   trends: { sales: Array<{ key: string; value: number }>; purchases: Array<{ key: string; value: number }> };
 };
@@ -109,8 +114,12 @@ async function main(): Promise<void> {
     assert.notEqual(yesterdayKey, todayKey);
     assert.notEqual(twoDaysAgoKey, yesterdayKey);
 
-    await pg.query(`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', '"${TZ}"'), ('t1', 'currency', 'EGP')`);
-    await pg.query(`INSERT INTO products (id, tenant_id, name, retail_price, stock_qty, min_stock_qty, cost_price, is_active) VALUES (1, 't1', 'Shirt', 30, 10, 2, 10, true)`);
+    await pg.query(
+      `INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', '"${TZ}"'), ('t1', 'currency', 'EGP')`,
+    );
+    await pg.query(
+      `INSERT INTO products (id, tenant_id, name, retail_price, stock_qty, min_stock_qty, cost_price, is_active) VALUES (1, 't1', 'Shirt', 30, 10, 2, 10, true)`,
+    );
     await pg.query(`
       INSERT INTO sales (id, tenant_id, account_id, total, tax_amount, discount, delivery_fee, delivery_fee_mode, delivery_rep_id, branch_id, location_id, created_by, created_at, status, paid_amount, store_credit_used, payment_type, payment_channel, customer_id) VALUES
         (1, 't1', 'a1', 300, 0, 0, 0, NULL, NULL, 1, 1, 1, '${saleAAt.toISOString()}', 'posted', 300, 0, 'cash', 'cash', NULL),
@@ -132,7 +141,9 @@ async function main(): Promise<void> {
     `);
 
     // 1. Open shift spanning midnight: "today" reaches back to the shift.
-    await pg.query(`INSERT INTO cashier_shifts (id, tenant_id, account_id, opened_by, status, branch_id, location_id, created_at, closed_at, closed_by, expected_cash, counted_cash) VALUES (1, 't1', 'a1', 1, 'open', 1, 1, '${shiftOpenedAt.toISOString()}', NULL, NULL, NULL, NULL)`);
+    await pg.query(
+      `INSERT INTO cashier_shifts (id, tenant_id, account_id, opened_by, status, branch_id, location_id, created_at, closed_at, closed_by, expected_cash, counted_cash) VALUES (1, 't1', 'a1', 1, 'open', 1, 1, '${shiftOpenedAt.toISOString()}', NULL, NULL, NULL, NULL)`,
+    );
     {
       const result = await overview(db, { branchId: 1, locationId: 1 });
       assert.equal(result.stats.todaySalesAmount, 450, '300 (yesterday 22:00, in shift) + 100 + 50');
@@ -149,7 +160,9 @@ async function main(): Promise<void> {
       assert.equal(result.trends.sales.find((p) => p.key === twoDaysAgoKey)?.value, 999);
       assert.equal(result.trends.purchases.find((p) => p.key === yesterdayKey)?.value, 70);
       assert.equal(result.trends.purchases.find((p) => p.key === todayKey)?.value, 40);
-      console.log('1. open shift spanning midnight extends today (450 / 3, purchases 110 / 2), trends stay calendar-day, passed');
+      console.log(
+        '1. open shift spanning midnight extends today (450 / 3, purchases 110 / 2), trends stay calendar-day, passed',
+      );
     }
 
     // 2. The same shift closed: calendar-day behaviour returns.
@@ -178,13 +191,19 @@ async function main(): Promise<void> {
 
     // 4. An open shift on another branch does NOT extend a branch-1 view;
     //    with no branch filter the same shift DOES extend (whole-tenant view).
-    await pg.query(`INSERT INTO cashier_shifts (id, tenant_id, account_id, opened_by, status, branch_id, location_id, created_at, closed_at, closed_by, expected_cash, counted_cash) VALUES (2, 't1', 'a1', 1, 'open', 2, 1, '${shiftOpenedAt.toISOString()}', NULL, NULL, NULL, NULL)`);
+    await pg.query(
+      `INSERT INTO cashier_shifts (id, tenant_id, account_id, opened_by, status, branch_id, location_id, created_at, closed_at, closed_by, expected_cash, counted_cash) VALUES (2, 't1', 'a1', 1, 'open', 2, 1, '${shiftOpenedAt.toISOString()}', NULL, NULL, NULL, NULL)`,
+    );
     {
       const scoped = await overview(db, { branchId: 1, locationId: 1 });
       assert.equal(scoped.stats.todaySalesAmount, 150, 'branch-2 shift must not extend a branch-1 view');
       assert.equal(scoped.stats.todaySalesCount, 2);
       const unscoped = await overview(db, {});
-      assert.equal(unscoped.stats.todaySalesAmount, 450, 'no branch filter: the open shift extends the whole-tenant view');
+      assert.equal(
+        unscoped.stats.todaySalesAmount,
+        450,
+        'no branch filter: the open shift extends the whole-tenant view',
+      );
       assert.equal(unscoped.stats.todaySalesCount, 3);
       console.log('4. other-branch shift does not extend a scoped view but extends the unscoped view, passed');
     }
@@ -192,7 +211,11 @@ async function main(): Promise<void> {
     // 5. Pure window rule.
     {
       const bounds = getBusinessDayBounds(new Date(), TZ);
-      assert.deepEqual(resolveOpenShiftTodayWindow(bounds, null), { start: bounds.start, end: bounds.end, extended: false });
+      assert.deepEqual(resolveOpenShiftTodayWindow(bounds, null), {
+        start: bounds.start,
+        end: bounds.end,
+        extended: false,
+      });
       assert.deepEqual(
         resolveOpenShiftTodayWindow(bounds, new Date(bounds.start.getTime() + HOUR)),
         { start: bounds.start, end: bounds.end, extended: false },
@@ -206,7 +229,8 @@ async function main(): Promise<void> {
     // 6. This spec is wired into both critical lists, in identical order
     // (326 specs — the solo-admin-carrier-invoice-override spec is the last entry).
     {
-      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+        .specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));

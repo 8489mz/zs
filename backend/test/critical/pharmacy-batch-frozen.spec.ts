@@ -60,7 +60,14 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { PharmacyService } from '../../src/modules/pharmacy/pharmacy.service';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function batchCount(db: Kysely<Database>): Promise<number> {
   const row = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM pharmacy_batches`.execute(db);
@@ -70,7 +77,10 @@ async function batchCount(db: Kysely<Database>): Promise<number> {
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const service = new PharmacyService(
     db as never,
     new AuditService(db as never),
@@ -94,10 +104,16 @@ async function main(): Promise<void> {
     assert.equal(await batchCount(db), 0);
 
     // Case 2: the YYYY-MM form and a future date are accepted.
-    const monthBatch = await service.upsertBatch(AUTH, { batchNumber: 'MONTH', expiryDate: '2030-12' } as never) as any;
+    const monthBatch = (await service.upsertBatch(AUTH, {
+      batchNumber: 'MONTH',
+      expiryDate: '2030-12',
+    } as never)) as any;
     assert.equal(monthBatch.batch_number, 'MONTH');
     assert.equal(monthBatch.expiry_date, '2030-12');
-    const dateBatch = await service.upsertBatch(AUTH, { batchNumber: 'DATE', expiryDate: '2030-12-15' } as never) as any;
+    const dateBatch = (await service.upsertBatch(AUTH, {
+      batchNumber: 'DATE',
+      expiryDate: '2030-12-15',
+    } as never)) as any;
     assert.equal(dateBatch.expiry_date, '2030-12-15');
 
     // Case 3: a past expiry cannot be created 'active', but can be 'expired'.
@@ -109,7 +125,11 @@ async function main(): Promise<void> {
       service.upsertBatch(AUTH, { batchNumber: 'PAST-ACTIVE-MONTH', expiryDate: '2020-01', status: 'active' } as never),
       /PHARMACY_BATCH_EXPIRY_INVALID/,
     );
-    const pastExpired = await service.upsertBatch(AUTH, { batchNumber: 'PAST-EXPIRED', expiryDate: '2020-01-01', status: 'expired' } as never) as any;
+    const pastExpired = (await service.upsertBatch(AUTH, {
+      batchNumber: 'PAST-EXPIRED',
+      expiryDate: '2020-01-01',
+      status: 'expired',
+    } as never)) as any;
     assert.equal(pastExpired.status, 'expired');
 
     // Case 4: expiry is frozen after creation.
@@ -117,11 +137,22 @@ async function main(): Promise<void> {
       service.upsertBatch(AUTH, { id: Number(dateBatch.id), batchNumber: 'DATE', expiryDate: '2031-01-01' } as never),
       /PHARMACY_BATCH_EXPIRY_FROZEN/,
     );
-    const unchanged = await sql<{ expiry_date: string }>`SELECT expiry_date FROM pharmacy_batches WHERE id = ${Number(dateBatch.id)}`.execute(db);
+    const unchanged = await sql<{
+      expiry_date: string;
+    }>`SELECT expiry_date FROM pharmacy_batches WHERE id = ${Number(dateBatch.id)}`.execute(db);
     assert.equal(unchanged.rows[0].expiry_date, '2030-12-15');
-    const sameExpiry = await service.upsertBatch(AUTH, { id: Number(dateBatch.id), batchNumber: 'DATE', expiryDate: '2030-12-15', notes: 'same date ok' } as never) as any;
+    const sameExpiry = (await service.upsertBatch(AUTH, {
+      id: Number(dateBatch.id),
+      batchNumber: 'DATE',
+      expiryDate: '2030-12-15',
+      notes: 'same date ok',
+    } as never)) as any;
     assert.equal(sameExpiry.notes, 'same date ok');
-    const omittedExpiry = await service.upsertBatch(AUTH, { id: Number(dateBatch.id), batchNumber: 'DATE', notes: 'no date ok' } as never) as any;
+    const omittedExpiry = (await service.upsertBatch(AUTH, {
+      id: Number(dateBatch.id),
+      batchNumber: 'DATE',
+      notes: 'no date ok',
+    } as never)) as any;
     assert.equal(omittedExpiry.notes, 'no date ok');
     assert.equal(omittedExpiry.expiry_date, '2030-12-15');
 
@@ -134,7 +165,11 @@ async function main(): Promise<void> {
       service.upsertBatch(AUTH, { id: Number(dateBatch.id), batchNumber: 'DATE', status: 'bogus' } as never),
       /PHARMACY_BATCH_STATUS_INVALID/,
     );
-    const toExpired = await service.upsertBatch(AUTH, { id: Number(dateBatch.id), batchNumber: 'DATE', status: 'expired' } as never) as any;
+    const toExpired = (await service.upsertBatch(AUTH, {
+      id: Number(dateBatch.id),
+      batchNumber: 'DATE',
+      status: 'expired',
+    } as never)) as any;
     assert.equal(toExpired.status, 'expired');
     await assert.rejects(
       service.upsertBatch(AUTH, { id: Number(dateBatch.id), batchNumber: 'DATE', status: 'active' } as never),
@@ -144,19 +179,35 @@ async function main(): Promise<void> {
     // Case 6: expiry passed while 'active' -- flipping INTO 'active'
     // from another status is rejected, but a notes-only update (or
     // repeating the stored status) is not blocked by time passing.
-    const staleActive = await service.upsertBatch(AUTH, { batchNumber: 'STALE', expiryDate: '2030-06-01' } as never) as any;
-    await sql`UPDATE pharmacy_batches SET expiry_date = '2020-06-01', status = 'depleted' WHERE id = ${Number(staleActive.id)}`.execute(db);
+    const staleActive = (await service.upsertBatch(AUTH, {
+      batchNumber: 'STALE',
+      expiryDate: '2030-06-01',
+    } as never)) as any;
+    await sql`UPDATE pharmacy_batches SET expiry_date = '2020-06-01', status = 'depleted' WHERE id = ${Number(staleActive.id)}`.execute(
+      db,
+    );
     await assert.rejects(
       service.upsertBatch(AUTH, { id: Number(staleActive.id), batchNumber: 'STALE', status: 'active' } as never),
       /PHARMACY_BATCH_REACTIVATION_FORBIDDEN/,
     );
-    const notesOnly = await service.upsertBatch(AUTH, { id: Number(staleActive.id), batchNumber: 'STALE', notes: 'still editable' } as never) as any;
+    const notesOnly = (await service.upsertBatch(AUTH, {
+      id: Number(staleActive.id),
+      batchNumber: 'STALE',
+      notes: 'still editable',
+    } as never)) as any;
     assert.equal(notesOnly.notes, 'still editable');
 
     // Case 7: a legacy status outside the list survives a notes-only update.
-    const legacy = await service.upsertBatch(AUTH, { batchNumber: 'LEGACY', expiryDate: '2030-06-01' } as never) as any;
+    const legacy = (await service.upsertBatch(AUTH, {
+      batchNumber: 'LEGACY',
+      expiryDate: '2030-06-01',
+    } as never)) as any;
     await sql`UPDATE pharmacy_batches SET status = 'quarantined' WHERE id = ${Number(legacy.id)}`.execute(db);
-    const legacyKept = await service.upsertBatch(AUTH, { id: Number(legacy.id), batchNumber: 'LEGACY', notes: 'kept' } as never) as any;
+    const legacyKept = (await service.upsertBatch(AUTH, {
+      id: Number(legacy.id),
+      batchNumber: 'LEGACY',
+      notes: 'kept',
+    } as never)) as any;
     assert.equal(legacyKept.status, 'quarantined');
 
     // Case 8: the pre-existing financial freeze is untouched.

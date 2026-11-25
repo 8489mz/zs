@@ -63,8 +63,13 @@ const now = new Date();
 const CUR = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
 const adminAuth: any = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['deliveryReps', 'accounting'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 };
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -88,29 +93,77 @@ function buildVanService(db: any): any {
   return service;
 }
 
-async function seedEmployee(db: Kysely<Database>, id: number, displayName: string, nationalId: string | null = null): Promise<void> {
-  await (db as any).insertInto('hr_employees').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, display_name: displayName, national_id: nationalId,
-    status: 'active', compensation_type: 'monthly', hourly_rate: 0, expected_daily_hours: 8,
-    hire_date: '2026-01-01', end_of_service_date: null, has_social_insurance: false,
-    insurance_salary: 0, has_income_tax: false, pay_frequency: 'monthly', user_id: null,
-    commission_type: null, commission_value: 0, commission_target: null, delay_policy: null,
-    approved_leave_days: 0,
-  }).execute();
+async function seedEmployee(
+  db: Kysely<Database>,
+  id: number,
+  displayName: string,
+  nationalId: string | null = null,
+): Promise<void> {
+  await (db as any)
+    .insertInto('hr_employees')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      display_name: displayName,
+      national_id: nationalId,
+      status: 'active',
+      compensation_type: 'monthly',
+      hourly_rate: 0,
+      expected_daily_hours: 8,
+      hire_date: '2026-01-01',
+      end_of_service_date: null,
+      has_social_insurance: false,
+      insurance_salary: 0,
+      has_income_tax: false,
+      pay_frequency: 'monthly',
+      user_id: null,
+      commission_type: null,
+      commission_value: 0,
+      commission_target: null,
+      delay_policy: null,
+      approved_leave_days: 0,
+    })
+    .execute();
 }
 
-async function seedRep(db: Kysely<Database>, repId: number, name: string, nationalId: string | null = null): Promise<void> {
-  await (db as any).insertInto('delivery_representatives').values({
-    id: repId, tenant_id: TENANT, account_id: ACCOUNT, name,
-    phone: null, vehicle_plate: null, van_location_id: 10, employee_id: null, national_id: nationalId,
-  }).execute();
+async function seedRep(
+  db: Kysely<Database>,
+  repId: number,
+  name: string,
+  nationalId: string | null = null,
+): Promise<void> {
+  await (db as any)
+    .insertInto('delivery_representatives')
+    .values({
+      id: repId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name,
+      phone: null,
+      vehicle_plate: null,
+      van_location_id: 10,
+      employee_id: null,
+      national_id: nationalId,
+    })
+    .execute();
 }
 
 async function seedSettlement(db: Kysely<Database>, id: number, repId: number, amount = 100): Promise<void> {
-  await (db as any).insertInto('van_rep_financial_settlements').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: repId, trip_id: 11,
-    entry_type: 'cash_shortage', amount, status: 'pending', notes: 'shortage',
-  }).execute();
+  await (db as any)
+    .insertInto('van_rep_financial_settlements')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: repId,
+      trip_id: 11,
+      entry_type: 'cash_shortage',
+      amount,
+      status: 'pending',
+      notes: 'shortage',
+    })
+    .execute();
 }
 
 async function push(db: Kysely<Database>, settlementIds: number[]): Promise<any> {
@@ -119,12 +172,20 @@ async function push(db: Kysely<Database>, settlementIds: number[]): Promise<any>
 }
 
 async function repEmployeeId(db: Kysely<Database>, repId: number): Promise<number | null> {
-  const row = await (db as any).selectFrom('delivery_representatives').select('employee_id').where('id', '=', repId).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('delivery_representatives')
+    .select('employee_id')
+    .where('id', '=', repId)
+    .executeTakeFirst();
   return row?.employee_id === null || row?.employee_id === undefined ? null : Number(row.employee_id);
 }
 
 async function adjustmentEmployeeIds(db: Kysely<Database>): Promise<number[]> {
-  const rows = await (db as any).selectFrom('hr_employee_adjustments').select('employee_id').orderBy('id', 'asc').execute();
+  const rows = await (db as any)
+    .selectFrom('hr_employee_adjustments')
+    .select('employee_id')
+    .orderBy('id', 'asc')
+    .execute();
   return rows.map((r: any) => Number(r.employee_id));
 }
 
@@ -166,7 +227,11 @@ async function main(): Promise<void> {
       await seedSettlement(db, 401, 4);
       const pushed = await push(db, [401]);
       assert.equal(pushed.results[0].success, true, 'the push succeeds');
-      assert.equal(await repEmployeeId(db, 4), 11, 'the rep links the lowest-id matching employee even when it was inserted second');
+      assert.equal(
+        await repEmployeeId(db, 4),
+        11,
+        'the rep links the lowest-id matching employee even when it was inserted second',
+      );
       assert.deepEqual(await adjustmentEmployeeIds(db), [11], 'the deduction lands on the lowest-id matching employee');
     } finally {
       await db.destroy();
@@ -186,7 +251,11 @@ async function main(): Promise<void> {
       await seedSettlement(db, 401, 4);
       const pushed = await push(db, [401]);
       assert.equal(pushed.results[0].success, true, 'the push succeeds');
-      assert.equal(await repEmployeeId(db, 4), 12, 'the rep links the literal underscore employee, not the wildcard match');
+      assert.equal(
+        await repEmployeeId(db, 4),
+        12,
+        'the rep links the literal underscore employee, not the wildcard match',
+      );
       assert.deepEqual(await adjustmentEmployeeIds(db), [12], 'the deduction lands on the literal underscore employee');
     } finally {
       await db.destroy();
@@ -206,7 +275,11 @@ async function main(): Promise<void> {
       await seedSettlement(db, 401, 4);
       const pushed = await push(db, [401]);
       assert.equal(pushed.results[0].success, true, 'the push succeeds');
-      assert.equal(await repEmployeeId(db, 4), 12, 'the rep links the literal percent employee, not the wildcard match');
+      assert.equal(
+        await repEmployeeId(db, 4),
+        12,
+        'the rep links the literal percent employee, not the wildcard match',
+      );
       assert.deepEqual(await adjustmentEmployeeIds(db), [12], 'the deduction lands on the literal percent employee');
     } finally {
       await db.destroy();
@@ -226,7 +299,11 @@ async function main(): Promise<void> {
       await seedSettlement(db, 401, 4);
       const pushed = await push(db, [401]);
       assert.equal(pushed.results[0].success, true, 'the push succeeds');
-      assert.equal(await repEmployeeId(db, 4), 12, 'the rep links the national_id employee, not the lower-id name match');
+      assert.equal(
+        await repEmployeeId(db, 4),
+        12,
+        'the rep links the national_id employee, not the lower-id name match',
+      );
       assert.deepEqual(await adjustmentEmployeeIds(db), [12], 'the deduction lands on the national_id employee');
     } finally {
       await db.destroy();
@@ -244,7 +321,11 @@ async function main(): Promise<void> {
       await seedSettlement(db, 401, 4);
       const pushed = await push(db, [401]);
       assert.equal(pushed.results[0].success, true, 'the push succeeds');
-      assert.equal(await repEmployeeId(db, 4), 11, 'the rep falls back to the name match when no employee has the national_id');
+      assert.equal(
+        await repEmployeeId(db, 4),
+        11,
+        'the rep falls back to the name match when no employee has the national_id',
+      );
       assert.deepEqual(await adjustmentEmployeeIds(db), [11], 'the deduction lands on the name-matched employee');
     } finally {
       await db.destroy();
@@ -259,12 +340,25 @@ async function main(): Promise<void> {
   {
     // File #59 split: the employee-match code lives in pushRepShortagesToPayroll
     // (S5 slice); the facade keeps only a thin delegate.
-    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/push-rep-shortages-to-payroll.slice.ts'), 'utf8');
+    const vanSource = readFileSync(
+      resolve(
+        __dirname,
+        '../../src/modules/delivery-reps/services/van-rep-financial-ledger/push-rep-shortages-to-payroll.slice.ts',
+      ),
+      'utf8',
+    );
     assert.ok(vanSource.includes('INV-REP-EMPLOYEE-MATCH-DETERMINISTIC'), 'van-sales names the invariant');
-    assert.ok(!vanSource.includes("eb('display_name', 'ilike', `%${item.repName}%`)"), 'the old unescaped name pattern is gone');
+    assert.ok(
+      !vanSource.includes("eb('display_name', 'ilike', `%${item.repName}%`)"),
+      'the old unescaped name pattern is gone',
+    );
     assert.ok(vanSource.includes('ESCAPE'), 'the name match carries an explicit ESCAPE clause');
     assert.ok(vanSource.includes("orderBy('id', 'asc')"), 'the match steps order deterministically by id');
-    assert.ok(vanSource.includes("eb('national_id', '=', item.repNationalId)") || vanSource.includes("'national_id', '=', item.repNationalId"), 'the national_id step is an exact match tried first');
+    assert.ok(
+      vanSource.includes("eb('national_id', '=', item.repNationalId)") ||
+        vanSource.includes("'national_id', '=', item.repNationalId"),
+      'the national_id step is an exact match tried first',
+    );
     console.log('  source pins passed');
   }
 

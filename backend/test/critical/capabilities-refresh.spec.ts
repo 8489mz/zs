@@ -82,21 +82,12 @@ async function main(): Promise<void> {
     assert.ok(register.includes(text), `review register must state: ${label}`);
   }
 
-  registerPresent(
-    'لم تُقلب أي حالة موديول في هذه الحزمة (C8)',
-    'C8 flipped no module state',
-  );
-  registerPresent(
-    'ليست في اليد وقت كتابة هذا القسم',
-    'U4 ci-full result recorded as not in hand',
-  );
+  registerPresent('لم تُقلب أي حالة موديول في هذه الحزمة (C8)', 'C8 flipped no module state');
+  registerPresent('ليست في اليد وقت كتابة هذا القسم', 'U4 ci-full result recorded as not in hand');
 
   for (const head of U_HEADS) {
     registerPresent(head.sha, `${head.batch} head SHA in the register`);
-    registerPresent(
-      head.lastPackageInv,
-      `${head.batch} last-package invariant in the register`,
-    );
+    registerPresent(head.lastPackageInv, `${head.batch} last-package invariant in the register`);
     assert.match(head.sha, /^[0-9a-f]{40}$/, `${head.batch} SHA must be 40 hex chars`);
     const objectType = execSync(`git cat-file -t ${head.sha}`, {
       cwd: REPO_ROOT,

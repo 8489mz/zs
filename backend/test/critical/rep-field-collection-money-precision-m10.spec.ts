@@ -114,56 +114,179 @@ interface TenantSeed {
 async function seedTenant(db: Kysely<Database>, cfg: TenantSeed, pinHash: string): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: cfg.tenant, key: 'currency', value: cfg.currency }).execute();
-  await anyDb.insertInto('settings').values({ tenant_id: cfg.tenant, key: 'managerPin', value: JSON.stringify(pinHash) }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: cfg.tenant, currency_code: cfg.currency, exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: cfg.userId, tenant_id: cfg.tenant, username: 'sys', is_active: true }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: cfg.tenant, key: 'managerPin', value: JSON.stringify(pinHash) })
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: cfg.tenant, currency_code: cfg.currency, exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: cfg.userId, tenant_id: cfg.tenant, username: 'sys', is_active: true })
+    .execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [code, codeStr, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id: cfg.acctBase + code, tenant_id: cfg.tenant, code: codeStr, name_ar: codeStr, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id: cfg.acctBase + code,
+        tenant_id: cfg.tenant,
+        code: codeStr,
+        name_ar: codeStr,
+        account_type: type,
+        is_active: true,
+        is_tax: false,
+      })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    // Production PK is (tenant_id, id): every tenant holds its
-    // singleton row at id 1, and getTenantAccountingSettings queries
-    // tenant_id + id = 1 — so both tenants seed id 1 here.
-    id: 1, tenant_id: cfg.tenant, cash_account_id: cfg.acctBase + 1110, bank_account_id: cfg.acctBase + 1120,
-    customer_receivable_account_id: cfg.acctBase + 1130, inventory_account_id: cfg.acctBase + 1140,
-    sales_revenue_account_id: cfg.acctBase + 4100, sales_discount_account_id: cfg.acctBase + 4300,
-    cogs_account_id: cfg.acctBase + 5100, sales_tax_account_id: cfg.acctBase + 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: cfg.whLocId, tenant_id: cfg.tenant, account_id: cfg.account, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: cfg.vanLocId, tenant_id: cfg.tenant, account_id: cfg.account, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: cfg.repId, tenant_id: cfg.tenant, account_id: cfg.account, name: `Rep ${cfg.repId}`, van_location_id: cfg.vanLocId, is_van_rep: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      // Production PK is (tenant_id, id): every tenant holds its
+      // singleton row at id 1, and getTenantAccountingSettings queries
+      // tenant_id + id = 1 — so both tenants seed id 1 here.
+      id: 1,
+      tenant_id: cfg.tenant,
+      cash_account_id: cfg.acctBase + 1110,
+      bank_account_id: cfg.acctBase + 1120,
+      customer_receivable_account_id: cfg.acctBase + 1130,
+      inventory_account_id: cfg.acctBase + 1140,
+      sales_revenue_account_id: cfg.acctBase + 4100,
+      sales_discount_account_id: cfg.acctBase + 4300,
+      cogs_account_id: cfg.acctBase + 5100,
+      sales_tax_account_id: cfg.acctBase + 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: cfg.whLocId,
+      tenant_id: cfg.tenant,
+      account_id: cfg.account,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: cfg.vanLocId,
+      tenant_id: cfg.tenant,
+      account_id: cfg.account,
+      name: 'Van',
+      location_type: 'van',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: cfg.repId,
+      tenant_id: cfg.tenant,
+      account_id: cfg.account,
+      name: `Rep ${cfg.repId}`,
+      van_location_id: cfg.vanLocId,
+      is_van_rep: true,
+    })
+    .execute();
   for (const tripId of cfg.tripIds) {
-    await anyDb.insertInto('van_sales_trips').values({ id: tripId, tenant_id: cfg.tenant, account_id: cfg.account, rep_id: cfg.repId, van_location_id: cfg.vanLocId, status: 'open' }).execute();
+    await anyDb
+      .insertInto('van_sales_trips')
+      .values({
+        id: tripId,
+        tenant_id: cfg.tenant,
+        account_id: cfg.account,
+        rep_id: cfg.repId,
+        van_location_id: cfg.vanLocId,
+        status: 'open',
+      })
+      .execute();
   }
   for (const cust of cfg.customers) {
-    await anyDb.insertInto('customers').values({ id: cust.id, tenant_id: cfg.tenant, account_id: cfg.account, name: `Shop Customer ${cust.id}`, balance: cust.balance, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-    await anyDb.insertInto('customer_ledger').values({ customer_id: cust.id, entry_type: 'sale', amount: cust.balance, balance_after: cust.balance, reference_type: 'sale', reference_id: null, van_trip_id: cust.tripId, tenant_id: cfg.tenant, account_id: cfg.account }).execute();
+    await anyDb
+      .insertInto('customers')
+      .values({
+        id: cust.id,
+        tenant_id: cfg.tenant,
+        account_id: cfg.account,
+        name: `Shop Customer ${cust.id}`,
+        balance: cust.balance,
+        credit_limit: 0,
+        customer_type: 'cash',
+        metadata: '{}',
+        is_active: true,
+      })
+      .execute();
+    await anyDb
+      .insertInto('customer_ledger')
+      .values({
+        customer_id: cust.id,
+        entry_type: 'sale',
+        amount: cust.balance,
+        balance_after: cust.balance,
+        reference_type: 'sale',
+        reference_id: null,
+        van_trip_id: cust.tripId,
+        tenant_id: cfg.tenant,
+        account_id: cfg.account,
+      })
+      .execute();
   }
 }
 
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const pinHash = await hashManagerPin(SUPERVISOR_PIN);
-  await seedTenant(db, {
-    tenant: TENANT, account: ACCOUNT, currency: 'EGP', userId: 1, repId: 1,
-    whLocId: 10, vanLocId: 20, acctBase: 0, tripIds: [11, 12, 13],
-    customers: [
-      { id: 101, balance: 200, tripId: 11 },
-      { id: 102, balance: 500, tripId: 12 },
-      { id: 103, balance: 300, tripId: 13 },
-    ],
-  }, pinHash);
-  await seedTenant(db, {
-    tenant: TENANT_KWD, account: ACCOUNT_KWD, currency: 'KWD', userId: 2, repId: 2,
-    whLocId: 30, vanLocId: 40, acctBase: 20000, tripIds: [21, 22],
-    customers: [
-      { id: 201, balance: 100, tripId: 21 },
-      { id: 202, balance: 50, tripId: 22 },
-    ],
-  }, pinHash);
+  await seedTenant(
+    db,
+    {
+      tenant: TENANT,
+      account: ACCOUNT,
+      currency: 'EGP',
+      userId: 1,
+      repId: 1,
+      whLocId: 10,
+      vanLocId: 20,
+      acctBase: 0,
+      tripIds: [11, 12, 13],
+      customers: [
+        { id: 101, balance: 200, tripId: 11 },
+        { id: 102, balance: 500, tripId: 12 },
+        { id: 103, balance: 300, tripId: 13 },
+      ],
+    },
+    pinHash,
+  );
+  await seedTenant(
+    db,
+    {
+      tenant: TENANT_KWD,
+      account: ACCOUNT_KWD,
+      currency: 'KWD',
+      userId: 2,
+      repId: 2,
+      whLocId: 30,
+      vanLocId: 40,
+      acctBase: 20000,
+      tripIds: [21, 22],
+      customers: [
+        { id: 201, balance: 100, tripId: 21 },
+        { id: 202, balance: 50, tripId: 22 },
+      ],
+    },
+    pinHash,
+  );
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -172,11 +295,27 @@ function buildService(db: Kysely<Database>): VanSalesService {
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async (tenantId: string, accountId: string) => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId, accountId,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId,
+    accountId,
   });
   return service;
 }
@@ -189,33 +328,72 @@ function clearCollectionCaches(): void {
 }
 
 async function customerBalance(db: Kysely<Database>, tenant: string, customerId: number): Promise<number> {
-  const row = await (db as any).selectFrom('customers').select('balance').where('tenant_id', '=', tenant).where('id', '=', customerId).executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('customers')
+    .select('balance')
+    .where('tenant_id', '=', tenant)
+    .where('id', '=', customerId)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.balance);
 }
 
 async function customerPayments(db: Kysely<Database>, tenant: string, customerId: number): Promise<any[]> {
-  return (db as any).selectFrom('customer_payments').selectAll().where('tenant_id', '=', tenant).where('customer_id', '=', customerId).orderBy('id', 'asc').execute();
+  return (db as any)
+    .selectFrom('customer_payments')
+    .selectAll()
+    .where('tenant_id', '=', tenant)
+    .where('customer_id', '=', customerId)
+    .orderBy('id', 'asc')
+    .execute();
 }
 
 async function customerLedger(db: Kysely<Database>, tenant: string, customerId: number): Promise<any[]> {
-  return (db as any).selectFrom('customer_ledger').selectAll().where('tenant_id', '=', tenant).where('customer_id', '=', customerId).orderBy('id', 'asc').execute();
+  return (db as any)
+    .selectFrom('customer_ledger')
+    .selectAll()
+    .where('tenant_id', '=', tenant)
+    .where('customer_id', '=', customerId)
+    .orderBy('id', 'asc')
+    .execute();
 }
 
 async function journalEntriesForPayment(db: Kysely<Database>, tenant: string, paymentId: number): Promise<any[]> {
-  return (db as any).selectFrom('journal_entries').selectAll().where('tenant_id', '=', tenant).where('source_type', '=', 'van_field_collection').where('source_id', '=', paymentId).execute();
+  return (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('tenant_id', '=', tenant)
+    .where('source_type', '=', 'van_field_collection')
+    .where('source_id', '=', paymentId)
+    .execute();
 }
 
 async function journalCount(db: Kysely<Database>, tenant: string, sourceType: string): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', sourceType).where('tenant_id', '=', tenant).execute();
+  const rows = await (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', sourceType)
+    .where('tenant_id', '=', tenant)
+    .execute();
   return rows.length;
 }
 
 async function journalLines(db: Kysely<Database>, tenant: string, entryId: number): Promise<any[]> {
-  return (db as any).selectFrom('journal_entry_lines').selectAll().where('tenant_id', '=', tenant).where('journal_entry_id', '=', entryId).orderBy('id', 'asc').execute();
+  return (db as any)
+    .selectFrom('journal_entry_lines')
+    .selectAll()
+    .where('tenant_id', '=', tenant)
+    .where('journal_entry_id', '=', entryId)
+    .orderBy('id', 'asc')
+    .execute();
 }
 
 async function tripRow(db: Kysely<Database>, tenant: string, tripId: number): Promise<any> {
-  return (db as any).selectFrom('van_sales_trips').selectAll().where('tenant_id', '=', tenant).where('id', '=', tripId).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('van_sales_trips')
+    .selectAll()
+    .where('tenant_id', '=', tenant)
+    .where('id', '=', tripId)
+    .executeTakeFirstOrThrow();
 }
 
 async function settlementScale(db: Kysely<Database>): Promise<{ precision: number; scale: number }> {
@@ -233,7 +411,13 @@ async function expectInvalidPaymentAmount(
   repId: number,
   tenant: string,
   account: string,
-  payload: { tripId: number; customerId: number; amount: number; paymentMethod?: 'cash' | 'instapay' | 'vodafone_cash' | 'bank_transfer'; clientTxId?: string },
+  payload: {
+    tripId: number;
+    customerId: number;
+    amount: number;
+    paymentMethod?: 'cash' | 'instapay' | 'vodafone_cash' | 'bank_transfer';
+    clientTxId?: string;
+  },
   digitsHint: RegExp,
 ): Promise<any> {
   let thrown: any = null;
@@ -268,17 +452,42 @@ async function main(): Promise<void> {
       const ledgerBefore = await customerLedger(db, TENANT, 101);
       const journalsBefore = await journalCount(db, TENANT, 'van_field_collection');
       const tripBefore = await tripRow(db, TENANT, 11);
-      await expectInvalidPaymentAmount(service, 1, TENANT, ACCOUNT,
+      await expectInvalidPaymentAmount(
+        service,
+        1,
+        TENANT,
+        ACCOUNT,
         { tripId: 11, customerId: 101, amount: 100.005, paymentMethod: 'cash', clientTxId: 'm10-s1' },
-        /2 decimal places.*EGP/);
-      assert.equal((await customerPayments(db, TENANT, 101)).length, paymentsBefore.length, 'no payment row was written for the refused amount');
+        /2 decimal places.*EGP/,
+      );
+      assert.equal(
+        (await customerPayments(db, TENANT, 101)).length,
+        paymentsBefore.length,
+        'no payment row was written for the refused amount',
+      );
       assert.equal(await customerBalance(db, TENANT, 101), 200, 'the customer balance is unchanged');
-      assert.equal(await journalCount(db, TENANT, 'van_field_collection'), journalsBefore, 'no journal was posted for the refused amount');
-      assert.equal(Number((await tripRow(db, TENANT, 11)).cash_collected), Number(tripBefore.cash_collected), 'trip cash total is unchanged');
-      assert.equal((await customerLedger(db, TENANT, 101)).length, ledgerBefore.length, 'no ledger row was written for the refused amount');
+      assert.equal(
+        await journalCount(db, TENANT, 'van_field_collection'),
+        journalsBefore,
+        'no journal was posted for the refused amount',
+      );
+      assert.equal(
+        Number((await tripRow(db, TENANT, 11)).cash_collected),
+        Number(tripBefore.cash_collected),
+        'trip cash total is unchanged',
+      );
+      assert.equal(
+        (await customerLedger(db, TENANT, 101)).length,
+        ledgerBefore.length,
+        'no ledger row was written for the refused amount',
+      );
       clearCollectionCaches();
       const ok = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 11, customerId: 101, amount: 100, paymentMethod: 'cash', clientTxId: 'm10-s1-valid',
+        tripId: 11,
+        customerId: 101,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm10-s1-valid',
       });
       assert.equal(ok.ok, true);
       assert.equal(ok.previousBalance, 200);
@@ -292,10 +501,19 @@ async function main(): Promise<void> {
     // check refuses it, and again nothing is written.
     {
       clearCollectionCaches();
-      await expectInvalidPaymentAmount(service, 1, TENANT, ACCOUNT,
+      await expectInvalidPaymentAmount(
+        service,
+        1,
+        TENANT,
+        ACCOUNT,
         { tripId: 13, customerId: 103, amount: 0.001, paymentMethod: 'cash', clientTxId: 'm10-s1b' },
-        /2 decimal places.*EGP/);
-      assert.equal((await customerPayments(db, TENANT, 103)).length, 0, 'no payment row was written for the dust amount');
+        /2 decimal places.*EGP/,
+      );
+      assert.equal(
+        (await customerPayments(db, TENANT, 103)).length,
+        0,
+        'no payment row was written for the dust amount',
+      );
       assert.equal(await customerBalance(db, TENANT, 103), 300, 'the customer balance is unchanged');
       assert.equal(await journalCount(db, TENANT, 'van_field_collection'), 1, 'no further journal was posted');
       console.log('  (S1b) B6: 0.001 dust on a 2dp tenant is refused with nothing written passed');
@@ -308,13 +526,21 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       const first = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 12, customerId: 102, amount: 100, paymentMethod: 'cash', clientTxId: 'm10-s2-a',
+        tripId: 12,
+        customerId: 102,
+        amount: 100,
+        paymentMethod: 'cash',
+        clientTxId: 'm10-s2-a',
       });
       assert.equal(first.ok, true);
       assert.equal(first.previousBalance, 500);
       assert.equal(first.newBalance, 400);
       const second = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 12, customerId: 102, amount: 100.01, paymentMethod: 'cash', clientTxId: 'm10-s2-b',
+        tripId: 12,
+        customerId: 102,
+        amount: 100.01,
+        paymentMethod: 'cash',
+        clientTxId: 'm10-s2-b',
       });
       assert.equal(second.ok, true);
       assert.equal(second.previousBalance, 400);
@@ -322,21 +548,34 @@ async function main(): Promise<void> {
       assert.equal(await customerBalance(db, TENANT, 102), 299.99, 'balance is 500 - 100 - 100.01');
       const payments = await customerPayments(db, TENANT, 102);
       assert.equal(payments.length, 2, 'two payment rows were written');
-      assert.deepEqual(payments.map((p: any) => Number(p.amount)), [100, 100.01], 'payment rows hold the exact amounts');
+      assert.deepEqual(
+        payments.map((p: any) => Number(p.amount)),
+        [100, 100.01],
+        'payment rows hold the exact amounts',
+      );
       const ledger = await customerLedger(db, TENANT, 102);
       assert.deepEqual(
         ledger.slice(1).map((l: any) => [Number(l.amount), Number(l.balance_after)]),
-        [[-100, 400], [-100.01, 299.99]],
+        [
+          [-100, 400],
+          [-100.01, 299.99],
+        ],
         'ledger rows agree with the payment rows and the balance',
       );
-      for (const [payment, expected] of [[payments[0], 100], [payments[1], 100.01]] as const) {
+      for (const [payment, expected] of [
+        [payments[0], 100],
+        [payments[1], 100.01],
+      ] as const) {
         const entries = await journalEntriesForPayment(db, TENANT, Number(payment.id));
         assert.equal(entries.length, 1, 'exactly one journal per collection');
         const lines = await journalLines(db, TENANT, Number(entries[0].id));
         assert.equal(lines.length, 2, 'the journal has its two legs');
         assert.deepEqual(
           lines.map((l: any) => [Number(l.debit), Number(l.credit)]).sort(),
-          [[0, expected], [expected, 0]],
+          [
+            [0, expected],
+            [expected, 0],
+          ],
           'journal debit/credit equal the collected amount exactly',
         );
       }
@@ -351,7 +590,11 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       const res = await service.recordFieldCollection(2, TENANT_KWD, ACCOUNT_KWD, {
-        tripId: 21, customerId: 201, amount: 10.125, paymentMethod: 'cash', clientTxId: 'm10-s3',
+        tripId: 21,
+        customerId: 201,
+        amount: 10.125,
+        paymentMethod: 'cash',
+        clientTxId: 'm10-s3',
       });
       assert.equal(res.ok, true);
       assert.equal(res.previousBalance, 100);
@@ -371,7 +614,10 @@ async function main(): Promise<void> {
       const lines = await journalLines(db, TENANT_KWD, Number(entries[0].id));
       assert.deepEqual(
         lines.map((l: any) => [Number(l.debit), Number(l.credit)]).sort(),
-        [[0, 10.125], [10.125, 0]],
+        [
+          [0, 10.125],
+          [10.125, 0],
+        ],
         'journal debit/credit equal 10.125 exactly',
       );
       assert.equal(Number((await tripRow(db, TENANT_KWD, 21)).cash_collected), 10.125, 'trip cash total is 10.125');
@@ -384,10 +630,19 @@ async function main(): Promise<void> {
     // nothing is written.
     {
       clearCollectionCaches();
-      await expectInvalidPaymentAmount(service, 2, TENANT_KWD, ACCOUNT_KWD,
+      await expectInvalidPaymentAmount(
+        service,
+        2,
+        TENANT_KWD,
+        ACCOUNT_KWD,
         { tripId: 22, customerId: 202, amount: 10.1255, paymentMethod: 'cash', clientTxId: 'm10-s3b' },
-        /3 decimal places.*KWD/);
-      assert.equal((await customerPayments(db, TENANT_KWD, 202)).length, 0, 'no payment row was written for the refused amount');
+        /3 decimal places.*KWD/,
+      );
+      assert.equal(
+        (await customerPayments(db, TENANT_KWD, 202)).length,
+        0,
+        'no payment row was written for the refused amount',
+      );
       assert.equal(await customerBalance(db, TENANT_KWD, 202), 50, 'the customer balance is unchanged');
       assert.equal(await journalCount(db, TENANT_KWD, 'van_field_collection'), 1, 'no further journal was posted');
       console.log('  (S3b) B6: 10.1255 on a 3dp tenant is refused with nothing written passed');
@@ -401,22 +656,48 @@ async function main(): Promise<void> {
     {
       const before = await settlementScale(db);
       assert.deepEqual([before.precision, before.scale], [14, 2], 'the harness table starts at the 0225 numeric(14,2)');
-      const legacy = await (db as any).insertInto('van_rep_financial_settlements').values({
-        tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, trip_id: 11,
-        entry_type: 'cash_shortage', amount: 10.125, status: 'pending',
-        notes: 'm10-s4 legacy row',
-      }).returning(['id', 'amount']).executeTakeFirstOrThrow() as any;
+      const legacy = (await (db as any)
+        .insertInto('van_rep_financial_settlements')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: 1,
+          trip_id: 11,
+          entry_type: 'cash_shortage',
+          amount: 10.125,
+          status: 'pending',
+          notes: 'm10-s4 legacy row',
+        })
+        .returning(['id', 'amount'])
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(legacy.amount), 10.13, 'pre-migration the 3dp amount rounds to 10.13 on store');
       await widenSettlementsAmountUp(db as any);
       const after = await settlementScale(db);
-      assert.deepEqual([after.precision, after.scale], [14, 3], 'the real 0321 migration widens the column to numeric(14,3)');
-      const fresh = await (db as any).insertInto('van_rep_financial_settlements').values({
-        tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, trip_id: 12,
-        entry_type: 'cash_shortage', amount: 10.125, status: 'pending',
-        notes: 'm10-s4 fresh row',
-      }).returning(['id', 'amount']).executeTakeFirstOrThrow() as any;
+      assert.deepEqual(
+        [after.precision, after.scale],
+        [14, 3],
+        'the real 0321 migration widens the column to numeric(14,3)',
+      );
+      const fresh = (await (db as any)
+        .insertInto('van_rep_financial_settlements')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: 1,
+          trip_id: 12,
+          entry_type: 'cash_shortage',
+          amount: 10.125,
+          status: 'pending',
+          notes: 'm10-s4 fresh row',
+        })
+        .returning(['id', 'amount'])
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(fresh.amount), 10.125, 'post-migration the 3dp amount is stored exact');
-      const legacyAgain = await (db as any).selectFrom('van_rep_financial_settlements').select('amount').where('id', '=', Number(legacy.id)).executeTakeFirstOrThrow() as any;
+      const legacyAgain = (await (db as any)
+        .selectFrom('van_rep_financial_settlements')
+        .select('amount')
+        .where('id', '=', Number(legacy.id))
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(legacyAgain.amount), 10.13, 'the pre-migration row is NOT rewritten (prospective only)');
       await widenSettlementsAmountUp(db as any);
       const again = await settlementScale(db);
@@ -431,12 +712,18 @@ async function main(): Promise<void> {
     // information_schema guard.
     {
       const here = __dirname;
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales/field-collection.ts'), 'utf8');
+      const vanSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/van-sales/field-collection.ts'),
+        'utf8',
+      );
       const fnAt = vanSource.indexOf('async recordFieldCollection(');
       assert.ok(fnAt > 0, 'recordFieldCollection exists');
       const fnSlice = vanSource.slice(fnAt, vanSource.indexOf('private async recordFieldCollectionInternal'));
       assert.ok(fnSlice.includes('INV-REP-FIELD-COLLECTION-MONEY-PRECISION'), 'the fix names its invariant');
-      assert.ok(fnSlice.includes('await tenantBaseCurrency(this.anyDb, tenantId)'), 'digits resolve from the tenant base currency');
+      assert.ok(
+        fnSlice.includes('await tenantBaseCurrency(this.anyDb, tenantId)'),
+        'digits resolve from the tenant base currency',
+      );
       assert.ok(fnSlice.includes('currencyMoneyDigits(baseCurrency)'), 'digits come from the tenant currency code');
       assert.ok(fnSlice.includes('INVALID_PAYMENT_AMOUNT'), 'the refusal uses the general-path error code');
       assert.ok(
@@ -444,9 +731,15 @@ async function main(): Promise<void> {
         'the validation sits before the internal call (before the first write)',
       );
       assert.ok(!fnSlice.includes('roundMoney('), 'the fix rejects the amount, never rounds it');
-      const migSource = readFileSync(resolve(here, '../../src/database/migrations/2040000000321_van_rep_financial_settlements_amount_3dp.ts'), 'utf8');
+      const migSource = readFileSync(
+        resolve(here, '../../src/database/migrations/2040000000321_van_rep_financial_settlements_amount_3dp.ts'),
+        'utf8',
+      );
       assert.ok(migSource.includes('van_rep_financial_settlements'), 'the migration names the settlements table');
-      assert.ok(migSource.includes('ALTER COLUMN "amount" TYPE numeric(14, 3)'), 'the migration widens amount to numeric(14,3)');
+      assert.ok(
+        migSource.includes('ALTER COLUMN "amount" TYPE numeric(14, 3)'),
+        'the migration widens amount to numeric(14,3)',
+      );
       assert.ok(migSource.includes('information_schema'), 'the migration guards on information_schema');
       console.log('  source pins passed');
     }

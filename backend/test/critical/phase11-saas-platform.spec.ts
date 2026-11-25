@@ -44,7 +44,20 @@ export function sanitizeAndValidateSlug(rawSlug: string): { isValid: boolean; sl
     return { isValid: false, slug: clean, reason: 'SLUG_TOO_LONG' };
   }
 
-  const reserved = ['admin', 'api', 'trial', 'login', 'store', 'st', 'shop', 'profile', 'settings', 'pos', 'system', 'zs'];
+  const reserved = [
+    'admin',
+    'api',
+    'trial',
+    'login',
+    'store',
+    'st',
+    'shop',
+    'profile',
+    'settings',
+    'pos',
+    'system',
+    'zs',
+  ];
   if (reserved.includes(clean)) {
     return { isValid: false, slug: clean, reason: 'RESERVED_SLUG' };
   }
@@ -86,7 +99,15 @@ export function evaluateBranchCreationLimit(params: {
     return { allowed: true, maxBranches: Infinity };
   }
 
-  const maxBranches = params.subscriptionMaxBranches ?? (params.hasMultiBranchFeature ? (params.tenantPlanId === 'plan_pro' ? 3 : 999) : (params.tenantStatus === 'trial' ? 2 : 1));
+  const maxBranches =
+    params.subscriptionMaxBranches ??
+    (params.hasMultiBranchFeature
+      ? params.tenantPlanId === 'plan_pro'
+        ? 3
+        : 999
+      : params.tenantStatus === 'trial'
+        ? 2
+        : 1);
   const allowed = params.activeBranchesCount < maxBranches;
   return { allowed, maxBranches };
 }
@@ -147,7 +168,7 @@ async function runPhase11Tests() {
     assert.strictEqual(
       checkPlatformAccess(rogueTenantAdmin),
       false,
-      'INVARIANT VIOLATION: Non-platform tenant user with role=super_admin must be strictly denied platform access!'
+      'INVARIANT VIOLATION: Non-platform tenant user with role=super_admin must be strictly denied platform access!',
     );
 
     // Platform tenant user with regular role
@@ -155,7 +176,7 @@ async function runPhase11Tests() {
     assert.strictEqual(
       checkPlatformAccess(platformStaff),
       false,
-      'INVARIANT VIOLATION: Platform tenant user with role=admin must be denied super_admin platform access!'
+      'INVARIANT VIOLATION: Platform tenant user with role=admin must be denied super_admin platform access!',
     );
 
     // Legitimate Platform Super Admin
@@ -163,7 +184,7 @@ async function runPhase11Tests() {
     assert.strictEqual(
       checkPlatformAccess(legitSuperAdmin),
       true,
-      'Legitimate platform super_admin must be granted access'
+      'Legitimate platform super_admin must be granted access',
     );
 
     // Target protection

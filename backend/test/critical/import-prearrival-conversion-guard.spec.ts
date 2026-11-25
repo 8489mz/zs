@@ -107,43 +107,92 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function seedShipment(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', container_number: 'C1', supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: 'proj-1',
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'sh-1-item', tenant_id: 't1', shipment_id: 'sh-1', product_id: 1,
-    quantity: 10, factory_unit_price_usd: 50, shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      container_number: 'C1',
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'sh-1-item',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 1,
+      quantity: 10,
+      factory_unit_price_usd: 50,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function seedPreorder(db: Kysely<Database>, preorderNo: string, qty: number): Promise<string> {
-  const row: any = await (db as any).insertInto('import_container_preorders').values({
-    tenant_id: 't1', preorder_no: preorderNo, shipment_id: 'sh-1', customer_id: 1,
-    product_id: 1, reserved_quantity: qty, unit_price_egp: 3000,
-    total_price_egp: qty * 3000, deposit_amount_egp: 0, status: 'reserved',
-  }).returning('id').executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .insertInto('import_container_preorders')
+    .values({
+      tenant_id: 't1',
+      preorder_no: preorderNo,
+      shipment_id: 'sh-1',
+      customer_id: 1,
+      product_id: 1,
+      reserved_quantity: qty,
+      unit_price_egp: 3000,
+      total_price_egp: qty * 3000,
+      deposit_amount_egp: 0,
+      status: 'reserved',
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
   return String(row.id);
 }
 
 async function postReceipt(db: Kysely<Database>, service: any): Promise<void> {
-  await service.updateShipmentCosts('t1', 1, 'sh-1', { status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10 });
-  const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+  await service.updateShipmentCosts('t1', 1, 'sh-1', {
+    status: 'Arrived',
+    exchangeRateAtArrival: 50,
+    receiptLocationId: 10,
+  });
+  const receipt: any = await (db as any)
+    .selectFrom('import_inventory_receipts')
+    .selectAll()
+    .where('shipment_id', '=', 'sh-1')
+    .executeTakeFirstOrThrow();
   assert.equal(receipt.state, 'posted');
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select(sql`count(*)`.as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select(sql`count(*)`.as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
 async function getPreorder(db: Kysely<Database>, id: string): Promise<any> {
-  return (db as any).selectFrom('import_container_preorders').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('import_container_preorders')
+    .selectAll()
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
 }
 
 async function getLot(db: Kysely<Database>): Promise<any> {
-  return (db as any).selectFrom('import_inventory_lots').selectAll().where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('import_inventory_lots')
+    .selectAll()
+    .where('shipment_id', '=', 'sh-1')
+    .executeTakeFirstOrThrow();
 }
 
 async function getProduct(db: Kysely<Database>): Promise<any> {
@@ -164,7 +213,11 @@ async function main(): Promise<void> {
       );
       assert.equal(await countRows(db, 'sales'), 0, 'No sale may be written by a refused conversion');
       assert.equal(await countRows(db, 'journal_entries'), 0, 'No journal may be written by a refused conversion');
-      assert.equal(await countRows(db, 'stock_movements'), 0, 'No stock movement may be written by a refused conversion');
+      assert.equal(
+        await countRows(db, 'stock_movements'),
+        0,
+        'No stock movement may be written by a refused conversion',
+      );
       assert.equal((await getPreorder(db, preorderId)).status, 'reserved');
       assert.equal(Number((await getProduct(db)).stock_qty), 0);
       console.log('Case 1 passed: no-receipt conversion refused with zero writes');
@@ -180,10 +233,17 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db);
       const preorderId = await seedPreorder(db, 'PO-1', 4);
-      await (db as any).insertInto('import_inventory_receipts').values({
-        tenant_id: 't1', shipment_id: 'sh-1', state: 'legacy_review_required',
-        review_reason: 'legacy', posted_at: null, created_by: 1,
-      }).execute();
+      await (db as any)
+        .insertInto('import_inventory_receipts')
+        .values({
+          tenant_id: 't1',
+          shipment_id: 'sh-1',
+          state: 'legacy_review_required',
+          review_reason: 'legacy',
+          posted_at: null,
+          created_by: 1,
+        })
+        .execute();
       await assert.rejects(
         service.convertPreorderToSale('t1', 1, preorderId, {}),
         /IMPORT_PREORDER_CONVERSION_NO_POSTED_RECEIPT/,
@@ -219,7 +279,11 @@ async function main(): Promise<void> {
       assert.equal(await countRows(db, 'sales'), 1, 'Only the first conversion wrote a sale');
       assert.equal(Number((await getLot(db)).remaining_quantity), 4, 'Refused conversion leaves the lot untouched');
       assert.equal(Number((await getProduct(db)).stock_qty), 4, 'Refused conversion leaves stock untouched');
-      assert.equal((await getPreorder(db, secondId)).status, 'reserved', 'Second preorder stays reserved, not invoiced');
+      assert.equal(
+        (await getPreorder(db, secondId)).status,
+        'reserved',
+        'Second preorder stays reserved, not invoiced',
+      );
       assert.equal(first.total, 18000);
       console.log('Case 3 passed: under-allocated conversion refused after partial consumption');
     } finally {
@@ -241,13 +305,30 @@ async function main(): Promise<void> {
       assert.equal(Number((await getPreorder(db, preorderId)).sale_invoice_id), result.saleId);
       assert.equal(Number((await getLot(db)).remaining_quantity), 6);
       assert.equal(Number((await getProduct(db)).stock_qty), 6);
-      const movement: any = await (db as any).selectFrom('stock_movements').selectAll()
-        .where('reference_type', '=', 'sale').where('reference_id', '=', result.saleId).executeTakeFirstOrThrow();
+      const movement: any = await (db as any)
+        .selectFrom('stock_movements')
+        .selectAll()
+        .where('reference_type', '=', 'sale')
+        .where('reference_id', '=', result.saleId)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(movement.qty), -4);
       assert.equal(Number(movement.before_qty), 10, 'Movement stamps the true scope quantity before deduction');
       assert.equal(Number(movement.after_qty), 6, 'Movement stamps the true scope quantity after deduction');
-      const lines: any[] = await (db as any).selectFrom('journal_entry_lines').selectAll()
-        .where('journal_entry_id', '=', (await (db as any).selectFrom('journal_entries').select('id').where('source_type', '=', 'sale').where('source_id', '=', result.saleId).executeTakeFirstOrThrow()).id)
+      const lines: any[] = await (db as any)
+        .selectFrom('journal_entry_lines')
+        .selectAll()
+        .where(
+          'journal_entry_id',
+          '=',
+          (
+            await (db as any)
+              .selectFrom('journal_entries')
+              .select('id')
+              .where('source_type', '=', 'sale')
+              .where('source_id', '=', result.saleId)
+              .executeTakeFirstOrThrow()
+          ).id,
+        )
         .execute();
       const debit = lines.reduce((s, l) => s + Number(l.debit || 0), 0);
       const credit = lines.reduce((s, l) => s + Number(l.credit || 0), 0);
@@ -257,7 +338,9 @@ async function main(): Promise<void> {
       assert.equal(Number(cogs.debit), 10000, 'COGS is exactly the lot landed cost: 4 x 2500');
       const inventory = lines.find((l) => Number(l.account_id) === 21);
       assert.equal(Number(inventory.credit), 10000, 'Inventory credit mirrors COGS');
-      console.log('Case 4 passed: allowed conversion posts a balanced journal at lot cost with true movement quantities');
+      console.log(
+        'Case 4 passed: allowed conversion posts a balanced journal at lot cost with true movement quantities',
+      );
     } finally {
       await db.destroy();
     }

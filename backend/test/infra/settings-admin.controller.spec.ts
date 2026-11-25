@@ -12,16 +12,46 @@ import { AdminRoleGuard } from '../../src/core/auth/guards/admin-role.guard';
 
   const serviceCalls: string[] = [];
   const service = {
-    getDiagnostics() { serviceCalls.push('getDiagnostics'); return { ok: true }; },
-    getMaintenanceReport() { serviceCalls.push('getMaintenanceReport'); return { ok: true }; },
-    getLaunchReadiness() { serviceCalls.push('getLaunchReadiness'); return { ok: true }; },
-    getOperationalReadiness() { serviceCalls.push('getOperationalReadiness'); return { ok: true }; },
-    getSupportSnapshot() { serviceCalls.push('getSupportSnapshot'); return { ok: true }; },
-    getUatReadiness() { serviceCalls.push('getUatReadiness'); return { ok: true }; },
-    cleanupExpiredSessions() { serviceCalls.push('cleanupExpiredSessions'); return { ok: true }; },
-    reconcileAll() { serviceCalls.push('reconcileAll'); return { ok: true }; },
-    reconcileCustomers() { serviceCalls.push('reconcileCustomers'); return { ok: true }; },
-    reconcileSuppliers() { serviceCalls.push('reconcileSuppliers'); return { ok: true }; },
+    getDiagnostics() {
+      serviceCalls.push('getDiagnostics');
+      return { ok: true };
+    },
+    getMaintenanceReport() {
+      serviceCalls.push('getMaintenanceReport');
+      return { ok: true };
+    },
+    getLaunchReadiness() {
+      serviceCalls.push('getLaunchReadiness');
+      return { ok: true };
+    },
+    getOperationalReadiness() {
+      serviceCalls.push('getOperationalReadiness');
+      return { ok: true };
+    },
+    getSupportSnapshot() {
+      serviceCalls.push('getSupportSnapshot');
+      return { ok: true };
+    },
+    getUatReadiness() {
+      serviceCalls.push('getUatReadiness');
+      return { ok: true };
+    },
+    cleanupExpiredSessions() {
+      serviceCalls.push('cleanupExpiredSessions');
+      return { ok: true };
+    },
+    reconcileAll() {
+      serviceCalls.push('reconcileAll');
+      return { ok: true };
+    },
+    reconcileCustomers() {
+      serviceCalls.push('reconcileCustomers');
+      return { ok: true };
+    },
+    reconcileSuppliers() {
+      serviceCalls.push('reconcileSuppliers');
+      return { ok: true };
+    },
   };
 
   const controller = new SettingsAdminController(service as any, {} as any);

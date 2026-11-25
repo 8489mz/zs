@@ -27,7 +27,7 @@ async function runVanSalesSimulation() {
   const stocks: Record<number, Record<number, number>> = {
     // locationId -> productId -> qty
     1: { 201: 100, 202: 80 }, // المستودع به 100 كرتونة عصير و 80 شيكارة أرز
-    50: { 201: 0, 202: 0 },    // سيارة الفان فارغة في الصباح
+    50: { 201: 0, 202: 0 }, // سيارة الفان فارغة في الصباح
   };
 
   console.log('\n  2. أرصدة الصباح في المستودع الرئيسي قبل التحميل:');
@@ -102,13 +102,13 @@ async function runVanSalesSimulation() {
     paymentMethod: 'credit',
     items: [
       { productId: 201, qty: 10, unitPrice: 50.0 }, // 10 كراتين عصير = 500 ج.م
-      { productId: 202, qty: 5, unitPrice: 40.0 },  // 5 شكائر أرز = 200 ج.م
+      { productId: 202, qty: 5, unitPrice: 40.0 }, // 5 شكائر أرز = 200 ج.م
     ],
   };
 
   stocks[50][201] -= 10;
   stocks[50][202] -= 5;
-  const sale2Total = (10 * 50.0) + (5 * 40.0); // 700 ج.م
+  const sale2Total = 10 * 50.0 + 5 * 40.0; // 700 ج.م
   trip.salesAmount += sale2Total;
   trip.creditSales += sale2Total;
 
@@ -158,7 +158,7 @@ async function runVanSalesSimulation() {
   // تفريغ البضاعة المتبقية في المستودع الرئيسي
   console.log('     - تفريغ عهدة البضاعة المتبقية بالفان وإرجاعها للمستودع الرئيسي:');
   const remainingJuice = stocks[50][201]; // 17
-  const remainingRice = stocks[50][202];  // 15
+  const remainingRice = stocks[50][202]; // 15
 
   stocks[50][201] = 0;
   stocks[50][202] = 0;
@@ -167,7 +167,9 @@ async function runVanSalesSimulation() {
 
   trip.status = 'settled';
 
-  console.log(`     ✓ رصيد سيارة الفان بعد التفريغ: (عصير: ${stocks[50][201]} | أرز: ${stocks[50][202]}) [مفرّغة بالكامل]`);
+  console.log(
+    `     ✓ رصيد سيارة الفان بعد التفريغ: (عصير: ${stocks[50][201]} | أرز: ${stocks[50][202]}) [مفرّغة بالكامل]`,
+  );
   console.log(`     ✓ رصيد المستودع الرئيسي بعد استلام المتبقي: (عصير: ${stocks[1][201]} | أرز: ${stocks[1][202]})`);
   console.log(`     ✓ تم إغلاق الرحلة وتوريد 550.00 ج.م إلى خزينة الفرع الرئيسية.`);
 

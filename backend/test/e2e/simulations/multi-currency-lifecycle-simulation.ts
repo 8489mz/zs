@@ -5,7 +5,7 @@ import { Database } from '../../../src/database/database.types';
 
 /**
  * Z-SYSTEMS ERP — MULTI-CURRENCY LIFECYCLE SIMULATION
- * 
+ *
  * Verifies:
  * 1. Multi-Currency Foundation: Base currency SAR, foreign currencies USD, EUR.
  * 2. Foreign Currency Sale: Invoice booked at initial exchange rate.
@@ -168,7 +168,7 @@ async function runMultiCurrencySimulation() {
     if (Math.abs(totalDebits - totalCredits) > 0.001) {
       throw new Error(`Double-entry invariant failed! Total Debits: ${totalDebits}, Total Credits: ${totalCredits}`);
     }
-    
+
     // Check individual journal entry balances
     for (const je of [je1, je2, je3, je4]) {
       const jeBalance = await sql<{ sum_debit: string; sum_credit: string }>`
@@ -178,7 +178,7 @@ async function runMultiCurrencySimulation() {
       const deb = Number(jeBalance.rows[0].sum_debit);
       const cred = Number(jeBalance.rows[0].sum_credit);
       if (Math.abs(deb - cred) > 0.001) {
-         throw new Error(`Journal ${je} is unbalanced! Debit: ${deb}, Credit: ${cred}`);
+        throw new Error(`Journal ${je} is unbalanced! Debit: ${deb}, Credit: ${cred}`);
       }
     }
 
@@ -186,7 +186,6 @@ async function runMultiCurrencySimulation() {
     console.log('\n================================================================');
     console.log('[SUCCESS] اكتملت محاكاة دورة حياة العملات المتعددة وفروق الصرف بنجاح 100%!');
     console.log('================================================================\n');
-
   } catch (err: any) {
     console.error('[ERROR] SIMULATION FAILED:', err.message || err);
     console.error(err.stack);

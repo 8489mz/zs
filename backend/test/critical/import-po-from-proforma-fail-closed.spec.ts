@@ -49,41 +49,81 @@ async function makeDb(): Promise<Kysely<Database>> {
     CREATE TABLE purchase_order_items (id bigserial PRIMARY KEY, tenant_id text, account_id text, purchase_order_id bigint, product_id bigint, product_name text, quantity numeric, received_quantity numeric, unit_cost numeric, tax_rate numeric, discount numeric, total numeric);
     CREATE TABLE settings (tenant_id text, key text, value text);
   `);
-  await db.insertInto('suppliers' as never).values({
-    id: 3, tenant_id: 't1', name: 'Supplier', account_id: 't1',
-  } as never).execute();
-  await db.insertInto('products' as never).values({
-    id: 5, tenant_id: 't1', name: 'Widget',
-  } as never).execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({
+      id: 3,
+      tenant_id: 't1',
+      name: 'Supplier',
+      account_id: 't1',
+    } as never)
+    .execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 5,
+      tenant_id: 't1',
+      name: 'Widget',
+    } as never)
+    .execute();
   return db;
 }
 
 async function seedProject(db: Kysely<Database>, id: string, createdAt: string): Promise<void> {
-  await db.insertInto('import_projects' as never).values({
-    id, tenant_id: 't1',
-    feasibility_data: JSON.stringify({ items: [{ name: 'Other Project Goods', qty: 10, factoryPriceUsd: 9 }] }),
-    created_at: createdAt,
-  } as never).execute();
+  await db
+    .insertInto('import_projects' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      feasibility_data: JSON.stringify({ items: [{ name: 'Other Project Goods', qty: 10, factoryPriceUsd: 9 }] }),
+      created_at: createdAt,
+    } as never)
+    .execute();
 }
 
 async function seedPi(db: Kysely<Database>, overrides: Record<string, unknown>): Promise<void> {
-  await db.insertInto('import_proforma_invoices' as never).values({
-    id: 'pi-1', tenant_id: 't1', project_id: null, supplier_id: 3, pi_number: 'PI-1',
-    pi_date: '2026-11-02', currency: 'USD', total_amount_foreign: 200,
-    exchange_rate_contract: 50, status: 'approved', po_status: 'draft', po_number: null,
-    po_date: null, items: '[]', advance_percentage: 30, balance_percentage: 70,
-    incoterm: 'FOB', delivery_port: null, payment_terms: null, notes: null,
-    ...overrides,
-  } as never).execute();
+  await db
+    .insertInto('import_proforma_invoices' as never)
+    .values({
+      id: 'pi-1',
+      tenant_id: 't1',
+      project_id: null,
+      supplier_id: 3,
+      pi_number: 'PI-1',
+      pi_date: '2026-11-02',
+      currency: 'USD',
+      total_amount_foreign: 200,
+      exchange_rate_contract: 50,
+      status: 'approved',
+      po_status: 'draft',
+      po_number: null,
+      po_date: null,
+      items: '[]',
+      advance_percentage: 30,
+      balance_percentage: 70,
+      incoterm: 'FOB',
+      delivery_port: null,
+      payment_terms: null,
+      notes: null,
+      ...overrides,
+    } as never)
+    .execute();
 }
 
 async function poCount(db: Kysely<Database>): Promise<number> {
-  const row: any = await (db as any).selectFrom('purchase_orders').select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom('purchase_orders')
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
 async function readPi(db: Kysely<Database>): Promise<any> {
-  return (db as any).selectFrom('import_proforma_invoices').selectAll().where('id', '=', 'pi-1').executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('import_proforma_invoices')
+    .selectAll()
+    .where('id', '=', 'pi-1')
+    .executeTakeFirstOrThrow();
 }
 
 async function main(): Promise<void> {
@@ -157,4 +197,7 @@ async function main(): Promise<void> {
   console.log('Import PO-from-proforma fail-closed tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

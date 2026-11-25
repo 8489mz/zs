@@ -103,8 +103,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makePosting(db: Kysely<Database>): AccountingPostingService {
@@ -130,29 +136,71 @@ async function seedSale(
   items: SeedItem[],
   remaining: Array<{ productId: number; qty: number }>,
 ): Promise<void> {
-  await db.insertInto('sales' as never).values({
-    id: saleId, tenant_id: 't1', doc_no: `S-${saleId}`, customer_id: null, subtotal: total, discount: 0,
-    tax_amount: 0, total, paid_amount: total, store_credit_used: 0, exchange_return_id: null,
-    branch_id: null, location_id: null, created_by: 1, created_at: new Date(), delivery_fee: 0,
-    delivery_fee_mode: null, service_charge: 0, tip_amount: 0, prices_include_tax: false,
-    sale_origin: 'pos', payment_type: 'cash', collection_status: 'paid',
-  } as never).execute();
+  await db
+    .insertInto('sales' as never)
+    .values({
+      id: saleId,
+      tenant_id: 't1',
+      doc_no: `S-${saleId}`,
+      customer_id: null,
+      subtotal: total,
+      discount: 0,
+      tax_amount: 0,
+      total,
+      paid_amount: total,
+      store_credit_used: 0,
+      exchange_return_id: null,
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+      created_at: new Date(),
+      delivery_fee: 0,
+      delivery_fee_mode: null,
+      service_charge: 0,
+      tip_amount: 0,
+      prices_include_tax: false,
+      sale_origin: 'pos',
+      payment_type: 'cash',
+      collection_status: 'paid',
+    } as never)
+    .execute();
   for (const [index, item] of items.entries()) {
-    await db.insertInto('sale_items' as never).values({
-      id: saleId * 10 + index, sale_id: saleId, tenant_id: 't1', product_id: item.productId,
-      qty: item.qty, cost_price: item.costPrice,
-      unit_multiplier: item.unitMultiplier ?? 1,
-      modifiers: JSON.stringify(item.modifiers ?? []),
-    } as never).execute();
+    await db
+      .insertInto('sale_items' as never)
+      .values({
+        id: saleId * 10 + index,
+        sale_id: saleId,
+        tenant_id: 't1',
+        product_id: item.productId,
+        qty: item.qty,
+        cost_price: item.costPrice,
+        unit_multiplier: item.unitMultiplier ?? 1,
+        modifiers: JSON.stringify(item.modifiers ?? []),
+      } as never)
+      .execute();
   }
-  await db.insertInto('sale_payments' as never).values({
-    sale_id: saleId, tenant_id: 't1', payment_channel: 'cash', amount: total,
-  } as never).execute();
+  await db
+    .insertInto('sale_payments' as never)
+    .values({
+      sale_id: saleId,
+      tenant_id: 't1',
+      payment_channel: 'cash',
+      amount: total,
+    } as never)
+    .execute();
   for (const stock of remaining) {
-    await db.insertInto('product_location_stock' as never).values({
-      tenant_id: 't1', account_id: 'a1', product_id: stock.productId, branch_id: null,
-      location_id: null, qty: stock.qty, reserved_qty: 0,
-    } as never).execute();
+    await db
+      .insertInto('product_location_stock' as never)
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: stock.productId,
+        branch_id: null,
+        location_id: null,
+        qty: stock.qty,
+        reserved_qty: 0,
+      } as never)
+      .execute();
   }
 }
 
@@ -161,14 +209,23 @@ async function cogsAndInventoryFor(
   saleId: number,
   sourceType = 'sale',
 ): Promise<{ cogs: number; inventory: number; totalDebit: number; totalCredit: number }> {
-  const entries = await (db as any).selectFrom('journal_entries').select(['id'])
-    .where('source_type', '=', sourceType).where('source_id', '=', saleId).execute() as Array<{ id: number }>;
+  const entries = (await (db as any)
+    .selectFrom('journal_entries')
+    .select(['id'])
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', saleId)
+    .execute()) as Array<{ id: number }>;
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for sale ${saleId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('accounting_accounts', 'accounting_accounts.id', 'journal_entry_lines.account_id')
-    .select(['accounting_accounts.code as code', 'journal_entry_lines.debit as debit', 'journal_entry_lines.credit as credit'])
+    .select([
+      'accounting_accounts.code as code',
+      'journal_entry_lines.debit as debit',
+      'journal_entry_lines.credit as credit',
+    ])
     .where('journal_entry_id', '=', entries[0].id)
-    .execute() as Array<{ code: string; debit: string; credit: string }>;
+    .execute()) as Array<{ code: string; debit: string; credit: string }>;
   const byCode = new Map(rows.map((row) => [row.code, { debit: Number(row.debit), credit: Number(row.credit) }]));
   return {
     cogs: Number(byCode.get('5100')?.debit || 0),
@@ -198,9 +255,13 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 100,
+      await seedSale(
+        db,
+        1,
+        100,
         [{ productId: 100, qty: 1, costPrice: 30.625, unitMultiplier: 2 }],
-        [{ productId: 100, qty: 5 }]);
+        [{ productId: 100, qty: 5 }],
+      );
       await postSaleOn(db, 1);
       const posted = await cogsAndInventoryFor(db, 1);
       assert.equal(posted.cogs, 30.63);
@@ -218,9 +279,13 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 200,
+      await seedSale(
+        db,
+        1,
+        200,
         [{ productId: 100, qty: 10, costPrice: 15.3125, unitMultiplier: 1 }],
-        [{ productId: 100, qty: 6 }]);
+        [{ productId: 100, qty: 6 }],
+      );
       await postSaleOn(db, 1);
       const posted = await cogsAndInventoryFor(db, 1);
       assert.equal(posted.cogs, 153.12);
@@ -240,12 +305,24 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 100,
-        [{
-          productId: 100, qty: 1, costPrice: 10.890625, unitMultiplier: 1,
-          modifiers: [{ productId: 200, qty: 1, consumptionQty: 0.25, costPrice: 0.578125, name: 'cheese' }],
-        }],
-        [{ productId: 100, qty: 1 }, { productId: 200, qty: 3.75 }]);
+      await seedSale(
+        db,
+        1,
+        100,
+        [
+          {
+            productId: 100,
+            qty: 1,
+            costPrice: 10.890625,
+            unitMultiplier: 1,
+            modifiers: [{ productId: 200, qty: 1, consumptionQty: 0.25, costPrice: 0.578125, name: 'cheese' }],
+          },
+        ],
+        [
+          { productId: 100, qty: 1 },
+          { productId: 200, qty: 3.75 },
+        ],
+      );
       await postSaleOn(db, 1);
       const posted = await cogsAndInventoryFor(db, 1);
       assert.equal(posted.cogs, 10.9);
@@ -264,15 +341,27 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 100,
-        [{
-          productId: 100, qty: 1, costPrice: 10.890625, unitMultiplier: 1,
-          modifiers: {
-            mods: [{ productId: 200, qty: 1, consumptionQty: 0.25, costPrice: 0.578125, name: 'cheese' }],
-            offer: { originalPrice: 20, offerDiscount: 0, offerName: 'deal' },
+      await seedSale(
+        db,
+        1,
+        100,
+        [
+          {
+            productId: 100,
+            qty: 1,
+            costPrice: 10.890625,
+            unitMultiplier: 1,
+            modifiers: {
+              mods: [{ productId: 200, qty: 1, consumptionQty: 0.25, costPrice: 0.578125, name: 'cheese' }],
+              offer: { originalPrice: 20, offerDiscount: 0, offerName: 'deal' },
+            },
           },
-        }],
-        [{ productId: 100, qty: 1 }, { productId: 200, qty: 3.75 }]);
+        ],
+        [
+          { productId: 100, qty: 1 },
+          { productId: 200, qty: 3.75 },
+        ],
+      );
       await postSaleOn(db, 1);
       const posted = await cogsAndInventoryFor(db, 1);
       assert.equal(posted.cogs, 10.9);
@@ -290,9 +379,13 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'KWD');
-      await seedSale(db, 1, 100,
+      await seedSale(
+        db,
+        1,
+        100,
         [{ productId: 100, qty: 1, costPrice: 20.0005, unitMultiplier: 2 }],
-        [{ productId: 100, qty: 5 }]);
+        [{ productId: 100, qty: 5 }],
+      );
       await postSaleOn(db, 1);
       const posted = await cogsAndInventoryFor(db, 1);
       assert.equal(posted.cogs, 20.001);
@@ -313,12 +406,16 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 200,
+      await seedSale(
+        db,
+        1,
+        200,
         [
           { productId: 100, qty: 1, costPrice: 30.625, unitMultiplier: 2 },
           { productId: 100, qty: 1, costPrice: 15.3125, unitMultiplier: 1 },
         ],
-        [{ productId: 100, qty: 5 }]);
+        [{ productId: 100, qty: 5 }],
+      );
       await postSaleOn(db, 1);
       const posted = await cogsAndInventoryFor(db, 1);
       assert.equal(posted.cogs, 45.95);
@@ -336,9 +433,13 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 100,
+      await seedSale(
+        db,
+        1,
+        100,
         [{ productId: 100, qty: 1, costPrice: 30.625, unitMultiplier: 2 }],
-        [{ productId: 100, qty: 5 }]);
+        [{ productId: 100, qty: 5 }],
+      );
       await postSaleOn(db, 1);
       await postSaleEditOn(db, 1);
       const edited = await cogsAndInventoryFor(db, 1, 'sale_edit');
@@ -355,9 +456,7 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 100,
-        [{ productId: 100, qty: 2, costPrice: 30.625, unitMultiplier: 2 }],
-        []);
+      await seedSale(db, 1, 100, [{ productId: 100, qty: 2, costPrice: 30.625, unitMultiplier: 2 }], []);
       await postSaleOn(db, 1);
       const posted = await cogsAndInventoryFor(db, 1);
       assert.equal(posted.cogs, 61.25);

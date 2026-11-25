@@ -40,11 +40,7 @@ async function testOrderTermsComeFromTheStoredOrder(): Promise<void> {
 }
 
 async function testAClosedOrderApprovesNothing(): Promise<void> {
-  for (const order of [
-    { ...ORDER, status: 'cancelled' },
-    { ...ORDER, sale_id: 900 },
-    undefined,
-  ]) {
+  for (const order of [{ ...ORDER, status: 'cancelled' }, { ...ORDER, sale_id: 900 }, undefined]) {
     const terms = await serviceWith(order).resolveOnlineOrderTerms(41, 'acme');
     assert.equal(terms, undefined, 'a cancelled, already invoiced or missing order grants no approval');
   }

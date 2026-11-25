@@ -53,13 +53,23 @@ const ACCOUNT = 'a1';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['deliveryReps', 'accounting'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierBAuth: AuthContext = {
-  userId: 3, sessionId: 'spec-b', username: 'cashier-b', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 3,
+  sessionId: 'spec-b',
+  username: 'cashier-b',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -128,47 +138,127 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 4, tenant_id: TENANT, username: 'rep-user', role: 'driver', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 4, tenant_id: TENANT, username: 'rep-user', role: 'driver', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [1160, '1160'], [2120, '2120'], [4100, '4100'], [4300, '4300'],
-    [5100, '5100'], [6400, '6400'], [7100, '7100'], [7200, '7200'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [1160, '1160'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
+    [6400, '6400'],
+    [7100, '7100'],
+    [7200, '7200'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 4, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', phone: null, van_location_id: 10 }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van',
+      location_type: 'van',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 4, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', phone: null, van_location_id: 10 })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
 async function seedTrip(db: Kysely<Database>, cashCollected: number): Promise<void> {
-  await (db as any).insertInto('van_sales_trips').values({
-    id: 11, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 4, vehicle_id: null,
-    start_odometer: 100, end_odometer: null, van_location_id: 10, source_warehouse_id: 10,
-    status: 'open', settlement_status: 'open', sales_amount: 0, cash_collected: cashCollected,
-    credit_sales: 0, returns_amount: 0, cash_refunds: 0,
-  }).execute();
+  await (db as any)
+    .insertInto('van_sales_trips')
+    .values({
+      id: 11,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: 4,
+      vehicle_id: null,
+      start_odometer: 100,
+      end_odometer: null,
+      van_location_id: 10,
+      source_warehouse_id: 10,
+      status: 'open',
+      settlement_status: 'open',
+      sales_amount: 0,
+      cash_collected: cashCollected,
+      credit_sales: 0,
+      returns_amount: 0,
+      cash_refunds: 0,
+    })
+    .execute();
 }
 
-function buildServices(db: Kysely<Database>): { van: VanSalesService; drawer: CashDrawerService; posting: AccountingPostingService } {
+function buildServices(db: Kysely<Database>): {
+  van: VanSalesService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -184,11 +274,21 @@ async function treasuryRows(db: Kysely<Database>): Promise<Array<Record<string, 
 }
 
 async function journalEntries(db: Kysely<Database>): Promise<Array<Record<string, any>>> {
-  return (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', 'van_trip_settlement').execute();
+  return (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', 'van_trip_settlement')
+    .execute();
 }
 
-async function journalLeg(db: Kysely<Database>, entryId: number, accountId: number, side: 'debit' | 'credit'): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+async function journalLeg(
+  db: Kysely<Database>,
+  entryId: number,
+  accountId: number,
+  side: 'debit' | 'credit',
+): Promise<number> {
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
     .select([side])
     .where('journal_entry_id', '=', entryId)
     .where('account_id', '=', accountId)
@@ -197,7 +297,11 @@ async function journalLeg(db: Kysely<Database>, entryId: number, accountId: numb
 }
 
 async function tripStatus(db: Kysely<Database>): Promise<string> {
-  const row = await (db as any).selectFrom('van_sales_trips').select(['status']).where('id', '=', 11).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('van_sales_trips')
+    .select(['status'])
+    .where('id', '=', 11)
+    .executeTakeFirst();
   return String(row?.status || '');
 }
 
@@ -216,15 +320,35 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 1);
       await seedShift(db, 2, 3);
       await seedTrip(db, 100);
-      await (db as any).insertInto('sales').values({
-        id: 50, tenant_id: TENANT, account_id: ACCOUNT, customer_id: null,
-        payment_type: 'cash', payment_channel: 'cash', total: 50, paid_amount: 50,
-        status: 'posted', collection_status: 'prepaid_by_rep',
-        branch_id: 1, location_id: 10, created_by: 4, created_at: '2026-01-02T00:00:00.000Z',
-      }).execute();
-      await (db as any).insertInto('sale_payments').values({
-        tenant_id: TENANT, account_id: ACCOUNT, sale_id: 50, payment_channel: 'cash', amount: 50,
-      }).execute();
+      await (db as any)
+        .insertInto('sales')
+        .values({
+          id: 50,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          customer_id: null,
+          payment_type: 'cash',
+          payment_channel: 'cash',
+          total: 50,
+          paid_amount: 50,
+          status: 'posted',
+          collection_status: 'prepaid_by_rep',
+          branch_id: 1,
+          location_id: 10,
+          created_by: 4,
+          created_at: '2026-01-02T00:00:00.000Z',
+        })
+        .execute();
+      await (db as any)
+        .insertInto('sale_payments')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          sale_id: 50,
+          payment_channel: 'cash',
+          amount: 50,
+        })
+        .execute();
       const { van, drawer } = buildServices(db);
       assert.equal(await drawer.computeShiftExpectedCash(2, cashierBAuth), 0, 'B expects nothing before the settle');
       const result = await van.settleTrip(4, TENANT, ACCOUNT, settlePayload(100), adminAuth);
@@ -240,8 +364,16 @@ async function main(): Promise<void> {
       assert.equal(Number(rows[0].amount), 100);
       assert.equal(rows[0].request_key, 'rep-remittance:trip:11');
       assert.ok(String(rows[0].note || '').includes('مندوب'), 'the note classifies the row as a delivery receipt');
-      assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 100, 'the receiving shift expects the remitted cash');
-      assert.equal(await drawer.computeShiftExpectedCash(2, cashierBAuth), 0, 'the other shift stays untouched and the rep-held sale stays out');
+      assert.equal(
+        await drawer.computeShiftExpectedCash(1, adminAuth),
+        100,
+        'the receiving shift expects the remitted cash',
+      );
+      assert.equal(
+        await drawer.computeShiftExpectedCash(2, cashierBAuth),
+        0,
+        'the other shift stays untouched and the rep-held sale stays out',
+      );
       const entries = await journalEntries(db);
       assert.equal(entries.length, 1, 'exactly one settlement journal');
       assert.equal(await journalLeg(db, Number(entries[0].id), 1110, 'debit'), 100, 'GL cash is debited exactly once');
@@ -265,8 +397,13 @@ async function main(): Promise<void> {
       await seedTrip(db, 80);
       const { van, drawer } = buildServices(db);
       const shiftlessSupervisor = {
-        userId: 5, sessionId: 'spec-s', username: 'supervisor', role: 'admin',
-        permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+        userId: 5,
+        sessionId: 'spec-s',
+        username: 'supervisor',
+        role: 'admin',
+        permissions: ['deliveryReps', 'accounting'],
+        tenantId: TENANT,
+        accountId: ACCOUNT,
       } as unknown as AuthContext;
       const result = await van.settleTrip(4, TENANT, ACCOUNT, settlePayload(80), shiftlessSupervisor);
       assert.equal(result.status, 'settled');
@@ -312,10 +449,7 @@ async function main(): Promise<void> {
       await seedTrip(db, 100);
       const { van, drawer } = buildServices(db);
       await van.settleTrip(4, TENANT, ACCOUNT, settlePayload(100), adminAuth);
-      await assert.rejects(
-        () => van.settleTrip(4, TENANT, ACCOUNT, settlePayload(100), adminAuth),
-        /TRIP_NOT_FOUND/,
-      );
+      await assert.rejects(() => van.settleTrip(4, TENANT, ACCOUNT, settlePayload(100), adminAuth), /TRIP_NOT_FOUND/);
       assert.equal((await treasuryRows(db)).length, 1, 'still one remittance row');
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 100, 'expected cash is not doubled');
       assert.equal((await journalEntries(db)).length, 1, 'still one journal');
@@ -354,15 +488,33 @@ async function main(): Promise<void> {
     // (S5), while the treasury row itself lives in the settlement
     // helper (S6 insertRepCashRemittanceRow) — the only place the
     // table name appears.
-    const s5Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
-    const s6Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settlement-helpers.service.ts'), 'utf8');
+    const s5Source = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'),
+      'utf8',
+    );
+    const s6Source = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settlement-helpers.service.ts'),
+      'utf8',
+    );
     assert.ok(s5Source.includes('INV-REP-CASH-REMITTANCE-SHIFT'), 'settleTrip names the invariant');
     assert.ok(s6Source.includes('rep_cash_remittance'), 'the remittance treasury row exists in the settlement helper');
     assert.ok(s5Source.includes('insertRepCashRemittanceRow'), 'the remittance write is a named step in settleTrip');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-REP-CASH-REMITTANCE-SHIFT').length - 1, 1, 'the invariant entry must exist exactly once');
-    assert.equal(invariants.split('INV-EXPECTED-CASH-SINGLE-WINDOW').length - 1, 1, 'the P8 window invariant must still exist exactly once');
-    assert.equal(invariants.split('INV-CASH-DRAWER-MOVEMENT-TYPES').length - 1, 1, 'the P4 movement-types invariant must still exist exactly once');
+    assert.equal(
+      invariants.split('INV-REP-CASH-REMITTANCE-SHIFT').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
+    assert.equal(
+      invariants.split('INV-EXPECTED-CASH-SINGLE-WINDOW').length - 1,
+      1,
+      'the P8 window invariant must still exist exactly once',
+    );
+    assert.equal(
+      invariants.split('INV-CASH-DRAWER-MOVEMENT-TYPES').length - 1,
+      1,
+      'the P4 movement-types invariant must still exist exactly once',
+    );
     console.log('  source + invariant pins passed');
   }
 

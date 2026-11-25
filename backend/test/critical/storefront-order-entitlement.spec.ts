@@ -58,10 +58,7 @@ function testEngineEntitlement(): void {
   // An explicit minus beats an otherwise entitled plan.
   assert.equal(isStorefrontEntitledForOrders(row('ecommerce', 'plan_omnichannel', ['-storefront']), checker), false);
   // Extra features stored as a JSON string are parsed, not ignored.
-  assert.equal(
-    isStorefrontEntitledForOrders(row('warehousing', 'plan_basic', '["storefront"]'), checker),
-    true,
-  );
+  assert.equal(isStorefrontEntitledForOrders(row('warehousing', 'plan_basic', '["storefront"]'), checker), true);
 }
 
 function testExtraFeaturesParsing(): void {
@@ -82,7 +79,10 @@ function makeFakeDb(tenant: Record<string, unknown>, settings: Array<{ key: stri
     product_offers: [],
   };
   const eb: any = new Proxy(function () {}, {
-    get: () => (..._args: unknown[]) => eb,
+    get:
+      () =>
+      (..._args: unknown[]) =>
+        eb,
     apply: () => eb,
   });
   class FakeQueryBuilder {
@@ -127,7 +127,10 @@ function makeFakeDb(tenant: Record<string, unknown>, settings: Array<{ key: stri
   return { selectFrom: (table: string) => new FakeQueryBuilder(table) };
 }
 
-function buildService(tenant: Record<string, unknown>, settings: Array<{ key: string; value: string }>): StorefrontService {
+function buildService(
+  tenant: Record<string, unknown>,
+  settings: Array<{ key: string; value: string }>,
+): StorefrontService {
   return new StorefrontService(makeFakeDb(tenant, settings), {} as never, {} as never, {} as never, undefined, checker);
 }
 
@@ -139,7 +142,13 @@ const orderDto: any = {
 };
 
 async function testServiceRejectsUnentitledTenant(): Promise<void> {
-  const tenant = { id: 't-warehousing', slug: 'test-shop', plan_id: 'plan_basic', extra_features: [], activity_type: 'warehousing' };
+  const tenant = {
+    id: 't-warehousing',
+    slug: 'test-shop',
+    plan_id: 'plan_basic',
+    extra_features: [],
+    activity_type: 'warehousing',
+  };
   const service = buildService(tenant, []);
   let caught: unknown;
   try {
@@ -152,7 +161,13 @@ async function testServiceRejectsUnentitledTenant(): Promise<void> {
 }
 
 async function testServicePassesGateForEntitledTenant(): Promise<void> {
-  const tenant = { id: 't-ecommerce', slug: 'test-shop', plan_id: 'plan_basic', extra_features: [], activity_type: 'ecommerce' };
+  const tenant = {
+    id: 't-ecommerce',
+    slug: 'test-shop',
+    plan_id: 'plan_basic',
+    extra_features: [],
+    activity_type: 'ecommerce',
+  };
   const service = buildService(tenant, []);
   let caught: unknown;
   try {
@@ -168,7 +183,13 @@ async function testServicePassesGateForEntitledTenant(): Promise<void> {
 }
 
 async function testServiceKeepsToggleMessage(): Promise<void> {
-  const tenant = { id: 't-ecommerce', slug: 'test-shop', plan_id: 'plan_basic', extra_features: [], activity_type: 'ecommerce' };
+  const tenant = {
+    id: 't-ecommerce',
+    slug: 'test-shop',
+    plan_id: 'plan_basic',
+    extra_features: [],
+    activity_type: 'ecommerce',
+  };
   const service = buildService(tenant, [{ key: 'storefront_enabled', value: '"false"' }]);
   let caught: unknown;
   try {

@@ -77,25 +77,37 @@ import { SalesOrdersService } from '../../src/modules/sales/services/sales-order
 import { QuotationsService } from '../../src/modules/sales/services/quotations.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { normalizeSalePayload } from '../../src/modules/sales/helpers/sales-payload.helper';
-import { buildPreparedSaleItem, roundSaleInvoiceTotals, resolveConversionPaymentTerms } from '../../src/modules/sales/helpers/sales-write.helper';
+import {
+  buildPreparedSaleItem,
+  roundSaleInvoiceTotals,
+  resolveConversionPaymentTerms,
+} from '../../src/modules/sales/helpers/sales-write.helper';
 import { computeInvoiceTotals } from '../../src/common/utils/invoice-totals';
 import { allocateInvoiceDiscount } from '../../src/modules/sales/engines/invoice-discount.engine';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 /** Recomputes the sale totals from a captured conversion payload through the real seam. */
 function seamTotals(payload: any, digits: 2 | 3, taxRate: number) {
   const normalized = normalizeSalePayload(payload);
   const prepared = normalized.items.map((item) =>
-    buildPreparedSaleItem(
-      { id: item.productId, name: 'P', stock_qty: 1000, cost_price: 10 } as any,
-      item,
-      { moneyDigits: digits },
-    ),
+    buildPreparedSaleItem({ id: item.productId, name: 'P', stock_qty: 1000, cost_price: 10 } as any, item, {
+      moneyDigits: digits,
+    }),
   );
   const subtotal = prepared.reduce((sum, item) => sum + item.lineTotal, 0);
   const totals = roundSaleInvoiceTotals(computeInvoiceTotals(subtotal, normalized.discount, taxRate, false), digits);
-  const itemOnlyTax = roundSaleInvoiceTotals(computeInvoiceTotals(subtotal, normalized.discount, taxRate, false), digits).taxAmount;
+  const itemOnlyTax = roundSaleInvoiceTotals(
+    computeInvoiceTotals(subtotal, normalized.discount, taxRate, false),
+    digits,
+  ).taxAmount;
   const allocated = allocateInvoiceDiscount({
     lines: prepared.map((item) => ({ lineTotal: item.lineTotal, qty: item.qty })),
     invoiceDiscount: normalized.discount,
@@ -119,7 +131,10 @@ async function main() {
       CREATE TABLE operation_executions (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, idempotency_key text NOT NULL, operation_type text NOT NULL, status text NOT NULL, request_hash text NOT NULL, document_id text, response_payload text, error_code text, created_at timestamptz NOT NULL DEFAULT NOW(), updated_at timestamptz NOT NULL DEFAULT NOW(), completed_at timestamptz);
     `);
 
-    await db.insertInto('branches').values({ id: 1, tenant_id: 't1', default_stock_location_id: 10 } as any).execute();
+    await db
+      .insertInto('branches')
+      .values({ id: 1, tenant_id: 't1', default_stock_location_id: 10 } as any)
+      .execute();
 
     let calls = 0;
     let lastPayload: any = null;
@@ -138,36 +153,69 @@ async function main() {
       { quantity: 1, unitPrice: 30, discount: 0, total: 30 },
     ];
 
-    async function seedOrder(
-      id: number,
-      paymentTerms: string | null,
-      customerId: number | null,
-    ): Promise<void> {
-      await db.insertInto('sales_orders').values({
-        id, tenant_id: 't1', account_id: 'a1', order_number: `SO-${id}`,
-        customer_id: customerId, customer_name: 'Cust', branch_id: 1,
-        discount_amount: 5, total_amount: 125, status: 'confirmed',
-        payment_terms: paymentTerms,
-      } as any).execute();
+    async function seedOrder(id: number, paymentTerms: string | null, customerId: number | null): Promise<void> {
+      await db
+        .insertInto('sales_orders')
+        .values({
+          id,
+          tenant_id: 't1',
+          account_id: 'a1',
+          order_number: `SO-${id}`,
+          customer_id: customerId,
+          customer_name: 'Cust',
+          branch_id: 1,
+          discount_amount: 5,
+          total_amount: 125,
+          status: 'confirmed',
+          payment_terms: paymentTerms,
+        } as any)
+        .execute();
       for (const row of rows) {
-        await db.insertInto('sales_order_items').values({
-          tenant_id: 't1', account_id: 'a1', sales_order_id: id, product_id: 1,
-          quantity: row.quantity, unit_price: row.unitPrice, discount: row.discount, total: row.total,
-        } as any).execute();
+        await db
+          .insertInto('sales_order_items')
+          .values({
+            tenant_id: 't1',
+            account_id: 'a1',
+            sales_order_id: id,
+            product_id: 1,
+            quantity: row.quantity,
+            unit_price: row.unitPrice,
+            discount: row.discount,
+            total: row.total,
+          } as any)
+          .execute();
       }
     }
 
     async function seedQuotation(id: number): Promise<void> {
-      await db.insertInto('quotations').values({
-        id, tenant_id: 't1', account_id: 'a1', quotation_number: `Q-${id}`,
-        customer_name: 'Cust', branch_id: 1,
-        discount_amount: 5, total_amount: 125, status: 'draft',
-      } as any).execute();
+      await db
+        .insertInto('quotations')
+        .values({
+          id,
+          tenant_id: 't1',
+          account_id: 'a1',
+          quotation_number: `Q-${id}`,
+          customer_name: 'Cust',
+          branch_id: 1,
+          discount_amount: 5,
+          total_amount: 125,
+          status: 'draft',
+        } as any)
+        .execute();
       for (const row of rows) {
-        await db.insertInto('quotation_items').values({
-          tenant_id: 't1', account_id: 'a1', quotation_id: id, product_id: 1,
-          quantity: row.quantity, unit_price: row.unitPrice, discount: row.discount, total: row.total,
-        } as any).execute();
+        await db
+          .insertInto('quotation_items')
+          .values({
+            tenant_id: 't1',
+            account_id: 'a1',
+            quotation_id: id,
+            product_id: 1,
+            quantity: row.quantity,
+            unit_price: row.unitPrice,
+            discount: row.discount,
+            total: row.total,
+          } as any)
+          .execute();
       }
     }
 
@@ -253,20 +301,23 @@ async function main() {
     // full collectible total for a payments:[] credit payload, so the
     // check consumes exactly this shape.
     {
-      const writer = readFileSync(
-        resolve(__dirname, '../../src/modules/sales/services/create-sale/allocate-tenders-and-delivery.ts'),
-        'utf8',
-      ) + readFileSync(
-        resolve(__dirname, '../../src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts'),
-        'utf8',
-      ) + readFileSync(
-        resolve(__dirname, '../../src/modules/sales/services/sales-edit-and-cancel/adjust-sale-payments.service.ts'),
-        'utf8',
-      );
+      const writer =
+        readFileSync(
+          resolve(__dirname, '../../src/modules/sales/services/create-sale/allocate-tenders-and-delivery.ts'),
+          'utf8',
+        ) +
+        readFileSync(
+          resolve(__dirname, '../../src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts'),
+          'utf8',
+        ) +
+        readFileSync(
+          resolve(__dirname, '../../src/modules/sales/services/sales-edit-and-cancel/adjust-sale-payments.service.ts'),
+          'utf8',
+        );
       const limitSites = writer.split('CUSTOMER_CREDIT_LIMIT').length - 1;
       assert.ok(limitSites >= 2, `expected the credit-limit check at create + edit sites, found ${limitSites}`);
       assert.ok(writer.includes('remainingDebt = roundMoney(Math.max(0, collectibleTotal - paidAmount)'));
-      assert.ok(writer.includes("if (remainingDebt > 0"));
+      assert.ok(writer.includes('if (remainingDebt > 0'));
     }
 
     // 9. Source pins: both conversions resolve terms through the one
@@ -297,8 +348,16 @@ async function main() {
     // cases above are unchanged.)
     {
       const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-      assert.equal(invariants.split('INV-CONVERSION-PAYMENT-TERMS-CARRIED').length - 1, 1, 'the invariant entry must exist exactly once');
-      assert.equal(invariants.split('INV-FLOATING-POOL-ALLOCATION-LEG').length - 1, 1, 'the P3 invariant entry must still exist exactly once');
+      assert.equal(
+        invariants.split('INV-CONVERSION-PAYMENT-TERMS-CARRIED').length - 1,
+        1,
+        'the invariant entry must exist exactly once',
+      );
+      assert.equal(
+        invariants.split('INV-FLOATING-POOL-ALLOCATION-LEG').length - 1,
+        1,
+        'the P3 invariant entry must still exist exactly once',
+      );
     }
   } finally {
     await db.destroy();

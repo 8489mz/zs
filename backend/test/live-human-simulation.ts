@@ -167,7 +167,9 @@ async function runLiveHumanSimulation() {
   // طباعة مخرجات إذن التحميل الذكي
   replenishmentResults.forEach((res) => {
     console.log(`     📋 صنف "${res.product.name}":`);
-    console.log(`        - مبيعات 48 ساعة: ${res.sold48h} قطعة | الاحتياج المحسوب: ${res.neededQty} قطعة (${res.cartons} ${res.product.packName})`);
+    console.log(
+      `        - مبيعات 48 ساعة: ${res.sold48h} قطعة | الاحتياج المحسوب: ${res.neededQty} قطعة (${res.cartons} ${res.product.packName})`,
+    );
     console.log(`        - المقترح للصرف: ${res.suggestedQty} قطعة`);
     console.log(`        - توجيه المحرك: ${res.routingNote}`);
     if (res.warningMessage) console.log(`        - ${res.warningMessage}`);
@@ -192,8 +194,12 @@ async function runLiveHumanSimulation() {
   products[2].stocks[1] -= 20;
   products[2].stocks[2] += 20;
 
-  console.log(`     ✓ صنف "${products[0].name}": رصيد المستودع أصبح (${products[0].stocks[1]}) | رصيد صالة المحل أصبح (${products[0].stocks[2]})`);
-  console.log(`     ✓ صنف "${products[2].name}": رصيد المستودع أصبح (${products[2].stocks[1]}) | رصيد صالة المحل أصبح (${products[2].stocks[2]})`);
+  console.log(
+    `     ✓ صنف "${products[0].name}": رصيد المستودع أصبح (${products[0].stocks[1]}) | رصيد صالة المحل أصبح (${products[0].stocks[2]})`,
+  );
+  console.log(
+    `     ✓ صنف "${products[2].name}": رصيد المستودع أصبح (${products[2].stocks[1]}) | رصيد صالة المحل أصبح (${products[2].stocks[2]})`,
+  );
 
   assert.equal(products[0].stocks[1], 64, 'رصيد الشاي بالمستودع يجب أن يكون 64');
   assert.equal(products[0].stocks[2], 28, 'رصيد الشاي بالمحل يجب أن يكون 28');
@@ -212,12 +218,16 @@ async function runLiveHumanSimulation() {
     const dateFormatted = deadline.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' });
 
     console.log(`     ⚠️ صنف "${prod.name}":`);
-    console.log(`        - إجمالي رصيد المؤسسة: ${totalEnterprise} قطعة (منها ${prod.stocks[1]} فقط في المستودع الرئيسي!)`);
+    console.log(
+      `        - إجمالي رصيد المؤسسة: ${totalEnterprise} قطعة (منها ${prod.stocks[1]} فقط في المستودع الرئيسي!)`,
+    );
     console.log(`        - معدل الاستهلاك اليومي: ${dailyRate} قطعة/يوم`);
     console.log(`        - أيام التغطية المتبقية: ${daysRemaining} يوم`);
 
     if (daysRemaining <= 2) {
-      console.log(`        🚨 إنذار عاجل: المخزون أوشك على النفاد التام! موعد الشراء الإلزامي: ${dateFormatted} لتفادي توقف البيع!`);
+      console.log(
+        `        🚨 إنذار عاجل: المخزون أوشك على النفاد التام! موعد الشراء الإلزامي: ${dateFormatted} لتفادي توقف البيع!`,
+      );
     } else {
       console.log(`        📅 موعد إعادة الطلب الموصى به: ${dateFormatted}`);
     }
@@ -257,7 +267,7 @@ async function runLiveHumanSimulation() {
   console.log('\n  2️⃣ تجربة رادار كشف سرقات وتلاعب الكاشير (Fraud Radar):');
   {
     const cashierStats = { voids: 7, draftCancels: 3, cancelledSales: 2, sales: 12 };
-    const rawScore = (cashierStats.voids * 12) + (cashierStats.draftCancels * 18) + (cashierStats.cancelledSales * 25);
+    const rawScore = cashierStats.voids * 12 + cashierStats.draftCancels * 18 + cashierStats.cancelledSales * 25;
     const riskScore = Math.min(100, Math.round(rawScore / Math.max(1, cashierStats.sales / 20)));
     const isHighRisk = riskScore >= 60 || cashierStats.voids >= 5;
 
@@ -281,7 +291,9 @@ async function runLiveHumanSimulation() {
     // محاكاة ورود طلب خارجي من أمازون لقطعتين
     const orderQty = 2;
     const remainingStock = localStock - orderQty;
-    console.log(`     • ورود طلب من أمازون (#AMZ-9912) بكمية ${orderQty} ➔ تم الحجز وخصم الرصيد المحلي فورياً إلى: ${remainingStock} قطعة`);
+    console.log(
+      `     • ورود طلب من أمازون (#AMZ-9912) بكمية ${orderQty} ➔ تم الحجز وخصم الرصيد المحلي فورياً إلى: ${remainingStock} قطعة`,
+    );
     assert.equal(remainingStock, 43);
     console.log('     ✓ تم التحقق بنجاح من منع البيع الزائد وخصم المخزون اللحظي.');
   }
@@ -292,7 +304,9 @@ async function runLiveHumanSimulation() {
     const elapsedMinutes = 16;
     const urgency = elapsedMinutes >= 15 ? 'critical' : elapsedMinutes >= 8 ? 'warning' : 'normal';
     console.log(`     • تذكرة طلب طاولة #4: مضى عليها ${elapsedMinutes} دقيقة.`);
-    console.log(`     • مستوى الأولوية البصري: ${urgency === 'critical' ? '🔴 أحمر وامض (عاجل وتنبيه للمشرف)' : '🟢 طبيعي'}`);
+    console.log(
+      `     • مستوى الأولوية البصري: ${urgency === 'critical' ? '🔴 أحمر وامض (عاجل وتنبيه للمشرف)' : '🟢 طبيعي'}`,
+    );
     assert.equal(urgency, 'critical');
 
     // تدرج الحالات

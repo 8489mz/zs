@@ -50,8 +50,13 @@ const ACCOUNT = 'a1';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-sf1-p1', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-sf1-p1',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -126,68 +131,216 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_accounts').values({ id: 2115, tenant_id: TENANT, code: '2115', name_ar: '2115', is_active: true, is_tax: false, account_type: 'liability', account_group: 'payable' }).execute();
+  await anyDb
+    .insertInto('accounting_accounts')
+    .values({
+      id: 2115,
+      tenant_id: TENANT,
+      code: '2115',
+      name_ar: '2115',
+      is_active: true,
+      is_tax: false,
+      account_type: 'liability',
+      account_group: 'payable',
+    })
+    .execute();
   // The variance accounts are seeded explicitly (like 2115) so the
   // resolver finds them: the auto-create path needs columns this
   // harness DDL does not carry.
-  await anyDb.insertInto('accounting_accounts').values({ id: 7100, tenant_id: TENANT, code: '7100', name_ar: '7100', is_active: true, is_tax: false, account_type: 'revenue', account_group: 'income' }).execute();
-  await anyDb.insertInto('accounting_accounts').values({ id: 7200, tenant_id: TENANT, code: '7200', name_ar: '7200', is_active: true, is_tax: false, account_type: 'expense', account_group: 'operating_expenses' }).execute();
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_accounts')
+    .values({
+      id: 7100,
+      tenant_id: TENANT,
+      code: '7100',
+      name_ar: '7100',
+      is_active: true,
+      is_tax: false,
+      account_type: 'revenue',
+      account_group: 'income',
+    })
+    .execute();
+  await anyDb
+    .insertInto('accounting_accounts')
+    .values({
+      id: 7200,
+      tenant_id: TENANT,
+      code: '7200',
+      name_ar: '7200',
+      is_active: true,
+      is_tax: false,
+      account_type: 'expense',
+      account_group: 'operating_expenses',
+    })
+    .execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
   // The live reproduction total: one item at 131.60.
-  await anyDb.insertInto('products').values({
-    id: 102, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 102',
-    stock_qty: 100, cost_price: 10, retail_price: 131.60,
-    wholesale_price: 131.60, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 102, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 7, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer Seven',
-    balance: 0, credit_limit: 0, is_credit_blocked: false, is_active: true,
-  }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 102,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 102',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 131.6,
+      wholesale_price: 131.6,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 102,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer Seven',
+      balance: 0,
+      credit_limit: 0,
+      is_credit_blocked: false,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep One',
+      is_active: true,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
-function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer: CashDrawerService; posting: AccountingPostingService; reps: DeliveryRepsService } {
+function buildServices(db: Kysely<Database>): {
+  sales: SalesWriteService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+  reps: DeliveryRepsService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -202,8 +355,16 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const planFeatures = { hasFeature: (_planId: any, _extra: any, feature: string) => feature === 'pos' };
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const reps = new DeliveryRepsService(db, audit, posting, finance);
@@ -213,14 +374,29 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
   const created: any = await service.createSale(payload, auth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
 async function saleFullRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales')
-    .select(['payment_type', 'payment_channel', 'collection_status', 'paid_amount', 'total', 'delivery_rep_id', 'delivery_status', 'delivery_fee', 'delivery_fee_mode'])
-    .where('id', '=', id).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .select([
+      'payment_type',
+      'payment_channel',
+      'collection_status',
+      'paid_amount',
+      'total',
+      'delivery_rep_id',
+      'delivery_status',
+      'delivery_fee',
+      'delivery_fee_mode',
+    ])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
 }
 
 async function treasuryRows(db: Kysely<Database>): Promise<any[]> {
@@ -228,23 +404,39 @@ async function treasuryRows(db: Kysely<Database>): Promise<any[]> {
 }
 
 async function ledgerRows(db: Kysely<Database>, customerId: number): Promise<any[]> {
-  return (db as any).selectFrom('customer_ledger').select(['amount', 'reference_id'])
-    .where('customer_id', '=', customerId).execute();
+  return (db as any)
+    .selectFrom('customer_ledger')
+    .select(['amount', 'reference_id'])
+    .where('customer_id', '=', customerId)
+    .execute();
 }
 
-async function journalByCode(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Map<string, { debit: number; credit: number }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute();
+async function journalByCode(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Map<string, { debit: number; credit: number }>> {
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute();
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines as l')
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines as l')
     .innerJoin('accounting_accounts as a', 'a.id', 'l.account_id')
     .select(['a.code as code', 'l.debit as debit', 'l.credit as credit'])
-    .where('l.journal_entry_id', '=', Number(entries[0].id)).execute();
+    .where('l.journal_entry_id', '=', Number(entries[0].id))
+    .execute();
   const byCode = new Map<string, { debit: number; credit: number }>();
   for (const row of rows) {
     const code = String((row as any).code);
     const prev = byCode.get(code) || { debit: 0, credit: 0 };
-    byCode.set(code, { debit: prev.debit + Number((row as any).debit || 0), credit: prev.credit + Number((row as any).credit || 0) });
+    byCode.set(code, {
+      debit: prev.debit + Number((row as any).debit || 0),
+      credit: prev.credit + Number((row as any).credit || 0),
+    });
   }
   return byCode;
 }
@@ -252,12 +444,21 @@ async function journalByCode(db: Kysely<Database>, sourceType: string, sourceId:
 /** Store-fleet COD order for the live total 131.60: one Widget 102, no fee, unstated status + courier + full cash tender posts COD, paid 0. */
 function storeFleetPayload(overrides: Record<string, unknown> = {}): any {
   return {
-    items: [{ productId: 102, qty: 1, price: 131.60, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: 131.60 }], tenderedAmount: 131.60,
-    branchId: 1, locationId: 10, source: 'pos',
-    customerId: 7, orderType: 'delivery', deliveryRepId: 1,
-    deliveryFee: 0, deliveryFeeMode: 'store_fleet',
+    items: [{ productId: 102, qty: 1, price: 131.6, priceType: 'retail', unitMultiplier: 1 }],
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: 131.6 }],
+    tenderedAmount: 131.6,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
+    customerId: 7,
+    orderType: 'delivery',
+    deliveryRepId: 1,
+    deliveryFee: 0,
+    deliveryFeeMode: 'store_fleet',
     ...overrides,
   };
 }
@@ -266,10 +467,18 @@ function storeFleetPayload(overrides: Record<string, unknown> = {}): any {
 function freelancePayload(overrides: Record<string, unknown> = {}): any {
   return {
     items: [{ productId: 101, qty: 5, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: 530 }], tenderedAmount: 530,
-    branchId: 1, locationId: 10, source: 'pos',
-    customerId: 7, orderType: 'delivery', deliveryRepId: 1,
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: 530 }],
+    tenderedAmount: 530,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
+    customerId: 7,
+    orderType: 'delivery',
+    deliveryRepId: 1,
     deliveryFee: 30,
     ...overrides,
   };
@@ -302,17 +511,17 @@ async function main(): Promise<void> {
       const { sales, reps } = buildServices(db);
       const saleId = await createAndGetId(sales, storeFleetPayload(), cashierAuth);
       const before = await saleFullRow(db, saleId);
-      assert.equal(Number(before.total), 131.60, 'one Widget 102 at 131.60');
+      assert.equal(Number(before.total), 131.6, 'one Widget 102 at 131.60');
       assert.equal(Number(before.paid_amount), 0, 'nothing has been paid yet');
       assert.equal(before.collection_status, 'cod', 'the unstated status defaults to COD when a courier is assigned');
       const saleJournal = await journalByCode(db, 'sale', saleId);
-      assert.equal(saleJournal.get('1130')?.debit, 131.60, 'the sale posts the full total as a customer receivable');
+      assert.equal(saleJournal.get('1130')?.debit, 131.6, 'the sale posts the full total as a customer receivable');
       assert.equal(saleJournal.get('1110'), undefined, 'no cash-in-till leg exists for money with the courier');
       const settled: any = await reps.settleOrder(saleId, cashierAuth, { countedCashAmount: 100 });
       assert.equal(settled?.ok, true, 'settleOrder succeeds with a counted amount');
       assert.equal(Number(settled?.countedCash), 100, 'the return reports the counted cash');
-      assert.equal(Number(settled?.expectedCash), 131.60, 'the return reports the book cash due');
-      assert.equal(Number(settled?.variance), -31.60, 'the return reports the shortage');
+      assert.equal(Number(settled?.expectedCash), 131.6, 'the return reports the book cash due');
+      assert.equal(Number(settled?.variance), -31.6, 'the return reports the shortage');
       const row = await saleFullRow(db, saleId);
       assert.equal(row.delivery_status, 'settled', 'the order is marked settled');
       const treasury = await treasuryRows(db);
@@ -321,11 +530,12 @@ async function main(): Promise<void> {
       assert.equal(Number(treasury[0].amount), 100, 'the drawer rises by the counted 100.00, never the book 131.60');
       const settlement = await journalByCode(db, 'delivery_rep_settlement', saleId);
       assert.equal(settlement.get('1110')?.debit, 100, 'the cash leg is the counted cash');
-      assert.equal(settlement.get('7200')?.debit, 31.60, 'the shortage is booked to 7200');
-      assert.equal(settlement.get('1130')?.credit, 131.60, 'the receivable is cleared in full by cash + variance');
+      assert.equal(settlement.get('7200')?.debit, 31.6, 'the shortage is booked to 7200');
+      assert.equal(settlement.get('1130')?.credit, 131.6, 'the receivable is cleared in full by cash + variance');
       assert.equal(settlement.get('7100'), undefined, 'no overage leg exists');
       const legs = await ledgerRows(db, 7);
-      const net = legs.filter((leg) => Number(leg.reference_id) === saleId)
+      const net = legs
+        .filter((leg) => Number(leg.reference_id) === saleId)
         .reduce((sum, leg) => sum + Number(leg.amount || 0), 0);
       assert.equal(net, 0, 'the customer ledger nets to zero after settlement');
     } finally {
@@ -344,14 +554,14 @@ async function main(): Promise<void> {
       const saleId = await createAndGetId(sales, storeFleetPayload(), cashierAuth);
       const settled: any = await reps.settleOrder(saleId, cashierAuth, { countedCashAmount: 150 });
       assert.equal(settled?.ok, true, 'settleOrder succeeds with an overage');
-      assert.equal(Number(settled?.variance), 18.40, 'the return reports the overage');
+      assert.equal(Number(settled?.variance), 18.4, 'the return reports the overage');
       const treasury = await treasuryRows(db);
       assert.equal(treasury.length, 1, 'exactly one treasury row exists');
       assert.equal(Number(treasury[0].amount), 150, 'the drawer rises by the counted 150.00');
       const settlement = await journalByCode(db, 'delivery_rep_settlement', saleId);
       assert.equal(settlement.get('1110')?.debit, 150, 'the cash leg is the counted cash');
-      assert.equal(settlement.get('7100')?.credit, 18.40, 'the overage is booked to 7100');
-      assert.equal(settlement.get('1130')?.credit, 131.60, 'the receivable is cleared exactly once');
+      assert.equal(settlement.get('7100')?.credit, 18.4, 'the overage is booked to 7100');
+      assert.equal(settlement.get('1130')?.credit, 131.6, 'the receivable is cleared exactly once');
       assert.equal(settlement.get('7200'), undefined, 'no shortage leg exists');
     } finally {
       await db.destroy();
@@ -367,11 +577,11 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales, reps } = buildServices(db);
       const saleId = await createAndGetId(sales, storeFleetPayload(), cashierAuth);
-      const settled: any = await reps.settleOrder(saleId, cashierAuth, { countedCashAmount: 131.60 });
+      const settled: any = await reps.settleOrder(saleId, cashierAuth, { countedCashAmount: 131.6 });
       assert.equal(Number(settled?.variance), 0, 'the return reports no variance');
       const settlement = await journalByCode(db, 'delivery_rep_settlement', saleId);
-      assert.equal(settlement.get('1110')?.debit, 131.60, 'the cash leg is the full book amount');
-      assert.equal(settlement.get('1130')?.credit, 131.60, 'the receivable is cleared in full');
+      assert.equal(settlement.get('1110')?.debit, 131.6, 'the cash leg is the full book amount');
+      assert.equal(settlement.get('1130')?.credit, 131.6, 'the receivable is cleared in full');
       assert.equal(settlement.get('7200'), undefined, 'no shortage leg exists');
       assert.equal(settlement.get('7100'), undefined, 'no overage leg exists');
     } finally {
@@ -444,11 +654,11 @@ async function main(): Promise<void> {
       const { sales, reps } = buildServices(db);
       const saleId = await createAndGetId(sales, storeFleetPayload(), cashierAuth);
       const settled: any = await reps.settleOrder(saleId, cashierAuth, { countedCashAmount: 0 });
-      assert.equal(Number(settled?.variance), -131.60, 'the return reports the full shortage');
+      assert.equal(Number(settled?.variance), -131.6, 'the return reports the full shortage');
       assert.deepEqual(await treasuryRows(db), [], 'no treasury row exists: no cash changed hands');
       const settlement = await journalByCode(db, 'delivery_rep_settlement', saleId);
-      assert.equal(settlement.get('7200')?.debit, 131.60, 'the whole receivable is a shortage');
-      assert.equal(settlement.get('1130')?.credit, 131.60, 'the receivable is cleared in full');
+      assert.equal(settlement.get('7200')?.debit, 131.6, 'the whole receivable is a shortage');
+      assert.equal(settlement.get('1130')?.credit, 131.6, 'the receivable is cleared in full');
       assert.equal(settlement.get('1110'), undefined, 'no cash leg exists');
     } finally {
       await db.destroy();
@@ -478,25 +688,32 @@ async function main(): Promise<void> {
   // 8. A counted amount on a prepaid (non-COD) delivery has no
   // cash to settle and fails closed with the specific code; the
   // order stays unsettled.
-  await check('D-SF-01 counted cash on a prepaid delivery fails closed with DELIVERY_SETTLEMENT_COUNTED_CASH_NOT_APPLICABLE', async () => {
-    const { pg, db } = await makeDb();
-    try {
-      await seedFoundation(db);
-      await seedShift(db, 1, 2);
-      const { sales, reps } = buildServices(db);
-      const saleId = await createAndGetId(sales, freelancePayload({ collectionStatus: 'prepaid_online' }), cashierAuth);
-      const before = await saleFullRow(db, saleId);
-      assert.equal(before.collection_status, 'prepaid_online', 'the explicit prepaid status is kept');
-      await assert.rejects(
-        reps.settleOrder(saleId, cashierAuth, { countedCashAmount: 100 }),
-        (err: any) => err && err.code === 'DELIVERY_SETTLEMENT_COUNTED_CASH_NOT_APPLICABLE',
-      );
-      const row = await saleFullRow(db, saleId);
-      assert.notEqual(row.delivery_status, 'settled', 'the failed settle leaves the order unsettled');
-    } finally {
-      await db.destroy();
-    }
-  });
+  await check(
+    'D-SF-01 counted cash on a prepaid delivery fails closed with DELIVERY_SETTLEMENT_COUNTED_CASH_NOT_APPLICABLE',
+    async () => {
+      const { pg, db } = await makeDb();
+      try {
+        await seedFoundation(db);
+        await seedShift(db, 1, 2);
+        const { sales, reps } = buildServices(db);
+        const saleId = await createAndGetId(
+          sales,
+          freelancePayload({ collectionStatus: 'prepaid_online' }),
+          cashierAuth,
+        );
+        const before = await saleFullRow(db, saleId);
+        assert.equal(before.collection_status, 'prepaid_online', 'the explicit prepaid status is kept');
+        await assert.rejects(
+          reps.settleOrder(saleId, cashierAuth, { countedCashAmount: 100 }),
+          (err: any) => err && err.code === 'DELIVERY_SETTLEMENT_COUNTED_CASH_NOT_APPLICABLE',
+        );
+        const row = await saleFullRow(db, saleId);
+        assert.notEqual(row.delivery_status, 'settled', 'the failed settle leaves the order unsettled');
+      } finally {
+        await db.destroy();
+      }
+    },
+  );
 
   if (failures.length) throw new Error(`${failures.length} D-SF-01 case(s) failed: ${failures.join(', ')}`);
   console.log('D-SF-01 single-settle counted-cash tests passed');

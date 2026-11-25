@@ -1,5 +1,8 @@
 import { strict as assert } from 'node:assert';
-import { ZatcaPhase2Service, ZatcaInvoiceData } from '../src/modules/tax-integration/services/zatca/zatca-phase2.service';
+import {
+  ZatcaPhase2Service,
+  ZatcaInvoiceData,
+} from '../src/modules/tax-integration/services/zatca/zatca-phase2.service';
 import { PosTerminalService } from '../src/modules/sales/services/pos-terminal.service';
 
 async function runTests() {
@@ -24,7 +27,7 @@ async function runTests() {
       buildingNumber: '100',
       city: 'الرياض',
       postalCode: '12211',
-      district: 'العليا'
+      district: 'العليا',
     },
     customerName: 'عميل نقدي',
     lineItems: [
@@ -36,7 +39,7 @@ async function runTests() {
         subtotal: 100,
         vatAmount: 15,
         vatRate: 15,
-        total: 115
+        total: 115,
       },
       {
         id: 2,
@@ -46,22 +49,25 @@ async function runTests() {
         subtotal: 200,
         vatAmount: 30,
         vatRate: 15,
-        total: 230
-      }
+        total: 230,
+      },
     ],
     subtotal: 300,
     vatTotal: 45,
     totalWithVat: 345,
     documentVatRate: 15,
     previousInvoiceHash: 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMjRiMWUxMDhkNDQ3ZjhlNzY1ZmVhNGU3NDkyNDQ1NQ==',
-    invoiceCounterValue: 1
+    invoiceCounterValue: 1,
   };
 
   const zatcaResult = zatcaService.generateZatcaPackage(sampleInvoice);
 
   // Assert UBL XML conforms
   assert.ok(zatcaResult.ublXml.includes('<Invoice'), 'UBL XML must have root Invoice element');
-  assert.ok(zatcaResult.ublXml.includes('xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"'), 'Must have UBL 2.1 namespace');
+  assert.ok(
+    zatcaResult.ublXml.includes('xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"'),
+    'Must have UBL 2.1 namespace',
+  );
   assert.ok(zatcaResult.ublXml.includes('<cbc:ID>INV-2026-0001</cbc:ID>'), 'Must include invoice number');
   assert.ok(zatcaResult.ublXml.includes('310000000000003'), 'Must include seller VAT number');
   assert.ok(zatcaResult.ublXml.includes('345.00'), 'Must include total with VAT');
@@ -93,7 +99,11 @@ async function runTests() {
 
   assert.equal(decodedTags.get(1), sampleInvoice.sellerName, 'TLV Tag 1 must be Seller Name');
   assert.equal(decodedTags.get(2), sampleInvoice.sellerVatNumber, 'TLV Tag 2 must be Seller VAT#');
-  assert.equal(decodedTags.get(3), `${sampleInvoice.issueDate}T${sampleInvoice.issueTime}Z`, 'TLV Tag 3 must be timestamp');
+  assert.equal(
+    decodedTags.get(3),
+    `${sampleInvoice.issueDate}T${sampleInvoice.issueTime}Z`,
+    'TLV Tag 3 must be timestamp',
+  );
   assert.equal(decodedTags.get(4), '345.00', 'TLV Tag 4 must be total amount');
   assert.equal(decodedTags.get(5), '45.00', 'TLV Tag 5 must be VAT total');
   assert.equal(decodedTags.get(6), zatcaResult.invoiceHash, 'TLV Tag 6 must be invoice hash');
@@ -118,14 +128,14 @@ async function runTests() {
   assert.ok(terminals.length > 0, 'Should have at least 1 terminal configured');
 
   const session = await terminalService.initiatePayment('test-tenant', {
-    amount: 150.50,
+    amount: 150.5,
     currency: 'SAR',
-    terminalId: terminals[0].id
+    terminalId: terminals[0].id,
   });
 
   assert.ok(session.transactionId.startsWith('EDC-'), 'Transaction ID must start with EDC-');
   assert.equal(session.status, 'pending', 'Initial status must be pending');
-  assert.equal(session.amount, 150.50, 'Amount must match');
+  assert.equal(session.amount, 150.5, 'Amount must match');
 
   // Check status after initiation
   const statusAfter = await terminalService.getPaymentStatus('test-tenant', session.transactionId);

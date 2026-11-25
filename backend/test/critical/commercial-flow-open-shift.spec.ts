@@ -38,8 +38,13 @@ const ACCOUNT = 'a1';
 const LOCATION_ID = 10;
 
 const ownerAuth: AuthContext = {
-  userId: 2, sessionId: 'spec', username: 'owner', role: 'owner',
-  permissions: ['sales', 'cashDrawer'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec',
+  username: 'owner',
+  role: 'owner',
+  permissions: ['sales', 'cashDrawer'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -106,14 +111,29 @@ async function seed(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('users').values({
-    id: 2, tenant_id: TENANT, username: 'owner', role: 'owner', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      username: 'owner',
+      role: 'owner',
+      is_active: true,
+    })
+    .execute();
   // Mirrors the E2E-created location: internal warehouse with NO branch.
-  await anyDb.insertInto('stock_locations').values({
-    id: LOCATION_ID, tenant_id: TENANT, account_id: ACCOUNT, branch_id: null,
-    name: 'E2E warehouse', location_type: 'internal_warehouse', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: LOCATION_ID,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: null,
+      name: 'E2E warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
 }
 
 function buildDrawer(db: Kysely<Database>): CashDrawerService {
@@ -184,4 +204,7 @@ async function main(): Promise<void> {
   console.log('commercial-flow-open-shift: OK');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

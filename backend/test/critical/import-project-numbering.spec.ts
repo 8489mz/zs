@@ -76,7 +76,11 @@ async function main(): Promise<void> {
       const second = await service.createProject('t1', { title: 'Second' });
       assert.notEqual(first.project_no, second.project_no, 'Two creations must not share a number');
       assert.match(first.project_no, /^IMP-\d{6}-0001$/, `First number uses the daily format, got ${first.project_no}`);
-      assert.match(second.project_no, /^IMP-\d{6}-0002$/, `Second number sequences within the day, got ${second.project_no}`);
+      assert.match(
+        second.project_no,
+        /^IMP-\d{6}-0002$/,
+        `Second number sequences within the day, got ${second.project_no}`,
+      );
       // Another tenant restarts at 0001.
       const other = await service.createProject('t2', { title: 'Other tenant' });
       assert.match(other.project_no, /^IMP-\d{6}-0001$/, `Numbering is tenant-scoped, got ${other.project_no}`);
@@ -115,13 +119,24 @@ async function main(): Promise<void> {
         .where('indexname', '=', 'uq_import_projects_tenant_project_no')
         .execute();
       assert.equal(indexes.length, 1, 'Migration up() must create the unique index');
-      await db.insertInto('import_projects' as never).values({
-        tenant_id: 't1', project_no: 'IMP-2026-009', title: 'A',
-      } as never).execute();
+      await db
+        .insertInto('import_projects' as never)
+        .values({
+          tenant_id: 't1',
+          project_no: 'IMP-2026-009',
+          title: 'A',
+        } as never)
+        .execute();
       await assert.rejects(
-        async () => db.insertInto('import_projects' as never).values({
-          tenant_id: 't1', project_no: 'IMP-2026-009', title: 'B',
-        } as never).execute(),
+        async () =>
+          db
+            .insertInto('import_projects' as never)
+            .values({
+              tenant_id: 't1',
+              project_no: 'IMP-2026-009',
+              title: 'B',
+            } as never)
+            .execute(),
         (err: any) => err?.code === '23505',
         'The index must reject a duplicate number at the database level',
       );
@@ -133,4 +148,7 @@ async function main(): Promise<void> {
   console.log('Import project numbering tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

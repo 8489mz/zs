@@ -28,7 +28,7 @@ const DISH_CATALOG: SimulatedDish[] = [
     salePrice: 110.0,
     is86Stopped: false,
     recipeIngredients: [
-      { ingredientId: 1, name: 'لحم بقري مفروم (كجم)', qtyPerUnit: 0.200, costPerUnit: 50.0 }, // 10.0 SAR
+      { ingredientId: 1, name: 'لحم بقري مفروم (كجم)', qtyPerUnit: 0.2, costPerUnit: 50.0 }, // 10.0 SAR
       { ingredientId: 2, name: 'خبز بريوش طازج', qtyPerUnit: 1, costPerUnit: 2.5 },
       { ingredientId: 3, name: 'جبنة شيدر أمريكي', qtyPerUnit: 2, costPerUnit: 3.0 },
     ],
@@ -41,9 +41,7 @@ const DISH_CATALOG: SimulatedDish[] = [
     costPrice: 55.0,
     salePrice: 180.0,
     is86Stopped: true, // Marked 86-stopped (نفذ من المطبخ)
-    recipeIngredients: [
-      { ingredientId: 4, name: 'لحم تندرلوين أنجوس (كجم)', qtyPerUnit: 0.300, costPerUnit: 120.0 },
-    ],
+    recipeIngredients: [{ ingredientId: 4, name: 'لحم تندرلوين أنجوس (كجم)', qtyPerUnit: 0.3, costPerUnit: 120.0 }],
   },
   {
     id: 103,
@@ -53,9 +51,7 @@ const DISH_CATALOG: SimulatedDish[] = [
     costPrice: 6.0,
     salePrice: 28.0,
     is86Stopped: false,
-    recipeIngredients: [
-      { ingredientId: 5, name: 'برتقال بلدي (كجم)', qtyPerUnit: 0.500, costPerUnit: 8.0 },
-    ],
+    recipeIngredients: [{ ingredientId: 5, name: 'برتقال بلدي (كجم)', qtyPerUnit: 0.5, costPerUnit: 8.0 }],
   },
 ];
 
@@ -137,8 +133,8 @@ async function runCommercialReadinessSimulation(): Promise<void> {
   assert.equal(waiterSecurityProfile.canOpenCashDrawer, false, 'Security Invariant: Waiter cannot trigger cash drawer');
 
   // Routing items to Prep Stations (KDS / KOT)
-  const grillTicketItems = waiterOrderDraft.items.filter(i => i.station === 'grill');
-  const barTicketItems = waiterOrderDraft.items.filter(i => i.station === 'beverages');
+  const grillTicketItems = waiterOrderDraft.items.filter((i) => i.station === 'grill');
+  const barTicketItems = waiterOrderDraft.items.filter((i) => i.station === 'beverages');
 
   assert.equal(grillTicketItems.length, 1);
   assert.equal(grillTicketItems[0].qty, 4);
@@ -180,9 +176,13 @@ async function runCommercialReadinessSimulation(): Promise<void> {
   // --------------------------------------------------------------------------
   console.log('\n[4/6] Testing Third-Party Aggregators & 86 Stop List Enforcement...');
   // Dish 102 (Tenderloin Steak) is marked 86-stopped
-  const onlineAggregatorCatalog = DISH_CATALOG.filter(dish => !dish.is86Stopped);
+  const onlineAggregatorCatalog = DISH_CATALOG.filter((dish) => !dish.is86Stopped);
   assert.equal(onlineAggregatorCatalog.length, 2, 'Only in-stock dishes visible on aggregator menus');
-  assert.equal(onlineAggregatorCatalog.some(d => d.id === 102), false, '86-stopped dish completely omitted');
+  assert.equal(
+    onlineAggregatorCatalog.some((d) => d.id === 102),
+    false,
+    '86-stopped dish completely omitted',
+  );
 
   // Aggregator commissions payout simulation
   const jahezOrderGross = 500.0;
@@ -209,7 +209,7 @@ async function runCommercialReadinessSimulation(): Promise<void> {
     discount,
     taxRate,
     false, // Exclusive mode
-    0,     // Delivery fee = 0
+    0, // Delivery fee = 0
     Number((foodSubtotal * (serviceChargePct / 100)).toFixed(2)), // 612 * 0.12 = 73.44
   );
 
@@ -239,18 +239,20 @@ async function runCommercialReadinessSimulation(): Promise<void> {
   console.log('\n[6/6] Testing Recipe BOM Consumption & Food Waste Variance Engine...');
   // 4 burgers sold:
   // Theoretical ground beef consumption = 4 * 0.200 kg = 0.800 kg
-  const theoreticalBeefConsumption = 4 * 0.200; // 0.800 kg
+  const theoreticalBeefConsumption = 4 * 0.2; // 0.800 kg
 
   // Physical inventory deducted from kitchen = 1.050 kg
-  const actualInventoryDeduction = 1.050; // kg
+  const actualInventoryDeduction = 1.05; // kg
 
   // Chef logged 0.150 kg waste (burnt meat during rush)
-  const loggedWasteKg = 0.150;
+  const loggedWasteKg = 0.15;
 
   // Unexplained variance (theft / overportioning)
-  const unexplainedVarianceKg = Number((actualInventoryDeduction - (theoreticalBeefConsumption + loggedWasteKg)).toFixed(3));
+  const unexplainedVarianceKg = Number(
+    (actualInventoryDeduction - (theoreticalBeefConsumption + loggedWasteKg)).toFixed(3),
+  );
   // 1.050 - (0.800 + 0.150) = 0.100 kg
-  assert.equal(unexplainedVarianceKg, 0.100, 'Unexplained variance = 0.100 kg');
+  assert.equal(unexplainedVarianceKg, 0.1, 'Unexplained variance = 0.100 kg');
 
   const beefCostPerKg = 50.0;
   const unexplainedLossCost = Number((unexplainedVarianceKg * beefCostPerKg).toFixed(2));

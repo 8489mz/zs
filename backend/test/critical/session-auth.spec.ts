@@ -1,6 +1,10 @@
 import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
-import { SessionService, isMfaChallenge, type AuthenticatedSessionResult } from '../../src/core/auth/services/session.service';
+import {
+  SessionService,
+  isMfaChallenge,
+  type AuthenticatedSessionResult,
+} from '../../src/core/auth/services/session.service';
 import type { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 /**
@@ -8,14 +12,11 @@ import type { AuthContext } from '../../src/core/auth/interfaces/auth-context.in
  * جلسة جاهزة لا تحدياً. هذا يضيّق النوع **ويحرس في الوقت نفسه**: لو عاد مسار الدخول يوماً
  * يطلب عاملاً ثانياً من حساب لم يفعّله، يفشل الجناح هنا بدل أن يمر بصمت.
  */
-function expectSession(
-  result: Awaited<ReturnType<SessionService['authenticate']>>,
-): AuthenticatedSessionResult {
+function expectSession(result: Awaited<ReturnType<SessionService['authenticate']>>): AuthenticatedSessionResult {
   assert.ok(result, 'expected a successful login');
   assert.ok(!isMfaChallenge(result), 'an account without MFA must get a session, not a challenge');
   return result as AuthenticatedSessionResult;
 }
-
 
 function hashPassword(password: string, salt: string): string {
   return createHash('sha256').update(`${password}:${salt}`).digest('hex');
@@ -63,7 +64,14 @@ class FakeConfigService {
 }
 
 class FakeDb {
-  public tenants: Array<{ id: string; slug: string; business_name: string; status: string; trial_ends_at: Date | null; created_at: Date }> = [];
+  public tenants: Array<{
+    id: string;
+    slug: string;
+    business_name: string;
+    status: string;
+    trial_ends_at: Date | null;
+    created_at: Date;
+  }> = [];
   public userMfa: Array<{ user_id: number; tenant_id: string; confirmed_at: Date | null }> = [];
   constructor(
     public users: UserRow[],
@@ -125,10 +133,14 @@ class UsersSelectBuilder {
   private tenantId?: string;
   private id?: number;
   constructor(private readonly db: FakeDb) {}
-  select(_cols: string[]) { return this; }
+  select(_cols: string[]) {
+    return this;
+  }
   // Source code locks users during failed-login accounting and session creation.
   // This in-memory fixture exercises the query chain only, not real PG concurrency.
-  forUpdate() { return this; }
+  forUpdate() {
+    return this;
+  }
   where(column: string | unknown, _op?: string, value?: any) {
     if (column === 'username') this.username = String(value);
     if (column === 'phone') {
@@ -181,7 +193,9 @@ class TenantsSelectBuilder {
   private id?: string;
   private ids?: string[];
   constructor(private readonly db: FakeDb) {}
-  select(_cols: string[]) { return this; }
+  select(_cols: string[]) {
+    return this;
+  }
   where(column: string, op: string, value: any) {
     if (column === 'id') {
       if (op === 'in' && Array.isArray(value)) {
@@ -208,7 +222,9 @@ class UserMfaSelectBuilder {
   private tenantId?: string;
   private confirmedOnly = false;
   constructor(private readonly db: FakeDb) {}
-  select(_cols: string[]) { return this; }
+  select(_cols: string[]) {
+    return this;
+  }
   where(column: string, op: string, value: any) {
     if (column === 'user_id') this.userId = value;
     if (column === 'tenant_id') this.tenantId = value;
@@ -216,25 +232,36 @@ class UserMfaSelectBuilder {
     return this;
   }
   async executeTakeFirst() {
-    return this.db.userMfa.find((row) => (
-      row.user_id === this.userId
-      && (this.tenantId === undefined || row.tenant_id === this.tenantId)
-      && (!this.confirmedOnly || row.confirmed_at !== null)
-    )) ?? undefined;
+    return (
+      this.db.userMfa.find(
+        (row) =>
+          row.user_id === this.userId &&
+          (this.tenantId === undefined || row.tenant_id === this.tenantId) &&
+          (!this.confirmedOnly || row.confirmed_at !== null),
+      ) ?? undefined
+    );
   }
 }
 
 class SettingsSelectBuilder {
   constructor(private readonly db: FakeDb) {}
-  select(_cols: string[]) { return this; }
-  where(_column: string | unknown, _op?: string, _value?: unknown) { return this; }
-  async execute() { return this.db.settings; }
+  select(_cols: string[]) {
+    return this;
+  }
+  where(_column: string | unknown, _op?: string, _value?: unknown) {
+    return this;
+  }
+  async execute() {
+    return this.db.settings;
+  }
 }
 
 class UserBranchesSelectBuilder {
   private userId?: number;
   constructor(private readonly db: FakeDb) {}
-  select(_cols: string[]) { return this; }
+  select(_cols: string[]) {
+    return this;
+  }
   where(column: string | unknown, _op?: string, value?: number) {
     if (column === 'user_id') this.userId = Number(value);
     return this;
@@ -247,7 +274,10 @@ class UserBranchesSelectBuilder {
 class SessionsInsertBuilder {
   private payload!: SessionRow;
   constructor(private readonly db: FakeDb) {}
-  values(payload: SessionRow) { this.payload = payload; return this; }
+  values(payload: SessionRow) {
+    this.payload = payload;
+    return this;
+  }
   async execute() {
     this.db.sessions.push({ ...this.payload, created_at: new Date() });
   }
@@ -257,7 +287,10 @@ class UsersUpdateBuilder {
   private payload: Partial<UserRow> = {};
   private id!: number;
   constructor(private readonly db: FakeDb) {}
-  set(payload: Partial<UserRow>) { this.payload = payload; return this; }
+  set(payload: Partial<UserRow>) {
+    this.payload = payload;
+    return this;
+  }
   where(column: string | unknown, _op?: string, value?: number) {
     if (column === 'id') this.id = Number(value);
     return this;
@@ -271,8 +304,12 @@ class UsersUpdateBuilder {
 
 class TenantsUpdateBuilder {
   constructor(private readonly _db: FakeDb) {}
-  set(_payload: Record<string, unknown>) { return this; }
-  where(_column: string, _op: string, _value: string) { return this; }
+  set(_payload: Record<string, unknown>) {
+    return this;
+  }
+  where(_column: string, _op: string, _value: string) {
+    return this;
+  }
   async execute() {}
 }
 
@@ -305,27 +342,39 @@ class SessionsDeleteBuilder {
 async function run(): Promise<void> {
   const salt = 'salt-1';
   const password = 'AdminStrong123!';
-  const db = new FakeDb([
-    {
-      id: 1,
-      username: 'admin',
-      password_hash: hashPassword(password, salt),
-      password_salt: salt,
-      role: 'super_admin',
-      display_name: 'Admin Root',
-      default_branch_id: 7,
-      permissions_json: JSON.stringify(['sales', 'reports']),
-      is_active: true,
-      locked_until: null,
-      failed_login_count: 0,
-      must_change_password: true,
-      last_login_at: null,
-      tenant_id: 'default',
-      account_id: 'default',
-    },
-  ], [], [{ key: 'storeName', value: 'Z Systems', tenant_id: 'default' }], [{ user_id: 1, branch_id: 7, tenant_id: 'default' }, { user_id: 1, branch_id: 9, tenant_id: 'default' }]);
+  const db = new FakeDb(
+    [
+      {
+        id: 1,
+        username: 'admin',
+        password_hash: hashPassword(password, salt),
+        password_salt: salt,
+        role: 'super_admin',
+        display_name: 'Admin Root',
+        default_branch_id: 7,
+        permissions_json: JSON.stringify(['sales', 'reports']),
+        is_active: true,
+        locked_until: null,
+        failed_login_count: 0,
+        must_change_password: true,
+        last_login_at: null,
+        tenant_id: 'default',
+        account_id: 'default',
+      },
+    ],
+    [],
+    [{ key: 'storeName', value: 'Z Systems', tenant_id: 'default' }],
+    [
+      { user_id: 1, branch_id: 7, tenant_id: 'default' },
+      { user_id: 1, branch_id: 9, tenant_id: 'default' },
+    ],
+  );
 
-  const service = new SessionService(db as any, new FakeConfigService({ LOGIN_MAX_ATTEMPTS: 3, LOGIN_LOCKOUT_MINUTES: 15 }) as any, { log: async () => {} } as any);
+  const service = new SessionService(
+    db as any,
+    new FakeConfigService({ LOGIN_MAX_ATTEMPTS: 3, LOGIN_LOCKOUT_MINUTES: 15 }) as any,
+    { log: async () => {} } as any,
+  );
 
   const invalid1 = await service.authenticate('admin', 'wrong-pass');
   assert.equal(invalid1, null);
@@ -342,7 +391,9 @@ async function run(): Promise<void> {
   db.users[0].locked_until = null;
   const oldHash = db.users[0].password_hash;
   const oldSalt = db.users[0].password_salt;
-  const valid = expectSession(await service.authenticate('admin', password, { ipAddress: '127.0.0.1', userAgent: 'spec' }));
+  const valid = expectSession(
+    await service.authenticate('admin', password, { ipAddress: '127.0.0.1', userAgent: 'spec' }),
+  );
   assert.ok(valid);
   assert.equal(db.sessions.length, 1);
   assert.equal(db.sessions[0].tenant_id, 'default');
@@ -357,7 +408,7 @@ async function run(): Promise<void> {
   assert.equal((loginPayload.user as any).displayName, 'Admin Root');
   assert.deepEqual((loginPayload.user as any).branchIds, ['7', '9']);
   assert.equal((loginPayload.user as any).defaultBranchId, '7');
-  assert.equal((loginPayload.mustChangePassword as any), true);
+  assert.equal(loginPayload.mustChangePassword as any, true);
   assert.equal((loginPayload.user as any).tenantId, 'default');
   assert.equal((loginPayload.user as any).accountId, 'default');
 
@@ -395,7 +446,11 @@ async function run(): Promise<void> {
   db.users.push(tenantUser);
   const tenantLogin = expectSession(await service.authenticate('tenant_owner', password));
   assert.ok(tenantLogin);
-  assert.equal(tenantLogin!.auth.role, 'admin', 'Session auth.role for non-platform tenant MUST be admin, never super_admin');
+  assert.equal(
+    tenantLogin!.auth.role,
+    'admin',
+    'Session auth.role for non-platform tenant MUST be admin, never super_admin',
+  );
   const tenantPayload = await service.buildLoginPayload(tenantLogin!.auth);
   assert.equal((tenantPayload.user as any).role, 'admin', 'Login payload for non-platform tenant MUST have role admin');
   const tenantMe = await service.buildMePayload(tenantLogin!.auth);
@@ -453,7 +508,9 @@ async function run(): Promise<void> {
   assert.equal(mahmoudLogin?.auth.userId, 102);
 
   // 4. Logging in with username + companyCode MUST succeed and lock to that company
-  const scopedRagab = expectSession(await service.authenticate('cashier_common', cashierPass, { companyCode: 'tenant-ragab' }));
+  const scopedRagab = expectSession(
+    await service.authenticate('cashier_common', cashierPass, { companyCode: 'tenant-ragab' }),
+  );
   assert.ok(scopedRagab);
   assert.equal(scopedRagab?.auth.tenantId, 'tenant-ragab');
   assert.equal(scopedRagab?.auth.userId, 101);
@@ -550,4 +607,3 @@ run()
   .then(() => {
     console.log('session-auth.spec: ok');
   });
-

@@ -166,10 +166,21 @@ console.log('✅ كافة اختبارات محرك كشف الحساب الما
 // withholding is not money the employer still owes them.
 const approvedOnly = buildEmployeeFinancialStatement({
   minorUnits: 2,
-  employee: sampleEmployee, payrollItems: [], loans: [{
-    id: 88, loanType: 'advance', principalAmount: 500, paidAmount: 0,
-    remainingAmount: 500, status: 'approved', createdAt: '2026-10-10',
-  }], adjustments: [], ledger: [],
+  employee: sampleEmployee,
+  payrollItems: [],
+  loans: [
+    {
+      id: 88,
+      loanType: 'advance',
+      principalAmount: 500,
+      paidAmount: 0,
+      remainingAmount: 500,
+      status: 'approved',
+      createdAt: '2026-10-10',
+    },
+  ],
+  adjustments: [],
+  ledger: [],
 });
 assert.equal(approvedOnly.summary.netFinancialBalance, 0);
 assert.equal(approvedOnly.summary.totalWithdrawals, 0);
@@ -178,14 +189,28 @@ assert.equal(approvedOnly.transactions.length, 0);
 const withheld = buildEmployeeFinancialStatement({
   minorUnits: 2,
   employee: sampleEmployee,
-  payrollItems: [{
-    ...payrollItems[0], grossPay: 6000, netPay: 4000,
-    deductionAmount: 1000, loanDeductionAmount: 1000,
-  }, { ...payrollItems[0], id: 51, itemStatus: 'excluded', grossPay: 20000, netPay: 20000 }],
-  loans, adjustments: [{
-    id: 100, adjustmentType: 'allowance', amount: 500, date: '2026-10-15',
-    status: 'applied', appliedInRunId: 10,
-  }], ledger: [],
+  payrollItems: [
+    {
+      ...payrollItems[0],
+      grossPay: 6000,
+      netPay: 4000,
+      deductionAmount: 1000,
+      loanDeductionAmount: 1000,
+    },
+    { ...payrollItems[0], id: 51, itemStatus: 'excluded', grossPay: 20000, netPay: 20000 },
+  ],
+  loans,
+  adjustments: [
+    {
+      id: 100,
+      adjustmentType: 'allowance',
+      amount: 500,
+      date: '2026-10-15',
+      status: 'applied',
+      appliedInRunId: 10,
+    },
+  ],
+  ledger: [],
 });
 assert.equal(withheld.summary.totalGrossEarnings, 6000);
 assert.equal(withheld.summary.totalAllowances, 0);
@@ -193,21 +218,38 @@ assert.equal(withheld.summary.totalPaidSalaries, 4000);
 assert.equal(withheld.summary.netFinancialBalance, 0);
 assert.equal(withheld.monthlyBreakdown[0].grossSalary, 6000);
 assert.equal(withheld.monthlyBreakdown[0].netMonth, 0);
-assert.equal(withheld.transactions.find(t => t.category === 'salary_entitlement')?.credit, 5000);
+assert.equal(withheld.transactions.find((t) => t.category === 'salary_entitlement')?.credit, 5000);
 
 // Manual repayment in a later month must appear as a standalone month, even
 // if there is no payroll or new advance disbursement in that later month.
 const laterRepayment = buildEmployeeFinancialStatement({
   minorUnits: 2,
-  employee: sampleEmployee, payrollItems: [], loans: [{
-    id: 701, loanType: 'advance', principalAmount: 200, paidAmount: 200,
-    remainingAmount: 0, status: 'repaid', disbursedAt: '2026-09-10 10:00:00',
-  }], adjustments: [], ledger: [{
-    id: 702, entryType: 'loan_repayment', amount: -200, balanceAfter: 0,
-    repaymentMethod: 'manual_cash', createdAt: '2026-10-14 12:00:00',
-  }],
+  employee: sampleEmployee,
+  payrollItems: [],
+  loans: [
+    {
+      id: 701,
+      loanType: 'advance',
+      principalAmount: 200,
+      paidAmount: 200,
+      remainingAmount: 0,
+      status: 'repaid',
+      disbursedAt: '2026-09-10 10:00:00',
+    },
+  ],
+  adjustments: [],
+  ledger: [
+    {
+      id: 702,
+      entryType: 'loan_repayment',
+      amount: -200,
+      balanceAfter: 0,
+      repaymentMethod: 'manual_cash',
+      createdAt: '2026-10-14 12:00:00',
+    },
+  ],
 });
-const octoberRepayments = laterRepayment.monthlyBreakdown.find(x => x.month === '2026-10');
+const octoberRepayments = laterRepayment.monthlyBreakdown.find((x) => x.month === '2026-10');
 assert.equal(octoberRepayments?.repayments, 200);
 assert.equal(octoberRepayments?.netMonth, 200);
 assert.equal(laterRepayment.summary.netFinancialBalance, 0);

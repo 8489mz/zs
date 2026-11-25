@@ -54,23 +54,63 @@ import { AccountingTenantFoundationService } from '../../src/modules/accounting/
 import { InventoryCountService } from '../../src/modules/inventory/services/inventory-count.service';
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
-const ADMIN1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin1', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
-const CASHIER = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 2, username: 'cashier', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
-const ADMIN2 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 3, username: 'admin2', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const ADMIN1 = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin1',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
+const CASHIER = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'cashier',
+  userId: 2,
+  username: 'cashier',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
+const ADMIN2 = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 3,
+  username: 'admin2',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 
 async function seedProduct(db: Kysely<Database>, id: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, 100, 0, 10, true, false)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, 100, 0)`.execute(db);
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, 100, 0, 10, true, false)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, 100, 0)`.execute(
+    db,
+  );
 }
 
-async function seedSession(db: Kysely<Database>, sessionId: number, productId: number, expected: number, counted: number, countedBy: number): Promise<void> {
-  await sql`INSERT INTO stock_count_sessions (id, tenant_id, account_id, doc_no, branch_id, location_id, status, note, counted_by, created_at, updated_at) VALUES (${sessionId}, 't1', 'a1', ${`ZSC-${sessionId}`}, 1, 1, 'draft', '', ${countedBy}, NOW(), NOW())`.execute(db);
-  await sql`INSERT INTO stock_count_items (tenant_id, account_id, session_id, product_id, product_name, expected_qty, counted_qty, variance_qty, reason, note, counted_serials, batch_counts) VALUES ('t1', 'a1', ${sessionId}, ${productId}, ${`Product ${productId}`}, ${expected}, ${counted}, ${Number((counted - expected).toFixed(3))}, 'shortage found', '', null, null)`.execute(db);
+async function seedSession(
+  db: Kysely<Database>,
+  sessionId: number,
+  productId: number,
+  expected: number,
+  counted: number,
+  countedBy: number,
+): Promise<void> {
+  await sql`INSERT INTO stock_count_sessions (id, tenant_id, account_id, doc_no, branch_id, location_id, status, note, counted_by, created_at, updated_at) VALUES (${sessionId}, 't1', 'a1', ${`ZSC-${sessionId}`}, 1, 1, 'draft', '', ${countedBy}, NOW(), NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO stock_count_items (tenant_id, account_id, session_id, product_id, product_name, expected_qty, counted_qty, variance_qty, reason, note, counted_serials, batch_counts) VALUES ('t1', 'a1', ${sessionId}, ${productId}, ${`Product ${productId}`}, ${expected}, ${counted}, ${Number((counted - expected).toFixed(3))}, 'shortage found', '', null, null)`.execute(
+    db,
+  );
 }
 
 async function expectCode(promise: Promise<unknown>, code: string): Promise<void> {
   let caught: unknown;
-  try { await promise; } catch (error) { caught = error; }
+  try {
+    await promise;
+  } catch (error) {
+    caught = error;
+  }
   assert.ok(caught, `expected rejection with ${code}`);
   assert.equal((caught as { code?: string }).code, code);
 }
@@ -78,7 +118,10 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<void
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new InventoryCountService(
     db as never,
@@ -129,15 +172,28 @@ async function main(): Promise<void> {
     // Approval fixtures: two distinct admin passwords + the shared
     // manager PIN. The cashier (id 2) holds no password.
     const admin1Record = await createPasswordRecord('admin1-pass');
-    await sql`UPDATE users SET password_hash = ${admin1Record.hash}, password_salt = ${admin1Record.salt} WHERE id = 1`.execute(db);
+    await sql`UPDATE users SET password_hash = ${admin1Record.hash}, password_salt = ${admin1Record.salt} WHERE id = 1`.execute(
+      db,
+    );
     const admin2Record = await createPasswordRecord('admin2-pass');
-    await sql`INSERT INTO users VALUES (3, 't1', 'admin2', 1, 'admin', ${admin2Record.hash}, ${admin2Record.salt}, true)`.execute(db);
+    await sql`INSERT INTO users VALUES (3, 't1', 'admin2', 1, 'admin', ${admin2Record.hash}, ${admin2Record.salt}, true)`.execute(
+      db,
+    );
     await sql`INSERT INTO users VALUES (2, 't1', 'cashier', 1, 'cashier', '', '', true)`.execute(db);
     await sql`INSERT INTO settings VALUES ('t1', 'managerPin', '"2468"')`.execute(db);
 
-    async function sessionState(db: Kysely<Database>, id: number): Promise<{ status: string; approvedBy: number | null }> {
-      const row = await sql<{ status: string; approved_by: number | null }>`SELECT status, approved_by FROM stock_count_sessions WHERE id = ${id}`.execute(db);
-      return { status: row.rows[0].status, approvedBy: row.rows[0].approved_by == null ? null : Number(row.rows[0].approved_by) };
+    async function sessionState(
+      db: Kysely<Database>,
+      id: number,
+    ): Promise<{ status: string; approvedBy: number | null }> {
+      const row = await sql<{
+        status: string;
+        approved_by: number | null;
+      }>`SELECT status, approved_by FROM stock_count_sessions WHERE id = ${id}`.execute(db);
+      return {
+        status: row.rows[0].status,
+        approvedBy: row.rows[0].approved_by == null ? null : Number(row.rows[0].approved_by),
+      };
     }
 
     // Case 1: an admin posting their own count (counter = poster = 1)
@@ -153,7 +209,9 @@ async function main(): Promise<void> {
     const selfApproved = await sessionState(db, 301);
     assert.equal(selfApproved.status, 'posted');
     assert.equal(selfApproved.approvedBy, 1);
-    const loc1 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 1 AND location_id = 1`.execute(db);
+    const loc1 = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE product_id = 1 AND location_id = 1`.execute(db);
     assert.equal(Number(loc1.rows[0].qty), 85);
 
     // Case 2: approver == counter. Cashier posts a count made by
@@ -197,7 +255,9 @@ async function main(): Promise<void> {
     const approved = await sessionState(db, 304);
     assert.equal(approved.status, 'posted');
     assert.equal(approved.approvedBy, 3);
-    const loc4 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 4 AND location_id = 1`.execute(db);
+    const loc4 = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE product_id = 4 AND location_id = 1`.execute(db);
     assert.equal(Number(loc4.rows[0].qty), 85);
 
     // Case 7: a zero-variance session posts with no credential at all

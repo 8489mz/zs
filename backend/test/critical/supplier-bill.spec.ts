@@ -52,8 +52,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const ADMIN = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['accounts', 'purchases'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['accounts', 'purchases'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -93,27 +98,80 @@ async function seedFoundation(db: Kysely<Database>, currency = 'EGP'): Promise<v
   const anyDb = db as any;
   invalidateTenantTimezoneCache(TENANT);
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
-  await anyDb.insertInto('settings').values([
-    { tenant_id: TENANT, key: 'currency', value: currency },
-    { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
-  ]).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values([
+      { tenant_id: TENANT, key: 'currency', value: currency },
+      { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   for (const [id, code, accountType] of [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'],
-    [1185, '1185', 'asset'], [2110, '2110', 'liability'],
-    [6600, '6600', 'expense'], [6700, '6700', 'expense'], [6900, '6900', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1185, '1185', 'asset'],
+    [2110, '2110', 'liability'],
+    [6600, '6600', 'expense'],
+    [6700, '6700', 'expense'],
+    [6900, '6900', 'expense'],
   ] as Array<[number, string, string]>) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: accountType, normal_balance: 'debit', is_active: true }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id,
+        tenant_id: TENANT,
+        code,
+        name_ar: code,
+        account_type: accountType,
+        normal_balance: 'debit',
+        is_active: true,
+      })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, supplier_payable_account_id: 2110,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'الفرع الرئيسي', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'المخزن الرئيسي', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'صنف للبيع', stock: 50, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, location_id: 10, quantity: 50 }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      supplier_payable_account_id: 2110,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'الفرع الرئيسي', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'المخزن الرئيسي',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'صنف للبيع', stock: 50, is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, product_id: 1, location_id: 10, quantity: 50 })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): { bills: SupplierBillsService; write: PurchasesWriteService } {
@@ -134,7 +192,11 @@ function buildServices(db: Kysely<Database>): { bills: SupplierBillsService; wri
 }
 
 /* Journal lines of one posted entry, keyed by account code. */
-async function journalLinesByCode(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
+async function journalLinesByCode(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
   const anyDb = db as any;
   const rows = await anyDb
     .selectFrom('journal_entry_lines as l')
@@ -151,15 +213,27 @@ async function journalLinesByCode(db: Kysely<Database>, sourceType: string, sour
 
 async function supplierBalance(db: Kysely<Database>, supplierId: number): Promise<number> {
   const anyDb = db as any;
-  const row = await anyDb.selectFrom('suppliers').select('balance').where('id', '=', supplierId).executeTakeFirstOrThrow();
+  const row = await anyDb
+    .selectFrom('suppliers')
+    .select('balance')
+    .where('id', '=', supplierId)
+    .executeTakeFirstOrThrow();
   return Number(row.balance);
 }
 
 async function expectReject(promise: Promise<unknown>, code: string): Promise<void> {
   let caught: any = null;
-  try { await promise; } catch (err) { caught = err; }
+  try {
+    await promise;
+  } catch (err) {
+    caught = err;
+  }
   assert.ok(caught, `expected rejection with ${code}, got success`);
-  assert.equal(String((caught as any).code || ''), code, `expected ${code}, got ${(caught as any).code}: ${(caught as any).message}`);
+  assert.equal(
+    String((caught as any).code || ''),
+    code,
+    `expected ${code}, got ${(caught as any).code}: ${(caught as any).message}`,
+  );
 }
 
 function tenantTodayKey(): string {
@@ -189,16 +263,28 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد توريدات', phone: '020', balance: 0, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد توريدات',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+        })
+        .execute();
       const { bills } = buildServices(db);
-      const result = await bills.createSupplierBill(
-        { supplierId: 1, lines: THREE_LINES } as any, ADMIN,
-      );
+      const result = await bills.createSupplierBill({ supplierId: 1, lines: THREE_LINES } as any, ADMIN);
       assert.equal((result as any).ok, true);
       const bill = (result as any).bill;
       assert.equal(Number(bill.total), 10000);
       assert.ok(/^SPB-\d{6}-0001$/.test(String(bill.docNo)), `doc no ${bill.docNo} must be SPB-YYMMDD-0001`);
-      assert.ok(String(bill.docNo).startsWith(`SPB-${tenantTodayKey()}-`), `doc no day must be the tenant day, got ${bill.docNo}`);
+      assert.ok(
+        String(bill.docNo).startsWith(`SPB-${tenantTodayKey()}-`),
+        `doc no day must be the tenant day, got ${bill.docNo}`,
+      );
       assert.equal(await supplierBalance(db, 1), 10000);
       const lines = await journalLinesByCode(db, 'supplier_bill', Number(bill.id));
       assert.deepEqual(lines, [
@@ -207,19 +293,30 @@ async function main(): Promise<void> {
         { code: '6700', debit: 2500, credit: 0 },
         { code: '6900', debit: 1500, credit: 0 },
       ]);
-      const ledger = await anyDb.selectFrom('supplier_ledger').select(['entry_type', 'amount', 'balance_after']).execute();
+      const ledger = await anyDb
+        .selectFrom('supplier_ledger')
+        .select(['entry_type', 'amount', 'balance_after'])
+        .execute();
       assert.equal(ledger.length, 1);
       assert.equal(ledger[0].entry_type, 'supplier_bill');
       assert.equal(Number(ledger[0].amount), 10000);
       assert.equal(Number(ledger[0].balance_after), 10000);
-      const storedLines = await anyDb.selectFrom('supplier_bill_lines').select(['description', 'chart_account_id', 'amount']).orderBy('sort_order', 'asc').execute();
+      const storedLines = await anyDb
+        .selectFrom('supplier_bill_lines')
+        .select(['description', 'chart_account_id', 'amount'])
+        .orderBy('sort_order', 'asc')
+        .execute();
       assert.equal(storedLines.length, 3);
       assert.equal(storedLines[0].description, 'برنامج محاسبة');
       assert.equal(Number(storedLines[0].chart_account_id), 6600);
       assert.equal(Number(storedLines[2].amount), 1500);
       const product = await anyDb.selectFrom('products').select('stock').where('id', '=', 1).executeTakeFirstOrThrow();
       assert.equal(Number(product.stock), 50, 'a non-stock bill must not touch product stock');
-      const locStock = await anyDb.selectFrom('product_location_stock').select('quantity').where('id', '=', 1).executeTakeFirstOrThrow();
+      const locStock = await anyDb
+        .selectFrom('product_location_stock')
+        .select('quantity')
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(locStock.quantity), 50, 'a non-stock bill must not touch location stock');
     } finally {
       await db.destroy();
@@ -233,10 +330,24 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد', phone: '020', balance: 0, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+        })
+        .execute();
       const { bills } = buildServices(db);
       await expectReject(
-        bills.createSupplierBill({ supplierId: 1, lines: [{ description: 'نقدية', accountId: 1110, amount: 100 }] } as any, ADMIN),
+        bills.createSupplierBill(
+          { supplierId: 1, lines: [{ description: 'نقدية', accountId: 1110, amount: 100 }] } as any,
+          ADMIN,
+        ),
         'SUPPLIER_BILL_INVALID_ACCOUNT',
       );
       assert.equal(await supplierBalance(db, 1), 0);
@@ -254,10 +365,24 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db, 'EGP');
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد', phone: '020', balance: 0, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+        })
+        .execute();
       const { bills } = buildServices(db);
       await expectReject(
-        bills.createSupplierBill({ supplierId: 1, lines: [{ description: 'بند', accountId: 6900, amount: 333.336 }] } as any, ADMIN),
+        bills.createSupplierBill(
+          { supplierId: 1, lines: [{ description: 'بند', accountId: 6900, amount: 333.336 }] } as any,
+          ADMIN,
+        ),
         'SUPPLIER_BILL_INVALID_AMOUNT',
       );
       assert.equal(await supplierBalance(db, 1), 0);
@@ -268,14 +393,29 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db2, 'KWD');
       const anyDb = db2 as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد', phone: '020', balance: 0, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+        })
+        .execute();
       const { bills } = buildServices(db2);
       const result = await bills.createSupplierBill(
-        { supplierId: 1, lines: [
-          { description: 'بند 1', accountId: 6900, amount: 333.336 },
-          { description: 'بند 2', accountId: 6900, amount: 333.336 },
-          { description: 'بند 3', accountId: 6900, amount: 333.336 },
-        ] } as any, ADMIN,
+        {
+          supplierId: 1,
+          lines: [
+            { description: 'بند 1', accountId: 6900, amount: 333.336 },
+            { description: 'بند 2', accountId: 6900, amount: 333.336 },
+            { description: 'بند 3', accountId: 6900, amount: 333.336 },
+          ],
+        } as any,
+        ADMIN,
       );
       assert.equal((result as any).ok, true);
       assert.equal(Number((result as any).bill.total), 1000.008);
@@ -292,7 +432,18 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد', phone: '020', balance: 0, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+        })
+        .execute();
       const { bills } = buildServices(db);
       await expectReject(
         bills.createSupplierBill({ supplierId: 999, lines: THREE_LINES } as any, ADMIN),
@@ -315,16 +466,35 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد توريدات', phone: '020', balance: 0, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد توريدات',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+        })
+        .execute();
       const { bills, write } = buildServices(db);
       await bills.createSupplierBill({ supplierId: 1, lines: THREE_LINES } as any, ADMIN);
       const result = await write.createSupplierPayment(
-        { supplierId: 1, amount: 2000, paymentChannel: 'cash' } as any, ADMIN,
+        { supplierId: 1, amount: 2000, paymentChannel: 'cash' } as any,
+        ADMIN,
       );
       assert.equal((result as any).ok, true);
       assert.equal(await supplierBalance(db, 1), 8000);
-      const payment = await anyDb.selectFrom('supplier_payments').select(['is_advance', 'amount']).executeTakeFirstOrThrow();
-      assert.equal((payment as any).is_advance, false, 'a payment against a real payable is a settlement, not an advance');
+      const payment = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['is_advance', 'amount'])
+        .executeTakeFirstOrThrow();
+      assert.equal(
+        (payment as any).is_advance,
+        false,
+        'a payment against a real payable is a settlement, not an advance',
+      );
       const lines = await journalLinesByCode(db, 'supplier_payment', 1);
       assert.deepEqual(lines, [
         { code: '1110', debit: 0, credit: 2000 },

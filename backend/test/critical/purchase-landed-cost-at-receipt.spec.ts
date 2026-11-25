@@ -79,7 +79,14 @@ import { PurchasesWriteService } from '../../src/modules/purchases/services/purc
 import { TransactionHelper } from '../../src/database/helpers/transaction.helper';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
-const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'tester', permissions: [] } as unknown as AuthContext;
+const auth = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'tester',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -173,20 +180,35 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 4100, 5100, 5190, 6950, 7290]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-      [code, 't1', String(code), code === 1150 || code === 2120]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      String(code),
+      code === 1150 || code === 2120,
+    ]);
   }
-  await pg.query(`INSERT INTO stock_locations(id,tenant_id,branch_id,is_active,location_type) VALUES (7,'t1',NULL,true,NULL)`);
+  await pg.query(
+    `INSERT INTO stock_locations(id,tenant_id,branch_id,is_active,location_type) VALUES (7,'t1',NULL,true,NULL)`,
+  );
   return { pg, db };
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: code } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: code } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): PurchasesWriteService {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auditStub = { log: async () => undefined };
   const idempotencyStub = {};
@@ -195,39 +217,93 @@ function makeServices(db: Kysely<Database>): PurchasesWriteService {
     listPurchases: async () => ({ purchases: [] }),
   };
   return new PurchasesWriteService(
-    db as any, new TransactionHelper(), auditStub as any,
-    new PurchasesFinanceService(), queryStub as any, posting as any, idempotencyStub as any,
+    db as any,
+    new TransactionHelper(),
+    auditStub as any,
+    new PurchasesFinanceService(),
+    queryStub as any,
+    posting as any,
+    idempotencyStub as any,
   );
 }
 
-async function seedProduct(db: Kysely<Database>, id: number, stockQty: number, costPrice: number, itemType = 'standard'): Promise<void> {
-  await db.insertInto('products' as never).values({
-    id, tenant_id: 't1', account_id: 'a1', name: `Product ${id}`, stock_qty: stockQty,
-    reserved_qty: 0, cost_price: costPrice, track_serials: false, item_type: itemType,
-  } as never).execute();
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  stockQty: number,
+  costPrice: number,
+  itemType = 'standard',
+): Promise<void> {
+  await db
+    .insertInto('products' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: `Product ${id}`,
+      stock_qty: stockQty,
+      reserved_qty: 0,
+      cost_price: costPrice,
+      track_serials: false,
+      item_type: itemType,
+    } as never)
+    .execute();
   if (stockQty > 0) {
-    await db.insertInto('product_location_stock' as never).values({
-      tenant_id: 't1', account_id: 'a1', product_id: id, branch_id: null, location_id: 7,
-      qty: stockQty, reserved_qty: 0,
-    } as never).execute();
+    await db
+      .insertInto('product_location_stock' as never)
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: id,
+        branch_id: null,
+        location_id: 7,
+        qty: stockQty,
+        reserved_qty: 0,
+      } as never)
+      .execute();
   }
 }
 
 async function readProduct(db: Kysely<Database>, id: number): Promise<{ stockQty: number; costPrice: number }> {
-  const row = await (db as any).selectFrom('products').select(['stock_qty', 'cost_price']).where('id', '=', id).executeTakeFirstOrThrow() as unknown as { stock_qty: string; cost_price: string };
+  const row = (await (db as any)
+    .selectFrom('products')
+    .select(['stock_qty', 'cost_price'])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow()) as unknown as { stock_qty: string; cost_price: string };
   return { stockQty: Number(row.stock_qty), costPrice: Number(row.cost_price) };
 }
 
-async function journalLegs(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
-  const entry = await (db as any).selectFrom('journal_entries').select(['id']).where('source_type', '=', sourceType).where('source_id', '=', sourceId).executeTakeFirst() as unknown as { id: number } | undefined;
+async function journalLegs(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
+  const entry = (await (db as any)
+    .selectFrom('journal_entries')
+    .select(['id'])
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .executeTakeFirst()) as unknown as { id: number } | undefined;
   if (!entry) return [];
-  const rows = await (db as any).selectFrom('journal_entry_lines').select(['account_id', 'debit', 'credit'])
-    .where('journal_entry_id', '=', Number(entry.id)).orderBy('id').execute() as unknown as Array<{ account_id: number; debit: string; credit: string }>;
-  return rows.map((row) => ({ accountId: Number(row.account_id), debit: Number(row.debit), credit: Number(row.credit) }));
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['account_id', 'debit', 'credit'])
+    .where('journal_entry_id', '=', Number(entry.id))
+    .orderBy('id')
+    .execute()) as unknown as Array<{ account_id: number; debit: string; credit: string }>;
+  return rows.map((row) => ({
+    accountId: Number(row.account_id),
+    debit: Number(row.debit),
+    credit: Number(row.credit),
+  }));
 }
 
 async function readPurchase(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('purchases').selectAll().where('id', '=', id).executeTakeFirstOrThrow() as unknown as any;
+  return (db as any)
+    .selectFrom('purchases')
+    .selectAll()
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow() as unknown as any;
 }
 
 function basePayload(overrides: Record<string, unknown> = {}): any {
@@ -250,11 +326,20 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       await seedProduct(db, 10, 15, 56.08);
-      await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never).execute();
+      await db
+        .insertInto('suppliers' as never)
+        .values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never)
+        .execute();
       const svc = makeServices(db);
-      const result = await svc.createPurchase(basePayload({
-        landedCosts: { allocationMethod: 'value', costs: [{ costType: 'freight', description: 'Freight', amount: 20 }] },
-      }), auth) as unknown as { purchaseId: number };
+      const result = (await svc.createPurchase(
+        basePayload({
+          landedCosts: {
+            allocationMethod: 'value',
+            costs: [{ costType: 'freight', description: 'Freight', amount: 20 }],
+          },
+        }),
+        auth,
+      )) as unknown as { purchaseId: number };
       const purchaseId = Number(result.purchaseId);
       assert.ok(purchaseId > 0, 'a purchase id is returned');
       const product = await readProduct(db, 10);
@@ -266,17 +351,21 @@ async function main(): Promise<void> {
       assert.equal(Number(purchase.landed_cost_total), 20);
       assert.equal(purchase.landed_cost_allocation_method, 'value');
       assert.ok(purchase.landed_cost_applied_at, 'the landed-cost stamp is set');
-      const item = await (db as any).selectFrom('purchase_items')
+      const item = (await (db as any)
+        .selectFrom('purchase_items')
         .select(['allocated_landed_cost', 'landed_unit_cost', 'unit_cost', 'line_total'])
-        .where('purchase_id', '=', purchaseId).executeTakeFirstOrThrow() as unknown as Record<string, string>;
+        .where('purchase_id', '=', purchaseId)
+        .executeTakeFirstOrThrow()) as unknown as Record<string, string>;
       assert.equal(Number(item.allocated_landed_cost), 20);
       assert.equal(Number(item.landed_unit_cost), 120);
       assert.equal(Number(item.unit_cost), 100);
       assert.equal(Number(item.line_total), 100);
-      const movement = await (db as any).selectFrom('stock_movements')
+      const movement = (await (db as any)
+        .selectFrom('stock_movements')
         .select(['movement_type', 'qty', 'unit_cost', 'total_cost'])
-        .where('reference_type', '=', 'purchase').where('reference_id', '=', purchaseId)
-        .executeTakeFirstOrThrow() as unknown as Record<string, string>;
+        .where('reference_type', '=', 'purchase')
+        .where('reference_id', '=', purchaseId)
+        .executeTakeFirstOrThrow()) as unknown as Record<string, string>;
       assert.equal(movement.movement_type, 'purchase');
       assert.equal(Number(movement.qty), 1);
       assert.equal(Number(movement.unit_cost), 120);
@@ -286,15 +375,30 @@ async function main(): Promise<void> {
         { accountId: 1140, debit: 120, credit: 0 },
         { accountId: 2110, debit: 0, credit: 120 },
       ]);
-      const supplier = await (db as any).selectFrom('suppliers').select('balance').where('id', '=', 9).executeTakeFirstOrThrow() as unknown as { balance: string };
+      const supplier = (await (db as any)
+        .selectFrom('suppliers')
+        .select('balance')
+        .where('id', '=', 9)
+        .executeTakeFirstOrThrow()) as unknown as { balance: string };
       assert.equal(Number(supplier.balance), 120);
-      const ledger = await (db as any).selectFrom('supplier_ledger').select(['entry_type', 'amount']).executeTakeFirstOrThrow() as unknown as { entry_type: string; amount: string };
+      const ledger = (await (db as any)
+        .selectFrom('supplier_ledger')
+        .select(['entry_type', 'amount'])
+        .executeTakeFirstOrThrow()) as unknown as { entry_type: string; amount: string };
       assert.equal(ledger.entry_type, 'purchase_credit');
       assert.equal(Number(ledger.amount), 120);
-      const landedRows = await (db as any).selectFrom('purchase_landed_costs').select(['cost_type', 'amount', 'allocation_method']).execute() as unknown as Array<Record<string, string>>;
-      assert.deepEqual(landedRows.map((row) => ({ costType: row.cost_type, amount: Number(row.amount), allocationMethod: row.allocation_method })), [
-        { costType: 'freight', amount: 20, allocationMethod: 'value' },
-      ]);
+      const landedRows = (await (db as any)
+        .selectFrom('purchase_landed_costs')
+        .select(['cost_type', 'amount', 'allocation_method'])
+        .execute()) as unknown as Array<Record<string, string>>;
+      assert.deepEqual(
+        landedRows.map((row) => ({
+          costType: row.cost_type,
+          amount: Number(row.amount),
+          allocationMethod: row.allocation_method,
+        })),
+        [{ costType: 'freight', amount: 20, allocationMethod: 'value' }],
+      );
     } finally {
       await db.destroy();
     }
@@ -306,9 +410,12 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       await seedProduct(db, 10, 15, 56.08);
-      await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never).execute();
+      await db
+        .insertInto('suppliers' as never)
+        .values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never)
+        .execute();
       const svc = makeServices(db);
-      const result = await svc.createPurchase(basePayload(), auth) as unknown as { purchaseId: number };
+      const result = (await svc.createPurchase(basePayload(), auth)) as unknown as { purchaseId: number };
       const purchaseId = Number(result.purchaseId);
       const product = await readProduct(db, 10);
       assert.equal(product.stockQty, 16);
@@ -321,12 +428,17 @@ async function main(): Promise<void> {
         { accountId: 1140, debit: 100, credit: 0 },
         { accountId: 2110, debit: 0, credit: 100 },
       ]);
-      const item = await (db as any).selectFrom('purchase_items')
+      const item = (await (db as any)
+        .selectFrom('purchase_items')
         .select(['allocated_landed_cost', 'landed_unit_cost'])
-        .where('purchase_id', '=', purchaseId).executeTakeFirstOrThrow() as unknown as Record<string, string | null>;
+        .where('purchase_id', '=', purchaseId)
+        .executeTakeFirstOrThrow()) as unknown as Record<string, string | null>;
       assert.equal(item.allocated_landed_cost, null);
       assert.equal(item.landed_unit_cost, null);
-      const landedRows = await (db as any).selectFrom('purchase_landed_costs').select('id').execute() as unknown as Array<unknown>;
+      const landedRows = (await (db as any)
+        .selectFrom('purchase_landed_costs')
+        .select('id')
+        .execute()) as unknown as Array<unknown>;
       assert.equal(landedRows.length, 0);
     } finally {
       await db.destroy();
@@ -340,15 +452,24 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'EGP');
       await seedProduct(db, 10, 10, 50);
       await seedProduct(db, 11, 0, 0);
-      await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never).execute();
+      await db
+        .insertInto('suppliers' as never)
+        .values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never)
+        .execute();
       const svc = makeServices(db);
-      const result = await svc.createPurchase(basePayload({
-        items: [
-          { productId: 10, qty: 2, cost: 100 },
-          { productId: 11, qty: 1, cost: 100 },
-        ],
-        landedCosts: { allocationMethod: 'value', costs: [{ costType: 'freight', description: 'Freight', amount: 30 }] },
-      }), auth) as unknown as { purchaseId: number };
+      const result = (await svc.createPurchase(
+        basePayload({
+          items: [
+            { productId: 10, qty: 2, cost: 100 },
+            { productId: 11, qty: 1, cost: 100 },
+          ],
+          landedCosts: {
+            allocationMethod: 'value',
+            costs: [{ costType: 'freight', description: 'Freight', amount: 30 }],
+          },
+        }),
+        auth,
+      )) as unknown as { purchaseId: number };
       const purchaseId = Number(result.purchaseId);
       const productA = await readProduct(db, 10);
       const productB = await readProduct(db, 11);
@@ -360,17 +481,23 @@ async function main(): Promise<void> {
       const purchase = await readPurchase(db, purchaseId);
       assert.equal(Number(purchase.total), 330);
       assert.equal(Number(purchase.landed_cost_total), 30);
-      const items = await (db as any).selectFrom('purchase_items')
+      const items = (await (db as any)
+        .selectFrom('purchase_items')
         .select(['product_id', 'allocated_landed_cost', 'landed_unit_cost'])
-        .where('purchase_id', '=', purchaseId).orderBy('product_id').execute() as unknown as Array<Record<string, string>>;
-      assert.deepEqual(items.map((row) => ({
-        productId: Number(row.product_id),
-        allocated: Number(row.allocated_landed_cost),
-        landedUnitCost: Number(row.landed_unit_cost),
-      })), [
-        { productId: 10, allocated: 20, landedUnitCost: 110 },
-        { productId: 11, allocated: 10, landedUnitCost: 110 },
-      ]);
+        .where('purchase_id', '=', purchaseId)
+        .orderBy('product_id')
+        .execute()) as unknown as Array<Record<string, string>>;
+      assert.deepEqual(
+        items.map((row) => ({
+          productId: Number(row.product_id),
+          allocated: Number(row.allocated_landed_cost),
+          landedUnitCost: Number(row.landed_unit_cost),
+        })),
+        [
+          { productId: 10, allocated: 20, landedUnitCost: 110 },
+          { productId: 11, allocated: 10, landedUnitCost: 110 },
+        ],
+      );
       assert.deepEqual(await journalLegs(db, 'purchase', purchaseId), [
         { accountId: 1140, debit: 330, credit: 0 },
         { accountId: 2110, debit: 0, credit: 330 },
@@ -387,13 +514,26 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       await seedProduct(db, 10, 15, 56.08);
-      await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never).execute();
-      await db.insertInto('suppliers' as never).values({ id: 8, tenant_id: 't1', name: 'Carrier', balance: 0 } as never).execute();
+      await db
+        .insertInto('suppliers' as never)
+        .values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never)
+        .execute();
+      await db
+        .insertInto('suppliers' as never)
+        .values({ id: 8, tenant_id: 't1', name: 'Carrier', balance: 0 } as never)
+        .execute();
       const svc = makeServices(db);
-      await assert.rejects(() => svc.createPurchase(basePayload({
-        landedCosts: { costs: [{ costType: 'freight', description: 'Freight', amount: 20, vendorId: 8 }] },
-      }), auth), /PURCHASE_LANDED_COST_VENDOR_MISMATCH/);
-      const purchases = await (db as any).selectFrom('purchases').select('id').execute() as unknown as Array<unknown>;
+      await assert.rejects(
+        () =>
+          svc.createPurchase(
+            basePayload({
+              landedCosts: { costs: [{ costType: 'freight', description: 'Freight', amount: 20, vendorId: 8 }] },
+            }),
+            auth,
+          ),
+        /PURCHASE_LANDED_COST_VENDOR_MISMATCH/,
+      );
+      const purchases = (await (db as any).selectFrom('purchases').select('id').execute()) as unknown as Array<unknown>;
       assert.equal(purchases.length, 0);
       const product = await readProduct(db, 10);
       assert.equal(product.stockQty, 15);
@@ -407,13 +547,26 @@ async function main(): Promise<void> {
       try {
         await seedCurrency(db2, 'EGP');
         await seedProduct(db2, 10, 15, 56.08);
-        await db2.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never).execute();
+        await db2
+          .insertInto('suppliers' as never)
+          .values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never)
+          .execute();
         const svc = makeServices(db2);
-        await assert.rejects(() => svc.createPurchase(basePayload({
-          lifecycleStatus: 'purchase_order',
-          landedCosts: { costs: [{ costType: 'freight', description: 'Freight', amount: 20 }] },
-        }), auth), /PURCHASE_LANDED_COST_UNSUPPORTED_DOCUMENT/);
-        const purchases = await (db2 as any).selectFrom('purchases').select('id').execute() as unknown as Array<unknown>;
+        await assert.rejects(
+          () =>
+            svc.createPurchase(
+              basePayload({
+                lifecycleStatus: 'purchase_order',
+                landedCosts: { costs: [{ costType: 'freight', description: 'Freight', amount: 20 }] },
+              }),
+              auth,
+            ),
+          /PURCHASE_LANDED_COST_UNSUPPORTED_DOCUMENT/,
+        );
+        const purchases = (await (db2 as any)
+          .selectFrom('purchases')
+          .select('id')
+          .execute()) as unknown as Array<unknown>;
         assert.equal(purchases.length, 0);
       } finally {
         await db2.destroy();
@@ -425,13 +578,26 @@ async function main(): Promise<void> {
       try {
         await seedCurrency(db3, 'EGP');
         await seedProduct(db3, 12, 0, 0, 'service');
-        await db3.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never).execute();
+        await db3
+          .insertInto('suppliers' as never)
+          .values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never)
+          .execute();
         const svc = makeServices(db3);
-        await assert.rejects(() => svc.createPurchase(basePayload({
-          items: [{ productId: 12, qty: 1, cost: 100 }],
-          landedCosts: { costs: [{ costType: 'freight', description: 'Freight', amount: 20 }] },
-        }), auth), /PURCHASE_LANDED_COST_NO_STOCKED_ITEMS/);
-        const purchases = await (db3 as any).selectFrom('purchases').select('id').execute() as unknown as Array<unknown>;
+        await assert.rejects(
+          () =>
+            svc.createPurchase(
+              basePayload({
+                items: [{ productId: 12, qty: 1, cost: 100 }],
+                landedCosts: { costs: [{ costType: 'freight', description: 'Freight', amount: 20 }] },
+              }),
+              auth,
+            ),
+          /PURCHASE_LANDED_COST_NO_STOCKED_ITEMS/,
+        );
+        const purchases = (await (db3 as any)
+          .selectFrom('purchases')
+          .select('id')
+          .execute()) as unknown as Array<unknown>;
         assert.equal(purchases.length, 0);
       } finally {
         await db3.destroy();
@@ -443,12 +609,25 @@ async function main(): Promise<void> {
       try {
         await seedCurrency(db4, 'EGP');
         await seedProduct(db4, 10, 15, 56.08);
-        await db4.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never).execute();
+        await db4
+          .insertInto('suppliers' as never)
+          .values({ id: 9, tenant_id: 't1', name: 'Supplier 9', balance: 0 } as never)
+          .execute();
         const svc = makeServices(db4);
-        await assert.rejects(() => svc.createPurchase(basePayload({
-          landedCosts: { costs: [{ costType: 'freight', description: 'Freight', amount: 0.005 }] },
-        }), auth), /PURCHASE_LANDED_COST_PRECISION/);
-        const purchases = await (db4 as any).selectFrom('purchases').select('id').execute() as unknown as Array<unknown>;
+        await assert.rejects(
+          () =>
+            svc.createPurchase(
+              basePayload({
+                landedCosts: { costs: [{ costType: 'freight', description: 'Freight', amount: 0.005 }] },
+              }),
+              auth,
+            ),
+          /PURCHASE_LANDED_COST_PRECISION/,
+        );
+        const purchases = (await (db4 as any)
+          .selectFrom('purchases')
+          .select('id')
+          .execute()) as unknown as Array<unknown>;
         assert.equal(purchases.length, 0);
       } finally {
         await db4.destroy();
@@ -460,27 +639,55 @@ async function main(): Promise<void> {
   // createPurchase only, through the canonical allocator and the
   // canonical WAC writer; the post-posting step is untouched.
   {
-    const createSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-create.service.ts'), 'utf8');
+    const createSource = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/purchases-write-create.service.ts'),
+      'utf8',
+    );
     const createStart = createSource.indexOf('async createPurchase(');
     assert.ok(createStart > 0, 'createPurchase exists');
-    const createBody = createSource.slice(createStart, createSource.indexOf('\n  private async generatePurchaseDocNo(', createStart));
+    const createBody = createSource.slice(
+      createStart,
+      createSource.indexOf('\n  private async generatePurchaseDocNo(', createStart),
+    );
     assert.ok(createBody.includes('validateAtReceiptLandedCosts('), 'create must validate at-receipt freight');
-    assert.ok(createBody.includes('allocateAtReceiptLandedCosts('), 'create must allocate at-receipt freight over the stocked lines');
+    assert.ok(
+      createBody.includes('allocateAtReceiptLandedCosts('),
+      'create must allocate at-receipt freight over the stocked lines',
+    );
     assert.ok(createBody.includes('landedBaseUnitCost'), 'the receipt blend must use the landed base unit cost');
-    assert.ok(createBody.includes('valueStockReceipt(trx, scope.tenantId, item.productId, stockChange.globalAfter, increasedQty, increasedQty * landedBaseUnitCost)'),
-      'the WAC blend must receive the landed receipt value');
+    assert.ok(
+      createBody.includes(
+        'valueStockReceipt(trx, scope.tenantId, item.productId, stockChange.globalAfter, increasedQty, increasedQty * landedBaseUnitCost)',
+      ),
+      'the WAC blend must receive the landed receipt value',
+    );
     assert.ok(createBody.includes("insertInto('purchase_landed_costs')"), 'create must store the freight breakdown');
     assert.ok(createBody.includes('landed_cost_applied_at'), 'create must stamp the header like the post-posting step');
     const validateStart = createSource.indexOf('private validateAtReceiptLandedCosts(');
     assert.ok(validateStart > 0, 'the at-receipt validator exists');
-    const validateBody = createSource.slice(validateStart, createSource.indexOf('\n  private allocateAtReceiptLandedCosts(', validateStart));
-    assert.ok(validateBody.includes('PURCHASE_LANDED_COST_VENDOR_MISMATCH'), 'a third-party freight vendor must fail closed');
-    assert.ok(validateBody.includes('PURCHASE_LANDED_COST_UNSUPPORTED_DOCUMENT'), 'freight on a purchase order must fail closed');
+    const validateBody = createSource.slice(
+      validateStart,
+      createSource.indexOf('\n  private allocateAtReceiptLandedCosts(', validateStart),
+    );
+    assert.ok(
+      validateBody.includes('PURCHASE_LANDED_COST_VENDOR_MISMATCH'),
+      'a third-party freight vendor must fail closed',
+    );
+    assert.ok(
+      validateBody.includes('PURCHASE_LANDED_COST_UNSUPPORTED_DOCUMENT'),
+      'freight on a purchase order must fail closed',
+    );
     assert.ok(validateBody.includes('PURCHASE_LANDED_COST_PRECISION'), 'a sub-minor freight amount must fail closed');
-    const manualSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchase-landed-costs.service.ts'), 'utf8');
+    const manualSource = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/purchase-landed-costs.service.ts'),
+      'utf8',
+    );
     assert.ok(manualSource.includes('async applyPurchaseLandedCosts('), 'the post-posting step still exists');
     assert.ok(manualSource.includes('calculateStockFlowShares'), 'the post-posting sold/held split is untouched');
-    const dtoSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/dto/upsert-purchase.dto.ts'), 'utf8');
+    const dtoSource = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/dto/upsert-purchase.dto.ts'),
+      'utf8',
+    );
     assert.ok(dtoSource.includes('landedCosts?: PurchaseLandedCostsInputDto'), 'the invoice DTO carries landedCosts');
   }
 

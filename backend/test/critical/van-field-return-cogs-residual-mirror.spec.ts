@@ -124,8 +124,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): { posting: AccountingPostingService; returns: VanReturnsService } {
@@ -159,51 +165,139 @@ async function seedWorld(
   },
 ): Promise<void> {
   await seedCurrency(db, opts.currency);
-  await db.insertInto('stock_locations' as never).values([
-    { id: 900, tenant_id: 't1', account_id: 'a1', name: 'Van', branch_id: null, location_type: 'van_stock', is_active: true },
-    { id: 901, tenant_id: 't1', account_id: 'a1', name: 'Damaged', branch_id: null, location_type: 'damaged', is_active: true },
-  ] as never).execute();
-  await db.insertInto('products' as never).values({
-    id: 100, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: opts.postSaleStock, reserved_qty: 0, cost_price: opts.currentCost,
-  } as never).execute();
-  await db.insertInto('product_location_stock' as never).values({
-    tenant_id: 't1', account_id: 'a1', product_id: 100, branch_id: null, location_id: 900, qty: opts.postSaleStock, reserved_qty: 0,
-  } as never).execute();
-  await db.insertInto('customers' as never).values({
-    // INV-VAN-RETURN-METHOD-MATCH: the fixture models the balance a
-    // posted credit sale of saleTotal leaves in production (the sale
-    // writer raises customers.balance by the credit leg), so the
-    // approval-time balance floor sees the real world, not a 0.
-    id: 5, tenant_id: 't1', account_id: 'a1', name: 'Shop', balance: opts.saleTotal,
-  } as never).execute();
-  await db.insertInto('van_sales_trips' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', status: 'open', van_location_id: 900,
-    source_warehouse_id: null, rep_id: 7, cash_collected: 1000, cash_refunds: 0, returns_amount: 0,
-  } as never).execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values([
+      {
+        id: 900,
+        tenant_id: 't1',
+        account_id: 'a1',
+        name: 'Van',
+        branch_id: null,
+        location_type: 'van_stock',
+        is_active: true,
+      },
+      {
+        id: 901,
+        tenant_id: 't1',
+        account_id: 'a1',
+        name: 'Damaged',
+        branch_id: null,
+        location_type: 'damaged',
+        is_active: true,
+      },
+    ] as never)
+    .execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 100,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Widget',
+      stock_qty: opts.postSaleStock,
+      reserved_qty: 0,
+      cost_price: opts.currentCost,
+    } as never)
+    .execute();
+  await db
+    .insertInto('product_location_stock' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 'a1',
+      product_id: 100,
+      branch_id: null,
+      location_id: 900,
+      qty: opts.postSaleStock,
+      reserved_qty: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('customers' as never)
+    .values({
+      // INV-VAN-RETURN-METHOD-MATCH: the fixture models the balance a
+      // posted credit sale of saleTotal leaves in production (the sale
+      // writer raises customers.balance by the credit leg), so the
+      // approval-time balance floor sees the real world, not a 0.
+      id: 5,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Shop',
+      balance: opts.saleTotal,
+    } as never)
+    .execute();
+  await db
+    .insertInto('van_sales_trips' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      status: 'open',
+      van_location_id: 900,
+      source_warehouse_id: null,
+      rep_id: 7,
+      cash_collected: 1000,
+      cash_refunds: 0,
+      returns_amount: 0,
+    } as never)
+    .execute();
   const saleId = opts.saleId === undefined ? 1 : opts.saleId;
   if (saleId != null) {
-    await db.insertInto('sales' as never).values({
-      id: saleId, tenant_id: 't1', doc_no: `S-${saleId}`, customer_id: 5, subtotal: opts.saleTotal,
-      // INV-VAN-RETURN-METHOD-MATCH: an unpaid credit sale carries
-      // paid_amount 0 and no sale_payments row — the sale writer sets
-      // paid_amount only for card/InstaPay, and postSale (like the
-      // refund-leg resolution) reads the receivable as
-      // total - paid_amount - store_credit_used. The old seed set
-      // paid_amount to the full total plus a cash settlement row,
-      // which described a fully-paid sale (receivable 0) and made
-      // every credit refund look like a refund of money nobody owes.
-      discount: 0, tax_amount: 0, total: opts.saleTotal, paid_amount: 0, store_credit_used: 0,
-      exchange_return_id: null, branch_id: null, location_id: null, created_by: 1, created_at: new Date(),
-      delivery_fee: 0, delivery_fee_mode: null, service_charge: 0, tip_amount: 0, prices_include_tax: false,
-      sale_origin: 'van', payment_type: 'credit', collection_status: 'paid', status: 'posted',
-      delivery_rep_id: null, van_trip_id: 1,
-    } as never).execute();
+    await db
+      .insertInto('sales' as never)
+      .values({
+        id: saleId,
+        tenant_id: 't1',
+        doc_no: `S-${saleId}`,
+        customer_id: 5,
+        subtotal: opts.saleTotal,
+        // INV-VAN-RETURN-METHOD-MATCH: an unpaid credit sale carries
+        // paid_amount 0 and no sale_payments row — the sale writer sets
+        // paid_amount only for card/InstaPay, and postSale (like the
+        // refund-leg resolution) reads the receivable as
+        // total - paid_amount - store_credit_used. The old seed set
+        // paid_amount to the full total plus a cash settlement row,
+        // which described a fully-paid sale (receivable 0) and made
+        // every credit refund look like a refund of money nobody owes.
+        discount: 0,
+        tax_amount: 0,
+        total: opts.saleTotal,
+        paid_amount: 0,
+        store_credit_used: 0,
+        exchange_return_id: null,
+        branch_id: null,
+        location_id: null,
+        created_by: 1,
+        created_at: new Date(),
+        delivery_fee: 0,
+        delivery_fee_mode: null,
+        service_charge: 0,
+        tip_amount: 0,
+        prices_include_tax: false,
+        sale_origin: 'van',
+        payment_type: 'credit',
+        collection_status: 'paid',
+        status: 'posted',
+        delivery_rep_id: null,
+        van_trip_id: 1,
+      } as never)
+      .execute();
     for (const line of opts.saleLines) {
-      await db.insertInto('sale_items' as never).values({
-        id: line.id, sale_id: saleId, tenant_id: 't1', product_id: line.productId, product_name: 'Widget', qty: line.qty,
-        line_total: line.lineTotal, cost_price: line.costPrice,
-        unit_multiplier: line.unitMultiplier ?? 1, modifiers: JSON.stringify([]),
-      } as never).execute();
+      await db
+        .insertInto('sale_items' as never)
+        .values({
+          id: line.id,
+          sale_id: saleId,
+          tenant_id: 't1',
+          product_id: line.productId,
+          product_name: 'Widget',
+          qty: line.qty,
+          line_total: line.lineTotal,
+          cost_price: line.costPrice,
+          unit_multiplier: line.unitMultiplier ?? 1,
+          modifiers: JSON.stringify([]),
+        } as never)
+        .execute();
     }
   }
 }
@@ -218,12 +312,28 @@ async function seedReturn(
     items: Array<{ productId: number; qty: number; unitPrice: number; saleItemId?: number }>;
   },
 ): Promise<void> {
-  await db.insertInto('van_field_returns' as never).values({
-    id: returnId, tenant_id: 't1', account_id: 'a1', doc_no: `FR-${returnId}`, trip_id: 1, rep_id: 7,
-    customer_id: 5, sale_id: opts.saleId, status: 'pending_approval', return_reason: opts.reason,
-    refund_method: 'credit', total_amount: opts.totalAmount, items_json: JSON.stringify(opts.items),
-    notes: null, rejection_reason: null, approved_by: null, approved_at: null,
-  } as never).execute();
+  await db
+    .insertInto('van_field_returns' as never)
+    .values({
+      id: returnId,
+      tenant_id: 't1',
+      account_id: 'a1',
+      doc_no: `FR-${returnId}`,
+      trip_id: 1,
+      rep_id: 7,
+      customer_id: 5,
+      sale_id: opts.saleId,
+      status: 'pending_approval',
+      return_reason: opts.reason,
+      refund_method: 'credit',
+      total_amount: opts.totalAmount,
+      items_json: JSON.stringify(opts.items),
+      notes: null,
+      rejection_reason: null,
+      approved_by: null,
+      approved_at: null,
+    } as never)
+    .execute();
 }
 
 async function postSaleOn(db: Kysely<Database>, posting: AccountingPostingService, saleId: number): Promise<void> {
@@ -237,14 +347,23 @@ async function journalByCode(
   sourceType: string,
   sourceId: number,
 ): Promise<Map<string, { debit: number; credit: number }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select(['id'])
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute() as Array<{ id: number }>;
+  const entries = (await (db as any)
+    .selectFrom('journal_entries')
+    .select(['id'])
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute()) as Array<{ id: number }>;
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('accounting_accounts', 'accounting_accounts.id', 'journal_entry_lines.account_id')
-    .select(['accounting_accounts.code as code', 'journal_entry_lines.debit as debit', 'journal_entry_lines.credit as credit'])
+    .select([
+      'accounting_accounts.code as code',
+      'journal_entry_lines.debit as debit',
+      'journal_entry_lines.credit as credit',
+    ])
     .where('journal_entry_id', '=', entries[0].id)
-    .execute() as Array<{ code: string; debit: string; credit: string }>;
+    .execute()) as Array<{ code: string; debit: string; credit: string }>;
   const byCode = new Map<string, { debit: number; credit: number }>();
   for (const row of rows) {
     byCode.set(row.code, { debit: Number(row.debit), credit: Number(row.credit) });
@@ -256,9 +375,13 @@ async function journalByCode(
 }
 
 async function locationQty(db: Kysely<Database>, locationId: number): Promise<number> {
-  const rows = await (db as any).selectFrom('product_location_stock')
-    .select(['qty']).where('tenant_id', '=', 't1').where('product_id', '=', 100)
-    .where('location_id', '=', locationId).execute() as Array<{ qty: string }>;
+  const rows = (await (db as any)
+    .selectFrom('product_location_stock')
+    .select(['qty'])
+    .where('tenant_id', '=', 't1')
+    .where('product_id', '=', 100)
+    .where('location_id', '=', locationId)
+    .execute()) as Array<{ qty: string }>;
   return rows.reduce((sum, row) => sum + Number(row.qty || 0), 0);
 }
 
@@ -269,7 +392,9 @@ async function main(): Promise<void> {
     try {
       const { posting, returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 15.3125, saleTotal: 200,
+        currency: 'EGP',
+        currentCost: 15.3125,
+        saleTotal: 200,
         saleLines: [{ id: 10, productId: 100, qty: 10, lineTotal: 200, costPrice: 15.3125 }],
         postSaleStock: 6,
       });
@@ -277,7 +402,9 @@ async function main(): Promise<void> {
       const saleJournal = await journalByCode(db, 'sale', 1);
       assert.equal(saleJournal.get('5100')?.debit, 153.12);
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 120,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 120,
         items: [{ productId: 100, qty: 6, unitPrice: 20, saleItemId: 10 }],
       });
       const approved = await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -304,13 +431,17 @@ async function main(): Promise<void> {
     try {
       const { posting, returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 15.3125, saleTotal: 200,
+        currency: 'EGP',
+        currentCost: 15.3125,
+        saleTotal: 200,
         saleLines: [{ id: 10, productId: 100, qty: 10, lineTotal: 200, costPrice: 15.3125 }],
         postSaleStock: 6,
       });
       await postSaleOn(db, posting, 1);
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 80,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 80,
         items: [{ productId: 100, qty: 4, unitPrice: 20, saleItemId: 10 }],
       });
       await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -318,7 +449,9 @@ async function main(): Promise<void> {
       assert.equal(first.get('1140')?.debit, 61.25);
       assert.equal(await locationQty(db, 900), 10);
       await seedReturn(db, 2, {
-        saleId: 1, reason: 'customer_request', totalAmount: 120,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 120,
         items: [{ productId: 100, qty: 6, unitPrice: 20, saleItemId: 10 }],
       });
       await returns.approveFieldReturn('t1', 'a1', 2, 1);
@@ -337,13 +470,17 @@ async function main(): Promise<void> {
     try {
       const { posting, returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 15.3125, saleTotal: 200,
+        currency: 'EGP',
+        currentCost: 15.3125,
+        saleTotal: 200,
         saleLines: [{ id: 10, productId: 100, qty: 10, lineTotal: 200, costPrice: 15.3125 }],
         postSaleStock: 6,
       });
       await postSaleOn(db, posting, 1);
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 200,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 200,
         items: [{ productId: 100, qty: 10, unitPrice: 20, saleItemId: 10 }],
       });
       await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -362,12 +499,16 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 16, saleTotal: 200,
+        currency: 'EGP',
+        currentCost: 16,
+        saleTotal: 200,
         saleLines: [{ id: 10, productId: 100, qty: 10, lineTotal: 200, costPrice: 15.3125 }],
         postSaleStock: 6,
       });
       await seedReturn(db, 1, {
-        saleId: null, reason: 'customer_request', totalAmount: 40,
+        saleId: null,
+        reason: 'customer_request',
+        totalAmount: 40,
         items: [{ productId: 100, qty: 2, unitPrice: 20 }],
       });
       await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -385,12 +526,16 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 16, saleTotal: 200,
+        currency: 'EGP',
+        currentCost: 16,
+        saleTotal: 200,
         saleLines: [{ id: 10, productId: 100, qty: 10, lineTotal: 200, costPrice: 15.3125 }],
         postSaleStock: 6,
       });
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'damaged', totalAmount: 120,
+        saleId: 1,
+        reason: 'damaged',
+        totalAmount: 120,
         items: [{ productId: 100, qty: 6, unitPrice: 20, saleItemId: 10 }],
       });
       await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -411,7 +556,9 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 15.3125, saleTotal: 200,
+        currency: 'EGP',
+        currentCost: 15.3125,
+        saleTotal: 200,
         saleLines: [
           { id: 10, productId: 100, qty: 5, lineTotal: 100, costPrice: 15.3125 },
           { id: 11, productId: 100, qty: 5, lineTotal: 100, costPrice: 15.5 },
@@ -419,7 +566,9 @@ async function main(): Promise<void> {
         postSaleStock: 6,
       });
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 40,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 40,
         items: [{ productId: 100, qty: 2, unitPrice: 20 }],
       });
       await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -437,13 +586,17 @@ async function main(): Promise<void> {
     try {
       const { posting, returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 16, saleTotal: 200,
+        currency: 'EGP',
+        currentCost: 16,
+        saleTotal: 200,
         saleLines: [{ id: 10, productId: 100, qty: 10, lineTotal: 200, costPrice: 15.3125 }],
         postSaleStock: 6,
       });
       await postSaleOn(db, posting, 1);
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 120,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 120,
         items: [{ productId: 100, qty: 6, unitPrice: 20, saleItemId: 10 }],
       });
       await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -463,12 +616,16 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 10, saleTotal: 200,
+        currency: 'EGP',
+        currentCost: 10,
+        saleTotal: 200,
         saleLines: [{ id: 10, productId: 100, qty: 10, lineTotal: 200, costPrice: 0 }],
         postSaleStock: 6,
       });
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 40,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 40,
         items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
       });
       await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -488,12 +645,16 @@ async function main(): Promise<void> {
     try {
       const { returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'EGP', currentCost: 10, saleTotal: 200,
+        currency: 'EGP',
+        currentCost: 10,
+        saleTotal: 200,
         saleLines: [{ id: 10, productId: 100, qty: 10, lineTotal: 200, costPrice: null }],
         postSaleStock: 6,
       });
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 40,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 40,
         items: [{ productId: 100, qty: 2, unitPrice: 20, saleItemId: 10 }],
       });
       await assert.rejects(
@@ -501,12 +662,18 @@ async function main(): Promise<void> {
         (err: any) => err.code === 'VAN_FIELD_RETURN_FROZEN_COST_INVALID',
         'a missing frozen cost must fail closed, never fall back to the current cost',
       );
-      const pending = await (db as any).selectFrom('van_field_returns').select(['status'])
-        .where('id', '=', 1).executeTakeFirst();
+      const pending = await (db as any)
+        .selectFrom('van_field_returns')
+        .select(['status'])
+        .where('id', '=', 1)
+        .executeTakeFirst();
       assert.equal(pending.status, 'pending_approval');
       assert.equal(await locationQty(db, 900), 6);
-      const entries = await (db as any).selectFrom('journal_entries').select(['id'])
-        .where('source_type', '=', 'van_field_return').execute();
+      const entries = await (db as any)
+        .selectFrom('journal_entries')
+        .select(['id'])
+        .where('source_type', '=', 'van_field_return')
+        .execute();
       assert.equal(entries.length, 0);
     } finally {
       await db.destroy();
@@ -519,7 +686,9 @@ async function main(): Promise<void> {
     try {
       const { posting, returns } = makeServices(db);
       await seedWorld(db, {
-        currency: 'KWD', currentCost: 15.31255, saleTotal: 200,
+        currency: 'KWD',
+        currentCost: 15.31255,
+        saleTotal: 200,
         saleLines: [{ id: 10, productId: 100, qty: 10, lineTotal: 200, costPrice: 15.31255 }],
         postSaleStock: 6,
       });
@@ -527,7 +696,9 @@ async function main(): Promise<void> {
       const saleJournal = await journalByCode(db, 'sale', 1);
       assert.equal(saleJournal.get('5100')?.debit, 153.126);
       await seedReturn(db, 1, {
-        saleId: 1, reason: 'customer_request', totalAmount: 120,
+        saleId: 1,
+        reason: 'customer_request',
+        totalAmount: 120,
         items: [{ productId: 100, qty: 6, unitPrice: 20, saleItemId: 10 }],
       });
       await returns.approveFieldReturn('t1', 'a1', 1, 1);
@@ -547,17 +718,30 @@ async function main(): Promise<void> {
     // File #63 split: the mirror helper and the fail-closed error moved to
     // the S8 slice; the shared residual grouping stays via the S8
     // lazy-getter arrow on the facade.
-    const s8Source = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-field-return.slice.ts'), 'utf8');
+    const s8Source = readFileSync(
+      resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting/post-van-field-return.slice.ts'),
+      'utf8',
+    );
     assert.ok(s8Source.includes('vanFieldReturnCogsAmount'), 'the van field-return mirror must exist');
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
+    const postingSource = readFileSync(
+      resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'),
+      'utf8',
+    );
     assert.ok(postingSource.includes('salesReturnCogsResidual'), 'the mirror must reuse the shared residual grouping');
     assert.ok(s8Source.includes('VAN_FIELD_RETURN_FROZEN_COST_INVALID'), 'the named fail-closed error must exist');
-    const returnsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'), 'utf8');
+    const returnsSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-returns/approve-field-return.slice.ts'),
+      'utf8',
+    );
     assert.ok(returnsSource.includes('saleId:'), 'approval must pass the sale link to the posting method');
     assert.ok(returnsSource.includes('isDamaged'), 'approval must pass the damaged flag to the posting method');
     assert.ok(returnsSource.includes('saleItemId'), 'approval must pass the per-item sale-line link');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-VAN-FIELD-RETURN-COGS-RESIDUAL-MIRROR').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-VAN-FIELD-RETURN-COGS-RESIDUAL-MIRROR').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
   }
 
   console.log('Van field-return COGS residual mirror tests passed');

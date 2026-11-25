@@ -57,12 +57,22 @@ type MoneyDigits = 2 | 3;
 
 const RECEIPT_LINES = [
   {
-    id: 'a', productId: 5, quantity: 7, receivedQuantity: 7,
-    factoryUnitPriceUsd: 1.225, shortageHandlingMethod: 'capitalize', landedCost: 6.125,
+    id: 'a',
+    productId: 5,
+    quantity: 7,
+    receivedQuantity: 7,
+    factoryUnitPriceUsd: 1.225,
+    shortageHandlingMethod: 'capitalize',
+    landedCost: 6.125,
   },
   {
-    id: 'b', productId: 6, quantity: 10, receivedQuantity: 9,
-    factoryUnitPriceUsd: 1.225, shortageHandlingMethod: 'expense', landedCost: 6.125,
+    id: 'b',
+    productId: 6,
+    quantity: 10,
+    receivedQuantity: 9,
+    factoryUnitPriceUsd: 1.225,
+    shortageHandlingMethod: 'expense',
+    landedCost: 6.125,
   },
 ];
 
@@ -120,7 +130,10 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -128,7 +141,9 @@ async function product(db: Kysely<Database>, id: number): Promise<any> {
   return (db as any).selectFrom('products').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
 }
 
-async function journalLines(db: Kysely<Database>): Promise<Array<{ account_id: number; debit: number; credit: number }>> {
+async function journalLines(
+  db: Kysely<Database>,
+): Promise<Array<{ account_id: number; debit: number; credit: number }>> {
   const rows: any[] = await (db as any)
     .selectFrom('journal_entry_lines')
     .select(['account_id', 'debit', 'credit'])
@@ -139,17 +154,27 @@ async function journalLines(db: Kysely<Database>): Promise<Array<{ account_id: n
 
 async function postReceipt(db: Kysely<Database>, service: any): Promise<void> {
   const shipment = await service.createShipment('t1', {
-    containerNumber: 'MSCU-W2', supplierId: '9', exchangeRateAtArrival: 5,
+    containerNumber: 'MSCU-W2',
+    supplierId: '9',
+    exchangeRateAtArrival: 5,
   });
   await service.addShipmentItem('t1', shipment.id, { productId: 5, quantity: 7, factoryUnitPriceUsd: 1.225 });
   // addShipmentItem has no received-quantity input: the short
   // item is seeded directly, and the Arrived recalculation reads
   // its received quantity from the row.
-  await (db as any).insertInto('import_shipment_items').values({
-    tenant_id: 't1', shipment_id: shipment.id, product_id: 6, quantity: 10,
-    received_quantity: 9, factory_unit_price_usd: 1.225, landed_cost_egp: 0,
-    shortage_handling_method: 'expense',
-  } as never).execute();
+  await (db as any)
+    .insertInto('import_shipment_items')
+    .values({
+      tenant_id: 't1',
+      shipment_id: shipment.id,
+      product_id: 6,
+      quantity: 10,
+      received_quantity: 9,
+      factory_unit_price_usd: 1.225,
+      landed_cost_egp: 0,
+      shortage_handling_method: 'expense',
+    } as never)
+    .execute();
   await service.updateShipmentCosts('t1', 1, shipment.id, { status: 'Arrived', receiptLocationId: 10 });
 }
 
@@ -170,17 +195,37 @@ async function main(): Promise<void> {
 
     // Float dust is gone: 0.1 x 3 used to accumulate as
     // 0.30000000000000004 and ride into the WAC and the journal.
-    const dust = groupImportReceipts([{
-      id: 'd', productId: 7, quantity: 3, receivedQuantity: 3,
-      factoryUnitPriceUsd: 0.1, shortageHandlingMethod: 'capitalize', landedCost: 0.1,
-    }] as any, 2);
+    const dust = groupImportReceipts(
+      [
+        {
+          id: 'd',
+          productId: 7,
+          quantity: 3,
+          receivedQuantity: 3,
+          factoryUnitPriceUsd: 0.1,
+          shortageHandlingMethod: 'capitalize',
+          landedCost: 0.1,
+        },
+      ] as any,
+      2,
+    );
     assert.equal(dust[0].value, 0.3, 'raw float dust is rounded away');
 
     // A 3dp group total rounds half-up at 2dp through roundMoney.
-    const half = groupImportReceipts([{
-      id: 'h', productId: 8, quantity: 3, receivedQuantity: 3,
-      factoryUnitPriceUsd: 10.125, shortageHandlingMethod: 'capitalize', landedCost: 10.125,
-    }] as any, 2);
+    const half = groupImportReceipts(
+      [
+        {
+          id: 'h',
+          productId: 8,
+          quantity: 3,
+          receivedQuantity: 3,
+          factoryUnitPriceUsd: 10.125,
+          shortageHandlingMethod: 'capitalize',
+          landedCost: 10.125,
+        },
+      ] as any,
+      2,
+    );
     assert.equal(half[0].value, 30.38, '30.375 rounds to 30.38 at 2dp');
 
     // Digits are explicit and fail closed: no silent default.
@@ -207,10 +252,18 @@ async function main(): Promise<void> {
   {
     const shares = apportionByBucketShares(0.005, [1, 1], 3);
     assert.deepEqual(shares, [0.003, 0.002], '0.005 splits 0.003/0.002 at 3dp');
-    assert.equal(shares.reduce((s, v) => s + v, 0), 0.005, 'shares sum exactly to the total');
+    assert.equal(
+      shares.reduce((s, v) => s + v, 0),
+      0.005,
+      'shares sum exactly to the total',
+    );
     const cents = apportionByBucketShares(0.01, [1, 1, 1], 2);
     assert.deepEqual(cents, [0.01, 0, 0], 'one cent goes to the first bucket at 2dp');
-    assert.equal(cents.reduce((s, v) => s + v, 0), 0.01, 'shares sum exactly at 2dp too');
+    assert.equal(
+      cents.reduce((s, v) => s + v, 0),
+      0.01,
+      'shares sum exactly at 2dp too',
+    );
     const legacy = apportionByBucketShares(10, [1, 3]);
     assert.deepEqual(legacy, [2.5, 7.5], 'the old two-arg call keeps its cents behaviour');
   }
@@ -244,8 +297,11 @@ async function main(): Promise<void> {
       assert.equal(payable?.credit, 104.125, 'goods credit is 104.125, not the old 104.13');
       const expense: any = await (db as any).selectFrom('expenses').selectAll().executeTakeFirstOrThrow();
       assert.equal(Number(expense.amount), 6.125, 'the shortage expense row keeps 6.125');
-      const movement: any = await (db as any).selectFrom('stock_movements').selectAll()
-        .where('product_id', '=', 5).executeTakeFirstOrThrow();
+      const movement: any = await (db as any)
+        .selectFrom('stock_movements')
+        .selectAll()
+        .where('product_id', '=', 5)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(movement.total_cost), 42.875, 'movement total is the rounded group value');
       assert.equal(Number(movement.unit_cost), 6.125, 'movement unit cost is the landed cost');
     } finally {
@@ -278,8 +334,11 @@ async function main(): Promise<void> {
       assert.equal(payable?.credit, 104.14, 'goods credit absorbs the rounding dust');
       const expense: any = await (db as any).selectFrom('expenses').selectAll().executeTakeFirstOrThrow();
       assert.equal(Number(expense.amount), 6.13, 'the shortage expense row rounds to 6.13');
-      const movement: any = await (db as any).selectFrom('stock_movements').selectAll()
-        .where('product_id', '=', 5).executeTakeFirstOrThrow();
+      const movement: any = await (db as any)
+        .selectFrom('stock_movements')
+        .selectAll()
+        .where('product_id', '=', 5)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(movement.total_cost), 42.88, 'movement total is the rounded group value');
     } finally {
       await db.destroy();
@@ -301,15 +360,20 @@ async function main(): Promise<void> {
     const db = await makeDb('KWD');
     try {
       // The settings say KWD but the base rate row says EGP.
-      await (db as any).updateTable('currency_exchange_rates')
+      await (db as any)
+        .updateTable('currency_exchange_rates')
         .set({ currency_code: 'EGP' } as never)
-        .where('tenant_id', '=', 't1').execute();
+        .where('tenant_id', '=', 't1')
+        .execute();
       const service = makeService(db);
       const shipment = await service.createShipment('t1', {
-        containerNumber: 'MSCU-W2X', supplierId: '9', exchangeRateAtArrival: 5,
+        containerNumber: 'MSCU-W2X',
+        supplierId: '9',
+        exchangeRateAtArrival: 5,
       });
       await assert.rejects(
-        async () => service.addShipmentItem('t1', shipment.id, { productId: 5, quantity: 7, factoryUnitPriceUsd: 1.225 }),
+        async () =>
+          service.addShipmentItem('t1', shipment.id, { productId: 5, quantity: 7, factoryUnitPriceUsd: 1.225 }),
         /إعداد عملة الأساس/,
         'a currency mismatch must fail closed at addShipmentItem, before any item is costed',
       );

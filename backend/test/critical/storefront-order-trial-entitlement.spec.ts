@@ -45,38 +45,75 @@ function row(
   status: string | null = null,
   trialEndsAt: string | Date | null = null,
 ): StorefrontTenantEntitlementRow {
-  return { plan_id: planId, extra_features: extraFeatures, activity_type: activityType, status, trial_ends_at: trialEndsAt };
+  return {
+    plan_id: planId,
+    extra_features: extraFeatures,
+    activity_type: activityType,
+    status,
+    trial_ends_at: trialEndsAt,
+  };
 }
 
 function testTrialWindow(): void {
   // The live test10k case: retail + Ultimate + active trial => entitled.
-  assert.equal(isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', [], 'trial', FUTURE), checker, NOW), true);
+  assert.equal(
+    isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', [], 'trial', FUTURE), checker, NOW),
+    true,
+  );
   // A trial also entitles a real shop on a basic plan (evaluation window).
   assert.equal(isStorefrontEntitledForOrders(row('pharmacy', 'plan_basic', [], 'trial', FUTURE), checker, NOW), true);
   assert.equal(isStorefrontTrialActive(row('retail_general', 'plan_ultimate', [], 'trial', FUTURE), NOW), true);
   // The boundary is strict: at the expiry instant the window is closed.
-  assert.equal(isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', [], 'trial', NOW), checker, NOW), false);
+  assert.equal(
+    isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', [], 'trial', NOW), checker, NOW),
+    false,
+  );
   // Expired trial => the plan decision governs again (Ultimate refused).
-  assert.equal(isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', [], 'trial', PAST), checker, NOW), false);
+  assert.equal(
+    isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', [], 'trial', PAST), checker, NOW),
+    false,
+  );
   assert.equal(isStorefrontTrialActive(row('retail_general', 'plan_ultimate', [], 'trial', PAST), NOW), false);
   // Trial status with no expiry on file grants nothing (fail-closed).
-  assert.equal(isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', [], 'trial', null), checker, NOW), false);
+  assert.equal(
+    isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', [], 'trial', null), checker, NOW),
+    false,
+  );
   // Malformed expiry grants nothing.
   assert.equal(isStorefrontTrialActive(row('retail_general', 'plan_ultimate', [], 'trial', 'not-a-date'), NOW), false);
   // A non-trial tenant is refused exactly as before (pinned Batch 10 rule).
-  assert.equal(isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', [], 'active', FUTURE), checker, NOW), false);
+  assert.equal(
+    isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', [], 'active', FUTURE), checker, NOW),
+    false,
+  );
   assert.equal(isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate'), checker, NOW), false);
 }
 
 function testTrialNeverRegrantsStructuralExclusions(): void {
   // Warehousing and services structurally exclude the storefront, trial or not.
-  assert.equal(isStorefrontEntitledForOrders(row('warehousing', 'plan_basic', [], 'trial', FUTURE), checker, NOW), false);
+  assert.equal(
+    isStorefrontEntitledForOrders(row('warehousing', 'plan_basic', [], 'trial', FUTURE), checker, NOW),
+    false,
+  );
   assert.equal(isStorefrontEntitledForOrders(row('services', 'plan_basic', [], 'trial', FUTURE), checker, NOW), false);
   // The isolated pillars are never re-granted by a trial either.
-  assert.equal(isStorefrontEntitledForOrders(row('contracting', 'plan_basic', [], 'trial', FUTURE), checker, NOW), false);
-  assert.equal(isStorefrontEntitledForOrders(row('maritime_freight', 'plan_basic', [], 'trial', FUTURE), checker, NOW), false);
+  assert.equal(
+    isStorefrontEntitledForOrders(row('contracting', 'plan_basic', [], 'trial', FUTURE), checker, NOW),
+    false,
+  );
+  assert.equal(
+    isStorefrontEntitledForOrders(row('maritime_freight', 'plan_basic', [], 'trial', FUTURE), checker, NOW),
+    false,
+  );
   // An explicit opt-out wins over the trial.
-  assert.equal(isStorefrontEntitledForOrders(row('retail_general', 'plan_ultimate', ['-storefront'], 'trial', FUTURE), checker, NOW), false);
+  assert.equal(
+    isStorefrontEntitledForOrders(
+      row('retail_general', 'plan_ultimate', ['-storefront'], 'trial', FUTURE),
+      checker,
+      NOW,
+    ),
+    false,
+  );
   // An explicit grant still works without a trial (unchanged behavior).
   assert.equal(isStorefrontEntitledForOrders(row('warehousing', 'plan_basic', ['storefront']), checker, NOW), true);
 }
@@ -90,7 +127,10 @@ function makeFakeDb(tenant: Record<string, unknown>, settings: Array<{ key: stri
     product_offers: [],
   };
   const eb: any = new Proxy(function () {}, {
-    get: () => (..._args: unknown[]) => eb,
+    get:
+      () =>
+      (..._args: unknown[]) =>
+        eb,
     apply: () => eb,
   });
   class FakeQueryBuilder {
@@ -135,7 +175,10 @@ function makeFakeDb(tenant: Record<string, unknown>, settings: Array<{ key: stri
   return { selectFrom: (table: string) => new FakeQueryBuilder(table) };
 }
 
-function buildService(tenant: Record<string, unknown>, settings: Array<{ key: string; value: string }>): StorefrontService {
+function buildService(
+  tenant: Record<string, unknown>,
+  settings: Array<{ key: string; value: string }>,
+): StorefrontService {
   return new StorefrontService(makeFakeDb(tenant, settings), {} as never, {} as never, {} as never, undefined, checker);
 }
 
@@ -148,8 +191,13 @@ const orderDto: any = {
 
 async function testServicePassesGateForTrialTenant(): Promise<void> {
   const tenant = {
-    id: 't-test10k', slug: 'test10k', plan_id: 'plan_ultimate', extra_features: [],
-    activity_type: 'retail_general', status: 'trial', trial_ends_at: FUTURE,
+    id: 't-test10k',
+    slug: 'test10k',
+    plan_id: 'plan_ultimate',
+    extra_features: [],
+    activity_type: 'retail_general',
+    status: 'trial',
+    trial_ends_at: FUTURE,
   };
   const service = buildService(tenant, []);
   let caught: unknown;
@@ -167,8 +215,13 @@ async function testServicePassesGateForTrialTenant(): Promise<void> {
 
 async function testServiceStillRefusesNonTrialUltimate(): Promise<void> {
   const tenant = {
-    id: 't-ultimate', slug: 'test-shop', plan_id: 'plan_ultimate', extra_features: [],
-    activity_type: 'retail_general', status: 'active', trial_ends_at: FUTURE,
+    id: 't-ultimate',
+    slug: 'test-shop',
+    plan_id: 'plan_ultimate',
+    extra_features: [],
+    activity_type: 'retail_general',
+    status: 'active',
+    trial_ends_at: FUTURE,
   };
   const service = buildService(tenant, []);
   let caught: unknown;

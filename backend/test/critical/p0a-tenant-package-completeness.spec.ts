@@ -15,15 +15,22 @@ assert.ok(preflightAt > 0 && preflightAt < deleteAt, 'preflight missing tables b
 assert.ok(countAt > deleteAt && countAt < orphanAt, 'count inserted rows before commit');
 assert.ok(fn.includes('ownedRows(spec, target.tenantId)'), 'preflight child tables too');
 const m: PackageManifest = {
-  format: PACKAGE_FORMAT, createdAt: '2026-10-25T00:00:00Z', source: 'spec',
+  format: PACKAGE_FORMAT,
+  createdAt: '2026-10-25T00:00:00Z',
+  source: 'spec',
   tenant: { id: 't1', slug: 't1', businessName: '', ownerName: '', ownerPhone: '', ownerEmail: '', activityType: null },
-  origin: null, migration: { latest: '', count: 0 }, offlineIdBlock: null,
+  origin: null,
+  migration: { latest: '', count: 0 },
+  offlineIdBlock: null,
   tables: { products: { rows: 1, columns: ['id', 'tenant_id'] } },
 };
 function pkg(manifest: PackageManifest, rows: string[]): Buffer {
   return gzipSync(Buffer.from([PACKAGE_FORMAT + '\t' + JSON.stringify(manifest), ...rows].join('\n')));
 }
 assert.throws(() => readPackage(pkg(m, ['customers\t[{"id":1}]'])), /Undeclared package table/);
-assert.throws(() => readPackage(pkg({ ...m, tables: { products: { rows: -1, columns: [] } } }, [])), /Invalid table inventory/);
+assert.throws(
+  () => readPackage(pkg({ ...m, tables: { products: { rows: -1, columns: [] } } }, [])),
+  /Invalid table inventory/,
+);
 assert.throws(() => readPackage(pkg(m, [])), /missing the rows/);
 console.log('p0a-tenant-package-completeness: source contract and archive parser checks passed');

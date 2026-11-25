@@ -126,35 +126,100 @@ async function seedFoundation(db: Kysely<Database>, currency: string): Promise<v
   // seeded around the Kuwait hour, proving the van writer evaluates
   // them in the tenant zone and not the host zone.
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'timezone', value: '"Asia/Kuwait"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('van_sales_trips').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true })
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' })
+    .execute();
 }
 
-async function seedProduct(db: Kysely<Database>, id: number, retail: number, cost: number, vanQty: number): Promise<void> {
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  retail: number,
+  cost: number,
+  vanQty: number,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({ id, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${id}`, stock_qty: vanQty, cost_price: cost, retail_price: retail, credit_price: 0, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Product ${id}`,
+      stock_qty: vanQty,
+      cost_price: cost,
+      retail_price: retail,
+      credit_price: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty })
+    .execute();
 }
 
 async function seedOffer(db: Kysely<Database>, offer: Record<string, unknown>): Promise<void> {
-  await (db as any).insertInto('product_offers').values({ tenant_id: TENANT, is_active: true, ...offer }).execute();
+  await (db as any)
+    .insertInto('product_offers')
+    .values({ tenant_id: TENANT, is_active: true, ...offer })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -163,17 +228,38 @@ function buildService(db: Kysely<Database>): VanSalesService {
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   return service;
 }
 
 async function saleItems(db: Kysely<Database>, saleId: number): Promise<any[]> {
-  return (db as any).selectFrom('sale_items').selectAll().where('sale_id', '=', saleId).where('tenant_id', '=', TENANT).execute();
+  return (db as any)
+    .selectFrom('sale_items')
+    .selectAll()
+    .where('sale_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .execute();
 }
 
 function pad2(n: number): string {
@@ -197,21 +283,27 @@ async function main(): Promise<void> {
       await seedOffer(db, { product_id: 101, offer_type: 'percent', value: 20, min_qty: 1 });
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 3 }],
       });
       const items = await saleItems(db, res.saleId);
       assert.equal(Number(items[0].unit_price), 80);
       assert.equal(Number(items[0].unit_offer_savings), 20);
       const posPrice = calculateAllowedSaleUnitPrice({
-        retailPrice: 100, priceType: 'retail', qty: 3, moneyDigits: 2,
+        retailPrice: 100,
+        priceType: 'retail',
+        qty: 3,
+        moneyDigits: 2,
         offers: [
           { offer_type: 'fixed', value: 5, min_qty: 3 },
           { offer_type: 'percent', value: 20, min_qty: 1 },
         ],
       });
       assert.equal(posPrice, 80);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. E2E sold-quantity basis: 1 carton x12, offers 50% at min_qty 10
@@ -227,20 +319,27 @@ async function main(): Promise<void> {
       await seedOffer(db, { product_id: 102, offer_type: 'percent', value: 10, min_qty: 1 });
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 102, qty: 1, unitMultiplier: 12 }],
       });
       const items = await saleItems(db, res.saleId);
       assert.equal(Number(items[0].unit_price), 108);
       const posPrice = calculateAllowedSaleUnitPrice({
-        retailPrice: 10, priceType: 'retail', qty: 1, unitMultiplier: 12, moneyDigits: 2,
+        retailPrice: 10,
+        priceType: 'retail',
+        qty: 1,
+        unitMultiplier: 12,
+        moneyDigits: 2,
         offers: [
           { offer_type: 'percent', value: 50, min_qty: 10 },
           { offer_type: 'percent', value: 10, min_qty: 1 },
         ],
       });
       assert.equal(posPrice, 108);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. E2E happy-hour windows: the 30% offer sits outside its window,
@@ -257,18 +356,29 @@ async function main(): Promise<void> {
       // P7: the van writer evaluates windows in the TENANT zone
       // (Asia/Kuwait, seeded in seedFoundation) — seed the windows
       // around the Kuwait hour, not the host hour.
-      const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kuwait', hour: 'numeric', hour12: false }).format(now));
+      const h = Number(
+        new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kuwait', hour: 'numeric', hour12: false }).format(now),
+      );
       await seedOffer(db, {
-        product_id: 103, offer_type: 'percent', value: 10, min_qty: 1,
-        happy_hour_start: hhmm(h - 1, 0), happy_hour_end: hhmm(h + 1, 59),
+        product_id: 103,
+        offer_type: 'percent',
+        value: 10,
+        min_qty: 1,
+        happy_hour_start: hhmm(h - 1, 0),
+        happy_hour_end: hhmm(h + 1, 59),
       });
       await seedOffer(db, {
-        product_id: 103, offer_type: 'percent', value: 30, min_qty: 1,
-        happy_hour_start: hhmm(h + 3, 0), happy_hour_end: hhmm(h + 4, 59),
+        product_id: 103,
+        offer_type: 'percent',
+        value: 30,
+        min_qty: 1,
+        happy_hour_start: hhmm(h + 3, 0),
+        happy_hour_end: hhmm(h + 4, 59),
       });
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 103, qty: 1 }],
       });
       const items = await saleItems(db, res.saleId);
@@ -280,15 +390,33 @@ async function main(): Promise<void> {
       // Without the tz the host-local default would read the Kuwait
       // windows in the host zone and disagree (100).
       const posPrice = calculateAllowedSaleUnitPrice({
-        retailPrice: 100, priceType: 'retail', qty: 1, moneyDigits: 2, now: specNow,
+        retailPrice: 100,
+        priceType: 'retail',
+        qty: 1,
+        moneyDigits: 2,
+        now: specNow,
         businessTimezone: 'Asia/Kuwait',
         offers: [
-          { offer_type: 'percent', value: 10, min_qty: 1, happy_hour_start: hhmm(h - 1, 0), happy_hour_end: hhmm(h + 1, 59) },
-          { offer_type: 'percent', value: 30, min_qty: 1, happy_hour_start: hhmm(h + 3, 0), happy_hour_end: hhmm(h + 4, 59) },
+          {
+            offer_type: 'percent',
+            value: 10,
+            min_qty: 1,
+            happy_hour_start: hhmm(h - 1, 0),
+            happy_hour_end: hhmm(h + 1, 59),
+          },
+          {
+            offer_type: 'percent',
+            value: 30,
+            min_qty: 1,
+            happy_hour_start: hhmm(h + 3, 0),
+            happy_hour_end: hhmm(h + 4, 59),
+          },
         ],
       });
       assert.equal(posPrice, 90);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 4. E2E 3dp tenant (KWD): 20.255 -10% = 18.229 at book digits,
@@ -301,18 +429,24 @@ async function main(): Promise<void> {
       await seedOffer(db, { product_id: 104, offer_type: 'percent', value: 10, min_qty: 1 });
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 104, qty: 1 }],
       });
       const items = await saleItems(db, res.saleId);
       assert.equal(Number(items[0].unit_price), 18.229);
       assert.equal(roundMoney(20.255 * 0.9, 3), 18.229);
       const posPrice = calculateAllowedSaleUnitPrice({
-        retailPrice: 20.255, priceType: 'retail', qty: 1, moneyDigits: 3,
+        retailPrice: 20.255,
+        priceType: 'retail',
+        qty: 1,
+        moneyDigits: 3,
         offers: [{ offer_type: 'percent', value: 10, min_qty: 1 }],
       });
       assert.equal(posPrice, 18.229);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 5. BOGO bonus gate is window-aware: the only BOGO sits in a
@@ -326,23 +460,42 @@ async function main(): Promise<void> {
       await seedProduct(db, 105, 100, 50, 100);
       // P7: window seeded around the Kuwait hour (tenant zone), as
       // in case 3 — the BOGO must stay inactive in the tenant zone.
-      const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kuwait', hour: 'numeric', hour12: false }).format(new Date()));
+      const h = Number(
+        new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kuwait', hour: 'numeric', hour12: false }).format(
+          new Date(),
+        ),
+      );
       await seedOffer(db, {
-        product_id: 105, offer_type: 'bogo', value: 100, min_qty: 1,
-        bogo_buy_qty: 1, bogo_get_qty: 1, bogo_discount_percent: 100,
-        happy_hour_start: hhmm(h + 3, 0), happy_hour_end: hhmm(h + 4, 59),
+        product_id: 105,
+        offer_type: 'bogo',
+        value: 100,
+        min_qty: 1,
+        bogo_buy_qty: 1,
+        bogo_get_qty: 1,
+        bogo_discount_percent: 100,
+        happy_hour_start: hhmm(h + 3, 0),
+        happy_hour_end: hhmm(h + 4, 59),
       });
       const service = buildService(db);
       await assert.rejects(
         service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 105, qty: 1, isBonus: true }],
         }),
-        (err: any) => String(err?.message || err).includes('BONUS_REQUIRES_SUPERVISOR_PIN') || String(err?.code || '').includes('BONUS_REQUIRES_SUPERVISOR_PIN'),
+        (err: any) =>
+          String(err?.message || err).includes('BONUS_REQUIRES_SUPERVISOR_PIN') ||
+          String(err?.code || '').includes('BONUS_REQUIRES_SUPERVISOR_PIN'),
       );
-      const count = await (db as any).selectFrom('sales').select(sql`count(*)`.as('c')).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow() as any;
+      const count = (await (db as any)
+        .selectFrom('sales')
+        .select(sql`count(*)`.as('c'))
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(count.c), 0);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 6. Direct selector, fixed instant (Wednesday 2026-11-04 10:30
@@ -359,12 +512,30 @@ async function main(): Promise<void> {
     assert.ok(!isOfferActive(thuOnly, todayIso, now));
     assert.equal(pickBestApplicableOffer([wedOnly, thuOnly], todayIso, 1, 100, now, 2), wedOnly);
 
-    const inWindow: SaleProductOfferRow = { offer_type: 'percent', value: 10, min_qty: 1, happy_hour_start: '09:00', happy_hour_end: '12:00' };
-    const outWindow: SaleProductOfferRow = { offer_type: 'percent', value: 30, min_qty: 1, happy_hour_start: '13:00', happy_hour_end: '15:00' };
+    const inWindow: SaleProductOfferRow = {
+      offer_type: 'percent',
+      value: 10,
+      min_qty: 1,
+      happy_hour_start: '09:00',
+      happy_hour_end: '12:00',
+    };
+    const outWindow: SaleProductOfferRow = {
+      offer_type: 'percent',
+      value: 30,
+      min_qty: 1,
+      happy_hour_start: '13:00',
+      happy_hour_end: '15:00',
+    };
     assert.equal(pickBestApplicableOffer([inWindow, outWindow], todayIso, 1, 100, now, 2), inWindow);
 
     const expired: SaleProductOfferRow = { offer_type: 'percent', value: 30, min_qty: 1, end_date: '2026-11-03' };
-    const live: SaleProductOfferRow = { offer_type: 'percent', value: 10, min_qty: 1, start_date: '2026-11-01', end_date: '2026-11-30' };
+    const live: SaleProductOfferRow = {
+      offer_type: 'percent',
+      value: 10,
+      min_qty: 1,
+      start_date: '2026-11-01',
+      end_date: '2026-11-30',
+    };
     assert.equal(pickBestApplicableOffer([expired, live], todayIso, 1, 100, now, 2), live);
 
     // Same adjusted price (90): the higher minimum quantity wins
@@ -378,7 +549,13 @@ async function main(): Promise<void> {
     const pct: SaleProductOfferRow = { offer_type: 'percent', value: 20, min_qty: 1 };
     assert.equal(pickBestApplicableOffer([bundle, pct], todayIso, 4, 100, now, 2), bundle);
     assert.equal(
-      calculateAllowedSaleUnitPrice({ retailPrice: 100, priceType: 'retail', qty: 4, moneyDigits: 2, offers: [bundle, pct] }),
+      calculateAllowedSaleUnitPrice({
+        retailPrice: 100,
+        priceType: 'retail',
+        qty: 4,
+        moneyDigits: 2,
+        offers: [bundle, pct],
+      }),
       75,
     );
   }
@@ -391,19 +568,36 @@ async function main(): Promise<void> {
   // reads the real file. The selector calls now carry the tenant
   // timezone, and the offer day derives from it.)
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'),
+      'utf8',
+    );
     const start = source.indexOf('async executeFieldSaleInternal(');
     const end = source.indexOf('async listDriverSales(');
     assert.ok(start > 0 && end > start);
     const body = source.slice(start, end);
-    assert.ok(body.includes('pickBestApplicableOffer(activeOffers, offerTodayIso, inputQty, baseUnitPrice, saleNow, bookDigits, businessTimezone)'), 'van calls the shared selector on sold qty in the tenant zone');
-    assert.ok(body.includes('isOfferActive(o, offerTodayIso, saleNow, businessTimezone)'), 'BOGO bonus gate uses the shared activity rule in the tenant zone');
-    assert.ok(body.includes("'happy_hour_start', 'happy_hour_end', 'days_of_week'"), 'window columns fetched for selection');
+    assert.ok(
+      body.includes(
+        'pickBestApplicableOffer(activeOffers, offerTodayIso, inputQty, baseUnitPrice, saleNow, bookDigits, businessTimezone)',
+      ),
+      'van calls the shared selector on sold qty in the tenant zone',
+    );
+    assert.ok(
+      body.includes('isOfferActive(o, offerTodayIso, saleNow, businessTimezone)'),
+      'BOGO bonus gate uses the shared activity rule in the tenant zone',
+    );
+    assert.ok(
+      body.includes("'happy_hour_start', 'happy_hour_end', 'days_of_week'"),
+      'window columns fetched for selection',
+    );
     for (const gone of ['getMinQty(b) - getMinQty(a)', 'baseQty >= getMinQty', 'toISOString().slice(0, 10)']) {
       assert.ok(!body.includes(gone), `old van selector must be gone: ${gone}`);
     }
     const helper = readFileSync(resolve(__dirname, '../../src/modules/sales/helpers/sales-write.helper.ts'), 'utf8');
-    assert.ok(helper.includes('export function todayLocalIsoDate('), 'shared offer-clock date is exported for both writers');
+    assert.ok(
+      helper.includes('export function todayLocalIsoDate('),
+      'shared offer-clock date is exported for both writers',
+    );
   }
 
   // 8. Invariant pin: exactly once. (Last-line ownership passes to

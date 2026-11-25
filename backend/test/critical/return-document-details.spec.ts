@@ -41,8 +41,13 @@ const OTHER_TENANT = 't2';
 const ACCOUNT = 'a1';
 
 const ADMIN = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['returns', 'accounts'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['returns', 'accounts'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -66,51 +71,162 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seed(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('suppliers').values({ id: 3, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد اختبار' }).execute();
-  await anyDb.insertInto('customers').values({ id: 5, tenant_id: TENANT, account_id: ACCOUNT, name: 'عميل اختبار' }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'الفرع الرئيسي', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'المخزن الرئيسي', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('purchases').values({ id: 1286, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'PUR-1286', supplier_id: 3 }).execute();
-  await anyDb.insertInto('sales').values({ id: 16309, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'Z-261105-16309', customer_id: 5 }).execute();
-  await anyDb.insertInto('return_documents').values({
-    id: 42, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'ZPR-261105-0592', return_type: 'purchase',
-    invoice_id: 1286, settlement_mode: 'payable', refund_method: 'cash', total: 100, note: 'مرتجع مشتريات اختبار',
-    branch_id: 1, location_id: 10, created_by: 1, created_at: '2026-11-05T10:00:00.000Z',
-  }).execute();
-  await anyDb.insertInto('return_documents').values({
-    id: 43, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'ZR-261105-0591', return_type: 'sale',
-    invoice_id: 16309, settlement_mode: 'cash_refund', refund_method: 'cash', total: 150, note: 'مرتجع مبيعات اختبار',
-    branch_id: 1, location_id: 10, created_by: 1, created_at: '2026-11-05T11:00:00.000Z',
-  }).execute();
-  await anyDb.insertInto('return_documents').values({
-    id: 44, tenant_id: OTHER_TENANT, account_id: ACCOUNT, doc_no: 'ZPR-261105-0593', return_type: 'purchase',
-    invoice_id: 1286, settlement_mode: 'payable', refund_method: 'cash', total: 50, note: 'مرتجع مستأجر آخر',
-    branch_id: null, location_id: null, created_by: 1, created_at: '2026-11-05T12:00:00.000Z',
-  }).execute();
-  await anyDb.insertInto('return_items').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, return_document_id: 42, product_id: 10,
-    product_name: 'صنف اختبار', qty: 2, unit_total: 50, line_total: 100, allocated_tax: 0,
-  }).execute();
-  await anyDb.insertInto('return_items').values({
-    id: 2, tenant_id: TENANT, account_id: ACCOUNT, return_document_id: 43, product_id: 11,
-    product_name: 'صنف مبيعات', qty: 1, unit_total: 150, line_total: 150, allocated_tax: 0,
-  }).execute();
-  await anyDb.insertInto('journal_entries').values({
-    id: 15001, tenant_id: TENANT, account_id: ACCOUNT, entry_no: 'JE-00014983',
-    entry_date: '2026-11-05', description: 'قيد مردودات مشتريات', source_type: 'purchase_return',
-    source_id: 42, status: 'posted', branch_id: 1, location_id: 10, created_by: 1,
-  }).execute();
+  await anyDb
+    .insertInto('suppliers')
+    .values({ id: 3, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد اختبار' })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({ id: 5, tenant_id: TENANT, account_id: ACCOUNT, name: 'عميل اختبار' })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'الفرع الرئيسي', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'المخزن الرئيسي',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('purchases')
+    .values({ id: 1286, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'PUR-1286', supplier_id: 3 })
+    .execute();
+  await anyDb
+    .insertInto('sales')
+    .values({ id: 16309, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'Z-261105-16309', customer_id: 5 })
+    .execute();
+  await anyDb
+    .insertInto('return_documents')
+    .values({
+      id: 42,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'ZPR-261105-0592',
+      return_type: 'purchase',
+      invoice_id: 1286,
+      settlement_mode: 'payable',
+      refund_method: 'cash',
+      total: 100,
+      note: 'مرتجع مشتريات اختبار',
+      branch_id: 1,
+      location_id: 10,
+      created_by: 1,
+      created_at: '2026-11-05T10:00:00.000Z',
+    })
+    .execute();
+  await anyDb
+    .insertInto('return_documents')
+    .values({
+      id: 43,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'ZR-261105-0591',
+      return_type: 'sale',
+      invoice_id: 16309,
+      settlement_mode: 'cash_refund',
+      refund_method: 'cash',
+      total: 150,
+      note: 'مرتجع مبيعات اختبار',
+      branch_id: 1,
+      location_id: 10,
+      created_by: 1,
+      created_at: '2026-11-05T11:00:00.000Z',
+    })
+    .execute();
+  await anyDb
+    .insertInto('return_documents')
+    .values({
+      id: 44,
+      tenant_id: OTHER_TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'ZPR-261105-0593',
+      return_type: 'purchase',
+      invoice_id: 1286,
+      settlement_mode: 'payable',
+      refund_method: 'cash',
+      total: 50,
+      note: 'مرتجع مستأجر آخر',
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+      created_at: '2026-11-05T12:00:00.000Z',
+    })
+    .execute();
+  await anyDb
+    .insertInto('return_items')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      return_document_id: 42,
+      product_id: 10,
+      product_name: 'صنف اختبار',
+      qty: 2,
+      unit_total: 50,
+      line_total: 100,
+      allocated_tax: 0,
+    })
+    .execute();
+  await anyDb
+    .insertInto('return_items')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      return_document_id: 43,
+      product_id: 11,
+      product_name: 'صنف مبيعات',
+      qty: 1,
+      unit_total: 150,
+      line_total: 150,
+      allocated_tax: 0,
+    })
+    .execute();
+  await anyDb
+    .insertInto('journal_entries')
+    .values({
+      id: 15001,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      entry_no: 'JE-00014983',
+      entry_date: '2026-11-05',
+      description: 'قيد مردودات مشتريات',
+      source_type: 'purchase_return',
+      source_id: 42,
+      status: 'posted',
+      branch_id: 1,
+      location_id: 10,
+      created_by: 1,
+    })
+    .execute();
 }
 
 async function main(): Promise<void> {
   const { db } = await makeDb();
   try {
     await seed(db);
-    const service = new ReturnsService(db as never, undefined as never, undefined as never, undefined as never, undefined as never);
+    const service = new ReturnsService(
+      db as never,
+      undefined as never,
+      undefined as never,
+      undefined as never,
+      undefined as never,
+    );
 
     {
-      const result = await service.getReturnById(42, ADMIN) as any;
+      const result = (await service.getReturnById(42, ADMIN)) as any;
       const doc = result.returnDocument;
       assert.equal(doc.id, '42');
       assert.equal(doc.docNo, 'ZPR-261105-0592');
@@ -133,7 +249,7 @@ async function main(): Promise<void> {
     }
 
     {
-      const result = await service.getReturnById(43, ADMIN) as any;
+      const result = (await service.getReturnById(43, ADMIN)) as any;
       const doc = result.returnDocument;
       assert.equal(doc.docNo, 'ZR-261105-0591');
       assert.equal(doc.returnType, 'sale');
@@ -148,28 +264,22 @@ async function main(): Promise<void> {
     }
 
     {
-      await assert.rejects(
-        service.getReturnById(999, ADMIN),
-        (error: unknown) => {
-          assert.ok(error instanceof AppError, 'missing return must throw AppError');
-          assert.equal((error as AppError).code, 'RETURN_NOT_FOUND');
-          assert.notEqual((error as AppError).code, 'PURCHASE_NOT_FOUND');
-          assert.equal((error as AppError).statusCode, 404);
-          return true;
-        },
-      );
+      await assert.rejects(service.getReturnById(999, ADMIN), (error: unknown) => {
+        assert.ok(error instanceof AppError, 'missing return must throw AppError');
+        assert.equal((error as AppError).code, 'RETURN_NOT_FOUND');
+        assert.notEqual((error as AppError).code, 'PURCHASE_NOT_FOUND');
+        assert.equal((error as AppError).statusCode, 404);
+        return true;
+      });
       console.log('  missing return throws RETURN_NOT_FOUND, never PURCHASE_NOT_FOUND passed');
     }
 
     {
-      await assert.rejects(
-        service.getReturnById(44, ADMIN),
-        (error: unknown) => {
-          assert.ok(error instanceof AppError, 'other-tenant return must throw AppError');
-          assert.equal((error as AppError).code, 'RETURN_NOT_FOUND');
-          return true;
-        },
-      );
+      await assert.rejects(service.getReturnById(44, ADMIN), (error: unknown) => {
+        assert.ok(error instanceof AppError, 'other-tenant return must throw AppError');
+        assert.equal((error as AppError).code, 'RETURN_NOT_FOUND');
+        return true;
+      });
       console.log('  other-tenant return is invisible passed');
     }
 

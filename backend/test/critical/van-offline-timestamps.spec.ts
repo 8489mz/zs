@@ -126,55 +126,180 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('settings').values([
-    { tenant_id: TENANT, key: 'currency', value: 'EGP' },
-    { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
-  ]).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values([
-    { id: 1, tenant_id: TENANT, username: 'sys', phone: null, is_active: true },
-    { id: 2, tenant_id: TENANT, username: 'sup', phone: null, role: 'admin', is_active: true },
-  ]).execute();
+  await anyDb
+    .insertInto('settings')
+    .values([
+      { tenant_id: TENANT, key: 'currency', value: 'EGP' },
+      { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values([
+      { id: 1, tenant_id: TENANT, username: 'sys', phone: null, is_active: true },
+      { id: 2, tenant_id: TENANT, username: 'sup', phone: null, role: 'admin', is_active: true },
+    ])
+    .execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [1160, '1160', 'asset'], [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'],
-    [5100, '5100', 'expense'], [6400, '6400', 'expense'], [7100, '7100', 'revenue'], [7200, '7200', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [1160, '1160', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
+    [6400, '6400', 'expense'],
+    [7100, '7100', 'revenue'],
+    [7200, '7200', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-    lock_date_all: null, lock_date_non_adviser: null, lock_date_tax: null,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', phone: null, van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('customers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer 1', balance: 500, credit_limit: 10000, is_active: true }).execute();
-  await anyDb.insertInto('cashier_shifts').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'CS-1', opened_by: 2, opening_cash: 0, status: 'open', branch_id: null, location_id: null }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+      lock_date_all: null,
+      lock_date_non_adviser: null,
+      lock_date_tax: null,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 1',
+      phone: null,
+      van_location_id: 20,
+      is_van_rep: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer 1',
+      balance: 500,
+      credit_limit: 10000,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'CS-1',
+      opened_by: 2,
+      opening_cash: 0,
+      status: 'open',
+      branch_id: null,
+      location_id: null,
+    })
+    .execute();
 }
 
 async function seedTrip(db: Kysely<Database>, id: number): Promise<void> {
-  await (db as any).insertInto('van_sales_trips').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, vehicle_id: null,
-    shift_name: null, start_odometer: 100, end_odometer: null, distance_km: null,
-    van_location_id: 20, source_warehouse_id: 10, status: 'open',
-    settlement_status: 'open', loaded_amount: 0, sales_amount: 0, cash_collected: 0,
-    credit_sales: 0, returns_amount: 0, cash_refunds: 0, total_instapay_sales: 0,
-    total_instapay_collections: 0, variance: null, stock_variance_details: null, notes: null,
-    night_stock_approved_by: null, night_stock_notes: null,
-    business_day: null, submitted_per_day_cash: null,
-    opened_at: '2026-11-09T08:00:00+02:00',
-  }).execute();
+  await (db as any)
+    .insertInto('van_sales_trips')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: 1,
+      vehicle_id: null,
+      shift_name: null,
+      start_odometer: 100,
+      end_odometer: null,
+      distance_km: null,
+      van_location_id: 20,
+      source_warehouse_id: 10,
+      status: 'open',
+      settlement_status: 'open',
+      loaded_amount: 0,
+      sales_amount: 0,
+      cash_collected: 0,
+      credit_sales: 0,
+      returns_amount: 0,
+      cash_refunds: 0,
+      total_instapay_sales: 0,
+      total_instapay_collections: 0,
+      variance: null,
+      stock_variance_details: null,
+      notes: null,
+      night_stock_approved_by: null,
+      night_stock_notes: null,
+      business_day: null,
+      submitted_per_day_cash: null,
+      opened_at: '2026-11-09T08:00:00+02:00',
+    })
+    .execute();
 }
 
-async function seedProduct(db: Kysely<Database>, id: number, retail: number, cost: number, vanQty: number): Promise<void> {
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  retail: number,
+  cost: number,
+  vanQty: number,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({ id, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${id}`, stock_qty: vanQty, cost_price: cost, retail_price: retail, credit_price: 0, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Product ${id}`,
+      stock_qty: vanQty,
+      cost_price: cost,
+      retail_price: retail,
+      credit_price: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -183,11 +308,27 @@ function buildService(db: Kysely<Database>): VanSalesService {
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   return service;
 }
@@ -209,7 +350,7 @@ function buildLifecycle(db: Kysely<Database>): VanTripLifecycleService {
     deductVanSalePharmacyBatches: async () => [],
     moveVanInventoryBatches: async () => 0,
     deductVanSaleInventoryBatches: async () => [],
-    resolveSystemAuthContext: async () => ({ ...ADMIN, userId: 2 } as never),
+    resolveSystemAuthContext: async () => ({ ...ADMIN, userId: 2 }) as never,
     recordSuspicionEvent: async () => ({}),
     listRepServedCustomerIds: async () => new Set<number>(),
     resolveRepLinkedUserId: async () => null,
@@ -217,15 +358,30 @@ function buildLifecycle(db: Kysely<Database>): VanTripLifecycleService {
 }
 
 async function saleRow(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll().where('id', '=', id).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', id)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function paymentRow(db: Kysely<Database>, tripId: number): Promise<any> {
-  return (db as any).selectFrom('customer_payments').selectAll().where('van_trip_id', '=', tripId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('customer_payments')
+    .selectAll()
+    .where('van_trip_id', '=', tripId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function returnRow(db: Kysely<Database>, tripId: number): Promise<any> {
-  return (db as any).selectFrom('van_field_returns').selectAll().where('trip_id', '=', tripId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('van_field_returns')
+    .selectAll()
+    .where('trip_id', '=', tripId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function salesCount(db: Kysely<Database>): Promise<number> {
@@ -257,7 +413,8 @@ async function main(): Promise<void> {
       await seedTrip(db, 1);
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 1 }],
         offlineCreatedAt: offline3d,
       });
@@ -269,7 +426,9 @@ async function main(): Promise<void> {
       // The booked day is the offline day, not the sync day.
       assert.notEqual(String(sale.created_at).slice(0, 10), new Date().toISOString().slice(0, 10));
       console.log('1. offline sale keeps its instant passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. A 30-day-old offline stamp is refused and writes nothing.
@@ -283,16 +442,21 @@ async function main(): Promise<void> {
       let thrown: unknown = null;
       try {
         await service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 1 }],
           offlineCreatedAt: new Date(nowMs - 30 * DAY_MS).toISOString(),
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown, 'a 30-day-old stamp must throw');
       assert.equal(errorCode(thrown), 'OFFLINE_TIMESTAMP_INVALID');
       assert.equal(await salesCount(db), 0);
       console.log('2. 30-day-old stamp refused passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. The 7-day boundary, pinned against a fixed now (wrapper and
@@ -305,11 +469,19 @@ async function main(): Promise<void> {
     assert.ok(validateVanOfflineCreatedAt(justInside, fixedNow) instanceof Date);
     assert.ok(validateOfflineCreatedAt(justInside, fixedNow) instanceof Date);
     let thrown: unknown = null;
-    try { validateVanOfflineCreatedAt(justOutside, fixedNow); } catch (e) { thrown = e; }
+    try {
+      validateVanOfflineCreatedAt(justOutside, fixedNow);
+    } catch (e) {
+      thrown = e;
+    }
     assert.ok(thrown);
     assert.equal(errorCode(thrown), 'OFFLINE_TIMESTAMP_INVALID');
     thrown = null;
-    try { validateOfflineCreatedAt(justOutside, fixedNow); } catch (e) { thrown = e; }
+    try {
+      validateOfflineCreatedAt(justOutside, fixedNow);
+    } catch (e) {
+      thrown = e;
+    }
     assert.ok(thrown);
     assert.equal(errorCode(thrown), 'OFFLINE_TIMESTAMP_INVALID');
     console.log('3. 7-day boundary passed');
@@ -318,9 +490,15 @@ async function main(): Promise<void> {
   // 4. The future window: +4 minutes passes, +6 minutes fails.
   {
     const fixedNow = new Date('2026-11-16T12:00:00.000Z');
-    assert.ok(validateVanOfflineCreatedAt(new Date(fixedNow.getTime() + 4 * 60_000).toISOString(), fixedNow) instanceof Date);
+    assert.ok(
+      validateVanOfflineCreatedAt(new Date(fixedNow.getTime() + 4 * 60_000).toISOString(), fixedNow) instanceof Date,
+    );
     let thrown: unknown = null;
-    try { validateVanOfflineCreatedAt(new Date(fixedNow.getTime() + 6 * 60_000).toISOString(), fixedNow); } catch (e) { thrown = e; }
+    try {
+      validateVanOfflineCreatedAt(new Date(fixedNow.getTime() + 6 * 60_000).toISOString(), fixedNow);
+    } catch (e) {
+      thrown = e;
+    }
     assert.ok(thrown);
     assert.equal(errorCode(thrown), 'OFFLINE_TIMESTAMP_INVALID');
     console.log('4. future window passed');
@@ -331,7 +509,11 @@ async function main(): Promise<void> {
   {
     for (const bad of ['not-a-date', '1999-12-31T00:00:00Z', '32/13/2026']) {
       let thrown: unknown = null;
-      try { validateVanOfflineCreatedAt(bad); } catch (e) { thrown = e; }
+      try {
+        validateVanOfflineCreatedAt(bad);
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown, `${bad} must throw`);
       assert.equal(errorCode(thrown), 'OFFLINE_TIMESTAMP_INVALID');
     }
@@ -352,14 +534,17 @@ async function main(): Promise<void> {
       const service = buildService(db);
       const before = Date.now();
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 1 }],
       });
       const sale = await saleRow(db, res.saleId);
       assert.ok(Math.abs(new Date(sale.created_at).getTime() - before) < 60_000);
       assert.equal(sale.received_at, null);
       console.log('6. online sale unchanged passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 7. Collection + return carry their offline stamps too. The
@@ -374,19 +559,29 @@ async function main(): Promise<void> {
       await seedTrip(db, 1);
       const service = buildService(db);
       const saleRes = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', customerId: 1,
+        tripId: 1,
+        paymentMethod: 'cash',
+        customerId: 1,
         items: [{ productId: 101, qty: 1 }],
       });
       await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 1, amount: 200, paymentMethod: 'cash',
-        clientTxId: 'p2-col-1', offlineCreatedAt: offline3d,
+        tripId: 1,
+        customerId: 1,
+        amount: 200,
+        paymentMethod: 'cash',
+        clientTxId: 'p2-col-1',
+        offlineCreatedAt: offline3d,
       });
       const payment = await paymentRow(db, 1);
       assert.equal(new Date(payment.created_at).getTime(), new Date(offline3d).getTime());
       assert.ok(payment.received_at);
       assert.ok(new Date(payment.received_at).getTime() > new Date(offline3d).getTime());
       await service.submitFieldReturn(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 1, saleId: saleRes.saleId, returnReason: 'damaged', refundMethod: 'cash',
+        tripId: 1,
+        customerId: 1,
+        saleId: saleRes.saleId,
+        returnReason: 'damaged',
+        refundMethod: 'cash',
         items: [{ productId: 101, qty: 1, unitPrice: 100 }],
         offlineCreatedAt: offline3d,
       });
@@ -395,7 +590,9 @@ async function main(): Promise<void> {
       assert.ok(ret.received_at);
       assert.ok(new Date(ret.received_at).getTime() > new Date(offline3d).getTime());
       console.log('7. collection + return stamps passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 8. Closed period: an offline date inside the lock is refused,
@@ -408,26 +605,39 @@ async function main(): Promise<void> {
       await seedTrip(db, 1);
       const yesterday = new Date(nowMs - DAY_MS).toISOString().slice(0, 10);
       const offline2d = new Date(nowMs - 2 * DAY_MS).toISOString();
-      await (db as any).updateTable('accounting_settings').set({ lock_date_all: yesterday }).where('tenant_id', '=', TENANT).execute();
+      await (db as any)
+        .updateTable('accounting_settings')
+        .set({ lock_date_all: yesterday })
+        .where('tenant_id', '=', TENANT)
+        .execute();
       const service = buildService(db);
       let thrown: unknown = null;
       try {
         await service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 1 }],
           offlineCreatedAt: offline2d,
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown, 'an offline sale into a closed period must throw');
-      assert.ok(errorMessage(thrown).includes('مقفلة'), `message must name the closed period, got: ${errorMessage(thrown)}`);
+      assert.ok(
+        errorMessage(thrown).includes('مقفلة'),
+        `message must name the closed period, got: ${errorMessage(thrown)}`,
+      );
       assert.equal(await salesCount(db), 0);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 1 }],
       });
       assert.ok(res.saleId);
       console.log('8. closed-period re-check passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 9. GPS missing is recorded, never a block.
@@ -441,15 +651,18 @@ async function main(): Promise<void> {
       await seedTrip(db, 3);
       const service = buildService(db);
       const withGps = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash',
+        tripId: 1,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 1 }],
-        deliveryGpsLat: 30.0, deliveryGpsLng: 31.0,
+        deliveryGpsLat: 30.0,
+        deliveryGpsLng: 31.0,
       });
       const gpsSale = await saleRow(db, withGps.saleId);
       assert.equal(Number(gpsSale.delivery_gps_lat), 30);
       assert.equal(gpsSale.gps_missing_reason, null);
       const timedOut = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 2, paymentMethod: 'cash',
+        tripId: 2,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 1 }],
         gpsMissingReason: 'timeout',
       });
@@ -457,24 +670,35 @@ async function main(): Promise<void> {
       assert.equal(timeoutSale.gps_missing_reason, 'timeout');
       assert.equal(timeoutSale.delivery_gps_lat, null);
       const neither = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 3, paymentMethod: 'cash',
+        tripId: 3,
+        paymentMethod: 'cash',
         items: [{ productId: 101, qty: 1 }],
       });
       const neitherSale = await saleRow(db, neither.saleId);
       assert.equal(neitherSale.gps_missing_reason, null);
       console.log('9. GPS missing recorded, never a block passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 10. Naive local-time strings (no offset) are rejected by the
   // wrapper and through the service.
   {
     let thrown: unknown = null;
-    try { validateVanOfflineCreatedAt('2026-11-13 10:00:00'); } catch (e) { thrown = e; }
+    try {
+      validateVanOfflineCreatedAt('2026-11-13 10:00:00');
+    } catch (e) {
+      thrown = e;
+    }
     assert.ok(thrown);
     assert.equal(errorCode(thrown), 'OFFLINE_TIMESTAMP_INVALID');
     thrown = null;
-    try { validateVanOfflineCreatedAt('2026-11-13T10:00:00'); } catch (e) { thrown = e; }
+    try {
+      validateVanOfflineCreatedAt('2026-11-13T10:00:00');
+    } catch (e) {
+      thrown = e;
+    }
     assert.ok(thrown);
     assert.equal(errorCode(thrown), 'OFFLINE_TIMESTAMP_INVALID');
     const { pg, db } = await makeDb();
@@ -486,16 +710,21 @@ async function main(): Promise<void> {
       thrown = null;
       try {
         await service.executeFieldSale(1, TENANT, ACCOUNT, {
-          tripId: 1, paymentMethod: 'cash',
+          tripId: 1,
+          paymentMethod: 'cash',
           items: [{ productId: 101, qty: 1 }],
           offlineCreatedAt: '2026-11-13T10:00:00',
         });
-      } catch (e) { thrown = e; }
+      } catch (e) {
+        thrown = e;
+      }
       assert.ok(thrown);
       assert.equal(errorCode(thrown), 'OFFLINE_TIMESTAMP_INVALID');
       assert.equal(await salesCount(db), 0);
       console.log('10. naive strings rejected passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 11. getActiveTrip anchors the page on the server clock, with
@@ -517,7 +746,9 @@ async function main(): Promise<void> {
       assert.ok(Math.abs(new Date(withTrip.serverTime).getTime() - Date.now()) < 60_000);
       assert.equal(withTrip.serverTimezone, 'Africa/Cairo');
       console.log('11. server-clock anchor passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   console.log('van-offline-timestamps: all cases passed');

@@ -166,24 +166,35 @@ function buildService(s: Scenario, purchasesWrite: unknown): { service: Purchase
 }
 
 const auth: AuthContext = {
-  tenantId: 't1', accountId: 't1', userId: 1,
-  username: 'spec-admin', role: 'admin', permissions: [], sessionId: 'spec-session',
+  tenantId: 't1',
+  accountId: 't1',
+  userId: 1,
+  username: 'spec-admin',
+  role: 'admin',
+  permissions: [],
+  sessionId: 'spec-session',
 };
 
 async function main(): Promise<void> {
   // 1. 3-decimal worked example: the old cents form stored line
   // 100.01 / total 110.01 here (float order makes the 10% tax land
   // on 10.000 either way); book digits keep the third decimal.
-  assert.deepEqual(
-    calculatePurchaseOrderTotals([{ quantity: 1, unitCost: 100.005, taxRate: 10 }], 0, 3),
-    { subtotal: 100.005, taxAmount: 10, discountAmount: 0, totalAmount: 110.005, lineTotals: [100.005] },
-  );
+  assert.deepEqual(calculatePurchaseOrderTotals([{ quantity: 1, unitCost: 100.005, taxRate: 10 }], 0, 3), {
+    subtotal: 100.005,
+    taxAmount: 10,
+    discountAmount: 0,
+    totalAmount: 110.005,
+    lineTotals: [100.005],
+  });
 
   // 2. A sub-cent discount is representable at 3 decimals.
-  assert.deepEqual(
-    calculatePurchaseOrderTotals([{ quantity: 2, unitCost: 50.005, taxRate: 0 }], 0.005, 3),
-    { subtotal: 100.01, taxAmount: 0, discountAmount: 0.005, totalAmount: 100.005, lineTotals: [100.01] },
-  );
+  assert.deepEqual(calculatePurchaseOrderTotals([{ quantity: 2, unitCost: 50.005, taxRate: 0 }], 0.005, 3), {
+    subtotal: 100.01,
+    taxAmount: 0,
+    discountAmount: 0.005,
+    totalAmount: 100.005,
+    lineTotals: [100.01],
+  });
 
   // 3. The same discount is rejected at 2 decimals: it cannot be
   // represented at book precision, so it must fail closed.
@@ -209,10 +220,13 @@ async function main(): Promise<void> {
 
   // 5. 2-decimal books are unchanged (same expectations as the
   // pre-existing totals spec).
-  assert.deepEqual(
-    calculatePurchaseOrderTotals([{ quantity: 2, unitCost: 100, taxRate: 14 }], 20, 2),
-    { subtotal: 200, discountAmount: 20, taxAmount: 25.2, totalAmount: 205.2, lineTotals: [200] },
-  );
+  assert.deepEqual(calculatePurchaseOrderTotals([{ quantity: 2, unitCost: 100, taxRate: 14 }], 20, 2), {
+    subtotal: 200,
+    discountAmount: 20,
+    taxAmount: 25.2,
+    totalAmount: 205.2,
+    lineTotals: [200],
+  });
 
   // 6. Digits are required: calling without them fails closed instead
   // of silently defaulting to 2.
@@ -232,8 +246,11 @@ async function main(): Promise<void> {
     const result = await service.createOrder(
       {
         items: [{ productId: 5, productName: 'Widget', quantity: 1, unitCost: 100.005, taxRate: 10 }],
-        discountAmount: 0, supplierId: 9, warehouseId: 3,
-        supplierName: 'Supplier', warehouseName: 'Main',
+        discountAmount: 0,
+        supplierId: 9,
+        warehouseId: 3,
+        supplierName: 'Supplier',
+        warehouseName: 'Main',
       } as any,
       auth,
     );
@@ -253,12 +270,21 @@ async function main(): Promise<void> {
   {
     const scenario: Scenario = {
       orderRow: {
-        id: 11, status: 'draft', discount_amount: 0, supplier_id: 9, warehouse_id: 3,
-        supplier_name: 'Supplier', supplier_phone: null, warehouse_name: 'Main',
-        expected_delivery_date: null, notes: null, terms_conditions: null,
+        id: 11,
+        status: 'draft',
+        discount_amount: 0,
+        supplier_id: 9,
+        warehouse_id: 3,
+        supplier_name: 'Supplier',
+        supplier_phone: null,
+        warehouse_name: 'Main',
+        expected_delivery_date: null,
+        notes: null,
+        terms_conditions: null,
       },
       itemsRows: [{ quantity: 1, unit_cost: 100.005, tax_rate: 10 }],
-      bill: {}, billItems: [],
+      bill: {},
+      billItems: [],
     };
     const { service, captures } = buildService(scenario, { createPurchase: neverCalled });
     const result = await service.updateOrder(11, {} as any, auth);
@@ -276,8 +302,15 @@ async function main(): Promise<void> {
   {
     const scenario: Scenario = {
       orderRow: {
-        id: 7, tenant_id: 't1', account_id: 't1', supplier_id: 9, order_number: 'PO-7',
-        status: 'confirmed', total_amount: 110.005, discount_amount: 0, tax_amount: 10,
+        id: 7,
+        tenant_id: 't1',
+        account_id: 't1',
+        supplier_id: 9,
+        order_number: 'PO-7',
+        status: 'confirmed',
+        total_amount: 110.005,
+        discount_amount: 0,
+        tax_amount: 10,
       },
       itemsRows: [{ id: 17, product_id: 31, quantity: 1, unit_cost: 100.005, unit_name: 'piece' }],
       bill: { id: 51, po_id: null },
@@ -307,14 +340,22 @@ async function main(): Promise<void> {
   // digits (no hardcoded cents), and all three service sites resolve
   // digits and pass them through.
   {
-    const engine = readFileSync(resolve(__dirname, '../../src/modules/purchases/engines/purchase-order-totals.engine.ts'), 'utf8');
+    const engine = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/engines/purchase-order-totals.engine.ts'),
+      'utf8',
+    );
     assert.ok(engine.includes('digits: MoneyDigits'));
     assert.ok(engine.includes('roundMoney(value, digits)'));
     assert.ok(!engine.includes('Math.round(value * 100)'));
     assert.ok(!engine.includes('toFixed(2)'));
-    const service = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchase-orders.service.ts'), 'utf8');
+    const service = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/purchase-orders.service.ts'),
+      'utf8',
+    );
     assert.ok(service.includes("import { tenantBaseCurrency } from '../../accounting/accounting-currency';"));
-    assert.ok(service.includes("import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';"));
+    assert.ok(
+      service.includes("import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';"),
+    );
     assert.ok(service.includes('tenantBaseCurrency(this.db, scope.tenantId)'));
     assert.ok(service.includes('tenantBaseCurrency(trx, scope.tenantId)'));
     assert.ok(service.includes('calculatePurchaseOrderTotals(payload.items, payload.discountAmount, digits)'));

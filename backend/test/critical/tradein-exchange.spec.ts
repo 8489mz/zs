@@ -263,11 +263,7 @@ async function assertRejectsCode(promise: Promise<unknown>, code: string, status
   try {
     await promise;
   } catch (error: any) {
-    assert.equal(
-      error?.code,
-      code,
-      `expected rejection ${code}, got ${error?.code}: ${error?.message}`,
-    );
+    assert.equal(error?.code, code, `expected rejection ${code}, got ${error?.code}: ${error?.message}`);
     if (status !== undefined) assert.equal(error?.statusCode, status);
     return;
   }
@@ -300,10 +296,7 @@ async function runPartA(): Promise<void> {
     const otherTenantSaleId = await insertSale(query, 't2', 'posted');
 
     // Exchange happy path: accepted, linked, stocked, no cash out.
-    const created = await service.createTransaction(
-      basePayload({ saleId: postedSaleId }),
-      AUTH,
-    );
+    const created = await service.createTransaction(basePayload({ saleId: postedSaleId }), AUTH);
     assert.equal(created.ok, true);
     const exchangeId = Number(created.id);
     assert.match(created.docNo, /^TRD-\d{6}-\d{4}$/);
@@ -401,7 +394,12 @@ async function runPartA(): Promise<void> {
 
     // Zero-value exchange with a link: recorded, still no cash out.
     const zero = await service.createTransaction(
-      basePayload({ serialNumber: 'IMEI-EX-7', saleId: postedSaleId, agreedPurchasePrice: 0, autoAddToInventory: false }),
+      basePayload({
+        serialNumber: 'IMEI-EX-7',
+        saleId: postedSaleId,
+        agreedPurchasePrice: 0,
+        autoAddToInventory: false,
+      }),
       AUTH,
     );
     assert.equal(zero.ok, true);
@@ -444,11 +442,7 @@ async function runPartA(): Promise<void> {
       'TRADEIN_DUPLICATE_SERIAL',
       409,
     );
-    await assertRejectsCode(
-      service.deleteTransaction(exchangeId, AUTH),
-      'TRADEIN_REVERSAL_REQUIRED',
-      409,
-    );
+    await assertRejectsCode(service.deleteTransaction(exchangeId, AUTH), 'TRADEIN_REVERSAL_REQUIRED', 409);
 
     console.log('tradein-exchange.spec.ts Part A (PGlite) passed');
   } finally {
@@ -518,10 +512,7 @@ async function runPartB(): Promise<void> {
   }
   const url = new URL(target);
   assert.ok(['localhost', '127.0.0.1'].includes(url.hostname), 'Acceptance tests are local-only');
-  assert.ok(
-    /^\/(zs_core_audit_test|zs_acceptance_[a-z0-9_]+)$/.test(url.pathname),
-    'Refusing a non-test database',
-  );
+  assert.ok(/^\/(zs_core_audit_test|zs_acceptance_[a-z0-9_]+)$/.test(url.pathname), 'Refusing a non-test database');
   const pool = new Pool({
     connectionString: target,
     options: '-c search_path=tradein_exchange_spec',
@@ -533,10 +524,7 @@ async function runPartB(): Promise<void> {
     const { service, posting } = buildService(db);
     const query = (text: string, params?: unknown[]) => pool.query(text, params as any);
     const postedSaleId = await insertSale(query, 't1', 'posted');
-    const created = await service.createTransaction(
-      basePayload({ saleId: postedSaleId }),
-      AUTH,
-    );
+    const created = await service.createTransaction(basePayload({ saleId: postedSaleId }), AUTH);
     assert.equal(created.ok, true);
     const exchangeId = Number(created.id);
     const treasury = await pool.query(

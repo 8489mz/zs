@@ -110,9 +110,15 @@ const breakdown = buildExpectedCashBreakdown({
 });
 assert.equal(breakdown.total, 170, '100+5+50+20+10+30-15-25-5 must be 170');
 assert.equal(sumExpectedCashRows(breakdown.rows), breakdown.total, 'rows must sum to the total');
-assert.ok(breakdown.rows.some((row: { key: string; amount: number }) => row.key === 'customerCollections' && row.amount === 30));
-assert.ok(breakdown.rows.some((row: { key: string; amount: number }) => row.key === 'cancelledSaleCash' && row.amount === 20));
-assert.ok(breakdown.rows.some((row: { key: string; amount: number }) => row.key === 'saleReturnsCash' && row.amount === -15));
+assert.ok(
+  breakdown.rows.some((row: { key: string; amount: number }) => row.key === 'customerCollections' && row.amount === 30),
+);
+assert.ok(
+  breakdown.rows.some((row: { key: string; amount: number }) => row.key === 'cancelledSaleCash' && row.amount === 20),
+);
+assert.ok(
+  breakdown.rows.some((row: { key: string; amount: number }) => row.key === 'saleReturnsCash' && row.amount === -15),
+);
 
 // --- Pure layer: offline timestamp validation (never silently clamped). ---
 // The "valid" case is relative to now: a fixed calendar date would age out
@@ -140,29 +146,89 @@ const codeOf = (error: unknown): string => (error as { code?: string })?.code ||
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const authz = new SalesAuthorizationService(db);
-  const admin1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin1', permissions: [] } as unknown as AuthContext;
-  const manager2 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 2, username: 'manager2', permissions: [] } as unknown as AuthContext;
-  const cashier3 = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 3, username: 'cashier3', permissions: [] } as unknown as AuthContext;
-  const cashier5 = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 5, username: 'cashier5', permissions: [] } as unknown as AuthContext;
-  const admin4 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 4, username: 'admin4', permissions: [] } as unknown as AuthContext;
-  const superAdmin = { tenantId: 't1', accountId: 'a1', role: 'super_admin', userId: 9, username: 'owner', permissions: [] } as unknown as AuthContext;
+  const admin1 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 1,
+    username: 'admin1',
+    permissions: [],
+  } as unknown as AuthContext;
+  const manager2 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 2,
+    username: 'manager2',
+    permissions: [],
+  } as unknown as AuthContext;
+  const cashier3 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'cashier',
+    userId: 3,
+    username: 'cashier3',
+    permissions: [],
+  } as unknown as AuthContext;
+  const cashier5 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'cashier',
+    userId: 5,
+    username: 'cashier5',
+    permissions: [],
+  } as unknown as AuthContext;
+  const admin4 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 4,
+    username: 'admin4',
+    permissions: [],
+  } as unknown as AuthContext;
+  const superAdmin = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'super_admin',
+    userId: 9,
+    username: 'owner',
+    permissions: [],
+  } as unknown as AuthContext;
 
   const shiftRow = async (id: number) => {
-    const r = await pg.query<{ status: string; close_note: string; counted_cash: string | null; variance: string | null; variance_approved_by: string | null; expected_cash: string; closed_by: string | null; closed_at: string | null }>(
-      'SELECT status, close_note, counted_cash, variance, variance_approved_by, expected_cash, closed_by, closed_at FROM cashier_shifts WHERE id=$1', [id]);
+    const r = await pg.query<{
+      status: string;
+      close_note: string;
+      counted_cash: string | null;
+      variance: string | null;
+      variance_approved_by: string | null;
+      expected_cash: string;
+      closed_by: string | null;
+      closed_at: string | null;
+    }>(
+      'SELECT status, close_note, counted_cash, variance, variance_approved_by, expected_cash, closed_by, closed_at FROM cashier_shifts WHERE id=$1',
+      [id],
+    );
     return r.rows[0];
   };
   const journalCount = async () => {
-    const r = await pg.query<{ count: string }>(`SELECT count(*) AS count FROM journal_entries WHERE source_type='cashier_shift_variance'`);
+    const r = await pg.query<{ count: string }>(
+      `SELECT count(*) AS count FROM journal_entries WHERE source_type='cashier_shift_variance'`,
+    );
     return Number(r.rows[0].count);
   };
   const shiftIdOf = async (opener: number): Promise<number> => {
     const r = await pg.query<{ id: string }>(
-      'SELECT id FROM cashier_shifts WHERE opened_by=$1 ORDER BY id DESC LIMIT 1', [opener]);
+      'SELECT id FROM cashier_shifts WHERE opened_by=$1 ORDER BY id DESC LIMIT 1',
+      [opener],
+    );
     return Number(r.rows[0].id);
   };
 
@@ -227,11 +293,35 @@ async function main() {
       INSERT INTO accounting_settings VALUES
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
     `);
-    for (const [code, type] of [[1110, 'asset'], [7110, 'revenue'], [7210, 'expense'], [1135, 'asset']] as const) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), type]);
+    for (const [code, type] of [
+      [1110, 'asset'],
+      [7110, 'revenue'],
+      [7210, 'expense'],
+      [1135, 'asset'],
+    ] as const) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        type,
+      ]);
     }
-    const passwords: Record<number, string> = { 1: 'pw-admin-1', 2: 'pw-manager-2', 3: 'pw-cashier-3', 4: 'pw-admin-4', 5: 'pw-cashier-5', 9: 'pw-owner-9' };
-    for (const [id, role, branch] of [[1, 'admin', null], [2, 'admin', null], [3, 'cashier', 1], [4, 'admin', null], [5, 'cashier', 1], [9, 'super_admin', null]] as const) {
+    const passwords: Record<number, string> = {
+      1: 'pw-admin-1',
+      2: 'pw-manager-2',
+      3: 'pw-cashier-3',
+      4: 'pw-admin-4',
+      5: 'pw-cashier-5',
+      9: 'pw-owner-9',
+    };
+    for (const [id, role, branch] of [
+      [1, 'admin', null],
+      [2, 'admin', null],
+      [3, 'cashier', 1],
+      [4, 'admin', null],
+      [5, 'cashier', 1],
+      [9, 'super_admin', null],
+    ] as const) {
       const rec = await createPasswordRecord(passwords[id as number]);
       await pg.query(
         'INSERT INTO users(id,tenant_id,username,role,is_active,password_hash,password_salt,default_branch_id) VALUES ($1,$2,$3,$4,true,$5,$6,$7)',
@@ -268,11 +358,29 @@ async function main() {
     await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
       VALUES (2,'t1','a1','T5','dine_in',1,1,now())`);
     await assert.rejects(
-      drawer.closeCashierShift(shiftB, { countedCash: 100, managerPin: 'pw-admin-1', openTablesOverrideSecret: 'pw-manager-2', openTablesOverrideReason: 'قصير' }, admin1),
+      drawer.closeCashierShift(
+        shiftB,
+        {
+          countedCash: 100,
+          managerPin: 'pw-admin-1',
+          openTablesOverrideSecret: 'pw-manager-2',
+          openTablesOverrideReason: 'قصير',
+        },
+        admin1,
+      ),
       (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OVERRIDE_REASON_REQUIRED',
       'an override reason under 10 chars must not open the gate',
     );
-    await drawer.closeCashierShift(shiftB, { countedCash: 100, managerPin: 'pw-admin-1', openTablesOverrideSecret: 'pw-manager-2', openTablesOverrideReason: 'الطاولة ستنتقل إلى وردية المساء' }, admin1);
+    await drawer.closeCashierShift(
+      shiftB,
+      {
+        countedCash: 100,
+        managerPin: 'pw-admin-1',
+        openTablesOverrideSecret: 'pw-manager-2',
+        openTablesOverrideReason: 'الطاولة ستنتقل إلى وردية المساء',
+      },
+      admin1,
+    );
     const rowB = await shiftRow(shiftB);
     assert.equal(rowB.status, 'closed');
     assert.ok(String(rowB.close_note || '').includes('T5'), 'the override stamp must name the open table');
@@ -280,13 +388,24 @@ async function main() {
 
     // The identity rule still binds a non-admin closer: the shared
     // manager PIN carries no identity, so it cannot approve an override.
-    await pg.query(`INSERT INTO settings VALUES ('t1','managerPin',$1)`, [JSON.stringify(await hashManagerPin('1234'))]);
+    await pg.query(`INSERT INTO settings VALUES ('t1','managerPin',$1)`, [
+      JSON.stringify(await hashManagerPin('1234')),
+    ]);
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
     const shiftB2 = await shiftIdOf(3);
     await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
       VALUES (3,'t1','a1','T5','dine_in',1,3,now())`);
     await assert.rejects(
-      drawer.closeCashierShift(shiftB2, { countedCash: 100, managerPin: 'pw-cashier-3', openTablesOverrideSecret: '1234', openTablesOverrideReason: 'الطاولة ستنتقل إلى وردية المساء' }, cashier3),
+      drawer.closeCashierShift(
+        shiftB2,
+        {
+          countedCash: 100,
+          managerPin: 'pw-cashier-3',
+          openTablesOverrideSecret: '1234',
+          openTablesOverrideReason: 'الطاولة ستنتقل إلى وردية المساء',
+        },
+        cashier3,
+      ),
       (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OVERRIDE_IDENTITY_REQUIRED',
       'a cashier cannot override with the shared manager PIN — it proves no second person',
     );
@@ -304,16 +423,33 @@ async function main() {
       VALUES (20,'t1','a1','T5','dine_in',1,1,now())`);
     await pg.query(`INSERT INTO sales(id,tenant_id,account_id,table_number,order_type,status,branch_id,created_by,created_at)
       VALUES (21,'t1','a1','T7','dine_in','draft',1,1,now())`);
-    await drawer.closeCashierShift(shiftH1, { countedCash: 100, note: 'الطاولات ستنتقل إلى وردية المساء', managerPin: 'pw-admin-1' }, admin1);
+    await drawer.closeCashierShift(
+      shiftH1,
+      { countedCash: 100, note: 'الطاولات ستنتقل إلى وردية المساء', managerPin: 'pw-admin-1' },
+      admin1,
+    );
     const rowH1 = await shiftRow(shiftH1);
-    assert.equal(rowH1.status, 'closed', 'an admin handover close with a >=10-char reason in the closing note must succeed');
-    assert.ok(String(rowH1.close_note || '').includes('وردية المساء'), 'the handover stamp must carry the closing-note reason');
+    assert.equal(
+      rowH1.status,
+      'closed',
+      'an admin handover close with a >=10-char reason in the closing note must succeed',
+    );
+    assert.ok(
+      String(rowH1.close_note || '').includes('وردية المساء'),
+      'the handover stamp must carry the closing-note reason',
+    );
     assert.ok(String(rowH1.close_note || '').includes('T5'), 'the handover stamp must name the open table');
     const heldAfter = await pg.query<{ count: string }>(`SELECT count(*) AS count FROM held_sales WHERE id=20`);
     assert.equal(Number(heldAfter.rows[0].count), 1, 'the held table must survive the close for the next cashier');
-    const draftAfter = await pg.query<{ count: string }>(`SELECT count(*) AS count FROM sales WHERE id=21 AND status='draft'`);
+    const draftAfter = await pg.query<{ count: string }>(
+      `SELECT count(*) AS count FROM sales WHERE id=21 AND status='draft'`,
+    );
     assert.equal(Number(draftAfter.rows[0].count), 1, 'the draft sale must survive the close');
-    assert.equal(await drawer.computeShiftExpectedCash(shiftH1, admin1), 100, 'held tables and drafts must not inflate the closed shift expected cash');
+    assert.equal(
+      await drawer.computeShiftExpectedCash(shiftH1, admin1),
+      100,
+      'held tables and drafts must not inflate the closed shift expected cash',
+    );
     await pg.query(`DELETE FROM held_sales WHERE id=20`);
     await pg.query(`DELETE FROM sales WHERE id=21`);
 
@@ -337,16 +473,36 @@ async function main() {
     await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
       VALUES (23,'t1','a1','T5','dine_in',1,3,now())`);
     await assert.rejects(
-      drawer.closeCashierShift(shiftH3, { countedCash: 100, note: 'الطاولات ستنتقل إلى وردية المساء', managerPin: 'pw-cashier-3' }, cashier3),
+      drawer.closeCashierShift(
+        shiftH3,
+        { countedCash: 100, note: 'الطاولات ستنتقل إلى وردية المساء', managerPin: 'pw-cashier-3' },
+        cashier3,
+      ),
       (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OPEN_TABLES',
       'a cashier still needs a second manager secret even with a long closing note',
     );
     // ...but the reason may live in the closing note instead of the
     // override-reason box: secret + note reason closes (to review).
-    await drawer.closeCashierShift(shiftH3, { countedCash: 100, note: 'الطاولات ستنتقل إلى وردية المساء', managerPin: 'pw-cashier-3', openTablesOverrideSecret: 'pw-manager-2' }, cashier3);
+    await drawer.closeCashierShift(
+      shiftH3,
+      {
+        countedCash: 100,
+        note: 'الطاولات ستنتقل إلى وردية المساء',
+        managerPin: 'pw-cashier-3',
+        openTablesOverrideSecret: 'pw-manager-2',
+      },
+      cashier3,
+    );
     const rowH3 = await shiftRow(shiftH3);
-    assert.equal(rowH3.status, 'pending_review', 'a cashier-opener shift closed with a manager override goes to review');
-    assert.ok(String(rowH3.close_note || '').includes('وردية المساء'), 'the override stamp must carry the closing-note reason for the cashier path too');
+    assert.equal(
+      rowH3.status,
+      'pending_review',
+      'a cashier-opener shift closed with a manager override goes to review',
+    );
+    assert.ok(
+      String(rowH3.close_note || '').includes('وردية المساء'),
+      'the override stamp must carry the closing-note reason for the cashier path too',
+    );
     await pg.query(`DELETE FROM held_sales WHERE id=23`);
 
     // ---------- TRIAL REPRODUCTION (SHIFT-261113-0027 state, 2026-11-14):
@@ -357,18 +513,29 @@ async function main() {
     // the backend close path is sound for this state and the live
     // failure is NOT a backend bug in the close logic (the browser
     // hypothesis then stands: stale bundle / stale session state).
-    await drawer.openCashierShift({ openingCash: 4283.90, branchId: 1 }, cashier3);
+    await drawer.openCashierShift({ openingCash: 4283.9, branchId: 1 }, cashier3);
     const shiftT1 = await shiftIdOf(3);
     for (let n = 1; n <= 5; n++) {
       await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
         VALUES (${30 + n},'t1','a1','T${n}','dine_in',1,3,now())`);
     }
-    await drawer.closeCashierShift(shiftT1, { countedCash: 4283.90, note: 'الطاولات الخمس ستنتقل إلى وردية المساء', managerPin: 'pw-admin-1' }, admin1);
+    await drawer.closeCashierShift(
+      shiftT1,
+      { countedCash: 4283.9, note: 'الطاولات الخمس ستنتقل إلى وردية المساء', managerPin: 'pw-admin-1' },
+      admin1,
+    );
     const rowT1 = await shiftRow(shiftT1);
-    assert.equal(rowT1.status, 'pending_review', 'a cashier-opener shift closes to review with 5 parked orders and a long note');
+    assert.equal(
+      rowT1.status,
+      'pending_review',
+      'a cashier-opener shift closes to review with 5 parked orders and a long note',
+    );
     assert.equal(Number(rowT1.variance), 0, 'counted = expected must give zero variance');
     assert.equal(Number(rowT1.expected_cash), 4283.9, 'expected cash must be the 4283.90 opening cash');
-    assert.ok(String(rowT1.close_note || '').includes('وردية المساء'), 'the override stamp must carry the closing-note reason');
+    assert.ok(
+      String(rowT1.close_note || '').includes('وردية المساء'),
+      'the override stamp must carry the closing-note reason',
+    );
     for (let n = 1; n <= 5; n++) {
       assert.ok(String(rowT1.close_note || '').includes(`T${n}`), `the override stamp must name table T${n}`);
     }
@@ -377,13 +544,17 @@ async function main() {
     // Same trial state, admin opener + admin closer: closes outright
     // (no blind review), variance 0, no variance journal.
     const journalsBeforeT = await journalCount();
-    await drawer.openCashierShift({ openingCash: 4283.90, branchId: 1 }, admin1);
+    await drawer.openCashierShift({ openingCash: 4283.9, branchId: 1 }, admin1);
     const shiftT2 = await shiftIdOf(1);
     for (let n = 1; n <= 5; n++) {
       await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
         VALUES (${40 + n},'t1','a1','T${n}','dine_in',1,1,now())`);
     }
-    await drawer.closeCashierShift(shiftT2, { countedCash: 4283.90, note: 'الطاولات الخمس ستنتقل إلى وردية المساء', managerPin: 'pw-admin-1' }, admin1);
+    await drawer.closeCashierShift(
+      shiftT2,
+      { countedCash: 4283.9, note: 'الطاولات الخمس ستنتقل إلى وردية المساء', managerPin: 'pw-admin-1' },
+      admin1,
+    );
     const rowT2 = await shiftRow(shiftT2);
     assert.equal(rowT2.status, 'closed', 'an admin-opener shift with 5 parked orders and a long note closes outright');
     assert.equal(Number(rowT2.variance), 0, 'counted = expected must give zero variance');
@@ -409,7 +580,11 @@ async function main() {
     );
     await drawer.closeCashierShift(shiftP1, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1);
     const rowP1 = await shiftRow(shiftP1);
-    assert.equal(rowP1.status, 'pending_review', 'an admin closing a cashier-opener shift goes to review, like super_admin');
+    assert.equal(
+      rowP1.status,
+      'pending_review',
+      'an admin closing a cashier-opener shift goes to review, like super_admin',
+    );
     assert.equal(Number(rowP1.closed_by), 1, 'the admin closer must be recorded as the closer');
     await drawer.reviewCashierShiftClose(shiftP1, { decision: 'approve', note: 'مطابق' }, manager2);
     assert.equal((await shiftRow(shiftP1)).status, 'closed');
@@ -428,14 +603,36 @@ async function main() {
       'a solo admin over the default 0.001 cap with a <10-char note and no approver must still throw — the override needs a recorded reason',
     );
     await assert.rejects(
-      drawer.closeCashierShift(shiftC, { countedCash: 80, note: 'فرق كبير في الدرج يستدعي المراجعة', managerPin: 'pw-admin-1', approverSecret: 'pw-admin-1' }, admin1),
+      drawer.closeCashierShift(
+        shiftC,
+        {
+          countedCash: 80,
+          note: 'فرق كبير في الدرج يستدعي المراجعة',
+          managerPin: 'pw-admin-1',
+          approverSecret: 'pw-admin-1',
+        },
+        admin1,
+      ),
       (err: unknown) => codeOf(err) === 'SHIFT_SECOND_APPROVER_MUST_DIFFER',
       'the closer cannot second-approve their own variance',
     );
-    await drawer.closeCashierShift(shiftC, { countedCash: 80, note: 'فرق كبير في الدرج يستدعي المراجعة', managerPin: 'pw-admin-1', approverSecret: 'pw-manager-2' }, admin1);
+    await drawer.closeCashierShift(
+      shiftC,
+      {
+        countedCash: 80,
+        note: 'فرق كبير في الدرج يستدعي المراجعة',
+        managerPin: 'pw-admin-1',
+        approverSecret: 'pw-manager-2',
+      },
+      admin1,
+    );
     const rowC = await shiftRow(shiftC);
     assert.equal(rowC.status, 'closed');
-    assert.equal(Number(rowC.variance_approved_by), 2, 'variance_approved_by must be the second approver, not the closer');
+    assert.equal(
+      Number(rowC.variance_approved_by),
+      2,
+      'variance_approved_by must be the second approver, not the closer',
+    );
     assert.equal(Number(rowC.variance), -20);
 
     // Within an explicitly configured cap (25) the same variance closes alone.
@@ -443,21 +640,33 @@ async function main() {
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
     const shiftD = await shiftIdOf(1);
     await drawer.closeCashierShift(shiftD, { countedCash: 80, note: 'x', managerPin: 'pw-admin-1' }, admin1);
-    assert.equal(Number((await shiftRow(shiftD)).variance_approved_by), 1, 'within cap the closer remains the approver of record');
+    assert.equal(
+      Number((await shiftRow(shiftD)).variance_approved_by),
+      1,
+      'within cap the closer remains the approver of record',
+    );
     await pg.query(`DELETE FROM settings WHERE tenant_id='t1' AND key='cashierShortageTolerance'`);
 
     // Blind close keys off the OPENER: a super_admin closing a cashier's shift goes to review.
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
     const shiftE = await shiftIdOf(3);
     await drawer.closeCashierShift(shiftE, { countedCash: 100, managerPin: 'pw-owner-9' }, superAdmin);
-    assert.equal((await shiftRow(shiftE)).status, 'pending_review', 'a cashier-opener shift closed by super_admin must await review');
+    assert.equal(
+      (await shiftRow(shiftE)).status,
+      'pending_review',
+      'a cashier-opener shift closed by super_admin must await review',
+    );
     await drawer.reviewCashierShiftClose(shiftE, { decision: 'approve', note: 'مطابق' }, manager2);
     assert.equal((await shiftRow(shiftE)).status, 'closed');
 
     // ---------- I22: review decides; reject reopens with no journal. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
     const shiftF = await shiftIdOf(3);
-    await drawer.closeCashierShift(shiftF, { countedCash: 100, cardDeclaredTotal: 100, cardOperationCount: 1, managerPin: 'pw-cashier-3' }, cashier3);
+    await drawer.closeCashierShift(
+      shiftF,
+      { countedCash: 100, cardDeclaredTotal: 100, cardOperationCount: 1, managerPin: 'pw-cashier-3' },
+      cashier3,
+    );
     assert.equal((await shiftRow(shiftF)).status, 'pending_review');
     const journalsBefore = await journalCount();
     await assert.rejects(
@@ -470,22 +679,43 @@ async function main() {
       (err: unknown) => codeOf(err) === 'SHIFT_REVIEW_NOTE_REQUIRED',
       'rejecting without a >=3-char reason must throw',
     );
-    await drawer.reviewCashierShiftClose(shiftF, { decision: 'reject', note: 'الإقرار لا يطابق تقرير الماكينة إطلاقا' }, manager2);
+    await drawer.reviewCashierShiftClose(
+      shiftF,
+      { decision: 'reject', note: 'الإقرار لا يطابق تقرير الماكينة إطلاقا' },
+      manager2,
+    );
     const rowF = await shiftRow(shiftF);
     assert.equal(rowF.status, 'open', 'a rejected close reopens the shift');
     assert.equal(await journalCount(), journalsBefore, 'a rejection must post no variance journal');
-    assert.ok(String(rowF.close_note || '').includes('الإقرار لا يطابق'), 'the rejection reason must be stamped on the shift');
+    assert.ok(
+      String(rowF.close_note || '').includes('الإقرار لا يطابق'),
+      'the rejection reason must be stamped on the shift',
+    );
 
     // Detail totals are reconciled too: declared 0 with 50.000 of itemised
     // card details is a mismatch even though computed card is also 0.
-    await drawer.closeCashierShift(shiftF, { countedCash: 100, cardDeclaredTotal: 0, cardOperationCount: 0, cardDetails: [{ amount: 50 }], managerPin: 'pw-cashier-3' }, cashier3);
+    await drawer.closeCashierShift(
+      shiftF,
+      {
+        countedCash: 100,
+        cardDeclaredTotal: 0,
+        cardOperationCount: 0,
+        cardDetails: [{ amount: 50 }],
+        managerPin: 'pw-cashier-3',
+      },
+      cashier3,
+    );
     assert.equal((await shiftRow(shiftF)).status, 'pending_review');
     await assert.rejects(
       drawer.reviewCashierShiftClose(shiftF, { decision: 'approve', note: '' }, manager2),
       (err: unknown) => codeOf(err) === 'SHIFT_REVIEW_NOTE_REQUIRED',
       'a detail-total mismatch must demand a review note even with zero declared/computed deltas',
     );
-    await drawer.reviewCashierShiftClose(shiftF, { decision: 'approve', note: 'تفاصيل البطاقة سجلت بالخطأ وستصحح' }, manager2);
+    await drawer.reviewCashierShiftClose(
+      shiftF,
+      { decision: 'approve', note: 'تفاصيل البطاقة سجلت بالخطأ وستصحح' },
+      manager2,
+    );
     assert.equal((await shiftRow(shiftF)).status, 'closed');
 
     // Clean approve: zero deltas close with a short note and no journal.
@@ -502,7 +732,11 @@ async function main() {
     // for the floor change: under the old 10-char floor it threw.
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
     const shiftJ = await shiftIdOf(3);
-    await drawer.closeCashierShift(shiftJ, { countedCash: 100, cardDeclaredTotal: 100, cardOperationCount: 1, managerPin: 'pw-cashier-3' }, cashier3);
+    await drawer.closeCashierShift(
+      shiftJ,
+      { countedCash: 100, cardDeclaredTotal: 100, cardOperationCount: 1, managerPin: 'pw-cashier-3' },
+      cashier3,
+    );
     assert.equal((await shiftRow(shiftJ)).status, 'pending_review');
     await assert.rejects(
       drawer.reviewCashierShiftClose(shiftJ, { decision: 'approve', note: 'لا' }, manager2),
@@ -520,14 +754,29 @@ async function main() {
     assert.equal((await shiftRow(shiftK)).status, 'closed', 'a zero-difference shift must approve with no note at all');
 
     // ---------- I23: the setting-aware sale gate (small service only). ----------
-    const noShiftFalse = await authz.hasOpenCashierShiftForSale(db, admin1, null, new Map([['requireCashierShiftForSales', false]]));
+    const noShiftFalse = await authz.hasOpenCashierShiftForSale(
+      db,
+      admin1,
+      null,
+      new Map([['requireCashierShiftForSales', false]]),
+    );
     assert.equal(noShiftFalse, true, 'setting false + no shift must let the sale through');
-    const noShiftTrue = await authz.hasOpenCashierShiftForSale(db, admin1, null, new Map([['requireCashierShiftForSales', true]]));
+    const noShiftTrue = await authz.hasOpenCashierShiftForSale(
+      db,
+      admin1,
+      null,
+      new Map([['requireCashierShiftForSales', true]]),
+    );
     assert.equal(noShiftTrue, false, 'setting true + no shift must block');
     const noShiftMissing = await authz.hasOpenCashierShiftForSale(db, admin1, null, new Map());
     assert.equal(noShiftMissing, false, 'a missing setting must fail closed to demanding a shift');
     await drawer.openCashierShift({ openingCash: 50 }, admin1);
-    const withShift = await authz.hasOpenCashierShiftForSale(db, admin1, null, new Map([['requireCashierShiftForSales', true]]));
+    const withShift = await authz.hasOpenCashierShiftForSale(
+      db,
+      admin1,
+      null,
+      new Map([['requireCashierShiftForSales', true]]),
+    );
     assert.equal(withShift, true, 'setting true + an open shift must pass');
     const openShiftId = await shiftIdOf(1);
     await drawer.closeCashierShift(openShiftId, { countedCash: 50, managerPin: 'pw-admin-1' }, admin1);
@@ -555,14 +804,25 @@ async function main() {
     await pg.query(`INSERT INTO sales(id,tenant_id,account_id,table_number,order_type,status,payment_type,payment_channel,total,paid_amount,branch_id,created_by,created_at)
       VALUES (11,'t1','a1','','takeaway','cancelled','cash','cash',20,20,NULL,1,now())`);
     const expectedH2 = await drawer.computeShiftExpectedCash(shiftH, admin1);
-    assert.equal(expectedH2, 200, 'shift A expected cash must now include the 30 collection and the 20 cancelled-sale cash (150 + 30 + 20)');
-    const listing = await drawer.listCashierShifts({}, admin1) as { cashierShifts: Array<Record<string, unknown>> };
+    assert.equal(
+      expectedH2,
+      200,
+      'shift A expected cash must now include the 30 collection and the 20 cancelled-sale cash (150 + 30 + 20)',
+    );
+    const listing = (await drawer.listCashierShifts({}, admin1)) as { cashierShifts: Array<Record<string, unknown>> };
     const rowH = listing.cashierShifts.find((row) => String(row.id) === String(shiftH));
-    assert.equal(Number(rowH?.customerCollectionsTotal || 0), 30, 'the hydrated row must expose customerCollectionsTotal');
+    assert.equal(
+      Number(rowH?.customerCollectionsTotal || 0),
+      30,
+      'the hydrated row must expose customerCollectionsTotal',
+    );
     assert.equal(Number(rowH?.cancelledSaleCashTotal || 0), 20, 'the hydrated row must expose cancelledSaleCashTotal');
   } finally {
     await db.destroy();
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

@@ -49,8 +49,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-a', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-a',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -121,24 +126,73 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 7, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer Seven',
-    balance: 0, credit_limit: 0, is_credit_blocked: false, is_active: true,
-  }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer Seven',
+      balance: 0,
+      credit_limit: 0,
+      is_credit_blocked: false,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep One',
+      is_active: true,
+    })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): SalesWriteService {
@@ -156,25 +210,66 @@ function buildServices(db: Kysely<Database>): SalesWriteService {
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
   return new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
 }
 
 function heldPayload(overrides: Record<string, unknown> = {}): any {
   return {
-    items: [{
-      productId: 101, name: 'Widget 101', qty: 2, price: 100, unitName: 'قطعة', unitMultiplier: 1,
-      priceType: 'retail', lineKey: '101::u1::retail::seat-1', unitId: 'u1',
-      serials: ['SN-1', 'SN-2'], originalPrice: 120, offerDiscount: 20, offerName: 'Deal',
-      isWeighted: false, quantityChunks: [1, 1], seatNumber: 1, course: 'main',
-    }],
-    customerId: 7, paymentType: 'cash', paymentChannel: 'cash',
-    cashAmount: 0, cardAmount: 0, transferAmount: 0, discount: 0, deliveryFee: 15,
-    note: 'no onions', search: '', priceType: 'retail', branchId: 1, locationId: 10,
-    orderType: 'delivery', tableNumber: '', deliveryRepId: 1, collectionStatus: 'prepaid_by_rep',
-    tipAmount: 5, loyaltyPointsRedeemed: 10, pagerNumber: 'A12', deliveryFeeMode: 'store_fleet',
-    onlineOrderId: 77, diningCourse: 'dessert', guestCount: 4,
+    items: [
+      {
+        productId: 101,
+        name: 'Widget 101',
+        qty: 2,
+        price: 100,
+        unitName: 'قطعة',
+        unitMultiplier: 1,
+        priceType: 'retail',
+        lineKey: '101::u1::retail::seat-1',
+        unitId: 'u1',
+        serials: ['SN-1', 'SN-2'],
+        originalPrice: 120,
+        offerDiscount: 20,
+        offerName: 'Deal',
+        isWeighted: false,
+        quantityChunks: [1, 1],
+        seatNumber: 1,
+        course: 'main',
+      },
+    ],
+    customerId: 7,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    cashAmount: 0,
+    cardAmount: 0,
+    transferAmount: 0,
+    discount: 0,
+    deliveryFee: 15,
+    note: 'no onions',
+    search: '',
+    priceType: 'retail',
+    branchId: 1,
+    locationId: 10,
+    orderType: 'delivery',
+    tableNumber: '',
+    deliveryRepId: 1,
+    collectionStatus: 'prepaid_by_rep',
+    tipAmount: 5,
+    loyaltyPointsRedeemed: 10,
+    pagerNumber: 'A12',
+    deliveryFeeMode: 'store_fleet',
+    onlineOrderId: 77,
+    diningCourse: 'dessert',
+    guestCount: 4,
     guestCheckPrintedAt: '2026-11-09T12:00:00.000Z',
     ...overrides,
   };
@@ -200,7 +295,11 @@ async function main(): Promise<void> {
     const dto = plainToInstance(HeldSaleDto, heldPayload());
     const errors = await validate(dto);
     assert.equal(errors.length, 0, `DTO must validate, got ${JSON.stringify(errors).slice(0, 400)}`);
-    const piped: any = await requestValidationPipe.transform(heldPayload(), { type: 'body', metatype: HeldSaleDto, data: '' });
+    const piped: any = await requestValidationPipe.transform(heldPayload(), {
+      type: 'body',
+      metatype: HeldSaleDto,
+      data: '',
+    });
     assert.equal(Number(piped.tipAmount), 5, 'pipe keeps tipAmount');
     assert.equal(Number(piped.loyaltyPointsRedeemed), 10, 'pipe keeps loyaltyPointsRedeemed');
     assert.equal(piped.pagerNumber, 'A12', 'pipe keeps pagerNumber');
@@ -283,18 +382,44 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      const inserted: any = await anyDb.insertInto('held_sales').values({
-        tenant_id: TENANT, account_id: ACCOUNT, payment_type: 'cash', payment_channel: 'cash',
-        paid_amount: 0, cash_amount: 0, card_amount: 0, discount: 0, delivery_fee: 0,
-        note: '', search: '', price_type: 'retail', branch_id: 1, location_id: 10,
-        created_by: 2,
-      }).returning('id').executeTakeFirstOrThrow();
-      await anyDb.insertInto('held_sale_items').values({
-        tenant_id: TENANT, account_id: ACCOUNT, held_sale_id: Number(inserted.id),
-        product_id: 101, product_name: 'Widget 101', qty: 1, unit_price: 100,
-        unit_name: 'قطعة', unit_multiplier: 1, price_type: 'retail', notes: '',
-        modifiers: JSON.stringify([]),
-      }).execute();
+      const inserted: any = await anyDb
+        .insertInto('held_sales')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          payment_type: 'cash',
+          payment_channel: 'cash',
+          paid_amount: 0,
+          cash_amount: 0,
+          card_amount: 0,
+          discount: 0,
+          delivery_fee: 0,
+          note: '',
+          search: '',
+          price_type: 'retail',
+          branch_id: 1,
+          location_id: 10,
+          created_by: 2,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await anyDb
+        .insertInto('held_sale_items')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          held_sale_id: Number(inserted.id),
+          product_id: 101,
+          product_name: 'Widget 101',
+          qty: 1,
+          unit_price: 100,
+          unit_name: 'قطعة',
+          unit_multiplier: 1,
+          price_type: 'retail',
+          notes: '',
+          modifiers: JSON.stringify([]),
+        })
+        .execute();
       const query = new SalesQueryService(db, new SalesAuthorizationService(db));
       const listed: any = await query.listHeldSales(cashierAuth);
       const draft = (listed.heldSales || [])[0] as any;

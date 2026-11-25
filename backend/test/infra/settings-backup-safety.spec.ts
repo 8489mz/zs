@@ -36,7 +36,11 @@ function createBackupService() {
     {} as any,
     { log: async () => undefined } as any,
     { invalidateTenant: () => undefined } as any,
-    { invalidateSettingsCache: () => undefined, invalidateBranchesCache: () => undefined, invalidatePlanFeaturesCache: () => undefined } as any,
+    {
+      invalidateSettingsCache: () => undefined,
+      invalidateBranchesCache: () => undefined,
+      invalidatePlanFeaturesCache: () => undefined,
+    } as any,
   );
 }
 
@@ -70,7 +74,12 @@ async function run(): Promise<void> {
   {
     const service = createBackupService();
     await assert.rejects(
-      () => service.restoreBackup({ ...backupPayload, confirmation: 'RESTORE BACKUP' }, actor({ permissions: ['settings'] }), false),
+      () =>
+        service.restoreBackup(
+          { ...backupPayload, confirmation: 'RESTORE BACKUP' },
+          actor({ permissions: ['settings'] }),
+          false,
+        ),
       ForbiddenException,
     );
   }

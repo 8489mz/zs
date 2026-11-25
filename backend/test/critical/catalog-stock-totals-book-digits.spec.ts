@@ -101,8 +101,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): { posting: AccountingPostingService; catalog: CatalogProductService } {
@@ -115,25 +121,35 @@ function makeServices(db: Kysely<Database>): { posting: AccountingPostingService
   return { posting, catalog };
 }
 
-async function journalLinesFor(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
-  const entries = await (db as any)
+async function journalLinesFor(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
+  const entries = (await (db as any)
     .selectFrom('journal_entries')
     .select(['id'])
     .where('source_type', '=', sourceType)
     .where('source_id', '=', sourceId)
-    .execute() as unknown as Array<{ id: number }>;
+    .execute()) as unknown as Array<{ id: number }>;
   assert.equal(entries.length, 1, `expected exactly one journal entry for ${sourceType} #${sourceId}`);
-  const rows = await (db as any)
+  const rows = (await (db as any)
     .selectFrom('journal_entry_lines')
     .select(['account_id', 'debit', 'credit'])
     .where('journal_entry_id', '=', entries[0].id)
     .orderBy('id')
-    .execute() as unknown as Array<{ account_id: number; debit: string; credit: string }>;
-  return rows.map((row) => ({ accountId: Number(row.account_id), debit: Number(row.debit), credit: Number(row.credit) }));
+    .execute()) as unknown as Array<{ account_id: number; debit: string; credit: string }>;
+  return rows.map((row) => ({
+    accountId: Number(row.account_id),
+    debit: Number(row.debit),
+    credit: Number(row.credit),
+  }));
 }
 
 async function journalEntryCount(db: Kysely<Database>): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entries').select('id').execute() as unknown as Array<{ id: number }>;
+  const rows = (await (db as any).selectFrom('journal_entries').select('id').execute()) as unknown as Array<{
+    id: number;
+  }>;
   return rows.length;
 }
 
@@ -193,8 +209,14 @@ async function main(): Promise<void> {
   {
     const { db } = await makeDb();
     try {
-      await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: '"KWD"' } as never).execute();
-      await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never).execute();
+      await db
+        .insertInto('settings' as never)
+        .values({ tenant_id: 't1', key: 'currency', value: '"KWD"' } as never)
+        .execute();
+      await db
+        .insertInto('currency_exchange_rates' as never)
+        .values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never)
+        .execute();
       const { catalog } = makeServices(db);
       await assert.rejects(
         db.transaction().execute(async (trx) => {
@@ -215,12 +237,28 @@ async function main(): Promise<void> {
       await seedCurrency(db, 'KWD');
       const { posting } = makeServices(db);
       const total = stockMovementTotal(3, 33.375, 3);
-      const inserted = await (db as any).insertInto('stock_movements').values({
-        tenant_id: 't1', account_id: 'a1', product_id: 7, movement_type: 'deduct',
-        qty: -3, before_qty: 3, after_qty: 0, unit_cost: 33.375, total_cost: total,
-        reason: 'archive_stock_zeroing', note: 'spec', reference_type: 'inventory_adjustment',
-        reference_id: 7, branch_id: null, location_id: null, created_by: 1,
-      }).returning('id').executeTakeFirst() as unknown as { id: number };
+      const inserted = (await (db as any)
+        .insertInto('stock_movements')
+        .values({
+          tenant_id: 't1',
+          account_id: 'a1',
+          product_id: 7,
+          movement_type: 'deduct',
+          qty: -3,
+          before_qty: 3,
+          after_qty: 0,
+          unit_cost: 33.375,
+          total_cost: total,
+          reason: 'archive_stock_zeroing',
+          note: 'spec',
+          reference_type: 'inventory_adjustment',
+          reference_id: 7,
+          branch_id: null,
+          location_id: null,
+          created_by: 1,
+        })
+        .returning('id')
+        .executeTakeFirst()) as unknown as { id: number };
       const result = await posting.postInventoryAdjustment(db as never, Number(inserted.id), auth);
       assert.equal(result.posted, true);
       const lines = await journalLinesFor(db, 'inventory_adjustment', Number(inserted.id));
@@ -260,11 +298,18 @@ async function main(): Promise<void> {
     );
     for (const [index, source] of sources.entries()) {
       const toFixedLines = source.split('\n').filter((line) => line.includes('toFixed(2)'));
-      assert.equal(toFixedLines.length, 0, `unexpected toFixed(2) site in ${serviceFiles[index]}: ${toFixedLines.map((line) => line.trim()).join(' | ')}`);
+      assert.equal(
+        toFixedLines.length,
+        0,
+        `unexpected toFixed(2) site in ${serviceFiles[index]}: ${toFixedLines.map((line) => line.trim()).join(' | ')}`,
+      );
       assert.ok(!source.includes('roundCurrency'), `no roundCurrency helper may remain in ${serviceFiles[index]}`);
     }
     const helperCalls = sources.flatMap((source) => source.match(/stockMovementTotal\(/g) ?? []);
-    assert.ok(helperCalls.length >= 9, `expected at least 9 stockMovementTotal call sites, found ${helperCalls.length}`);
+    assert.ok(
+      helperCalls.length >= 9,
+      `expected at least 9 stockMovementTotal call sites, found ${helperCalls.length}`,
+    );
   }
 
   console.log('catalog-stock-totals-book-digits: all cases passed');

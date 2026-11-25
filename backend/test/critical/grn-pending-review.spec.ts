@@ -33,7 +33,14 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
  * constraint on goods_receipt_lines and is unchanged.
  */
 
-const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'tester', permissions: [] } as unknown as AuthContext;
+const auth = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'tester',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -138,76 +145,180 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 2125, 4100, 5100, 5190, 7290]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-      [code, 't1', String(code), code === 1150 || code === 2120]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      String(code),
+      code === 1150 || code === 2120,
+    ]);
   }
   return { pg, db };
 }
 
 async function seedCurrency(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: 'EGP' } as never).execute();
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'timezone', value: 'Africa/Cairo' } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: 'EGP' } as never)
+    .execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'timezone', value: 'Africa/Cairo' } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeGrnService(db: Kysely<Database>): GoodsReceiptService {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const finance = new PurchasesFinanceService();
   return new GoodsReceiptService(db as any, posting as any, finance as any);
 }
 
 async function seedBase(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('stock_locations' as never).values({ id: 1, tenant_id: 't1', branch_id: null, name: 'Main' } as never).execute();
-  await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier', balance: 0 } as never).execute();
-  await db.insertInto('products' as never).values({
-    id: 10, tenant_id: 't1', account_id: 'a1', name: 'Widget 10',
-    stock_qty: 0, reserved_qty: 0, cost_price: 10, track_serials: false,
-  } as never).execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values({ id: 1, tenant_id: 't1', branch_id: null, name: 'Main' } as never)
+    .execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({ id: 9, tenant_id: 't1', name: 'Supplier', balance: 0 } as never)
+    .execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 10,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Widget 10',
+      stock_qty: 0,
+      reserved_qty: 0,
+      cost_price: 10,
+      track_serials: false,
+    } as never)
+    .execute();
 }
 
 async function seedPo(db: Kysely<Database>, status: string, quantity: number, received?: number): Promise<void> {
-  await db.insertInto('purchase_orders' as never).values({
-    id: 7, tenant_id: 't1', account_id: 'a1', order_number: 'PO-7', supplier_id: 9,
-    supplier_name: 'Supplier', warehouse_id: 1, subtotal: quantity * 10, tax_amount: 0, discount_amount: 0,
-    total_amount: quantity * 10, status, updated_at: new Date('2026-10-01'),
-  } as never).execute();
-  await db.insertInto('purchase_order_items' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', purchase_order_id: 7, product_id: 10,
-    product_name: 'Widget 10', unit_name: 'piece', quantity, received_quantity: received ?? 0,
-    unit_cost: 10, tax_rate: 0, discount: 0, total: quantity * 10,
-  } as never).execute();
+  await db
+    .insertInto('purchase_orders' as never)
+    .values({
+      id: 7,
+      tenant_id: 't1',
+      account_id: 'a1',
+      order_number: 'PO-7',
+      supplier_id: 9,
+      supplier_name: 'Supplier',
+      warehouse_id: 1,
+      subtotal: quantity * 10,
+      tax_amount: 0,
+      discount_amount: 0,
+      total_amount: quantity * 10,
+      status,
+      updated_at: new Date('2026-10-01'),
+    } as never)
+    .execute();
+  await db
+    .insertInto('purchase_order_items' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      purchase_order_id: 7,
+      product_id: 10,
+      product_name: 'Widget 10',
+      unit_name: 'piece',
+      quantity,
+      received_quantity: received ?? 0,
+      unit_cost: 10,
+      tax_rate: 0,
+      discount: 0,
+      total: quantity * 10,
+    } as never)
+    .execute();
 }
 
 async function seedGrn(db: Kysely<Database>, grnId: number, accepted: number, rejected?: number): Promise<void> {
-  await db.insertInto('goods_receipt_notes' as never).values({
-    id: grnId, tenant_id: 't1', account_id: 'a1', doc_no: `GRN-${grnId}`, purchase_order_id: 7,
-    supplier_id: 9, location_id: 1, received_at: new Date('2026-10-01T08:00:00.000Z'),
-    received_by: 1, status: 'draft',
-  } as never).execute();
-  await db.insertInto('goods_receipt_lines' as never).values({
-    id: grnId, tenant_id: 't1', account_id: 'a1', grn_id: grnId,
-    purchase_order_item_id: 1, product_id: 10,
-    ordered_qty: accepted + (rejected ?? 0), received_qty: accepted + (rejected ?? 0),
-    accepted_qty: accepted, rejected_qty: rejected ?? 0, unit_cost: 10,
-  } as never).execute();
+  await db
+    .insertInto('goods_receipt_notes' as never)
+    .values({
+      id: grnId,
+      tenant_id: 't1',
+      account_id: 'a1',
+      doc_no: `GRN-${grnId}`,
+      purchase_order_id: 7,
+      supplier_id: 9,
+      location_id: 1,
+      received_at: new Date('2026-10-01T08:00:00.000Z'),
+      received_by: 1,
+      status: 'draft',
+    } as never)
+    .execute();
+  await db
+    .insertInto('goods_receipt_lines' as never)
+    .values({
+      id: grnId,
+      tenant_id: 't1',
+      account_id: 'a1',
+      grn_id: grnId,
+      purchase_order_item_id: 1,
+      product_id: 10,
+      ordered_qty: accepted + (rejected ?? 0),
+      received_qty: accepted + (rejected ?? 0),
+      accepted_qty: accepted,
+      rejected_qty: rejected ?? 0,
+      unit_cost: 10,
+    } as never)
+    .execute();
 }
 
 async function readState(db: Kysely<Database>, grnId: number): Promise<any> {
-  const product = await (db as any).selectFrom('products').select('stock_qty').where('id', '=', 10).executeTakeFirstOrThrow();
-  const po = await (db as any).selectFrom('purchase_orders').select(['status']).where('id', '=', 7).executeTakeFirstOrThrow();
-  const poItem = await (db as any).selectFrom('purchase_order_items').select(['received_quantity']).where('id', '=', 1).executeTakeFirstOrThrow();
-  const grn = await (db as any).selectFrom('goods_receipt_notes').select(['status', 'pending_review', 'pending_review_reason', 'grni_journal_entry_id']).where('id', '=', grnId).executeTakeFirstOrThrow();
-  const line = await (db as any).selectFrom('goods_receipt_lines').select(['over_received_qty']).where('grn_id', '=', grnId).executeTakeFirstOrThrow();
+  const product = await (db as any)
+    .selectFrom('products')
+    .select('stock_qty')
+    .where('id', '=', 10)
+    .executeTakeFirstOrThrow();
+  const po = await (db as any)
+    .selectFrom('purchase_orders')
+    .select(['status'])
+    .where('id', '=', 7)
+    .executeTakeFirstOrThrow();
+  const poItem = await (db as any)
+    .selectFrom('purchase_order_items')
+    .select(['received_quantity'])
+    .where('id', '=', 1)
+    .executeTakeFirstOrThrow();
+  const grn = await (db as any)
+    .selectFrom('goods_receipt_notes')
+    .select(['status', 'pending_review', 'pending_review_reason', 'grni_journal_entry_id'])
+    .where('id', '=', grnId)
+    .executeTakeFirstOrThrow();
+  const line = await (db as any)
+    .selectFrom('goods_receipt_lines')
+    .select(['over_received_qty'])
+    .where('grn_id', '=', grnId)
+    .executeTakeFirstOrThrow();
   const journals = await (db as any).selectFrom('journal_entries').select('id').execute();
-  const journalLines = await (db as any).selectFrom('journal_entry_lines').select(['account_id', 'debit', 'credit']).execute();
+  const journalLines = await (db as any)
+    .selectFrom('journal_entry_lines')
+    .select(['account_id', 'debit', 'credit'])
+    .execute();
   return {
-    stock: Number(product.stock_qty), poStatus: po.status,
+    stock: Number(product.stock_qty),
+    poStatus: po.status,
     poReceived: Number(poItem.received_quantity),
-    grnStatus: grn.status, pendingReview: grn.pending_review,
-    pendingReason: grn.pending_review_reason, grniEntryId: grn.grni_journal_entry_id,
+    grnStatus: grn.status,
+    pendingReview: grn.pending_review,
+    pendingReason: grn.pending_review_reason,
+    grniEntryId: grn.grni_journal_entry_id,
     overReceived: Number(line.over_received_qty),
-    journalCount: journals.length, journalLines,
+    journalCount: journals.length,
+    journalLines,
   };
 }
 
@@ -220,10 +331,25 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedPo(db, 'draft', 10);
       const grn = makeGrnService(db);
-      const created = await grn.createGoodsReceipt({
-        supplierId: 9, locationId: 1, purchaseOrderId: 7,
-        lines: [{ productId: 10, purchaseOrderItemId: 1, orderedQty: 10, receivedQty: 10, acceptedQty: 10, rejectedQty: 0, unitCost: 10 }],
-      } as any, auth);
+      const created = await grn.createGoodsReceipt(
+        {
+          supplierId: 9,
+          locationId: 1,
+          purchaseOrderId: 7,
+          lines: [
+            {
+              productId: 10,
+              purchaseOrderItemId: 1,
+              orderedQty: 10,
+              receivedQty: 10,
+              acceptedQty: 10,
+              rejectedQty: 0,
+              unitCost: 10,
+            },
+          ],
+        } as any,
+        auth,
+      );
       assert.equal(created.status, 'draft', 'draft receipt creation succeeds against a draft order');
       const result = await grn.postGoodsReceipt(Number(created.id), auth);
       assert.equal(result.status, 'posted');
@@ -280,10 +406,16 @@ async function main(): Promise<void> {
       const grn = makeGrnService(db);
       await grn.postGoodsReceipt(1, auth);
       await assert.rejects(
-        () => grn.createBillFromReceipts({
-          purchaseOrderId: 7, supplierId: 9, supplierInvoiceNo: 'INV-1',
-          lines: [{ grnLineId: 1, qty: 10, unitCost: 10 }],
-        } as any, auth),
+        () =>
+          grn.createBillFromReceipts(
+            {
+              purchaseOrderId: 7,
+              supplierId: 9,
+              supplierInvoiceNo: 'INV-1',
+              lines: [{ grnLineId: 1, qty: 10, unitCost: 10 }],
+            } as any,
+            auth,
+          ),
         /غير معتمد/,
         'billing a pending-review receipt is rejected while the order is draft',
       );
@@ -301,10 +433,26 @@ async function main(): Promise<void> {
       await seedPo(db, 'cancelled', 10);
       const grn = makeGrnService(db);
       await assert.rejects(
-        () => grn.createGoodsReceipt({
-          supplierId: 9, locationId: 1, purchaseOrderId: 7,
-          lines: [{ productId: 10, purchaseOrderItemId: 1, orderedQty: 10, receivedQty: 10, acceptedQty: 10, rejectedQty: 0, unitCost: 10 }],
-        } as any, auth),
+        () =>
+          grn.createGoodsReceipt(
+            {
+              supplierId: 9,
+              locationId: 1,
+              purchaseOrderId: 7,
+              lines: [
+                {
+                  productId: 10,
+                  purchaseOrderItemId: 1,
+                  orderedQty: 10,
+                  receivedQty: 10,
+                  acceptedQty: 10,
+                  rejectedQty: 0,
+                  unitCost: 10,
+                },
+              ],
+            } as any,
+            auth,
+          ),
         /ملغي/,
         'creation against a cancelled order is rejected',
       );

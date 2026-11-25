@@ -41,17 +41,31 @@ async function makeDb(): Promise<Kysely<Database>> {
     CREATE TABLE purchase_order_items (id bigserial PRIMARY KEY, tenant_id text, account_id text, purchase_order_id bigint, product_id bigint, product_name text, quantity numeric, received_quantity numeric, unit_cost numeric, tax_rate numeric, discount numeric, total numeric);
     CREATE TABLE settings (tenant_id text, key text, value text);
   `);
-  await db.insertInto('suppliers' as never).values({
-    id: 3, tenant_id: 't1', name: 'Supplier', account_id: 't1',
-  } as never).execute();
-  await db.insertInto('products' as never).values({
-    id: 5, tenant_id: 't1', name: 'Widget',
-  } as never).execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({
+      id: 3,
+      tenant_id: 't1',
+      name: 'Supplier',
+      account_id: 't1',
+    } as never)
+    .execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 5,
+      tenant_id: 't1',
+      name: 'Widget',
+    } as never)
+    .execute();
   return db;
 }
 
 async function poCount(db: Kysely<Database>): Promise<number> {
-  const row: any = await (db as any).selectFrom('purchase_orders').select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom('purchase_orders')
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -60,15 +74,36 @@ async function readPi(db: Kysely<Database>, id: string): Promise<any> {
 }
 
 async function seedPi(db: Kysely<Database>, overrides: Record<string, unknown>): Promise<void> {
-  await db.insertInto('import_proforma_invoices' as never).values({
-    id: 'pi-1', tenant_id: 't1', project_id: null, supplier_id: 3, pi_number: 'PI-1',
-    pi_date: '2026-11-02', currency: 'USD', total_amount_foreign: 10,
-    exchange_rate_contract: 50, status: 'approved', po_status: 'draft', po_number: null,
-    po_date: null, items: '[]', advance_percentage: 30, balance_percentage: 70,
-    incoterm: 'FOB', delivery_port: null, payment_terms: null, notes: null,
-    paid_amount_foreign: 0, payment_status: 'unpaid', approved_by: null, approved_at: null,
-    ...overrides,
-  } as never).execute();
+  await db
+    .insertInto('import_proforma_invoices' as never)
+    .values({
+      id: 'pi-1',
+      tenant_id: 't1',
+      project_id: null,
+      supplier_id: 3,
+      pi_number: 'PI-1',
+      pi_date: '2026-11-02',
+      currency: 'USD',
+      total_amount_foreign: 10,
+      exchange_rate_contract: 50,
+      status: 'approved',
+      po_status: 'draft',
+      po_number: null,
+      po_date: null,
+      items: '[]',
+      advance_percentage: 30,
+      balance_percentage: 70,
+      incoterm: 'FOB',
+      delivery_port: null,
+      payment_terms: null,
+      notes: null,
+      paid_amount_foreign: 0,
+      payment_status: 'unpaid',
+      approved_by: null,
+      approved_at: null,
+      ...overrides,
+    } as never)
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -126,9 +161,14 @@ async function main(): Promise<void> {
     try {
       const service = new (ImportSalesService as any)(db);
       const created: any = await service.createProformaInvoice('t1', {
-        supplierId: '3', piNumber: 'PI-LINK-1', piDate: '2026-11-09',
-        currency: 'USD', totalAmountForeign: 10, exchangeRateContract: 50,
-        advancePercentage: 30, balancePercentage: 70,
+        supplierId: '3',
+        piNumber: 'PI-LINK-1',
+        piDate: '2026-11-09',
+        currency: 'USD',
+        totalAmountForeign: 10,
+        exchangeRateContract: 50,
+        advancePercentage: 30,
+        balancePercentage: 70,
         items: [{ productName: 'Widget', quantity: 10, unitPriceForeign: 1 }],
       });
       await service.approveProformaInvoice('t1', 1, created.id);
@@ -151,14 +191,22 @@ async function main(): Promise<void> {
   {
     const db = await makeDb();
     try {
-      await db.insertInto('import_projects' as never).values({
-        id: 'proj-1', tenant_id: 't1',
-        feasibility_data: JSON.stringify({
-          items: [{ name: 'Widget', productId: 5, qty: 10, factoryPriceUsd: 1, hsCode: '8708.30' }],
-        }),
-        created_at: '2026-11-09T00:00:00Z',
-      } as never).execute();
-      const proj: any = await (db as any).selectFrom('import_projects').selectAll().where('id', '=', 'proj-1').executeTakeFirstOrThrow();
+      await db
+        .insertInto('import_projects' as never)
+        .values({
+          id: 'proj-1',
+          tenant_id: 't1',
+          feasibility_data: JSON.stringify({
+            items: [{ name: 'Widget', productId: 5, qty: 10, factoryPriceUsd: 1, hsCode: '8708.30' }],
+          }),
+          created_at: '2026-11-09T00:00:00Z',
+        } as never)
+        .execute();
+      const proj: any = await (db as any)
+        .selectFrom('import_projects')
+        .selectAll()
+        .where('id', '=', 'proj-1')
+        .executeTakeFirstOrThrow();
       const feas = JSON.parse(proj.feasibility_data);
       // Mirror of ChinaProformasTab handleSelectProject mapping.
       const pulledItems = feas.items.map((it: any) => ({
@@ -171,9 +219,16 @@ async function main(): Promise<void> {
       assert.equal(Number(pulledItems[0].productId), 5, 'The feasibility->PI pull must carry productId through');
       const service = new (ImportSalesService as any)(db);
       const created: any = await service.createProformaInvoice('t1', {
-        projectId: 'proj-1', supplierId: '3', piNumber: 'PI-PULL-1', piDate: '2026-11-09',
-        currency: 'USD', totalAmountForeign: 10, exchangeRateContract: 50,
-        advancePercentage: 30, balancePercentage: 70, items: pulledItems,
+        projectId: 'proj-1',
+        supplierId: '3',
+        piNumber: 'PI-PULL-1',
+        piDate: '2026-11-09',
+        currency: 'USD',
+        totalAmountForeign: 10,
+        exchangeRateContract: 50,
+        advancePercentage: 30,
+        balancePercentage: 70,
+        items: pulledItems,
       });
       await service.approveProformaInvoice('t1', 1, created.id);
       const result = await service.generatePoFromProforma('t1', 1, created.id);
@@ -188,4 +243,7 @@ async function main(): Promise<void> {
   console.log('Import PI item-link tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

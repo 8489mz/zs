@@ -76,7 +76,9 @@ function legacyFeasibility(): Record<string, unknown> {
 }
 
 async function seedLegacyProject(db: Kysely<Database>, id: string): Promise<void> {
-  await sql`INSERT INTO import_projects (id, tenant_id, project_no, feasibility_data, budget_currency, country_destination, status) VALUES (${id}, 't1', ${`IMP-${id}`}, ${JSON.stringify(legacyFeasibility())}::jsonb, 'USD', 'Alexandria', 'feasibility')`.execute(db);
+  await sql`INSERT INTO import_projects (id, tenant_id, project_no, feasibility_data, budget_currency, country_destination, status) VALUES (${id}, 't1', ${`IMP-${id}`}, ${JSON.stringify(legacyFeasibility())}::jsonb, 'USD', 'Alexandria', 'feasibility')`.execute(
+    db,
+  );
 }
 
 async function projectCount(db: Kysely<Database>): Promise<number> {
@@ -85,7 +87,9 @@ async function projectCount(db: Kysely<Database>): Promise<number> {
 }
 
 async function storedFeasibility(db: Kysely<Database>, id: string): Promise<Record<string, any>> {
-  const r = await sql<{ feasibility_data: any }>`SELECT feasibility_data FROM import_projects WHERE id = ${id}`.execute(db);
+  const r = await sql<{ feasibility_data: any }>`SELECT feasibility_data FROM import_projects WHERE id = ${id}`.execute(
+    db,
+  );
   const raw = r.rows[0].feasibility_data;
   return typeof raw === 'string' ? JSON.parse(raw) : raw;
 }
@@ -120,7 +124,10 @@ async function main(): Promise<void> {
       'a stored study with no commercial rate must still fail closed',
     );
     assert.equal(await projectCount(db), 1);
-    const untouched = await sql<{ status: string; feasibility_converted_at: string | null }>`SELECT status, feasibility_converted_at FROM import_projects WHERE id = 'legacy-1'`.execute(db);
+    const untouched = await sql<{
+      status: string;
+      feasibility_converted_at: string | null;
+    }>`SELECT status, feasibility_converted_at FROM import_projects WHERE id = 'legacy-1'`.execute(db);
     assert.equal(untouched.rows[0].status, 'feasibility');
     assert.equal(untouched.rows[0].feasibility_converted_at, null);
 
@@ -142,7 +149,13 @@ async function main(): Promise<void> {
     assert.equal(converted.proformaId, null);
     assert.equal(converted.cashFlowSchedule[0].amountEgp, 15000, '30% advance of $1000 at rate 50 is 15000 EGP');
     assert.equal(await projectCount(db), 1, 'approval must not create a second project');
-    const after = await sql<{ status: string; feasibility_converted_at: string | null; cash_flow_schedule: string | null }>`SELECT status, feasibility_converted_at, cash_flow_schedule FROM import_projects WHERE id = 'legacy-1'`.execute(db);
+    const after = await sql<{
+      status: string;
+      feasibility_converted_at: string | null;
+      cash_flow_schedule: string | null;
+    }>`SELECT status, feasibility_converted_at, cash_flow_schedule FROM import_projects WHERE id = 'legacy-1'`.execute(
+      db,
+    );
     assert.equal(after.rows[0].status, 'sourcing');
     assert.notEqual(after.rows[0].feasibility_converted_at, null);
     assert.equal(JSON.parse(after.rows[0].cash_flow_schedule as string).length, 5);
@@ -163,11 +176,19 @@ async function main(): Promise<void> {
       exchangeRateCommercial: 50,
     } as never);
     await service.updateProject('t1', 'legacy-2', { feasibilityData: recalculated2 } as never);
-    const withSupplier = await service.convertFeasibilityToProject('t1', 'legacy-2', { projectId: 'legacy-2', supplierId: '7' } as never);
+    const withSupplier = await service.convertFeasibilityToProject('t1', 'legacy-2', {
+      projectId: 'legacy-2',
+      supplierId: '7',
+    } as never);
     assert.equal(withSupplier.projectId, 'legacy-2');
     assert.notEqual(withSupplier.proformaId, null);
     assert.equal(await projectCount(db), 2, 'still exactly the two seeded projects');
-    const pi = await sql<{ exchange_rate_contract: string; project_id: string }>`SELECT exchange_rate_contract, project_id FROM import_proforma_invoices WHERE project_id = 'legacy-2'`.execute(db);
+    const pi = await sql<{
+      exchange_rate_contract: string;
+      project_id: string;
+    }>`SELECT exchange_rate_contract, project_id FROM import_proforma_invoices WHERE project_id = 'legacy-2'`.execute(
+      db,
+    );
     assert.equal(pi.rows.length, 1);
     assert.equal(pi.rows[0].project_id, 'legacy-2');
     assert.equal(Number(pi.rows[0].exchange_rate_contract), 50);

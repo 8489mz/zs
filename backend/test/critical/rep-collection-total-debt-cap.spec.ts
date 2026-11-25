@@ -99,40 +99,184 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true })
+    .execute();
   // One open trip per service case (1-4), one customer per case (21-24).
   for (let tripId = 1; tripId <= 4; tripId++) {
-    await anyDb.insertInto('van_sales_trips').values({ id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' }).execute();
+    await anyDb
+      .insertInto('van_sales_trips')
+      .values({ id: tripId, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' })
+      .execute();
   }
   // Customer 21: owes 100, all of it rep 1's share (ledger +100 via trip 1).
-  await anyDb.insertInto('customers').values({ id: 21, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 21', balance: 100, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-  await anyDb.insertInto('customer_ledger').values({ customer_id: 21, entry_type: 'sale', amount: 100, balance_after: 100, reference_type: 'sale', reference_id: null, van_trip_id: 1, tenant_id: TENANT, account_id: ACCOUNT }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 21,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 21',
+      balance: 100,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_ledger')
+    .values({
+      customer_id: 21,
+      entry_type: 'sale',
+      amount: 100,
+      balance_after: 100,
+      reference_type: 'sale',
+      reference_id: null,
+      van_trip_id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
   // Customer 22: owes 100, all of it rep 1's share (ledger +100 via trip 2) — the B2 hole customer.
-  await anyDb.insertInto('customers').values({ id: 22, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 22', balance: 100, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-  await anyDb.insertInto('customer_ledger').values({ customer_id: 22, entry_type: 'sale', amount: 100, balance_after: 100, reference_type: 'sale', reference_id: null, van_trip_id: 2, tenant_id: TENANT, account_id: ACCOUNT }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 22,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 22',
+      balance: 100,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_ledger')
+    .values({
+      customer_id: 22,
+      entry_type: 'sale',
+      amount: 100,
+      balance_after: 100,
+      reference_type: 'sale',
+      reference_id: null,
+      van_trip_id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
   // Customer 23: owes 150 total = rep 1's share 100 + 50 unassigned legacy balance.
-  await anyDb.insertInto('customers').values({ id: 23, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 23', balance: 150, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-  await anyDb.insertInto('customer_ledger').values({ customer_id: 23, entry_type: 'sale', amount: 100, balance_after: 150, reference_type: 'sale', reference_id: null, van_trip_id: 3, tenant_id: TENANT, account_id: ACCOUNT }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 23,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 23',
+      balance: 150,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_ledger')
+    .values({
+      customer_id: 23,
+      entry_type: 'sale',
+      amount: 100,
+      balance_after: 150,
+      reference_type: 'sale',
+      reference_id: null,
+      van_trip_id: 3,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
   // Customer 24: owes 100, all of it rep 1's share (ledger +100 via trip 4) — boundary customer.
-  await anyDb.insertInto('customers').values({ id: 24, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop Customer 24', balance: 100, credit_limit: 0, customer_type: 'cash', metadata: '{}', is_active: true }).execute();
-  await anyDb.insertInto('customer_ledger').values({ customer_id: 24, entry_type: 'sale', amount: 100, balance_after: 100, reference_type: 'sale', reference_id: null, van_trip_id: 4, tenant_id: TENANT, account_id: ACCOUNT }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 24,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Shop Customer 24',
+      balance: 100,
+      credit_limit: 0,
+      customer_type: 'cash',
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customer_ledger')
+    .values({
+      customer_id: 24,
+      entry_type: 'sale',
+      amount: 100,
+      balance_after: 100,
+      reference_type: 'sale',
+      reference_id: null,
+      van_trip_id: 4,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -141,11 +285,27 @@ function buildService(db: Kysely<Database>): VanSalesService {
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   return service;
 }
@@ -159,7 +319,11 @@ function clearCollectionCaches(): void {
 }
 
 async function customerBalance(db: Kysely<Database>, customerId: number): Promise<number> {
-  const row = await (db as any).selectFrom('customers').select('balance').where('id', '=', customerId).executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('customers')
+    .select('balance')
+    .where('id', '=', customerId)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.balance);
 }
 
@@ -169,7 +333,12 @@ async function paymentsCount(db: Kysely<Database>): Promise<number> {
 }
 
 async function journalCount(db: Kysely<Database>, sourceType: string): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', sourceType).where('tenant_id', '=', TENANT).execute();
+  const rows = await (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', sourceType)
+    .where('tenant_id', '=', TENANT)
+    .execute();
   return rows.length;
 }
 
@@ -186,7 +355,12 @@ async function main(): Promise<void> {
     // E1. Engine: amount == total debt is allowed.
     {
       const v = validateIsolatedRepCollection({
-        repId: 1, collectionAmount: 100, repBalance: 100, otherRepsBalance: 0, totalCustomerBalance: 100, moneyDigits: 2,
+        repId: 1,
+        collectionAmount: 100,
+        repBalance: 100,
+        otherRepsBalance: 0,
+        totalCustomerBalance: 100,
+        moneyDigits: 2,
       });
       assert.equal(v.allowed, true);
       assert.equal(v.companyPreviousBalance, 100);
@@ -200,7 +374,12 @@ async function main(): Promise<void> {
     // allowed: true). The error names both amounts.
     {
       const v = validateIsolatedRepCollection({
-        repId: 1, collectionAmount: 150, repBalance: 100, otherRepsBalance: 0, totalCustomerBalance: 100, moneyDigits: 2,
+        repId: 1,
+        collectionAmount: 150,
+        repBalance: 100,
+        otherRepsBalance: 0,
+        totalCustomerBalance: 100,
+        moneyDigits: 2,
       });
       assert.equal(v.allowed, false);
       assert.equal(v.errorCode, 'REP_COLLECTION_EXCEEDS_TOTAL_BALANCE');
@@ -216,7 +395,12 @@ async function main(): Promise<void> {
     // nobody else's custody — otherRepsBalance is 0).
     {
       const v = validateIsolatedRepCollection({
-        repId: 1, collectionAmount: 120, repBalance: 100, otherRepsBalance: 0, totalCustomerBalance: 150, moneyDigits: 2,
+        repId: 1,
+        collectionAmount: 120,
+        repBalance: 100,
+        otherRepsBalance: 0,
+        totalCustomerBalance: 150,
+        moneyDigits: 2,
       });
       assert.equal(v.allowed, true);
       assert.equal(v.companyPreviousBalance, 150);
@@ -236,10 +420,18 @@ async function main(): Promise<void> {
       assert.ok(payloadAt > 0, 'recordFieldCollection exists');
       const payloadSlice = vanSource.slice(payloadAt, payloadAt + 1200);
       assert.ok(!/advance/i.test(payloadSlice), 'the collection payload carries no advance flag');
-      const engineSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/rep-target/rep-balances.slice.ts'), 'utf8');
+      const engineSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/rep-target/rep-balances.slice.ts'),
+        'utf8',
+      );
       assert.ok(engineSource.includes('INV-REP-COLLECTION-TOTAL-BALANCE-CAP'), 'the engine names the invariant');
       const v = validateIsolatedRepCollection({
-        repId: 1, collectionAmount: 150, repBalance: 100, otherRepsBalance: 0, totalCustomerBalance: 100, moneyDigits: 2,
+        repId: 1,
+        collectionAmount: 150,
+        repBalance: 100,
+        otherRepsBalance: 0,
+        totalCustomerBalance: 100,
+        moneyDigits: 2,
       });
       assert.equal(v.allowed, false);
       assert.equal(v.errorCode, 'REP_COLLECTION_EXCEEDS_TOTAL_BALANCE');
@@ -252,12 +444,19 @@ async function main(): Promise<void> {
       clearCollectionCaches();
       const journalsBefore = await journalCount(db, 'van_field_collection');
       const res = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 21, amount: 100, paymentMethod: 'cash',
+        tripId: 1,
+        customerId: 21,
+        amount: 100,
+        paymentMethod: 'cash',
       });
       assert.equal(res.ok, true);
       assert.equal(res.amount, 100);
       assert.equal(await customerBalance(db, 21), 0, '100 collected off the 100 balance');
-      assert.equal(await journalCount(db, 'van_field_collection'), journalsBefore + 1, 'exactly one collection journal posted');
+      assert.equal(
+        await journalCount(db, 'van_field_collection'),
+        journalsBefore + 1,
+        'exactly one collection journal posted',
+      );
       console.log('  (S1) service: amount == total debt posts, balance 0 passed');
     }
 
@@ -270,9 +469,13 @@ async function main(): Promise<void> {
       const journalsBefore = await journalCount(db, 'van_field_collection');
       const paymentsBefore = await paymentsCount(db);
       await assert.rejects(
-        () => service.recordFieldCollection(1, TENANT, ACCOUNT, {
-          tripId: 2, customerId: 22, amount: 150, paymentMethod: 'cash',
-        }),
+        () =>
+          service.recordFieldCollection(1, TENANT, ACCOUNT, {
+            tripId: 2,
+            customerId: 22,
+            amount: 150,
+            paymentMethod: 'cash',
+          }),
         (err: any) => err.code === 'REP_COLLECTION_EXCEEDS_TOTAL_BALANCE',
         'an over-total collection must be refused with the total-cap code',
       );
@@ -290,7 +493,10 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       const res = await service.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 3, customerId: 23, amount: 120, paymentMethod: 'cash',
+        tripId: 3,
+        customerId: 23,
+        amount: 120,
+        paymentMethod: 'cash',
       });
       assert.equal(res.ok, true);
       assert.equal(res.amount, 120);
@@ -303,9 +509,13 @@ async function main(): Promise<void> {
     {
       clearCollectionCaches();
       await assert.rejects(
-        () => service.recordFieldCollection(1, TENANT, ACCOUNT, {
-          tripId: 4, customerId: 24, amount: 100.01, paymentMethod: 'cash',
-        }),
+        () =>
+          service.recordFieldCollection(1, TENANT, ACCOUNT, {
+            tripId: 4,
+            customerId: 24,
+            amount: 100.01,
+            paymentMethod: 'cash',
+          }),
         (err: any) => err.code === 'REP_COLLECTION_EXCEEDS_TOTAL_BALANCE',
         'one minor unit over the total debt must still be refused',
       );
@@ -318,9 +528,18 @@ async function main(): Promise<void> {
     // File #67 split: the guard moved into the S1 slice — read it directly.
     {
       const here = __dirname;
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-collections-and-swaps/record-field-collection.slice.ts'), 'utf8');
+      const vanSource = readFileSync(
+        resolve(
+          here,
+          '../../src/modules/delivery-reps/services/van-collections-and-swaps/record-field-collection.slice.ts',
+        ),
+        'utf8',
+      );
       assert.ok(vanSource.includes('INV-REP-COLLECTION-TOTAL-BALANCE-CAP'), 'van-sales names the invariant');
-      assert.ok(vanSource.includes('roundMoney(finalBalance, moneyDigits) < 0'), 'the balance write carries the negative-balance floor guard');
+      assert.ok(
+        vanSource.includes('roundMoney(finalBalance, moneyDigits) < 0'),
+        'the balance write carries the negative-balance floor guard',
+      );
       assert.ok(vanSource.includes('REP_COLLECTION_EXCEEDS_TOTAL_BALANCE'), 'van-sales uses the total-cap error code');
       console.log('  source pins passed');
     }

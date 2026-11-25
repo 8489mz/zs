@@ -47,15 +47,35 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
-async function journalLines(db: Kysely<Database>, workOrderId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
-  const rows = await sql<{ code: string; debit: string; credit: string }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'manufacturing_work_order' AND e.source_id = ${workOrderId} ORDER BY l.id`.execute(db);
+async function journalLines(
+  db: Kysely<Database>,
+  workOrderId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
+  const rows = await sql<{
+    code: string;
+    debit: string;
+    credit: string;
+  }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'manufacturing_work_order' AND e.source_id = ${workOrderId} ORDER BY l.id`.execute(
+    db,
+  );
   return rows.rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
 async function journalCount(db: Kysely<Database>, workOrderId: number): Promise<number> {
-  const rows = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM journal_entries WHERE source_type = 'manufacturing_work_order' AND source_id = ${workOrderId}`.execute(db);
+  const rows = await sql<{
+    n: string;
+  }>`SELECT COUNT(*) AS n FROM journal_entries WHERE source_type = 'manufacturing_work_order' AND source_id = ${workOrderId}`.execute(
+    db,
+  );
   return Number(rows.rows[0].n);
 }
 
@@ -63,30 +83,51 @@ async function seedOrder(
   db: Kysely<Database>,
   id: number,
   opts: {
-    bomQuantity: number; overhead: number; qty: number; storedTotal: number;
-    rm: number; ops: number; fgMovement: number | null; byMovement: number;
+    bomQuantity: number;
+    overhead: number;
+    qty: number;
+    storedTotal: number;
+    rm: number;
+    ops: number;
+    fgMovement: number | null;
+    byMovement: number;
   },
 ): Promise<void> {
-  await sql`INSERT INTO manufacturing_boms (id, product_id, quantity, overhead_cost, expected_cost, is_active, tenant_id, account_id) VALUES (${id}, 1, ${opts.bomQuantity}, ${opts.overhead}, 0, true, 't1', 'a1')`.execute(db);
-  await sql`INSERT INTO manufacturing_work_orders (id, bom_id, status, quantity_to_produce, produced_quantity, source_location_id, destination_location_id, total_cost, completed_at, created_by, tenant_id, account_id) VALUES (${id}, ${id}, 'done', ${opts.qty}, ${opts.qty}, 1, 1, ${opts.storedTotal}, NOW(), 1, 't1', 'a1')`.execute(db);
+  await sql`INSERT INTO manufacturing_boms (id, product_id, quantity, overhead_cost, expected_cost, is_active, tenant_id, account_id) VALUES (${id}, 1, ${opts.bomQuantity}, ${opts.overhead}, 0, true, 't1', 'a1')`.execute(
+    db,
+  );
+  await sql`INSERT INTO manufacturing_work_orders (id, bom_id, status, quantity_to_produce, produced_quantity, source_location_id, destination_location_id, total_cost, completed_at, created_by, tenant_id, account_id) VALUES (${id}, ${id}, 'done', ${opts.qty}, ${opts.qty}, 1, 1, ${opts.storedTotal}, NOW(), 1, 't1', 'a1')`.execute(
+    db,
+  );
   if (opts.rm > 0) {
-    await sql`INSERT INTO manufacturing_wo_consumptions (tenant_id, account_id, work_order_id, component_product_id, quantity_consumed, unit_cost, line_total) VALUES ('t1', 'a1', ${id}, 2, 1, ${opts.rm}, ${opts.rm})`.execute(db);
+    await sql`INSERT INTO manufacturing_wo_consumptions (tenant_id, account_id, work_order_id, component_product_id, quantity_consumed, unit_cost, line_total) VALUES ('t1', 'a1', ${id}, 2, 1, ${opts.rm}, ${opts.rm})`.execute(
+      db,
+    );
   }
   if (opts.ops > 0) {
-    await sql`INSERT INTO manufacturing_wo_operations (tenant_id, account_id, work_order_id, work_center_id, operation_name, sequence, duration_hours, hourly_cost, total_cost, status) VALUES ('t1', 'a1', ${id}, 1, 'Cutting', 1, 1, ${opts.ops}, ${opts.ops}, 'completed')`.execute(db);
+    await sql`INSERT INTO manufacturing_wo_operations (tenant_id, account_id, work_order_id, work_center_id, operation_name, sequence, duration_hours, hourly_cost, total_cost, status) VALUES ('t1', 'a1', ${id}, 1, 'Cutting', 1, 1, ${opts.ops}, ${opts.ops}, 'completed')`.execute(
+      db,
+    );
   }
   if (opts.fgMovement !== null) {
-    await sql`INSERT INTO stock_movements (tenant_id, account_id, product_id, movement_type, qty, before_qty, after_qty, reference_type, reference_id, location_id, created_by, unit_cost, total_cost) VALUES ('t1', 'a1', 1, 'manufacturing_production', ${opts.qty}, 0, ${opts.qty}, 'manufacturing_work_order', ${id}, 1, 1, 0, ${opts.fgMovement})`.execute(db);
+    await sql`INSERT INTO stock_movements (tenant_id, account_id, product_id, movement_type, qty, before_qty, after_qty, reference_type, reference_id, location_id, created_by, unit_cost, total_cost) VALUES ('t1', 'a1', 1, 'manufacturing_production', ${opts.qty}, 0, ${opts.qty}, 'manufacturing_work_order', ${id}, 1, 1, 0, ${opts.fgMovement})`.execute(
+      db,
+    );
   }
   if (opts.byMovement > 0) {
-    await sql`INSERT INTO stock_movements (tenant_id, account_id, product_id, movement_type, qty, before_qty, after_qty, reference_type, reference_id, location_id, created_by, unit_cost, total_cost) VALUES ('t1', 'a1', 3, 'manufacturing_byproduct', 1, 0, 1, 'manufacturing_work_order', ${id}, 1, 1, 0, ${opts.byMovement})`.execute(db);
+    await sql`INSERT INTO stock_movements (tenant_id, account_id, product_id, movement_type, qty, before_qty, after_qty, reference_type, reference_id, location_id, created_by, unit_cost, total_cost) VALUES ('t1', 'a1', 3, 'manufacturing_byproduct', 1, 0, 1, 'manufacturing_work_order', ${id}, 1, 1, 0, ${opts.byMovement})`.execute(
+      db,
+    );
   }
 }
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
 
   try {
@@ -127,7 +168,16 @@ async function main(): Promise<void> {
     // Case 1: full shape -- RM 60 + ops 30 + scaled overhead 10 = 100;
     // FG movement 80, by-product 20. Old code debited 100 to FG and
     // hid the by-product leg; new code debits 80 + 20 separately.
-    await seedOrder(db, 1, { bomQuantity: 2, overhead: 10, qty: 2, storedTotal: 100, rm: 60, ops: 30, fgMovement: 80, byMovement: 20 });
+    await seedOrder(db, 1, {
+      bomQuantity: 2,
+      overhead: 10,
+      qty: 2,
+      storedTotal: 100,
+      rm: 60,
+      ops: 30,
+      fgMovement: 80,
+      byMovement: 20,
+    });
     const res1 = await posting.postManufacturingWorkOrder(db as never, 1, AUTH);
     assert.equal(res1.posted, true);
     assert.deepEqual(await journalLines(db, 1), [
@@ -138,7 +188,16 @@ async function main(): Promise<void> {
     ]);
 
     // Case 2: pure overhead shape (no ops, no by-products) -- unchanged.
-    await seedOrder(db, 2, { bomQuantity: 1, overhead: 20, qty: 2, storedTotal: 90, rm: 50, ops: 0, fgMovement: 90, byMovement: 0 });
+    await seedOrder(db, 2, {
+      bomQuantity: 1,
+      overhead: 20,
+      qty: 2,
+      storedTotal: 90,
+      rm: 50,
+      ops: 0,
+      fgMovement: 90,
+      byMovement: 0,
+    });
     await posting.postManufacturingWorkOrder(db as never, 2, AUTH);
     assert.deepEqual(await journalLines(db, 2), [
       { code: '1140', debit: 90, credit: 0 },
@@ -148,7 +207,16 @@ async function main(): Promise<void> {
 
     // Case 3: a wrong stored total cannot poison the journal when the
     // components and movements agree (stored 500, real economics 100).
-    await seedOrder(db, 3, { bomQuantity: 2, overhead: 10, qty: 2, storedTotal: 500, rm: 60, ops: 30, fgMovement: 80, byMovement: 20 });
+    await seedOrder(db, 3, {
+      bomQuantity: 2,
+      overhead: 10,
+      qty: 2,
+      storedTotal: 500,
+      rm: 60,
+      ops: 30,
+      fgMovement: 80,
+      byMovement: 20,
+    });
     await posting.postManufacturingWorkOrder(db as never, 3, AUTH);
     assert.deepEqual(await journalLines(db, 3), [
       { code: '1140', debit: 80, credit: 0 },
@@ -159,7 +227,16 @@ async function main(): Promise<void> {
 
     // Case 4a: one-minor-unit residue debits 5190 (components 100,
     // recorded output 99.99).
-    await seedOrder(db, 4, { bomQuantity: 1, overhead: 10, qty: 1, storedTotal: 100, rm: 60, ops: 30, fgMovement: 99.99, byMovement: 0 });
+    await seedOrder(db, 4, {
+      bomQuantity: 1,
+      overhead: 10,
+      qty: 1,
+      storedTotal: 100,
+      rm: 60,
+      ops: 30,
+      fgMovement: 99.99,
+      byMovement: 0,
+    });
     await posting.postManufacturingWorkOrder(db as never, 4, AUTH);
     assert.deepEqual(await journalLines(db, 4), [
       { code: '1140', debit: 99.99, credit: 0 },
@@ -169,7 +246,16 @@ async function main(): Promise<void> {
     ]);
 
     // Case 4b: one-minor-unit residue the other way credits 5190.
-    await seedOrder(db, 5, { bomQuantity: 1, overhead: 10, qty: 1, storedTotal: 100, rm: 60, ops: 30, fgMovement: 100.01, byMovement: 0 });
+    await seedOrder(db, 5, {
+      bomQuantity: 1,
+      overhead: 10,
+      qty: 1,
+      storedTotal: 100,
+      rm: 60,
+      ops: 30,
+      fgMovement: 100.01,
+      byMovement: 0,
+    });
     await posting.postManufacturingWorkOrder(db as never, 5, AUTH);
     assert.deepEqual(await journalLines(db, 5), [
       { code: '1140', debit: 100.01, credit: 0 },
@@ -179,7 +265,16 @@ async function main(): Promise<void> {
     ]);
 
     // Case 5: drift beyond one minor unit fails closed, posts nothing.
-    await seedOrder(db, 6, { bomQuantity: 1, overhead: 10, qty: 1, storedTotal: 100, rm: 60, ops: 30, fgMovement: 90, byMovement: 0 });
+    await seedOrder(db, 6, {
+      bomQuantity: 1,
+      overhead: 10,
+      qty: 1,
+      storedTotal: 100,
+      rm: 60,
+      ops: 30,
+      fgMovement: 90,
+      byMovement: 0,
+    });
     await assert.rejects(
       posting.postManufacturingWorkOrder(db as never, 6, AUTH),
       (err: any) => err && err.code === 'MANUFACTURING_COST_MISMATCH' && err.statusCode === 409,
@@ -187,13 +282,31 @@ async function main(): Promise<void> {
     assert.equal(await journalCount(db, 6), 0);
 
     // Case 6: genuinely zero-cost posts nothing and does not throw.
-    await seedOrder(db, 7, { bomQuantity: 1, overhead: 0, qty: 1, storedTotal: 0, rm: 0, ops: 0, fgMovement: 0, byMovement: 0 });
+    await seedOrder(db, 7, {
+      bomQuantity: 1,
+      overhead: 0,
+      qty: 1,
+      storedTotal: 0,
+      rm: 0,
+      ops: 0,
+      fgMovement: 0,
+      byMovement: 0,
+    });
     const res7 = await posting.postManufacturingWorkOrder(db as never, 7, AUTH);
     assert.equal(res7.posted, false);
     assert.equal(await journalCount(db, 7), 0);
 
     // Case 7: by-product value beyond the components fails closed.
-    await seedOrder(db, 8, { bomQuantity: 1, overhead: 10, qty: 1, storedTotal: 100, rm: 60, ops: 30, fgMovement: 0, byMovement: 120 });
+    await seedOrder(db, 8, {
+      bomQuantity: 1,
+      overhead: 10,
+      qty: 1,
+      storedTotal: 100,
+      rm: 60,
+      ops: 30,
+      fgMovement: 0,
+      byMovement: 120,
+    });
     await assert.rejects(
       posting.postManufacturingWorkOrder(db as never, 8, AUTH),
       (err: any) => err && err.code === 'MANUFACTURING_COST_MISMATCH' && err.statusCode === 409,
@@ -208,7 +321,10 @@ async function main(): Promise<void> {
 
     // Case 9: source pin -- no residual derivation, both new reads present.
     const source = fs.readFileSync(
-      path.resolve(__dirname, '../../src/modules/accounting/services/inventory-manufacturing-cash-posting/post-manufacturing-work-order.slice.ts'),
+      path.resolve(
+        __dirname,
+        '../../src/modules/accounting/services/inventory-manufacturing-cash-posting/post-manufacturing-work-order.slice.ts',
+      ),
       'utf8',
     );
     const start = source.indexOf('async postManufacturingWorkOrder(');

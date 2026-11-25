@@ -25,7 +25,10 @@ function testPermissionGuards(): void {
   const metaAny = Reflect.getMetadata(REQUIRED_ANY_PERMISSIONS_KEY, ImportSalesController);
   assert.ok(metaAny, 'ImportSalesController must have @RequireAnyPermission');
   assert.ok(!metaAny.includes('sales'), 'ImportSalesController class-level must NOT contain sales permission');
-  assert.ok(metaAny.includes('accounting') || metaAny.includes('purchases'), 'ImportSalesController must be restricted to accounting/purchases');
+  assert.ok(
+    metaAny.includes('accounting') || metaAny.includes('purchases'),
+    'ImportSalesController must be restricted to accounting/purchases',
+  );
 
   // 2. Sensitive partner routes must strictly require 'accounting'
   const partnerMethods = [
@@ -35,7 +38,7 @@ function testPermissionGuards(): void {
     'deletePartner',
     'getPartnerLedger',
     'recordCapitalTransaction',
-    'recordPartnerPayout'
+    'recordPartnerPayout',
   ];
 
   for (const m of partnerMethods) {
@@ -51,7 +54,10 @@ function testPermissionGuards(): void {
     const fn = (ImportSalesController.prototype as any)[m];
     const perms = Reflect.getMetadata(REQUIRED_ANY_PERMISSIONS_KEY, fn);
     assert.ok(perms, `Method ${m} must have explicit permission guard`);
-    assert.ok(perms.includes('accounting') && perms.includes('purchases'), `Method ${m} must require purchases or accounting`);
+    assert.ok(
+      perms.includes('accounting') && perms.includes('purchases'),
+      `Method ${m} must require purchases or accounting`,
+    );
   }
 }
 
@@ -73,7 +79,7 @@ function testLandedCostAndProfitAllocation(): void {
   const customsEgp = 8000;
   const transportEgp = 2000;
 
-  const totalOverhead = (shippingUsd * rate) + customsEgp + transportEgp;
+  const totalOverhead = shippingUsd * rate + customsEgp + transportEgp;
   assert.equal(totalOverhead, 20000, 'Total overhead must equal 20,000 EGP');
 
   const baseCost = qty * unitUsd * rate;
@@ -93,7 +99,7 @@ function testLandedCostAndProfitAllocation(): void {
   const cogs = 70000;
   const grossProfit = revenue - cogs;
   const generalOperatingExpenses = 5000;
-  
+
   // If double-counting happened: profit would be 30,000 - 20,000 - 5,000 = 5,000 EGP (WRONG!)
   // Correct Net Profit Pool:
   const netProfitPool = grossProfit - generalOperatingExpenses;
@@ -117,13 +123,13 @@ function testWeightedAverageCostFormula(): void {
   const landedCost = 80;
 
   const totalQty = oldQty + arrivedQty;
-  const newWeightedCost = ((oldQty * oldCost) + (arrivedQty * landedCost)) / totalQty;
+  const newWeightedCost = (oldQty * oldCost + arrivedQty * landedCost) / totalQty;
   assert.equal(newWeightedCost, 60, 'Weighted average cost must be exactly 60 EGP');
 
   // Edge case: Old stock is 0 (first receipt)
   const firstQty = 50;
   const firstLanded = 75;
-  const firstWeighted = ((0 * 0) + (firstQty * firstLanded)) / firstQty;
+  const firstWeighted = (0 * 0 + firstQty * firstLanded) / firstQty;
   assert.equal(firstWeighted, 75, 'When previous stock is 0, cost must equal landed cost');
 }
 
@@ -137,8 +143,8 @@ function testMarkupCalculation(): void {
   const wholesalePrice = Number((cost * (1 + wholesaleMarkup / 100)).toFixed(2));
   const retailPrice = Number((cost * (1 + retailMarkup / 100)).toFixed(2));
 
-  assert.equal(wholesalePrice, 120.00, 'Wholesale price with 20% markup must be 120.00 EGP');
-  assert.equal(retailPrice, 135.00, 'Retail price with 35% markup must be 135.00 EGP');
+  assert.equal(wholesalePrice, 120.0, 'Wholesale price with 20% markup must be 120.00 EGP');
+  assert.equal(retailPrice, 135.0, 'Retail price with 35% markup must be 135.00 EGP');
 }
 
 function testDocNoPatternMatching(): void {

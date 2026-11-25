@@ -30,13 +30,22 @@ import {
 import { HrService } from '../../src/modules/hr/hr.service';
 import { TransactionHelper } from '../../src/database/helpers/transaction.helper';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', userId: 1, username: 'tester', role: 'admin', permissions: [] } as never;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  userId: 1,
+  username: 'tester',
+  role: 'admin',
+  permissions: [],
+} as never;
 const AUDIT_STUB = { log: async () => ({}) } as never;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_resolve, reject) => setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms)),
+    new Promise<T>((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms),
+    ),
   ]);
 }
 
@@ -45,14 +54,42 @@ function partA(): void {
   assert.equal(DEFAULT_DIRECT_ADVANCE_CASH_CAP, 2000, 'default cap is 2000');
   assert.equal(resolveDirectAdvanceCashCap(null, 'KWD'), 2000, 'no policies -> default');
   assert.equal(resolveDirectAdvanceCashCap({}, 'KWD'), 2000, 'empty policies -> default');
-  assert.equal(resolveDirectAdvanceCashCap({ directAdvanceCashCapByCurrency: { KWD: 500 } }, 'KWD'), 500, 'map entry for the currency');
-  assert.equal(resolveDirectAdvanceCashCap({ directAdvanceCashCapByCurrency: { KWD: 500 } }, 'EGP'), 2000, 'map without this currency -> default');
+  assert.equal(
+    resolveDirectAdvanceCashCap({ directAdvanceCashCapByCurrency: { KWD: 500 } }, 'KWD'),
+    500,
+    'map entry for the currency',
+  );
+  assert.equal(
+    resolveDirectAdvanceCashCap({ directAdvanceCashCapByCurrency: { KWD: 500 } }, 'EGP'),
+    2000,
+    'map without this currency -> default',
+  );
   assert.equal(resolveDirectAdvanceCashCap({ directAdvanceCashCap: 3000 }, 'EGP'), 3000, 'scalar applies');
-  assert.equal(resolveDirectAdvanceCashCap({ directAdvanceCashCap: 100, directAdvanceCashCapByCurrency: { KWD: 500 } }, 'KWD'), 500, 'map wins over scalar');
-  assert.equal(resolveDirectAdvanceCashCap({ directAdvanceCashCapByCurrency: { KWD: 0 } }, 'KWD'), 2000, 'zero map entry -> default');
-  assert.equal(resolveDirectAdvanceCashCap({ directAdvanceCashCapByCurrency: { KWD: -50 } }, 'KWD'), 2000, 'negative map entry -> default');
-  assert.equal(resolveDirectAdvanceCashCap({ directAdvanceCashCap: 'lots' }, 'KWD'), 2000, 'non-numeric scalar -> default');
-  assert.equal(resolveDirectAdvanceCashCap({ directAdvanceCashCapByCurrency: { kwd: 700 } }, 'KWD'), 700, 'map keys match case-insensitively');
+  assert.equal(
+    resolveDirectAdvanceCashCap({ directAdvanceCashCap: 100, directAdvanceCashCapByCurrency: { KWD: 500 } }, 'KWD'),
+    500,
+    'map wins over scalar',
+  );
+  assert.equal(
+    resolveDirectAdvanceCashCap({ directAdvanceCashCapByCurrency: { KWD: 0 } }, 'KWD'),
+    2000,
+    'zero map entry -> default',
+  );
+  assert.equal(
+    resolveDirectAdvanceCashCap({ directAdvanceCashCapByCurrency: { KWD: -50 } }, 'KWD'),
+    2000,
+    'negative map entry -> default',
+  );
+  assert.equal(
+    resolveDirectAdvanceCashCap({ directAdvanceCashCap: 'lots' }, 'KWD'),
+    2000,
+    'non-numeric scalar -> default',
+  );
+  assert.equal(
+    resolveDirectAdvanceCashCap({ directAdvanceCashCapByCurrency: { kwd: 700 } }, 'KWD'),
+    700,
+    'map keys match case-insensitively',
+  );
 
   assert.equal(currencyDisplayLabel('KWD'), 'د.ك', 'KWD label');
   assert.equal(currencyDisplayLabel('SAR'), 'ر.س', 'SAR label');
@@ -61,14 +98,21 @@ function partA(): void {
 
   const baseCtx = {
     employee: {
-      id: 1, displayName: 'Test', compensationType: 'monthly' as const,
-      payFrequency: 'monthly' as const, hourlyRate: 0,
-      expectedDailyHours: 8, status: 'active',
+      id: 1,
+      displayName: 'Test',
+      compensationType: 'monthly' as const,
+      payFrequency: 'monthly' as const,
+      hourlyRate: 0,
+      expectedDailyHours: 8,
+      status: 'active',
     },
     contract: { baseSalary: 10000, currency: 'KWD' },
     currentCycle: { cycleStart: '2026-03-01', cycleEnd: '2026-03-31', daysElapsed: 31 },
-    punches: [], priorLoans: [], unpaidApprovedPayrollItems: [],
-    todayDate: '2026-03-31', minorUnits: 2 as const,
+    punches: [],
+    priorLoans: [],
+    unpaidApprovedPayrollItems: [],
+    todayDate: '2026-03-31',
+    minorUnits: 2 as const,
   };
   const capped = calculateEmployeeWithdrawalBalance({ ...baseCtx, directAdvanceCashCap: 500 });
   assert.equal(capped.directAdvanceCashCap, 500, 'engine reports the configured cap');
@@ -100,23 +144,47 @@ const DDL = [
   `CREATE TABLE hr_employee_loans (id integer PRIMARY KEY, tenant_id text NOT NULL, employee_id integer, loan_type text, principal_amount numeric, remaining_amount numeric, issue_date date, status text)`,
 ];
 
-async function runServiceCase(policiesJson: string | null): Promise<{ maxDirectAdvance: number; directAdvanceCashCap: number; currencyLabel: string; calculationText: string }> {
+async function runServiceCase(
+  policiesJson: string | null,
+): Promise<{ maxDirectAdvance: number; directAdvanceCashCap: number; currencyLabel: string; calculationText: string }> {
   const pg = new PGlite();
   const db = new Kysely<any>({ dialect: new PGliteDialect(pg) });
   try {
     for (const statement of DDL) await sql.raw(statement).execute(db);
     const today = new Date().toISOString().slice(0, 10);
-    await sql.raw(`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'currency', 'KWD'), ('t1', 'timezone', 'UTC')`).execute(db);
+    await sql
+      .raw(`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'currency', 'KWD'), ('t1', 'timezone', 'UTC')`)
+      .execute(db);
     if (policiesJson !== null) {
-      await sql.raw(`INSERT INTO hr_hr_settings (tenant_id, account_id, key, value, updated_by) VALUES ('t1', 'a1', 'payroll_policies', '${policiesJson.replace(/'/g, "''")}', 1)`).execute(db);
+      await sql
+        .raw(
+          `INSERT INTO hr_hr_settings (tenant_id, account_id, key, value, updated_by) VALUES ('t1', 'a1', 'payroll_policies', '${policiesJson.replace(/'/g, "''")}', 1)`,
+        )
+        .execute(db);
     }
-    await sql.raw(`INSERT INTO hr_employees (id, tenant_id, display_name, compensation_type, pay_frequency, hourly_rate, expected_daily_hours, hire_date, status) VALUES (1, 't1', 'Ahmed', 'monthly', 'daily', 0, 8, '2026-01-01', 'active')`).execute(db);
-    await sql.raw(`INSERT INTO hr_employment_contracts (id, tenant_id, account_id, employee_id, contract_no, contract_type, status, start_date, end_date, base_salary, currency) VALUES (1, 't1', 'a1', 1, 'CON-1', 'standard', 'active', '2026-01-01', NULL, 30000, 'KWD')`).execute(db);
+    await sql
+      .raw(
+        `INSERT INTO hr_employees (id, tenant_id, display_name, compensation_type, pay_frequency, hourly_rate, expected_daily_hours, hire_date, status) VALUES (1, 't1', 'Ahmed', 'monthly', 'daily', 0, 8, '2026-01-01', 'active')`,
+      )
+      .execute(db);
+    await sql
+      .raw(
+        `INSERT INTO hr_employment_contracts (id, tenant_id, account_id, employee_id, contract_no, contract_type, status, start_date, end_date, base_salary, currency) VALUES (1, 't1', 'a1', 1, 'CON-1', 'standard', 'active', '2026-01-01', NULL, 30000, 'KWD')`,
+      )
+      .execute(db);
     for (let i = 1; i <= 3; i++) {
-      await sql.raw(`INSERT INTO hr_attendance_records (id, tenant_id, employee_id, work_date, status) VALUES (${i}, 't1', 1, '${today}', 'present')`).execute(db);
+      await sql
+        .raw(
+          `INSERT INTO hr_attendance_records (id, tenant_id, employee_id, work_date, status) VALUES (${i}, 't1', 1, '${today}', 'present')`,
+        )
+        .execute(db);
     }
     const service = new HrService(db, new TransactionHelper(), AUDIT_STUB, {} as never, {} as never, undefined);
-    const result = await withTimeout(service.getEmployeeWithdrawalBalance(1, AUTH), 25000, 'getEmployeeWithdrawalBalance');
+    const result = await withTimeout(
+      service.getEmployeeWithdrawalBalance(1, AUTH),
+      25000,
+      'getEmployeeWithdrawalBalance',
+    );
     return {
       maxDirectAdvance: result.maxDirectAdvance,
       directAdvanceCashCap: result.directAdvanceCashCap,
@@ -147,7 +215,9 @@ async function partB(): Promise<void> {
   assert.equal(scalar.maxDirectAdvance, 100, 'service caps at 100');
 
   // Map wins over scalar.
-  const both = await runServiceCase(JSON.stringify({ directAdvanceCashCap: 100, directAdvanceCashCapByCurrency: { KWD: 500 } }));
+  const both = await runServiceCase(
+    JSON.stringify({ directAdvanceCashCap: 100, directAdvanceCashCapByCurrency: { KWD: 500 } }),
+  );
   assert.equal(both.directAdvanceCashCap, 500, 'service prefers the map entry');
   assert.equal(both.maxDirectAdvance, 500, 'service caps at the map value');
 

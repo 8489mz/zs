@@ -5,14 +5,30 @@ type RowMap = Record<string, unknown[]>;
 
 class FakeQuery {
   constructor(private readonly rows: unknown[]) {}
-  select(): this { return this; }
-  where(): this { return this; }
-  innerJoin(): this { return this; }
-  leftJoin(): this { return this; }
-  orderBy(): this { return this; }
-  limit(): this { return this; }
-  execute(): Promise<unknown[]> { return Promise.resolve(this.rows); }
-  executeTakeFirst(): Promise<unknown> { return Promise.resolve(this.rows[0]); }
+  select(): this {
+    return this;
+  }
+  where(): this {
+    return this;
+  }
+  innerJoin(): this {
+    return this;
+  }
+  leftJoin(): this {
+    return this;
+  }
+  orderBy(): this {
+    return this;
+  }
+  limit(): this {
+    return this;
+  }
+  execute(): Promise<unknown[]> {
+    return Promise.resolve(this.rows);
+  }
+  executeTakeFirst(): Promise<unknown> {
+    return Promise.resolve(this.rows[0]);
+  }
 }
 
 class FakeDb {
@@ -23,32 +39,57 @@ class FakeDb {
 }
 
 (async () => {
-  const service = new ReportsService(new FakeDb({
-    sales: [
-      { id: 1, total: 1000, discount: 0, branch_id: 1, location_id: 1, created_at: '2026-04-01T10:00:00.000Z' },
-      { id: 2, total: 500, discount: 20, branch_id: 1, location_id: 1, created_at: '2026-04-02T10:00:00.000Z' },
-    ],
-    purchases: [
-      { id: 1, total: 700, branch_id: 1, location_id: 1, created_at: '2026-04-01T10:00:00.000Z' },
-    ],
-    expenses: [
-      { id: 1, amount: 120, branch_id: 1, location_id: 1, expense_date: '2026-04-03T10:00:00.000Z' },
-      { id: 2, amount: 30, branch_id: 1, location_id: 1, expense_date: '2026-04-04T10:00:00.000Z' },
-    ],
-    return_documents: [
-      { id: 1, return_type: 'sale', total: 80, branch_id: 1, location_id: 1, created_at: '2026-04-03T10:00:00.000Z' },
-      { id: 2, return_type: 'purchase', total: 50, branch_id: 1, location_id: 1, created_at: '2026-04-04T10:00:00.000Z' },
-    ],
-    treasury_transactions: [
-      { amount: 1000, branch_id: 1, location_id: 1, created_at: '2026-04-01T10:00:00.000Z' },
-      { amount: -150, branch_id: 1, location_id: 1, created_at: '2026-04-03T10:00:00.000Z' },
-      { amount: -50, branch_id: 1, location_id: 1, created_at: '2026-04-04T10:00:00.000Z' },
-    ],
-    'sale_items as si': [
-      { product_id: 1, product_name: 'A', qty: 2, line_total: 400, cost_price: 100, branch_id: 1, location_id: 1, created_at: '2026-04-01T10:00:00.000Z' },
-      { product_id: 2, product_name: 'B', qty: 1, line_total: 300, cost_price: 150, branch_id: 1, location_id: 1, created_at: '2026-04-02T10:00:00.000Z' },
-    ],
-  }) as never);
+  const service = new ReportsService(
+    new FakeDb({
+      sales: [
+        { id: 1, total: 1000, discount: 0, branch_id: 1, location_id: 1, created_at: '2026-04-01T10:00:00.000Z' },
+        { id: 2, total: 500, discount: 20, branch_id: 1, location_id: 1, created_at: '2026-04-02T10:00:00.000Z' },
+      ],
+      purchases: [{ id: 1, total: 700, branch_id: 1, location_id: 1, created_at: '2026-04-01T10:00:00.000Z' }],
+      expenses: [
+        { id: 1, amount: 120, branch_id: 1, location_id: 1, expense_date: '2026-04-03T10:00:00.000Z' },
+        { id: 2, amount: 30, branch_id: 1, location_id: 1, expense_date: '2026-04-04T10:00:00.000Z' },
+      ],
+      return_documents: [
+        { id: 1, return_type: 'sale', total: 80, branch_id: 1, location_id: 1, created_at: '2026-04-03T10:00:00.000Z' },
+        {
+          id: 2,
+          return_type: 'purchase',
+          total: 50,
+          branch_id: 1,
+          location_id: 1,
+          created_at: '2026-04-04T10:00:00.000Z',
+        },
+      ],
+      treasury_transactions: [
+        { amount: 1000, branch_id: 1, location_id: 1, created_at: '2026-04-01T10:00:00.000Z' },
+        { amount: -150, branch_id: 1, location_id: 1, created_at: '2026-04-03T10:00:00.000Z' },
+        { amount: -50, branch_id: 1, location_id: 1, created_at: '2026-04-04T10:00:00.000Z' },
+      ],
+      'sale_items as si': [
+        {
+          product_id: 1,
+          product_name: 'A',
+          qty: 2,
+          line_total: 400,
+          cost_price: 100,
+          branch_id: 1,
+          location_id: 1,
+          created_at: '2026-04-01T10:00:00.000Z',
+        },
+        {
+          product_id: 2,
+          product_name: 'B',
+          qty: 1,
+          line_total: 300,
+          cost_price: 150,
+          branch_id: 1,
+          location_id: 1,
+          created_at: '2026-04-02T10:00:00.000Z',
+        },
+      ],
+    }) as never,
+  );
 
   const summary = await service.reportSummary(
     { from: '2026-04-01T00:00:00.000Z', to: '2026-04-30T23:59:59.999Z', branchId: 1, locationId: 1 },

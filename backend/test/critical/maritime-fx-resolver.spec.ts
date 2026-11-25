@@ -57,12 +57,33 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const authT1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
-  const authT2 = { tenantId: 't2', accountId: 'a2', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
-  const authT3 = { tenantId: 't3', accountId: 'a3', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+  const authT1 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 1,
+    permissions: [],
+  } as unknown as AuthContext;
+  const authT2 = {
+    tenantId: 't2',
+    accountId: 'a2',
+    role: 'admin',
+    userId: 1,
+    permissions: [],
+  } as unknown as AuthContext;
+  const authT3 = {
+    tenantId: 't3',
+    accountId: 'a3',
+    role: 'admin',
+    userId: 1,
+    permissions: [],
+  } as unknown as AuthContext;
   const calls: Array<{ sourceType: string; lines: Array<{ debit: number; credit: number }> }> = [];
   const postingStub = {
-    postDomainJournal: async (_trx: unknown, input: { sourceType: string; lines: Array<{ debit: number; credit: number }> }) => {
+    postDomainJournal: async (
+      _trx: unknown,
+      input: { sourceType: string; lines: Array<{ debit: number; credit: number }> },
+    ) => {
       calls.push({ sourceType: input.sourceType, lines: input.lines });
       return 900;
     },
@@ -70,8 +91,11 @@ async function main(): Promise<void> {
   const service = new MaritimeFreightService(db, {} as never, {} as never, postingStub as never);
 
   const quoteCount = async (tenantId: string): Promise<number> => {
-    const rows: any[] = await (db as any).selectFrom('maritime_quotations').selectAll()
-      .where('tenant_id', '=', tenantId).execute();
+    const rows: any[] = await (db as any)
+      .selectFrom('maritime_quotations')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .execute();
     return rows.length;
   };
 
@@ -104,7 +128,12 @@ async function main(): Promise<void> {
     `);
 
     const quoteDto = (overrides: Record<string, unknown> = {}): any => ({
-      customerName: 'Acme', currency: 'USD', baseCost: 100.125, marginType: 'fixed', marginValue: 0, ...overrides,
+      customerName: 'Acme',
+      currency: 'USD',
+      baseCost: 100.125,
+      marginType: 'fixed',
+      marginValue: 0,
+      ...overrides,
     });
 
     // 1. KWD, USD, no rate: the live registered rate resolves, local at 3dp.
@@ -140,7 +169,10 @@ async function main(): Promise<void> {
     assert.equal(await quoteCount('t3'), 0);
 
     // 7. Percentage margin still flows through the resolver.
-    const q7: any = await service.createQuotation(authT1, quoteDto({ baseCost: 100, marginType: 'percentage', marginValue: 10 }));
+    const q7: any = await service.createQuotation(
+      authT1,
+      quoteDto({ baseCost: 100, marginType: 'percentage', marginValue: 10 }),
+    );
     assert.equal(Number(q7.final_total), 110);
     assert.equal(Number(q7.final_total_local), 5335);
 
@@ -154,7 +186,17 @@ async function main(): Promise<void> {
       thcCharges: 0,
       bafCharges: 0,
       otherCharges: 0,
-      rateCard: { id: 1, carrierName: 'Line', totalFreightCost: 100.125, oceanFreight: 100.125, thcOrigin: 0, thcDestination: 0, bafCharges: 0, otherCharges: 0, currency: 'USD' },
+      rateCard: {
+        id: 1,
+        carrierName: 'Line',
+        totalFreightCost: 100.125,
+        oceanFreight: 100.125,
+        thcOrigin: 0,
+        thcDestination: 0,
+        bafCharges: 0,
+        otherCharges: 0,
+        currency: 'USD',
+      },
       containerCount: 1,
       exchangeRate: 48.5,
     });
@@ -172,7 +214,17 @@ async function main(): Promise<void> {
       thcCharges: 0,
       bafCharges: 0,
       otherCharges: 0,
-      rateCard: { id: 1, carrierName: 'Line', totalFreightCost: 100.125, oceanFreight: 100.125, thcOrigin: 0, thcDestination: 0, bafCharges: 0, otherCharges: 0, currency: 'USD' },
+      rateCard: {
+        id: 1,
+        carrierName: 'Line',
+        totalFreightCost: 100.125,
+        oceanFreight: 100.125,
+        thcOrigin: 0,
+        thcDestination: 0,
+        bafCharges: 0,
+        otherCharges: 0,
+        currency: 'USD',
+      },
       containerCount: 1,
       exchangeRate: 48.5,
       moneyDigits: 2,
@@ -200,7 +252,17 @@ async function main(): Promise<void> {
       thcCharges: 350,
       bafCharges: 50,
       otherCharges: 0,
-      rateCard: { id: 1, carrierName: 'Line', totalFreightCost: 2000, oceanFreight: 1600, thcOrigin: 200, thcDestination: 150, bafCharges: 50, otherCharges: 0, currency: 'USD' },
+      rateCard: {
+        id: 1,
+        carrierName: 'Line',
+        totalFreightCost: 2000,
+        oceanFreight: 1600,
+        thcOrigin: 200,
+        thcDestination: 150,
+        bafCharges: 50,
+        otherCharges: 0,
+        currency: 'USD',
+      },
       containerCount: 1,
     });
     assert.equal(same.contractedTotal, 2000);
@@ -219,8 +281,11 @@ async function main(): Promise<void> {
     assert.equal(created.success, true);
     assert.equal(created.invoice.audit_status, 'overcharge');
     assert.equal(calls.length, 0);
-    const stored: any = await (db as any).selectFrom('maritime_carrier_invoices').selectAll()
-      .where('invoice_number', '=', 'MSCU-200').executeTakeFirstOrThrow();
+    const stored: any = await (db as any)
+      .selectFrom('maritime_carrier_invoices')
+      .selectAll()
+      .where('invoice_number', '=', 'MSCU-200')
+      .executeTakeFirstOrThrow();
     assert.equal(Number(stored.contracted_amount), 100.13);
     assert.equal(Number(stored.variance_amount), 99.87);
     assert.equal(Number(stored.variance_pct), 99.74);

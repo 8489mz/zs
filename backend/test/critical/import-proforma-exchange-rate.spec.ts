@@ -163,4 +163,7 @@ async function main() {
   console.log('Import proforma exchange rate tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

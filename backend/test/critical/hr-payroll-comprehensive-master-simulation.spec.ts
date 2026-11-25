@@ -22,10 +22,7 @@ import {
   calculatePayrollLoanDueTotal,
   calculateLoanInstallmentSchedule,
 } from '../../src/modules/hr/payroll-loan-allocation.engine';
-import {
-  summarizeHourlyAttendance,
-  type WorkPunch,
-} from '../../src/modules/hr/engines/hourly-attendance-pay.engine';
+import { summarizeHourlyAttendance, type WorkPunch } from '../../src/modules/hr/engines/hourly-attendance-pay.engine';
 
 console.log('================================================================================');
 console.log('  المحاكاة الشاملة الكبرى واختبارات الضغط لمسيرات الرواتب والسلف وكشوف الحساب  ');
@@ -463,7 +460,7 @@ function testMonteCarlo50000Cases() {
       assetRecoveryDeduction: 0,
       otherDeductions: 0,
       scheduledLoanDeduction: loanAdvance,
-      maxDeductionPct: 0.50, // سقف الـ 50% لقانون العمل
+      maxDeductionPct: 0.5, // سقف الـ 50% لقانون العمل
     });
 
     // تحققات الثوابت الرياضية الصارمة (Invariants):
@@ -477,14 +474,18 @@ function testMonteCarlo50000Cases() {
     }
 
     // مجموع الاستقطاعات = التأمينات + الضرائب + الحضور المطبق + القسط المطبق
-    const expectedDeductions = payrollLine.employeeSocialInsurance +
+    const expectedDeductions =
+      payrollLine.employeeSocialInsurance +
       payrollLine.incomeTax +
       payrollLine.attendanceDeduction +
       payrollLine.appliedLoanDeduction;
     assert.ok(Math.abs(payrollLine.totalDeductions - expectedDeductions) < 0.01, 'مجموع الاستقطاعات دقيق');
 
     // الصافي المستحق = الإجمالي - الاستقطاعات
-    assert.ok(Math.abs(payrollLine.netPay - (payrollLine.grossPay - payrollLine.totalDeductions)) < 0.01, 'صافي الراتب مطابق للمعادلة');
+    assert.ok(
+      Math.abs(payrollLine.netPay - (payrollLine.grossPay - payrollLine.totalDeductions)) < 0.01,
+      'صافي الراتب مطابق للمعادلة',
+    );
 
     // 3. محاكاة السلفة وتوزيعها
     let loanRecord: FinancialLoanRecord | null = null;
@@ -525,7 +526,7 @@ function testMonteCarlo50000Cases() {
 
     // 5. فحص كشف الحساب المالي بعد الصرف:
     const stmt = buildEmployeeFinancialStatement({
-    minorUnits: 2,
+      minorUnits: 2,
       employee: {
         id: i,
         displayName: `موظف محاكاة #${i}`,
@@ -545,7 +546,10 @@ function testMonteCarlo50000Cases() {
       settledCount++;
     } else {
       // لو تبقت مديونية سلفة مؤجلة لسقف الـ 50%، يتبقى على الموظف بالضبط المتبقي من السلفة مدين
-      assert.ok(Math.abs(stmt.summary.netFinancialBalance - (-loanRecord.remainingAmount)) < 0.01, `المتبقي على الموظف يجب أن يطابق مديونية السلفة`);
+      assert.ok(
+        Math.abs(stmt.summary.netFinancialBalance - -loanRecord.remainingAmount) < 0.01,
+        `المتبقي على الموظف يجب أن يطابق مديونية السلفة`,
+      );
       assert.equal(stmt.summary.balanceStatus, 'debit');
     }
 
@@ -557,10 +561,18 @@ function testMonteCarlo50000Cases() {
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log(`  ✔ اكتمل فحص 50,000 حالة بنجاح تام خلال ${duration} ثانية!`);
-  console.log(`    - إجمالي صافي الرواتب المصروفة والمحققة: ${totalSimulatedPay.toLocaleString('en-US', { maximumFractionDigits: 0 })} ج.م`);
-  console.log(`    - إجمالي السلف النقدية المختبرة: ${totalSimulatedAdvances.toLocaleString('en-US', { maximumFractionDigits: 0 })} ج.م`);
-  console.log(`    - الحالات التي فُعّل فيها سقف قانون العمل 50% لحماية راتب الموظف: ${cappedCount.toLocaleString('en-US')}`);
-  console.log(`    - الحالات التي تصفّر رصيدها تماماً (0.00 ج.م) وأغلقت بحالة settled: ${settledCount.toLocaleString('en-US')}\n`);
+  console.log(
+    `    - إجمالي صافي الرواتب المصروفة والمحققة: ${totalSimulatedPay.toLocaleString('en-US', { maximumFractionDigits: 0 })} ج.م`,
+  );
+  console.log(
+    `    - إجمالي السلف النقدية المختبرة: ${totalSimulatedAdvances.toLocaleString('en-US', { maximumFractionDigits: 0 })} ج.م`,
+  );
+  console.log(
+    `    - الحالات التي فُعّل فيها سقف قانون العمل 50% لحماية راتب الموظف: ${cappedCount.toLocaleString('en-US')}`,
+  );
+  console.log(
+    `    - الحالات التي تصفّر رصيدها تماماً (0.00 ج.م) وأغلقت بحالة settled: ${settledCount.toLocaleString('en-US')}\n`,
+  );
 }
 
 // ==============================================================================
@@ -570,7 +582,7 @@ function testDoubleEntryReconciliation() {
   console.log('--- 5. اختبار القيود المحاسبية المزدوجة (تطابق المدين والدائن 100%) ---');
 
   const line1 = calculateEmployeePayrollLine({
-      minorUnits: 2,
+    minorUnits: 2,
     employeeId: 1,
     baseSalary: 10000,
     allowanceAmount: 0,
@@ -587,7 +599,7 @@ function testDoubleEntryReconciliation() {
   });
 
   const line2 = calculateEmployeePayrollLine({
-      minorUnits: 2,
+    minorUnits: 2,
     employeeId: 2,
     baseSalary: 8000,
     allowanceAmount: 0,

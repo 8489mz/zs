@@ -140,28 +140,36 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     // STEP 1: Work Center Provisioning & Capacity Planning
     // -------------------------------------------------------------------------
     console.log('[STEP 1] Provisioning Industrial Work Centers & Machine Routing...');
-    const wc1Res = await mfgService.upsertWorkCenter(null, {
-      code: 'WC-CNC-01',
-      name: 'مركز القص والتشكيل الرقمي بالليزر CNC',
-      costPerHour: 40,
-      capacity: 8,
-      timeEfficiency: 95,
-      status: 'active',
-      notes: 'ماكينة ليزر فايبر 6 كيلووات',
-    }, auth);
+    const wc1Res = await mfgService.upsertWorkCenter(
+      null,
+      {
+        code: 'WC-CNC-01',
+        name: 'مركز القص والتشكيل الرقمي بالليزر CNC',
+        costPerHour: 40,
+        capacity: 8,
+        timeEfficiency: 95,
+        status: 'active',
+        notes: 'ماكينة ليزر فايبر 6 كيلووات',
+      },
+      auth,
+    );
     assert(Boolean(wc1Res.workCenter?.id), 'Work Center 1 must be created');
     const wc1Id = Number(wc1Res.workCenter.id);
     console.log(`  -> Created Work Center 1: [${wc1Res.workCenter.code}] ${wc1Res.workCenter.name} (40 EGP/hr)`);
 
-    const wc2Res = await mfgService.upsertWorkCenter(null, {
-      code: 'WC-ASSM-01',
-      name: 'محطة التجميع الآلي واللحام الروبوتي',
-      costPerHour: 25,
-      capacity: 16,
-      timeEfficiency: 100,
-      status: 'active',
-      notes: 'روبوت لحام ثنائي المحاور',
-    }, auth);
+    const wc2Res = await mfgService.upsertWorkCenter(
+      null,
+      {
+        code: 'WC-ASSM-01',
+        name: 'محطة التجميع الآلي واللحام الروبوتي',
+        costPerHour: 25,
+        capacity: 16,
+        timeEfficiency: 100,
+        status: 'active',
+        notes: 'روبوت لحام ثنائي المحاور',
+      },
+      auth,
+    );
     assert(Boolean(wc2Res.workCenter?.id), 'Work Center 2 must be created');
     const wc2Id = Number(wc2Res.workCenter.id);
     console.log(`  -> Created Work Center 2: [${wc2Res.workCenter.code}] ${wc2Res.workCenter.name} (25 EGP/hr)`);
@@ -285,14 +293,15 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     // Circular Defense Test: Self-Reference
     let selfRefBlocked = false;
     try {
-      await mfgService.createBom({
-        productId: fgId,
-        quantity: 1,
-        overheadCost: 50,
-        lines: [
-          { componentProductId: fgId, quantity: 1, unitName: 'Pcs', unitMultiplier: 1, expectedCost: 100 }
-        ],
-      }, auth);
+      await mfgService.createBom(
+        {
+          productId: fgId,
+          quantity: 1,
+          overheadCost: 50,
+          lines: [{ componentProductId: fgId, quantity: 1, unitName: 'Pcs', unitMultiplier: 1, expectedCost: 100 }],
+        },
+        auth,
+      );
     } catch (err: any) {
       selfRefBlocked = true;
       console.log(`  -> Circular Defense Guard correctly rejected self-reference: ${err.message}`);
@@ -305,16 +314,40 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     // - 20 Pcs of RM2 @ 2 = 40 EGP
     // - 1 Liter of RM3 @ 50 = 50 EGP
     // + 50 EGP Overhead cost = 440 EGP Expected Unit Cost
-    const bomRes = await mfgService.createBom({
-      productId: fgId,
-      quantity: 1,
-      overheadCost: 50,
-      lines: [
-        { componentProductId: rm1Id, quantity: 10, unitName: 'Kg', unitMultiplier: 1, expectedCost: 30, wastePercentage: 5 },
-        { componentProductId: rm2Id, quantity: 20, unitName: 'Pcs', unitMultiplier: 1, expectedCost: 2, wastePercentage: 0 },
-        { componentProductId: rm3Id, quantity: 1, unitName: 'Liter', unitMultiplier: 1, expectedCost: 50, wastePercentage: 0 },
-      ],
-    }, auth);
+    const bomRes = await mfgService.createBom(
+      {
+        productId: fgId,
+        quantity: 1,
+        overheadCost: 50,
+        lines: [
+          {
+            componentProductId: rm1Id,
+            quantity: 10,
+            unitName: 'Kg',
+            unitMultiplier: 1,
+            expectedCost: 30,
+            wastePercentage: 5,
+          },
+          {
+            componentProductId: rm2Id,
+            quantity: 20,
+            unitName: 'Pcs',
+            unitMultiplier: 1,
+            expectedCost: 2,
+            wastePercentage: 0,
+          },
+          {
+            componentProductId: rm3Id,
+            quantity: 1,
+            unitName: 'Liter',
+            unitMultiplier: 1,
+            expectedCost: 50,
+            wastePercentage: 0,
+          },
+        ],
+      },
+      auth,
+    );
 
     assert(Boolean(bomRes.bomId), 'BOM ID must exist');
     const bomId = bomRes.bomId;
@@ -323,7 +356,10 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     const bomsList = await mfgService.getBoms(auth);
     const createdBom = bomsList.boms.find((b: any) => Number(b.id) === bomId);
     assert(Boolean(createdBom), 'Created BOM must appear in active BOM list');
-    assert(Number(createdBom!.expected_cost) === 440, `Expected unit cost must be 440, got: ${createdBom!.expected_cost}`);
+    assert(
+      Number(createdBom!.expected_cost) === 440,
+      `Expected unit cost must be 440, got: ${createdBom!.expected_cost}`,
+    );
     console.log(`  -> BOM Expected Cost Verified: ${createdBom!.expected_cost} EGP/Unit`);
     console.log('  [PASS] STEP 3 PASSED: BOM created with anti-circular invariants.\n');
 
@@ -331,11 +367,32 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     // STEP 4: Warehouse Stock Provisioning (Canonical Lock Order)
     // -------------------------------------------------------------------------
     console.log('[STEP 4] Seeding Raw Materials Inventory via Canonical Lock Order...');
-    
+
     // Seed: 500 Kg of RM1, 1000 Pcs of RM2, 100 Liters of RM3
-    await applyStockDelta(db, { tenantId, accountId: tenantId, productId: rm1Id, branchId: null, locationId, delta: 500 });
-    await applyStockDelta(db, { tenantId, accountId: tenantId, productId: rm2Id, branchId: null, locationId, delta: 1000 });
-    await applyStockDelta(db, { tenantId, accountId: tenantId, productId: rm3Id, branchId: null, locationId, delta: 100 });
+    await applyStockDelta(db, {
+      tenantId,
+      accountId: tenantId,
+      productId: rm1Id,
+      branchId: null,
+      locationId,
+      delta: 500,
+    });
+    await applyStockDelta(db, {
+      tenantId,
+      accountId: tenantId,
+      productId: rm2Id,
+      branchId: null,
+      locationId,
+      delta: 1000,
+    });
+    await applyStockDelta(db, {
+      tenantId,
+      accountId: tenantId,
+      productId: rm3Id,
+      branchId: null,
+      locationId,
+      delta: 100,
+    });
 
     const checkStockRM1 = await (db as any)
       .selectFrom('product_location_stock')
@@ -352,13 +409,16 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     // STEP 5: Work Order Issuance & Document Numbering
     // -------------------------------------------------------------------------
     console.log('[STEP 5] Issuing Manufacturing Work Order #1 (20 Cabinets)...');
-    const wo1Res = await mfgService.createWorkOrder({
-      bomId,
-      quantityToProduce: 20,
-      sourceLocationId: locationId,
-      destinationLocationId: locationId,
-      note: 'تشغيل دفعة 20 لوحة تحكم كهربائية للوحدات المدمجة',
-    }, auth);
+    const wo1Res = await mfgService.createWorkOrder(
+      {
+        bomId,
+        quantityToProduce: 20,
+        sourceLocationId: locationId,
+        destinationLocationId: locationId,
+        note: 'تشغيل دفعة 20 لوحة تحكم كهربائية للوحدات المدمجة',
+      },
+      auth,
+    );
 
     assert(Boolean(wo1Res.workOrderId), 'Work Order ID must exist');
     const wo1Id = wo1Res.workOrderId;
@@ -376,20 +436,27 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     // STEP 6: Shortage Defense Guard (Insufficient Material Invariant)
     // -------------------------------------------------------------------------
     console.log('[STEP 6] Testing Shortage Defense Guard against Excess Work Order...');
-    const woShortageRes = await mfgService.createWorkOrder({
-      bomId,
-      quantityToProduce: 200, // Requires 200 * 10 * 1.05 = 2,100 Kg RM1 (only 500 available)
-      sourceLocationId: locationId,
-      destinationLocationId: locationId,
-      note: 'أمر إنتاج زائد لاختبار حارس العجز المخزني',
-    }, auth);
+    const woShortageRes = await mfgService.createWorkOrder(
+      {
+        bomId,
+        quantityToProduce: 200, // Requires 200 * 10 * 1.05 = 2,100 Kg RM1 (only 500 available)
+        sourceLocationId: locationId,
+        destinationLocationId: locationId,
+        note: 'أمر إنتاج زائد لاختبار حارس العجز المخزني',
+      },
+      auth,
+    );
 
     let shortageBlocked = false;
     try {
-      await mfgService.completeWorkOrder(woShortageRes.workOrderId, {
-        sourceLocationId: locationId,
-        destinationLocationId: locationId,
-      }, auth);
+      await mfgService.completeWorkOrder(
+        woShortageRes.workOrderId,
+        {
+          sourceLocationId: locationId,
+          destinationLocationId: locationId,
+        },
+        auth,
+      );
     } catch (err: any) {
       shortageBlocked = true;
       console.log(`  -> Shortage Guard strictly blocked work order: ${err.message}`);
@@ -419,7 +486,9 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
         notes: 'فحص استواء الزوايا وجودة اللحام',
       },
     ];
-    console.log(`  -> Configured 2 Shop Floor Operations: 5 hrs @ CNC (200 EGP) + 8 hrs @ Assembly (200 EGP) = 400 EGP Machine Cost`);
+    console.log(
+      `  -> Configured 2 Shop Floor Operations: 5 hrs @ CNC (200 EGP) + 8 hrs @ Assembly (200 EGP) = 400 EGP Machine Cost`,
+    );
     console.log('  [PASS] STEP 7 PASSED: Operations routing ready.\n');
 
     // -------------------------------------------------------------------------
@@ -431,20 +500,24 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     // RM2: 20 * 20 = 400 Pcs consumed
     // RM3: 20 * 1 = 20 Liters consumed
     // By-Product: 50 Kg of Scrap Steel produced
-    const completeRes = await mfgService.completeWorkOrder(wo1Id, {
-      sourceLocationId: locationId,
-      destinationLocationId: locationId,
-      operations,
-      byProducts: [
-        {
-          productId: bpId,
-          productName: 'قصاصات وخردة صاج صلب',
-          quantity: 50,
-          unitCost: 5,
-          locationId,
-        },
-      ],
-    }, auth);
+    const completeRes = await mfgService.completeWorkOrder(
+      wo1Id,
+      {
+        sourceLocationId: locationId,
+        destinationLocationId: locationId,
+        operations,
+        byProducts: [
+          {
+            productId: bpId,
+            productName: 'قصاصات وخردة صاج صلب',
+            quantity: 50,
+            unitCost: 5,
+            locationId,
+          },
+        ],
+      },
+      auth,
+    );
 
     assert(completeRes.ok === true, 'Work order completion must succeed');
     console.log(`  -> Work Order #${wo1Id} Completed Successfully!`);
@@ -457,7 +530,9 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
       .executeTakeFirst();
     assert(wo1Completed.status === 'done', `Work order status must be "done", got: ${wo1Completed.status}`);
     assert(Number(wo1Completed.produced_quantity) === 20, 'Produced quantity must be 20');
-    console.log(`  -> Work Order DB Status: [${wo1Completed.status}], Total Actual Cost: ${wo1Completed.total_cost} EGP`);
+    console.log(
+      `  -> Work Order DB Status: [${wo1Completed.status}], Total Actual Cost: ${wo1Completed.total_cost} EGP`,
+    );
 
     // Verify Raw Materials stock deductions
     const postStockRM1 = await (db as any)
@@ -468,7 +543,10 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
       .where('product_id', '=', rm1Id)
       .executeTakeFirst();
     // 500 - 210.526 = 289.474 Kg (5% waste factor: 200 / 0.95 = 210.526)
-    assert(Math.abs(Number(postStockRM1?.qty) - 289.474) < 0.01, `RM1 remaining stock must be ~289.474 Kg, got: ${postStockRM1?.qty}`);
+    assert(
+      Math.abs(Number(postStockRM1?.qty) - 289.474) < 0.01,
+      `RM1 remaining stock must be ~289.474 Kg, got: ${postStockRM1?.qty}`,
+    );
     console.log(`  -> Verified RM1 Stock deducted correctly: 500 -> ${postStockRM1?.qty} Kg`);
 
     // Verify Finished Good stock increase
@@ -535,11 +613,15 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
       const c = Number(l.credit || 0);
       sumDebit += d;
       sumCredit += c;
-      console.log(`    Line: [${l.code}] ${l.name_ar} | Debit: ${d.toFixed(2)} EGP | Credit: ${c.toFixed(2)} EGP | ${l.description}`);
+      console.log(
+        `    Line: [${l.code}] ${l.name_ar} | Debit: ${d.toFixed(2)} EGP | Credit: ${c.toFixed(2)} EGP | ${l.description}`,
+      );
     }
 
     const delta = Math.abs(sumDebit - sumCredit);
-    console.log(`  -> Double-Entry Balance Check: Debit ${sumDebit.toFixed(2)} == Credit ${sumCredit.toFixed(2)} (Discrepancy: ${delta.toFixed(2)})`);
+    console.log(
+      `  -> Double-Entry Balance Check: Debit ${sumDebit.toFixed(2)} == Credit ${sumCredit.toFixed(2)} (Discrepancy: ${delta.toFixed(2)})`,
+    );
     assert(delta === 0, `Manufacturing Journal must be mathematically balanced with zero delta, got: ${delta}`);
     console.log('  [PASS] STEP 9 PASSED: Double-entry manufacturing ledger audit verified.\n');
 
@@ -547,13 +629,16 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     // STEP 10: Unbuild / Disassembly Order (Reverse Manufacturing)
     // -------------------------------------------------------------------------
     console.log('[STEP 10] Testing Unbuild / Disassembly Order (Reverse Manufacturing)...');
-    const unbuildRes = await mfgService.createUnbuildOrder({
-      productId: fgId,
-      bomId,
-      quantity: 2, // Disassemble 2 finished cabinets
-      warehouseId: locationId,
-      notes: 'تفكيك وحدتين لإعادة استخدام المكونات في طلب خاص',
-    }, auth);
+    const unbuildRes = await mfgService.createUnbuildOrder(
+      {
+        productId: fgId,
+        bomId,
+        quantity: 2, // Disassemble 2 finished cabinets
+        warehouseId: locationId,
+        notes: 'تفكيك وحدتين لإعادة استخدام المكونات في طلب خاص',
+      },
+      auth,
+    );
 
     assert(unbuildRes.ok === true, 'Unbuild order creation must succeed');
     console.log(`  -> Created Unbuild Order #${unbuildRes.unbuildNumber} (ID: ${unbuildRes.unbuildId})`);
@@ -566,7 +651,10 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
       .where('location_id', '=', locationId)
       .where('product_id', '=', fgId)
       .executeTakeFirst();
-    assert(Number(stockAfterUnbuildFG?.qty) === 18, `FG stock after unbuild must be 18 (20 - 2), got: ${stockAfterUnbuildFG?.qty}`);
+    assert(
+      Number(stockAfterUnbuildFG?.qty) === 18,
+      `FG stock after unbuild must be 18 (20 - 2), got: ${stockAfterUnbuildFG?.qty}`,
+    );
     console.log(`  -> Verified FG Stock after unbuild: ${stockAfterUnbuildFG?.qty} Units`);
 
     // Verify RM1 returned to stock (2 * 10 = 20 Kg returned: 289.474 + 20 = 309.474 Kg)
@@ -577,7 +665,10 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
       .where('location_id', '=', locationId)
       .where('product_id', '=', rm1Id)
       .executeTakeFirst();
-    assert(Math.abs(Number(stockAfterUnbuildRM1?.qty) - 309.474) < 0.01, `RM1 stock after unbuild must be ~309.474 Kg (289.474 + 20), got: ${stockAfterUnbuildRM1?.qty}`);
+    assert(
+      Math.abs(Number(stockAfterUnbuildRM1?.qty) - 309.474) < 0.01,
+      `RM1 stock after unbuild must be ~309.474 Kg (289.474 + 20), got: ${stockAfterUnbuildRM1?.qty}`,
+    );
     console.log(`  -> Verified RM1 Stock recovered: 289.474 -> ${stockAfterUnbuildRM1?.qty} Kg`);
 
     const unbuildList = await mfgService.listUnbuildOrders(auth);
@@ -588,12 +679,15 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     // STEP 11: Make-To-Order (MTO) Dynamic Linkage
     // -------------------------------------------------------------------------
     console.log('[STEP 11] Testing Make-To-Order (MTO) Dynamic Work Order Linkage...');
-    const mtoRes = await mfgService.createMtoWorkOrder({
-      salesOrderId: 8842,
-      productId: fgId,
-      quantityToProduce: 15,
-      notes: 'أمر تشغيل مرتبط بعقد التوريد رقم SO-8842',
-    }, auth);
+    const mtoRes = await mfgService.createMtoWorkOrder(
+      {
+        salesOrderId: 8842,
+        productId: fgId,
+        quantityToProduce: 15,
+        notes: 'أمر تشغيل مرتبط بعقد التوريد رقم SO-8842',
+      },
+      auth,
+    );
 
     assert(mtoRes.ok === true, 'MTO Work order must succeed');
     assert(Boolean(mtoRes.workOrderId), 'MTO Work order ID must exist');
@@ -612,7 +706,6 @@ export async function runManufacturingProductionMasterSimulation(): Promise<void
     console.log('========================================================================');
     console.log('  ALL 11 PHASES OF MANUFACTURING & WORK ORDERS PASSED 100%!');
     console.log('========================================================================\n');
-
   } catch (err: any) {
     console.error('[FAIL] MANUFACTURING MASTER SIMULATION FAILED:', err?.message || err);
     console.error(err?.stack);

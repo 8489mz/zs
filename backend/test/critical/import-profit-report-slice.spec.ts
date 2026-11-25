@@ -239,10 +239,7 @@ async function main(): Promise<void> {
       'generatePeriodProfitReport',
       'getImportCommandCenterMetrics',
     ]) {
-      assert.ok(
-        facade.includes(`this.profitReportService.${name}(`),
-        `facade must delegate ${name} to the slice`,
-      );
+      assert.ok(facade.includes(`this.profitReportService.${name}(`), `facade must delegate ${name} to the slice`);
       assert.ok(slice.includes(name), `slice must contain ${name}`);
     }
     assert.ok(slice.includes('acidBound'), 'slice must carry the tenant-day ACI bound');

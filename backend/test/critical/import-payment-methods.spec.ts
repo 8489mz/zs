@@ -93,15 +93,27 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function insertApproval(db: Kysely<Database>, id: string, payload: Record<string, unknown>): Promise<void> {
-  await db.insertInto('import_approval_requests' as never).values({
-    id, tenant_id: 't1', module: 'import', action_type: 'large_transfer',
-    reference_id: '1', requested_by: 99, created_by: 99, status: 'approved',
-    request_payload: JSON.stringify(payload),
-  } as never).execute();
+  await db
+    .insertInto('import_approval_requests' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      module: 'import',
+      action_type: 'large_transfer',
+      reference_id: '1',
+      requested_by: 99,
+      created_by: 99,
+      status: 'approved',
+      request_payload: JSON.stringify(payload),
+    } as never)
+    .execute();
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -124,8 +136,11 @@ async function readPayment(db: Kysely<Database>): Promise<any> {
 }
 
 const BOUND_PAYLOAD = {
-  amount: 1000, currency: 'USD', supplierId: '1',
-  proformaInvoiceId: 'pi-a', projectId: 'proj-1',
+  amount: 1000,
+  currency: 'USD',
+  supplierId: '1',
+  proformaInvoiceId: 'pi-a',
+  projectId: 'proj-1',
 };
 
 async function main(): Promise<void> {
@@ -157,7 +172,9 @@ async function main(): Promise<void> {
       );
       assert.equal(await countRows(db, 'supplier_payments'), 0, 'No payment may be written by a rejected transfer');
       await transfer(db, service, {
-        paymentMethod: 'bank_transfer', paymentReference: 'SWIFT-REF-1', bankSwiftCode: 'CIBEEGCX',
+        paymentMethod: 'bank_transfer',
+        paymentReference: 'SWIFT-REF-1',
+        bankSwiftCode: 'CIBEEGCX',
         idempotencyKey: 'key-bank-ok',
       });
       const payment = await readPayment(db);
@@ -176,24 +193,35 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await assert.rejects(
-        async () => transfer(db, service, {
-          paymentMethod: 'cash_carried', carrierName: 'Ahmed', idempotencyKey: 'key-cash-partial',
-        }),
+        async () =>
+          transfer(db, service, {
+            paymentMethod: 'cash_carried',
+            carrierName: 'Ahmed',
+            idempotencyKey: 'key-cash-partial',
+          }),
         /IMPORT_PAYMENT_EVIDENCE_REQUIRED/,
         'Cash carried without travel date and handover receipt must fail closed',
       );
       await assert.rejects(
-        async () => transfer(db, service, {
-          paymentMethod: 'cash_carried', carrierName: 'Ahmed', travelDate: '2026-02-01',
-          handoverReceiptNo: 'HR-9', bankAccountId: undefined, idempotencyKey: 'key-cash-noacct',
-        }),
+        async () =>
+          transfer(db, service, {
+            paymentMethod: 'cash_carried',
+            carrierName: 'Ahmed',
+            travelDate: '2026-02-01',
+            handoverReceiptNo: 'HR-9',
+            bankAccountId: undefined,
+            idempotencyKey: 'key-cash-noacct',
+          }),
         /حساب العهدة النقدية/,
         'Cash carried without an explicit custody account must fail closed: the settings bank account is never silently treated as cash in hand',
       );
       assert.equal(await countRows(db, 'supplier_payments'), 0, 'No payment may be written by a rejected transfer');
       await transfer(db, service, {
-        paymentMethod: 'cash_carried', carrierName: 'Ahmed', travelDate: '2026-02-01',
-        handoverReceiptNo: 'HR-9', idempotencyKey: 'key-cash-ok',
+        paymentMethod: 'cash_carried',
+        carrierName: 'Ahmed',
+        travelDate: '2026-02-01',
+        handoverReceiptNo: 'HR-9',
+        idempotencyKey: 'key-cash-ok',
       });
       const payment = await readPayment(db);
       assert.equal(payment.payment_method, 'cash_carried');
@@ -210,22 +238,30 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await assert.rejects(
-        async () => transfer(db, service, {
-          paymentMethod: 'letter_of_credit', lcNumber: 'LC-1', lcIssuingBank: 'Bank',
-          lcDocuments: 'B/L, invoice', idempotencyKey: 'key-lc-partial',
-        }),
+        async () =>
+          transfer(db, service, {
+            paymentMethod: 'letter_of_credit',
+            lcNumber: 'LC-1',
+            lcIssuingBank: 'Bank',
+            lcDocuments: 'B/L, invoice',
+            idempotencyKey: 'key-lc-partial',
+          }),
         /IMPORT_PAYMENT_EVIDENCE_REQUIRED/,
         'An LC without an expiry date must fail closed',
       );
       await assert.rejects(
-        async () => transfer(db, service, { paymentMethod: 'cash_against_documents', idempotencyKey: 'key-cad-partial' }),
+        async () =>
+          transfer(db, service, { paymentMethod: 'cash_against_documents', idempotencyKey: 'key-cad-partial' }),
         /IMPORT_PAYMENT_EVIDENCE_REQUIRED/,
         'CAD without documents-handover proof must fail closed',
       );
       await assert.rejects(
-        async () => transfer(db, service, {
-          paymentMethod: 'open_account', paymentTerms: 'Net 60', idempotencyKey: 'key-oa-partial',
-        }),
+        async () =>
+          transfer(db, service, {
+            paymentMethod: 'open_account',
+            paymentTerms: 'Net 60',
+            idempotencyKey: 'key-oa-partial',
+          }),
         /IMPORT_PAYMENT_EVIDENCE_REQUIRED/,
         'Open account without a due date must fail closed',
       );
@@ -236,8 +272,12 @@ async function main(): Promise<void> {
       );
       assert.equal(await countRows(db, 'supplier_payments'), 0, 'No payment may be written by a rejected transfer');
       await transfer(db, service, {
-        paymentMethod: 'letter_of_credit', lcNumber: 'LC-1', lcIssuingBank: 'Bank',
-        lcExpiryDate: '2026-06-01', lcDocuments: 'B/L, invoice', idempotencyKey: 'key-lc-ok',
+        paymentMethod: 'letter_of_credit',
+        lcNumber: 'LC-1',
+        lcIssuingBank: 'Bank',
+        lcExpiryDate: '2026-06-01',
+        lcDocuments: 'B/L, invoice',
+        idempotencyKey: 'key-lc-ok',
       });
       const payment = await readPayment(db);
       assert.equal(payment.payment_method, 'letter_of_credit');
@@ -254,31 +294,44 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await insertApproval(db, 'appr-bank', { ...BOUND_PAYLOAD, paymentMethod: 'bank_transfer' });
       await assert.rejects(
-        async () => transfer(db, service, {
-          approvalRequestId: 'appr-bank', paymentMethod: 'cash_carried',
-          carrierName: 'Ahmed', travelDate: '2026-02-01', handoverReceiptNo: 'HR-9',
-          idempotencyKey: 'key-method-mismatch',
-        }),
+        async () =>
+          transfer(db, service, {
+            approvalRequestId: 'appr-bank',
+            paymentMethod: 'cash_carried',
+            carrierName: 'Ahmed',
+            travelDate: '2026-02-01',
+            handoverReceiptNo: 'HR-9',
+            idempotencyKey: 'key-method-mismatch',
+          }),
         /طريقة الدفع/,
         'An approval bound to bank transfer must not authorize a cash-carried transfer',
       );
       assert.equal(await countRows(db, 'supplier_payments'), 0);
       await insertApproval(db, 'appr-nomethod', BOUND_PAYLOAD);
       await assert.rejects(
-        async () => transfer(db, service, {
-          approvalRequestId: 'appr-nomethod', paymentMethod: 'bank_transfer',
-          paymentReference: 'REF-1', idempotencyKey: 'key-nomethod',
-        }),
+        async () =>
+          transfer(db, service, {
+            approvalRequestId: 'appr-nomethod',
+            paymentMethod: 'bank_transfer',
+            paymentReference: 'REF-1',
+            idempotencyKey: 'key-nomethod',
+          }),
         /طريقة الدفع/,
         'An approval with no method cannot authorize a method-bound transfer: the approver never saw the method',
       );
       assert.equal(await countRows(db, 'supplier_payments'), 0);
       await insertApproval(db, 'appr-match', { ...BOUND_PAYLOAD, paymentMethod: 'bank_transfer' });
       await transfer(db, service, {
-        approvalRequestId: 'appr-match', paymentMethod: 'bank_transfer',
-        paymentReference: 'REF-2', idempotencyKey: 'key-method-ok',
+        approvalRequestId: 'appr-match',
+        paymentMethod: 'bank_transfer',
+        paymentReference: 'REF-2',
+        idempotencyKey: 'key-method-ok',
       });
-      assert.equal(await countRows(db, 'supplier_payments'), 1, 'A matching method-bound approval authorizes the transfer');
+      assert.equal(
+        await countRows(db, 'supplier_payments'),
+        1,
+        'A matching method-bound approval authorizes the transfer',
+      );
     } finally {
       await db.destroy();
     }
@@ -289,7 +342,14 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      const base: any = { supplierId: '1', piNumber: 'PI-X', piDate: '2026-01-15', currency: 'USD', totalAmountForeign: 2000, exchangeRateContract: 50 };
+      const base: any = {
+        supplierId: '1',
+        piNumber: 'PI-X',
+        piDate: '2026-01-15',
+        currency: 'USD',
+        totalAmountForeign: 2000,
+        exchangeRateContract: 50,
+      };
       const neither = await service.createProformaInvoice('t1', { ...base, piNumber: 'PI-NONE' });
       assert.equal(neither.advance_percentage, null, 'No percentages given: no advance structure is recorded');
       assert.equal(neither.balance_percentage, null);
@@ -299,14 +359,29 @@ async function main(): Promise<void> {
         'A one-sided advance percentage must fail closed instead of defaulting the balance to 70',
       );
       await assert.rejects(
-        async () => service.createProformaInvoice('t1', { ...base, piNumber: 'PI-SUM', advancePercentage: 40, balancePercentage: 50 }),
+        async () =>
+          service.createProformaInvoice('t1', {
+            ...base,
+            piNumber: 'PI-SUM',
+            advancePercentage: 40,
+            balancePercentage: 50,
+          }),
         /مجموعهما 100/,
         'Percentages that do not sum to 100 must fail closed',
       );
-      const explicit = await service.createProformaInvoice('t1', { ...base, piNumber: 'PI-OK', advancePercentage: 30, balancePercentage: 70 });
+      const explicit = await service.createProformaInvoice('t1', {
+        ...base,
+        piNumber: 'PI-OK',
+        advancePercentage: 30,
+        balancePercentage: 70,
+      });
       assert.equal(Number(explicit.advance_percentage), 30, 'An explicit 30/70 split is stored as given');
       assert.equal(Number(explicit.balance_percentage), 70);
-      assert.equal(await countRows(db, 'import_proforma_invoices'), 3, 'Only the valid proformas are stored (seed + none + explicit)');
+      assert.equal(
+        await countRows(db, 'import_proforma_invoices'),
+        3,
+        'Only the valid proformas are stored (seed + none + explicit)',
+      );
     } finally {
       await db.destroy();
     }
@@ -318,7 +393,13 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await assert.rejects(
-        async () => service.disburseBrokerAdvance('t1', 1, { brokerId: 'b1', advanceNo: 'ADV-1', amountEgp: 1000, paymentMethod: 'crypto' }),
+        async () =>
+          service.disburseBrokerAdvance('t1', 1, {
+            brokerId: 'b1',
+            advanceNo: 'ADV-1',
+            amountEgp: 1000,
+            paymentMethod: 'crypto',
+          }),
         /IMPORT_PAYMENT_METHOD_UNKNOWN/,
         'A broker payment with an unknown method must fail closed',
       );
@@ -330,4 +411,7 @@ async function main(): Promise<void> {
   console.log('Import payment methods tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

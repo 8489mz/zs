@@ -43,14 +43,8 @@ import {
   type CustomerDunningInput,
   type DunningLevel,
 } from '../../src/modules/accounting/engines/ar-dunning.engine';
-import {
-  evaluateFmcgCartPromotions,
-  type FmcgPromotion,
-} from '../../src/modules/delivery-reps/fmcg-promotions.engine';
-import {
-  todayTenantDate,
-  getTenantTimezone,
-} from '../../src/common/utils/tenant-timezone.util';
+import { evaluateFmcgCartPromotions, type FmcgPromotion } from '../../src/modules/delivery-reps/fmcg-promotions.engine';
+import { todayTenantDate, getTenantTimezone } from '../../src/common/utils/tenant-timezone.util';
 import { ArCollectionsService } from '../../src/modules/accounting/services/ar-collections.service';
 import { VanPromotionsService } from '../../src/modules/delivery-reps/services/van-promotions.service';
 
@@ -60,11 +54,19 @@ const KUWAIT = 'Asia/Kuwait';
 const CAIRO = 'Africa/Cairo';
 
 const KWD_AUTH = {
-  tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['settings'],
 } as unknown as AuthContext;
 const EGP_AUTH = {
-  tenantId: 't3', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't3',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['settings'],
 } as unknown as AuthContext;
 
@@ -75,10 +77,16 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 async function seedCurrency(db: Kysely<Database>, tenantId: string, currency: string): Promise<void> {
-  await sql`CREATE TABLE IF NOT EXISTS settings (tenant_id text, key text, value text, PRIMARY KEY (tenant_id, key))`.execute(db);
-  await sql`CREATE TABLE IF NOT EXISTS currency_exchange_rates (tenant_id text, currency_code text, is_base boolean, exchange_rate numeric)`.execute(db);
+  await sql`CREATE TABLE IF NOT EXISTS settings (tenant_id text, key text, value text, PRIMARY KEY (tenant_id, key))`.execute(
+    db,
+  );
+  await sql`CREATE TABLE IF NOT EXISTS currency_exchange_rates (tenant_id text, currency_code text, is_base boolean, exchange_rate numeric)`.execute(
+    db,
+  );
   await sql`INSERT INTO settings (tenant_id, key, value) VALUES (${tenantId}, 'currency', ${currency})`.execute(db);
-  await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES (${tenantId}, ${currency}, true, 1)`.execute(db);
+  await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES (${tenantId}, ${currency}, true, 1)`.execute(
+    db,
+  );
 }
 
 function mixMatchPromo(code: string, startDate: string | null, endDate: string | null): FmcgPromotion {
@@ -117,7 +125,10 @@ async function main(): Promise<void> {
     const kwd = allocateCustomerOverdueFifo(
       100,
       [{ id: 1, invoiceNumber: 'INV-1', createdAt: FROZEN, total: 100, paidAmount: 0 }],
-      asOf, 0, 2, KUWAIT,
+      asOf,
+      0,
+      2,
+      KUWAIT,
     );
     assert.equal(kwd.overdueInvoices.length, 1, 'A1: one overdue invoice');
     assert.equal(kwd.overdueInvoices[0].createdAt, '2026-04-09', 'A1: createdAt is the Kuwait day');
@@ -129,7 +140,9 @@ async function main(): Promise<void> {
     const fb = allocateCustomerOverdueFifo(
       100,
       [{ id: 1, invoiceNumber: 'INV-1', createdAt: FROZEN, total: 100, paidAmount: 0 }],
-      asOf, 0, 2,
+      asOf,
+      0,
+      2,
     );
     assert.equal(fb.overdueInvoices[0].createdAt, fallbackDay, 'A2: no-zone call keeps the env-or-Cairo fallback day');
     console.log('✓ A2 Passed: allocateCustomerOverdueFifo without a zone keeps the fallback');
@@ -138,7 +151,10 @@ async function main(): Promise<void> {
     const due = allocateCustomerOverdueFifo(
       100,
       [{ id: 1, invoiceNumber: 'INV-1', createdAt: FROZEN, dueDate: FROZEN, total: 100, paidAmount: 0 }],
-      asOf, 0, 2, KUWAIT,
+      asOf,
+      0,
+      2,
+      KUWAIT,
     );
     assert.equal(due.overdueInvoices[0].dueDate, '2026-04-09', 'A3: explicit datetime dueDate is the Kuwait day');
     console.log('✓ A3 Passed: explicit dueDate renders in the tenant zone');
@@ -205,12 +221,27 @@ async function main(): Promise<void> {
     // C1: real VanPromotionsService.evaluateCart on PGlite, Kuwait tenant.
     const { pg, db } = await makeDb();
     try {
-      await sql`CREATE TABLE settings (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL DEFAULT '')`.execute(db);
-      await sql`CREATE TABLE currency_exchange_rates (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, currency_code TEXT NOT NULL, currency_name TEXT NOT NULL, exchange_rate NUMERIC(14,6) NOT NULL DEFAULT 1, is_base BOOLEAN NOT NULL DEFAULT false)`.execute(db);
-      await sql`CREATE TABLE fmcg_promotions (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, name TEXT NOT NULL, code TEXT NOT NULL, promo_type TEXT NOT NULL, apply_type TEXT NOT NULL, buy_conditions JSONB, reward JSONB, customer_types JSONB, start_date DATE, end_date DATE, is_active BOOLEAN NOT NULL DEFAULT true, max_applications_per_order INTEGER NOT NULL DEFAULT 1, priority INTEGER NOT NULL DEFAULT 0, notes TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`.execute(db);
+      await sql`CREATE TABLE settings (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL DEFAULT '')`.execute(
+        db,
+      );
+      await sql`CREATE TABLE currency_exchange_rates (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, currency_code TEXT NOT NULL, currency_name TEXT NOT NULL, exchange_rate NUMERIC(14,6) NOT NULL DEFAULT 1, is_base BOOLEAN NOT NULL DEFAULT false)`.execute(
+        db,
+      );
+      await sql`CREATE TABLE fmcg_promotions (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, name TEXT NOT NULL, code TEXT NOT NULL, promo_type TEXT NOT NULL, apply_type TEXT NOT NULL, buy_conditions JSONB, reward JSONB, customer_types JSONB, start_date DATE, end_date DATE, is_active BOOLEAN NOT NULL DEFAULT true, max_applications_per_order INTEGER NOT NULL DEFAULT 1, priority INTEGER NOT NULL DEFAULT 0, notes TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`.execute(
+        db,
+      );
       await db.insertInto('settings').values({ tenant_id: 't-kw', key: 'currency', value: '"EGP"' }).execute();
       await db.insertInto('settings').values({ tenant_id: 't-kw', key: 'timezone', value: 'Asia/Kuwait' }).execute();
-      await db.insertInto('currency_exchange_rates').values({ tenant_id: 't-kw', currency_code: 'EGP', currency_name: 'Egyptian Pound', exchange_rate: 1, is_base: true }).execute();
+      await db
+        .insertInto('currency_exchange_rates')
+        .values({
+          tenant_id: 't-kw',
+          currency_code: 'EGP',
+          currency_name: 'Egyptian Pound',
+          exchange_rate: 1,
+          is_base: true,
+        })
+        .execute();
       const promoRow = (code: string, startDate: string | null, endDate: string | null) => ({
         tenant_id: 't-kw',
         name: `Promo ${code}`,
@@ -227,8 +258,14 @@ async function main(): Promise<void> {
         priority: 0,
         notes: null,
       });
-      await db.insertInto('fmcg_promotions').values(promoRow('PROMO-ALWAYS', '2026-01-01', '2027-12-31')).execute();
-      await db.insertInto('fmcg_promotions').values(promoRow('PROMO-NODATES', null, null)).execute();
+      await db
+        .insertInto('fmcg_promotions')
+        .values(promoRow('PROMO-ALWAYS', '2026-01-01', '2027-12-31'))
+        .execute();
+      await db
+        .insertInto('fmcg_promotions')
+        .values(promoRow('PROMO-NODATES', null, null))
+        .execute();
       assert.equal(await getTenantTimezone(db as never, 't-kw'), 'Asia/Kuwait', 'C1: the Kuwait settings row resolves');
       const promos = new VanPromotionsService(db as any);
       const res = await promos.evaluateCart('t-kw', {
@@ -262,15 +299,25 @@ async function main(): Promise<void> {
       `);
       await seedCurrency(db, 't1', 'KWD');
       await seedCurrency(db, 't3', 'EGP');
-      await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Asia/Kuwait'), ('t3', 'timezone', 'Africa/Cairo')`.execute(db);
+      await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Asia/Kuwait'), ('t3', 'timezone', 'Africa/Cairo')`.execute(
+        db,
+      );
       assert.equal(await getTenantTimezone(db as never, 't1'), 'Asia/Kuwait', 'C2: the Kuwait settings row resolves');
       const service = new ArCollectionsService(db as never);
       const kwd = await service.syncCollections(KWD_AUTH);
       const egp = await service.syncCollections(EGP_AUTH);
       assert.equal(kwd.activeCases, 1, 'C2: Kuwait tenant has one active case');
       assert.equal(egp.activeCases, 1, 'C2: Cairo tenant has one active case');
-      const kwdCase = await db.selectFrom('ar_collection_cases').selectAll().where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
-      const egpCase = await db.selectFrom('ar_collection_cases').selectAll().where('tenant_id', '=', 't3').executeTakeFirstOrThrow();
+      const kwdCase = await db
+        .selectFrom('ar_collection_cases')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .executeTakeFirstOrThrow();
+      const egpCase = await db
+        .selectFrom('ar_collection_cases')
+        .selectAll()
+        .where('tenant_id', '=', 't3')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(kwdCase.total_overdue), 100.125, 'C2: Kuwait case total at KWD digits');
       assert.equal(Number(egpCase.total_overdue), 100.13, 'C2: Cairo case total at EGP digits');
       console.log('✓ C2 Passed: live ArCollectionsService.syncCollections is unchanged with a Kuwait tenant');

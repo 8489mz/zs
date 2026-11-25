@@ -10,7 +10,9 @@ import { IdempotencyService } from '../../src/core/idempotency/idempotency.servi
 // ─── Mock DB (in-memory operation_executions) ──────────────────────────────
 let operations: Record<string, any> = {};
 
-function resetMockState() { operations = {}; }
+function resetMockState() {
+  operations = {};
+}
 
 const mockDb: any = {
   insertInto: (table: string) => ({
@@ -24,8 +26,8 @@ const mockDb: any = {
           throw err;
         }
         operations[k] = { ...data };
-      }
-    })
+      },
+    }),
   }),
   selectFrom: (_table: string) => ({
     selectAll: () => buildChain(),
@@ -38,10 +40,10 @@ const mockDb: any = {
 
 function buildChain(): any {
   const predicates: Array<(row: any) => boolean> = [];
-  const matches = (row: any) => predicates.every(predicate => predicate(row));
+  const matches = (row: any) => predicates.every((predicate) => predicate(row));
   const h: any = {
     where: (column: string, operator: string, value: unknown) => {
-      predicates.push(row => operator === 'is' && value === null ? row[column] == null : row[column] === value);
+      predicates.push((row) => (operator === 'is' && value === null ? row[column] == null : row[column] === value));
       return h;
     },
     executeTakeFirst: async () => {
@@ -62,13 +64,15 @@ function buildUpdateChain(data: any): any {
           operations[k] = { ...operations[k], ...data };
         }
       }
-    }
+    },
   };
   return h;
 }
 
 const svc = new IdempotencyService(mockDb);
-const T = 'test-tenant', A = 'test-account', OP = 'purchase_create';
+const T = 'test-tenant',
+  A = 'test-account',
+  OP = 'purchase_create';
 
 async function runTests() {
   console.log('\n=== purchases-idempotency.spec.ts ===');
@@ -79,10 +83,27 @@ async function runTests() {
     const key = 'key-001';
     const payload = { supplierId: 1, items: [{ productId: 10, cost: 50, qty: 5 }] };
     const hash = svc.generateRequestHash(payload);
-    const r1 = await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: hash });
+    const r1 = await svc.reserveOperation({
+      tenantId: T,
+      accountId: A,
+      idempotencyKey: key,
+      operationType: OP,
+      requestHash: hash,
+    });
     assert.equal(r1, null, '1a: first reserve => null');
-    await svc.commitOperation(mockDb, { tenantId: T, accountId: A, idempotencyKey: key, operationType: OP }, { purchaseId: 1001 }, '1001');
-    const r2 = await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: hash });
+    await svc.commitOperation(
+      mockDb,
+      { tenantId: T, accountId: A, idempotencyKey: key, operationType: OP },
+      { purchaseId: 1001 },
+      '1001',
+    );
+    const r2 = await svc.reserveOperation({
+      tenantId: T,
+      accountId: A,
+      idempotencyKey: key,
+      operationType: OP,
+      requestHash: hash,
+    });
     assert.equal(r2?.status, 'committed', '1b: retry => committed');
     console.log('✓ Test 1: same key+payload => committed on retry, no duplicate');
   }
@@ -96,7 +117,13 @@ async function runTests() {
     assert.notEqual(h1, h2, '2: diff payloads => diff hashes');
     await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: h1 });
     try {
-      await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: h2 });
+      await svc.reserveOperation({
+        tenantId: T,
+        accountId: A,
+        idempotencyKey: key,
+        operationType: OP,
+        requestHash: h2,
+      });
       assert.fail('2: should throw');
     } catch (e: any) {
       assert.ok(e instanceof AppError);
@@ -110,9 +137,24 @@ async function runTests() {
   {
     const key = 'key-003';
     const hash = svc.generateRequestHash({ supplierId: 1 });
-    await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: hash });
-    await svc.recordFailure({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP }, 'SUPPLIER_NOT_FOUND');
-    const r = await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: hash });
+    await svc.reserveOperation({
+      tenantId: T,
+      accountId: A,
+      idempotencyKey: key,
+      operationType: OP,
+      requestHash: hash,
+    });
+    await svc.recordFailure(
+      { tenantId: T, accountId: A, idempotencyKey: key, operationType: OP },
+      'SUPPLIER_NOT_FOUND',
+    );
+    const r = await svc.reserveOperation({
+      tenantId: T,
+      accountId: A,
+      idempotencyKey: key,
+      operationType: OP,
+      requestHash: hash,
+    });
     assert.equal(r?.status, 'failed', '3: after recordFailure => failed');
     console.log('✓ Test 3: AppError failure => marked failed, rollback confirmed');
   }
@@ -122,12 +164,31 @@ async function runTests() {
   {
     const key = 'key-004';
     const hash = svc.generateRequestHash({ supplierId: 2 });
-    await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: hash });
+    await svc.reserveOperation({
+      tenantId: T,
+      accountId: A,
+      idempotencyKey: key,
+      operationType: OP,
+      requestHash: hash,
+    });
     // Simulate service catch block marking recovery_required for 5xx
-    await mockDb.updateTable('operation_executions')
+    await mockDb
+      .updateTable('operation_executions')
       .set({ status: 'recovery_required', updated_at: 'NOW' })
-      .where().where().where().where().where().where().execute();
-    const r = await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: hash });
+      .where()
+      .where()
+      .where()
+      .where()
+      .where()
+      .where()
+      .execute();
+    const r = await svc.reserveOperation({
+      tenantId: T,
+      accountId: A,
+      idempotencyKey: key,
+      operationType: OP,
+      requestHash: hash,
+    });
     assert.equal(r?.status, 'recovery_required', '4: 5xx => recovery_required');
     console.log('✓ Test 4: 5xx error => recovery_required, not failed');
   }
@@ -138,10 +199,27 @@ async function runTests() {
     const key = 'key-005';
     const payload = { supplierId: 3, items: [{ productId: 20, cost: 100, qty: 1 }] };
     const hash = svc.generateRequestHash(payload);
-    await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: hash });
-    await svc.commitOperation(mockDb, { tenantId: T, accountId: A, idempotencyKey: key, operationType: OP }, { purchaseId: 2002 }, '2002');
+    await svc.reserveOperation({
+      tenantId: T,
+      accountId: A,
+      idempotencyKey: key,
+      operationType: OP,
+      requestHash: hash,
+    });
+    await svc.commitOperation(
+      mockDb,
+      { tenantId: T, accountId: A, idempotencyKey: key, operationType: OP },
+      { purchaseId: 2002 },
+      '2002',
+    );
     // Client lost response, retries
-    const r = await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: hash });
+    const r = await svc.reserveOperation({
+      tenantId: T,
+      accountId: A,
+      idempotencyKey: key,
+      operationType: OP,
+      requestHash: hash,
+    });
     assert.equal(r?.status, 'committed', '5a: lost response retry => committed');
     assert.equal(r?.responsePayload?.purchaseId, 2002, '5b: correct purchaseId returned');
     console.log('✓ Test 5: lost response after commit => retry returns cached committed, no duplicate');
@@ -152,9 +230,21 @@ async function runTests() {
   {
     const key = 'key-006';
     const hash = svc.generateRequestHash({ supplierId: 4 });
-    const r1 = await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: hash });
+    const r1 = await svc.reserveOperation({
+      tenantId: T,
+      accountId: A,
+      idempotencyKey: key,
+      operationType: OP,
+      requestHash: hash,
+    });
     assert.equal(r1, null, '6a: first click => reserved');
-    const r2 = await svc.reserveOperation({ tenantId: T, accountId: A, idempotencyKey: key, operationType: OP, requestHash: hash });
+    const r2 = await svc.reserveOperation({
+      tenantId: T,
+      accountId: A,
+      idempotencyKey: key,
+      operationType: OP,
+      requestHash: hash,
+    });
     assert.equal(r2?.status, 'processing', '6b: double-click => processing');
     console.log('✓ Test 6: double-click => second request gets processing, not duplicate operation');
   }

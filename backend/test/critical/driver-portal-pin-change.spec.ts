@@ -69,15 +69,34 @@ async function main(): Promise<void> {
     `);
 
     const future = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
-    await anyDb.insertInto('tenants').values({ id: 't1', slug: 't1', business_name: 'Test Co', status: 'active', trial_ends_at: null }).execute();
-    await anyDb.insertInto('tenant_subscriptions').values({ tenant_id: 't1', status: 'active', ends_at: future, grace_ends_at: null }).execute();
+    await anyDb
+      .insertInto('tenants')
+      .values({ id: 't1', slug: 't1', business_name: 'Test Co', status: 'active', trial_ends_at: null })
+      .execute();
+    await anyDb
+      .insertInto('tenant_subscriptions')
+      .values({ tenant_id: 't1', status: 'active', ends_at: future, grace_ends_at: null })
+      .execute();
 
     const pin = await createPasswordRecord('1234');
-    await anyDb.insertInto('delivery_representatives').values({
-      id: 1, tenant_id: 't1', account_id: 'a1', full_name: 'Rep One', name: 'Rep One',
-      phone: '01000000001', vehicle_plate: null, pin_hash: pin.hash, pin_salt: pin.salt,
-      is_van_rep: false, van_location_id: null, permissions: null, is_active: true,
-    }).execute();
+    await anyDb
+      .insertInto('delivery_representatives')
+      .values({
+        id: 1,
+        tenant_id: 't1',
+        account_id: 'a1',
+        full_name: 'Rep One',
+        name: 'Rep One',
+        phone: '01000000001',
+        vehicle_plate: null,
+        pin_hash: pin.hash,
+        pin_salt: pin.salt,
+        is_van_rep: false,
+        van_location_id: null,
+        permissions: null,
+        is_active: true,
+      })
+      .execute();
 
     const service = new DeliveryRepsService(db, {} as never, {} as never, {} as never);
 

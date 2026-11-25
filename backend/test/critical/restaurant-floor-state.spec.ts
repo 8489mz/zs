@@ -119,7 +119,13 @@ async function resetDb(pg: PGlite): Promise<void> {
 }
 
 const managerScope: TenantScope = { tenantId: TENANT, accountId: ACCOUNT, role: 'admin', permissions: [], userId: 1 };
-const cashierScope: TenantScope = { tenantId: TENANT, accountId: ACCOUNT, role: 'cashier', permissions: ['sales'], userId: 2 };
+const cashierScope: TenantScope = {
+  tenantId: TENANT,
+  accountId: ACCOUNT,
+  role: 'cashier',
+  permissions: ['sales'],
+  userId: 2,
+};
 
 async function expectAppError(promise: Promise<unknown>, code: string, statusCode: number): Promise<void> {
   try {
@@ -132,10 +138,7 @@ async function expectAppError(promise: Promise<unknown>, code: string, statusCod
   assert.fail(`expected AppError ${code} but the call succeeded`);
 }
 
-async function seedHeldDraft(
-  db: Kysely<Database>,
-  overrides: Record<string, unknown> = {},
-): Promise<number> {
+async function seedHeldDraft(db: Kysely<Database>, overrides: Record<string, unknown> = {}): Promise<number> {
   const [row] = await (db as any)
     .insertInto('held_sales')
     .values({
@@ -176,9 +179,7 @@ async function main(): Promise<void> {
     {
       await resetDb(pg);
       await expectAppError(
-        service.saveTableLayouts(cashierScope, [
-          { table_number: '1', shape: 'square', x_pos: 10, y_pos: 10 },
-        ]),
+        service.saveTableLayouts(cashierScope, [{ table_number: '1', shape: 'square', x_pos: 10, y_pos: 10 }]),
         'MANAGER_PERMISSION_REQUIRED',
         403,
       );
@@ -238,34 +239,38 @@ async function main(): Promise<void> {
     // (5) Renaming a missing draft is a 404, not a silent no-op.
     {
       await resetDb(pg);
-      await expectAppError(
-        (service as any).renameHeldDraftTable(managerScope, 9999, '9'),
-        'HELD_DRAFT_NOT_FOUND',
-        404,
-      );
+      await expectAppError((service as any).renameHeldDraftTable(managerScope, 9999, '9'), 'HELD_DRAFT_NOT_FOUND', 404);
       console.log('  (5) rename of a missing draft is 404 passed');
     }
 
     // (6) A 01:00 Cairo reservation lists under its own tenant-local day.
     {
       await resetDb(pg);
-      await (db as any).insertInto('settings').values({
-        tenant_id: TENANT, key: 'timezone', value: '"Africa/Cairo"',
-      }).execute();
-      await (db as any).insertInto('restaurant_table_reservations').values({
-        tenant_id: TENANT,
-        branch_id: null,
-        table_number: '5',
-        guest_name: 'ضيف الفجر',
-        guest_phone: null,
-        guest_count: 2,
-        // 01:00 Cairo (UTC+2) on 2026-11-09 = 2026-11-08T23:00:00Z.
-        reservation_time: new Date('2026-11-08T23:00:00.000Z'),
-        status: 'confirmed',
-        special_requests: null,
-        reservation_type: 'reservation',
-        created_by: 1,
-      }).execute();
+      await (db as any)
+        .insertInto('settings')
+        .values({
+          tenant_id: TENANT,
+          key: 'timezone',
+          value: '"Africa/Cairo"',
+        })
+        .execute();
+      await (db as any)
+        .insertInto('restaurant_table_reservations')
+        .values({
+          tenant_id: TENANT,
+          branch_id: null,
+          table_number: '5',
+          guest_name: 'ضيف الفجر',
+          guest_phone: null,
+          guest_count: 2,
+          // 01:00 Cairo (UTC+2) on 2026-11-09 = 2026-11-08T23:00:00Z.
+          reservation_time: new Date('2026-11-08T23:00:00.000Z'),
+          status: 'confirmed',
+          special_requests: null,
+          reservation_type: 'reservation',
+          created_by: 1,
+        })
+        .execute();
       const listed: any[] = await reservations.listReservations(TENANT, undefined, '2026-11-09');
       assert.equal(listed.length, 1, 'the 01:00 Cairo reservation must list under 2026-11-09');
       assert.equal(String(listed[0].table_number), '5');
@@ -283,8 +288,13 @@ async function main(): Promise<void> {
       const controller = new RestaurantAdvancedFnbController(service);
       const managerReq: any = {
         authContext: {
-          userId: 1, sessionId: 's1', username: 'admin',
-          role: 'admin', permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+          userId: 1,
+          sessionId: 's1',
+          username: 'admin',
+          role: 'admin',
+          permissions: [],
+          tenantId: TENANT,
+          accountId: ACCOUNT,
         },
       };
       const saved: any = await controller.saveTableLayouts(managerReq, {
@@ -302,8 +312,13 @@ async function main(): Promise<void> {
       const controller = new RestaurantAdvancedFnbController(service);
       const cashierReq: any = {
         authContext: {
-          userId: 2, sessionId: 's2', username: 'cashier',
-          role: 'cashier', permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+          userId: 2,
+          sessionId: 's2',
+          username: 'cashier',
+          role: 'cashier',
+          permissions: ['sales'],
+          tenantId: TENANT,
+          accountId: ACCOUNT,
         },
       };
       await expectAppError(
@@ -325,8 +340,13 @@ async function main(): Promise<void> {
       const controller = new RestaurantAdvancedFnbController(service);
       const cashierReq: any = {
         authContext: {
-          userId: 2, sessionId: 's2', username: 'cashier',
-          role: 'cashier', permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+          userId: 2,
+          sessionId: 's2',
+          username: 'cashier',
+          role: 'cashier',
+          permissions: ['sales'],
+          tenantId: TENANT,
+          accountId: ACCOUNT,
         },
       };
       await expectAppError(
@@ -345,18 +365,24 @@ async function main(): Promise<void> {
       const controller = new RestaurantAdvancedFnbController(service);
       const managerReq: any = {
         authContext: {
-          userId: 1, sessionId: 's1', username: 'admin',
-          role: 'admin', permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+          userId: 1,
+          sessionId: 's1',
+          username: 'admin',
+          role: 'admin',
+          permissions: [],
+          tenantId: TENANT,
+          accountId: ACCOUNT,
         },
       };
       const saved: any = await controller.saveZone(managerReq, {
-        zoneCode: 'vip', name: 'VIP', tableNumbers: ['1', '2'],
+        zoneCode: 'vip',
+        name: 'VIP',
+        tableNumbers: ['1', '2'],
       });
       assert.equal(saved.success, true);
-      const rows: any = await pg.query(
-        `SELECT zone_code, name FROM restaurant_table_zones WHERE tenant_id = $1`,
-        [TENANT],
-      );
+      const rows: any = await pg.query(`SELECT zone_code, name FROM restaurant_table_zones WHERE tenant_id = $1`, [
+        TENANT,
+      ]);
       assert.equal(rows.rows.length, 1);
       assert.equal(rows.rows[0].zone_code, 'vip');
       assert.equal(rows.rows[0].name, 'VIP');
@@ -370,9 +396,18 @@ async function main(): Promise<void> {
       const [layout] = await (db as any)
         .insertInto('restaurant_table_layouts')
         .values({
-          tenant_id: TENANT, branch_id: null, table_number: '1', zone_code: 'main',
-          shape: 'square', x_pos: 10, y_pos: 10, width: 80, height: 80,
-          seats: 4, rotation: 0, is_active: true,
+          tenant_id: TENANT,
+          branch_id: null,
+          table_number: '1',
+          zone_code: 'main',
+          shape: 'square',
+          x_pos: 10,
+          y_pos: 10,
+          width: 80,
+          height: 80,
+          seats: 4,
+          rotation: 0,
+          is_active: true,
         })
         .returning('id')
         .execute();
@@ -380,15 +415,16 @@ async function main(): Promise<void> {
       const controller = new RestaurantAdvancedFnbController(service);
       const cashierReq: any = {
         authContext: {
-          userId: 2, sessionId: 's2', username: 'cashier',
-          role: 'cashier', permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+          userId: 2,
+          sessionId: 's2',
+          username: 'cashier',
+          role: 'cashier',
+          permissions: ['sales'],
+          tenantId: TENANT,
+          accountId: ACCOUNT,
         },
       };
-      await expectAppError(
-        controller.deleteTableLayout(cashierReq, layoutId),
-        'MANAGER_PERMISSION_REQUIRED',
-        403,
-      );
+      await expectAppError(controller.deleteTableLayout(cashierReq, layoutId), 'MANAGER_PERMISSION_REQUIRED', 403);
       const rows: any = await pg.query(`SELECT COUNT(*)::int AS n FROM restaurant_table_layouts`);
       assert.equal(Number(rows.rows[0].n), 1, 'the refused delete must leave the layout in place');
       console.log('  (11) controller cashier deleteTableLayout refused with 403 passed');
@@ -400,9 +436,18 @@ async function main(): Promise<void> {
       const [layout] = await (db as any)
         .insertInto('restaurant_table_layouts')
         .values({
-          tenant_id: TENANT, branch_id: null, table_number: '1', zone_code: 'main',
-          shape: 'square', x_pos: 10, y_pos: 10, width: 80, height: 80,
-          seats: 4, rotation: 0, is_active: true,
+          tenant_id: TENANT,
+          branch_id: null,
+          table_number: '1',
+          zone_code: 'main',
+          shape: 'square',
+          x_pos: 10,
+          y_pos: 10,
+          width: 80,
+          height: 80,
+          seats: 4,
+          rotation: 0,
+          is_active: true,
         })
         .returning('id')
         .execute();
@@ -410,8 +455,13 @@ async function main(): Promise<void> {
       const controller = new RestaurantAdvancedFnbController(service);
       const managerReq: any = {
         authContext: {
-          userId: 1, sessionId: 's1', username: 'admin',
-          role: 'admin', permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+          userId: 1,
+          sessionId: 's1',
+          username: 'admin',
+          role: 'admin',
+          permissions: [],
+          tenantId: TENANT,
+          accountId: ACCOUNT,
         },
       };
       const deleted: any = await controller.deleteTableLayout(managerReq, layoutId);
@@ -431,16 +481,18 @@ async function main(): Promise<void> {
       const controller = new RestaurantAdvancedFnbController(service);
       const cashierReq: any = {
         authContext: {
-          userId: 2, sessionId: 's2', username: 'cashier',
-          role: 'cashier', permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+          userId: 2,
+          sessionId: 's2',
+          username: 'cashier',
+          role: 'cashier',
+          permissions: ['sales'],
+          tenantId: TENANT,
+          accountId: ACCOUNT,
         },
       };
       const renamed: any = await controller.renameHeldDraftTable(cashierReq, id, { tableNumber: '9' });
       assert.equal(String(renamed.table_number), '9');
-      const rows: any = await pg.query(
-        `SELECT paid_amount, discount, note FROM held_sales WHERE id = $1`,
-        [id],
-      );
+      const rows: any = await pg.query(`SELECT paid_amount, discount, note FROM held_sales WHERE id = $1`, [id]);
       assert.equal(Number(rows.rows[0].paid_amount), 100);
       assert.equal(Number(rows.rows[0].discount), 5);
       assert.equal(rows.rows[0].note, 'keep-me');
@@ -455,9 +507,15 @@ async function main(): Promise<void> {
       const [rating] = await (db as any)
         .insertInto('restaurant_table_ratings')
         .values({
-          tenant_id: TENANT, branch_id: null, table_number: '5', sale_id: null,
-          rating: 2, feedback_category: 'service_speed', notes: 'slow',
-          is_rescued: false, rescued_by: null,
+          tenant_id: TENANT,
+          branch_id: null,
+          table_number: '5',
+          sale_id: null,
+          rating: 2,
+          feedback_category: 'service_speed',
+          notes: 'slow',
+          is_rescued: false,
+          rescued_by: null,
         })
         .returning('id')
         .execute();
@@ -465,16 +523,20 @@ async function main(): Promise<void> {
       const controller = new RestaurantAdvancedFnbController(service);
       const cashierReq: any = {
         authContext: {
-          userId: 2, sessionId: 's2', username: 'cashier',
-          role: 'cashier', permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+          userId: 2,
+          sessionId: 's2',
+          username: 'cashier',
+          role: 'cashier',
+          permissions: ['sales'],
+          tenantId: TENANT,
+          accountId: ACCOUNT,
         },
       };
       const resolved: any = await controller.resolveRescueAlert(cashierReq, ratingId, 'أحمد');
       assert.equal(resolved.success, true);
-      const rows: any = await pg.query(
-        `SELECT is_rescued, rescued_by FROM restaurant_table_ratings WHERE id = $1`,
-        [ratingId],
-      );
+      const rows: any = await pg.query(`SELECT is_rescued, rescued_by FROM restaurant_table_ratings WHERE id = $1`, [
+        ratingId,
+      ]);
       assert.equal(rows.rows[0].is_rescued, true);
       assert.equal(rows.rows[0].rescued_by, 'أحمد');
       console.log('  (14) controller cashier resolveRescueAlert still records passed');

@@ -8,12 +8,7 @@ import {
 describe('FMCG Visit Execution & Merchandising Engine Specification', () => {
   it('should accurately calculate geodesic distance between two GPS coordinates', () => {
     // Tahrir Square (30.0444, 31.2357) to Cairo Tower (30.0459, 31.2243)
-    const distanceMeters = FmcgVisitExecutionEngine.calculateDistanceMeters(
-      30.0444,
-      31.2357,
-      30.0459,
-      31.2243,
-    );
+    const distanceMeters = FmcgVisitExecutionEngine.calculateDistanceMeters(30.0444, 31.2357, 30.0459, 31.2243);
 
     // Distance should be approximately 1100m - 1150m
     assert.ok(distanceMeters >= 1050 && distanceMeters <= 1160, `Distance ${distanceMeters} should be ~1100m`);
@@ -23,12 +18,12 @@ describe('FMCG Visit Execution & Merchandising Engine Specification', () => {
   });
 
   it('should validate geofence within 300m and reject breach attempts beyond 300m', () => {
-    const customerLat = 30.050000;
-    const customerLng = 31.240000;
+    const customerLat = 30.05;
+    const customerLng = 31.24;
 
     // Driver 50 meters away (Valid)
-    const validRepLat = 30.050400;
-    const validRepLng = 31.240000;
+    const validRepLat = 30.0504;
+    const validRepLng = 31.24;
     const validResult = FmcgVisitExecutionEngine.evaluateGeofence(
       customerLat,
       customerLng,
@@ -40,8 +35,8 @@ describe('FMCG Visit Execution & Merchandising Engine Specification', () => {
     assert.ok(validResult.distanceMeters < 300);
 
     // Driver 600 meters away (Breach)
-    const breachRepLat = 30.055500;
-    const breachRepLng = 31.240000;
+    const breachRepLat = 30.0555;
+    const breachRepLng = 31.24;
     const breachResult = FmcgVisitExecutionEngine.evaluateGeofence(
       customerLat,
       customerLng,
@@ -53,13 +48,7 @@ describe('FMCG Visit Execution & Merchandising Engine Specification', () => {
     assert.ok(breachResult.distanceMeters > 300);
 
     // Unmapped customer (null GPS) should pass gracefully with isUnmappedCustomer=true
-    const unmappedResult = FmcgVisitExecutionEngine.evaluateGeofence(
-      null,
-      null,
-      validRepLat,
-      validRepLng,
-      300,
-    );
+    const unmappedResult = FmcgVisitExecutionEngine.evaluateGeofence(null, null, validRepLat, validRepLng, 300);
     assert.equal(unmappedResult.isValid, true);
     assert.equal(unmappedResult.isUnmappedCustomer, true);
   });

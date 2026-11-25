@@ -1,13 +1,16 @@
 import { strict as assert } from 'node:assert';
 
 // Simulated engine math matching AccountingService logic
-function calculateDepreciation(asset: {
-  purchaseCost: number;
-  salvageValue: number;
-  usefulLifeMonths: number;
-  accumulatedDepreciation: number;
-  method: 'straight_line' | 'declining_balance';
-}, months: number = 1) {
+function calculateDepreciation(
+  asset: {
+    purchaseCost: number;
+    salvageValue: number;
+    usefulLifeMonths: number;
+    accumulatedDepreciation: number;
+    method: 'straight_line' | 'declining_balance';
+  },
+  months: number = 1,
+) {
   const cost = Number(asset.purchaseCost || 0);
   const salvage = Number(asset.salvageValue || 0);
   const usefulLife = Math.max(1, Number(asset.usefulLifeMonths || 60));
@@ -90,7 +93,10 @@ async function runFixedAssetsAudit() {
 
   const res3 = calculateDepreciation(asset3, 1);
   // Expected: 100000 * (0.4 / 12) = 3333.33
-  assert.ok(Math.abs(res3.depreciationAmount - 3333.33) < 0.05, `DDB depreciation should be ~3333.33, got ${res3.depreciationAmount}`);
+  assert.ok(
+    Math.abs(res3.depreciationAmount - 3333.33) < 0.05,
+    `DDB depreciation should be ~3333.33, got ${res3.depreciationAmount}`,
+  );
   assert.equal(res3.newBookValue, 96666.67, 'Book value after 1st month DDB');
   console.log('✓ Double declining balance calculation passed.');
 

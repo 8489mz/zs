@@ -41,44 +41,90 @@ import { allocatePayrollAccrual } from '../../src/modules/hr/engines/payroll-acc
 
 function testAllocatorAtBookPrecision(): void {
   // Case 1 (spurious block): book-exact totals that do not reconcile in cents.
-  const blocked = allocatePayrollAccrual({
-    grossPay: 10.008, netPay: 5.002, loanDeductions: 2.002,
-    assetRecoveryDeductions: 1.002, operationalDeductions: 2.002, employeeInsurance: 1.001,
-    employerInsurance: 0.5, incomeTax: 1.001,
-  }, 3);
+  const blocked = allocatePayrollAccrual(
+    {
+      grossPay: 10.008,
+      netPay: 5.002,
+      loanDeductions: 2.002,
+      assetRecoveryDeductions: 1.002,
+      operationalDeductions: 2.002,
+      employeeInsurance: 1.001,
+      employerInsurance: 0.5,
+      incomeTax: 1.001,
+    },
+    3,
+  );
   assert.equal(blocked.salaryExpense, 10.008);
   assert.equal(blocked.wageReduction, 0);
   assert.equal(blocked.totalDebit, 10.508);
   assert.equal(blocked.totalCredit, 10.508);
 
   // Case 2 (silent misstatement): the cents check passes but the expense is 0.005 high.
-  const misstated = allocatePayrollAccrual({
-    grossPay: 10.125, netPay: 9.0, loanDeductions: 0,
-    assetRecoveryDeductions: 0, operationalDeductions: 1.125, employeeInsurance: 0,
-    employerInsurance: 0, incomeTax: 1.125,
-  }, 3);
+  const misstated = allocatePayrollAccrual(
+    {
+      grossPay: 10.125,
+      netPay: 9.0,
+      loanDeductions: 0,
+      assetRecoveryDeductions: 0,
+      operationalDeductions: 1.125,
+      employeeInsurance: 0,
+      employerInsurance: 0,
+      incomeTax: 1.125,
+    },
+    3,
+  );
   assert.equal(misstated.salaryExpense, 10.125);
   assert.equal(misstated.totalDebit, 10.125);
   assert.equal(misstated.totalCredit, 10.125);
 
   // Finer-than-book inputs fail closed instead of rounding silently.
-  assert.throws(() => allocatePayrollAccrual({
-    grossPay: 10.0085, netPay: 5.002, loanDeductions: 2.002,
-    assetRecoveryDeductions: 1.002, operationalDeductions: 2.002, employeeInsurance: 1.001,
-    employerInsurance: 0.5, incomeTax: 1.001,
-  }, 3));
-  assert.throws(() => allocatePayrollAccrual({
-    grossPay: -10.008, netPay: 5.002, loanDeductions: 2.002,
-    assetRecoveryDeductions: 1.002, operationalDeductions: 2.002, employeeInsurance: 1.001,
-    employerInsurance: 0.5, incomeTax: 1.001,
-  }, 3));
+  assert.throws(() =>
+    allocatePayrollAccrual(
+      {
+        grossPay: 10.0085,
+        netPay: 5.002,
+        loanDeductions: 2.002,
+        assetRecoveryDeductions: 1.002,
+        operationalDeductions: 2.002,
+        employeeInsurance: 1.001,
+        employerInsurance: 0.5,
+        incomeTax: 1.001,
+      },
+      3,
+    ),
+  );
+  assert.throws(() =>
+    allocatePayrollAccrual(
+      {
+        grossPay: -10.008,
+        netPay: 5.002,
+        loanDeductions: 2.002,
+        assetRecoveryDeductions: 1.002,
+        operationalDeductions: 2.002,
+        employeeInsurance: 1.001,
+        employerInsurance: 0.5,
+        incomeTax: 1.001,
+      },
+      3,
+    ),
+  );
 
   // A 3dp total under a 2dp book also fails closed rather than rounding.
-  assert.throws(() => allocatePayrollAccrual({
-    grossPay: 10.008, netPay: 5.002, loanDeductions: 2.002,
-    assetRecoveryDeductions: 1.002, operationalDeductions: 2.002, employeeInsurance: 1.001,
-    employerInsurance: 0.5, incomeTax: 1.001,
-  }, 2));
+  assert.throws(() =>
+    allocatePayrollAccrual(
+      {
+        grossPay: 10.008,
+        netPay: 5.002,
+        loanDeductions: 2.002,
+        assetRecoveryDeductions: 1.002,
+        operationalDeductions: 2.002,
+        employeeInsurance: 1.001,
+        employerInsurance: 0.5,
+        incomeTax: 1.001,
+      },
+      2,
+    ),
+  );
 
   console.log('Payroll accrual allocator book-precision tests passed');
 }
@@ -88,7 +134,10 @@ async function main() {
 
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const inTx = <T>(fn: (trx: any) => Promise<T>): Promise<T> => db.transaction().execute(fn);
@@ -140,15 +189,23 @@ async function main() {
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
     `);
     for (const code of [1110, 1120, 1160, 2140, 2145, 2146, 6200, 6210, 7100, 7290]) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), '']);
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        '',
+      ]);
     }
     const amount = async (id: number, code: number, side: 'debit' | 'credit') => {
-      const rows = await pg.query<{ amount: string }>(`SELECT coalesce(sum(${side}),0) AS amount FROM journal_entry_lines WHERE journal_entry_id=$1 AND account_id=$2`, [id, code]);
+      const rows = await pg.query<{ amount: string }>(
+        `SELECT coalesce(sum(${side}),0) AS amount FROM journal_entry_lines WHERE journal_entry_id=$1 AND account_id=$2`,
+        [id, code],
+      );
       return Number(rows.rows[0].amount);
     };
 
     // 1. Spurious-block case: a valid KWD accrual posts at exact 3dp amounts.
-    const accrual = await inTx(trx => posting.postPayrollAccrual(trx, 7, auth));
+    const accrual = await inTx((trx) => posting.postPayrollAccrual(trx, 7, auth));
     assert.equal(accrual.posted, true);
     assert.equal(await amount(accrual.journalEntryId!, 6200, 'debit'), 10.008);
     assert.equal(await amount(accrual.journalEntryId!, 6210, 'debit'), 0.5);
@@ -161,12 +218,12 @@ async function main() {
     assert.equal(await amount(accrual.journalEntryId!, 7290, 'credit'), 0);
 
     // The existing-journal guard still returns the same entry without re-posting.
-    const replay = await inTx(trx => posting.postPayrollAccrual(trx, 7, auth));
+    const replay = await inTx((trx) => posting.postPayrollAccrual(trx, 7, auth));
     assert.equal(replay.posted, false);
     assert.equal(replay.journalEntryId, accrual.journalEntryId);
 
     // 2. Silent-misstatement case: expense and credits stay exactly 3dp (old: 10.13 / 9.00 / 1.13).
-    const accrual2 = await inTx(trx => posting.postPayrollAccrual(trx, 8, auth));
+    const accrual2 = await inTx((trx) => posting.postPayrollAccrual(trx, 8, auth));
     assert.equal(accrual2.posted, true);
     assert.equal(await amount(accrual2.journalEntryId!, 6200, 'debit'), 10.125);
     assert.equal(await amount(accrual2.journalEntryId!, 2140, 'credit'), 9);
@@ -180,4 +237,7 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

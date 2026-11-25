@@ -95,26 +95,46 @@ function run(): void {
   // 3. الديسكتوب/الأوفلاين يعمل بلا سر مضبوط: سر التثبيت يُولَّد عند أول تشغيل
   //    ويُحفَظ محلياً — ولا يكون أبداً السر الثابت العام القديم.
   withTempSecretFile((secretPath) => {
-    withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, SESSION_CSRF_SECRET: undefined, ZS_INSTALL_SECRET_PATH: secretPath }, () => {
-      const resolved = resolvePortalTokenSecret();
-      assert.notEqual(resolved, OLD_DESKTOP_LITERAL, 'the resolved desktop secret must never be the retired public literal');
-      const token = signPortalToken({ employeeId: 7, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
-      const payload = verifyPortalToken<any>(`Bearer ${token}`, ERRORS);
-      assert.equal(payload.employeeId, 7);
-      const stored = fs.readFileSync(secretPath, 'utf8').trim();
-      assert.match(stored, /^[0-9a-f]{64}$/, 'the install secret file must hold 64 hex chars');
-      assert.equal(resolvePortalTokenSecret(), resolved, 'the install secret must be stable across resolves');
-    });
+    withEnv(
+      {
+        APP_MODE: 'SELF_CONTAINED',
+        SESSION_SECRET: undefined,
+        SESSION_CSRF_SECRET: undefined,
+        ZS_INSTALL_SECRET_PATH: secretPath,
+      },
+      () => {
+        const resolved = resolvePortalTokenSecret();
+        assert.notEqual(
+          resolved,
+          OLD_DESKTOP_LITERAL,
+          'the resolved desktop secret must never be the retired public literal',
+        );
+        const token = signPortalToken({ employeeId: 7, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
+        const payload = verifyPortalToken<any>(`Bearer ${token}`, ERRORS);
+        assert.equal(payload.employeeId, 7);
+        const stored = fs.readFileSync(secretPath, 'utf8').trim();
+        assert.match(stored, /^[0-9a-f]{64}$/, 'the install secret file must hold 64 hex chars');
+        assert.equal(resolvePortalTokenSecret(), resolved, 'the install secret must be stable across resolves');
+      },
+    );
   });
 
   // 3-b. بيئة التطوير والبايلوت المحلي (LOCAL_PILOT) تعمل أيضاً كبيئة محلية بلا إيقاف البوابات.
   withTempSecretFile((secretPath) => {
-    withEnv({ APP_MODE: 'LOCAL_PILOT', SESSION_SECRET: undefined, SESSION_CSRF_SECRET: undefined, ZS_INSTALL_SECRET_PATH: secretPath }, () => {
-      assert.notEqual(resolvePortalTokenSecret(), OLD_DESKTOP_LITERAL);
-      const token = signPortalToken({ employeeId: 9, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
-      const payload = verifyPortalToken<any>(`Bearer ${token}`, ERRORS);
-      assert.equal(payload.employeeId, 9);
-    });
+    withEnv(
+      {
+        APP_MODE: 'LOCAL_PILOT',
+        SESSION_SECRET: undefined,
+        SESSION_CSRF_SECRET: undefined,
+        ZS_INSTALL_SECRET_PATH: secretPath,
+      },
+      () => {
+        assert.notEqual(resolvePortalTokenSecret(), OLD_DESKTOP_LITERAL);
+        const token = signPortalToken({ employeeId: 9, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
+        const payload = verifyPortalToken<any>(`Bearer ${token}`, ERRORS);
+        assert.equal(payload.employeeId, 9);
+      },
+    );
   });
 
   withEnv({ APP_MODE: 'CLOUD_SAAS', SESSION_SECRET: REAL_SECRET }, () => {
@@ -129,17 +149,17 @@ function run(): void {
     assert.equal(verifyPortalToken<any>(token, ERRORS).tenantId, 'tenant-a');
 
     // 5. تبديل المستأجر داخل الحمولة يكسر التوقيع — لا عبور بين المستأجرين.
-    const forgedPayload = Buffer
-      .from(JSON.stringify({ employeeId: 42, tenantId: 'tenant-b', exp: Date.now() + 60_000 }))
-      .toString('base64url');
+    const forgedPayload = Buffer.from(
+      JSON.stringify({ employeeId: 42, tenantId: 'tenant-b', exp: Date.now() + 60_000 }),
+    ).toString('base64url');
     const stolenSignature = token.split('.')[1];
     expectAppError('BAD_SIGNATURE', () => verifyPortalToken(`${forgedPayload}.${stolenSignature}`, ERRORS));
 
     // 6. رمز موقّع بأي سر افتراضي قديم مسرَّب يُرفض بعد ضبط سر حقيقي.
     for (const legacySecret of LEAKED_LEGACY_SECRETS) {
-      const encoded = Buffer
-        .from(JSON.stringify({ employeeId: 999, tenantId: 'victim-tenant', exp: Date.now() + 60_000 }))
-        .toString('base64url');
+      const encoded = Buffer.from(
+        JSON.stringify({ employeeId: 999, tenantId: 'victim-tenant', exp: Date.now() + 60_000 }),
+      ).toString('base64url');
       const legacySignature = createHmac('sha256', legacySecret).update(encoded).digest('base64url');
       expectAppError('BAD_SIGNATURE', () => verifyPortalToken(`${encoded}.${legacySignature}`, ERRORS));
     }
@@ -165,12 +185,28 @@ function run(): void {
     const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'zs-install-secret-b-'));
     try {
       let token = '';
-      withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, SESSION_CSRF_SECRET: undefined, ZS_INSTALL_SECRET_PATH: path.join(dirA, 'install-secret') }, () => {
-        token = signPortalToken({ employeeId: 7, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
-      });
-      withEnv({ APP_MODE: 'SELF_CONTAINED', SESSION_SECRET: undefined, SESSION_CSRF_SECRET: undefined, ZS_INSTALL_SECRET_PATH: path.join(dirB, 'install-secret') }, () => {
-        expectAppError('BAD_SIGNATURE', () => verifyPortalToken(token, ERRORS));
-      });
+      withEnv(
+        {
+          APP_MODE: 'SELF_CONTAINED',
+          SESSION_SECRET: undefined,
+          SESSION_CSRF_SECRET: undefined,
+          ZS_INSTALL_SECRET_PATH: path.join(dirA, 'install-secret'),
+        },
+        () => {
+          token = signPortalToken({ employeeId: 7, tenantId: 'default' }, PORTAL_TOKEN_TTL_MS);
+        },
+      );
+      withEnv(
+        {
+          APP_MODE: 'SELF_CONTAINED',
+          SESSION_SECRET: undefined,
+          SESSION_CSRF_SECRET: undefined,
+          ZS_INSTALL_SECRET_PATH: path.join(dirB, 'install-secret'),
+        },
+        () => {
+          expectAppError('BAD_SIGNATURE', () => verifyPortalToken(token, ERRORS));
+        },
+      );
     } finally {
       fs.rmSync(dirA, { recursive: true, force: true });
       fs.rmSync(dirB, { recursive: true, force: true });

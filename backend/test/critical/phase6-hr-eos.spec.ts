@@ -24,7 +24,7 @@ function testGratuityCalculations() {
       lawType: 'saudi',
       reason: 'resignation',
       minorUnits: 2,
-    })
+    });
     assert.equal(res.gratuityPercentage, 0, 'استقالة أقل من سنتين: النسبة 0%');
     assert.equal(res.gratuityAmount, 0, 'استقالة أقل من سنتين: المكافأة صفر');
     console.log('✔ قانون العمل السعودي: استقالة أقل من سنتين -> استحقاق 0% (ناجح)');
@@ -39,7 +39,7 @@ function testGratuityCalculations() {
       lawType: 'saudi',
       reason: 'resignation',
       minorUnits: 2,
-    })
+    });
     // Base: 3 * 0.5 * 10000 = 15000. 15000 * 33.333% = 4999.95
     assert.equal(res.baseGratuity, 15000, 'الأساس لـ 3 سنوات هو 15000');
     assert.equal(res.gratuityPercentage, 33.333, 'النسبة ثلث');
@@ -56,7 +56,7 @@ function testGratuityCalculations() {
       lawType: 'saudi',
       reason: 'resignation',
       minorUnits: 2,
-    })
+    });
     // Base: (5 * 0.5 * 10000) + (2 * 1.0 * 10000) = 25000 + 20000 = 45000.
     // Amount: 45000 * 66.667% = 30000.15
     assert.equal(res.baseGratuity, 45000, 'الأساس لـ 7 سنوات هو 45000');
@@ -74,7 +74,7 @@ function testGratuityCalculations() {
       lawType: 'saudi',
       reason: 'resignation',
       minorUnits: 2,
-    })
+    });
     // Base: (5 * 0.5 * 10000) + (7 * 1.0 * 10000) = 25000 + 70000 = 95000.
     assert.equal(res.baseGratuity, 95000, 'الأساس لـ 12 سنة هو 95000');
     assert.equal(res.gratuityPercentage, 100, 'النسبة 100%');
@@ -91,7 +91,7 @@ function testGratuityCalculations() {
       lawType: 'saudi',
       reason: 'termination_by_employer',
       minorUnits: 2,
-    })
+    });
     assert.equal(res.gratuityPercentage, 100, 'إنهاء من صاحب العمل يستحق كامل المكافأة');
     assert.equal(res.gratuityAmount, 15000, 'المكافأة كاملة لـ 3 سنوات 15000');
     console.log('✔ قانون العمل السعودي: إنهاء من صاحب العمل -> استحقاق 100% بغض النظر عن المدة (ناجح)');
@@ -106,7 +106,7 @@ function testGratuityCalculations() {
       lawType: 'saudi',
       reason: 'termination_article_80',
       minorUnits: 2,
-    })
+    });
     assert.equal(res.gratuityPercentage, 0, 'فصل بموجب المادة 80 لا يستحق مكافأة');
     assert.equal(res.gratuityAmount, 0, 'المكافأة صفر');
     console.log('✔ قانون العمل السعودي: فصل بموجب المادة 80 -> استحقاق 0% (ناجح)');
@@ -121,7 +121,7 @@ function testGratuityCalculations() {
       lawType: 'egyptian',
       reason: 'resignation',
       minorUnits: 2,
-    })
+    });
     // First 5 yrs: 5 * 0.5 * 8000 = 20000. Next 1 yr: 1 * 1.0 * 8000 = 8000. Total = 28000.
     assert.equal(res.baseGratuity, 28000, 'مكافأة 6 سنوات بمصر: 28000');
     assert.equal(res.gratuityAmount, 28000, 'استحقاق كامل 28000');
@@ -291,15 +291,15 @@ function testAccountingJournalBalance() {
     assert.equal(res.totalDebit, res.totalCredit, 'توازن تام بين المدين والدائن');
 
     // Verify account codes
-    const loanLine = res.lines.find(l => l.accountId === 1160);
+    const loanLine = res.lines.find((l) => l.accountId === 1160);
     assert.ok(loanLine, 'تم إدراج سطر تسوية السلف في حساب 1160');
     assert.equal(loanLine?.credit, 12000, 'مبلغ استقطاع السلف 12000');
 
-    const assetLine = res.lines.find(l => l.accountId === 7100 && l.description.includes('عهدة'));
+    const assetLine = res.lines.find((l) => l.accountId === 7100 && l.description.includes('عهدة'));
     assert.ok(assetLine, 'تم إدراج سطر استرداد العهدة في حساب 7100');
     assert.equal(assetLine?.credit, 3000, 'مبلغ استقطاع العهدة 3000');
 
-    const bankLine = res.lines.find(l => l.accountId === 1120);
+    const bankLine = res.lines.find((l) => l.accountId === 1120);
     assert.ok(bankLine, 'تم إدراج سطر الصرف البنكي في حساب 1120');
     assert.equal(bankLine?.credit, 51000, 'مبلغ الصرف 51000');
 
@@ -413,11 +413,11 @@ function testLoanRepaymentAllocation() {
   function allocateEosLoanDeduction(
     loans: Loan[],
     installments: Installment[],
-    deductionAmount: number
+    deductionAmount: number,
   ): { updatedLoans: Loan[]; updatedInstallments: Installment[]; totalAllocated: number } {
     let remainingToDeduct = deductionAmount;
-    const updatedLoans = loans.map(l => ({ ...l }));
-    const updatedInstallments = installments.map(i => ({ ...i }));
+    const updatedLoans = loans.map((l) => ({ ...l }));
+    const updatedInstallments = installments.map((i) => ({ ...i }));
 
     for (const loan of updatedLoans) {
       if (remainingToDeduct <= 0) break;
@@ -427,7 +427,7 @@ function testLoanRepaymentAllocation() {
       loan.status = loan.remainingAmount <= 0 ? 'repaid' : 'partially_repaid';
 
       let instDeduction = toDeduct;
-      for (const inst of updatedInstallments.filter(i => i.loanId === loan.id && i.status !== 'paid')) {
+      for (const inst of updatedInstallments.filter((i) => i.loanId === loan.id && i.status !== 'paid')) {
         if (instDeduction <= 0) break;
         const due = inst.amount - inst.paidAmount;
         const applied = Math.min(due, instDeduction);
@@ -486,9 +486,17 @@ function testLoanRepaymentAllocation() {
 }
 
 function testRejectsInvalidSettlementAmounts() {
-  const base = { gratuityAmount: 1000, leaveEncashmentAmount: 0, pendingSalaryAmount: 0,
-    noticePeriodAmount: 0, otherEntitlementsAmount: 0, unpaidLoansDeduction: 100,
-    assetsDeduction: 0, otherDeductions: 0, minorUnits: 2 as const };
+  const base = {
+    gratuityAmount: 1000,
+    leaveEncashmentAmount: 0,
+    pendingSalaryAmount: 0,
+    noticePeriodAmount: 0,
+    otherEntitlementsAmount: 0,
+    unpaidLoansDeduction: 100,
+    assetsDeduction: 0,
+    otherDeductions: 0,
+    minorUnits: 2 as const,
+  };
   assert.equal(calculateSettlementAbsorption(base).netPayable, 900);
   assert.throws(() => calculateSettlementAbsorption({ ...base, assetsDeduction: -1 }), /negative/);
   assert.throws(() => calculateSettlementAbsorption({ ...base, pendingSalaryAmount: Infinity }), /Invalid/);

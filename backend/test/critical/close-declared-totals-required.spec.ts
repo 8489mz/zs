@@ -50,28 +50,44 @@ const codeOf = (error: unknown): string => (error as { code?: string })?.code ||
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
-  const cashier3 = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 3, username: 'cashier3', permissions: [] } as unknown as AuthContext;
+  const cashier3 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'cashier',
+    userId: 3,
+    username: 'cashier3',
+    permissions: [],
+  } as unknown as AuthContext;
 
   const shiftRow = async (id: number) => {
     const r = await pg.query<{ status: string }>('SELECT status FROM cashier_shifts WHERE id=$1', [id]);
     return r.rows[0];
   };
   const journalCount = async () => {
-    const r = await pg.query<{ count: string }>(`SELECT count(*) AS count FROM journal_entries WHERE source_type='cashier_shift_variance'`);
+    const r = await pg.query<{ count: string }>(
+      `SELECT count(*) AS count FROM journal_entries WHERE source_type='cashier_shift_variance'`,
+    );
     return Number(r.rows[0].count);
   };
   const shiftIdOf = async (opener: number): Promise<number> => {
     const r = await pg.query<{ id: string }>(
-      'SELECT id FROM cashier_shifts WHERE opened_by=$1 ORDER BY id DESC LIMIT 1', [opener]);
+      'SELECT id FROM cashier_shifts WHERE opened_by=$1 ORDER BY id DESC LIMIT 1',
+      [opener],
+    );
     return Number(r.rows[0].id);
   };
   const seedSale = async (id: number, channel: string, amount: number, opener = 1) => {
-    await pg.query(`INSERT INTO sales(id,tenant_id,account_id,table_number,order_type,status,payment_type,payment_channel,total,paid_amount,branch_id,created_by,created_at)
+    await pg.query(
+      `INSERT INTO sales(id,tenant_id,account_id,table_number,order_type,status,payment_type,payment_channel,total,paid_amount,branch_id,created_by,created_at)
       VALUES ($1,'t1','a1','','takeaway','posted',$2,$3,$4,$4,1,$5,now())`,
-      [id, channel, channel, amount, opener]);
+      [id, channel, channel, amount, opener],
+    );
   };
   const expectCode = async (promise: Promise<unknown>, code: string, message: string) => {
     try {
@@ -144,11 +160,24 @@ async function main() {
       INSERT INTO accounting_settings VALUES
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
     `);
-    for (const [code, type] of [[1110, 'asset'], [7110, 'revenue'], [7210, 'expense'], [1135, 'asset']] as const) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), type]);
+    for (const [code, type] of [
+      [1110, 'asset'],
+      [7110, 'revenue'],
+      [7210, 'expense'],
+      [1135, 'asset'],
+    ] as const) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        type,
+      ]);
     }
     const passwords: Record<number, string> = { 1: 'pw-admin-1', 3: 'pw-cashier-3' };
-    for (const [id, role, branch] of [[1, 'admin', null], [3, 'cashier', 1]] as const) {
+    for (const [id, role, branch] of [
+      [1, 'admin', null],
+      [3, 'cashier', 1],
+    ] as const) {
       const rec = await createPasswordRecord(passwords[id as number]);
       await pg.query(
         'INSERT INTO users(id,tenant_id,username,role,is_active,password_hash,password_salt,default_branch_id) VALUES ($1,$2,$3,$4,true,$5,$6,$7)',
@@ -170,8 +199,16 @@ async function main() {
     assert.equal((await shiftRow(shiftCard)).status, 'open', 'a refused close must leave the shift open');
     assert.equal(await journalCount(), journalsBeforeCard, 'a refused close must post no variance journal');
     // The SAME shift closes once the total is declared — even an explicit 0.00.
-    await drawer.closeCashierShift(shiftCard, { countedCash: 100, cardDeclaredTotal: 0, managerPin: 'pw-cashier-3' }, cashier3);
-    assert.equal((await shiftRow(shiftCard)).status, 'pending_review', 'an explicitly entered 0.00 card total must let the close proceed to review');
+    await drawer.closeCashierShift(
+      shiftCard,
+      { countedCash: 100, cardDeclaredTotal: 0, managerPin: 'pw-cashier-3' },
+      cashier3,
+    );
+    assert.equal(
+      (await shiftRow(shiftCard)).status,
+      'pending_review',
+      'an explicitly entered 0.00 card total must let the close proceed to review',
+    );
 
     // ---------- Wallet: same shape. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
@@ -183,8 +220,16 @@ async function main() {
       'a wallet sale with no walletDeclaredTotal must refuse the close',
     );
     assert.equal((await shiftRow(shiftWallet)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftWallet, { countedCash: 100, walletDeclaredTotal: 0, managerPin: 'pw-cashier-3' }, cashier3);
-    assert.equal((await shiftRow(shiftWallet)).status, 'pending_review', 'an explicitly entered 0.00 wallet total must let the close proceed to review');
+    await drawer.closeCashierShift(
+      shiftWallet,
+      { countedCash: 100, walletDeclaredTotal: 0, managerPin: 'pw-cashier-3' },
+      cashier3,
+    );
+    assert.equal(
+      (await shiftRow(shiftWallet)).status,
+      'pending_review',
+      'an explicitly entered 0.00 wallet total must let the close proceed to review',
+    );
 
     // ---------- InstaPay: same shape. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
@@ -196,8 +241,16 @@ async function main() {
       'an InstaPay sale with no instapayDeclaredTotal must refuse the close',
     );
     assert.equal((await shiftRow(shiftInstapay)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftInstapay, { countedCash: 100, instapayDeclaredTotal: 0, managerPin: 'pw-cashier-3' }, cashier3);
-    assert.equal((await shiftRow(shiftInstapay)).status, 'pending_review', 'an explicitly entered 0.00 InstaPay total must let the close proceed to review');
+    await drawer.closeCashierShift(
+      shiftInstapay,
+      { countedCash: 100, instapayDeclaredTotal: 0, managerPin: 'pw-cashier-3' },
+      cashier3,
+    );
+    assert.equal(
+      (await shiftRow(shiftInstapay)).status,
+      'pending_review',
+      'an explicitly entered 0.00 InstaPay total must let the close proceed to review',
+    );
 
     // ---------- Drawer cash: cash operations with no countedCash refuse; with it, proceed. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
@@ -210,13 +263,21 @@ async function main() {
     );
     assert.equal((await shiftRow(shiftCash)).status, 'open', 'a refused close must leave the shift open');
     await drawer.closeCashierShift(shiftCash, { countedCash: 150, managerPin: 'pw-cashier-3' }, cashier3);
-    assert.equal((await shiftRow(shiftCash)).status, 'pending_review', 'counted cash 150 (opening 100 + cash sale 50) must close clean to review');
+    assert.equal(
+      (await shiftRow(shiftCash)).status,
+      'pending_review',
+      'counted cash 150 (opening 100 + cash sale 50) must close clean to review',
+    );
 
     // ---------- Zero operations on every method: no declarations needed at all. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
     const shiftEmpty = await shiftIdOf(3);
     await drawer.closeCashierShift(shiftEmpty, { managerPin: 'pw-cashier-3' }, cashier3);
-    assert.equal((await shiftRow(shiftEmpty)).status, 'pending_review', 'a shift with zero operations must close with no declared totals at all');
+    assert.equal(
+      (await shiftRow(shiftEmpty)).status,
+      'pending_review',
+      'a shift with zero operations must close with no declared totals at all',
+    );
 
     // ---------- Collections count too: a card receipt alone requires the card total. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
@@ -229,21 +290,41 @@ async function main() {
       'a card customer collection with no cardDeclaredTotal must refuse the close',
     );
     assert.equal((await shiftRow(shiftColl)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftColl, { countedCash: 100, cardDeclaredTotal: 50, managerPin: 'pw-cashier-3' }, cashier3);
-    assert.equal((await shiftRow(shiftColl)).status, 'pending_review', 'declaring the collected card total must let the close proceed to review');
+    await drawer.closeCashierShift(
+      shiftColl,
+      { countedCash: 100, cardDeclaredTotal: 50, managerPin: 'pw-cashier-3' },
+      cashier3,
+    );
+    assert.equal(
+      (await shiftRow(shiftColl)).status,
+      'pending_review',
+      'declaring the collected card total must let the close proceed to review',
+    );
 
     // ---------- The gate never trusts caller-supplied counts. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
     const shiftLie = await shiftIdOf(3);
     await seedSale(5, 'card', 100, 3);
     await expectCode(
-      drawer.closeCashierShift(shiftLie, { countedCash: 100, cardOperationCount: 0, managerPin: 'pw-cashier-3' }, cashier3),
+      drawer.closeCashierShift(
+        shiftLie,
+        { countedCash: 100, cardOperationCount: 0, managerPin: 'pw-cashier-3' },
+        cashier3,
+      ),
       'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED',
       'a payload claiming cardOperationCount 0 while a card sale exists must still refuse the close',
     );
     assert.equal((await shiftRow(shiftLie)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftLie, { countedCash: 100, cardDeclaredTotal: 100, cardOperationCount: 0, managerPin: 'pw-cashier-3' }, cashier3);
-    assert.equal((await shiftRow(shiftLie)).status, 'pending_review', 'declaring the card total must let the close proceed to review even with a caller count of 0');
+    await drawer.closeCashierShift(
+      shiftLie,
+      { countedCash: 100, cardDeclaredTotal: 100, cardOperationCount: 0, managerPin: 'pw-cashier-3' },
+      cashier3,
+    );
+    assert.equal(
+      (await shiftRow(shiftLie)).status,
+      'pending_review',
+      'declaring the card total must let the close proceed to review even with a caller count of 0',
+    );
 
     // ---------- Service card alone (no card sale) requires the card total. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
@@ -256,8 +337,16 @@ async function main() {
       'a service card payment with no cardDeclaredTotal must refuse the close',
     );
     assert.equal((await shiftRow(shiftService)).status, 'open', 'a refused close must leave the shift open');
-    await drawer.closeCashierShift(shiftService, { countedCash: 100, cardDeclaredTotal: 10, managerPin: 'pw-cashier-3' }, cashier3);
-    assert.equal((await shiftRow(shiftService)).status, 'pending_review', 'declaring the service card total must let the close proceed to review');
+    await drawer.closeCashierShift(
+      shiftService,
+      { countedCash: 100, cardDeclaredTotal: 10, managerPin: 'pw-cashier-3' },
+      cashier3,
+    );
+    assert.equal(
+      (await shiftRow(shiftService)).status,
+      'pending_review',
+      'declaring the service card total must let the close proceed to review',
+    );
 
     console.log('Close declared-totals-required tests passed');
   } finally {
@@ -265,4 +354,7 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

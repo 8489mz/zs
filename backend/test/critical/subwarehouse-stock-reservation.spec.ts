@@ -22,8 +22,24 @@ console.log('=== بدء اختبارات حجز المخزون على مستوى
  * and product_location_stock exactly mirroring the schema and locking queries.
  */
 function createMockStockDb(initialData: {
-  products: Array<{ id: number; name: string; stock_qty: number; reserved_qty: number; tenant_id: string; account_id: string }>;
-  locationStock: Array<{ id: number; product_id: number; branch_id: number | null; location_id: number | null; qty: number; reserved_qty: number; tenant_id: string; account_id: string }>;
+  products: Array<{
+    id: number;
+    name: string;
+    stock_qty: number;
+    reserved_qty: number;
+    tenant_id: string;
+    account_id: string;
+  }>;
+  locationStock: Array<{
+    id: number;
+    product_id: number;
+    branch_id: number | null;
+    location_id: number | null;
+    qty: number;
+    reserved_qty: number;
+    tenant_id: string;
+    account_id: string;
+  }>;
 }) {
   const products = initialData.products.map((p) => ({ ...p }));
   const locationStock = initialData.locationStock.map((ls) => ({ ...ls }));
@@ -183,14 +199,29 @@ async function testAvailableStockEngines() {
         { id: 1, name: 'سماعة بلوتوث', stock_qty: 10, reserved_qty: 3, tenant_id: 't1', account_id: 't1:main' },
       ],
       locationStock: [
-        { id: 101, product_id: 1, branch_id: 1, location_id: 10, qty: 10, reserved_qty: 3, tenant_id: 't1', account_id: 't1:main' },
+        {
+          id: 101,
+          product_id: 1,
+          branch_id: 1,
+          location_id: 10,
+          qty: 10,
+          reserved_qty: 3,
+          tenant_id: 't1',
+          account_id: 't1:main',
+        },
       ],
     });
 
     const consumable = await previewConsumableStockQty(db, { tenantId: 't1', accountId: 't1:main', productId: 1 });
     assert.equal(consumable, 7, 'الرصيد المتاح العام بعد الحجز يجب أن يكون 10 - 3 = 7');
 
-    const locAvailable = await previewAssignedLocationStockQty(db, { tenantId: 't1', accountId: 't1:main', productId: 1, branchId: 1, locationId: 10 });
+    const locAvailable = await previewAssignedLocationStockQty(db, {
+      tenantId: 't1',
+      accountId: 't1:main',
+      productId: 1,
+      branchId: 1,
+      locationId: 10,
+    });
     assert.equal(locAvailable, 7, 'الرصيد المتاح للمخزن بعد الحجز يجب أن يكون 10 - 3 = 7');
     console.log('✔ حساب الرصيد المتاح الصافي للمخزن والمنتج بدقة (10 - 3 = 7)');
   }
@@ -198,18 +229,31 @@ async function testAvailableStockEngines() {
   // Case 1.2: Stock is fully reserved (5 on hand, 5 reserved)
   {
     const db = createMockStockDb({
-      products: [
-        { id: 2, name: 'شاحن سريع', stock_qty: 5, reserved_qty: 5, tenant_id: 't1', account_id: 't1:main' },
-      ],
+      products: [{ id: 2, name: 'شاحن سريع', stock_qty: 5, reserved_qty: 5, tenant_id: 't1', account_id: 't1:main' }],
       locationStock: [
-        { id: 102, product_id: 2, branch_id: 1, location_id: 10, qty: 5, reserved_qty: 5, tenant_id: 't1', account_id: 't1:main' },
+        {
+          id: 102,
+          product_id: 2,
+          branch_id: 1,
+          location_id: 10,
+          qty: 5,
+          reserved_qty: 5,
+          tenant_id: 't1',
+          account_id: 't1:main',
+        },
       ],
     });
 
     const consumable = await previewConsumableStockQty(db, { tenantId: 't1', accountId: 't1:main', productId: 2 });
     assert.equal(consumable, 0, 'عند حجز كامل الرصيد، المتاح يجب أن يكون 0');
 
-    const locAvailable = await previewAssignedLocationStockQty(db, { tenantId: 't1', accountId: 't1:main', productId: 2, branchId: 1, locationId: 10 });
+    const locAvailable = await previewAssignedLocationStockQty(db, {
+      tenantId: 't1',
+      accountId: 't1:main',
+      productId: 2,
+      branchId: 1,
+      locationId: 10,
+    });
     assert.equal(locAvailable, 0, 'المتاح للمخزن يجب أن يكون 0 عند حجز كامل الرصيد');
     console.log('✔ منع البيع عند حجز كامل رصيد المخزن (المتاح = 0)');
   }
@@ -223,15 +267,45 @@ async function testAvailableStockEngines() {
         { id: 3, name: 'كابل تايب سي', stock_qty: 23, reserved_qty: 2, tenant_id: 't1', account_id: 't1:main' },
       ],
       locationStock: [
-        { id: 103, product_id: 3, branch_id: 1, location_id: 10, qty: 8, reserved_qty: 2, tenant_id: 't1', account_id: 't1:main' },
-        { id: 104, product_id: 3, branch_id: 2, location_id: 20, qty: 15, reserved_qty: 0, tenant_id: 't1', account_id: 't1:main' },
+        {
+          id: 103,
+          product_id: 3,
+          branch_id: 1,
+          location_id: 10,
+          qty: 8,
+          reserved_qty: 2,
+          tenant_id: 't1',
+          account_id: 't1:main',
+        },
+        {
+          id: 104,
+          product_id: 3,
+          branch_id: 2,
+          location_id: 20,
+          qty: 15,
+          reserved_qty: 0,
+          tenant_id: 't1',
+          account_id: 't1:main',
+        },
       ],
     });
 
-    const loc10Avail = await previewAssignedLocationStockQty(db, { tenantId: 't1', accountId: 't1:main', productId: 3, branchId: 1, locationId: 10 });
+    const loc10Avail = await previewAssignedLocationStockQty(db, {
+      tenantId: 't1',
+      accountId: 't1:main',
+      productId: 3,
+      branchId: 1,
+      locationId: 10,
+    });
     assert.equal(loc10Avail, 6, 'مخزن الفرع 1 يجب أن يتاح منه 8 - 2 = 6');
 
-    const loc20Avail = await previewAssignedLocationStockQty(db, { tenantId: 't1', accountId: 't1:main', productId: 3, branchId: 2, locationId: 20 });
+    const loc20Avail = await previewAssignedLocationStockQty(db, {
+      tenantId: 't1',
+      accountId: 't1:main',
+      productId: 3,
+      branchId: 2,
+      locationId: 20,
+    });
     assert.equal(loc20Avail, 15, 'مخزن الفرع 2 يجب أن يظل بكامل رصيده 15 دون تأثر بحجز الفرع 1');
     console.log('✔ عزل الحجز المخزني بين الفروع والمخازن الفرعية بدقة تامة');
   }
@@ -249,8 +323,26 @@ async function testReservationAndReleaseExecution() {
       { id: 20, name: 'كيبورد ميكانيكي', stock_qty: 5, reserved_qty: 0, tenant_id: 't1', account_id: 't1:main' },
     ],
     locationStock: [
-      { id: 501, product_id: 10, branch_id: 1, location_id: 100, qty: 20, reserved_qty: 0, tenant_id: 't1', account_id: 't1:main' },
-      { id: 502, product_id: 20, branch_id: 1, location_id: 100, qty: 5, reserved_qty: 0, tenant_id: 't1', account_id: 't1:main' },
+      {
+        id: 501,
+        product_id: 10,
+        branch_id: 1,
+        location_id: 100,
+        qty: 20,
+        reserved_qty: 0,
+        tenant_id: 't1',
+        account_id: 't1:main',
+      },
+      {
+        id: 502,
+        product_id: 20,
+        branch_id: 1,
+        location_id: 100,
+        qty: 5,
+        reserved_qty: 0,
+        tenant_id: 't1',
+        account_id: 't1:main',
+      },
     ],
   });
 
@@ -304,7 +396,7 @@ async function testReservationAndReleaseExecution() {
       assert.equal(err.code, 'INSUFFICIENT_LOCATION_STOCK');
       return true;
     },
-    'يجب رفض الحجز عندما تكون الكمية المطلوبة أكبر من الرصيد المتاح'
+    'يجب رفض الحجز عندما تكون الكمية المطلوبة أكبر من الرصيد المتاح',
   );
   console.log('✔ الحظر الحازم للحجز الزائد عند تجاوز الرصيد المتاح (INSUFFICIENT_LOCATION_STOCK)');
 
@@ -323,7 +415,7 @@ async function testReservationAndReleaseExecution() {
       assert.equal(err.code, 'INSUFFICIENT_LOCATION_STOCK');
       return true;
     },
-    'يجب منع حجز كمية تتجاوز الرصيد غير المحجوز'
+    'يجب منع حجز كمية تتجاوز الرصيد غير المحجوز',
   );
   console.log('✔ حظر حجز كمية تفوق الرصيد غير المحجوز في المخزن (INSUFFICIENT_LOCATION_STOCK)');
 
@@ -374,20 +466,23 @@ async function testReservationAndReleaseExecution() {
 function testMigration145Schema() {
   console.log('\n--- 3. اختبارات فحص ملف الهجرة 145 والقيود الهيكلية لقاعدة البيانات ---');
 
-  const migrationPath = join(__dirname, '../../src/database/migrations/2040000000145_subwarehouse_stock_reservation.ts');
+  const migrationPath = join(
+    __dirname,
+    '../../src/database/migrations/2040000000145_subwarehouse_stock_reservation.ts',
+  );
   const migrationContent = readFileSync(migrationPath, 'utf8');
 
   // Verify reserved_qty column added to product_location_stock
   assert(
     migrationContent.includes('reserved_qty'),
-    'الهجرة 145 يجب أن تضيف عمود reserved_qty إلى product_location_stock'
+    'الهجرة 145 يجب أن تضيف عمود reserved_qty إلى product_location_stock',
   );
 
   // Verify non-negative check constraint
   assert(
     migrationContent.includes('chk_product_location_stock_reserved_non_negative') &&
       migrationContent.includes('reserved_qty >= 0'),
-    'الهجرة 145 يجب أن تنشئ قيد عدم السالب chk_product_location_stock_reserved_non_negative'
+    'الهجرة 145 يجب أن تنشئ قيد عدم السالب chk_product_location_stock_reserved_non_negative',
   );
 
   // Verify online_orders tracking columns
@@ -396,14 +491,14 @@ function testMigration145Schema() {
       migrationContent.includes('reserved_branch_id') &&
       migrationContent.includes('reserved_location_id') &&
       migrationContent.includes('stock_reserved_at'),
-    'الهجرة 145 يجب أن تضيف أعمدة تتبع حجز المخزون في جدول online_orders'
+    'الهجرة 145 يجب أن تضيف أعمدة تتبع حجز المخزون في جدول online_orders',
   );
 
   // Verify partial indexes for active reservations
   assert(
     migrationContent.includes('idx_pls_tenant_prod_loc_reserved') &&
       migrationContent.includes('idx_online_orders_stock_reserved'),
-    'الهجرة 145 يجب أن تنشئ فهارس جزئية للحجوزات النشطة لتحقيق أقصى سرعة استعلام'
+    'الهجرة 145 يجب أن تنشئ فهارس جزئية للحجوزات النشطة لتحقيق أقصى سرعة استعلام',
   );
 
   console.log('✔ بنية الهجرة 145 مطابقة بنسبة 100% لكافة القيود الهيكلية وفهارس الأداء');
@@ -413,7 +508,9 @@ function testMigration145Schema() {
  * 4. Test Lock Ordering & Deadlock Prevention
  */
 async function testCanonicalLockOrdering() {
-  console.log('\n--- 4. اختبار الترتيب القانوني للأقفال ومنع التعليق المتبادل (SQLSTATE 40P01 Deadlock Prevention) ---');
+  console.log(
+    '\n--- 4. اختبار الترتيب القانوني للأقفال ومنع التعليق المتبادل (SQLSTATE 40P01 Deadlock Prevention) ---',
+  );
 
   const lockedItemSequence: number[] = [];
 
@@ -424,9 +521,36 @@ async function testCanonicalLockOrdering() {
       { id: 45, name: 'منتج 45', stock_qty: 10, reserved_qty: 0, tenant_id: 't1', account_id: 't1:main' },
     ],
     locationStock: [
-      { id: 1, product_id: 99, branch_id: 1, location_id: 1, qty: 10, reserved_qty: 0, tenant_id: 't1', account_id: 't1:main' },
-      { id: 2, product_id: 12, branch_id: 1, location_id: 1, qty: 10, reserved_qty: 0, tenant_id: 't1', account_id: 't1:main' },
-      { id: 3, product_id: 45, branch_id: 1, location_id: 1, qty: 10, reserved_qty: 0, tenant_id: 't1', account_id: 't1:main' },
+      {
+        id: 1,
+        product_id: 99,
+        branch_id: 1,
+        location_id: 1,
+        qty: 10,
+        reserved_qty: 0,
+        tenant_id: 't1',
+        account_id: 't1:main',
+      },
+      {
+        id: 2,
+        product_id: 12,
+        branch_id: 1,
+        location_id: 1,
+        qty: 10,
+        reserved_qty: 0,
+        tenant_id: 't1',
+        account_id: 't1:main',
+      },
+      {
+        id: 3,
+        product_id: 45,
+        branch_id: 1,
+        location_id: 1,
+        qty: 10,
+        reserved_qty: 0,
+        tenant_id: 't1',
+        account_id: 't1:main',
+      },
     ],
   });
 
@@ -448,7 +572,7 @@ async function testCanonicalLockOrdering() {
   assert.deepEqual(
     processedProductIds,
     [12, 45, 99],
-    'محرك الحجز يجب أن يرتب الأصناف تصاعدياً بالـ productId لفرض الترتيب القانوني للأقفال'
+    'محرك الحجز يجب أن يرتب الأصناف تصاعدياً بالـ productId لفرض الترتيب القانوني للأقفال',
   );
 
   console.log('✔ الترتيب القانوني للأقفال (Sorted ascending by productId: 12 -> 45 -> 99)');

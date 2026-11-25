@@ -93,49 +93,115 @@ async function seedShipment(
   projectId: string | null,
   onHand: number,
 ): Promise<void> {
-  await db.insertInto('products' as never).values({
-    id: 5, tenant_id: 't1', account_id: 't1', name: 'P5',
-    stock_qty: 10, reserved_qty: 0, cost_price: 500, updated_at: new Date(),
-  } as never).execute();
-  await db.insertInto('product_location_stock' as never).values({
-    tenant_id: 't1', account_id: 't1', product_id: 5, branch_id: 2,
-    location_id: 10, qty: 10, reserved_qty: 0,
-  } as never).execute();
-  await db.insertInto('import_shipments' as never).values({
-    id: shipmentId, tenant_id: 't1', supplier_id: 9, project_id: projectId,
-    container_number: `MSCU-${shipmentId}`, status: 'Arrived',
-    cost_allocation_method: 'value',
-    late_expenses_total_egp: 0, late_cogs_adjustment_egp: 0, late_inventory_adjustment_egp: 0,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: `${shipmentId}-item`, tenant_id: 't1', shipment_id: shipmentId, product_id: 5,
-    quantity: 10, received_quantity: 10, factory_unit_price_usd: 10,
-    landed_cost_egp: 500, shortage_handling_method: 'capitalize',
-    gross_weight_kg_unit: 1, cbm_unit: 0.1,
-  } as never).execute();
-  await db.insertInto('import_inventory_lots' as never).values({
-    tenant_id: 't1', lot_number: `LOT-${shipmentId}`, project_id: projectId, shipment_id: shipmentId,
-    shipment_item_id: `${shipmentId}-item`, product_id: 5, location_id: 10,
-    initial_quantity: 10, remaining_quantity: onHand, unit_landed_cost_egp: 500,
-    status: 'active', receipt_date: '2026-11-02', updated_at: new Date(),
-  } as never).execute();
-  await db.insertInto('import_inventory_receipts' as never).values({
-    tenant_id: 't1', shipment_id: shipmentId, state: 'posted', review_reason: null,
-    posted_at: new Date(), created_by: 1, journal_entry_id: null,
-  } as never).execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 5,
+      tenant_id: 't1',
+      account_id: 't1',
+      name: 'P5',
+      stock_qty: 10,
+      reserved_qty: 0,
+      cost_price: 500,
+      updated_at: new Date(),
+    } as never)
+    .execute();
+  await db
+    .insertInto('product_location_stock' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 't1',
+      product_id: 5,
+      branch_id: 2,
+      location_id: 10,
+      qty: 10,
+      reserved_qty: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: shipmentId,
+      tenant_id: 't1',
+      supplier_id: 9,
+      project_id: projectId,
+      container_number: `MSCU-${shipmentId}`,
+      status: 'Arrived',
+      cost_allocation_method: 'value',
+      late_expenses_total_egp: 0,
+      late_cogs_adjustment_egp: 0,
+      late_inventory_adjustment_egp: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: `${shipmentId}-item`,
+      tenant_id: 't1',
+      shipment_id: shipmentId,
+      product_id: 5,
+      quantity: 10,
+      received_quantity: 10,
+      factory_unit_price_usd: 10,
+      landed_cost_egp: 500,
+      shortage_handling_method: 'capitalize',
+      gross_weight_kg_unit: 1,
+      cbm_unit: 0.1,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_inventory_lots' as never)
+    .values({
+      tenant_id: 't1',
+      lot_number: `LOT-${shipmentId}`,
+      project_id: projectId,
+      shipment_id: shipmentId,
+      shipment_item_id: `${shipmentId}-item`,
+      product_id: 5,
+      location_id: 10,
+      initial_quantity: 10,
+      remaining_quantity: onHand,
+      unit_landed_cost_egp: 500,
+      status: 'active',
+      receipt_date: '2026-11-02',
+      updated_at: new Date(),
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_inventory_receipts' as never)
+    .values({
+      tenant_id: 't1',
+      shipment_id: shipmentId,
+      state: 'posted',
+      review_reason: null,
+      posted_at: new Date(),
+      created_by: 1,
+      journal_entry_id: null,
+    } as never)
+    .execute();
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select(sql`count(*)`.as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select(sql`count(*)`.as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
 async function lateExpenseJournalLines(db: Kysely<Database>): Promise<any[]> {
   const event: any = await (db as any).selectFrom('import_late_expense_events').selectAll().executeTakeFirstOrThrow();
-  const entry: any = await (db as any).selectFrom('journal_entries').selectAll()
-    .where('id', '=', Number(event.journal_entry_id)).executeTakeFirstOrThrow();
-  return (db as any).selectFrom('journal_entry_lines').selectAll()
-    .where('journal_entry_id', '=', entry.id).orderBy('id').execute();
+  const entry: any = await (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('id', '=', Number(event.journal_entry_id))
+    .executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('journal_entry_lines')
+    .selectAll()
+    .where('journal_entry_id', '=', entry.id)
+    .orderBy('id')
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -147,7 +213,9 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db, 'sh-1', 'proj-1', 6);
       const result = await service.processLateShipmentExpense('t1', 1, 'sh-1', {
-        lateExpenseAmount: 1000, title: 'Demurrage', supplierId: 9,
+        lateExpenseAmount: 1000,
+        title: 'Demurrage',
+        supplierId: 9,
       });
       assert.equal(result.success, true);
       assert.equal(result.allocation.lateExpenseAmount, 1000);
@@ -171,7 +239,11 @@ async function main(): Promise<void> {
       assert.equal(centres[0].code, 'CC-IMP-261109-0001', 'Cost centre code follows the contracting pattern');
       assert.equal(centres[0].dimension, 'project');
       for (const line of lines) {
-        assert.equal(Number(line.cost_center_id), Number(centres[0].id), `Line ${line.id} carries the project cost centre`);
+        assert.equal(
+          Number(line.cost_center_id),
+          Number(centres[0].id),
+          `Line ${line.id} carries the project cost centre`,
+        );
       }
       console.log('Case A passed: project-linked late-expense JE carries the cost centre on every line');
     } finally {
@@ -187,7 +259,9 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db, 'sh-1', null, 10);
       const result = await service.processLateShipmentExpense('t1', 1, 'sh-1', {
-        lateExpenseAmount: 1000, title: 'Demurrage', supplierId: 9,
+        lateExpenseAmount: 1000,
+        title: 'Demurrage',
+        supplierId: 9,
       });
       assert.equal(result.success, true);
       const lines = await lateExpenseJournalLines(db);
@@ -214,15 +288,25 @@ async function main(): Promise<void> {
       await seedShipment(db, 'sh-1', 'proj-missing', 10);
       await assert.rejects(
         service.processLateShipmentExpense('t1', 1, 'sh-1', {
-          lateExpenseAmount: 1000, title: 'Demurrage', supplierId: 9,
+          lateExpenseAmount: 1000,
+          title: 'Demurrage',
+          supplierId: 9,
         }),
         /IMPORT_RECEIPT_PROJECT_NOT_FOUND/,
       );
       assert.equal(await countRows(db, 'journal_entries'), 0, 'No journal may exist after a refused posting');
-      assert.equal(await countRows(db, 'import_late_expense_events'), 0, 'No late-expense event may exist after a refused posting');
+      assert.equal(
+        await countRows(db, 'import_late_expense_events'),
+        0,
+        'No late-expense event may exist after a refused posting',
+      );
       assert.equal(await countRows(db, 'stock_movements'), 0, 'No stock movement may exist after a refused posting');
       assert.equal(await countRows(db, 'cost_centers'), 0, 'No cost centre may be created by a refused posting');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 5).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 5)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.cost_price), 500, 'WAC stays untouched after a refused posting');
       console.log('Case C passed: dangling project reference fails closed with zero writes');
     } finally {

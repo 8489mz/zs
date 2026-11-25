@@ -43,13 +43,23 @@ const PASSWORD = 'cashier-pw-1';
 const SHIFT_AT = '2026-01-01T00:00:00.000Z';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec', username: 'cashier-a', role: 'cashier',
-  permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: [],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const managerAuth: AuthContext = {
-  userId: 3, sessionId: 'spec', username: 'manager', role: 'manager',
-  permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 3,
+  sessionId: 'spec',
+  username: 'manager',
+  role: 'manager',
+  permissions: [],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -90,35 +100,152 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: '"KWD"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'KWD', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'manager', role: 'manager', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'KWD', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'manager', role: 'manager', is_active: true })
+    .execute();
   const record = await createPasswordRecord(PASSWORD);
-  await anyDb.updateTable('users').set({ password_hash: record.hash, password_salt: record.salt }).where('id', '=', 2).execute();
+  await anyDb
+    .updateTable('users')
+    .set({ password_hash: record.hash, password_salt: record.salt })
+    .where('id', '=', 2)
+    .execute();
   const accounts: Array<[number, string, string, string, boolean]> = [
-    [1110, '1110', 'asset', 'debit', true], [1120, '1120', 'asset', 'debit', true],
-    [1130, '1130', 'asset', 'debit', false], [1140, '1140', 'asset', 'debit', false],
-    [4100, '4100', 'income', 'credit', false], [5100, '5100', 'expense', 'debit', false],
-    [7100, '7100', 'income', 'credit', false], [7210, '7210', 'expense', 'debit', false],
+    [1110, '1110', 'asset', 'debit', true],
+    [1120, '1120', 'asset', 'debit', true],
+    [1130, '1130', 'asset', 'debit', false],
+    [1140, '1140', 'asset', 'debit', false],
+    [4100, '4100', 'income', 'credit', false],
+    [5100, '5100', 'expense', 'debit', false],
+    [7100, '7100', 'income', 'credit', false],
+    [7210, '7210', 'expense', 'debit', false],
   ];
   for (const [id, code, type, balance, cashBank] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, name_en: code, account_type: type, normal_balance: balance, is_cash_bank: cashBank, is_active: true, is_tax: false, account_group: 'g' }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id,
+        tenant_id: TENANT,
+        code,
+        name_ar: code,
+        name_en: code,
+        account_type: type,
+        normal_balance: balance,
+        is_cash_bank: cashBank,
+        is_active: true,
+        is_tax: false,
+        account_group: 'g',
+      })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, cash_account_id: 1110, bank_account_id: 1120, customer_receivable_account_id: 1130, inventory_account_id: 1140, sales_revenue_account_id: 4100, cogs_account_id: 5100 }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      cogs_account_id: 5100,
+    })
+    .execute();
 }
 
 async function seedShiftWithSales(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('cashier_shifts').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-1', opened_by: 2, status: 'open', branch_id: null, location_id: null, opening_cash: 0, expected_cash: 0, created_at: SHIFT_AT }).execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'SHIFT-1',
+      opened_by: 2,
+      status: 'open',
+      branch_id: null,
+      location_id: null,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_AT,
+    })
+    .execute();
   // Card sale 100.005 + service card 10.001 − card return refund 5.005 = computed card 105.001.
-  await anyDb.insertInto('sales').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, status: 'posted', created_by: 2, created_at: '2026-01-01T10:00:00.000Z', total: 100.005, paid_amount: 100.005, payment_channel: 'card' }).execute();
-  await anyDb.insertInto('sale_payments').values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 1, payment_channel: 'card', amount: 100.005 }).execute();
+  await anyDb
+    .insertInto('sales')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      status: 'posted',
+      created_by: 2,
+      created_at: '2026-01-01T10:00:00.000Z',
+      total: 100.005,
+      paid_amount: 100.005,
+      payment_channel: 'card',
+    })
+    .execute();
+  await anyDb
+    .insertInto('sale_payments')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 1, payment_channel: 'card', amount: 100.005 })
+    .execute();
   // Wallet sale 50.002.
-  await anyDb.insertInto('sales').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, status: 'posted', created_by: 2, created_at: '2026-01-01T11:00:00.000Z', total: 50.002, paid_amount: 50.002, payment_channel: 'wallet' }).execute();
-  await anyDb.insertInto('sale_payments').values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 2, payment_channel: 'wallet', amount: 50.002 }).execute();
-  await anyDb.insertInto('services').values({ tenant_id: TENANT, created_by: 2, service_date: '2026-01-01T12:00:00.000Z', created_at: '2026-01-01T12:00:00.000Z', payment_channel: 'card', amount: 10.001 }).execute();
-  await anyDb.insertInto('return_documents').values({ id: 1, tenant_id: TENANT, return_type: 'sale', created_by: 2, created_at: '2026-01-01T13:00:00.000Z', settlement_mode: 'refund', refund_method: 'card', total: 5.005 }).execute();
+  await anyDb
+    .insertInto('sales')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      status: 'posted',
+      created_by: 2,
+      created_at: '2026-01-01T11:00:00.000Z',
+      total: 50.002,
+      paid_amount: 50.002,
+      payment_channel: 'wallet',
+    })
+    .execute();
+  await anyDb
+    .insertInto('sale_payments')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 2, payment_channel: 'wallet', amount: 50.002 })
+    .execute();
+  await anyDb
+    .insertInto('services')
+    .values({
+      tenant_id: TENANT,
+      created_by: 2,
+      service_date: '2026-01-01T12:00:00.000Z',
+      created_at: '2026-01-01T12:00:00.000Z',
+      payment_channel: 'card',
+      amount: 10.001,
+    })
+    .execute();
+  await anyDb
+    .insertInto('return_documents')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      return_type: 'sale',
+      created_by: 2,
+      created_at: '2026-01-01T13:00:00.000Z',
+      settlement_mode: 'refund',
+      refund_method: 'card',
+      total: 5.005,
+    })
+    .execute();
 }
 
 async function readCloseNote(db: Kysely<Database>, shiftId: number): Promise<any> {
@@ -135,7 +262,10 @@ async function journalCount(db: Kysely<Database>): Promise<number> {
 
 async function main(): Promise<void> {
   const { pg, db } = await makeDb();
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   try {
@@ -145,18 +275,22 @@ async function main(): Promise<void> {
     // Case 1: declared card total is short by 5.001; wallet matches;
     // instapay is zero on both sides. Review surfaces the card delta
     // at book digits and stores it durably.
-    await drawer.closeCashierShift(1, {
-      countedCash: 0,
-      cardDeclaredTotal: 100.005,
-      cardOperationCount: 1,
-      cardDetails: [{ amount: 100.005, reference: 'AUTH-1' }],
-      walletDeclaredTotal: 50.002,
-      walletOperationCount: 1,
-      walletDetails: [{ amount: 50.002 }],
-      instapayDeclaredTotal: 0,
-      instapayOperationCount: 0,
-      managerPin: PASSWORD,
-    }, cashierAuth);
+    await drawer.closeCashierShift(
+      1,
+      {
+        countedCash: 0,
+        cardDeclaredTotal: 100.005,
+        cardOperationCount: 1,
+        cardDetails: [{ amount: 100.005, reference: 'AUTH-1' }],
+        walletDeclaredTotal: 50.002,
+        walletOperationCount: 1,
+        walletDetails: [{ amount: 50.002 }],
+        instapayDeclaredTotal: 0,
+        instapayOperationCount: 0,
+        managerPin: PASSWORD,
+      },
+      cashierAuth,
+    );
 
     const stored = await readCloseNote(db, 1);
     // Declared figures survive at book digits: the old 2dp storage
@@ -169,19 +303,34 @@ async function main(): Promise<void> {
     const review = await drawer.reviewCashierShiftClose(1, { decision: 'approve', note: 'reviewed' }, managerAuth);
     const reconciliation = review.reconciliation as any;
     assert.deepEqual(reconciliation.card, {
-      declared: 100.005, computed: 105.001, delta: -4.996,
-      declaredCount: 1, computedCount: 1, countDelta: 0,
-      detailTotal: 100.005, detailDelta: 0,
+      declared: 100.005,
+      computed: 105.001,
+      delta: -4.996,
+      declaredCount: 1,
+      computedCount: 1,
+      countDelta: 0,
+      detailTotal: 100.005,
+      detailDelta: 0,
     });
     assert.deepEqual(reconciliation.wallet, {
-      declared: 50.002, computed: 50.002, delta: 0,
-      declaredCount: 1, computedCount: 1, countDelta: 0,
-      detailTotal: 50.002, detailDelta: 0,
+      declared: 50.002,
+      computed: 50.002,
+      delta: 0,
+      declaredCount: 1,
+      computedCount: 1,
+      countDelta: 0,
+      detailTotal: 50.002,
+      detailDelta: 0,
     });
     assert.deepEqual(reconciliation.instapay, {
-      declared: 0, computed: 0, delta: 0,
-      declaredCount: 0, computedCount: 0, countDelta: 0,
-      detailTotal: 0, detailDelta: 0,
+      declared: 0,
+      computed: 0,
+      delta: 0,
+      declaredCount: 0,
+      computedCount: 0,
+      countDelta: 0,
+      detailTotal: 0,
+      detailDelta: 0,
     });
 
     const persisted = await readCloseNote(db, 1);
@@ -190,7 +339,7 @@ async function main(): Promise<void> {
 
     // The listing exposes the stored reconciliation, and the cash
     // variance posting is untouched: no cash moved, no journal.
-    const listing = await drawer.listCashierShifts({}, managerAuth) as any;
+    const listing = (await drawer.listCashierShifts({}, managerAuth)) as any;
     const row = (listing.cashierShifts as any[]).find((r) => Number(r.id) === 1);
     assert.deepEqual(row.reconciliation, reconciliation);
     assert.equal(row.status, 'closed');
@@ -200,28 +349,82 @@ async function main(): Promise<void> {
     // before this package reconciles against its stored value
     // unchanged — no re-rounding of history.
     const anyDb = db as any;
-    const legacyNote = 'BLIND_CLOSE::' + JSON.stringify({
-      blindClose: true,
-      declared: { cash: 0, cardTotal: 100.01, cardCount: 1, walletTotal: 0, walletCount: 0, instapayTotal: 0, instapayCount: 0 },
-      detailTotals: { card: 100.01, wallet: 0, instapay: 0 },
-      details: { card: [{ amount: 100.01 }], wallet: [], instapay: [] },
-      note: '',
-    });
-    await anyDb.insertInto('cashier_shifts').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-2', opened_by: 2, status: 'pending_review', branch_id: null, location_id: null, opening_cash: 0, expected_cash: 0, counted_cash: 0, variance: 0, close_note: legacyNote, created_at: '2026-02-01T00:00:00.000Z', closed_at: '2026-02-01T20:00:00.000Z' }).execute();
-    await anyDb.insertInto('sales').values({ id: 3, tenant_id: TENANT, account_id: ACCOUNT, status: 'posted', created_by: 2, created_at: '2026-02-01T10:00:00.000Z', total: 100.01, paid_amount: 100.01, payment_channel: 'card' }).execute();
-    await anyDb.insertInto('sale_payments').values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 3, payment_channel: 'card', amount: 100.01 }).execute();
+    const legacyNote =
+      'BLIND_CLOSE::' +
+      JSON.stringify({
+        blindClose: true,
+        declared: {
+          cash: 0,
+          cardTotal: 100.01,
+          cardCount: 1,
+          walletTotal: 0,
+          walletCount: 0,
+          instapayTotal: 0,
+          instapayCount: 0,
+        },
+        detailTotals: { card: 100.01, wallet: 0, instapay: 0 },
+        details: { card: [{ amount: 100.01 }], wallet: [], instapay: [] },
+        note: '',
+      });
+    await anyDb
+      .insertInto('cashier_shifts')
+      .values({
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'SHIFT-2',
+        opened_by: 2,
+        status: 'pending_review',
+        branch_id: null,
+        location_id: null,
+        opening_cash: 0,
+        expected_cash: 0,
+        counted_cash: 0,
+        variance: 0,
+        close_note: legacyNote,
+        created_at: '2026-02-01T00:00:00.000Z',
+        closed_at: '2026-02-01T20:00:00.000Z',
+      })
+      .execute();
+    await anyDb
+      .insertInto('sales')
+      .values({
+        id: 3,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        status: 'posted',
+        created_by: 2,
+        created_at: '2026-02-01T10:00:00.000Z',
+        total: 100.01,
+        paid_amount: 100.01,
+        payment_channel: 'card',
+      })
+      .execute();
+    await anyDb
+      .insertInto('sale_payments')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 3, payment_channel: 'card', amount: 100.01 })
+      .execute();
     const legacyReview = await drawer.reviewCashierShiftClose(2, { decision: 'approve', note: 'legacy' }, managerAuth);
     assert.deepEqual((legacyReview.reconciliation as any).card, {
-      declared: 100.01, computed: 100.01, delta: 0,
-      declaredCount: 1, computedCount: 1, countDelta: 0,
-      detailTotal: 100.01, detailDelta: 0,
+      declared: 100.01,
+      computed: 100.01,
+      delta: 0,
+      declaredCount: 1,
+      computedCount: 1,
+      countDelta: 0,
+      detailTotal: 100.01,
+      detailDelta: 0,
     });
 
     // Invariant pin: the entry exists exactly once and is last.
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-BLIND-CLOSE-DECLARED-RECONCILIATION').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-BLIND-CLOSE-DECLARED-RECONCILIATION').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
 
     console.log('Blind-close declared reconciliation tests passed');
   } finally {

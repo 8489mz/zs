@@ -41,7 +41,10 @@ class FakeSelectBuilder {
   private filterColumn = '';
   private filterValue: unknown;
 
-  constructor(private readonly table: keyof DbState, private readonly state: DbState) {}
+  constructor(
+    private readonly table: keyof DbState,
+    private readonly state: DbState,
+  ) {}
 
   select(): this {
     return this;
@@ -80,7 +83,12 @@ class FakeInsertBuilder {
     return this;
   }
 
-  onConflict(handler: (builder: { column: (name: string) => { doUpdateSet: (payload: Record<string, unknown>) => unknown }; columns: (names: string[]) => { doNothing: () => unknown } }) => unknown): this {
+  onConflict(
+    handler: (builder: {
+      column: (name: string) => { doUpdateSet: (payload: Record<string, unknown>) => unknown };
+      columns: (names: string[]) => { doNothing: () => unknown };
+    }) => unknown,
+  ): this {
     handler({
       column: (_name: string) => ({
         doUpdateSet: (_payload: Record<string, unknown>) => null,
@@ -116,7 +124,9 @@ class FakeInsertBuilder {
         user_id: Number(this.payload.user_id || 0),
         branch_id: Number(this.payload.branch_id || 0),
       };
-      const duplicate = this.state.user_branches.some((entry) => entry.user_id === row.user_id && entry.branch_id === row.branch_id);
+      const duplicate = this.state.user_branches.some(
+        (entry) => entry.user_id === row.user_id && entry.branch_id === row.branch_id,
+      );
       if (!duplicate || !this.ignoreConflict) this.state.user_branches.push(row);
     }
   }

@@ -37,10 +37,10 @@ import { strict as assert } from 'node:assert';
 import { StorefrontOrderQuoteService } from '../../src/modules/storefront/services/storefront-order-quote.service';
 
 function makeFakeDb(rowsByTable: Record<string, any[]>): any {
-  const eb: any = Object.assign(
-    (..._args: any[]) => true,
-    { or: (..._args: any[]) => true, and: (..._args: any[]) => true },
-  );
+  const eb: any = Object.assign((..._args: any[]) => true, {
+    or: (..._args: any[]) => true,
+    and: (..._args: any[]) => true,
+  });
   const makeQuery = (table: string): any => {
     const q: any = new Proxy(function () {}, {
       get(_target, prop) {
@@ -50,13 +50,19 @@ function makeFakeDb(rowsByTable: Record<string, any[]>): any {
         return (...args: any[]) => {
           for (const arg of args) {
             if (typeof arg === 'function') {
-              try { arg(eb); } catch { /* expression-builder shapes only */ }
+              try {
+                arg(eb);
+              } catch {
+                /* expression-builder shapes only */
+              }
             }
           }
           return q;
         };
       },
-      apply() { return q; },
+      apply() {
+        return q;
+      },
     });
     return q;
   };
@@ -83,8 +89,7 @@ function makeService(tenantCurrency: string, settingsCurrency?: string): any {
   const svc: any = new StorefrontOrderQuoteService({
     db: makeFakeDb({ products: [PRODUCT], product_offers: [] }),
     getTenantBySlug: async () => ({ id: 'tenant-1', currency: tenantCurrency, slug: 'shop', activity_type: null }),
-    getTenantSettingsMap: async () =>
-      new Map<string, string>(settingsCurrency ? [['currency', settingsCurrency]] : []),
+    getTenantSettingsMap: async () => new Map<string, string>(settingsCurrency ? [['currency', settingsCurrency]] : []),
   } as any);
   svc.resolveOrderCharges = async () => ({
     deliveryFee: 0.005,

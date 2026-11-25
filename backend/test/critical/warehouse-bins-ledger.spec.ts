@@ -79,7 +79,14 @@ a duplicate reassign a no-op rather than a double-apply; the
 two-terminal drive stays a live-Postgres acceptance item).
 */
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['inventory'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['inventory'],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -110,25 +117,37 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedProduct(db: Kysely<Database>, id: number, globalQty: number, cost: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, retail_price, is_active) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, 0, ${cost}, 0, true)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${globalQty}, 0)`.execute(db);
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, retail_price, is_active) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, 0, ${cost}, 0, true)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${globalQty}, 0)`.execute(
+    db,
+  );
 }
 
 async function seedBin(db: Kysely<Database>, id: number, code: string): Promise<void> {
-  await sql`INSERT INTO warehouse_bins (id, tenant_id, account_id, location_id, code, barcode, is_active) VALUES (${id}, 't1', 'a1', 1, ${code}, ${`BIN-${code}`}, true)`.execute(db);
+  await sql`INSERT INTO warehouse_bins (id, tenant_id, account_id, location_id, code, barcode, is_active) VALUES (${id}, 't1', 'a1', 1, ${code}, ${`BIN-${code}`}, true)`.execute(
+    db,
+  );
 }
 
 async function seedAllocation(db: Kysely<Database>, binId: number, productId: number, qty: number): Promise<void> {
-  await sql`INSERT INTO product_bin_allocations (tenant_id, account_id, bin_id, product_id, quantity, is_primary) VALUES ('t1', 'a1', ${binId}, ${productId}, ${qty}, false)`.execute(db);
+  await sql`INSERT INTO product_bin_allocations (tenant_id, account_id, bin_id, product_id, quantity, is_primary) VALUES ('t1', 'a1', ${binId}, ${productId}, ${qty}, false)`.execute(
+    db,
+  );
 }
 
 async function allocQty(db: Kysely<Database>, binId: number, productId: number): Promise<number> {
-  const row = await sql<{ quantity: string }>`SELECT quantity FROM product_bin_allocations WHERE bin_id = ${binId} AND product_id = ${productId}`.execute(db);
+  const row = await sql<{
+    quantity: string;
+  }>`SELECT quantity FROM product_bin_allocations WHERE bin_id = ${binId} AND product_id = ${productId}`.execute(db);
   return row.rows.length ? Number(row.rows[0].quantity) : 0;
 }
 
 async function locQty(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = 1`.execute(db);
+  const row = await sql<{
+    qty: string;
+  }>`SELECT qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = 1`.execute(db);
   return row.rows.length ? Number(row.rows[0].qty) : 0;
 }
 
@@ -138,17 +157,61 @@ async function globalQty(db: Kysely<Database>, productId: number): Promise<numbe
 }
 
 async function binSumAtLocation(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await sql<{ total: string }>`SELECT COALESCE(SUM(pba.quantity), 0) AS total FROM product_bin_allocations pba JOIN warehouse_bins wb ON wb.id = pba.bin_id WHERE pba.product_id = ${productId} AND wb.location_id = 1`.execute(db);
+  const row = await sql<{
+    total: string;
+  }>`SELECT COALESCE(SUM(pba.quantity), 0) AS total FROM product_bin_allocations pba JOIN warehouse_bins wb ON wb.id = pba.bin_id WHERE pba.product_id = ${productId} AND wb.location_id = 1`.execute(
+    db,
+  );
   return Number(row.rows[0].total);
 }
 
-async function movements(db: Kysely<Database>, productId: number): Promise<Array<{ movement_type: string; qty: number; before_qty: number; after_qty: number; total_cost: number; reference_type: string; reference_id: number }>> {
-  const rows = await sql<{ movement_type: string; qty: string; before_qty: string; after_qty: string; total_cost: string; reference_type: string; reference_id: string }>`SELECT movement_type, qty, before_qty, after_qty, total_cost, reference_type, reference_id FROM stock_movements WHERE product_id = ${productId} ORDER BY id`.execute(db);
-  return rows.rows.map((r) => ({ movement_type: r.movement_type, qty: Number(r.qty), before_qty: Number(r.before_qty), after_qty: Number(r.after_qty), total_cost: Number(r.total_cost), reference_type: r.reference_type, reference_id: Number(r.reference_id) }));
+async function movements(
+  db: Kysely<Database>,
+  productId: number,
+): Promise<
+  Array<{
+    movement_type: string;
+    qty: number;
+    before_qty: number;
+    after_qty: number;
+    total_cost: number;
+    reference_type: string;
+    reference_id: number;
+  }>
+> {
+  const rows = await sql<{
+    movement_type: string;
+    qty: string;
+    before_qty: string;
+    after_qty: string;
+    total_cost: string;
+    reference_type: string;
+    reference_id: string;
+  }>`SELECT movement_type, qty, before_qty, after_qty, total_cost, reference_type, reference_id FROM stock_movements WHERE product_id = ${productId} ORDER BY id`.execute(
+    db,
+  );
+  return rows.rows.map((r) => ({
+    movement_type: r.movement_type,
+    qty: Number(r.qty),
+    before_qty: Number(r.before_qty),
+    after_qty: Number(r.after_qty),
+    total_cost: Number(r.total_cost),
+    reference_type: r.reference_type,
+    reference_id: Number(r.reference_id),
+  }));
 }
 
-async function journalLines(db: Kysely<Database>, movementId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
-  const rows = await sql<{ code: string; debit: string; credit: string }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'inventory_adjustment' AND e.source_id = ${movementId} AND e.tenant_id = 't1' ORDER BY a.code`.execute(db);
+async function journalLines(
+  db: Kysely<Database>,
+  movementId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
+  const rows = await sql<{
+    code: string;
+    debit: string;
+    credit: string;
+  }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'inventory_adjustment' AND e.source_id = ${movementId} AND e.tenant_id = 't1' ORDER BY a.code`.execute(
+    db,
+  );
   return rows.rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
@@ -158,11 +221,18 @@ async function journalEntryCount(db: Kysely<Database>): Promise<number> {
 }
 
 function makeService(db: Kysely<Database>, posting?: AccountingPostingService): WarehouseBinsService {
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   // `as any`: the constructor takes (db, tx, posting) with the fix and
   // (db) without it — the cast keeps the removal proof behavioural
   // (assertion failure) instead of a compile error either way.
-  return new (WarehouseBinsService as any)(db, new TransactionHelper(), posting ?? new AccountingPostingService(foundation));
+  return new (WarehouseBinsService as any)(
+    db,
+    new TransactionHelper(),
+    posting ?? new AccountingPostingService(foundation),
+  );
 }
 
 async function main(): Promise<void> {
@@ -175,15 +245,27 @@ async function main(): Promise<void> {
     await seedBin(db, 12, 'A-12');
     await seedAllocation(db, 11, 1, 30);
     await seedAllocation(db, 12, 1, 20);
-    await assert.rejects(service.quickReassignProduct({ binId: 11, productId: 1, quantity: -5 }, AUTH), /zero or greater/);
-    await assert.rejects(service.quickAuditUpdate({ binId: 11, productId: 1, countedQty: -2 }, AUTH), /zero or greater/);
-    await assert.rejects(service.quickReassignProduct({ binId: 11, productId: 1, quantity: 10.1234 }, AUTH), /three decimal places/);
+    await assert.rejects(
+      service.quickReassignProduct({ binId: 11, productId: 1, quantity: -5 }, AUTH),
+      /zero or greater/,
+    );
+    await assert.rejects(
+      service.quickAuditUpdate({ binId: 11, productId: 1, countedQty: -2 }, AUTH),
+      /zero or greater/,
+    );
+    await assert.rejects(
+      service.quickReassignProduct({ binId: 11, productId: 1, quantity: 10.1234 }, AUTH),
+      /three decimal places/,
+    );
     assert.equal(await allocQty(db, 11, 1), 30);
     assert.equal((await movements(db, 1)).length, 0);
     assert.equal(await locQty(db, 1), 100);
 
     // Case 2: reassign is a pure reallocation — movement, no journal, capped.
-    const reassign = await service.quickReassignProduct({ binId: 11, productId: 1, quantity: 40, isPrimary: true }, AUTH);
+    const reassign = await service.quickReassignProduct(
+      { binId: 11, productId: 1, quantity: 40, isPrimary: true },
+      AUTH,
+    );
     assert.equal(reassign.previousQty, 30);
     assert.equal(reassign.delta, 10);
     assert.ok(reassign.movementId);
@@ -192,14 +274,28 @@ async function main(): Promise<void> {
     assert.equal(await globalQty(db, 1), 100);
     assert.equal(await binSumAtLocation(db, 1), 60);
     assert.deepEqual(await movements(db, 1), [
-      { movement_type: 'bin_reassign', qty: 10, before_qty: 30, after_qty: 40, total_cost: 100, reference_type: 'bin_reassign', reference_id: 11 },
+      {
+        movement_type: 'bin_reassign',
+        qty: 10,
+        before_qty: 30,
+        after_qty: 40,
+        total_cost: 100,
+        reference_type: 'bin_reassign',
+        reference_id: 11,
+      },
     ]);
     assert.equal(await journalEntryCount(db), 0);
-    const prod1 = await sql<{ primary_bin_id: string; bin_location: string }>`SELECT primary_bin_id, bin_location FROM products WHERE id = 1`.execute(db);
+    const prod1 = await sql<{
+      primary_bin_id: string;
+      bin_location: string;
+    }>`SELECT primary_bin_id, bin_location FROM products WHERE id = 1`.execute(db);
     assert.equal(Number(prod1.rows[0].primary_bin_id), 11);
     assert.equal(prod1.rows[0].bin_location, 'A-11');
     // Cap: location 100, other bins 20, so at most 80 can sit in bin 11.
-    await assert.rejects(service.quickReassignProduct({ binId: 11, productId: 1, quantity: 90 }, AUTH), /exceeds available location stock/);
+    await assert.rejects(
+      service.quickReassignProduct({ binId: 11, productId: 1, quantity: 90 }, AUTH),
+      /exceeds available location stock/,
+    );
     assert.equal(await allocQty(db, 11, 1), 40);
     // Duplicate reassign to the same quantity writes no second movement.
     const dupReassign = await service.quickReassignProduct({ binId: 11, productId: 1, quantity: 40 }, AUTH);
@@ -220,7 +316,15 @@ async function main(): Promise<void> {
     assert.equal(await globalQty(db, 1), 95);
     assert.equal(await binSumAtLocation(db, 1), 55);
     const lossMovs = await movements(db, 1);
-    assert.deepEqual(lossMovs[1], { movement_type: 'adjust', qty: -5, before_qty: 100, after_qty: 95, total_cost: 50, reference_type: 'bin_audit', reference_id: 11 });
+    assert.deepEqual(lossMovs[1], {
+      movement_type: 'adjust',
+      qty: -5,
+      before_qty: 100,
+      after_qty: 95,
+      total_cost: 50,
+      reference_type: 'bin_audit',
+      reference_id: 11,
+    });
     assert.deepEqual(await journalLines(db, Number(auditLoss.movementId)), [
       { code: '1140', debit: 0, credit: 50 },
       { code: '5200', debit: 50, credit: 0 },
@@ -235,7 +339,15 @@ async function main(): Promise<void> {
     assert.equal(await globalQty(db, 1), 98);
     assert.equal(await binSumAtLocation(db, 1), 58);
     const gainMovs = await movements(db, 1);
-    assert.deepEqual(gainMovs[2], { movement_type: 'adjust', qty: 3, before_qty: 95, after_qty: 98, total_cost: 30, reference_type: 'bin_audit', reference_id: 11 });
+    assert.deepEqual(gainMovs[2], {
+      movement_type: 'adjust',
+      qty: 3,
+      before_qty: 95,
+      after_qty: 98,
+      total_cost: 30,
+      reference_type: 'bin_audit',
+      reference_id: 11,
+    });
     assert.deepEqual(await journalLines(db, Number(auditGain.movementId)), [
       { code: '1140', debit: 30, credit: 0 },
       { code: '7100', debit: 0, credit: 30 },
@@ -258,7 +370,15 @@ async function main(): Promise<void> {
     assert.equal(await locQty(db, 2), 100.125);
     assert.equal(await globalQty(db, 2), 100.125);
     assert.deepEqual(await movements(db, 2), [
-      { movement_type: 'adjust', qty: 0.125, before_qty: 100, after_qty: 100.125, total_cost: 1.25, reference_type: 'bin_audit', reference_id: 21 },
+      {
+        movement_type: 'adjust',
+        qty: 0.125,
+        before_qty: 100,
+        after_qty: 100.125,
+        total_cost: 1.25,
+        reference_type: 'bin_audit',
+        reference_id: 21,
+      },
     ]);
     assert.deepEqual(await journalLines(db, Number(audit3dp.movementId)), [
       { code: '1140', debit: 1.25, credit: 0 },
@@ -267,7 +387,9 @@ async function main(): Promise<void> {
 
     // Case 5: atomicity — a posting failure rolls allocation, location and movement back.
     const failingPosting = {
-      postInventoryAdjustment: async () => { throw new Error('POSTING_FAILED_SIMULATED'); },
+      postInventoryAdjustment: async () => {
+        throw new Error('POSTING_FAILED_SIMULATED');
+      },
     } as unknown as AccountingPostingService;
     const failingService = makeService(db, failingPosting);
     await seedProduct(db, 3, 50, 10);

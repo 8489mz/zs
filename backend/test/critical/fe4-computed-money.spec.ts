@@ -137,8 +137,7 @@ const HELPER_IMPORT = "from '../utils/van-money.utils'";
 // File #45: slices under components/van-pre-sales/ sit one level deeper,
 // so their rounder import reads '../../utils/van-money.utils'.
 const HELPER_IMPORT_DEEP = "from '../../utils/van-money.utils'";
-const QUANTITY_ALLOWLIST_FILE =
-  'delivery-reps/components/DriverNewLoadRequisitionView.tsx';
+const QUANTITY_ALLOWLIST_FILE = 'delivery-reps/components/DriverNewLoadRequisitionView.tsx';
 const QUANTITY_ALLOWLIST_MAX = 2;
 
 interface ShapeBViolation {
@@ -149,9 +148,7 @@ interface ShapeBViolation {
 
 function stripComments(source: string): string {
   // Blank out comments but keep every newline, so line numbers stay exact.
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+  return source.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
 function lineNumberOf(source: string, index: number): number {
@@ -214,21 +211,14 @@ async function main(): Promise<void> {
   );
 
   // 2. The numeric proof for the rounder exists (Vitest spec, runs in CI).
-  const vitestSpec = path.join(
-    REPO_ROOT,
-    FE4_ROOT,
-    'delivery-reps/utils/van-money.utils.spec.ts',
-  );
+  const vitestSpec = path.join(REPO_ROOT, FE4_ROOT, 'delivery-reps/utils/van-money.utils.spec.ts');
   assert.ok(fs.existsSync(vitestSpec), 'van-money.utils.spec.ts must exist');
   const vitest = fs.readFileSync(vitestSpec, 'utf8');
   assert.ok(
     vitest.includes("from './van-money.utils'"),
     'Vitest spec must import the production rounder, not re-implement it',
   );
-  assert.ok(
-    vitest.includes('roundMoney(1.005)'),
-    'Vitest spec must pin the 1.005 float-boundary case',
-  );
+  assert.ok(vitest.includes('roundMoney(1.005)'), 'Vitest spec must pin the 1.005 float-boundary case');
 
   // 3. Exactly the five fixed importers import the shared rounder: the
   //    two untouched components (shallow import) plus the three file-#45
@@ -239,8 +229,7 @@ async function main(): Promise<void> {
     const full = path.join(REPO_ROOT, FE4_ROOT, rel);
     assert.ok(fs.existsSync(full), `${rel} must exist`);
     const src = fs.readFileSync(full, 'utf8');
-    if (src.includes(HELPER_IMPORT) || src.includes(HELPER_IMPORT_DEEP))
-      importers.push(rel);
+    if (src.includes(HELPER_IMPORT) || src.includes(HELPER_IMPORT_DEEP)) importers.push(rel);
   }
   assert.deepEqual(
     importers.sort(),
@@ -278,11 +267,7 @@ async function main(): Promise<void> {
       `allowlisted site must be quantity stepping (currentQty/step), found: ${v.file}:${v.line}: ${v.snippet}`,
     );
   }
-  assert.equal(
-    all.length,
-    allowed.length,
-    'every shape-B site must be an allowlisted quantity site',
-  );
+  assert.equal(all.length, allowed.length, 'every shape-B site must be an allowlisted quantity site');
 
   console.log(
     `fe4 computed money checks passed (${FE4_FILES.length} files, ${allowed.length} allowlisted quantity sites, 0 money sites)`,

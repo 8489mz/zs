@@ -36,7 +36,11 @@ async function main(): Promise<void> {
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   void auth;
 
-  const fakePkg = { invoiceHash: 'aGFzaA==', uuid: '11111111-1111-1111-1111-111111111111', ublXml: '<Invoice/>' } as never;
+  const fakePkg = {
+    invoiceHash: 'aGFzaA==',
+    uuid: '11111111-1111-1111-1111-111111111111',
+    ublXml: '<Invoice/>',
+  } as never;
   const builderStub = { buildZatcaInvoice: async () => fakePkg };
   const taxSettingsStub = { getSettings: async () => ({ environment: 'sandbox' }) } as never;
   const service = new ZatcaSubmissionService(db, builderStub as never, taxSettingsStub);
@@ -45,7 +49,11 @@ async function main(): Promise<void> {
   let fetchMode: 'throw' | 'report' = 'throw';
   (globalThis as any).fetch = async () => {
     if (fetchMode === 'throw') throw new Error('network down');
-    return { status: 200, ok: true, text: async () => JSON.stringify({ reportingStatus: 'REPORTED', validationResults: { warningMessages: [] } }) } as never;
+    return {
+      status: 200,
+      ok: true,
+      text: async () => JSON.stringify({ reportingStatus: 'REPORTED', validationResults: { warningMessages: [] } }),
+    } as never;
   };
 
   try {

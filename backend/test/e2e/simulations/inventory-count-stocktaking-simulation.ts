@@ -14,7 +14,7 @@ import { setScopedStockQty } from '../../../src/common/utils/location-stock-ledg
 
 /**
  * Z-SYSTEMS ERP — INVENTORY COUNT & STOCKTAKING SIMULATION
- * 
+ *
  * Verifies:
  * 1. Foundation: Tenant, Branch, Stock Location, Products with Cost & Pricing.
  * 2. Initial Stock Ingestion: Setting initial physical quantities across locations.
@@ -143,21 +143,30 @@ async function runInventoryCountSimulation() {
 
     // 3. Create Stock Count Session (Shortage on A: counted 95, Surplus on B: counted 53)
     console.log('\n--- 3. إنشاء جلسة جرد المستودع ورصد الفروقات ---');
-    const sessionRes = await inventoryCountService.createStockCountSession({
-      branchId,
-      locationId,
-      note: 'جرد دوري ربع سنوي لمستودع المنطقة الوسطى',
-      items: [
-        { productId: prodAId, countedQty: 95, note: 'عجز 5 حبات' },
-        { productId: prodBId, countedQty: 53, note: 'فائض 3 حبات' },
-      ],
-    }, auth);
+    const sessionRes = await inventoryCountService.createStockCountSession(
+      {
+        branchId,
+        locationId,
+        note: 'جرد دوري ربع سنوي لمستودع المنطقة الوسطى',
+        items: [
+          { productId: prodAId, countedQty: 95, note: 'عجز 5 حبات' },
+          { productId: prodBId, countedQty: 53, note: 'فائض 3 حبات' },
+        ],
+      },
+      auth,
+    );
 
     const sessionId = Number(sessionRes.sessionId);
     console.log(`[OK] تم إنشاء جلسة الجرد #${sessionId} بحالة draft.`);
 
     // 4. Verify Session & Variance Details
-    const countItems = await sql<{ id: number; product_id: number; expected_qty: string; counted_qty: string; variance_qty: string }>`
+    const countItems = await sql<{
+      id: number;
+      product_id: number;
+      expected_qty: string;
+      counted_qty: string;
+      variance_qty: string;
+    }>`
       SELECT id, product_id, expected_qty, counted_qty, variance_qty
       FROM stock_count_items
       WHERE session_id = ${sessionId} AND tenant_id = ${auth.tenantId}
@@ -190,7 +199,9 @@ async function runInventoryCountSimulation() {
     const updatedItemARes = await sql<{ variance_qty: string; counted_qty: string }>`
       SELECT variance_qty, counted_qty FROM stock_count_items WHERE id = ${itemA.id} AND tenant_id = ${auth.tenantId}
     `.execute(db);
-    console.log(`[OK] تم تحديث العد بعد إعادة الجرد: الكمية الفعلية ${updatedItemARes.rows[0].counted_qty} والفارق الجديد ${updatedItemARes.rows[0].variance_qty}.`);
+    console.log(
+      `[OK] تم تحديث العد بعد إعادة الجرد: الكمية الفعلية ${updatedItemARes.rows[0].counted_qty} والفارق الجديد ${updatedItemARes.rows[0].variance_qty}.`,
+    );
 
     // 6. Post Stock Count Session
     console.log('\n--- 6. ترحيل جلسة الجرد وتحديث دفاتر المخزون ---');
@@ -224,14 +235,17 @@ async function runInventoryCountSimulation() {
 
     // 8. Register Damaged Stock
     console.log('\n--- 8. تسجيل بضاعة تالفة وتقييم التكلفة (Damaged Stock) ---');
-    await inventoryCountService.createDamagedStock({
-      productId: prodBId,
-      branchId,
-      locationId,
-      qty: 3,
-      reason: 'تلف كرتون أثناء النقل بالرافعة الشوكية',
-      note: 'كسر داخلي غير قابل للاسترجاع للمورد',
-    }, auth);
+    await inventoryCountService.createDamagedStock(
+      {
+        productId: prodBId,
+        branchId,
+        locationId,
+        qty: 3,
+        reason: 'تلف كرتون أثناء النقل بالرافعة الشوكية',
+        note: 'كسر داخلي غير قابل للاسترجاع للمورد',
+      },
+      auth,
+    );
 
     const stockBAfterDamage = await sql<{ qty: string }>`
       SELECT qty FROM product_location_stock
@@ -245,15 +259,18 @@ async function runInventoryCountSimulation() {
 
     // 9. Zero Variance Session
     console.log('\n--- 9. جلسة جرد متطابقة بدون أي فروقات (Zero Variance) ---');
-    const zeroSessionRes = await inventoryCountService.createStockCountSession({
-      branchId,
-      locationId,
-      note: 'جرد تأكيدي متطابق تماماً مع الدفاتر',
-      items: [
-        { productId: prodAId, countedQty: 96 },
-        { productId: prodBId, countedQty: 50 },
-      ],
-    }, auth);
+    const zeroSessionRes = await inventoryCountService.createStockCountSession(
+      {
+        branchId,
+        locationId,
+        note: 'جرد تأكيدي متطابق تماماً مع الدفاتر',
+        items: [
+          { productId: prodAId, countedQty: 96 },
+          { productId: prodBId, countedQty: 50 },
+        ],
+      },
+      auth,
+    );
     const zeroSessionId = Number(zeroSessionRes.sessionId);
     await inventoryCountService.postStockCountSession(zeroSessionId, auth);
     console.log(`[OK] تم ترحيل جلسة الجرد المتطابقة #${zeroSessionId} بنجاح.`);
@@ -267,7 +284,6 @@ async function runInventoryCountSimulation() {
     console.log('\n================================================================');
     console.log('[SUCCESS] اكتملت محاكاة جرد المخزون والتسويات بنجاح 100%!');
     console.log('================================================================\n');
-
   } catch (err: any) {
     console.error('[ERROR] SIMULATION FAILED:', err.message || err);
     console.error(err.stack);

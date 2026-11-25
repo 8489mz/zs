@@ -29,8 +29,13 @@ const TENANT = 'tenant-a';
 const ACCOUNT = 'account-a';
 
 const AUTH = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: [],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -58,23 +63,74 @@ async function seed(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   const fiveDaysAgo = new Date(Date.now() - 5 * DAY_MS).toISOString();
   const fortyDaysAgo = new Date(Date.now() - 40 * DAY_MS).toISOString();
-  await anyDb.insertInto('sales').values([
-    { id: 1, tenant_id: TENANT, total: 1000, tax_amount: 0, status: 'posted', created_at: fiveDaysAgo, prices_include_tax: false },
-  ]).execute();
-  await anyDb.insertInto('sale_items').values([
-    { tenant_id: TENANT, sale_id: 1, product_id: 1, product_name: 'A', qty: 2, unit_multiplier: 1, net_line_total: null, line_total: 1000, allocated_discount: 0, allocated_tax: 0, cost_price: 100 },
-  ]).execute();
-  await anyDb.insertInto('products').values([
-    { id: 1, tenant_id: TENANT, name: 'A', category_id: null, stock_qty: 10, min_stock_qty: 0, cost_price: 100, retail_price: 500, is_active: true },
-  ]).execute();
-  await anyDb.insertInto('expenses').values([
-    { id: 1, tenant_id: TENANT, amount: 50, expense_date: fiveDaysAgo },
-  ]).execute();
-  await anyDb.insertInto('services').values([
-    { id: 1, tenant_id: TENANT, name: 'Delivery', amount: 75, notes: '', service_date: fiveDaysAgo, is_active: true },
-    { id: 2, tenant_id: TENANT, name: 'Cancelled', amount: 100, notes: '', service_date: fiveDaysAgo, is_active: false },
-    { id: 3, tenant_id: TENANT, name: 'Old', amount: 60, notes: '', service_date: fortyDaysAgo, is_active: true },
-  ]).execute();
+  await anyDb
+    .insertInto('sales')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        total: 1000,
+        tax_amount: 0,
+        status: 'posted',
+        created_at: fiveDaysAgo,
+        prices_include_tax: false,
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('sale_items')
+    .values([
+      {
+        tenant_id: TENANT,
+        sale_id: 1,
+        product_id: 1,
+        product_name: 'A',
+        qty: 2,
+        unit_multiplier: 1,
+        net_line_total: null,
+        line_total: 1000,
+        allocated_discount: 0,
+        allocated_tax: 0,
+        cost_price: 100,
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        name: 'A',
+        category_id: null,
+        stock_qty: 10,
+        min_stock_qty: 0,
+        cost_price: 100,
+        retail_price: 500,
+        is_active: true,
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('expenses')
+    .values([{ id: 1, tenant_id: TENANT, amount: 50, expense_date: fiveDaysAgo }])
+    .execute();
+  await anyDb
+    .insertInto('services')
+    .values([
+      { id: 1, tenant_id: TENANT, name: 'Delivery', amount: 75, notes: '', service_date: fiveDaysAgo, is_active: true },
+      {
+        id: 2,
+        tenant_id: TENANT,
+        name: 'Cancelled',
+        amount: 100,
+        notes: '',
+        service_date: fiveDaysAgo,
+        is_active: false,
+      },
+      { id: 3, tenant_id: TENANT, name: 'Old', amount: 60, notes: '', service_date: fortyDaysAgo, is_active: true },
+    ])
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -83,7 +139,13 @@ async function main(): Promise<void> {
     await seed(db);
     const service = new ManagerDashboardService(db);
     const overview = await service.overview(AUTH);
-    const profit = overview.profitSummary as { netSales: number; cogs: number; grossProfit: number; expenses: number; netProfit: number };
+    const profit = overview.profitSummary as {
+      netSales: number;
+      cogs: number;
+      grossProfit: number;
+      expenses: number;
+      netProfit: number;
+    };
 
     // The live defect: dashboard profit was 701.51 against the sales
     // report's 776.51 — exactly the 75.00 services invoice missing.
@@ -103,8 +165,29 @@ async function main(): Promise<void> {
     // The sales report must agree with the dashboard for the same
     // revenue: buildCommercialSummary is the report-side profit.
     const commercial = buildCommercialSummary(
-      { salesCount: 1, servicesCount: 1, purchasesCount: 0, expensesCount: 1, returnsCount: 0, salesReturnCount: 0, purchaseReturnCount: 0 },
-      { salesTotal: 1000, servicesTotal: 75, purchasesTotal: 0, expensesTotal: 50, salesReturnsTotal: 0, purchaseReturnsTotal: 0, salesDiscountsTotal: 0, salesTaxTotal: 0, salesReturnTaxTotal: 0, cashIn: 0, cashOut: 0, cogs: 200 },
+      {
+        salesCount: 1,
+        servicesCount: 1,
+        purchasesCount: 0,
+        expensesCount: 1,
+        returnsCount: 0,
+        salesReturnCount: 0,
+        purchaseReturnCount: 0,
+      },
+      {
+        salesTotal: 1000,
+        servicesTotal: 75,
+        purchasesTotal: 0,
+        expensesTotal: 50,
+        salesReturnsTotal: 0,
+        purchaseReturnsTotal: 0,
+        salesDiscountsTotal: 0,
+        salesTaxTotal: 0,
+        salesReturnTaxTotal: 0,
+        cashIn: 0,
+        cashOut: 0,
+        cogs: 200,
+      },
     ).commercial;
     assert.equal(commercial.grossProfit, profit.grossProfit);
     assert.equal(commercial.netOperatingProfit, profit.netProfit);

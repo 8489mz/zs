@@ -5,16 +5,36 @@ type RowMap = Record<string, unknown[]>;
 
 class FakeQuery {
   constructor(private readonly rows: unknown[]) {}
-  select(): this { return this; }
-  where(): this { return this; }
-  innerJoin(): this { return this; }
-  leftJoin(): this { return this; }
-  orderBy(): this { return this; }
-  groupBy(): this { return this; }
-  limit(): this { return this; }
-  offset(): this { return this; }
-  execute(): Promise<unknown[]> { return Promise.resolve(this.rows); }
-  executeTakeFirst(): Promise<unknown> { return Promise.resolve(this.rows[0]); }
+  select(): this {
+    return this;
+  }
+  where(): this {
+    return this;
+  }
+  innerJoin(): this {
+    return this;
+  }
+  leftJoin(): this {
+    return this;
+  }
+  orderBy(): this {
+    return this;
+  }
+  groupBy(): this {
+    return this;
+  }
+  limit(): this {
+    return this;
+  }
+  offset(): this {
+    return this;
+  }
+  execute(): Promise<unknown[]> {
+    return Promise.resolve(this.rows);
+  }
+  executeTakeFirst(): Promise<unknown> {
+    return Promise.resolve(this.rows[0]);
+  }
 }
 
 class FakeDb {
@@ -25,30 +45,34 @@ class FakeDb {
 }
 
 (async () => {
-  const service = new ReportsService(new FakeDb({
-    'audit_logs as a': [
-      {
-        id: 20,
-        action: 'sale.created',
-        details: 'created invoice',
-        created_at: new Date().toISOString(),
-        username: 'admin',
-        count: 2,
-      },
-      {
-        id: 19,
-        action: 'sale.cancelled',
-        details: 'cancelled invoice',
-        created_at: new Date().toISOString(),
-        username: 'cashier',
-      },
-    ],
-  }) as never);
-
-  const result = await service.auditLogs(
-    { page: 1, pageSize: 50, search: 'sale' },
-    { role: 'admin', permissions: ['audit'], tenantId: 'tenant-a', accountId: 'account-a' } as never,
+  const service = new ReportsService(
+    new FakeDb({
+      'audit_logs as a': [
+        {
+          id: 20,
+          action: 'sale.created',
+          details: 'created invoice',
+          created_at: new Date().toISOString(),
+          username: 'admin',
+          count: 2,
+        },
+        {
+          id: 19,
+          action: 'sale.cancelled',
+          details: 'cancelled invoice',
+          created_at: new Date().toISOString(),
+          username: 'cashier',
+        },
+      ],
+    }) as never,
   );
+
+  const result = await service.auditLogs({ page: 1, pageSize: 50, search: 'sale' }, {
+    role: 'admin',
+    permissions: ['audit'],
+    tenantId: 'tenant-a',
+    accountId: 'account-a',
+  } as never);
   const logs = (result.auditLogs as any[]) || [];
   const pagination = result.pagination as any;
   const summary = result.summary as any;

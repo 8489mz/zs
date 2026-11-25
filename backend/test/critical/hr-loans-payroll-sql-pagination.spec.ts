@@ -46,56 +46,123 @@ import { TransactionHelper } from '../../src/database/helpers/transaction.helper
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const AUTH = {
-  userId: 1, sessionId: 'sess-spec', username: 'actor-1', role: 'admin',
-  permissions: [], tenantId: 't1', accountId: 'a1',
+  userId: 1,
+  sessionId: 'sess-spec',
+  username: 'actor-1',
+  role: 'admin',
+  permissions: [],
+  tenantId: 't1',
+  accountId: 'a1',
 } as unknown as AuthContext;
 
 type Page = { page: number; pageSize: number; totalItems: number; totalPages: number };
 type InstallmentRow = {
-  id: string; loanId: string; installmentNumber: number; dueDate: string;
-  amount: number; paidAmount: number; remainingAmount: number; status: string; paidAt: string;
+  id: string;
+  loanId: string;
+  installmentNumber: number;
+  dueDate: string;
+  amount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  status: string;
+  paidAt: string;
 };
 type RepaymentRow = {
-  id: string; loanId: string; entryType: string; amount: number; balanceAfter: number;
-  repaymentMethod: string; note: string; createdAt: string;
-  receivedById: string; receivedByUsername: string; receivedByName: string;
+  id: string;
+  loanId: string;
+  entryType: string;
+  amount: number;
+  balanceAfter: number;
+  repaymentMethod: string;
+  note: string;
+  createdAt: string;
+  receivedById: string;
+  receivedByUsername: string;
+  receivedByName: string;
 };
 type LoanRow = {
-  id: string; employeeId: string; employeeName: string; loanNo: string; loanType: string;
-  principalAmount: number; paidAmount: number; remainingAmount: number;
-  installmentCount: number; installmentAmount: number; repaymentMode: string;
-  monthlyInstallmentAmount: number | null; status: string; issueDate: string;
-  firstDueDate: string; salaryDueDate: string; createdAt: string; updatedAt: string;
-  approvedAt: string; disbursedAt: string; paidAt: string;
-  branchId: string; locationId: string; notes: string;
-  dueInstallmentsAmount: number; dueInstallmentsCount: number;
-  installments: InstallmentRow[]; repayments: RepaymentRow[];
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  loanNo: string;
+  loanType: string;
+  principalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  installmentCount: number;
+  installmentAmount: number;
+  repaymentMode: string;
+  monthlyInstallmentAmount: number | null;
+  status: string;
+  issueDate: string;
+  firstDueDate: string;
+  salaryDueDate: string;
+  createdAt: string;
+  updatedAt: string;
+  approvedAt: string;
+  disbursedAt: string;
+  paidAt: string;
+  branchId: string;
+  locationId: string;
+  notes: string;
+  dueInstallmentsAmount: number;
+  dueInstallmentsCount: number;
+  installments: InstallmentRow[];
+  repayments: RepaymentRow[];
 };
 type LoansResult = {
-  loans: LoanRow[]; pagination: Page;
+  loans: LoanRow[];
+  pagination: Page;
   summary: { totalItems: number; outstandingAmount: number };
 };
 type RunRow = {
-  id: string; periodMonth: string; startDate: string; endDate: string;
-  payFrequency: string; status: string; notes: string;
-  createdBy: string; reviewedBy: string; approvedBy: string;
-  createdAt: string; reviewedAt: string; approvedAt: string; updatedAt: string;
-  itemCount: number; totalBaseSalary: number; totalAllowanceAmount: number;
-  totalDeductionAmount: number; totalLoanDeductionAmount: number;
-  totalAssetRecoveryDeductionAmount: number; totalEmployeeSocialInsurance: number;
-  totalEmployerSocialInsurance: number; totalIncomeTax: number;
-  totalPenaltyDeduction: number; totalCarriedForwardDeduction: number;
-  totalGrossPay: number; totalNetPay: number;
+  id: string;
+  periodMonth: string;
+  startDate: string;
+  endDate: string;
+  payFrequency: string;
+  status: string;
+  notes: string;
+  createdBy: string;
+  reviewedBy: string;
+  approvedBy: string;
+  createdAt: string;
+  reviewedAt: string;
+  approvedAt: string;
+  updatedAt: string;
+  itemCount: number;
+  totalBaseSalary: number;
+  totalAllowanceAmount: number;
+  totalDeductionAmount: number;
+  totalLoanDeductionAmount: number;
+  totalAssetRecoveryDeductionAmount: number;
+  totalEmployeeSocialInsurance: number;
+  totalEmployerSocialInsurance: number;
+  totalIncomeTax: number;
+  totalPenaltyDeduction: number;
+  totalCarriedForwardDeduction: number;
+  totalGrossPay: number;
+  totalNetPay: number;
 };
 type RunsResult = {
-  runs: RunRow[]; pagination: Page; summary: { totalItems: number };
-  serverTime: string; serverTimezone: string;
+  runs: RunRow[];
+  pagination: Page;
+  summary: { totalItems: number };
+  serverTime: string;
+  serverTimezone: string;
 };
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const hr = new HrService(db, new TransactionHelper(), { log: async () => {} } as never, {} as never, {} as never, undefined);
+  const hr = new HrService(
+    db,
+    new TransactionHelper(),
+    { log: async () => {} } as never,
+    {} as never,
+    {} as never,
+    undefined,
+  );
 
   try {
     await pg.exec(`SET TIME ZONE 'UTC'`);
@@ -152,51 +219,55 @@ async function main(): Promise<void> {
     `);
 
     // ---------------- LOANS: 246 loans, outstanding 1799.50 + 240*10 = 4199.50 ----------------
-    const def = await hr.listLoans({}, AUTH) as unknown as LoansResult;
+    const def = (await hr.listLoans({}, AUTH)) as unknown as LoansResult;
     assert.equal(def.loans.length, 25, 'loans default page is 25 rows');
     assert.equal(def.pagination.totalItems, 246, 'loans totalItems is the FULL set');
     assert.equal(def.pagination.totalPages, 10, 'loans totalPages = ceil(246/25)');
     assert.equal(def.pagination.page, 1);
     assert.equal(def.pagination.pageSize, 25);
     assert.equal(def.summary.totalItems, 246, 'loans summary totalItems is the FULL set');
-    assert.equal(def.summary.outstandingAmount, 4199.50, 'loans summary outstanding is exact over the FULL set');
+    assert.equal(def.summary.outstandingAmount, 4199.5, 'loans summary outstanding is exact over the FULL set');
     assert.equal(def.loans[0].id, '339', 'loans order is id DESC');
     assert.equal(def.loans[24].id, '315', 'loans default page ends at id 315');
 
-    const cap150 = await hr.listLoans({ pageSize: 150 }, AUTH) as unknown as LoansResult;
+    const cap150 = (await hr.listLoans({ pageSize: 150 }, AUTH)) as unknown as LoansResult;
     assert.equal(cap150.loans.length, 150, 'loans pageSize=150 returns 150 rows (old code: 100)');
     assert.equal(cap150.pagination.pageSize, 150);
     assert.equal(cap150.pagination.totalPages, 2);
     assert.equal(cap150.loans[149].id, '190', 'loans page 1 of 150 ends at id 190');
-    assert.equal(cap150.summary.outstandingAmount, 4199.50, 'loans summary stays exact on a 150 page');
+    assert.equal(cap150.summary.outstandingAmount, 4199.5, 'loans summary stays exact on a 150 page');
 
-    const cap1000 = await hr.listLoans({ pageSize: 1000 }, AUTH) as unknown as LoansResult;
+    const cap1000 = (await hr.listLoans({ pageSize: 1000 }, AUTH)) as unknown as LoansResult;
     assert.equal(cap1000.loans.length, 200, 'loans pageSize=1000 caps at 200 rows');
     assert.equal(cap1000.pagination.pageSize, 200);
 
-    const page2 = await hr.listLoans({ page: 2, pageSize: 200 }, AUTH) as unknown as LoansResult;
+    const page2 = (await hr.listLoans({ page: 2, pageSize: 200 }, AUTH)) as unknown as LoansResult;
     assert.equal(page2.loans.length, 46, 'loans page 2 of 200 has the remaining 46 rows');
     assert.equal(page2.loans[0].id, '139', 'loans page 2 of 200 starts at id 139');
     assert.equal(page2.loans[45].id, '1', 'loans page 2 of 200 ends at id 1');
     assert.equal(page2.summary.totalItems, 246, 'loans summary stays exact on page 2');
 
-    const clamp = await hr.listLoans({ page: 99 }, AUTH) as unknown as LoansResult;
+    const clamp = (await hr.listLoans({ page: 99 }, AUTH)) as unknown as LoansResult;
     assert.equal(clamp.pagination.page, 10, 'loans page 99 clamps to the last page');
     assert.equal(clamp.loans.length, 21, 'loans last page has 21 rows');
     assert.equal(clamp.loans[0].id, '114', 'loans last page starts at id 114');
 
-    const e2 = await hr.listLoans({ employeeId: 2 }, AUTH) as unknown as LoansResult;
-    assert.deepEqual(e2.loans.map((r) => r.id), ['4', '3'], 'loans employeeId=2 returns only her 2 loans');
+    const e2 = (await hr.listLoans({ employeeId: 2 }, AUTH)) as unknown as LoansResult;
+    assert.deepEqual(
+      e2.loans.map((r) => r.id),
+      ['4', '3'],
+      'loans employeeId=2 returns only her 2 loans',
+    );
     assert.equal(e2.summary.totalItems, 2, 'loans summary follows the employee filter');
     assert.equal(e2.summary.outstandingAmount, 300, 'loans e2 outstanding is 300 + 0');
 
-    const e1 = await hr.listLoans({ employeeId: 1 }, AUTH) as unknown as LoansResult;
+    const e1 = (await hr.listLoans({ employeeId: 1 }, AUTH)) as unknown as LoansResult;
     assert.equal(e1.summary.totalItems, 244, 'loans employeeId=1 has 244 loans');
-    assert.equal(e1.summary.outstandingAmount, 3899.50, 'loans e1 outstanding is 4199.50 - 300');
+    assert.equal(e1.summary.outstandingAmount, 3899.5, 'loans e1 outstanding is 4199.50 - 300');
 
     // L1 detail: the LAST row of e1's page 2 (200). Installments, repayments
     // and the latest-paid timestamp all come from the post-paging queries.
-    const e1p2 = await hr.listLoans({ employeeId: 1, page: 2, pageSize: 200 }, AUTH) as unknown as LoansResult;
+    const e1p2 = (await hr.listLoans({ employeeId: 1, page: 2, pageSize: 200 }, AUTH)) as unknown as LoansResult;
     assert.equal(e1p2.loans.length, 44, 'loans e1 page 2 of 200 has 44 rows');
     const l6 = e1p2.loans[40];
     assert.equal(l6.id, '6', 'loans e1 page 2 row 40 is L006');
@@ -230,8 +301,12 @@ async function main(): Promise<void> {
 
     // L3 detail: month 2026-04, e2 only. periodMonth affects ONLY the due
     // summary — never the page or the summary totals.
-    const apr = await hr.listLoans({ employeeId: 2, month: '2026-04' }, AUTH) as unknown as LoansResult;
-    assert.deepEqual(apr.loans.map((r) => r.id), ['4', '3'], 'loans month filter does not change the page');
+    const apr = (await hr.listLoans({ employeeId: 2, month: '2026-04' }, AUTH)) as unknown as LoansResult;
+    assert.deepEqual(
+      apr.loans.map((r) => r.id),
+      ['4', '3'],
+      'loans month filter does not change the page',
+    );
     assert.equal(apr.summary.totalItems, 2, 'loans month filter does not change the summary');
     assert.equal(apr.summary.outstandingAmount, 300, 'loans month filter does not change outstanding');
     const l3 = apr.loans[1];
@@ -248,7 +323,7 @@ async function main(): Promise<void> {
     assert.equal(l3NoMonth.dueInstallmentsAmount, 0);
 
     // ---------------- RUNS: 126 runs, order period_month DESC, id DESC ----------------
-    const runsDef = await hr.listPayrollRuns({}, AUTH) as unknown as RunsResult;
+    const runsDef = (await hr.listPayrollRuns({}, AUTH)) as unknown as RunsResult;
     assert.equal(runsDef.runs.length, 25, 'runs default page is 25 rows');
     assert.equal(runsDef.pagination.totalItems, 126, 'runs totalItems is the FULL set');
     assert.equal(runsDef.pagination.totalPages, 6, 'runs totalPages = ceil(126/25)');
@@ -291,27 +366,35 @@ async function main(): Promise<void> {
     assert.equal(runsDef.runs[6].id, '219', 'runs first filler after the named runs is 219');
     assert.equal(runsDef.runs[24].id, '201', 'runs default page ends at id 201');
 
-    const runs150 = await hr.listPayrollRuns({ pageSize: 150 }, AUTH) as unknown as RunsResult;
+    const runs150 = (await hr.listPayrollRuns({ pageSize: 150 }, AUTH)) as unknown as RunsResult;
     assert.equal(runs150.runs.length, 126, 'runs pageSize=150 returns all 126 runs (old code: 100)');
     assert.equal(runs150.pagination.totalPages, 1);
 
-    const runs1000 = await hr.listPayrollRuns({ pageSize: 1000 }, AUTH) as unknown as RunsResult;
+    const runs1000 = (await hr.listPayrollRuns({ pageSize: 1000 }, AUTH)) as unknown as RunsResult;
     assert.equal(runs1000.runs.length, 126, 'runs pageSize=1000 returns all 126 runs');
     assert.equal(runs1000.pagination.pageSize, 200, 'runs pageSize=1000 caps at 200');
 
-    const oct = await hr.listPayrollRuns({ month: '2026-10' }, AUTH) as unknown as RunsResult;
-    assert.deepEqual(oct.runs.map((r) => r.id), ['3', '2'], 'runs month 2026-10 returns only its 2 runs');
+    const oct = (await hr.listPayrollRuns({ month: '2026-10' }, AUTH)) as unknown as RunsResult;
+    assert.deepEqual(
+      oct.runs.map((r) => r.id),
+      ['3', '2'],
+      'runs month 2026-10 returns only its 2 runs',
+    );
     assert.equal(oct.summary.totalItems, 2, 'runs summary follows the month filter');
 
-    const nov = await hr.listPayrollRuns({ month: '2026-11' }, AUTH) as unknown as RunsResult;
-    assert.deepEqual(nov.runs.map((r) => r.id), ['6', '1'], 'runs month 2026-11 returns only its 2 runs');
+    const nov = (await hr.listPayrollRuns({ month: '2026-11' }, AUTH)) as unknown as RunsResult;
+    assert.deepEqual(
+      nov.runs.map((r) => r.id),
+      ['6', '1'],
+      'runs month 2026-11 returns only its 2 runs',
+    );
 
-    const none = await hr.listPayrollRuns({ month: '2020-01' }, AUTH) as unknown as RunsResult;
+    const none = (await hr.listPayrollRuns({ month: '2020-01' }, AUTH)) as unknown as RunsResult;
     assert.equal(none.runs.length, 0, 'runs an empty month has no rows');
     assert.equal(none.summary.totalItems, 0);
     assert.equal(none.pagination.totalPages, 1, 'runs an empty month has totalPages 1');
 
-    const runsClamp = await hr.listPayrollRuns({ page: 99 }, AUTH) as unknown as RunsResult;
+    const runsClamp = (await hr.listPayrollRuns({ page: 99 }, AUTH)) as unknown as RunsResult;
     assert.equal(runsClamp.pagination.page, 6, 'runs page 99 clamps to the last page');
     assert.equal(runsClamp.runs.length, 1, 'runs last page has 1 row');
     assert.equal(runsClamp.runs[0].id, '100', 'runs last page row is id 100');
@@ -324,5 +407,8 @@ async function main(): Promise<void> {
 
 main().then(
   () => process.exit(0),
-  (err) => { console.error(err); process.exit(1); },
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
 );

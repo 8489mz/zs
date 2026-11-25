@@ -39,9 +39,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { Kysely } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
-import {
-  assertProductsNot86ed,
-} from '../../src/modules/sales/services/restaurant-advanced-fnb.service';
+import { assertProductsNot86ed } from '../../src/modules/sales/services/restaurant-advanced-fnb.service';
 import { SalesWriteService } from '../../src/modules/sales/services/sales-write.service';
 import { StorefrontService } from '../../src/modules/storefront/storefront.service';
 import { PlanFeatureService } from '../../src/core/auth/services/plan-feature.service';
@@ -83,7 +81,18 @@ async function expect86Error(promise: Promise<unknown>, name: string): Promise<v
 
 function chainable(terminal: Record<string, any>) {
   const builder: any = {};
-  for (const key of ['selectAll', 'select', 'where', 'forUpdate', 'leftJoin', 'innerJoin', 'orderBy', 'limit', 'onRef', 'on']) {
+  for (const key of [
+    'selectAll',
+    'select',
+    'where',
+    'forUpdate',
+    'leftJoin',
+    'innerJoin',
+    'orderBy',
+    'limit',
+    'onRef',
+    'on',
+  ]) {
     builder[key] = (...args: any[]) => {
       if ((key === 'leftJoin' || key === 'innerJoin') && typeof args[1] === 'function') args[1](builder);
       return builder;
@@ -93,7 +102,11 @@ function chainable(terminal: Record<string, any>) {
   return builder;
 }
 
-function buildCreateSaleService(settingsRows: any[], rows86: any[], hasFeature: (feature: string) => boolean = (feature) => feature === 'pos') {
+function buildCreateSaleService(
+  settingsRows: any[],
+  rows86: any[],
+  hasFeature: (feature: string) => boolean = (feature) => feature === 'pos',
+) {
   const trx: any = {
     executeQuery: async () => ({ rows: [] }),
     getExecutor: () => ({
@@ -103,7 +116,9 @@ function buildCreateSaleService(settingsRows: any[], rows86: any[], hasFeature: 
     }),
     selectFrom: (table: string) => {
       if (table === 'accounting_settings') {
-        return chainable({ executeTakeFirst: async () => ({ lock_date_all: null, lock_date_non_adviser: null, lock_date_tax: null }) });
+        return chainable({
+          executeTakeFirst: async () => ({ lock_date_all: null, lock_date_non_adviser: null, lock_date_tax: null }),
+        });
       }
       if (table === 'accounting_fiscal_periods') {
         return chainable({ executeTakeFirst: async () => null });
@@ -120,19 +135,34 @@ function buildCreateSaleService(settingsRows: any[], rows86: any[], hasFeature: 
       if (table === 'customers') {
         return chainable({
           executeTakeFirst: async () => ({
-            id: 21, name: 'Customer', balance: 0, credit_limit: 0,
-            store_credit_balance: 0, loyalty_points: 0,
-            is_credit_blocked: false, credit_block_reason: null,
+            id: 21,
+            name: 'Customer',
+            balance: 0,
+            credit_limit: 0,
+            store_credit_balance: 0,
+            loyalty_points: 0,
+            is_credit_blocked: false,
+            credit_block_reason: null,
           }),
         });
       }
       if (table === 'products as p') {
         return chainable({
-          execute: async () => [{
-            id: 1, name: 'Widget', name_en: null, stock_qty: 100, reserved_qty: 0,
-            retail_price: 100, wholesale_price: 90, cost_price: 60,
-            min_selling_price: 0, item_type: 'product', bom_id: null,
-          }],
+          execute: async () => [
+            {
+              id: 1,
+              name: 'Widget',
+              name_en: null,
+              stock_qty: 100,
+              reserved_qty: 0,
+              retail_price: 100,
+              wholesale_price: 90,
+              cost_price: 60,
+              min_selling_price: 0,
+              item_type: 'product',
+              bom_id: null,
+            },
+          ],
         });
       }
       if (table === 'product_offers') {
@@ -141,21 +171,30 @@ function buildCreateSaleService(settingsRows: any[], rows86: any[], hasFeature: 
       if (table === 'branches') {
         return chainable({
           executeTakeFirst: async () => ({
-            id: 1, name: 'Main', default_stock_location_id: 10,
-            sales_stock_mode: null, allow_external_sales_stock: false,
+            id: 1,
+            name: 'Main',
+            default_stock_location_id: 10,
+            sales_stock_mode: null,
+            allow_external_sales_stock: false,
           }),
         });
       }
       if (table === 'stock_locations') {
         return chainable({
           executeTakeFirst: async () => ({
-            id: 10, name: 'Main', is_active: true, location_type: 'branch_stock', branch_id: 1,
+            id: 10,
+            name: 'Main',
+            is_active: true,
+            location_type: 'branch_stock',
+            branch_id: 1,
           }),
           execute: async () => [],
         });
       }
       if (table === 'product_location_stock') {
-        return chainable({ execute: async () => [{ product_id: 1, location_id: 10, branch_id: 1, qty: 100, reserved_qty: 0 }] });
+        return chainable({
+          execute: async () => [{ product_id: 1, location_id: 10, branch_id: 1, qty: 100, reserved_qty: 0 }],
+        });
       }
       if (table === 'restaurant_86_items') {
         return chainable({ execute: async () => rows86 });
@@ -173,14 +212,19 @@ function buildCreateSaleService(settingsRows: any[], rows86: any[], hasFeature: 
       values: (row: any) => {
         if (table === 'sales') throw new Error('SALE_INSERT_REACHED');
         return chainable({
-          returningAll: () => chainable({ executeTakeFirstOrThrow: async () => ({ id: 999 }), execute: async () => [] }),
+          returningAll: () =>
+            chainable({ executeTakeFirstOrThrow: async () => ({ id: 999 }), execute: async () => [] }),
           execute: async () => [],
           executeTakeFirstOrThrow: async () => ({ id: 999 }),
         });
       },
     }),
-    updateTable: () => { throw new Error('unexpected write'); },
-    deleteFrom: () => { throw new Error('unexpected write'); },
+    updateTable: () => {
+      throw new Error('unexpected write');
+    },
+    deleteFrom: () => {
+      throw new Error('unexpected write');
+    },
   };
   const service = Object.create(SalesWriteService.prototype);
   service.db = {};
@@ -226,7 +270,15 @@ function createSalePayload(): { payload: any; auth: any } {
     serviceCharge: 0,
     payments: [{ paymentChannel: 'cash', amount: 500 }],
   };
-  const auth: any = { userId: 1, tenantId: 't-sc-86', accountId: 'a1', role: 'admin', permissions: [], sessionId: 'x', username: 't' };
+  const auth: any = {
+    userId: 1,
+    tenantId: 't-sc-86',
+    accountId: 'a1',
+    role: 'admin',
+    permissions: [],
+    sessionId: 'x',
+    username: 't',
+  };
   return { payload, auth };
 }
 
@@ -257,19 +309,37 @@ async function makeOnlineDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     ${EIGHTY_SIX_DDL}
   `);
   const anyDb = db as any;
-  await anyDb.insertInto('tenants').values({
-    id: TENANT, slug: SLUG, activity_type: 'restaurant', plan_id: 'plan_basic',
-    extra_features: '["storefront"]', owner_phone: null,
-  }).execute();
+  await anyDb
+    .insertInto('tenants')
+    .values({
+      id: TENANT,
+      slug: SLUG,
+      activity_type: 'restaurant',
+      plan_id: 'plan_basic',
+      extra_features: '["storefront"]',
+      owner_phone: null,
+    })
+    .execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' }).execute();
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
   await anyDb.insertInto('branches').values({ id: 2, tenant_id: TENANT, name: 'Second', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: `${TENANT}:main`, name: 'Product 101',
-    stock_qty: 100, cost_price: 10, retail_price: 50,
-    wholesale_price: 50, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      name: 'Product 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 50,
+      wholesale_price: 50,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
   return { pg, db };
 }
 
@@ -288,10 +358,17 @@ function onlineOrderDto() {
   };
 }
 
-async function seed86(db: Kysely<Database>, row: { product_id: number; product_name: string; branch_id: number | null; is_86ed: boolean }): Promise<void> {
-  await (db as any).insertInto('restaurant_86_items').values({
-    tenant_id: TENANT, ...row,
-  }).execute();
+async function seed86(
+  db: Kysely<Database>,
+  row: { product_id: number; product_name: string; branch_id: number | null; is_86ed: boolean },
+): Promise<void> {
+  await (db as any)
+    .insertInto('restaurant_86_items')
+    .values({
+      tenant_id: TENANT,
+      ...row,
+    })
+    .execute();
 }
 
 async function main() {
@@ -300,36 +377,50 @@ async function main() {
     const { pg, db } = await makeHelperDb();
     try {
       // Tenant-wide 86 blocks any branch.
-      await (db as any).insertInto('restaurant_86_items').values({
-        tenant_id: TENANT, branch_id: null, product_id: 5, product_name: 'Shawarma', is_86ed: true,
-      }).execute();
-      await expect86Error(
-        assertProductsNot86ed(db, TENANT, 1, [{ productId: 5 }]),
-        'Shawarma',
-      );
+      await (db as any)
+        .insertInto('restaurant_86_items')
+        .values({
+          tenant_id: TENANT,
+          branch_id: null,
+          product_id: 5,
+          product_name: 'Shawarma',
+          is_86ed: true,
+        })
+        .execute();
+      await expect86Error(assertProductsNot86ed(db, TENANT, 1, [{ productId: 5 }]), 'Shawarma');
       // One 86'd line among clean ones names exactly that line.
-      await expect86Error(
-        assertProductsNot86ed(db, TENANT, 1, [{ productId: 9 }, { productId: 5 }]),
-        'Shawarma',
-      );
+      await expect86Error(assertProductsNot86ed(db, TENANT, 1, [{ productId: 9 }, { productId: 5 }]), 'Shawarma');
       // A clean product passes.
       await assertProductsNot86ed(db, TENANT, 1, [{ productId: 9 }]);
       // An un-86'd row (is_86ed false) does not block.
-      await (db as any).insertInto('restaurant_86_items').values({
-        tenant_id: TENANT, branch_id: null, product_id: 6, product_name: 'Fries', is_86ed: false,
-      }).execute();
+      await (db as any)
+        .insertInto('restaurant_86_items')
+        .values({
+          tenant_id: TENANT,
+          branch_id: null,
+          product_id: 6,
+          product_name: 'Fries',
+          is_86ed: false,
+        })
+        .execute();
       await assertProductsNot86ed(db, TENANT, 1, [{ productId: 6 }]);
       // A branch-scoped 86 on branch 2 does not block branch 1, but
       // blocks branch 2.
-      await (db as any).insertInto('restaurant_86_items').values({
-        tenant_id: TENANT, branch_id: 2, product_id: 7, product_name: 'Soup', is_86ed: true,
-      }).execute();
+      await (db as any)
+        .insertInto('restaurant_86_items')
+        .values({
+          tenant_id: TENANT,
+          branch_id: 2,
+          product_id: 7,
+          product_name: 'Soup',
+          is_86ed: true,
+        })
+        .execute();
       await assertProductsNot86ed(db, TENANT, 1, [{ productId: 7 }]);
-      await expect86Error(
-        assertProductsNot86ed(db, TENANT, 2, [{ productId: 7 }]),
-        'Soup',
-      );
-    } finally { await db.destroy(); }
+      await expect86Error(assertProductsNot86ed(db, TENANT, 2, [{ productId: 7 }]), 'Soup');
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Part B: createSale.
@@ -339,7 +430,8 @@ async function main() {
     const { payload, auth } = createSalePayload();
     await assert.rejects(
       async () => service.createSale(payload, auth),
-      (err: any) => err?.code === 'ITEM_86ED' && err?.statusCode === 422 && String(err?.message || '').includes('Widget'),
+      (err: any) =>
+        err?.code === 'ITEM_86ED' && err?.statusCode === 422 && String(err?.message || '').includes('Widget'),
     );
     // Clean sale -> still reaches the sales insert.
     const cleanService = buildCreateSaleService(saleSettings(), []);
@@ -372,7 +464,8 @@ async function main() {
       await seed86(db, { product_id: 101, product_name: 'Product 101', branch_id: null, is_86ed: true });
       await assert.rejects(
         async () => service.createOnlineOrder(SLUG, onlineOrderDto() as any),
-        (err: any) => err?.code === 'ITEM_86ED' && err?.statusCode === 422 && String(err?.message || '').includes('Product 101'),
+        (err: any) =>
+          err?.code === 'ITEM_86ED' && err?.statusCode === 422 && String(err?.message || '').includes('Product 101'),
       );
       const count = await (db as any).selectFrom('online_orders').select('id').execute();
       assert.equal(count.length, 0, 'an 86-blocked order must not be recorded');
@@ -397,10 +490,15 @@ async function main() {
       const result: any = await service.createOnlineOrder(SLUG, onlineOrderDto() as any);
       assert.ok(result.orderId, 'the order must be created once the item is un-86ed');
       assert.equal(Number(result.totalAmount), 50);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   console.log('Restaurant 86 enforcement tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

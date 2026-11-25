@@ -100,7 +100,9 @@ async function main(): Promise<void> {
   const childDir = fs.mkdtempSync(path.join(__dirname, '.tmp-b5p3-'));
   const childTmp = path.join(childDir, 'cairo-check.ts');
   try {
-    fs.writeFileSync(childTmp, `import { formatLocalCalendarDay, todayTenantDate } from '../../../src/common/utils/tenant-timezone.util';
+    fs.writeFileSync(
+      childTmp,
+      `import { formatLocalCalendarDay, todayTenantDate } from '../../../src/common/utils/tenant-timezone.util';
 async function main(): Promise<void> {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (zone !== 'Africa/Cairo') { console.error('child zone is ' + zone + ', want Africa/Cairo'); process.exit(2); }
@@ -120,7 +122,8 @@ async function main(): Promise<void> {
   console.log('CAIRO-CHILD-OK');
 }
 main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
-`);
+`,
+    );
     const out = execFileSync('npx', ['ts-node', childTmp], {
       cwd: path.resolve(__dirname, '../..'),
       env: { ...process.env, TZ: 'Africa/Cairo' },
@@ -128,10 +131,20 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
       encoding: 'utf8',
     });
     assert.ok(out.includes('CAIRO-CHILD-OK'), `Cairo child must pass (got: ${out.trim()})`);
-    console.log('✓ §0 passed: the UTC slice yields the previous day under Cairo TZ; the tenant-day helpers yield the stored day; old overdue 1 vs new 0');
+    console.log(
+      '✓ §0 passed: the UTC slice yields the previous day under Cairo TZ; the tenant-day helpers yield the stored day; old overdue 1 vs new 0',
+    );
   } finally {
-    try { fs.unlinkSync(childTmp); } catch { /* already gone */ }
-    try { fs.rmSync(childDir, { recursive: true, force: true }); } catch { /* already gone */ }
+    try {
+      fs.unlinkSync(childTmp);
+    } catch {
+      /* already gone */
+    }
+    try {
+      fs.rmSync(childDir, { recursive: true, force: true });
+    } catch {
+      /* already gone */
+    }
   }
 
   // §A — NEW-D demurrage: deadlineDayKey keys the stored DATE from
@@ -140,8 +153,14 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   // there (the facade delegate keeps the private signature).
   const jobsCore = read('modules/maritime-freight/maritime-freight-jobs-core.service.ts');
   const closure = fnSlice(jobsCore, 'async assertJobCanClose(', 6000);
-  assert.ok(closure.includes('formatLocalCalendarDay(value)'), 'deadlineDayKey must use formatLocalCalendarDay for the Date branch');
-  assert.ok(!closure.includes('value.toISOString().slice(0, 10)'), 'deadlineDayKey must no longer UTC-slice the stored DATE');
+  assert.ok(
+    closure.includes('formatLocalCalendarDay(value)'),
+    'deadlineDayKey must use formatLocalCalendarDay for the Date branch',
+  );
+  assert.ok(
+    !closure.includes('value.toISOString().slice(0, 10)'),
+    'deadlineDayKey must no longer UTC-slice the stored DATE',
+  );
   console.log('✓ §A passed: demurrage deadline keys on the stored calendar day');
 
   // §B — NEW-D rate cards: validUntilDayKey keys the stored DATE from
@@ -149,8 +168,14 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   // Maritime split: listRateCards lives in the rate-cards slice.
   const rateCardsSource = read('modules/maritime-freight/maritime-freight-rate-cards.service.ts');
   const rateCards = fnSlice(rateCardsSource, 'async listRateCards(', 6000);
-  assert.ok(rateCards.includes('formatLocalCalendarDay(value)'), 'validUntilDayKey must use formatLocalCalendarDay for the Date branch');
-  assert.ok(!rateCards.includes('value.toISOString().slice(0, 10)'), 'validUntilDayKey must no longer UTC-slice the stored DATE');
+  assert.ok(
+    rateCards.includes('formatLocalCalendarDay(value)'),
+    'validUntilDayKey must use formatLocalCalendarDay for the Date branch',
+  );
+  assert.ok(
+    !rateCards.includes('value.toISOString().slice(0, 10)'),
+    'validUntilDayKey must no longer UTC-slice the stored DATE',
+  );
   console.log('✓ §B passed: rate-card expiry keys on the stored calendar day');
 
   // §C — NEW-D extra (:3346): the updateContainer deadline derivation
@@ -158,10 +183,19 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   // Maritime split: updateContainer lives in the jobs-containers slice.
   const containers = read('modules/maritime-freight/maritime-freight-jobs-containers.service.ts');
   const updateContainer = fnSlice(containers, 'async updateContainer(', 8000);
-  assert.ok(updateContainer.includes('formatLocalCalendarDay(deadlineDate as unknown as Date)'), 'updateContainer must key deadlineDate from host-local calendar parts');
-  assert.ok(!updateContainer.includes('new Date(deadlineDate).toISOString().slice(0, 10)'), 'updateContainer must no longer UTC-slice deadlineDate');
+  assert.ok(
+    updateContainer.includes('formatLocalCalendarDay(deadlineDate as unknown as Date)'),
+    'updateContainer must key deadlineDate from host-local calendar parts',
+  );
+  assert.ok(
+    !updateContainer.includes('new Date(deadlineDate).toISOString().slice(0, 10)'),
+    'updateContainer must no longer UTC-slice deadlineDate',
+  );
   // :3338 stays: baseDate is UTC-midnight built from a tenant day string.
-  assert.ok(updateContainer.includes('deadlineDate = baseDate.toISOString().slice(0, 10)'), ':3338 UTC-calendar math on the UTC-midnight baseDate must stay');
+  assert.ok(
+    updateContainer.includes('deadlineDate = baseDate.toISOString().slice(0, 10)'),
+    ':3338 UTC-calendar math on the UTC-midnight baseDate must stay',
+  );
   console.log('✓ §C passed: updateContainer deadline keys on the stored calendar day (:3338 untouched)');
 
   // ---- shared PGlite fixture for §D (one db; the tenant day is
@@ -172,13 +206,24 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   const discZone = utcHour >= 10 ? 'Pacific/Kiritimati' : 'Pacific/Midway';
   const utcDay = new Date().toISOString().slice(0, 10);
   const tenantDay = todayTenantDate(discZone);
-  assert.notEqual(tenantDay, utcDay, `discordant zone ${discZone} must differ from the UTC day ${utcDay} at UTC hour ${utcHour}`);
+  assert.notEqual(
+    tenantDay,
+    utcDay,
+    `discordant zone ${discZone} must differ from the UTC day ${utcDay} at UTC hour ${utcHour}`,
+  );
 
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   const arCollections = new ArCollectionsService(db);
   const authFor = (tenantId: string): AuthContext =>
-    ({ tenantId, accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['accounting'] }) as unknown as AuthContext;
+    ({
+      tenantId,
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      username: 'admin',
+      permissions: ['accounting'],
+    }) as unknown as AuthContext;
 
   try {
     await pg.exec(`
@@ -205,50 +250,121 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     // §D1 — ar-collections getOverview, service-driven: a promise dated
     // the tenant day counts in "promised today"; one dated the UTC day
     // must not.
-    await db.insertInto('ar_collection_cases' as any).values([
-      { tenant_id: 't-b5p3-disc', status: 'promised_to_pay', total_overdue: 250, oldest_overdue_days: 1, promised_payment_date: tenantDay, promised_amount: 250 },
-      { tenant_id: 't-b5p3-disc', status: 'promised_to_pay', total_overdue: 100, oldest_overdue_days: 1, promised_payment_date: utcDay, promised_amount: 100 },
-    ] as any).execute();
+    await db
+      .insertInto('ar_collection_cases' as any)
+      .values([
+        {
+          tenant_id: 't-b5p3-disc',
+          status: 'promised_to_pay',
+          total_overdue: 250,
+          oldest_overdue_days: 1,
+          promised_payment_date: tenantDay,
+          promised_amount: 250,
+        },
+        {
+          tenant_id: 't-b5p3-disc',
+          status: 'promised_to_pay',
+          total_overdue: 100,
+          oldest_overdue_days: 1,
+          promised_payment_date: utcDay,
+          promised_amount: 100,
+        },
+      ] as any)
+      .execute();
     const overview = await arCollections.getOverview(authFor('t-b5p3-disc'));
-    assert.equal(overview.promisedAmountToday, 250, `promised today must be the tenant-day promise only (250), got ${overview.promisedAmountToday}`);
+    assert.equal(
+      overview.promisedAmountToday,
+      250,
+      `promised today must be the tenant-day promise only (250), got ${overview.promisedAmountToday}`,
+    );
     console.log('✓ §D1 passed: "promised today" counts the tenant-day promise, not the DB-day one');
 
     // §D2 — van ledger periodPassed fragment contrast + source pin.
     // Runs: end_date = tenant day (r1) and end_date = UTC day (r2).
-    await db.insertInto('hr_payroll_runs' as any).values([
-      { id: 1, tenant_id: 't-b5p3-disc', period_month: '2026-11', start_date: tenantDay, end_date: tenantDay },
-      { id: 2, tenant_id: 't-b5p3-disc', period_month: '2026-11', start_date: utcDay, end_date: utcDay },
-    ] as any).execute();
-    const oldPassed = await sql<{ id: number }>`SELECT id FROM hr_payroll_runs WHERE end_date < CURRENT_DATE`.execute(db);
-    const newPassed = await sql<{ id: number }>`SELECT id FROM hr_payroll_runs WHERE end_date < ${tenantDay}`.execute(db);
+    await db
+      .insertInto('hr_payroll_runs' as any)
+      .values([
+        { id: 1, tenant_id: 't-b5p3-disc', period_month: '2026-11', start_date: tenantDay, end_date: tenantDay },
+        { id: 2, tenant_id: 't-b5p3-disc', period_month: '2026-11', start_date: utcDay, end_date: utcDay },
+      ] as any)
+      .execute();
+    const oldPassed = await sql<{ id: number }>`SELECT id FROM hr_payroll_runs WHERE end_date < CURRENT_DATE`.execute(
+      db,
+    );
+    const newPassed = await sql<{ id: number }>`SELECT id FROM hr_payroll_runs WHERE end_date < ${tenantDay}`.execute(
+      db,
+    );
     const oldIds = oldPassed.rows.map((r) => r.id).sort();
     const newIds = newPassed.rows.map((r) => r.id).sort();
-    assert.notDeepEqual(oldIds, newIds, `OLD (CURRENT_DATE) and NEW (tenant day) period-passed sets must differ (old=${JSON.stringify(oldIds)} new=${JSON.stringify(newIds)})`);
+    assert.notDeepEqual(
+      oldIds,
+      newIds,
+      `OLD (CURRENT_DATE) and NEW (tenant day) period-passed sets must differ (old=${JSON.stringify(oldIds)} new=${JSON.stringify(newIds)})`,
+    );
     const expectedNew = tenantDay > utcDay ? [2] : [];
-    assert.deepEqual(newIds, expectedNew, `NEW set must be the tenant-day expectation ${JSON.stringify(expectedNew)}, got ${JSON.stringify(newIds)}`);
+    assert.deepEqual(
+      newIds,
+      expectedNew,
+      `NEW set must be the tenant-day expectation ${JSON.stringify(expectedNew)}, got ${JSON.stringify(newIds)}`,
+    );
     // File #59 split: pushRepShortagesToPayroll moved to the S5 slice.
-    const ledger = read('modules/delivery-reps/services/van-rep-financial-ledger/push-rep-shortages-to-payroll.slice.ts');
+    const ledger = read(
+      'modules/delivery-reps/services/van-rep-financial-ledger/push-rep-shortages-to-payroll.slice.ts',
+    );
     const pushShortages = fnSlice(ledger, 'async pushRepShortagesToPayroll(', 8000);
-    assert.ok(pushShortages.includes('end_date < ${todayKey}'), 'periodPassed must compare end_date against the tenant-day bound');
+    assert.ok(
+      pushShortages.includes('end_date < ${todayKey}'),
+      'periodPassed must compare end_date against the tenant-day bound',
+    );
     assert.ok(!pushShortages.includes('end_date < CURRENT_DATE'), 'periodPassed must no longer use CURRENT_DATE');
-    console.log('✓ §D2 passed: period-passed flag keys on the tenant day (fragment sets differ, NEW matches expectation)');
+    console.log(
+      '✓ §D2 passed: period-passed flag keys on the tenant day (fragment sets differ, NEW matches expectation)',
+    );
 
     // §D3 — hr approveLoan contract lookup fragment contrast + pin.
     // One contract active exactly on the tenant day: active under the
     // tenant day, inactive under the UTC day (discordant by design).
-    await db.insertInto('hr_employment_contracts' as any).values([
-      { id: 1, tenant_id: 't-b5p3-disc', employee_id: 7, base_salary: 10000, status: 'active', start_date: tenantDay, end_date: tenantDay },
-    ] as any).execute();
-    const oldActive = await sql<{ id: number }>`SELECT id FROM hr_employment_contracts WHERE status = 'active' AND start_date <= CURRENT_DATE AND (end_date IS NULL OR end_date >= CURRENT_DATE)`.execute(db);
-    const newActive = await sql<{ id: number }>`SELECT id FROM hr_employment_contracts WHERE status = 'active' AND start_date <= ${tenantDay} AND (end_date IS NULL OR end_date >= ${tenantDay})`.execute(db);
+    await db
+      .insertInto('hr_employment_contracts' as any)
+      .values([
+        {
+          id: 1,
+          tenant_id: 't-b5p3-disc',
+          employee_id: 7,
+          base_salary: 10000,
+          status: 'active',
+          start_date: tenantDay,
+          end_date: tenantDay,
+        },
+      ] as any)
+      .execute();
+    const oldActive = await sql<{
+      id: number;
+    }>`SELECT id FROM hr_employment_contracts WHERE status = 'active' AND start_date <= CURRENT_DATE AND (end_date IS NULL OR end_date >= CURRENT_DATE)`.execute(
+      db,
+    );
+    const newActive = await sql<{
+      id: number;
+    }>`SELECT id FROM hr_employment_contracts WHERE status = 'active' AND start_date <= ${tenantDay} AND (end_date IS NULL OR end_date >= ${tenantDay})`.execute(
+      db,
+    );
     assert.equal(oldActive.rows.length, 0, 'OLD (CURRENT_DATE) must miss the tenant-day contract');
     assert.equal(newActive.rows.length, 1, 'NEW (tenant day) must find the tenant-day contract');
     const hr = read('modules/hr/services/hr-loans.service.ts');
     const approveLoan = fnSlice(hr, 'async approveLoan(', 8000);
-    assert.ok(approveLoan.includes('start_date <= ${todayKey}'), 'contract lookup must bound start_date by the tenant day');
+    assert.ok(
+      approveLoan.includes('start_date <= ${todayKey}'),
+      'contract lookup must bound start_date by the tenant day',
+    );
     assert.ok(approveLoan.includes('end_date >= ${todayKey}'), 'contract lookup must bound end_date by the tenant day');
-    assert.ok(!approveLoan.includes('start_date <= CURRENT_DATE'), 'approveLoan start_date must no longer use CURRENT_DATE');
-    assert.ok(!approveLoan.includes('end_date >= CURRENT_DATE'), 'approveLoan end_date must no longer use CURRENT_DATE');
+    assert.ok(
+      !approveLoan.includes('start_date <= CURRENT_DATE'),
+      'approveLoan start_date must no longer use CURRENT_DATE',
+    );
+    assert.ok(
+      !approveLoan.includes('end_date >= CURRENT_DATE'),
+      'approveLoan end_date must no longer use CURRENT_DATE',
+    );
     console.log('✓ §D3 passed: loan-ceiling contract lookup keys on the tenant day');
 
     // §D4 — import ACI expiry window fragment contrast + pin.
@@ -257,20 +373,41 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     const bound14 = addDaysToDayKey(tenantDay, 14);
     const bound15 = addDaysToDayKey(tenantDay, 15);
     assert.ok(bound14 && bound15, 'tenant day + 14/+15 must be valid day keys');
-    await db.insertInto('import_aci_compliance' as any).values([
-      { id: 1, tenant_id: 't-b5p3-disc', status: 'pending', acid_expiry_date: bound14 },
-      { id: 2, tenant_id: 't-b5p3-disc', status: 'pending', acid_expiry_date: bound15 },
-    ] as any).execute();
-    const oldAci = await sql<{ id: number }>`SELECT id FROM import_aci_compliance WHERE acid_expiry_date <= CURRENT_DATE + INTERVAL '14 days'`.execute(db);
-    const newAci = await sql<{ id: number }>`SELECT id FROM import_aci_compliance WHERE acid_expiry_date <= ${bound14}`.execute(db);
+    await db
+      .insertInto('import_aci_compliance' as any)
+      .values([
+        { id: 1, tenant_id: 't-b5p3-disc', status: 'pending', acid_expiry_date: bound14 },
+        { id: 2, tenant_id: 't-b5p3-disc', status: 'pending', acid_expiry_date: bound15 },
+      ] as any)
+      .execute();
+    const oldAci = await sql<{
+      id: number;
+    }>`SELECT id FROM import_aci_compliance WHERE acid_expiry_date <= CURRENT_DATE + INTERVAL '14 days'`.execute(db);
+    const newAci = await sql<{
+      id: number;
+    }>`SELECT id FROM import_aci_compliance WHERE acid_expiry_date <= ${bound14}`.execute(db);
     const oldAciIds = oldAci.rows.map((r) => r.id).sort();
     const newAciIds = newAci.rows.map((r) => r.id).sort();
-    assert.notDeepEqual(oldAciIds, newAciIds, `OLD (CURRENT_DATE + 14d) and NEW (tenant day + 14d) ACI windows must differ (old=${JSON.stringify(oldAciIds)} new=${JSON.stringify(newAciIds)})`);
-    assert.deepEqual(newAciIds, [1], `NEW window must select exactly the tenant-day+14 expiry, got ${JSON.stringify(newAciIds)}`);
+    assert.notDeepEqual(
+      oldAciIds,
+      newAciIds,
+      `OLD (CURRENT_DATE + 14d) and NEW (tenant day + 14d) ACI windows must differ (old=${JSON.stringify(oldAciIds)} new=${JSON.stringify(newAciIds)})`,
+    );
+    assert.deepEqual(
+      newAciIds,
+      [1],
+      `NEW window must select exactly the tenant-day+14 expiry, got ${JSON.stringify(newAciIds)}`,
+    );
     const importSales = read('modules/import-sales/services/import-profit-report.service.ts');
     const metrics = fnSlice(importSales, 'async getImportCommandCenterMetrics(', 8000);
-    assert.ok(!metrics.includes("CURRENT_DATE + INTERVAL '14 days'"), 'ACI window must no longer use CURRENT_DATE + 14 days');
-    assert.ok(metrics.includes('acidBound') || metrics.includes('addDaysToDayKey'), 'ACI window must derive its bound from the tenant day');
+    assert.ok(
+      !metrics.includes("CURRENT_DATE + INTERVAL '14 days'"),
+      'ACI window must no longer use CURRENT_DATE + 14 days',
+    );
+    assert.ok(
+      metrics.includes('acidBound') || metrics.includes('addDaysToDayKey'),
+      'ACI window must derive its bound from the tenant day',
+    );
     console.log('✓ §D4 passed: ACI expiry window keys on the tenant day + 14');
 
     console.log('CLOCK-B5-P3 CHECKS PASSED');
@@ -279,4 +416,10 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   }
 }
 
-main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
+main().then(
+  () => process.exit(0),
+  (e) => {
+    console.error(e);
+    process.exit(1);
+  },
+);

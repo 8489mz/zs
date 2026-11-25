@@ -45,10 +45,7 @@ function main(): void {
   for (const [name, tool] of Object.entries(expected)) {
     const cmd = scripts[name];
     assert.ok(typeof cmd === 'string' && cmd.length > 0, `backend/package.json must define a "${name}" script`);
-    assert.ok(
-      cmd.includes(tool),
-      `backend/package.json "${name}" script must invoke ${tool} (got: ${cmd})`,
-    );
+    assert.ok(cmd.includes(tool), `backend/package.json "${name}" script must invoke ${tool} (got: ${cmd})`);
   }
   console.log('backend lint + prettier tooling check passed');
 }

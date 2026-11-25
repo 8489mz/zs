@@ -241,34 +241,68 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function seedTrialShipment(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', container_number: 'C1', supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: 'proj-1',
-    shipping_cost_usd: 5, insurance_cost_usd: 1, customs_cost_egp: 100,
-    internal_transport_cost_egp: 50, customs_duty_rate_percent: 5, vat_rate_percent: 14,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'sh-1-item', tenant_id: 't1', shipment_id: 'sh-1', product_id: 1,
-    quantity: 10, received_quantity: 10, factory_unit_price_usd: 1,
-    shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      container_number: 'C1',
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 5,
+      insurance_cost_usd: 1,
+      customs_cost_egp: 100,
+      internal_transport_cost_egp: 50,
+      customs_duty_rate_percent: 5,
+      vat_rate_percent: 14,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'sh-1-item',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 1,
+      quantity: 10,
+      received_quantity: 10,
+      factory_unit_price_usd: 1,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select(sql`count(*)`.as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select(sql`count(*)`.as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
 async function receiptJournalLines(db: Kysely<Database>): Promise<any[]> {
-  const entry: any = await (db as any).selectFrom('journal_entries').selectAll()
-    .where('source_type', '=', 'import_inventory_receipt').executeTakeFirstOrThrow();
-  return (db as any).selectFrom('journal_entry_lines').selectAll()
-    .where('journal_entry_id', '=', entry.id).orderBy('id').execute();
+  const entry: any = await (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('source_type', '=', 'import_inventory_receipt')
+    .executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('journal_entry_lines')
+    .selectAll()
+    .where('journal_entry_id', '=', entry.id)
+    .orderBy('id')
+    .execute();
 }
 
 async function supplierLedgerTotal(db: Kysely<Database>, supplierId: number): Promise<number> {
-  const rows: any[] = await (db as any).selectFrom('supplier_ledger').select('amount')
-    .where('supplier_id', '=', supplierId).execute();
+  const rows: any[] = await (db as any)
+    .selectFrom('supplier_ledger')
+    .select('amount')
+    .where('supplier_id', '=', supplierId)
+    .execute();
   return rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
 }
 
@@ -296,8 +330,11 @@ async function main(): Promise<void> {
       assert.equal((result.breakdown as any).dutyEgp, 40, 'Live duty must be 40');
       assert.equal((result.breakdown as any).vatEgp, 117.6, 'Live VAT must be 117.60');
       assert.equal(result.breakdown.items[0].landedCostEgp, 110.76, 'Live unit landed cost must be 110.76');
-      const stored: any = await (db as any).selectFrom('import_shipment_items')
-        .select(['landed_cost_egp']).where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+      const stored: any = await (db as any)
+        .selectFrom('import_shipment_items')
+        .select(['landed_cost_egp'])
+        .where('shipment_id', '=', 'sh-1')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(stored.landed_cost_egp), 110.76, 'Stored per-unit landed cost must be 110.76');
       console.log('Case D passed: live recalculation carries duty/VAT into the stored landed cost');
     } finally {
@@ -313,13 +350,24 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedTrialShipment(db);
       await service.updateShipmentCosts('t1', 1, 'sh-1', {
-        status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
-        shippingCostUsd: 5, insuranceCostUsd: 1, customsCostEgp: 100,
-        internalTransportCostEgp: 50, customsDutyRatePercent: 5, vatRatePercent: 14,
-        freightSupplierId: 2, customsSupplierId: 3, transportSupplierId: 4,
+        status: 'Arrived',
+        exchangeRateAtArrival: 50,
+        receiptLocationId: 10,
+        shippingCostUsd: 5,
+        insuranceCostUsd: 1,
+        customsCostEgp: 100,
+        internalTransportCostEgp: 50,
+        customsDutyRatePercent: 5,
+        vatRatePercent: 14,
+        freightSupplierId: 2,
+        customsSupplierId: 3,
+        transportSupplierId: 4,
       });
-      const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll()
-        .where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+      const receipt: any = await (db as any)
+        .selectFrom('import_inventory_receipts')
+        .selectAll()
+        .where('shipment_id', '=', 'sh-1')
+        .executeTakeFirstOrThrow();
       assert.equal(receipt.state, 'posted', 'Receipt must post');
       const lines = await receiptJournalLines(db);
       const debit = lines.reduce((s, l) => s + Number(l.debit || 0), 0);
@@ -337,7 +385,11 @@ async function main(): Promise<void> {
       assert.equal(await supplierLedgerTotal(db, 2), 300, 'Carrier subledger: freight 250 + insurance 50');
       assert.equal(await supplierLedgerTotal(db, 3), 257.6, 'Customs broker subledger: 100 + 40 + 117.60');
       assert.equal(await supplierLedgerTotal(db, 4), 50, 'Transporter subledger agrees');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.cost_price), 110.76, 'WAC must be the agreed 110.76 per unit');
       console.log('Case E passed: receipt journal totals 1,107.60 with itemized duty/VAT lines');
     } finally {
@@ -356,10 +408,17 @@ async function main(): Promise<void> {
       await seedTrialShipment(db);
       await assert.rejects(
         service.updateShipmentCosts('t1', 1, 'sh-1', {
-          status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10,
-          shippingCostUsd: 5, insuranceCostUsd: 1, customsCostEgp: 0,
-          internalTransportCostEgp: 50, customsDutyRatePercent: 5, vatRatePercent: 14,
-          freightSupplierId: 2, transportSupplierId: 4,
+          status: 'Arrived',
+          exchangeRateAtArrival: 50,
+          receiptLocationId: 10,
+          shippingCostUsd: 5,
+          insuranceCostUsd: 1,
+          customsCostEgp: 0,
+          internalTransportCostEgp: 50,
+          customsDutyRatePercent: 5,
+          vatRatePercent: 14,
+          freightSupplierId: 2,
+          transportSupplierId: 4,
         }),
         /IMPORT_COMPONENT_PAYEE_REQUIRED/,
         'Duty/VAT with no customs payee must fail closed',
@@ -379,15 +438,24 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      await (db as any).insertInto('import_projects').values({
-        id: 'proj-feas', tenant_id: 't1', status: 'active',
-        feasibility_data: JSON.stringify({
-          customsDutyRatePercent: 5, vatRatePercent: 14, insuranceUsd: 1,
-          internationalShippingUsd: 5, exchangeRateCommercial: 50,
-        }),
-      }).execute();
+      await (db as any)
+        .insertInto('import_projects')
+        .values({
+          id: 'proj-feas',
+          tenant_id: 't1',
+          status: 'active',
+          feasibility_data: JSON.stringify({
+            customsDutyRatePercent: 5,
+            vatRatePercent: 14,
+            insuranceUsd: 1,
+            internationalShippingUsd: 5,
+            exchangeRateCommercial: 50,
+          }),
+        })
+        .execute();
       const created: any = await service.createShipment('t1', {
-        containerNumber: 'MSCU-TEST-F6', projectId: 'proj-feas',
+        containerNumber: 'MSCU-TEST-F6',
+        projectId: 'proj-feas',
       });
       assert.equal(Number(created.customs_duty_rate_percent), 5, 'Duty rate must carry from the feasibility');
       assert.equal(Number(created.vat_rate_percent), 14, 'VAT rate must carry from the feasibility');
@@ -410,15 +478,29 @@ async function main(): Promise<void> {
       assert.equal(Number(created.customs_duty_rate_percent ?? 0), 0, 'Duty rate must default to 0');
       assert.equal(Number(created.vat_rate_percent ?? 0), 0, 'VAT rate must default to 0');
       assert.equal(Number(created.insurance_cost_usd ?? 0), 0, 'Insurance must default to 0');
-      await db.insertInto('import_shipment_items' as never).values({
-        id: 'nf-item', tenant_id: 't1', shipment_id: created.id, product_id: 1,
-        quantity: 10, received_quantity: 10, factory_unit_price_usd: 1,
-        shortage_handling_method: 'capitalize',
-      } as never).execute();
-      await (db as any).updateTable('import_shipments' as never).set({
-        exchange_rate_at_arrival: 50, shipping_cost_usd: 5,
-        customs_cost_egp: 100, internal_transport_cost_egp: 50,
-      } as never).where('id', '=', created.id).execute();
+      await db
+        .insertInto('import_shipment_items' as never)
+        .values({
+          id: 'nf-item',
+          tenant_id: 't1',
+          shipment_id: created.id,
+          product_id: 1,
+          quantity: 10,
+          received_quantity: 10,
+          factory_unit_price_usd: 1,
+          shortage_handling_method: 'capitalize',
+        } as never)
+        .execute();
+      await (db as any)
+        .updateTable('import_shipments' as never)
+        .set({
+          exchange_rate_at_arrival: 50,
+          shipping_cost_usd: 5,
+          customs_cost_egp: 100,
+          internal_transport_cost_egp: 50,
+        } as never)
+        .where('id', '=', created.id)
+        .execute();
       const result = await service.calculateLandedCost('t1', created.id);
       assert.equal(result.breakdown.totalOverheadEgp, 400, 'No-feasibility overhead stays 250 + 100 + 50 = 400');
       assert.equal(result.breakdown.items[0].totalItemLandedCostEgp, 900, 'No-feasibility total stays the old 900.00');

@@ -110,8 +110,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makePosting(db: Kysely<Database>): AccountingPostingService {
@@ -137,34 +143,78 @@ async function seedSale(
   items: SeedItem[],
   remaining: Array<{ productId: number; qty: number }>,
 ): Promise<void> {
-  await db.insertInto('sales' as never).values({
-    id: saleId, tenant_id: 't1', doc_no: `S-${saleId}`, customer_id: null, subtotal: total, discount: 0,
-    tax_amount: 0, total, paid_amount: total, store_credit_used: 0, exchange_return_id: null,
-    branch_id: null, location_id: null, created_by: 1, created_at: new Date(), delivery_fee: 0,
-    delivery_fee_mode: null, service_charge: 0, tip_amount: 0, prices_include_tax: false,
-    sale_origin: 'pos', payment_type: 'cash', collection_status: 'paid',
-  } as never).execute();
+  await db
+    .insertInto('sales' as never)
+    .values({
+      id: saleId,
+      tenant_id: 't1',
+      doc_no: `S-${saleId}`,
+      customer_id: null,
+      subtotal: total,
+      discount: 0,
+      tax_amount: 0,
+      total,
+      paid_amount: total,
+      store_credit_used: 0,
+      exchange_return_id: null,
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+      created_at: new Date(),
+      delivery_fee: 0,
+      delivery_fee_mode: null,
+      service_charge: 0,
+      tip_amount: 0,
+      prices_include_tax: false,
+      sale_origin: 'pos',
+      payment_type: 'cash',
+      collection_status: 'paid',
+    } as never)
+    .execute();
   for (const [index, item] of items.entries()) {
-    await db.insertInto('sale_items' as never).values({
-      id: saleId * 10 + index, sale_id: saleId, tenant_id: 't1', product_id: item.productId,
-      qty: item.qty, cost_price: item.costPrice,
-      unit_multiplier: item.unitMultiplier ?? 1,
-      modifiers: JSON.stringify(item.modifiers ?? []),
-    } as never).execute();
+    await db
+      .insertInto('sale_items' as never)
+      .values({
+        id: saleId * 10 + index,
+        sale_id: saleId,
+        tenant_id: 't1',
+        product_id: item.productId,
+        qty: item.qty,
+        cost_price: item.costPrice,
+        unit_multiplier: item.unitMultiplier ?? 1,
+        modifiers: JSON.stringify(item.modifiers ?? []),
+      } as never)
+      .execute();
   }
-  await db.insertInto('sale_payments' as never).values({
-    sale_id: saleId, tenant_id: 't1', payment_channel: 'cash', amount: total,
-  } as never).execute();
+  await db
+    .insertInto('sale_payments' as never)
+    .values({
+      sale_id: saleId,
+      tenant_id: 't1',
+      payment_channel: 'cash',
+      amount: total,
+    } as never)
+    .execute();
   for (const stock of remaining) {
-    await db.insertInto('product_location_stock' as never).values({
-      tenant_id: 't1', account_id: 'a1', product_id: stock.productId, branch_id: null,
-      location_id: null, qty: stock.qty, reserved_qty: 0,
-    } as never).execute();
+    await db
+      .insertInto('product_location_stock' as never)
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: stock.productId,
+        branch_id: null,
+        location_id: null,
+        qty: stock.qty,
+        reserved_qty: 0,
+      } as never)
+      .execute();
   }
 }
 
 async function setRemaining(db: Kysely<Database>, productId: number, qty: number): Promise<void> {
-  await sql`UPDATE product_location_stock SET qty = ${qty} WHERE tenant_id = 't1' AND product_id = ${productId}`.execute(db);
+  await sql`UPDATE product_location_stock SET qty = ${qty} WHERE tenant_id = 't1' AND product_id = ${productId}`.execute(
+    db,
+  );
 }
 
 type ReturnSeedLine = {
@@ -181,21 +231,45 @@ async function seedReturn(
   total: number,
   lines: ReturnSeedLine[],
 ): Promise<void> {
-  await db.insertInto('return_documents' as never).values({
-    id: returnId, tenant_id: 't1', doc_no: `ZR-${returnId}`, return_type: 'sale', invoice_id: saleId,
-    settlement_mode: '', refund_method: 'cash', refund_allocations: null, total,
-    branch_id: null, location_id: null, created_by: 1, created_at: new Date(),
-  } as never).execute();
+  await db
+    .insertInto('return_documents' as never)
+    .values({
+      id: returnId,
+      tenant_id: 't1',
+      doc_no: `ZR-${returnId}`,
+      return_type: 'sale',
+      invoice_id: saleId,
+      settlement_mode: '',
+      refund_method: 'cash',
+      refund_allocations: null,
+      total,
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+      created_at: new Date(),
+    } as never)
+    .execute();
   for (const [index, line] of lines.entries()) {
-    await db.insertInto('return_items' as never).values({
-      id: returnId * 10 + index, return_document_id: returnId, tenant_id: 't1',
-      product_id: line.productId, sale_item_id: line.saleItemId, qty: line.qty,
-      cost_price: line.costPrice, allocated_tax: 0,
-    } as never).execute();
+    await db
+      .insertInto('return_items' as never)
+      .values({
+        id: returnId * 10 + index,
+        return_document_id: returnId,
+        tenant_id: 't1',
+        product_id: line.productId,
+        sale_item_id: line.saleItemId,
+        qty: line.qty,
+        cost_price: line.costPrice,
+        allocated_tax: 0,
+      } as never)
+      .execute();
   }
 }
 
-async function postOn(db: Kysely<Database>, run: (posting: AccountingPostingService, trx: any) => Promise<unknown>): Promise<void> {
+async function postOn(
+  db: Kysely<Database>,
+  run: (posting: AccountingPostingService, trx: any) => Promise<unknown>,
+): Promise<void> {
   const posting = makePosting(db);
   await db.transaction().execute(async (trx) => {
     await run(posting, trx as any);
@@ -207,14 +281,23 @@ async function journalByCode(
   sourceType: string,
   sourceId: number,
 ): Promise<Map<string, { debit: number; credit: number }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select(['id'])
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute() as Array<{ id: number }>;
+  const entries = (await (db as any)
+    .selectFrom('journal_entries')
+    .select(['id'])
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute()) as Array<{ id: number }>;
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('accounting_accounts', 'accounting_accounts.id', 'journal_entry_lines.account_id')
-    .select(['accounting_accounts.code as code', 'journal_entry_lines.debit as debit', 'journal_entry_lines.credit as credit'])
+    .select([
+      'accounting_accounts.code as code',
+      'journal_entry_lines.debit as debit',
+      'journal_entry_lines.credit as credit',
+    ])
     .where('journal_entry_id', '=', entries[0].id)
-    .execute() as Array<{ code: string; debit: string; credit: string }>;
+    .execute()) as Array<{ code: string; debit: string; credit: string }>;
   const byCode = new Map<string, { debit: number; credit: number }>();
   for (const row of rows) {
     byCode.set(row.code, { debit: Number(row.debit), credit: Number(row.credit) });
@@ -231,21 +314,21 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 200,
-        [{ productId: 100, qty: 10, costPrice: 15.3125 }],
-        [{ productId: 100, qty: 6 }]);
+      await seedSale(db, 1, 200, [{ productId: 100, qty: 10, costPrice: 15.3125 }], [{ productId: 100, qty: 6 }]);
       await postOn(db, (posting, trx) => posting.postSale(trx, 1, auth));
       const saleJournal = await journalByCode(db, 'sale', 1);
       assert.equal(saleJournal.get('5100')?.debit, 153.12);
       // The legacy plain product reverses 91.88 and strands the unit.
-      assert.equal(calculateSalesReturnCost(
-        [{ product_id: 100, sale_item_id: 10, qty: 6, cost_price: 15.3125 }],
-        [{ id: 10, product_id: 100, cost_price: 15.3125 }],
-      ), 91.875);
+      assert.equal(
+        calculateSalesReturnCost(
+          [{ product_id: 100, sale_item_id: 10, qty: 6, cost_price: 15.3125 }],
+          [{ id: 10, product_id: 100, cost_price: 15.3125 }],
+        ),
+        91.875,
+      );
       // Restock: remaining 6 -> 12.
       await setRemaining(db, 100, 12);
-      await seedReturn(db, 1, 1, 120,
-        [{ productId: 100, saleItemId: 10, qty: 6, costPrice: 15.3125 }]);
+      await seedReturn(db, 1, 1, 120, [{ productId: 100, saleItemId: 10, qty: 6, costPrice: 15.3125 }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 1, auth));
       const ret = await journalByCode(db, 'sales_return', 1);
       assert.equal(ret.get('1140')?.debit, 91.87);
@@ -262,13 +345,10 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 200,
-        [{ productId: 100, qty: 10, costPrice: 15.3125 }],
-        [{ productId: 100, qty: 6 }]);
+      await seedSale(db, 1, 200, [{ productId: 100, qty: 10, costPrice: 15.3125 }], [{ productId: 100, qty: 6 }]);
       await postOn(db, (posting, trx) => posting.postSale(trx, 1, auth));
       await setRemaining(db, 100, 16);
-      await seedReturn(db, 1, 1, 200,
-        [{ productId: 100, saleItemId: 10, qty: 10, costPrice: 15.3125 }]);
+      await seedReturn(db, 1, 1, 200, [{ productId: 100, saleItemId: 10, qty: 10, costPrice: 15.3125 }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 1, auth));
       const ret = await journalByCode(db, 'sales_return', 1);
       assert.equal(ret.get('1140')?.debit, 153.12);
@@ -284,19 +364,15 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 200,
-        [{ productId: 100, qty: 10, costPrice: 15.3125 }],
-        [{ productId: 100, qty: 6 }]);
+      await seedSale(db, 1, 200, [{ productId: 100, qty: 10, costPrice: 15.3125 }], [{ productId: 100, qty: 6 }]);
       await postOn(db, (posting, trx) => posting.postSale(trx, 1, auth));
       await setRemaining(db, 100, 10);
-      await seedReturn(db, 1, 1, 80,
-        [{ productId: 100, saleItemId: 10, qty: 4, costPrice: 15.3125 }]);
+      await seedReturn(db, 1, 1, 80, [{ productId: 100, saleItemId: 10, qty: 4, costPrice: 15.3125 }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 1, auth));
       const first = await journalByCode(db, 'sales_return', 1);
       assert.equal(first.get('1140')?.debit, 61.25);
       await setRemaining(db, 100, 16);
-      await seedReturn(db, 2, 1, 120,
-        [{ productId: 100, saleItemId: 10, qty: 6, costPrice: 15.3125 }]);
+      await seedReturn(db, 2, 1, 120, [{ productId: 100, saleItemId: 10, qty: 6, costPrice: 15.3125 }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 2, auth));
       const second = await journalByCode(db, 'sales_return', 2);
       assert.equal(second.get('1140')?.debit, 91.87);
@@ -311,15 +387,18 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 100,
+      await seedSale(
+        db,
+        1,
+        100,
         [{ productId: 100, qty: 1, costPrice: 30.625, unitMultiplier: 2 }],
-        [{ productId: 100, qty: 5 }]);
+        [{ productId: 100, qty: 5 }],
+      );
       await postOn(db, (posting, trx) => posting.postSale(trx, 1, auth));
       const saleJournal = await journalByCode(db, 'sale', 1);
       assert.equal(saleJournal.get('5100')?.debit, 30.63);
       await setRemaining(db, 100, 7);
-      await seedReturn(db, 1, 1, 100,
-        [{ productId: 100, saleItemId: 10, qty: 1, costPrice: 30.625 }]);
+      await seedReturn(db, 1, 1, 100, [{ productId: 100, saleItemId: 10, qty: 1, costPrice: 30.625 }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 1, auth));
       const ret = await journalByCode(db, 'sales_return', 1);
       assert.equal(ret.get('1140')?.debit, 30.63);
@@ -334,15 +413,12 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'KWD');
-      await seedSale(db, 1, 200,
-        [{ productId: 100, qty: 10, costPrice: 15.31255 }],
-        [{ productId: 100, qty: 6 }]);
+      await seedSale(db, 1, 200, [{ productId: 100, qty: 10, costPrice: 15.31255 }], [{ productId: 100, qty: 6 }]);
       await postOn(db, (posting, trx) => posting.postSale(trx, 1, auth));
       const saleJournal = await journalByCode(db, 'sale', 1);
       assert.equal(saleJournal.get('5100')?.debit, 153.126);
       await setRemaining(db, 100, 12);
-      await seedReturn(db, 1, 1, 120,
-        [{ productId: 100, saleItemId: 10, qty: 6, costPrice: 15.31255 }]);
+      await seedReturn(db, 1, 1, 120, [{ productId: 100, saleItemId: 10, qty: 6, costPrice: 15.31255 }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 1, auth));
       const ret = await journalByCode(db, 'sales_return', 1);
       assert.equal(ret.get('1140')?.debit, 91.876);
@@ -359,12 +435,16 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 300,
+      await seedSale(
+        db,
+        1,
+        300,
         [
           { productId: 100, qty: 6, costPrice: 15.3125 },
           { productId: 100, qty: 4, costPrice: 15.5 },
         ],
-        [{ productId: 100, qty: 6 }]);
+        [{ productId: 100, qty: 6 }],
+      );
       await postOn(db, (posting, trx) => posting.postSale(trx, 1, auth));
       const saleJournal = await journalByCode(db, 'sale', 1);
       // Per-group semantics (Slice 5 P1): the FULL remaining stock is
@@ -374,8 +454,7 @@ async function main(): Promise<void> {
       // sales, and the mirror telescopes per group instead.
       assert.equal(saleJournal.get('5100')?.debit, 153.87);
       await setRemaining(db, 100, 12);
-      await seedReturn(db, 1, 1, 120,
-        [{ productId: 100, saleItemId: 10, qty: 6, costPrice: 15.3125 }]);
+      await seedReturn(db, 1, 1, 120, [{ productId: 100, saleItemId: 10, qty: 6, costPrice: 15.3125 }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 1, auth));
       const ret = await journalByCode(db, 'sales_return', 1);
       assert.equal(ret.get('1140')?.debit, 91.87);
@@ -390,19 +469,30 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await seedSale(db, 1, 100,
-        [{
-          productId: 100, qty: 1, costPrice: 10.890625, unitMultiplier: 1,
-          modifiers: [{ productId: 200, qty: 1, consumptionQty: 0.25, costPrice: 0.578125, name: 'cheese' }],
-        }],
-        [{ productId: 100, qty: 1 }, { productId: 200, qty: 3.75 }]);
+      await seedSale(
+        db,
+        1,
+        100,
+        [
+          {
+            productId: 100,
+            qty: 1,
+            costPrice: 10.890625,
+            unitMultiplier: 1,
+            modifiers: [{ productId: 200, qty: 1, consumptionQty: 0.25, costPrice: 0.578125, name: 'cheese' }],
+          },
+        ],
+        [
+          { productId: 100, qty: 1 },
+          { productId: 200, qty: 3.75 },
+        ],
+      );
       await postOn(db, (posting, trx) => posting.postSale(trx, 1, auth));
       const saleJournal = await journalByCode(db, 'sale', 1);
       assert.equal(saleJournal.get('5100')?.debit, 10.9);
       // Parent restocks; the consumed component does not.
       await setRemaining(db, 100, 2);
-      await seedReturn(db, 1, 1, 100,
-        [{ productId: 100, saleItemId: 10, qty: 1, costPrice: 10.890625 }]);
+      await seedReturn(db, 1, 1, 100, [{ productId: 100, saleItemId: 10, qty: 1, costPrice: 10.890625 }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 1, auth));
       const ret = await journalByCode(db, 'sales_return', 1);
       assert.equal(ret.get('1140')?.debit, 10.9);
@@ -418,40 +508,37 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       // 8a: a differing nonzero saved cost keeps the pinned override.
-      await seedSale(db, 1, 200,
-        [{ productId: 100, qty: 10, costPrice: 10 }],
-        [{ productId: 100, qty: 5 }]);
+      await seedSale(db, 1, 200, [{ productId: 100, qty: 10, costPrice: 10 }], [{ productId: 100, qty: 5 }]);
       await postOn(db, (posting, trx) => posting.postSale(trx, 1, auth));
       await setRemaining(db, 100, 7);
-      await seedReturn(db, 1, 1, 50,
-        [{ productId: 100, saleItemId: 10, qty: 2, costPrice: 12.5 }]);
+      await seedReturn(db, 1, 1, 50, [{ productId: 100, saleItemId: 10, qty: 2, costPrice: 12.5 }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 1, auth));
       const overridden = await journalByCode(db, 'sales_return', 1);
       assert.equal(overridden.get('1140')?.debit, 25);
 
       // 8b: a zero saved cost (prepared composite) reverses nothing.
-      await seedSale(db, 2, 200,
-        [{ productId: 100, qty: 10, costPrice: 10 }],
-        [{ productId: 100, qty: 5 }]);
+      await seedSale(db, 2, 200, [{ productId: 100, qty: 10, costPrice: 10 }], [{ productId: 100, qty: 5 }]);
       await postOn(db, (posting, trx) => posting.postSale(trx, 2, auth));
-      await seedReturn(db, 2, 2, 50,
-        [{ productId: 100, saleItemId: 20, qty: 2, costPrice: 0 }]);
+      await seedReturn(db, 2, 2, 50, [{ productId: 100, saleItemId: 20, qty: 2, costPrice: 0 }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 2, auth));
       const prepared = await journalByCode(db, 'sales_return', 2);
       assert.equal(prepared.get('1140'), undefined);
       assert.equal(prepared.get('5100'), undefined);
 
       // 8c: an unlinked line across two identical-cost lines keeps the plain product.
-      await seedSale(db, 3, 300,
+      await seedSale(
+        db,
+        3,
+        300,
         [
           { productId: 100, qty: 5, costPrice: 15.3125 },
           { productId: 100, qty: 5, costPrice: 15.3125 },
         ],
-        [{ productId: 100, qty: 3 }]);
+        [{ productId: 100, qty: 3 }],
+      );
       await postOn(db, (posting, trx) => posting.postSale(trx, 3, auth));
       await setRemaining(db, 100, 5);
-      await seedReturn(db, 3, 3, 60,
-        [{ productId: 100, saleItemId: null, qty: 2, costPrice: null }]);
+      await seedReturn(db, 3, 3, 60, [{ productId: 100, saleItemId: null, qty: 2, costPrice: null }]);
       await postOn(db, (posting, trx) => posting.postSalesReturn(trx, 3, auth));
       const unlinked = await journalByCode(db, 'sales_return', 3);
       assert.equal(unlinked.get('1140')?.debit, 30.63);
@@ -463,12 +550,19 @@ async function main(): Promise<void> {
   // Case 9: source + invariant pins.
   {
     const here = __dirname;
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/sales-returns-posting.service.ts'), 'utf8');
+    const postingSource = readFileSync(
+      resolve(here, '../../src/modules/accounting/services/sales-returns-posting.service.ts'),
+      'utf8',
+    );
     assert.ok(postingSource.includes('salesReturnCogsResidual'), 'the return mirror must exist');
     assert.ok(postingSource.includes('residualCogsGroups'), 'the shared residual grouping must exist');
     assert.ok(postingSource.includes('resolveSalesReturnCostLines'), 'the return cost resolver must be shared');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-SALES-RETURN-COGS-RESIDUAL-MIRROR').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-SALES-RETURN-COGS-RESIDUAL-MIRROR').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
   }
 
   console.log('Sales return COGS residual mirror tests passed');

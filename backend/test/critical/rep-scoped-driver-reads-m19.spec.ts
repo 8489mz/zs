@@ -126,66 +126,308 @@ async function main(): Promise<void> {
     const vanService = new VanSalesService(db, {} as never, {} as never, postingStub as never);
 
     await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-    await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 }).execute();
+    await anyDb
+      .insertInto('currency_exchange_rates')
+      .values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 })
+      .execute();
 
-    await anyDb.insertInto('delivery_representatives').values([
-      { id: REP_OWN, tenant_id: TENANT, account_id: ACCOUNT, name: 'Own Rep', phone: '01000000001', van_location_id: VAN_OWN, vehicle_plate: 'ABC-1', is_active: true },
-      { id: REP_OTHER, tenant_id: TENANT, account_id: ACCOUNT, name: 'Other Rep', phone: '01000000002', van_location_id: VAN_OTHER, vehicle_plate: 'XYZ-2', is_active: true },
-      { id: REP_NEW, tenant_id: TENANT, account_id: ACCOUNT, name: 'New Rep', phone: '01000000003', van_location_id: null, vehicle_plate: null, is_active: true },
-    ]).execute();
-    await anyDb.insertInto('stock_locations').values([
-      { id: WH_OWN, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main Warehouse', code: 'WH-1', location_type: 'internal_warehouse', is_active: true },
-      { id: WH_OTHER, tenant_id: TENANT, account_id: ACCOUNT, name: 'Branch Warehouse', code: 'WH-2', location_type: 'branch_stock', is_active: true },
-      { id: VAN_OWN, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van Own', code: 'VAN_11', location_type: 'van_stock', is_active: true },
-      { id: VAN_OTHER, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van Other', code: 'VAN_22', location_type: 'van_stock', is_active: true },
-    ]).execute();
-    await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, default_stock_location_id: WH_OWN, is_active: true }).execute();
+    await anyDb
+      .insertInto('delivery_representatives')
+      .values([
+        {
+          id: REP_OWN,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Own Rep',
+          phone: '01000000001',
+          van_location_id: VAN_OWN,
+          vehicle_plate: 'ABC-1',
+          is_active: true,
+        },
+        {
+          id: REP_OTHER,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Other Rep',
+          phone: '01000000002',
+          van_location_id: VAN_OTHER,
+          vehicle_plate: 'XYZ-2',
+          is_active: true,
+        },
+        {
+          id: REP_NEW,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'New Rep',
+          phone: '01000000003',
+          van_location_id: null,
+          vehicle_plate: null,
+          is_active: true,
+        },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('stock_locations')
+      .values([
+        {
+          id: WH_OWN,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Main Warehouse',
+          code: 'WH-1',
+          location_type: 'internal_warehouse',
+          is_active: true,
+        },
+        {
+          id: WH_OTHER,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Branch Warehouse',
+          code: 'WH-2',
+          location_type: 'branch_stock',
+          is_active: true,
+        },
+        {
+          id: VAN_OWN,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Van Own',
+          code: 'VAN_11',
+          location_type: 'van_stock',
+          is_active: true,
+        },
+        {
+          id: VAN_OTHER,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Van Other',
+          code: 'VAN_22',
+          location_type: 'van_stock',
+          is_active: true,
+        },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('branches')
+      .values({ id: 1, tenant_id: TENANT, default_stock_location_id: WH_OWN, is_active: true })
+      .execute();
 
     // Products: P1 in both warehouses (100 own-source / 500 other),
     // P2 only in the own-source warehouse.
-    await anyDb.insertInto('products').values([
-      { id: 101, tenant_id: TENANT, name: 'Product One', barcode: 'P101', stock_qty: 600, reserved_qty: 0, cost_price: 40, retail_price: 100, wholesale_price: 70, credit_price: 90, consumer_price: 110, is_active: true, metadata: null },
-      { id: 102, tenant_id: TENANT, name: 'Product Two', barcode: 'P102', stock_qty: 5, reserved_qty: 0, cost_price: 10, retail_price: 50, wholesale_price: 30, credit_price: 45, consumer_price: 55, is_active: true, metadata: null },
-    ]).execute();
-    await anyDb.insertInto('product_location_stock').values([
-      { product_id: 101, location_id: WH_OWN, tenant_id: TENANT, qty: 100, reserved_qty: 0 },
-      { product_id: 101, location_id: WH_OTHER, tenant_id: TENANT, qty: 500, reserved_qty: 0 },
-      { product_id: 102, location_id: WH_OWN, tenant_id: TENANT, qty: 5, reserved_qty: 0 },
-    ]).execute();
+    await anyDb
+      .insertInto('products')
+      .values([
+        {
+          id: 101,
+          tenant_id: TENANT,
+          name: 'Product One',
+          barcode: 'P101',
+          stock_qty: 600,
+          reserved_qty: 0,
+          cost_price: 40,
+          retail_price: 100,
+          wholesale_price: 70,
+          credit_price: 90,
+          consumer_price: 110,
+          is_active: true,
+          metadata: null,
+        },
+        {
+          id: 102,
+          tenant_id: TENANT,
+          name: 'Product Two',
+          barcode: 'P102',
+          stock_qty: 5,
+          reserved_qty: 0,
+          cost_price: 10,
+          retail_price: 50,
+          wholesale_price: 30,
+          credit_price: 45,
+          consumer_price: 55,
+          is_active: true,
+          metadata: null,
+        },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('product_location_stock')
+      .values([
+        { product_id: 101, location_id: WH_OWN, tenant_id: TENANT, qty: 100, reserved_qty: 0 },
+        { product_id: 101, location_id: WH_OTHER, tenant_id: TENANT, qty: 500, reserved_qty: 0 },
+        { product_id: 102, location_id: WH_OWN, tenant_id: TENANT, qty: 5, reserved_qty: 0 },
+      ])
+      .execute();
 
     // Customers on shared route R1: 100 assigned to OWN, 200 assigned
     // to OTHER, 300 unassigned, 400 served by OWN via a field visit.
     const meta = (o: any) => JSON.stringify(o);
-    await anyDb.insertInto('customers').values([
-      { id: 100, tenant_id: TENANT, name: 'Assigned Own', phone: '011100', address: 'Addr 100', balance: 50, credit_limit: 100, is_active: true, metadata: meta({ assigned_rep_ids: [REP_OWN], route: 'R1', route_sequence: 5, location_url: 'https://maps.google.com/?q=30.04,31.23' }) },
-      { id: 200, tenant_id: TENANT, name: 'Other Rep Customer', phone: '011200', address: 'Addr 200', balance: 70, credit_limit: 200, is_active: true, metadata: meta({ assigned_rep_ids: [REP_OTHER], route: 'R1', route_sequence: 9, location_url: 'https://maps.google.com/?q=30.05,31.24' }) },
-      { id: 300, tenant_id: TENANT, name: 'Unassigned Stranger', phone: '011300', address: 'Addr 300', balance: 999, credit_limit: 500, is_active: true, metadata: meta({ route: 'R1', route_sequence: 7, location_url: 'https://maps.google.com/?q=30.06,31.25' }) },
-      { id: 400, tenant_id: TENANT, name: 'Visited By Own', phone: '011400', address: 'Addr 400', balance: 10, credit_limit: 0, is_active: true, metadata: meta({ route: 'R1', route_sequence: 3, location_url: 'https://maps.google.com/?q=30.07,31.26' }) },
-    ]).execute();
+    await anyDb
+      .insertInto('customers')
+      .values([
+        {
+          id: 100,
+          tenant_id: TENANT,
+          name: 'Assigned Own',
+          phone: '011100',
+          address: 'Addr 100',
+          balance: 50,
+          credit_limit: 100,
+          is_active: true,
+          metadata: meta({
+            assigned_rep_ids: [REP_OWN],
+            route: 'R1',
+            route_sequence: 5,
+            location_url: 'https://maps.google.com/?q=30.04,31.23',
+          }),
+        },
+        {
+          id: 200,
+          tenant_id: TENANT,
+          name: 'Other Rep Customer',
+          phone: '011200',
+          address: 'Addr 200',
+          balance: 70,
+          credit_limit: 200,
+          is_active: true,
+          metadata: meta({
+            assigned_rep_ids: [REP_OTHER],
+            route: 'R1',
+            route_sequence: 9,
+            location_url: 'https://maps.google.com/?q=30.05,31.24',
+          }),
+        },
+        {
+          id: 300,
+          tenant_id: TENANT,
+          name: 'Unassigned Stranger',
+          phone: '011300',
+          address: 'Addr 300',
+          balance: 999,
+          credit_limit: 500,
+          is_active: true,
+          metadata: meta({ route: 'R1', route_sequence: 7, location_url: 'https://maps.google.com/?q=30.06,31.25' }),
+        },
+        {
+          id: 400,
+          tenant_id: TENANT,
+          name: 'Visited By Own',
+          phone: '011400',
+          address: 'Addr 400',
+          balance: 10,
+          credit_limit: 0,
+          is_active: true,
+          metadata: meta({ route: 'R1', route_sequence: 3, location_url: 'https://maps.google.com/?q=30.07,31.26' }),
+        },
+      ])
+      .execute();
 
     // Trips: OWN loaded from WH_OWN, OTHER from WH_OTHER. Requisition:
     // OWN also requisitioned from WH_OWN (both evidence legs).
-    await anyDb.insertInto('van_sales_trips').values([
-      { id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OWN, van_location_id: VAN_OWN, source_warehouse_id: WH_OWN, status: 'open', settlement_status: 'open' },
-      { id: 2, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OTHER, van_location_id: VAN_OTHER, source_warehouse_id: WH_OTHER, status: 'open', settlement_status: 'open' },
-    ]).execute();
-    await anyDb.insertInto('van_load_requisitions').values(
-      { id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'REQ-260101-0001', rep_id: REP_OWN, source_warehouse_id: WH_OWN, status: 'approved', requested_items: '[]', approved_items: '[]' },
-    ).execute();
-    await anyDb.insertInto('van_field_visits').values(
-      { tenant_id: TENANT, account_id: ACCOUNT, trip_id: 1, rep_id: REP_OWN, customer_id: 400, visit_type: 'positive' },
-    ).execute();
+    await anyDb
+      .insertInto('van_sales_trips')
+      .values([
+        {
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: REP_OWN,
+          van_location_id: VAN_OWN,
+          source_warehouse_id: WH_OWN,
+          status: 'open',
+          settlement_status: 'open',
+        },
+        {
+          id: 2,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: REP_OTHER,
+          van_location_id: VAN_OTHER,
+          source_warehouse_id: WH_OTHER,
+          status: 'open',
+          settlement_status: 'open',
+        },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('van_load_requisitions')
+      .values({
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'REQ-260101-0001',
+        rep_id: REP_OWN,
+        source_warehouse_id: WH_OWN,
+        status: 'approved',
+        requested_items: '[]',
+        approved_items: '[]',
+      })
+      .execute();
+    await anyDb
+      .insertInto('van_field_visits')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        trip_id: 1,
+        rep_id: REP_OWN,
+        customer_id: 400,
+        visit_type: 'positive',
+      })
+      .execute();
 
     // Fleet: V1 assigned to OWN (licence long expired + oil overdue),
     // V2 assigned to OTHER (licence long expired too).
-    await anyDb.insertInto('fleet_vehicles').values([
-      { id: 1, tenant_id: TENANT, account_id: ACCOUNT, plate_number: 'ABC-1', model_name: 'Van A', current_odometer: 5000, license_expires_at: '2020-01-01', status: 'assigned', assigned_rep_id: REP_OWN, van_location_id: VAN_OWN },
-      { id: 2, tenant_id: TENANT, account_id: ACCOUNT, plate_number: 'XYZ-2', model_name: 'Van B', current_odometer: 5000, license_expires_at: '2020-01-01', status: 'assigned', assigned_rep_id: REP_OTHER, van_location_id: VAN_OTHER },
-    ]).execute();
-    await anyDb.insertInto('fleet_oil_changes').values([
-      { tenant_id: TENANT, vehicle_id: 1, next_due_odometer: 1000, alert_km_before: 500, oil_type: '5W-30', with_filter: false, status: 'active' },
-      { tenant_id: TENANT, vehicle_id: 2, next_due_odometer: 1000, alert_km_before: 500, oil_type: '5W-30', with_filter: false, status: 'active' },
-    ]).execute();
+    await anyDb
+      .insertInto('fleet_vehicles')
+      .values([
+        {
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          plate_number: 'ABC-1',
+          model_name: 'Van A',
+          current_odometer: 5000,
+          license_expires_at: '2020-01-01',
+          status: 'assigned',
+          assigned_rep_id: REP_OWN,
+          van_location_id: VAN_OWN,
+        },
+        {
+          id: 2,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          plate_number: 'XYZ-2',
+          model_name: 'Van B',
+          current_odometer: 5000,
+          license_expires_at: '2020-01-01',
+          status: 'assigned',
+          assigned_rep_id: REP_OTHER,
+          van_location_id: VAN_OTHER,
+        },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('fleet_oil_changes')
+      .values([
+        {
+          tenant_id: TENANT,
+          vehicle_id: 1,
+          next_due_odometer: 1000,
+          alert_km_before: 500,
+          oil_type: '5W-30',
+          with_filter: false,
+          status: 'active',
+        },
+        {
+          tenant_id: TENANT,
+          vehicle_id: 2,
+          next_due_odometer: 1000,
+          alert_km_before: 500,
+          oil_type: '5W-30',
+          with_filter: false,
+          status: 'active',
+        },
+      ])
+      .execute();
 
     const isCode = (code: string, status: number) => (err: any) =>
       err && err.code === code && err.statusCode === status;
@@ -197,7 +439,7 @@ async function main(): Promise<void> {
         .where('id', '=', customerId)
         .where('tenant_id', '=', TENANT)
         .executeTakeFirst();
-      const m = typeof row?.metadata === 'string' ? JSON.parse(row.metadata) : (row?.metadata || {});
+      const m = typeof row?.metadata === 'string' ? JSON.parse(row.metadata) : row?.metadata || {};
       return Number(m.route_sequence || 0);
     };
 
@@ -249,8 +491,7 @@ async function main(): Promise<void> {
       assert.ok(Number((item as any).retailPrice) > 0, 'retail price must still be present');
     }
     const p1Driver = driverCatalog.items.find((i: any) => Number(i.id) === 101);
-    assert.equal(
-      Number(p1Driver?.stockQty), 100, 'driver catalog stock must be his own warehouse stock');
+    assert.equal(Number(p1Driver?.stockQty), 100, 'driver catalog stock must be his own warehouse stock');
     // An explicitly requested warehouse outside his scope is refused.
     await assert.rejects(
       preSalesService.listWarehouseCatalog(TENANT, WH_OTHER, {}, REP_OWN),
@@ -268,15 +509,27 @@ async function main(): Promise<void> {
     // from. A rep with no load history yet (bootstrap) sees the full
     // list; the staff read is unchanged.
     const ownWh = await requisitionsService.getDriverWarehouses(TENANT, REP_OWN);
-    assert.deepEqual(ownWh.map((w: any) => Number(w.id)), [WH_OWN]);
+    assert.deepEqual(
+      ownWh.map((w: any) => Number(w.id)),
+      [WH_OWN],
+    );
     const newWh = await requisitionsService.getDriverWarehouses(TENANT, REP_NEW);
-    assert.deepEqual(newWh.map((w: any) => Number(w.id)).sort((a: number, b: number) => a - b), [WH_OWN, WH_OTHER]);
+    assert.deepEqual(
+      newWh.map((w: any) => Number(w.id)).sort((a: number, b: number) => a - b),
+      [WH_OWN, WH_OTHER],
+    );
     const staffWh = await requisitionsService.getDriverWarehouses(TENANT);
-    assert.deepEqual(staffWh.map((w: any) => Number(w.id)).sort((a: number, b: number) => a - b), [WH_OWN, WH_OTHER]);
+    assert.deepEqual(
+      staffWh.map((w: any) => Number(w.id)).sort((a: number, b: number) => a - b),
+      [WH_OWN, WH_OTHER],
+    );
     // Same scoping through the VanSalesService pass-through the driver
     // controller calls.
     const ownWhViaService = await vanService.getDriverWarehouses(TENANT, REP_OWN);
-    assert.deepEqual(ownWhViaService.map((w: any) => Number(w.id)), [WH_OWN]);
+    assert.deepEqual(
+      ownWhViaService.map((w: any) => Number(w.id)),
+      [WH_OWN],
+    );
 
     // 6. (D10) Driver products: stock only in his own warehouses, with
     // a per-warehouse breakdown limited to those warehouses. An
@@ -334,7 +587,9 @@ async function main(): Promise<void> {
       isCode('REP_VEHICLE_NOT_ASSIGNED', 403),
     );
     const staffAlerts = await fleetService.getFleetMaintenanceAlerts(TENANT);
-    const staffVehicleIds = [...new Set((staffAlerts.alerts || []).map((a: any) => Number(a.vehicleId)))].sort((a: number, b: number) => a - b);
+    const staffVehicleIds = [...new Set((staffAlerts.alerts || []).map((a: any) => Number(a.vehicleId)))].sort(
+      (a: number, b: number) => a - b,
+    );
     assert.deepEqual(staffVehicleIds, [1, 2]);
     const ownAlertsViaService = await vanService.getFleetMaintenanceAlerts(TENANT, undefined, REP_OWN);
     assert.ok((ownAlertsViaService.alerts || []).every((a: any) => Number(a.vehicleId) === 1));
@@ -342,7 +597,10 @@ async function main(): Promise<void> {
     // 8. (D10) Peer reps expose no phone numbers, while name + plate
     // stay for the transfer picker.
     const peers = await transfersService.getPeerReps(TENANT, REP_OWN);
-    assert.deepEqual(peers.map((r: any) => Number(r.id)).sort((a: number, b: number) => a - b), [REP_OTHER, REP_NEW]);
+    assert.deepEqual(
+      peers.map((r: any) => Number(r.id)).sort((a: number, b: number) => a - b),
+      [REP_OTHER, REP_NEW],
+    );
     for (const peer of peers) {
       assert.equal(peer.phone, '', 'peer phone must be hidden');
     }

@@ -63,13 +63,22 @@ const eosEngineModule = require('../../src/modules/hr/engines/eos-calculation.en
   calculateSettlementAbsorption: typeof calculateSettlementAbsorption;
 };
 
-const AUTH = { tenantId: 't1', accountId: 'a1', userId: 1, username: 'tester', role: 'admin', permissions: [] } as never;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  userId: 1,
+  username: 'tester',
+  role: 'admin',
+  permissions: [],
+} as never;
 const FOUNDATION_STUB = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as never;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_resolve, reject) => setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms)),
+    new Promise<T>((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms),
+    ),
   ]);
 }
 
@@ -92,7 +101,9 @@ async function main(): Promise<void> {
     originalAbsorption = eosEngineModule.calculateSettlementAbsorption;
     let delayEngineCalls = 0;
     let absorptionEngineCalls = 0;
-    payrollEngineModule.calculateProgressiveDelayDeduction = ((params: Parameters<typeof calculateProgressiveDelayDeduction>[0]) => {
+    payrollEngineModule.calculateProgressiveDelayDeduction = ((
+      params: Parameters<typeof calculateProgressiveDelayDeduction>[0],
+    ) => {
       delayEngineCalls += 1;
       return (originalDelay as typeof calculateProgressiveDelayDeduction)(params);
     }) as typeof calculateProgressiveDelayDeduction;
@@ -146,16 +157,32 @@ async function main(): Promise<void> {
     await sql.raw(`INSERT INTO settings VALUES ('t2', 'currency', 'EGP')`).execute(db);
     await sql.raw(`INSERT INTO settings VALUES ('t3', 'currency', 'EGP')`).execute(db);
     await sql.raw(`INSERT INTO settings VALUES ('t4', 'currency', 'EGP')`).execute(db);
-    await sql.raw(`INSERT INTO hr_hr_settings VALUES (1, 't1', 'payroll_policies', '{"hrDelayPolicyEnabled":true,"hrDelayPolicyFirstTimeDeduction":0.25,"hrDelayPolicySecondTimeDeduction":0.5,"hrDelayPolicyThirdTimeDeduction":1,"hrDelayPolicyFourthTimeDeduction":1}')`).execute(db);
-    await sql.raw(`INSERT INTO hr_hr_settings VALUES (2, 't2', 'payroll_policies', '{"hrDelayPolicyEnabled":false}')`).execute(db);
-    await sql.raw(`INSERT INTO hr_hr_settings VALUES (3, 't3', 'payroll_policies', '{"hrDelayPolicyEnabled":true}')`).execute(db);
-    await sql.raw(`INSERT INTO hr_hr_settings VALUES (4, 't4', 'payroll_policies', '{"hrDelayPolicyEnabled":true}')`).execute(db);
-    await sql.raw(`INSERT INTO hr_employees (id, tenant_id, display_name, status, compensation_type, hourly_rate, expected_daily_hours, hire_date, end_of_service_date, has_social_insurance, insurance_salary, has_income_tax, pay_frequency, user_id, commission_type, commission_value, commission_target, delay_policy, approved_leave_days) VALUES
+    await sql
+      .raw(
+        `INSERT INTO hr_hr_settings VALUES (1, 't1', 'payroll_policies', '{"hrDelayPolicyEnabled":true,"hrDelayPolicyFirstTimeDeduction":0.25,"hrDelayPolicySecondTimeDeduction":0.5,"hrDelayPolicyThirdTimeDeduction":1,"hrDelayPolicyFourthTimeDeduction":1}')`,
+      )
+      .execute(db);
+    await sql
+      .raw(`INSERT INTO hr_hr_settings VALUES (2, 't2', 'payroll_policies', '{"hrDelayPolicyEnabled":false}')`)
+      .execute(db);
+    await sql
+      .raw(`INSERT INTO hr_hr_settings VALUES (3, 't3', 'payroll_policies', '{"hrDelayPolicyEnabled":true}')`)
+      .execute(db);
+    await sql
+      .raw(`INSERT INTO hr_hr_settings VALUES (4, 't4', 'payroll_policies', '{"hrDelayPolicyEnabled":true}')`)
+      .execute(db);
+    await sql
+      .raw(
+        `INSERT INTO hr_employees (id, tenant_id, display_name, status, compensation_type, hourly_rate, expected_daily_hours, hire_date, end_of_service_date, has_social_insurance, insurance_salary, has_income_tax, pay_frequency, user_id, commission_type, commission_value, commission_target, delay_policy, approved_leave_days) VALUES
       (1, 't1', 'Progressive Emp', 'active', 'monthly', 0, 8, '2026-01-01', NULL, false, 0, false, 'monthly', NULL, NULL, 0, NULL, NULL, 0),
       (2, 't2', 'Standard Emp', 'active', 'monthly', 0, 8, '2026-01-01', NULL, false, 0, false, 'monthly', NULL, NULL, 0, NULL, NULL, 0),
       (3, 't3', 'Strict Emp', 'active', 'monthly', 0, 8, '2026-01-01', NULL, false, 0, false, 'monthly', NULL, NULL, 0, NULL, 'strict', 0),
-      (4, 't4', 'Disabled Emp', 'active', 'monthly', 0, 8, '2026-01-01', NULL, false, 0, false, 'monthly', NULL, NULL, 0, NULL, 'disabled', 0)`).execute(db);
-    await sql.raw(`INSERT INTO hr_attendance_exceptions (id, tenant_id, employee_id, status, work_date, exception_type, approved_duration_minutes, duration_minutes) VALUES
+      (4, 't4', 'Disabled Emp', 'active', 'monthly', 0, 8, '2026-01-01', NULL, false, 0, false, 'monthly', NULL, NULL, 0, NULL, 'disabled', 0)`,
+      )
+      .execute(db);
+    await sql
+      .raw(
+        `INSERT INTO hr_attendance_exceptions (id, tenant_id, employee_id, status, work_date, exception_type, approved_duration_minutes, duration_minutes) VALUES
       (1, 't1', 1, 'pending', '2026-02-03', 'late_check_in', NULL, 30),
       (2, 't1', 1, 'pending', '2026-02-10', 'late_check_in', NULL, 30),
       (3, 't2', 2, 'pending', '2026-02-03', 'late_check_in', NULL, 60),
@@ -164,14 +191,21 @@ async function main(): Promise<void> {
       (6, 't3', 3, 'pending', '2026-02-10', 'late_check_in', NULL, 45),
       (7, 't4', 4, 'pending', '2026-02-03', 'late_check_in', NULL, 40),
       (8, 't4', 4, 'pending', '2026-02-10', 'late_check_in', NULL, 40),
-      (9, 't4', 4, 'pending', '2026-02-17', 'late_check_in', NULL, 40)`).execute(db);
+      (9, 't4', 4, 'pending', '2026-02-17', 'late_check_in', NULL, 40)`,
+      )
+      .execute(db);
 
     const range = { from: '2026-02-01', to: '2026-02-28' };
     const review = (tenantId: string, employeeId: number) =>
       (hr as any).payrollReviewService.calculatePayrollOperationalReview(
-        db, range, [employeeId],
-        new Map([[employeeId, 9000]]), tenantId,
-        new Map([[employeeId, 9000]]), undefined, 2,
+        db,
+        range,
+        [employeeId],
+        new Map([[employeeId, 9000]]),
+        tenantId,
+        new Map([[employeeId, 9000]]),
+        undefined,
+        2,
       ) as Promise<Map<number, any>>;
 
     const progressive = await withTimeout(review('t1', 1), 25000, 'progressive review');
@@ -192,23 +226,45 @@ async function main(): Promise<void> {
     await sql.raw(`INSERT INTO branches VALUES (10,'t1',NULL)`).execute(db);
     await sql.raw(`INSERT INTO stock_locations VALUES (20,'t1',10)`).execute(db);
     await sql.raw(`INSERT INTO users VALUES (1,'t1','Tester','tester',NULL)`).execute(db);
-    await sql.raw(`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES ('t1', 'EGP', true, 1)`).execute(db);
-    await sql.raw(`INSERT INTO accounting_settings VALUES
-      (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL)`).execute(db);
-    await sql.raw(`INSERT INTO accounting_accounts (id, tenant_id, code, account_type) VALUES
+    await sql
+      .raw(
+        `INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES ('t1', 'EGP', true, 1)`,
+      )
+      .execute(db);
+    await sql
+      .raw(
+        `INSERT INTO accounting_settings VALUES
+      (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL)`,
+      )
+      .execute(db);
+    await sql
+      .raw(
+        `INSERT INTO accounting_accounts (id, tenant_id, code, account_type) VALUES
       (1110, 't1', '1110', ''), (1120, 't1', '1120', ''), (1160, 't1', '1160', ''),
-      (2140, 't1', '2140', ''), (6200, 't1', '6200', ''), (7100, 't1', '7100', '')`).execute(db);
-    await sql.raw(`INSERT INTO hr_end_of_service_settlements (id, tenant_id, settlement_no, employee_id, settlement_date, gratuity_amount, leave_encashment_amount, pending_salary_amount, notice_period_amount, other_entitlements_amount, unpaid_loans_deduction, assets_deduction, other_deductions, status) VALUES
+      (2140, 't1', '2140', ''), (6200, 't1', '6200', ''), (7100, 't1', '7100', '')`,
+      )
+      .execute(db);
+    await sql
+      .raw(
+        `INSERT INTO hr_end_of_service_settlements (id, tenant_id, settlement_no, employee_id, settlement_date, gratuity_amount, leave_encashment_amount, pending_salary_amount, notice_period_amount, other_entitlements_amount, unpaid_loans_deduction, assets_deduction, other_deductions, status) VALUES
       (1, 't1', 'EOS-1', 1, '2026-03-31', 6000, 1000, 3000, 0, 0, 9000, 3000, 2000, 'draft'),
-      (2, 't1', 'EOS-2', 1, '2026-03-31', 6000, 1000, 3000, 0, 0, 2000, 500, 0, 'draft')`).execute(db);
+      (2, 't1', 'EOS-2', 1, '2026-03-31', 6000, 1000, 3000, 0, 0, 2000, 500, 0, 'draft')`,
+      )
+      .execute(db);
 
     const posting = new AccountingPostingService(FOUNDATION_STUB as never);
     // Expected values from the saved original, so this read does not
     // inflate the absorption counter.
     const expectedOver = (originalAbsorption as typeof calculateSettlementAbsorption)({
-      gratuityAmount: 6000, leaveEncashmentAmount: 1000, pendingSalaryAmount: 3000,
-      noticePeriodAmount: 0, otherEntitlementsAmount: 0,
-      unpaidLoansDeduction: 9000, assetsDeduction: 3000, otherDeductions: 2000, minorUnits: 2,
+      gratuityAmount: 6000,
+      leaveEncashmentAmount: 1000,
+      pendingSalaryAmount: 3000,
+      noticePeriodAmount: 0,
+      otherEntitlementsAmount: 0,
+      unpaidLoansDeduction: 9000,
+      assetsDeduction: 3000,
+      otherDeductions: 2000,
+      minorUnits: 2,
     });
     assert.equal(expectedOver.appliedLoans, 5000, 'engine caps loans at the remaining pool');
     assert.equal(expectedOver.netPayable, 0, 'engine net payable is zero when over-absorbed');
@@ -221,21 +277,37 @@ async function main(): Promise<void> {
     );
     assert.equal(resOver.posted, true);
     assert.equal(absorptionEngineCalls, 1, 'over-absorbed posting calls the absorption engine once');
-    const linesOver = await db.selectFrom('journal_entry_lines').selectAll().execute() as unknown as Array<{ journal_entry_id: number; account_id: number; debit: string; credit: string }>;
+    const linesOver = (await db.selectFrom('journal_entry_lines').selectAll().execute()) as unknown as Array<{
+      journal_entry_id: number;
+      account_id: number;
+      debit: string;
+      credit: string;
+    }>;
     const overEntryId = Number(resOver.journalEntryId);
     const byAccountOver = new Map<number, { debit: number; credit: number }>();
     let totalDebitOver = 0;
     let totalCreditOver = 0;
     for (const line of linesOver.filter((l) => Number(l.journal_entry_id) === overEntryId)) {
       const prev = byAccountOver.get(line.account_id) || { debit: 0, credit: 0 };
-      byAccountOver.set(line.account_id, { debit: prev.debit + Number(line.debit), credit: prev.credit + Number(line.credit) });
+      byAccountOver.set(line.account_id, {
+        debit: prev.debit + Number(line.debit),
+        credit: prev.credit + Number(line.credit),
+      });
       totalDebitOver += Number(line.debit);
       totalCreditOver += Number(line.credit);
     }
     assert.equal(totalDebitOver, totalCreditOver, 'over-absorbed journal balances');
-    assert.equal(byAccountOver.get(6200)?.debit, expectedOver.totalEntitlements, 'Dr 6200 equals engine total entitlements');
+    assert.equal(
+      byAccountOver.get(6200)?.debit,
+      expectedOver.totalEntitlements,
+      'Dr 6200 equals engine total entitlements',
+    );
     assert.equal(byAccountOver.get(1160)?.credit, expectedOver.appliedLoans, 'Cr 1160 equals engine applied loans');
-    assert.equal(byAccountOver.get(7100)?.credit, expectedOver.appliedAssets + expectedOver.appliedOther, 'Cr 7100 equals engine applied assets + other');
+    assert.equal(
+      byAccountOver.get(7100)?.credit,
+      expectedOver.appliedAssets + expectedOver.appliedOther,
+      'Cr 7100 equals engine applied assets + other',
+    );
     assert.equal(byAccountOver.has(2140), false, 'no 2140 leg when net payable is zero');
 
     const resNormal = await withTimeout(
@@ -245,18 +317,28 @@ async function main(): Promise<void> {
     );
     assert.equal(resNormal.posted, true);
     assert.equal(absorptionEngineCalls, 2, 'normal posting calls the absorption engine once');
-    const linesNormal = await db.selectFrom('journal_entry_lines').selectAll().execute() as unknown as Array<{ journal_entry_id: number; account_id: number; debit: string; credit: string }>;
+    const linesNormal = (await db.selectFrom('journal_entry_lines').selectAll().execute()) as unknown as Array<{
+      journal_entry_id: number;
+      account_id: number;
+      debit: string;
+      credit: string;
+    }>;
     const normalEntryId = Number(resNormal.journalEntryId);
     const byAccountNormal = new Map<number, { debit: number; credit: number }>();
     for (const line of linesNormal.filter((l) => Number(l.journal_entry_id) === normalEntryId)) {
       const prev = byAccountNormal.get(line.account_id) || { debit: 0, credit: 0 };
-      byAccountNormal.set(line.account_id, { debit: prev.debit + Number(line.debit), credit: prev.credit + Number(line.credit) });
+      byAccountNormal.set(line.account_id, {
+        debit: prev.debit + Number(line.debit),
+        credit: prev.credit + Number(line.credit),
+      });
     }
     assert.equal(byAccountNormal.get(6200)?.debit, 10000, 'Dr 6200 total entitlements');
     assert.equal(byAccountNormal.get(1160)?.credit, 2000, 'Cr 1160 applied loans');
     assert.equal(byAccountNormal.get(7100)?.credit, 500, 'Cr 7100 applied assets');
     assert.equal(byAccountNormal.get(2140)?.credit, 7500, 'Cr 2140 net payable');
-    console.log('payroll-eos-dedup.spec: ok (delay 241.07 / 60.27 / 321.43 / 0, engine calls 3, strict 0; EOS over-absorbed net 0, normal Cr 2140 7500, absorption calls 2)');
+    console.log(
+      'payroll-eos-dedup.spec: ok (delay 241.07 / 60.27 / 321.43 / 0, engine calls 3, strict 0; EOS over-absorbed net 0, normal Cr 2140 7500, absorption calls 2)',
+    );
   } finally {
     if (originalDelay) payrollEngineModule.calculateProgressiveDelayDeduction = originalDelay;
     if (originalAbsorption) eosEngineModule.calculateSettlementAbsorption = originalAbsorption;
@@ -266,5 +348,8 @@ async function main(): Promise<void> {
 
 main().then(
   () => process.exit(0),
-  (error) => { console.error(error); process.exit(1); },
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
 );

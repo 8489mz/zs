@@ -67,21 +67,44 @@ const RECEIVER_PASSWORD = 'receiver-password';
 const APPROVER_PASSWORD = 'approver-password';
 const MANAGER_PIN = '2468';
 const REASON = 'Two units lost in transit';
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
-const CASHIER_AUTH = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 3, username: 'cashier', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
+const CASHIER_AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'cashier',
+  userId: 3,
+  username: 'cashier',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 
 async function seedProduct(db: Kysely<Database>, id: number, qty: number, cost: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(db);
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(
+    db,
+  );
 }
 
-async function makeTransfer(service: InventoryTransferService, items: Array<{ productId: number; qty: number }>): Promise<number> {
-  const res = await service.createStockTransfer({ fromLocationId: 1, toLocationId: 2, items } as never, AUTH) as any;
+async function makeTransfer(
+  service: InventoryTransferService,
+  items: Array<{ productId: number; qty: number }>,
+): Promise<number> {
+  const res = (await service.createStockTransfer({ fromLocationId: 1, toLocationId: 2, items } as never, AUTH)) as any;
   return Number(res.transferId);
 }
 
 async function transferItemId(db: Kysely<Database>, transferId: number, productId: number): Promise<number> {
-  const row = await sql<{ id: number }>`SELECT id FROM stock_transfer_items WHERE transfer_id = ${transferId} AND product_id = ${productId}`.execute(db);
+  const row = await sql<{
+    id: number;
+  }>`SELECT id FROM stock_transfer_items WHERE transfer_id = ${transferId} AND product_id = ${productId}`.execute(db);
   return Number(row.rows[0].id);
 }
 
@@ -91,29 +114,44 @@ async function transferStatus(db: Kysely<Database>, transferId: number): Promise
 }
 
 async function lossCount(db: Kysely<Database>, transferId: number): Promise<number> {
-  const row = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM stock_movements WHERE reference_id = ${transferId} AND movement_type = 'transfer_transit_loss'`.execute(db);
+  const row = await sql<{
+    n: string;
+  }>`SELECT COUNT(*) AS n FROM stock_movements WHERE reference_id = ${transferId} AND movement_type = 'transfer_transit_loss'`.execute(
+    db,
+  );
   return Number(row.rows[0].n);
 }
 
 async function latestAuditDetails(db: Kysely<Database>): Promise<string> {
-  const row = await sql<{ details: string }>`SELECT details FROM audit_logs WHERE action = 'استلام تحويل مخزون' ORDER BY id DESC LIMIT 1`.execute(db);
+  const row = await sql<{
+    details: string;
+  }>`SELECT details FROM audit_logs WHERE action = 'استلام تحويل مخزون' ORDER BY id DESC LIMIT 1`.execute(db);
   return row.rows.length ? String(row.rows[0].details) : '';
 }
 
 async function lossNote(db: Kysely<Database>, transferId: number): Promise<string> {
-  const row = await sql<{ note: string }>`SELECT note FROM stock_movements WHERE reference_id = ${transferId} AND movement_type = 'transfer_transit_loss'`.execute(db);
+  const row = await sql<{
+    note: string;
+  }>`SELECT note FROM stock_movements WHERE reference_id = ${transferId} AND movement_type = 'transfer_transit_loss'`.execute(
+    db,
+  );
   return row.rows.length ? String(row.rows[0].note) : '';
 }
 
 async function itemReason(db: Kysely<Database>, itemId: number): Promise<string> {
-  const row = await sql<{ variance_reason: string }>`SELECT variance_reason FROM stock_transfer_items WHERE id = ${itemId}`.execute(db);
+  const row = await sql<{
+    variance_reason: string;
+  }>`SELECT variance_reason FROM stock_transfer_items WHERE id = ${itemId}`.execute(db);
   return String(row.rows[0].variance_reason);
 }
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new InventoryTransferService(
     db as never,
@@ -165,8 +203,12 @@ async function main(): Promise<void> {
     const receiverRecord = await createPasswordRecord(RECEIVER_PASSWORD);
     const approverRecord = await createPasswordRecord(APPROVER_PASSWORD);
     const cashierRecord = await createPasswordRecord('cashier-password');
-    await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${receiverRecord.hash}, ${receiverRecord.salt}, true)`.execute(db);
-    await sql`INSERT INTO users VALUES (3, 't1', 'cashier', 1, 'cashier', ${cashierRecord.hash}, ${cashierRecord.salt}, true)`.execute(db);
+    await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${receiverRecord.hash}, ${receiverRecord.salt}, true)`.execute(
+      db,
+    );
+    await sql`INSERT INTO users VALUES (3, 't1', 'cashier', 1, 'cashier', ${cashierRecord.hash}, ${cashierRecord.salt}, true)`.execute(
+      db,
+    );
     const pinHash = await hashManagerPin(MANAGER_PIN);
     await sql`INSERT INTO settings VALUES ('t1', 'managerPin', ${JSON.stringify(pinHash)})`.execute(db);
 
@@ -176,7 +218,10 @@ async function main(): Promise<void> {
     await seedProduct(db, 1, 100, 10);
     const t1 = await makeTransfer(service, [{ productId: 1, qty: 10 }]);
     const t1item = await transferItemId(db, t1, 1);
-    await service.receiveStockTransfer(t1, AUTH, { items: [{ itemId: t1item, receivedQty: 8 }], varianceReason: REASON } as never);
+    await service.receiveStockTransfer(t1, AUTH, {
+      items: [{ itemId: t1item, receivedQty: 8 }],
+      varianceReason: REASON,
+    } as never);
     assert.equal(await transferStatus(db, t1), 'received');
     assert.equal(await lossCount(db, t1), 1);
     assert.equal(await itemReason(db, t1item), REASON);
@@ -197,7 +242,11 @@ async function main(): Promise<void> {
     const t2 = await makeTransfer(service, [{ productId: 2, qty: 10 }]);
     const t2item = await transferItemId(db, t2, 2);
     await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item, receivedQty: 8 }], varianceReason: REASON, approvalSecret: RECEIVER_PASSWORD } as never),
+      service.receiveStockTransfer(t2, AUTH, {
+        items: [{ itemId: t2item, receivedQty: 8 }],
+        varianceReason: REASON,
+        approvalSecret: RECEIVER_PASSWORD,
+      } as never),
       /TRANSFER_SHORTAGE_SELF_APPROVAL/,
     );
     assert.equal(await transferStatus(db, t2), 'sent');
@@ -206,7 +255,10 @@ async function main(): Promise<void> {
     // Case A3: solo admin with a short reason and no secret is still
     // refused — the >= 8-char reason is a real control that stays.
     await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item, receivedQty: 8 }], varianceReason: 'lost' } as never),
+      service.receiveStockTransfer(t2, AUTH, {
+        items: [{ itemId: t2item, receivedQty: 8 }],
+        varianceReason: 'lost',
+      } as never),
       /TRANSFER_SHORTAGE_REASON_REQUIRED/,
     );
     assert.equal(await transferStatus(db, t2), 'sent');
@@ -215,7 +267,11 @@ async function main(): Promise<void> {
     // Case A4: the shared manager PIN still cannot satisfy the gate,
     // even for a solo admin — the PIN identifies no approver.
     await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item, receivedQty: 8 }], varianceReason: REASON, approvalSecret: MANAGER_PIN } as never),
+      service.receiveStockTransfer(t2, AUTH, {
+        items: [{ itemId: t2item, receivedQty: 8 }],
+        varianceReason: REASON,
+        approvalSecret: MANAGER_PIN,
+      } as never),
       /TRANSFER_SHORTAGE_APPROVAL_REQUIRED/,
     );
     assert.equal(await transferStatus(db, t2), 'sent');
@@ -224,18 +280,27 @@ async function main(): Promise<void> {
     // Case A5: a non-admin receiver can never use the override — a
     // cashier receiving with no secret is still refused.
     await assert.rejects(
-      service.receiveStockTransfer(t2, CASHIER_AUTH, { items: [{ itemId: t2item, receivedQty: 8 }], varianceReason: REASON } as never),
+      service.receiveStockTransfer(t2, CASHIER_AUTH, {
+        items: [{ itemId: t2item, receivedQty: 8 }],
+        varianceReason: REASON,
+      } as never),
       /TRANSFER_SHORTAGE_APPROVAL_REQUIRED/,
     );
     assert.equal(await transferStatus(db, t2), 'sent');
     assert.equal(await lossCount(db, t2), 0);
 
     // Phase B: a SECOND active admin exists — the old rule stands.
-    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(db);
+    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(
+      db,
+    );
 
     // Case B1: self-approval is still refused when a second admin exists.
     await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item, receivedQty: 8 }], varianceReason: REASON, approvalSecret: RECEIVER_PASSWORD } as never),
+      service.receiveStockTransfer(t2, AUTH, {
+        items: [{ itemId: t2item, receivedQty: 8 }],
+        varianceReason: REASON,
+        approvalSecret: RECEIVER_PASSWORD,
+      } as never),
       /TRANSFER_SHORTAGE_SELF_APPROVAL/,
     );
     assert.equal(await transferStatus(db, t2), 'sent');
@@ -243,7 +308,10 @@ async function main(): Promise<void> {
 
     // Case B2: no secret is still refused when a second admin exists.
     await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item, receivedQty: 8 }], varianceReason: REASON } as never),
+      service.receiveStockTransfer(t2, AUTH, {
+        items: [{ itemId: t2item, receivedQty: 8 }],
+        varianceReason: REASON,
+      } as never),
       /TRANSFER_SHORTAGE_APPROVAL_REQUIRED/,
     );
     assert.equal(await transferStatus(db, t2), 'sent');
@@ -251,13 +319,20 @@ async function main(): Promise<void> {
 
     // Case B3: a DIFFERENT admin approving works as before, with NO
     // override stamp in the audit log or the shrinkage note.
-    await service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item, receivedQty: 8 }], varianceReason: REASON, approvalSecret: APPROVER_PASSWORD } as never);
+    await service.receiveStockTransfer(t2, AUTH, {
+      items: [{ itemId: t2item, receivedQty: 8 }],
+      varianceReason: REASON,
+      approvalSecret: APPROVER_PASSWORD,
+    } as never);
     assert.equal(await transferStatus(db, t2), 'received');
     assert.equal(await lossCount(db, t2), 1);
     assert.equal(await itemReason(db, t2item), REASON);
     const audit2 = await latestAuditDetails(db);
     assert.ok(!audit2.includes('اعتماد فاقد منفرد'), 'the two-admin path must carry no override stamp');
-    assert.ok(!(await lossNote(db, t2)).includes('اعتماد منفرد'), 'the two-admin shrinkage note must carry no override stamp');
+    assert.ok(
+      !(await lossNote(db, t2)).includes('اعتماد منفرد'),
+      'the two-admin shrinkage note must carry no override stamp',
+    );
 
     // Case B4: an INACTIVE second admin does not count — once user 2
     // is deactivated, the solo admin may accept alone again, stamped.
@@ -265,7 +340,10 @@ async function main(): Promise<void> {
     await seedProduct(db, 3, 100, 10);
     const t3 = await makeTransfer(service, [{ productId: 3, qty: 10 }]);
     const t3item = await transferItemId(db, t3, 3);
-    await service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 7 }], varianceReason: REASON } as never);
+    await service.receiveStockTransfer(t3, AUTH, {
+      items: [{ itemId: t3item, receivedQty: 7 }],
+      varianceReason: REASON,
+    } as never);
     assert.equal(await transferStatus(db, t3), 'received');
     assert.equal(await lossCount(db, t3), 1);
     const audit3 = await latestAuditDetails(db);
@@ -275,7 +353,8 @@ async function main(): Promise<void> {
 
     // ---------- Wiring: this spec is in both critical lists, in identical order (326 specs — the solo-admin-carrier-invoice-override spec is the last entry). ----------
     {
-      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+        .specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));

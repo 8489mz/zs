@@ -68,20 +68,39 @@ import { Database } from '../../src/database/database.types';
 import { SalesOrdersService } from '../../src/modules/sales/services/sales-orders.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function locationReserved(db: Kysely<Database>, locationId: number, productId: number): Promise<number> {
-  const row = await db.selectFrom('product_location_stock').select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty')).where('product_id', '=', productId).where('location_id', '=', locationId).executeTakeFirst();
+  const row = await db
+    .selectFrom('product_location_stock')
+    .select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty'))
+    .where('product_id', '=', productId)
+    .where('location_id', '=', locationId)
+    .executeTakeFirst();
   return row ? Number(row.reserved_qty) : 0;
 }
 
 async function globalReserved(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await db.selectFrom('products').select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty')).where('id', '=', productId).executeTakeFirstOrThrow();
+  const row = await db
+    .selectFrom('products')
+    .select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty'))
+    .where('id', '=', productId)
+    .executeTakeFirstOrThrow();
   return Number(row.reserved_qty);
 }
 
 async function orderCount(db: Kysely<Database>): Promise<number> {
-  const row = await db.selectFrom('sales_orders').select(sql<number>`count(*)::int`.as('n')).executeTakeFirstOrThrow();
+  const row = await db
+    .selectFrom('sales_orders')
+    .select(sql<number>`count(*)::int`.as('n'))
+    .executeTakeFirstOrThrow();
   return Number(row.n);
 }
 
@@ -110,19 +129,78 @@ async function main() {
       CREATE TABLE operation_executions (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, idempotency_key text NOT NULL, operation_type text NOT NULL, status text NOT NULL, request_hash text NOT NULL, document_id text, response_payload text, error_code text, created_at timestamptz NOT NULL DEFAULT NOW(), updated_at timestamptz NOT NULL DEFAULT NOW(), completed_at timestamptz);
     `);
 
-    await db.insertInto('branches').values({ id: 1, tenant_id: 't1', account_id: 'a1', default_stock_location_id: 10 } as any).execute();
-    await db.insertInto('stock_locations').values([
-      { id: 10, tenant_id: 't1', account_id: 'a1', name: 'مخزن البيع الأساسي', branch_id: 1, location_type: 'branch_stock', is_active: true },
-      { id: 20, tenant_id: 't1', account_id: 'a1', name: 'مخزن اختبار تحويل', branch_id: 1, location_type: 'internal_warehouse', is_active: true },
-      { id: 30, tenant_id: 't1', account_id: 'a1', name: 'مخزن موقوف', branch_id: 1, location_type: 'internal_warehouse', is_active: false },
-    ] as any).execute();
+    await db
+      .insertInto('branches')
+      .values({ id: 1, tenant_id: 't1', account_id: 'a1', default_stock_location_id: 10 } as any)
+      .execute();
+    await db
+      .insertInto('stock_locations')
+      .values([
+        {
+          id: 10,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'مخزن البيع الأساسي',
+          branch_id: 1,
+          location_type: 'branch_stock',
+          is_active: true,
+        },
+        {
+          id: 20,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'مخزن اختبار تحويل',
+          branch_id: 1,
+          location_type: 'internal_warehouse',
+          is_active: true,
+        },
+        {
+          id: 30,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'مخزن موقوف',
+          branch_id: 1,
+          location_type: 'internal_warehouse',
+          is_active: false,
+        },
+      ] as any)
+      .execute();
     // Trial shape: global 15 = 5 in the default warehouse + 10 in the transfer warehouse.
     for (const productId of [1, 2, 3]) {
-      await db.insertInto('products').values({ id: productId, tenant_id: 't1', account_id: 'a1', name: 'اختبار صنف استيراد 001', stock_qty: 15, reserved_qty: 0 } as any).execute();
-      await db.insertInto('product_location_stock').values([
-        { tenant_id: 't1', account_id: 'a1', product_id: productId, branch_id: 1, location_id: 10, qty: 5, reserved_qty: 0 },
-        { tenant_id: 't1', account_id: 'a1', product_id: productId, branch_id: 1, location_id: 20, qty: 10, reserved_qty: 0 },
-      ] as any).execute();
+      await db
+        .insertInto('products')
+        .values({
+          id: productId,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'اختبار صنف استيراد 001',
+          stock_qty: 15,
+          reserved_qty: 0,
+        } as any)
+        .execute();
+      await db
+        .insertInto('product_location_stock')
+        .values([
+          {
+            tenant_id: 't1',
+            account_id: 'a1',
+            product_id: productId,
+            branch_id: 1,
+            location_id: 10,
+            qty: 5,
+            reserved_qty: 0,
+          },
+          {
+            tenant_id: 't1',
+            account_id: 'a1',
+            product_id: productId,
+            branch_id: 1,
+            location_id: 20,
+            qty: 10,
+            reserved_qty: 0,
+          },
+        ] as any)
+        .execute();
     }
 
     const service = new SalesOrdersService(db as any, {} as any);
@@ -131,14 +209,18 @@ async function main() {
     const avail20 = await service.getLocationAvailability(1, 20, AUTH);
     assert.equal(Number((avail20 as any).availableAtLocation), 10);
     assert.equal(Number((avail20 as any).globalAvailable), 15);
-    assert.equal(Number((await service.getLocationAvailability(1, 10, AUTH) as any).availableAtLocation), 5);
-    assert.equal(Number((await service.getLocationAvailability(1, null, AUTH) as any).availableAtLocation), 15);
+    assert.equal(Number(((await service.getLocationAvailability(1, 10, AUTH)) as any).availableAtLocation), 5);
+    assert.equal(Number(((await service.getLocationAvailability(1, null, AUTH)) as any).availableAtLocation), 15);
 
     // 2. Order in the transfer warehouse approves and reserves THERE.
     const created = await service.createOrder(createDto(1, 10, { warehouseLocationId: 20 }), AUTH);
     const order1Id = Number((created as any).order.id);
     assert.equal((created as any).order.status, 'confirmed');
-    const order1Row = await db.selectFrom('sales_orders').select(['status', 'warehouse_location_id']).where('id', '=', order1Id).executeTakeFirstOrThrow();
+    const order1Row = await db
+      .selectFrom('sales_orders')
+      .select(['status', 'warehouse_location_id'])
+      .where('id', '=', order1Id)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(order1Row.warehouse_location_id), 20);
     assert.equal(await locationReserved(db, 20, 1), 10);
     assert.equal(await locationReserved(db, 10, 1), 0);
@@ -149,8 +231,8 @@ async function main() {
     assert.equal(Number((details as any).items[0].available_qty), 0);
 
     // 9 (checked here, while the reservation is live): display tracks the reservation in the same warehouse only.
-    assert.equal(Number((await service.getLocationAvailability(1, 20, AUTH) as any).availableAtLocation), 0);
-    assert.equal(Number((await service.getLocationAvailability(1, 10, AUTH) as any).availableAtLocation), 5);
+    assert.equal(Number(((await service.getLocationAvailability(1, 20, AUTH)) as any).availableAtLocation), 0);
+    assert.equal(Number(((await service.getLocationAvailability(1, 10, AUTH)) as any).availableAtLocation), 5);
 
     // 4. Same order against the default warehouse fails naming that warehouse's 5.
     const before = await orderCount(db);
@@ -185,7 +267,7 @@ async function main() {
     assert.equal(await locationReserved(db, 20, 3), 0);
     assert.equal(await locationReserved(db, 10, 3), 0);
     assert.equal(await globalReserved(db, 3), 0);
-    assert.equal(Number((await service.getLocationAvailability(3, 20, AUTH) as any).availableAtLocation), 10);
+    assert.equal(Number(((await service.getLocationAvailability(3, 20, AUTH)) as any).availableAtLocation), 10);
 
     // 8. Unknown or inactive warehouse is rejected naming the warehouse.
     await assert.rejects(
@@ -217,8 +299,17 @@ async function main() {
     assert.equal(convertCalls, 1);
     assert.equal(Number(lastPayload.locationId), 20);
     assert.deepEqual(lastPayload.items, [{ productId: 1, qty: 10, price: 120, lineDiscount: 0, unitName: undefined }]);
-    assert.deepEqual(lastRelease, { salesOrderId: order1Id, branchId: 1, locationId: 20, items: [{ productId: 1, qty: 10 }] });
-    const convertedRow = await db.selectFrom('sales_orders').select(['status', 'sale_id']).where('id', '=', order1Id).executeTakeFirstOrThrow();
+    assert.deepEqual(lastRelease, {
+      salesOrderId: order1Id,
+      branchId: 1,
+      locationId: 20,
+      items: [{ productId: 1, qty: 10 }],
+    });
+    const convertedRow = await db
+      .selectFrom('sales_orders')
+      .select(['status', 'sale_id'])
+      .where('id', '=', order1Id)
+      .executeTakeFirstOrThrow();
     assert.equal(convertedRow.status, 'converted');
     assert.equal(Number(convertedRow.sale_id), 501);
 

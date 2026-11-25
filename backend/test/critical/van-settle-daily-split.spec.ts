@@ -116,36 +116,116 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('settings').values([
-    { tenant_id: TENANT, key: 'currency', value: 'EGP' },
-    { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
-  ]).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values([
-    { id: 1, tenant_id: TENANT, username: 'sys', phone: null, is_active: true },
-    { id: 2, tenant_id: TENANT, username: 'sup', phone: null, role: 'admin', is_active: true },
-    { id: 3, tenant_id: TENANT, username: 'rep2', phone: '01000000001', role: 'admin', is_active: true },
-  ]).execute();
+  await anyDb
+    .insertInto('settings')
+    .values([
+      { tenant_id: TENANT, key: 'currency', value: 'EGP' },
+      { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values([
+      { id: 1, tenant_id: TENANT, username: 'sys', phone: null, is_active: true },
+      { id: 2, tenant_id: TENANT, username: 'sup', phone: null, role: 'admin', is_active: true },
+      { id: 3, tenant_id: TENANT, username: 'rep2', phone: '01000000001', role: 'admin', is_active: true },
+    ])
+    .execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [1160, '1160', 'asset'], [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'],
-    [5100, '5100', 'expense'], [6400, '6400', 'expense'], [7100, '7100', 'revenue'], [7200, '7200', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [1160, '1160', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
+    [6400, '6400', 'expense'],
+    [7100, '7100', 'revenue'],
+    [7200, '7200', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-    lock_date_all: null, lock_date_non_adviser: null, lock_date_tax: null,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', phone: null, van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 2', phone: '01000000001', van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('cashier_shifts').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'CS-1', opened_by: 2, opening_cash: 0, status: 'open', branch_id: null, location_id: null }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+      lock_date_all: null,
+      lock_date_non_adviser: null,
+      lock_date_tax: null,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 1',
+      phone: null,
+      van_location_id: 20,
+      is_van_rep: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep 2',
+      phone: '01000000001',
+      van_location_id: 20,
+      is_van_rep: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'CS-1',
+      opened_by: 2,
+      opening_cash: 0,
+      status: 'open',
+      branch_id: null,
+      location_id: null,
+    })
+    .execute();
 }
 
 async function seedTrip(
@@ -153,51 +233,162 @@ async function seedTrip(
   id: number,
   opts: { repId?: number; cashCollected: number; businessDay?: string | null; openedAt?: string; status?: string },
 ): Promise<void> {
-  await (db as any).insertInto('van_sales_trips').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: opts.repId ?? 1, vehicle_id: null,
-    shift_name: null, start_odometer: 100, end_odometer: null, distance_km: null,
-    van_location_id: 20, source_warehouse_id: 10, status: opts.status ?? 'open',
-    settlement_status: 'open', loaded_amount: 0, sales_amount: 0, cash_collected: opts.cashCollected,
-    credit_sales: 0, returns_amount: 0, cash_refunds: 0, total_instapay_sales: 0,
-    total_instapay_collections: 0, variance: null, stock_variance_details: null, notes: null,
-    night_stock_approved_by: null, night_stock_notes: null,
-    business_day: opts.businessDay ?? null, submitted_per_day_cash: null,
-    opened_at: opts.openedAt ?? '2026-11-09T08:00:00+02:00',
-  }).execute();
+  await (db as any)
+    .insertInto('van_sales_trips')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: opts.repId ?? 1,
+      vehicle_id: null,
+      shift_name: null,
+      start_odometer: 100,
+      end_odometer: null,
+      distance_km: null,
+      van_location_id: 20,
+      source_warehouse_id: 10,
+      status: opts.status ?? 'open',
+      settlement_status: 'open',
+      loaded_amount: 0,
+      sales_amount: 0,
+      cash_collected: opts.cashCollected,
+      credit_sales: 0,
+      returns_amount: 0,
+      cash_refunds: 0,
+      total_instapay_sales: 0,
+      total_instapay_collections: 0,
+      variance: null,
+      stock_variance_details: null,
+      notes: null,
+      night_stock_approved_by: null,
+      night_stock_notes: null,
+      business_day: opts.businessDay ?? null,
+      submitted_per_day_cash: null,
+      opened_at: opts.openedAt ?? '2026-11-09T08:00:00+02:00',
+    })
+    .execute();
 }
 
-async function seedCashSale(db: Kysely<Database>, id: number, tripId: number, total: number, createdAt: string): Promise<void> {
-  await (db as any).insertInto('sales').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `INV-${id}`, total, subtotal: total,
-    discount: 0, tax_rate: 0, tax_amount: 0, delivery_fee: 0, delivery_fee_mode: 'per_order',
-    service_charge: 0, tip_amount: 0, paid_amount: total, store_credit_used: 0, prices_include_tax: true,
-    status: 'posted', payment_type: 'cash', payment_channel: 'cash', collection_status: 'prepaid_by_rep',
-    customer_id: null, branch_id: null, location_id: null, created_by: 2, delivery_rep_id: 1,
-    van_trip_id: tripId, sale_origin: 'van_field', exchange_return_id: null,
-    is_credit_overridden: false, credit_override_by_user_id: null, credit_override_reason: null,
-    transfer_reference: null, transfer_receipt_url: null, recipient_name: null, recipient_phone: null,
-    recipient_role: null, recipient_signature: null, note: null, delivery_gps_lat: null,
-    delivery_gps_lng: null, delivery_proof_photo: null, packaging_breakdown: null,
-    created_at: createdAt, received_at: createdAt,
-  }).execute();
+async function seedCashSale(
+  db: Kysely<Database>,
+  id: number,
+  tripId: number,
+  total: number,
+  createdAt: string,
+): Promise<void> {
+  await (db as any)
+    .insertInto('sales')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `INV-${id}`,
+      total,
+      subtotal: total,
+      discount: 0,
+      tax_rate: 0,
+      tax_amount: 0,
+      delivery_fee: 0,
+      delivery_fee_mode: 'per_order',
+      service_charge: 0,
+      tip_amount: 0,
+      paid_amount: total,
+      store_credit_used: 0,
+      prices_include_tax: true,
+      status: 'posted',
+      payment_type: 'cash',
+      payment_channel: 'cash',
+      collection_status: 'prepaid_by_rep',
+      customer_id: null,
+      branch_id: null,
+      location_id: null,
+      created_by: 2,
+      delivery_rep_id: 1,
+      van_trip_id: tripId,
+      sale_origin: 'van_field',
+      exchange_return_id: null,
+      is_credit_overridden: false,
+      credit_override_by_user_id: null,
+      credit_override_reason: null,
+      transfer_reference: null,
+      transfer_receipt_url: null,
+      recipient_name: null,
+      recipient_phone: null,
+      recipient_role: null,
+      recipient_signature: null,
+      note: null,
+      delivery_gps_lat: null,
+      delivery_gps_lng: null,
+      delivery_proof_photo: null,
+      packaging_breakdown: null,
+      created_at: createdAt,
+      received_at: createdAt,
+    })
+    .execute();
 }
 
-async function seedCollection(db: Kysely<Database>, id: number, tripId: number, amount: number, createdAt: string): Promise<void> {
-  await (db as any).insertInto('customer_payments').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, customer_id: 1, amount, payment_channel: 'cash',
-    note: 'collection', branch_id: null, location_id: null, job_id: null, created_by: 2,
-    transfer_reference: null, instapay_address: null, transfer_receipt_url: null,
-    van_trip_id: tripId, rep_id: 1, client_tx_id: null, created_at: createdAt,
-  }).execute();
+async function seedCollection(
+  db: Kysely<Database>,
+  id: number,
+  tripId: number,
+  amount: number,
+  createdAt: string,
+): Promise<void> {
+  await (db as any)
+    .insertInto('customer_payments')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      customer_id: 1,
+      amount,
+      payment_channel: 'cash',
+      note: 'collection',
+      branch_id: null,
+      location_id: null,
+      job_id: null,
+      created_by: 2,
+      transfer_reference: null,
+      instapay_address: null,
+      transfer_receipt_url: null,
+      van_trip_id: tripId,
+      rep_id: 1,
+      client_tx_id: null,
+      created_at: createdAt,
+    })
+    .execute();
 }
 
-async function seedCashRefund(db: Kysely<Database>, id: number, tripId: number, total: number, createdAt: string): Promise<void> {
-  await (db as any).insertInto('van_field_returns').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `RET-${id}`, trip_id: tripId, rep_id: 1,
-    customer_id: 1, sale_id: null, status: 'approved', return_reason: 'damaged',
-    refund_method: 'cash', total_amount: total, items_json: null, notes: null,
-    rejection_reason: null, approved_by: 2, approved_at: createdAt, created_at: createdAt,
-  }).execute();
+async function seedCashRefund(
+  db: Kysely<Database>,
+  id: number,
+  tripId: number,
+  total: number,
+  createdAt: string,
+): Promise<void> {
+  await (db as any)
+    .insertInto('van_field_returns')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `RET-${id}`,
+      trip_id: tripId,
+      rep_id: 1,
+      customer_id: 1,
+      sale_id: null,
+      status: 'approved',
+      return_reason: 'damaged',
+      refund_method: 'cash',
+      total_amount: total,
+      items_json: null,
+      notes: null,
+      rejection_reason: null,
+      approved_by: 2,
+      approved_at: createdAt,
+      created_at: createdAt,
+    })
+    .execute();
 }
 
 function buildLifecycle(db: Kysely<Database>): VanTripLifecycleService {
@@ -217,7 +408,7 @@ function buildLifecycle(db: Kysely<Database>): VanTripLifecycleService {
     deductVanSalePharmacyBatches: async () => [],
     moveVanInventoryBatches: async () => 0,
     deductVanSaleInventoryBatches: async () => [],
-    resolveSystemAuthContext: async () => ({ ...ADMIN, userId: 2 } as never),
+    resolveSystemAuthContext: async () => ({ ...ADMIN, userId: 2 }) as never,
     recordSuspicionEvent: async () => ({}),
     listRepServedCustomerIds: async () => new Set<number>(),
     resolveRepLinkedUserId: async () => null,
@@ -232,8 +423,11 @@ async function remittanceRows(db: Kysely<Database>, tripId?: number): Promise<an
   // The row's reference_id is the receiving SHIFT id, not the trip:
   // the trip is identified by the request key
   // 'rep-remittance:trip:{id}' (or '...:day:{YYYY-MM-DD}').
-  let q = (db as any).selectFrom('treasury_transactions').selectAll()
-    .where('tenant_id', '=', TENANT).where('txn_type', '=', 'rep_cash_remittance');
+  let q = (db as any)
+    .selectFrom('treasury_transactions')
+    .selectAll()
+    .where('tenant_id', '=', TENANT)
+    .where('txn_type', '=', 'rep_cash_remittance');
   if (tripId !== undefined) q = q.where('request_key', 'like', `rep-remittance:trip:${tripId}%`);
   return q.orderBy('id').execute();
 }
@@ -245,21 +439,39 @@ async function settlementRows(db: Kysely<Database>, entryType?: string): Promise
 }
 
 async function allocationRows(db: Kysely<Database>): Promise<any[]> {
-  return (db as any).selectFrom('settlement_allocations').selectAll().where('tenant_id', '=', TENANT).orderBy('id').execute();
+  return (db as any)
+    .selectFrom('settlement_allocations')
+    .selectAll()
+    .where('tenant_id', '=', TENANT)
+    .orderBy('id')
+    .execute();
 }
 
 async function journalForTrip(db: Kysely<Database>, tripId: number): Promise<{ entries: any[]; lines: any[] }> {
-  const entries = await (db as any).selectFrom('journal_entries').selectAll()
-    .where('tenant_id', '=', TENANT).where('source_type', '=', 'van_trip_settlement').where('source_id', '=', tripId).execute();
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .selectAll()
+    .where('tenant_id', '=', TENANT)
+    .where('source_type', '=', 'van_trip_settlement')
+    .where('source_id', '=', tripId)
+    .execute();
   const lines = entries.length
-    ? await (db as any).selectFrom('journal_entry_lines').selectAll().where('journal_entry_id', '=', Number(entries[0].id)).execute()
+    ? await (db as any)
+        .selectFrom('journal_entry_lines')
+        .selectAll()
+        .where('journal_entry_id', '=', Number(entries[0].id))
+        .execute()
     : [];
   return { entries, lines };
 }
 
 function lineFor(lines: any[], accountId: number): { debit: number; credit: number } {
-  return lines.filter((l) => Number(l.account_id) === accountId)
-    .reduce((acc, l) => ({ debit: acc.debit + Number(l.debit), credit: acc.credit + Number(l.credit) }), { debit: 0, credit: 0 });
+  return lines
+    .filter((l) => Number(l.account_id) === accountId)
+    .reduce((acc, l) => ({ debit: acc.debit + Number(l.debit), credit: acc.credit + Number(l.credit) }), {
+      debit: 0,
+      credit: 0,
+    });
 }
 
 function codeOf(err: unknown): string {
@@ -271,7 +483,13 @@ function dayOf(v: unknown): string {
   return String(v ?? '').slice(0, 10);
 }
 
-async function seedTwoDayTrip(db: Kysely<Database>, tripId: number, saleA: number, saleB: number, payment: number): Promise<void> {
+async function seedTwoDayTrip(
+  db: Kysely<Database>,
+  tripId: number,
+  saleA: number,
+  saleB: number,
+  payment: number,
+): Promise<void> {
   await seedTrip(db, tripId, { cashCollected: 3000, businessDay: D1 });
   await seedCashSale(db, saleA, tripId, 1000, '2026-11-09T10:00:00+02:00');
   await seedCashSale(db, saleB, tripId, 1500, '2026-11-10T11:00:00+02:00');
@@ -288,17 +506,31 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedTwoDayTrip(db, 1, 11, 12, 21);
       const service = buildLifecycle(db);
-      const res = await service.settleTrip(1, TENANT, ACCOUNT, {
-        tripId: 1, countedCash: 3000,
-        perDayCash: [{ businessDay: D1, countedCash: 1000 }, { businessDay: D2, countedCash: 2000 }],
-        unloadRemainingToWarehouse: false, endOdometer: 120,
-      }, ADMIN as never);
+      const res = await service.settleTrip(
+        1,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 1,
+          countedCash: 3000,
+          perDayCash: [
+            { businessDay: D1, countedCash: 1000 },
+            { businessDay: D2, countedCash: 2000 },
+          ],
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
+        },
+        ADMIN as never,
+      );
       assert.equal(res.dailySplit?.length, 2);
       assert.deepEqual(res.dailySplit?.[0], { businessDay: D1, due: 1000, countedCash: 1000, remittedCash: 1000 });
       assert.deepEqual(res.dailySplit?.[1], { businessDay: D2, due: 2000, countedCash: 2000, remittedCash: 2000 });
       const remits = await remittanceRows(db, 1);
       assert.equal(remits.length, 2);
-      assert.deepEqual(remits.map((r) => Number(r.amount)).sort((a, b) => a - b), [1000, 2000]);
+      assert.deepEqual(
+        remits.map((r) => Number(r.amount)).sort((a, b) => a - b),
+        [1000, 2000],
+      );
       assert.deepEqual(remits.map((r) => String(r.request_key)).sort(), [
         'rep-remittance:trip:1:day:2026-11-09',
         'rep-remittance:trip:1:day:2026-11-10',
@@ -319,7 +551,10 @@ async function main(): Promise<void> {
       assert.equal(Number(d1Allocs[0].amount), 1000);
       assert.equal(d1Allocs[0].customer_payment_id, null);
       assert.equal(d2Allocs.length, 2);
-      assert.deepEqual(d2Allocs.map((a) => Number(a.amount)).sort((a, b) => a - b), [500, 1500]);
+      assert.deepEqual(
+        d2Allocs.map((a) => Number(a.amount)).sort((a, b) => a - b),
+        [500, 1500],
+      );
       assert.ok(d2Allocs.some((a) => Number(a.sale_id) === 12 && Number(a.amount) === 1500));
       assert.ok(d2Allocs.some((a) => Number(a.customer_payment_id) === 21 && Number(a.amount) === 500));
       const { entries, lines } = await journalForTrip(db, 1);
@@ -330,9 +565,14 @@ async function main(): Promise<void> {
       const trip = await tripRow(db, 1);
       assert.equal(trip.status, 'settled');
       assert.equal(dayOf(trip.business_day), D1);
-      const ledgerCount = await (db as any).selectFrom('customer_ledger').select(sql`count(*)`.as('c')).executeTakeFirstOrThrow() as any;
+      const ledgerCount = (await (db as any)
+        .selectFrom('customer_ledger')
+        .select(sql`count(*)`.as('c'))
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(ledgerCount.c), 0);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. Per-day due read matches seeded sales + collections - returns.
@@ -353,7 +593,9 @@ async function main(): Promise<void> {
       assert.equal(due.days[1].due, 2000);
       assert.deepEqual(due.days[1].saleIds, [12]);
       assert.deepEqual(due.days[1].paymentIds, [21]);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. Multi-day trip settled as one lump is refused, nothing written.
@@ -364,16 +606,27 @@ async function main(): Promise<void> {
       await seedTwoDayTrip(db, 1, 11, 12, 21);
       const service = buildLifecycle(db);
       await assert.rejects(
-        service.settleTrip(1, TENANT, ACCOUNT, {
-          tripId: 1, countedCash: 3000, unloadRemainingToWarehouse: false, endOdometer: 120,
-        }, ADMIN as never),
+        service.settleTrip(
+          1,
+          TENANT,
+          ACCOUNT,
+          {
+            tripId: 1,
+            countedCash: 3000,
+            unloadRemainingToWarehouse: false,
+            endOdometer: 120,
+          },
+          ADMIN as never,
+        ),
         (err: any) => codeOf(err).includes('SETTLEMENT_REQUIRES_PER_DAY_BREAKDOWN'),
       );
       const trip = await tripRow(db, 1);
       assert.equal(trip.status, 'open');
       assert.equal((await remittanceRows(db, 1)).length, 0);
       assert.equal((await journalForTrip(db, 1)).entries.length, 0);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 4. UTC-midnight trap: 23:30Z is the NEXT Cairo day. Two sales
@@ -392,9 +645,18 @@ async function main(): Promise<void> {
       assert.equal(due.days[0].businessDay, D2);
       assert.equal(due.days[0].due, 1500);
       assert.deepEqual(due.days[0].saleIds, [13, 14]);
-      const res = await service.settleTrip(1, TENANT, ACCOUNT, {
-        tripId: 2, countedCash: 1500, unloadRemainingToWarehouse: false, endOdometer: 120,
-      }, ADMIN as never);
+      const res = await service.settleTrip(
+        1,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 2,
+          countedCash: 1500,
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
+        },
+        ADMIN as never,
+      );
       assert.equal(res.dailySplit?.length, 1);
       const remits = await remittanceRows(db, 2);
       assert.equal(remits.length, 1);
@@ -404,7 +666,9 @@ async function main(): Promise<void> {
       assert.equal(dayOf(settlements[0].business_day), D2);
       const trip = await tripRow(db, 2);
       assert.equal(dayOf(trip.business_day), D2);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 5. Double-settle: the second call finds no open trip
@@ -416,18 +680,38 @@ async function main(): Promise<void> {
       await seedTrip(db, 3, { cashCollected: 700, businessDay: D1 });
       await seedCashSale(db, 15, 3, 700, '2026-11-09T10:00:00+02:00');
       const service = buildLifecycle(db);
-      await service.settleTrip(1, TENANT, ACCOUNT, {
-        tripId: 3, countedCash: 700, unloadRemainingToWarehouse: false, endOdometer: 120,
-      }, ADMIN as never);
+      await service.settleTrip(
+        1,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 3,
+          countedCash: 700,
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
+        },
+        ADMIN as never,
+      );
       await assert.rejects(
-        service.settleTrip(1, TENANT, ACCOUNT, {
-          tripId: 3, countedCash: 700, unloadRemainingToWarehouse: false, endOdometer: 120,
-        }, ADMIN as never),
+        service.settleTrip(
+          1,
+          TENANT,
+          ACCOUNT,
+          {
+            tripId: 3,
+            countedCash: 700,
+            unloadRemainingToWarehouse: false,
+            endOdometer: 120,
+          },
+          ADMIN as never,
+        ),
         (err: any) => codeOf(err).includes('TRIP_NOT_FOUND'),
       );
       assert.equal((await remittanceRows(db, 3)).length, 1);
       assert.equal((await journalForTrip(db, 3)).entries.length, 1);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 6. Submit a per-day declaration, then settle with no breakdown:
@@ -439,9 +723,14 @@ async function main(): Promise<void> {
       await seedTwoDayTrip(db, 4, 16, 17, 22);
       const service = buildLifecycle(db);
       const submitted = await service.submitTripSettlement(1, TENANT, ACCOUNT, {
-        tripId: 4, countedCash: 3000,
-        perDayCash: [{ businessDay: D1, countedCash: 1000 }, { businessDay: D2, countedCash: 2000 }],
-        unloadRemainingToWarehouse: false, endOdometer: 120,
+        tripId: 4,
+        countedCash: 3000,
+        perDayCash: [
+          { businessDay: D1, countedCash: 1000 },
+          { businessDay: D2, countedCash: 2000 },
+        ],
+        unloadRemainingToWarehouse: false,
+        endOdometer: 120,
       });
       assert.deepEqual(submitted.perDayCash, [
         { businessDay: D1, countedCash: 1000 },
@@ -449,19 +738,31 @@ async function main(): Promise<void> {
       ]);
       const tripBefore = await tripRow(db, 4);
       assert.equal(tripBefore.settlement_status, 'submitted_by_rep');
-      const stored = typeof tripBefore.submitted_per_day_cash === 'string'
-        ? JSON.parse(tripBefore.submitted_per_day_cash)
-        : tripBefore.submitted_per_day_cash;
+      const stored =
+        typeof tripBefore.submitted_per_day_cash === 'string'
+          ? JSON.parse(tripBefore.submitted_per_day_cash)
+          : tripBefore.submitted_per_day_cash;
       assert.deepEqual(stored, [
         { businessDay: D1, countedCash: 1000 },
         { businessDay: D2, countedCash: 2000 },
       ]);
-      const res = await service.settleTrip(1, TENANT, ACCOUNT, {
-        tripId: 4, countedCash: 3000, unloadRemainingToWarehouse: false, endOdometer: 120,
-      }, ADMIN as never);
+      const res = await service.settleTrip(
+        1,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 4,
+          countedCash: 3000,
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
+        },
+        ADMIN as never,
+      );
       assert.equal(res.dailySplit?.length, 2);
       assert.equal((await remittanceRows(db, 4)).length, 2);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 7. Per-day breakdown that does not sum to counted cash is refused.
@@ -472,17 +773,30 @@ async function main(): Promise<void> {
       await seedTwoDayTrip(db, 5, 18, 19, 23);
       const service = buildLifecycle(db);
       await assert.rejects(
-        service.settleTrip(1, TENANT, ACCOUNT, {
-          tripId: 5, countedCash: 3000,
-          perDayCash: [{ businessDay: D1, countedCash: 1000 }, { businessDay: D2, countedCash: 1900 }],
-          unloadRemainingToWarehouse: false, endOdometer: 120,
-        }, ADMIN as never),
+        service.settleTrip(
+          1,
+          TENANT,
+          ACCOUNT,
+          {
+            tripId: 5,
+            countedCash: 3000,
+            perDayCash: [
+              { businessDay: D1, countedCash: 1000 },
+              { businessDay: D2, countedCash: 1900 },
+            ],
+            unloadRemainingToWarehouse: false,
+            endOdometer: 120,
+          },
+          ADMIN as never,
+        ),
         (err: any) => codeOf(err).includes('SETTLEMENT_PER_DAY_MISMATCH'),
       );
       const trip = await tripRow(db, 5);
       assert.equal(trip.status, 'open');
       assert.equal((await remittanceRows(db, 5)).length, 0);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 8. The same sum check on submit: a bad declaration is refused
@@ -495,16 +809,23 @@ async function main(): Promise<void> {
       const service = buildLifecycle(db);
       await assert.rejects(
         service.submitTripSettlement(1, TENANT, ACCOUNT, {
-          tripId: 5, countedCash: 3000,
-          perDayCash: [{ businessDay: D1, countedCash: 1000 }, { businessDay: D2, countedCash: 1900 }],
-          unloadRemainingToWarehouse: false, endOdometer: 120,
+          tripId: 5,
+          countedCash: 3000,
+          perDayCash: [
+            { businessDay: D1, countedCash: 1000 },
+            { businessDay: D2, countedCash: 1900 },
+          ],
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
         }),
         (err: any) => codeOf(err).includes('SETTLEMENT_PER_DAY_MISMATCH'),
       );
       const trip = await tripRow(db, 5);
       assert.equal(trip.settlement_status, 'open');
       assert.equal(trip.submitted_per_day_cash, null);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 9. Maker-checker pin: the rep's own login cannot settle his own
@@ -518,15 +839,26 @@ async function main(): Promise<void> {
       const service = buildLifecycle(db);
       const repAuth = { ...ADMIN, userId: 3, username: 'rep2' };
       await assert.rejects(
-        service.settleTrip(2, TENANT, ACCOUNT, {
-          tripId: 6, countedCash: 500, unloadRemainingToWarehouse: false, endOdometer: 120,
-        }, repAuth as never),
+        service.settleTrip(
+          2,
+          TENANT,
+          ACCOUNT,
+          {
+            tripId: 6,
+            countedCash: 500,
+            unloadRemainingToWarehouse: false,
+            endOdometer: 120,
+          },
+          repAuth as never,
+        ),
         (err: any) => codeOf(err).includes('MAKER_CHECKER_SELF_APPROVAL'),
       );
       const trip = await tripRow(db, 6);
       assert.equal(trip.status, 'open');
       assert.equal((await remittanceRows(db, 6)).length, 0);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 10. Open-trip guard pin: a second open call is refused while a
@@ -537,13 +869,18 @@ async function main(): Promise<void> {
       await seedFoundation(db);
       await seedTrip(db, 7, { cashCollected: 0, businessDay: '2026-11-08', openedAt: '2026-11-08T08:00:00+02:00' });
       const service = buildLifecycle(db);
-      await assert.rejects(
-        service.openTripAndLoad(1, TENANT, ACCOUNT, { sourceWarehouseId: 10 }),
-        (err: any) => codeOf(err).includes('TRIP_ALREADY_OPEN'),
+      await assert.rejects(service.openTripAndLoad(1, TENANT, ACCOUNT, { sourceWarehouseId: 10 }), (err: any) =>
+        codeOf(err).includes('TRIP_ALREADY_OPEN'),
       );
-      const count = await (db as any).selectFrom('van_sales_trips').select(sql`count(*)`.as('c')).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow() as any;
+      const count = (await (db as any)
+        .selectFrom('van_sales_trips')
+        .select(sql`count(*)`.as('c'))
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirstOrThrow()) as any;
       assert.equal(Number(count.c), 1);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 11. Prospective-only: settling one trip never touches another
@@ -553,24 +890,46 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await seedTrip(db, 8, { cashCollected: 500, businessDay: D1, status: 'settled' });
-      await (db as any).insertInto('treasury_transactions').values({
-        tenant_id: TENANT, account_id: ACCOUNT, txn_type: 'rep_cash_remittance', amount: 500,
-        request_key: 'rep-remittance:trip:8', payment_channel: 'cash',
-        note: 'prior', reference_type: 'cashier_shift', reference_id: 1,
-        branch_id: null, location_id: null, created_by: 2,
-      }).execute();
+      await (db as any)
+        .insertInto('treasury_transactions')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          txn_type: 'rep_cash_remittance',
+          amount: 500,
+          request_key: 'rep-remittance:trip:8',
+          payment_channel: 'cash',
+          note: 'prior',
+          reference_type: 'cashier_shift',
+          reference_id: 1,
+          branch_id: null,
+          location_id: null,
+          created_by: 2,
+        })
+        .execute();
       await seedTrip(db, 9, { cashCollected: 400, businessDay: D1 });
       await seedCashSale(db, 21, 9, 400, '2026-11-09T10:00:00+02:00');
       const service = buildLifecycle(db);
-      await service.settleTrip(1, TENANT, ACCOUNT, {
-        tripId: 9, countedCash: 400, unloadRemainingToWarehouse: false, endOdometer: 120,
-      }, ADMIN as never);
+      await service.settleTrip(
+        1,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 9,
+          countedCash: 400,
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
+        },
+        ADMIN as never,
+      );
       const prior = await remittanceRows(db, 8);
       assert.equal(prior.length, 1);
       assert.equal(Number(prior[0].amount), 500);
       assert.equal(String(prior[0].request_key), 'rep-remittance:trip:8');
       assert.equal((await remittanceRows(db, 9)).length, 1);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 12. A cash refund reduces the day's due, and the allocation is
@@ -586,11 +945,19 @@ async function main(): Promise<void> {
       const due = await service.getTripDueByDay(1, TENANT, 10);
       assert.equal(due.days.length, 1);
       assert.equal(due.days[0].due, 800);
-      const res = await service.settleTrip(1, TENANT, ACCOUNT, {
-        tripId: 10, countedCash: 800,
-        perDayCash: [{ businessDay: D1, countedCash: 800 }],
-        unloadRemainingToWarehouse: false, endOdometer: 120,
-      }, ADMIN as never);
+      const res = await service.settleTrip(
+        1,
+        TENANT,
+        ACCOUNT,
+        {
+          tripId: 10,
+          countedCash: 800,
+          perDayCash: [{ businessDay: D1, countedCash: 800 }],
+          unloadRemainingToWarehouse: false,
+          endOdometer: 120,
+        },
+        ADMIN as never,
+      );
       assert.deepEqual(res.dailySplit?.[0], { businessDay: D1, due: 800, countedCash: 800, remittedCash: 800 });
       const allocs = await allocationRows(db);
       assert.equal(allocs.length, 1);
@@ -599,7 +966,9 @@ async function main(): Promise<void> {
       const remits = await remittanceRows(db, 10);
       assert.equal(remits.length, 1);
       assert.equal(Number(remits[0].amount), 800);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 13. Engine unit pins (production code imported, not re-derived):
@@ -608,7 +977,14 @@ async function main(): Promise<void> {
     assert.equal(tenantDayKey('2026-11-09T23:30:00Z', 'Africa/Cairo'), '2026-11-10');
     assert.equal(tenantDayKey('2026-11-10T00:30:00+02:00', 'Africa/Cairo'), '2026-11-10');
     assert.throws(
-      () => normalizePerDayCash([{ businessDay: D1, countedCash: 1 }, { businessDay: D1, countedCash: 2 }], 2),
+      () =>
+        normalizePerDayCash(
+          [
+            { businessDay: D1, countedCash: 1 },
+            { businessDay: D1, countedCash: 2 },
+          ],
+          2,
+        ),
       (err: any) => String(err?.message).includes('SETTLEMENT_PER_DAY_DUPLICATE_DAY'),
     );
     assert.throws(
@@ -616,15 +992,28 @@ async function main(): Promise<void> {
       (err: any) => String(err?.message).includes('SETTLEMENT_PER_DAY_EMPTY'),
     );
     assert.deepEqual(
-      normalizePerDayCash([{ businessDay: D2, countedCash: '2000' }, { businessDay: D1, countedCash: 1000 }], 2),
-      [{ businessDay: D1, countedCash: 1000 }, { businessDay: D2, countedCash: 2000 }],
+      normalizePerDayCash(
+        [
+          { businessDay: D2, countedCash: '2000' },
+          { businessDay: D1, countedCash: 1000 },
+        ],
+        2,
+      ),
+      [
+        { businessDay: D1, countedCash: 1000 },
+        { businessDay: D2, countedCash: 2000 },
+      ],
     );
-    const buckets = bucketTripCashByDay([
-      { kind: 'sale', id: 11, createdAt: '2026-11-09T10:00:00+02:00', cashAmount: 1000 },
-      { kind: 'sale', id: 12, createdAt: '2026-11-10T11:00:00+02:00', cashAmount: 1500 },
-      { kind: 'collection', id: 21, createdAt: '2026-11-10T15:00:00+02:00', cashAmount: 500 },
-      { kind: 'refund', id: 31, createdAt: '2026-11-10T16:00:00+02:00', cashAmount: 200 },
-    ], 'Africa/Cairo', 2);
+    const buckets = bucketTripCashByDay(
+      [
+        { kind: 'sale', id: 11, createdAt: '2026-11-09T10:00:00+02:00', cashAmount: 1000 },
+        { kind: 'sale', id: 12, createdAt: '2026-11-10T11:00:00+02:00', cashAmount: 1500 },
+        { kind: 'collection', id: 21, createdAt: '2026-11-10T15:00:00+02:00', cashAmount: 500 },
+        { kind: 'refund', id: 31, createdAt: '2026-11-10T16:00:00+02:00', cashAmount: 200 },
+      ],
+      'Africa/Cairo',
+      2,
+    );
     assert.equal(buckets.length, 2);
     assert.equal(buckets[0].due, 1000);
     assert.equal(buckets[1].cashSales, 1500);
@@ -637,7 +1026,10 @@ async function main(): Promise<void> {
       { businessDay: D2, saleId: null, customerPaymentId: 21, amount: 300 },
     ]);
     const capped = allocateDayRemittance(buckets[1], 5000, 2);
-    assert.equal(capped.reduce((s, a) => s + a.amount, 0), 2000);
+    assert.equal(
+      capped.reduce((s, a) => s + a.amount, 0),
+      2000,
+    );
     assert.deepEqual(allocateDayRemittance(buckets[1], 0, 2), []);
   }
 

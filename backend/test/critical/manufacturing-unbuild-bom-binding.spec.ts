@@ -51,8 +51,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['manufacturing'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['manufacturing'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -78,29 +83,112 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   `);
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main' }).execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main' })
+    .execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('accounting_settings').values({ id: 1, tenant_id: TENANT }).execute();
-  for (const [id, code, type] of [[1140, '1140', 'asset'], [5190, '5190', 'expense']] as const) {
-    await anyDb.insertInto('accounting_accounts').values({
-      id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, allow_manual_entries: true,
-    }).execute();
+  for (const [id, code, type] of [
+    [1140, '1140', 'asset'],
+    [5190, '5190', 'expense'],
+  ] as const) {
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id,
+        tenant_id: TENANT,
+        code,
+        name_ar: code,
+        account_type: type,
+        is_active: true,
+        allow_manual_entries: true,
+      })
+      .execute();
   }
   // A: finished product, cost 20, stock 10 at location 1.
-  await anyDb.insertInto('products').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Meal A', cost_price: 20, default_location_id: 1, is_active: true, stock_qty: 10 }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 10, location_id: 1, branch_id: null, qty: 10 }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Meal A',
+      cost_price: 20,
+      default_location_id: 1,
+      is_active: true,
+      stock_qty: 10,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 10, location_id: 1, branch_id: null, qty: 10 })
+    .execute();
   // B: component, cost 10 (equal to the finished value per
   // recovered unit, so the match case is balanced), no stock.
-  await anyDb.insertInto('products').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Component B', cost_price: 10, default_location_id: 1, is_active: true, stock_qty: 0 }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 20,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Component B',
+      cost_price: 10,
+      default_location_id: 1,
+      is_active: true,
+      stock_qty: 0,
+    })
+    .execute();
   // C: a different finished product whose BOM must never unbuild A.
-  await anyDb.insertInto('products').values({ id: 30, tenant_id: TENANT, account_id: ACCOUNT, name: 'Meal C', cost_price: 30, default_location_id: 1, is_active: true, stock_qty: 5 }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 30,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Meal C',
+      cost_price: 30,
+      default_location_id: 1,
+      is_active: true,
+      stock_qty: 5,
+    })
+    .execute();
   // BOM of C: 2 x B per unit.
-  await anyDb.insertInto('manufacturing_boms').values({ id: 100, tenant_id: TENANT, account_id: ACCOUNT, product_id: 30, quantity: 1, is_active: true }).execute();
-  await anyDb.insertInto('manufacturing_bom_lines').values({ tenant_id: TENANT, account_id: ACCOUNT, bom_id: 100, component_product_id: 20, quantity: 2, unit_multiplier: 1 }).execute();
+  await anyDb
+    .insertInto('manufacturing_boms')
+    .values({ id: 100, tenant_id: TENANT, account_id: ACCOUNT, product_id: 30, quantity: 1, is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('manufacturing_bom_lines')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      bom_id: 100,
+      component_product_id: 20,
+      quantity: 2,
+      unit_multiplier: 1,
+    })
+    .execute();
   // BOM of A: 2 x B per unit.
-  await anyDb.insertInto('manufacturing_boms').values({ id: 101, tenant_id: TENANT, account_id: ACCOUNT, product_id: 10, quantity: 1, is_active: true }).execute();
-  await anyDb.insertInto('manufacturing_bom_lines').values({ tenant_id: TENANT, account_id: ACCOUNT, bom_id: 101, component_product_id: 20, quantity: 2, unit_multiplier: 1 }).execute();
+  await anyDb
+    .insertInto('manufacturing_boms')
+    .values({ id: 101, tenant_id: TENANT, account_id: ACCOUNT, product_id: 10, quantity: 1, is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('manufacturing_bom_lines')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      bom_id: 101,
+      component_product_id: 20,
+      quantity: 2,
+      unit_multiplier: 1,
+    })
+    .execute();
   return { pg, db };
 }
 
@@ -114,7 +202,11 @@ function buildService(db: Kysely<Database>): ManufacturingService {
 }
 
 async function stockOf(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await (db as any).selectFrom('products').select('stock_qty').where('id', '=', productId).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('products')
+    .select('stock_qty')
+    .where('id', '=', productId)
+    .executeTakeFirst();
   return Number(row?.stock_qty || 0);
 }
 
@@ -157,8 +249,11 @@ async function main(): Promise<void> {
       assert.equal(await stockOf(db, 20), 4, 'components recover at 2 per unit');
       const journals = await (db as any).selectFrom('journal_entries').select(['id', 'source_type']).execute();
       assert.equal(journals.length, 1, 'exactly one journal posts');
-      const lines = await (db as any).selectFrom('journal_entry_lines').select(['debit', 'credit'])
-        .where('journal_entry_id', '=', journals[0].id).execute();
+      const lines = await (db as any)
+        .selectFrom('journal_entry_lines')
+        .select(['debit', 'credit'])
+        .where('journal_entry_id', '=', journals[0].id)
+        .execute();
       const debit = lines.reduce((s: number, r: any) => s + Number(r.debit || 0), 0);
       const credit = lines.reduce((s: number, r: any) => s + Number(r.credit || 0), 0);
       assert.equal(debit, credit, 'the unbuild journal balances');

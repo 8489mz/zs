@@ -87,11 +87,7 @@ export function validateAndCalculateCostCenterSplits(params: {
   return { isValid: true, totalPercentage, allocatedSplits };
 }
 
-export function calculateForexRevaluation(params: {
-  localBalance: number;
-  bookRate: number;
-  closingRate: number;
-}): {
+export function calculateForexRevaluation(params: { localBalance: number; bookRate: number; closingRate: number }): {
   foreignBalance: number;
   revaluedLocalValue: number;
   unrealizedDifference: number;
@@ -262,7 +258,9 @@ export async function runPhase10CriticalTests() {
     assert.equal(lossRes.unrealizedDifference, -3000);
     assert.equal(lossRes.isGain, false);
 
-    console.log('✓ Test 5 Passed: IAS 21 Forex revaluation accurately computes foreign balance and unrealized gain/loss.');
+    console.log(
+      '✓ Test 5 Passed: IAS 21 Forex revaluation accurately computes foreign balance and unrealized gain/loss.',
+    );
   }
 
   // Test 6: Universal Document Numbering Standard for Forex Entries

@@ -89,8 +89,12 @@ async function setupDb(currency: string | null): Promise<{ pg: PGlite; db: Kysel
       INSERT INTO cost_centers VALUES (7,'t1','CC7','Cost center');
     `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 2125, 2150, 4100, 4300, 4400, 5100, 5190, 7290, 9001]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-      [code, 't1', String(code), code === 1150 || code === 2120]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      String(code),
+      code === 1150 || code === 2120,
+    ]);
   }
   if (currency !== null) {
     await pg.query(`INSERT INTO settings VALUES ('t1','currency',$1)`, [currency]);
@@ -98,7 +102,13 @@ async function setupDb(currency: string | null): Promise<{ pg: PGlite; db: Kysel
   return { pg, db };
 }
 
-async function addJournal(pg: PGlite, entryNo: string, sourceType: string, sourceId: number, reversedBy: number | null): Promise<number> {
+async function addJournal(
+  pg: PGlite,
+  entryNo: string,
+  sourceType: string,
+  sourceId: number,
+  reversedBy: number | null,
+): Promise<number> {
   const res = await pg.query<{ id: string }>(
     `INSERT INTO journal_entries (tenant_id, account_id, entry_no, source_type, source_id, status, reversed_by_entry_id)
      VALUES ('t1','a1',$1,$2,$3,'posted',$4) RETURNING id`,
@@ -208,6 +218,12 @@ async function main(): Promise<void> {
 }
 
 main().then(
-  () => { console.log('integrity-check-expansion.spec: ok'); process.exit(0); },
-  (err) => { console.error(err); process.exit(1); },
+  () => {
+    console.log('integrity-check-expansion.spec: ok');
+    process.exit(0);
+  },
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
 );

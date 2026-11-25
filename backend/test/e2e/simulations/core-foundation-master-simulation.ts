@@ -8,7 +8,11 @@ import { TreasuryService } from '../../../src/modules/treasury/treasury.service'
 import { AuditService } from '../../../src/core/audit/audit.service';
 import { TransactionHelper } from '../../../src/database/helpers/transaction.helper';
 import { AuthContext } from '../../../src/core/auth/interfaces/auth-context.interface';
-import { applyStockDelta, relocateStockBetweenLocations, previewConsumableStockQty } from '../../../src/common/utils/location-stock-ledger';
+import {
+  applyStockDelta,
+  relocateStockBetweenLocations,
+  previewConsumableStockQty,
+} from '../../../src/common/utils/location-stock-ledger';
 import { roundMoneyToTwoDecimals } from '../../../src/common/utils/financial-integrity';
 
 async function runCoreFoundationMasterSimulation() {
@@ -187,8 +191,12 @@ async function runCoreFoundationMasterSimulation() {
       )
     `.execute(db);
 
-    const purchasePostResult = await db.transaction().execute(trx => accountingPosting.postPurchase(trx, purchaseId, auth));
-    console.log(`✓ تم ترحيل قيد فاتورة المشتريات بنجاح إلى دفتر الأستاذ العام (#${purchasePostResult.journalEntryId}).`);
+    const purchasePostResult = await db
+      .transaction()
+      .execute((trx) => accountingPosting.postPurchase(trx, purchaseId, auth));
+    console.log(
+      `✓ تم ترحيل قيد فاتورة المشتريات بنجاح إلى دفتر الأستاذ العام (#${purchasePostResult.journalEntryId}).`,
+    );
 
     // -------------------------------------------------------------------------
     // STEP 5: الحركات المخزنية والتحويل بين المستودعات (Location Stock Relocation)
@@ -205,9 +213,13 @@ async function runCoreFoundationMasterSimulation() {
       accountId: auth.accountId,
     });
 
-    console.log(`✓ نقل 30 قطعة: المستودع الرئيسي أصبح (${transferResult.sourceAfter})، والفرعي أصبح (${transferResult.targetAfter}).`);
+    console.log(
+      `✓ نقل 30 قطعة: المستودع الرئيسي أصبح (${transferResult.sourceAfter})، والفرعي أصبح (${transferResult.targetAfter}).`,
+    );
     if (transferResult.sourceAfter !== 70 || transferResult.targetAfter !== 30) {
-      throw new Error(`Location transfer balance mismatch: main=${transferResult.sourceAfter}, sub=${transferResult.targetAfter}`);
+      throw new Error(
+        `Location transfer balance mismatch: main=${transferResult.sourceAfter}, sub=${transferResult.targetAfter}`,
+      );
     }
 
     const consumableMain = await previewConsumableStockQty(db, {
@@ -304,7 +316,7 @@ async function runCoreFoundationMasterSimulation() {
       )
     `.execute(db);
 
-    const salePostResult = await db.transaction().execute(trx => accountingPosting.postSale(trx, saleId, auth));
+    const salePostResult = await db.transaction().execute((trx) => accountingPosting.postSale(trx, saleId, auth));
     console.log(`✓ تم ترحيل قيد المبيعات النقدية وتكلفة البضاعة المباعة (#${salePostResult.journalEntryId}):`);
     console.log('   - مدين: الخزينة 1110 (1000) / دائن: المبيعات 4100 (1000)');
     console.log('   - مدين: تكلفة المبيعات 5110 (500) / دائن: المخزون 1140 (500)');
@@ -381,13 +393,15 @@ async function runCoreFoundationMasterSimulation() {
       {
         fromAccountId: cashAccountId,
         toAccountId: bankAccountId,
-        amount: 5000.00,
+        amount: 5000.0,
         note: 'تحويل سيولة من الخزينة إلى الحساب البنكي',
         requestKey: `req_transfer_${simUid}`,
       },
       auth,
     );
-    console.log(`✓ تم ترحيل قيد التحويل الداخلي بين الخزينة والبنك (Dr 1120 Bank / Cr 1110 Cash) (#${transferRes.journalEntryId}).`);
+    console.log(
+      `✓ تم ترحيل قيد التحويل الداخلي بين الخزينة والبنك (Dr 1120 Bank / Cr 1110 Cash) (#${transferRes.journalEntryId}).`,
+    );
 
     // -------------------------------------------------------------------------
     // STEP 9: التحقق الحاسم من توازن القيد المزدوج وثبات الدفاتر (The Double-Entry Invariant)
@@ -413,14 +427,18 @@ async function runCoreFoundationMasterSimulation() {
     const delta = roundMoneyToTwoDecimals(Math.abs(sumDebit - sumCredit));
 
     console.log(`📊 إجمالي القيود المُنشأة: ${totalEntries} قيود محاسبية.`);
-    console.log(`📊 إجمالي المدين: ${sumDebit.toLocaleString()} جنيه | إجمالي الدائن: ${sumCredit.toLocaleString()} جنيه | الفارق: ${delta}`);
+    console.log(
+      `📊 إجمالي المدين: ${sumDebit.toLocaleString()} جنيه | إجمالي الدائن: ${sumCredit.toLocaleString()} جنيه | الفارق: ${delta}`,
+    );
 
     if (totalEntries === 0) {
       throw new Error('No journal entries were recorded!');
     }
 
     if (delta !== 0) {
-      throw new Error(`CRITICAL INVARIANT VIOLATION: Sum(Debit) [${sumDebit}] != Sum(Credit) [${sumCredit}], Delta: ${delta}`);
+      throw new Error(
+        `CRITICAL INVARIANT VIOLATION: Sum(Debit) [${sumDebit}] != Sum(Credit) [${sumCredit}], Delta: ${delta}`,
+      );
     }
 
     // التأكد من أن كل قيد بمفرده متوازن بدقة سنت بسنت
@@ -443,7 +461,6 @@ async function runCoreFoundationMasterSimulation() {
     console.log('\n=============================================================================');
     console.log('  تهانينا! فحص النواة المركزية والمحاسبة والمخازن (Core Foundation) اجتاز 100%');
     console.log('=============================================================================\n');
-
   } finally {
     await sql`DELETE FROM treasury_transfers WHERE tenant_id = ${auth.tenantId}`.execute(db);
     await sql`DELETE FROM supplier_payments WHERE tenant_id = ${auth.tenantId}`.execute(db);

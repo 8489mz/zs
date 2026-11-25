@@ -93,7 +93,14 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
  * - Case 8, source pin + invariant pin.
  */
 
-const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'tester', permissions: [] } as unknown as AuthContext;
+const auth = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'tester',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -136,10 +143,31 @@ async function advanceSequences(pg: PGlite): Promise<void> {
 }
 
 async function seedBase(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('stock_locations' as never).values({ id: 1, tenant_id: 't1', branch_id: null, name: 'Main' } as never).execute();
-  await db.insertInto('stock_locations' as never).values({ id: 2, tenant_id: 't1', branch_id: null, name: 'Second' } as never).execute();
-  await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier', phone: null } as never).execute();
-  await db.insertInto('products' as never).values({ id: 10, tenant_id: 't1', account_id: 'a1', name: 'Widget', barcode: null, cost_price: 10, stock_qty: 0, reserved_qty: 0 } as never).execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values({ id: 1, tenant_id: 't1', branch_id: null, name: 'Main' } as never)
+    .execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values({ id: 2, tenant_id: 't1', branch_id: null, name: 'Second' } as never)
+    .execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({ id: 9, tenant_id: 't1', name: 'Supplier', phone: null } as never)
+    .execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 10,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Widget',
+      barcode: null,
+      cost_price: 10,
+      stock_qty: 0,
+      reserved_qty: 0,
+    } as never)
+    .execute();
 }
 
 async function seedRule(
@@ -179,7 +207,12 @@ async function seedRule(
 
 async function seedPo(
   db: Kysely<Database>,
-  opts: { id: number; status: string; warehouseId?: number | null; items: Array<{ id: number; quantity: number; received: number }> },
+  opts: {
+    id: number;
+    status: string;
+    warehouseId?: number | null;
+    items: Array<{ id: number; quantity: number; received: number }>;
+  },
 ): Promise<void> {
   await db
     .insertInto('purchase_orders' as never)
@@ -225,7 +258,10 @@ async function seedPo(
 }
 
 async function readPos(db: Kysely<Database>): Promise<any[]> {
-  const orders = (await db.selectFrom('purchase_orders' as never).selectAll().execute()) as any[];
+  const orders = (await db
+    .selectFrom('purchase_orders' as never)
+    .selectAll()
+    .execute()) as any[];
   orders.sort((a, b) => Number(a.id) - Number(b.id));
   for (const order of orders) {
     order.items = (await db
@@ -405,7 +441,9 @@ async function main(): Promise<void> {
     const evalBody = source.slice(evalStart, source.indexOf('async listRules(', evalStart + 1));
     assert.ok(evalBody.includes('REORDER_INCOMING_STATUSES'), 'the incoming query must use the committed-status list');
     assert.ok(
-      source.includes("const REORDER_INCOMING_STATUSES: string[] = ['pending_approval', 'confirmed', 'partially_received'];"),
+      source.includes(
+        "const REORDER_INCOMING_STATUSES: string[] = ['pending_approval', 'confirmed', 'partially_received'];",
+      ),
       'the committed-status list must be exact',
     );
     const runStart = source.indexOf('async runEvaluation(');
@@ -419,10 +457,17 @@ async function main(): Promise<void> {
     assert.ok(runBody.includes('manual_review'), 'manual_review rules must be honoured in the evaluation body');
     assert.ok(runBody.includes('hasOpenDraft'), 'the draft quench must live in the evaluation body');
     assert.ok(!runBody.includes('count('), 'no row-count numbering may remain in the evaluation path');
-    assert.ok(!runBody.includes('getDailyDocumentPrefix'), 'the daily-count prefix helper must be gone from the service');
+    assert.ok(
+      !runBody.includes('getDailyDocumentPrefix'),
+      'the daily-count prefix helper must be gone from the service',
+    );
     assert.ok(!source.includes("['draft', 'pending', 'approved', 'ordered']"), 'the dead status list must be gone');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-REORDER-EVALUATION-PIPELINE').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-REORDER-EVALUATION-PIPELINE').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
   }
 
   console.log('reorder-evaluation-pipeline: all cases passed');

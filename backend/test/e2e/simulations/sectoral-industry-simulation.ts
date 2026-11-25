@@ -4,7 +4,7 @@ import { Kysely, PostgresDialect, sql } from 'kysely';
 
 /**
  * Z-SYSTEMS ERP — SECTORAL & SPECIALIZED INDUSTRY SIMULATION
- * 
+ *
  * Verifies:
  * 1. Pharmacy Domain: Medications, Batches, Expiry tracking, and FEFO allocation.
  * 2. Customer Installments: Financing plans, Schedules, Payment tracking, and Outstanding balance.
@@ -159,7 +159,7 @@ async function runSectoralSimulation() {
         ) VALUES (
           ${testTenantId}, ${testAccountId}, ${planId}, ${customerId},
           ${i}, CURRENT_DATE + (${i} * INTERVAL '1 month'), 1000.00,
-          ${isFirst ? 1000.00 : 0.00},
+          ${isFirst ? 1000.0 : 0.0},
           ${isFirst ? 'paid' : 'pending'},
           NOW(), NOW()
         )
@@ -180,7 +180,9 @@ async function runSectoralSimulation() {
     if (totalPaid !== 1000 || pendingCount !== 9) {
       throw new Error(`Installment schedule mismatch: total paid ${totalPaid}, pending count ${pendingCount}`);
     }
-    console.log(`[OK] تم إنشاء خطة التقسيط ${planNumber}: 10 أقساط بمبلغ 1,000 ريال (مدفوع: ${totalPaid}، متبقي 9 أقساط).`);
+    console.log(
+      `[OK] تم إنشاء خطة التقسيط ${planNumber}: 10 أقساط بمبلغ 1,000 ريال (مدفوع: ${totalPaid}، متبقي 9 أقساط).`,
+    );
 
     // -------------------------------------------------------------------------
     // 3. Commercial Subscriptions (الاشتراكات التجارية والعقود الدورية)
@@ -303,7 +305,6 @@ async function runSectoralSimulation() {
     console.log('\n================================================================');
     console.log('[SUCCESS] اكتملت محاكاة القطاعات المتخصصة والأنشطة الرأسية بنجاح 100%!');
     console.log('================================================================\n');
-
   } catch (error: any) {
     console.error('[ERROR] SIMULATION FAILED:', error.message || error);
     console.error(error.stack);

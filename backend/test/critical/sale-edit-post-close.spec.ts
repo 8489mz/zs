@@ -38,13 +38,23 @@ const CASHIER_PASSWORD = 'cashier-secret-1';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-a', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-a',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -114,45 +124,122 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
-function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer: CashDrawerService; posting: AccountingPostingService } {
+function buildServices(db: Kysely<Database>): {
+  sales: SalesWriteService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -168,40 +255,63 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const returnsStub = {};
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
-    undefined, undefined, drawer,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
+    undefined,
+    undefined,
+    drawer,
   );
   return { sales, drawer, posting };
 }
 
-
 async function setCashierPassword(db: Kysely<Database>): Promise<void> {
   const record = await createPasswordRecord(CASHIER_PASSWORD);
-  await (db as any).updateTable('users').set({ password_hash: record.hash, password_salt: record.salt }).where('id', '=', 2).execute();
+  await (db as any)
+    .updateTable('users')
+    .set({ password_hash: record.hash, password_salt: record.salt })
+    .where('id', '=', 2)
+    .execute();
   await (db as any).insertInto('user_branches').values({ tenant_id: TENANT, user_id: 2, branch_id: 1 }).execute();
 }
 
 function posPayload(total: number, qty = 1): any {
   return {
     items: [{ productId: 101, qty, price: total, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: total * qty }], tenderedAmount: total * qty,
-    branchId: 1, locationId: 10, source: 'pos',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: total * qty }],
+    tenderedAmount: total * qty,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
   };
 }
 
 async function createPosSale(sales: SalesWriteService, total: number): Promise<number> {
   const created: any = await sales.createSale(posPayload(total), cashierAAuth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
 async function openCashierShift(drawer: CashDrawerService): Promise<number> {
   const opened: any = await drawer.openCashierShift({ openingCash: 0, branchId: 1, locationId: 10 }, cashierAAuth);
-  const shift = (opened.cashierShifts as any[]).find((row) => Number(row.openedBy) === 2 && String(row.status) === 'open')
-    || (opened.cashierShifts as any[])[0];
+  const shift =
+    (opened.cashierShifts as any[]).find((row) => Number(row.openedBy) === 2 && String(row.status) === 'open') ||
+    (opened.cashierShifts as any[])[0];
   const shiftId = Number(shift.id);
   assert.ok(shiftId > 0, 'cashier shift must open');
   return shiftId;
@@ -209,13 +319,26 @@ async function openCashierShift(drawer: CashDrawerService): Promise<number> {
 
 async function closeCashierShift(drawer: CashDrawerService, shiftId: number): Promise<void> {
   // Counted cash = the 100 sale cash + 0 opening = 100, so the close is clean.
-  const closed: any = await drawer.closeCashierShift(shiftId, { countedCash: 100, note: 'close', managerPin: CASHIER_PASSWORD }, cashierAAuth);
+  const closed: any = await drawer.closeCashierShift(
+    shiftId,
+    { countedCash: 100, note: 'close', managerPin: CASHIER_PASSWORD },
+    cashierAAuth,
+  );
   const closedRow = (closed.cashierShifts as any[]).find((row) => Number(row.id) === shiftId);
   assert.notEqual(String(closedRow.status), 'open', 'cashier shift must be closed');
 }
 
-async function auditEvents(db: Kysely<Database>, eventType: string, saleId: number): Promise<Array<Record<string, any>>> {
-  return (db as any).selectFrom('pos_audit_events').selectAll().where('event_type', '=', eventType).where('sale_id', '=', saleId).execute();
+async function auditEvents(
+  db: Kysely<Database>,
+  eventType: string,
+  saleId: number,
+): Promise<Array<Record<string, any>>> {
+  return (db as any)
+    .selectFrom('pos_audit_events')
+    .selectAll()
+    .where('event_type', '=', eventType)
+    .where('sale_id', '=', saleId)
+    .execute();
 }
 
 async function expectCode(promise: Promise<unknown>, code: string): Promise<void> {
@@ -240,7 +363,11 @@ async function main(): Promise<void> {
       const saleId = await createPosSale(sales, 100);
       await closeCashierShift(drawer, shiftId);
       await seedShift(db, 99, 1);
-      const edited: any = await sales.updateSale(saleId, { ...posPayload(100, 2), editReason: 'customer asked for one more', managerPin: MANAGER_PIN }, adminAuth);
+      const edited: any = await sales.updateSale(
+        saleId,
+        { ...posPayload(100, 2), editReason: 'customer asked for one more', managerPin: MANAGER_PIN },
+        adminAuth,
+      );
       assert.equal(edited.ok, true, 'post-close edit must succeed');
       const events = await auditEvents(db, 'sale_edit_post_close', saleId);
       assert.equal(events.length, 1, 'exactly one post-close edit audit event');
@@ -288,7 +415,11 @@ async function main(): Promise<void> {
       const saleId = await createPosSale(sales, 100);
       await seedShift(db, 99, 1);
       await expectCode(
-        sales.updateSale(saleId, { ...posPayload(100, 2), editReason: 'try during open shift', managerPin: MANAGER_PIN }, adminAuth),
+        sales.updateSale(
+          saleId,
+          { ...posPayload(100, 2), editReason: 'try during open shift', managerPin: MANAGER_PIN },
+          adminAuth,
+        ),
         'SALE_EDIT_ORIGINAL_SHIFT_LOCKED',
       );
     } finally {
@@ -312,7 +443,11 @@ async function main(): Promise<void> {
         sales.updateSale(saleId, { ...posPayload(100, 2), editReason: 'no pin supplied' }, cashierAAuth),
         'MANAGER_AUTH_REQUIRED',
       );
-      const adminEdited: any = await sales.updateSale(saleId, { ...posPayload(100, 2), editReason: 'admin post-close without pin' }, adminAuth);
+      const adminEdited: any = await sales.updateSale(
+        saleId,
+        { ...posPayload(100, 2), editReason: 'admin post-close without pin' },
+        adminAuth,
+      );
       assert.equal(adminEdited.ok, true, 'admin post-close edit succeeds without manager PIN');
     } finally {
       await db.destroy();
@@ -323,4 +458,7 @@ async function main(): Promise<void> {
   console.log('sale-edit-post-close: OK');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

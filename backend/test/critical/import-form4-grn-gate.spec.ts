@@ -103,29 +103,54 @@ async function seedShipment(
   // the legacy row that predates the column, read as the
   // bank_transfer default). An explicit value seeds the declared
   // funding type.
-  await db.insertInto('import_shipments' as never).values({
-    id, tenant_id: 't1', container_number: opts.containerNumber || 'C-1', supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: 'proj-1',
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-    ...(opts.fundingType !== undefined ? { funding_type: opts.fundingType } : {}),
-    ...(opts.form4Number !== undefined ? { form4_number: opts.form4Number } : {}),
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: `${id}-item`, tenant_id: 't1', shipment_id: id, product_id: 1,
-    quantity, factory_unit_price_usd: unitPrice,
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      container_number: opts.containerNumber || 'C-1',
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+      ...(opts.fundingType !== undefined ? { funding_type: opts.fundingType } : {}),
+      ...(opts.form4Number !== undefined ? { form4_number: opts.form4Number } : {}),
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: `${id}-item`,
+      tenant_id: 't1',
+      shipment_id: id,
+      product_id: 1,
+      quantity,
+      factory_unit_price_usd: unitPrice,
+    } as never)
+    .execute();
 }
 
-async function seedFunding(
-  db: Kysely<Database>,
-  method: string,
-  form4Number: string | null,
-): Promise<void> {
-  await db.insertInto('supplier_payments' as never).values({
-    tenant_id: 't1', account_id: 't1', supplier_id: 1, amount: 50000, amount_foreign: 1000,
-    note: 'funding', currency: 'USD', exchange_rate: 50, proforma_invoice_id: 'pi-a',
-    payment_method: method, form4_number: form4Number,
-  } as never).execute();
+async function seedFunding(db: Kysely<Database>, method: string, form4Number: string | null): Promise<void> {
+  await db
+    .insertInto('supplier_payments' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 't1',
+      supplier_id: 1,
+      amount: 50000,
+      amount_foreign: 1000,
+      note: 'funding',
+      currency: 'USD',
+      exchange_rate: 50,
+      proforma_invoice_id: 'pi-a',
+      payment_method: method,
+      form4_number: form4Number,
+    } as never)
+    .execute();
 }
 
 function grnDto(shipmentId: string, stage = 'receiving'): any {
@@ -150,7 +175,11 @@ async function countRows(db: Kysely<Database>, table: string, where?: (eb: any) 
 }
 
 async function shipmentStatus(db: Kysely<Database>, id: string): Promise<string> {
-  const row: any = await (db as any).selectFrom('import_shipments').select('status').where('id', '=', id).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom('import_shipments')
+    .select('status')
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
   return row.status;
 }
 
@@ -273,7 +302,11 @@ async function main(): Promise<void> {
         /IMPORT_FORM4_REQUIRED/,
         'Flipping a QC row to the GRN stage must not bypass the Form 4 gate',
       );
-      const after: any = await (db as any).selectFrom('import_qc_inspections').select('stage').where('id', '=', created.id).executeTakeFirstOrThrow();
+      const after: any = await (db as any)
+        .selectFrom('import_qc_inspections')
+        .select('stage')
+        .where('id', '=', created.id)
+        .executeTakeFirstOrThrow();
       assert.equal(after.stage, 'pre_shipment', 'The refused flip must not change the stored stage');
       assert.equal(await countRows(db, 'import_qc_inspections'), 1, 'No receiving row must exist');
     } finally {
@@ -304,7 +337,8 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, 'sh-f4-probe', 2001, 1, { containerNumber: 'MSCU-TEST-F4' });
-      await db.insertInto('import_inventory_receipts' as never)
+      await db
+        .insertInto('import_inventory_receipts' as never)
         .values({ id: 'rc-1', tenant_id: 't1', shipment_id: 'sh-f4-probe', state: 'posted' } as never)
         .execute();
       await assert.rejects(
@@ -321,4 +355,7 @@ async function main(): Promise<void> {
   console.log('Import Form 4 GRN gate tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

@@ -129,15 +129,36 @@ async function main(): Promise<void> {
       vatIsRefundable: true,
       internalTransportEgp: 300,
     };
-    await db.insertInto('import_projects' as never).values({
-      id: 'proj-40', tenant_id: 't1', project_no: 'P-40', title: 'Split 40', status: 'feasibility',
-      budget_currency: 'USD', country_destination: 'Egypt', feasibility_data: feas,
-    } as never).execute();
-    await db.insertInto('import_projects' as never).values({
-      id: 'proj-30', tenant_id: 't1', project_no: 'P-30', title: 'Split default', status: 'feasibility',
-      budget_currency: 'USD', country_destination: 'Egypt', feasibility_data: feas,
-    } as never).execute();
-    const conv40 = await svc.convertFeasibilityToProject('t1', 'proj-40', { projectId: 'proj-40', advancePaymentPercentage: 40 });
+    await db
+      .insertInto('import_projects' as never)
+      .values({
+        id: 'proj-40',
+        tenant_id: 't1',
+        project_no: 'P-40',
+        title: 'Split 40',
+        status: 'feasibility',
+        budget_currency: 'USD',
+        country_destination: 'Egypt',
+        feasibility_data: feas,
+      } as never)
+      .execute();
+    await db
+      .insertInto('import_projects' as never)
+      .values({
+        id: 'proj-30',
+        tenant_id: 't1',
+        project_no: 'P-30',
+        title: 'Split default',
+        status: 'feasibility',
+        budget_currency: 'USD',
+        country_destination: 'Egypt',
+        feasibility_data: feas,
+      } as never)
+      .execute();
+    const conv40 = await svc.convertFeasibilityToProject('t1', 'proj-40', {
+      projectId: 'proj-40',
+      advancePaymentPercentage: 40,
+    });
     assert.equal(conv40.success, true);
     const t0 = conv40.cashFlowSchedule[0];
     const t1 = conv40.cashFlowSchedule[1];
@@ -154,77 +175,157 @@ async function main(): Promise<void> {
     assert.match(String(s0.milestone), /30%/);
     assert.equal(Number(s0.amountUsd), 3000);
     assert.equal(s0.assumed_advance_percentage, true);
-    const stored = await (db as any).selectFrom('import_projects').selectAll().where('id', '=', 'proj-40').executeTakeFirstOrThrow() as any;
-    const storedSchedule = typeof stored.cash_flow_schedule === 'string' ? JSON.parse(stored.cash_flow_schedule) : stored.cash_flow_schedule;
+    const stored = (await (db as any)
+      .selectFrom('import_projects')
+      .selectAll()
+      .where('id', '=', 'proj-40')
+      .executeTakeFirstOrThrow()) as any;
+    const storedSchedule =
+      typeof stored.cash_flow_schedule === 'string' ? JSON.parse(stored.cash_flow_schedule) : stored.cash_flow_schedule;
     assert.match(String(storedSchedule[0].milestone), /40%/);
     assert.equal(storedSchedule[0].assumed_advance_percentage, false);
     console.log('Case 2 passed: schedule milestones state the actual split with its basis');
 
     // Case 3 — suggested prices fail closed on pricing-rate-without-arrival-rate.
-    await db.insertInto('import_shipments' as never).values({
-      id: 'sh-price-bad', tenant_id: 't1', container_number: 'CBAD', supplier_id: 1, status: 'Pending',
-      pricing_exchange_rate: 55, exchange_rate_at_arrival: null, project_id: null,
-    } as never).execute();
-    await db.insertInto('import_shipment_items' as never).values({
-      id: 'item-bad', tenant_id: 't1', shipment_id: 'sh-price-bad', product_id: 1,
-      quantity: 10, factory_unit_price_usd: 50, landed_cost_egp: 3300,
-      target_retail_margin: 20, target_wholesale_margin: 10,
-    } as never).execute();
-    await assert.rejects(
-      () => svc.applySuggestedPrices('t1', 'sh-price-bad'),
-      /IMPORT_ARRIVAL_RATE_REQUIRED/,
-    );
-    const untouched = await (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow() as any;
+    await db
+      .insertInto('import_shipments' as never)
+      .values({
+        id: 'sh-price-bad',
+        tenant_id: 't1',
+        container_number: 'CBAD',
+        supplier_id: 1,
+        status: 'Pending',
+        pricing_exchange_rate: 55,
+        exchange_rate_at_arrival: null,
+        project_id: null,
+      } as never)
+      .execute();
+    await db
+      .insertInto('import_shipment_items' as never)
+      .values({
+        id: 'item-bad',
+        tenant_id: 't1',
+        shipment_id: 'sh-price-bad',
+        product_id: 1,
+        quantity: 10,
+        factory_unit_price_usd: 50,
+        landed_cost_egp: 3300,
+        target_retail_margin: 20,
+        target_wholesale_margin: 10,
+      } as never)
+      .execute();
+    await assert.rejects(() => svc.applySuggestedPrices('t1', 'sh-price-bad'), /IMPORT_ARRIVAL_RATE_REQUIRED/);
+    const untouched = (await (db as any)
+      .selectFrom('products')
+      .selectAll()
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow()) as any;
     assert.equal(untouched.retail_price, null);
     assert.equal(untouched.wholesale_price, null);
-    await (db as any).updateTable('import_shipments').set({ exchange_rate_at_arrival: 50 }).where('id', '=', 'sh-price-bad').execute();
+    await (db as any)
+      .updateTable('import_shipments')
+      .set({ exchange_rate_at_arrival: 50 })
+      .where('id', '=', 'sh-price-bad')
+      .execute();
     const applied = await svc.applySuggestedPrices('t1', 'sh-price-bad');
     assert.equal(applied.success, true);
-    const priced = await (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow() as any;
+    const priced = (await (db as any)
+      .selectFrom('products')
+      .selectAll()
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow()) as any;
     // pricingCost = 3300 + 50 x (55 - 50) = 3550; retail x1.2 = 4260; wholesale x1.1 = 3905.
     assert.equal(Number(priced.retail_price), 4260);
     assert.equal(Number(priced.wholesale_price), 3905);
-    await db.insertInto('import_shipments' as never).values({
-      id: 'sh-price-none', tenant_id: 't1', container_number: 'CNONE', supplier_id: 1, status: 'Pending',
-      pricing_exchange_rate: null, exchange_rate_at_arrival: null, project_id: null,
-    } as never).execute();
-    await db.insertInto('import_shipment_items' as never).values({
-      id: 'item-none', tenant_id: 't1', shipment_id: 'sh-price-none', product_id: 1,
-      quantity: 10, factory_unit_price_usd: 50, landed_cost_egp: 3300,
-      target_retail_margin: 20, target_wholesale_margin: 10,
-    } as never).execute();
+    await db
+      .insertInto('import_shipments' as never)
+      .values({
+        id: 'sh-price-none',
+        tenant_id: 't1',
+        container_number: 'CNONE',
+        supplier_id: 1,
+        status: 'Pending',
+        pricing_exchange_rate: null,
+        exchange_rate_at_arrival: null,
+        project_id: null,
+      } as never)
+      .execute();
+    await db
+      .insertInto('import_shipment_items' as never)
+      .values({
+        id: 'item-none',
+        tenant_id: 't1',
+        shipment_id: 'sh-price-none',
+        product_id: 1,
+        quantity: 10,
+        factory_unit_price_usd: 50,
+        landed_cost_egp: 3300,
+        target_retail_margin: 20,
+        target_wholesale_margin: 10,
+      } as never)
+      .execute();
     await svc.applySuggestedPrices('t1', 'sh-price-none');
-    const pricedNone = await (db as any).selectFrom('products').selectAll().where('id', '=', 1).executeTakeFirstOrThrow() as any;
+    const pricedNone = (await (db as any)
+      .selectFrom('products')
+      .selectAll()
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow()) as any;
     assert.equal(Number(pricedNone.retail_price), 3960);
     assert.equal(Number(pricedNone.wholesale_price), 3630);
     console.log('Case 3 passed: pricing fails closed on the inconsistent rate state only');
 
     // Case 4 — demurrage risk names every assumed input.
-    await db.insertInto('import_shipments' as never).values({
-      id: 'sh-dem-assumed', tenant_id: 't1', container_number: 'CDEM1', supplier_id: 1, status: 'InTransit',
-      arrival_date: daysAgo(20), container_status: 'Pending', project_id: null,
-    } as never).execute();
+    await db
+      .insertInto('import_shipments' as never)
+      .values({
+        id: 'sh-dem-assumed',
+        tenant_id: 't1',
+        container_number: 'CDEM1',
+        supplier_id: 1,
+        status: 'InTransit',
+        arrival_date: daysAgo(20),
+        container_status: 'Pending',
+        project_id: null,
+      } as never)
+      .execute();
     const gotAssumed = await svc.getShipmentById('t1', 'sh-dem-assumed');
     assert.equal(gotAssumed.demurrageRisk.isOverdue, true);
     assert.equal(gotAssumed.demurrageRisk.overdueDays, 6);
     assert.equal(Number(gotAssumed.demurrageRisk.estimatedFeesEgp), 300);
     assert.deepEqual(gotAssumed.demurrageRisk.assumptions, {
-      freeDays: 14, freeDaysAssumed: true,
-      dailyRateUsd: 50, dailyRateAssumed: true,
-      exchangeRate: 1, exchangeRateAssumed: true,
+      freeDays: 14,
+      freeDaysAssumed: true,
+      dailyRateUsd: 50,
+      dailyRateAssumed: true,
+      exchangeRate: 1,
+      exchangeRateAssumed: true,
     });
-    await db.insertInto('import_shipments' as never).values({
-      id: 'sh-dem-explicit', tenant_id: 't1', container_number: 'CDEM2', supplier_id: 1, status: 'InTransit',
-      arrival_date: daysAgo(20), container_status: 'Pending', project_id: null,
-      free_demurrage_days: 10, demurrage_rate_per_day: 80, exchange_rate_at_arrival: 50,
-    } as never).execute();
+    await db
+      .insertInto('import_shipments' as never)
+      .values({
+        id: 'sh-dem-explicit',
+        tenant_id: 't1',
+        container_number: 'CDEM2',
+        supplier_id: 1,
+        status: 'InTransit',
+        arrival_date: daysAgo(20),
+        container_status: 'Pending',
+        project_id: null,
+        free_demurrage_days: 10,
+        demurrage_rate_per_day: 80,
+        exchange_rate_at_arrival: 50,
+      } as never)
+      .execute();
     const gotExplicit = await svc.getShipmentById('t1', 'sh-dem-explicit');
     assert.equal(gotExplicit.demurrageRisk.overdueDays, 10);
     assert.equal(Number(gotExplicit.demurrageRisk.estimatedFeesEgp), 40000);
     assert.deepEqual(gotExplicit.demurrageRisk.assumptions, {
-      freeDays: 10, freeDaysAssumed: false,
-      dailyRateUsd: 80, dailyRateAssumed: false,
-      exchangeRate: 50, exchangeRateAssumed: false,
+      freeDays: 10,
+      freeDaysAssumed: false,
+      dailyRateUsd: 80,
+      dailyRateAssumed: false,
+      exchangeRate: 50,
+      exchangeRateAssumed: false,
     });
     console.log('Case 4 passed: demurrage risk carries its assumed-input basis');
   } finally {

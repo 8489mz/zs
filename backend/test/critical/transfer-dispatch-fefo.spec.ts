@@ -73,24 +73,59 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   return { pg, db };
 }
 
-async function seedBatch(db: Kysely<Database>, id: number, expiry: string, qty: number, status = 'active'): Promise<void> {
-  await (db as any).insertInto('pharmacy_batches').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, product_id: PRODUCT, drug_id: 1,
-    batch_number: `B${id}`, expiry_date: expiry, quantity: qty, unit_cost: 10,
-    location_id: 1, supplier_name: 'supplier', status,
-  }).execute();
+async function seedBatch(
+  db: Kysely<Database>,
+  id: number,
+  expiry: string,
+  qty: number,
+  status = 'active',
+): Promise<void> {
+  await (db as any)
+    .insertInto('pharmacy_batches')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: PRODUCT,
+      drug_id: 1,
+      batch_number: `B${id}`,
+      expiry_date: expiry,
+      quantity: qty,
+      unit_cost: 10,
+      location_id: 1,
+      supplier_name: 'supplier',
+      status,
+    })
+    .execute();
 }
 
 async function batchQty(db: Kysely<Database>, id: number): Promise<number> {
-  const row = await (db as any).selectFrom('pharmacy_batches').select('quantity').where('id', '=', id).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('pharmacy_batches')
+    .select('quantity')
+    .where('id', '=', id)
+    .executeTakeFirst();
   return Number(row?.quantity || 0);
 }
 
-async function dispatch(db: Kysely<Database>, qty: number, batchAllocations?: Array<{ batchId: number; qty: number }>): Promise<any> {
-  return db.transaction().execute(async (trx) => dispatchTrackedStock(
-    trx as any, { tenantId: TENANT, accountId: ACCOUNT },
-    { productId: PRODUCT, qty, batchAllocations }, 1, null, 2, 99,
-  ));
+async function dispatch(
+  db: Kysely<Database>,
+  qty: number,
+  batchAllocations?: Array<{ batchId: number; qty: number }>,
+): Promise<any> {
+  return db
+    .transaction()
+    .execute(async (trx) =>
+      dispatchTrackedStock(
+        trx as any,
+        { tenantId: TENANT, accountId: ACCOUNT },
+        { productId: PRODUCT, qty, batchAllocations },
+        1,
+        null,
+        2,
+        99,
+      ),
+    );
 }
 
 async function expectThrow(fn: () => Promise<unknown>, codeFragment: string): Promise<void> {

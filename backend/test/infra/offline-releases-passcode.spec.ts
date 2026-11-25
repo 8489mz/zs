@@ -79,29 +79,29 @@ async function main() {
       await service.simulateUpdate({ targetVersion: '1.1.15', passcode: publishedManifest.passcode });
       assert.fail('published code for an unprovisioned version must be rejected');
     } catch (e: any) {
-      assert.ok(
-        /no code provisioned|لم يتم تخصيص/i.test(e.message),
-        `expected fail-closed error, got: ${e.message}`,
-      );
+      assert.ok(/no code provisioned|لم يتم تخصيص/i.test(e.message), `expected fail-closed error, got: ${e.message}`);
     }
 
     // 3b. Same fail-closed rule when a row exists but holds no passcode.
     await db
       .insertInto('offline_releases')
       .values({
-        version: '1.1.15', changelog: '', patch_url: '', is_active: false,
-        passcode: null, requires_passcode: true, promoted_by: null,
-        promoted_at: null, created_at: new Date().toISOString(),
+        version: '1.1.15',
+        changelog: '',
+        patch_url: '',
+        is_active: false,
+        passcode: null,
+        requires_passcode: true,
+        promoted_by: null,
+        promoted_at: null,
+        created_at: new Date().toISOString(),
       } as any)
       .execute();
     try {
       await service.simulateUpdate({ targetVersion: '1.1.15', passcode: publishedManifest.passcode });
       assert.fail('published code must be rejected when the row holds no passcode');
     } catch (e: any) {
-      assert.ok(
-        /no code provisioned|لم يتم تخصيص/i.test(e.message),
-        `expected fail-closed error, got: ${e.message}`,
-      );
+      assert.ok(/no code provisioned|لم يتم تخصيص/i.test(e.message), `expected fail-closed error, got: ${e.message}`);
     }
 
     // 4. A wrong code must not leak the expected code (and the success
@@ -110,9 +110,15 @@ async function main() {
     await db
       .insertInto('offline_releases')
       .values({
-        version: '9.9.9', changelog: '', patch_url: '', is_active: false,
-        passcode: storedCode, requires_passcode: true, promoted_by: null,
-        promoted_at: new Date().toISOString(), created_at: new Date().toISOString(),
+        version: '9.9.9',
+        changelog: '',
+        patch_url: '',
+        is_active: false,
+        passcode: storedCode,
+        requires_passcode: true,
+        promoted_by: null,
+        promoted_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       } as any)
       .execute();
     try {
@@ -134,7 +140,10 @@ async function main() {
 
     // 5b. The stored code also unlocks the local apply path.
     const applied = await service.applyLocalUpdate({
-      version: '9.9.9', patchUrl: 'https://example.invalid/patch-9.9.9.zip', changelog: '', passcode: storedCode,
+      version: '9.9.9',
+      patchUrl: 'https://example.invalid/patch-9.9.9.zip',
+      changelog: '',
+      passcode: storedCode,
     });
     assert.equal(applied.ok, true);
     assert.equal(applied.version, '9.9.9');

@@ -25,8 +25,13 @@ const TENANT = 'tenant-a';
 const ACCOUNT = 'account-a';
 
 const AUTH = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: [],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -50,30 +55,146 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seed(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('sales').values([
-    { id: 1, tenant_id: TENANT, account_id: ACCOUNT, total: 1000, tax_amount: 0, discount: 0, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-01T10:00:00.000Z', status: 'posted' },
-    { id: 2, tenant_id: TENANT, account_id: ACCOUNT, total: 500, tax_amount: 0, discount: 20, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-02T10:00:00.000Z', status: 'posted' },
-  ]).execute();
-  await anyDb.insertInto('purchases').values([
-    { id: 1, tenant_id: TENANT, account_id: ACCOUNT, total: 700, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-01T10:00:00.000Z', status: 'posted' },
-  ]).execute();
-  await anyDb.insertInto('expenses').values([
-    { id: 1, tenant_id: TENANT, account_id: ACCOUNT, amount: 120, branch_id: 1, location_id: 1, created_by: 1, expense_date: '2026-04-03T10:00:00.000Z' },
-    { id: 2, tenant_id: TENANT, account_id: ACCOUNT, amount: 30, branch_id: 1, location_id: 1, created_by: 1, expense_date: '2026-04-04T10:00:00.000Z' },
-  ]).execute();
-  await anyDb.insertInto('return_documents').values([
-    { id: 1, tenant_id: TENANT, account_id: ACCOUNT, return_type: 'sale', total: 80, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-03T10:00:00.000Z' },
-    { id: 2, tenant_id: TENANT, account_id: ACCOUNT, return_type: 'purchase', total: 50, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-04T10:00:00.000Z' },
-  ]).execute();
-  await anyDb.insertInto('treasury_transactions').values([
-    { tenant_id: TENANT, account_id: ACCOUNT, amount: 1000, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-01T10:00:00.000Z' },
-    { tenant_id: TENANT, account_id: ACCOUNT, amount: -150, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-03T10:00:00.000Z' },
-    { tenant_id: TENANT, account_id: ACCOUNT, amount: -50, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-04T10:00:00.000Z' },
-  ]).execute();
-  await anyDb.insertInto('sale_items').values([
-    { tenant_id: TENANT, sale_id: 1, product_id: 1, product_name: 'A', qty: 2, line_total: 400, cost_price: 100 },
-    { tenant_id: TENANT, sale_id: 2, product_id: 2, product_name: 'B', qty: 1, line_total: 300, cost_price: 150 },
-  ]).execute();
+  await anyDb
+    .insertInto('sales')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 1000,
+        tax_amount: 0,
+        discount: 0,
+        delivery_fee: 0,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-01T10:00:00.000Z',
+        status: 'posted',
+      },
+      {
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 500,
+        tax_amount: 0,
+        discount: 20,
+        delivery_fee: 0,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-02T10:00:00.000Z',
+        status: 'posted',
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('purchases')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        total: 700,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-01T10:00:00.000Z',
+        status: 'posted',
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('expenses')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        amount: 120,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        expense_date: '2026-04-03T10:00:00.000Z',
+      },
+      {
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        amount: 30,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        expense_date: '2026-04-04T10:00:00.000Z',
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('return_documents')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        return_type: 'sale',
+        total: 80,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-03T10:00:00.000Z',
+      },
+      {
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        return_type: 'purchase',
+        total: 50,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-04T10:00:00.000Z',
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('treasury_transactions')
+    .values([
+      {
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        amount: 1000,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-01T10:00:00.000Z',
+      },
+      {
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        amount: -150,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-03T10:00:00.000Z',
+      },
+      {
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        amount: -50,
+        branch_id: 1,
+        location_id: 1,
+        created_by: 1,
+        created_at: '2026-04-04T10:00:00.000Z',
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('sale_items')
+    .values([
+      { tenant_id: TENANT, sale_id: 1, product_id: 1, product_name: 'A', qty: 2, line_total: 400, cost_price: 100 },
+      { tenant_id: TENANT, sale_id: 2, product_id: 2, product_name: 'B', qty: 1, line_total: 300, cost_price: 150 },
+    ])
+    .execute();
 }
 
 async function main(): Promise<void> {

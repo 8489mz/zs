@@ -54,54 +54,121 @@ import { TransactionHelper } from '../../src/database/helpers/transaction.helper
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const AUTH = {
-  userId: 1, sessionId: 'sess-spec', username: 'actor-1', role: 'admin',
-  permissions: [], tenantId: 't1', accountId: 'a1',
+  userId: 1,
+  sessionId: 'sess-spec',
+  username: 'actor-1',
+  role: 'admin',
+  permissions: [],
+  tenantId: 't1',
+  accountId: 'a1',
 } as unknown as AuthContext;
 
 type Page = { page: number; pageSize: number; totalItems: number; totalPages: number };
 type AssetRow = {
-  id: string; employeeId: string; employeeNo: string; employeeName: string;
-  departmentName: string; jobTitleName: string; assetType: string; assetName: string;
-  assetCode: string; serialNo: string; assignedAt: string; returnedAt: string;
-  status: string; notes: string; returnNotes: string; createdAt: string;
+  id: string;
+  employeeId: string;
+  employeeNo: string;
+  employeeName: string;
+  departmentName: string;
+  jobTitleName: string;
+  assetType: string;
+  assetName: string;
+  assetCode: string;
+  serialNo: string;
+  assignedAt: string;
+  returnedAt: string;
+  status: string;
+  notes: string;
+  returnNotes: string;
+  createdAt: string;
 };
 type AssetsResult = {
-  assets: AssetRow[]; pagination: Page;
-  summary: { totalItems: number; assignedCount: number; returnedCount: number; lostCount: number; damagedCount: number };
+  assets: AssetRow[];
+  pagination: Page;
+  summary: {
+    totalItems: number;
+    assignedCount: number;
+    returnedCount: number;
+    lostCount: number;
+    damagedCount: number;
+  };
 };
 type MasterRow = {
-  id: string; name: string; code: string; description: string;
-  departmentId: string; departmentName: string; jobTitleId: string; jobTitleName: string;
-  branchId: string; branchName: string; locationId: string; locationName: string;
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  departmentId: string;
+  departmentName: string;
+  jobTitleId: string;
+  jobTitleName: string;
+  branchId: string;
+  branchName: string;
+  locationId: string;
+  locationName: string;
   isActive: boolean;
 };
 type MasterResult = { rows: MasterRow[]; pagination: Page; summary: { totalItems: number } };
 type HolidayRow = { id: string; name: string; startDate: string; endDate: string };
 type HolidaysResult = { rows: HolidayRow[]; pagination: Page; summary: { totalItems: number } };
 type LeaveTypeRow = {
-  id: string; name: string; code: string; description: string;
-  isPaid: boolean; deductsFromBalance: boolean; isActive: boolean;
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  isPaid: boolean;
+  deductsFromBalance: boolean;
+  isActive: boolean;
 };
 type LeaveTypesResult = {
-  rows: LeaveTypeRow[]; pagination: Page;
+  rows: LeaveTypeRow[];
+  pagination: Page;
   summary: { totalItems: number; activeCount: number };
 };
 type LeaveRequestRow = {
-  id: string; employeeId: string; employeeNo: string; employeeName: string;
-  departmentName: string; jobTitleName: string; leaveTypeId: string;
-  leaveTypeName: string; leaveType: string; startDate: string; endDate: string;
-  daysCount: number; status: string; reason: string; notes: string;
-  decisionNotes: string; decidedBy: string; decidedAt: string; createdAt: string;
+  id: string;
+  employeeId: string;
+  employeeNo: string;
+  employeeName: string;
+  departmentName: string;
+  jobTitleName: string;
+  leaveTypeId: string;
+  leaveTypeName: string;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  daysCount: number;
+  status: string;
+  reason: string;
+  notes: string;
+  decisionNotes: string;
+  decidedBy: string;
+  decidedAt: string;
+  createdAt: string;
 };
 type LeaveRequestsResult = {
-  requests: LeaveRequestRow[]; pagination: Page;
-  summary: { totalItems: number; pendingCount: number; approvedCount: number; rejectedCount: number; cancelledCount: number };
+  requests: LeaveRequestRow[];
+  pagination: Page;
+  summary: {
+    totalItems: number;
+    pendingCount: number;
+    approvedCount: number;
+    rejectedCount: number;
+    cancelledCount: number;
+  };
 };
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const hr = new HrService(db, new TransactionHelper(), { log: async () => {} } as never, {} as never, {} as never, undefined);
+  const hr = new HrService(
+    db,
+    new TransactionHelper(),
+    { log: async () => {} } as never,
+    {} as never,
+    {} as never,
+    undefined,
+  );
 
   try {
     await pg.exec(`SET TIME ZONE 'UTC'`);
@@ -201,7 +268,11 @@ async function main(): Promise<void> {
     // 5. Employee + search filters.
     const asEmp2 = (await hr.listEmployeeAssets({ employeeId: 2 }, AUTH)) as unknown as AssetsResult;
     assert.equal(asEmp2.pagination.totalItems, 2, 'employeeId 2 must hold 2 rows');
-    assert.deepEqual(asEmp2.assets.map((r) => r.id), ['3', '4'], 'employeeId 2 rows must be ids 3, 4');
+    assert.deepEqual(
+      asEmp2.assets.map((r) => r.id),
+      ['3', '4'],
+      'employeeId 2 rows must be ids 3, 4',
+    );
     const asLaptop = (await hr.listEmployeeAssets({ search: 'laptop' }, AUTH)) as unknown as AssetsResult;
     assert.equal(asLaptop.pagination.totalItems, 3, 'search laptop must find 3 rows');
     const asSerial = (await hr.listEmployeeAssets({ search: 'sn-300' }, AUTH)) as unknown as AssetsResult;
@@ -259,7 +330,12 @@ async function main(): Promise<void> {
     assert.equal(mdPosCashier.pagination.totalItems, 1, 'search cashier must find 1 position');
 
     // 6. Internal callers keep working through the facade.
-    const upserted = (await hr.upsertMasterData('departments', null, { name: 'New Dept', code: 'NEW', description: 'brand new', isActive: true }, AUTH)) as unknown as { ok: boolean; id: string; item: MasterRow; rows: MasterRow[] };
+    const upserted = (await hr.upsertMasterData(
+      'departments',
+      null,
+      { name: 'New Dept', code: 'NEW', description: 'brand new', isActive: true },
+      AUTH,
+    )) as unknown as { ok: boolean; id: string; item: MasterRow; rows: MasterRow[] };
     assert.equal(upserted.ok, true, 'upsertMasterData must return ok');
     assert.equal(upserted.id, '220', 'upserted department id must be 220 (sequence follows the seeded max)');
     assert.equal(upserted.item.name, 'New Dept', 'upsertMasterData must find its just-inserted row on page 1');
@@ -386,7 +462,11 @@ async function main(): Promise<void> {
 
     const lrEmp2 = (await hr.listLeaveRequests({ employeeId: 2 }, AUTH)) as unknown as LeaveRequestsResult;
     assert.equal(lrEmp2.pagination.totalItems, 2, 'employeeId 2 must hold 2 requests');
-    assert.deepEqual(lrEmp2.requests.map((r) => r.id), ['3', '4'], 'employeeId 2 requests must be ids 3, 4');
+    assert.deepEqual(
+      lrEmp2.requests.map((r) => r.id),
+      ['3', '4'],
+      'employeeId 2 requests must be ids 3, 4',
+    );
     const lrApproved = (await hr.listLeaveRequests({ status: 'approved' }, AUTH)) as unknown as LeaveRequestsResult;
     assert.equal(lrApproved.pagination.totalItems, 1, 'status approved must hold 1 request');
     assert.equal(lrApproved.requests[0].id, '2', 'approved request must be id 2');
@@ -396,9 +476,16 @@ async function main(): Promise<void> {
     assert.equal(lrFrom.pagination.totalItems, 4, 'from 2026-11-01 must hold 4 requests (end_date >= from)');
     const lrTo = (await hr.listLeaveRequests({ to: '2026-11-30' }, AUTH)) as unknown as LeaveRequestsResult;
     assert.equal(lrTo.pagination.totalItems, 244, 'to 2026-11-30 must hold 244 requests (start_date <= to)');
-    const lrRange = (await hr.listLeaveRequests({ from: '2026-11-01', to: '2026-11-30' }, AUTH)) as unknown as LeaveRequestsResult;
+    const lrRange = (await hr.listLeaveRequests(
+      { from: '2026-11-01', to: '2026-11-30' },
+      AUTH,
+    )) as unknown as LeaveRequestsResult;
     assert.equal(lrRange.pagination.totalItems, 3, 'Nov range must hold 3 requests');
-    assert.deepEqual(lrRange.requests.map((r) => r.id), ['1', '2', '3'], 'Nov range requests must be ids 1, 2, 3');
+    assert.deepEqual(
+      lrRange.requests.map((r) => r.id),
+      ['1', '2', '3'],
+      'Nov range requests must be ids 1, 2, 3',
+    );
     const lrSara = (await hr.listLeaveRequests({ search: 'sara' }, AUTH)) as unknown as LeaveRequestsResult;
     assert.equal(lrSara.pagination.totalItems, 2, 'search sara must find 2 requests');
     const lrSick = (await hr.listLeaveRequests({ search: 'sick' }, AUTH)) as unknown as LeaveRequestsResult;

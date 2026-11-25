@@ -45,10 +45,21 @@ import { Database } from '../../src/database/database.types';
 import { SettingsAdminService } from '../../src/modules/settings/services/settings-admin.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'super_admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'super_admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 function makeService(db: Kysely<Database>, auditCalls: unknown[][]) {
-  const auditStub = { log: async (...args: unknown[]) => { auditCalls.push(args); } } as never;
+  const auditStub = {
+    log: async (...args: unknown[]) => {
+      auditCalls.push(args);
+    },
+  } as never;
   return new SettingsAdminService(db, auditStub);
 }
 
@@ -83,21 +94,31 @@ async function main() {
 
       const result = await service.reconcileCustomers(AUTH);
       assert.deepEqual(result, { ok: true, updated: 1, skipped: 1 });
-      const customers = await pg.query<{ id: string; balance: string }>('SELECT id, balance FROM customers ORDER BY id');
-      assert.deepEqual(customers.rows.map((r) => [Number(r.id), String(r.balance)]), [
-        [25, '100.125'],
-        [26, '50'],
-        [27, '0'],
-        [28, '10.125'],
-      ]);
+      const customers = await pg.query<{ id: string; balance: string }>(
+        'SELECT id, balance FROM customers ORDER BY id',
+      );
+      assert.deepEqual(
+        customers.rows.map((r) => [Number(r.id), String(r.balance)]),
+        [
+          [25, '100.125'],
+          [26, '50'],
+          [27, '0'],
+          [28, '10.125'],
+        ],
+      );
 
       const supplierResult = await service.reconcileSuppliers(AUTH);
       assert.deepEqual(supplierResult, { ok: true, updated: 1, skipped: 1 });
-      const suppliers = await pg.query<{ id: string; balance: string }>('SELECT id, balance FROM suppliers ORDER BY id');
-      assert.deepEqual(suppliers.rows.map((r) => [Number(r.id), String(r.balance)]), [
-        [7, '19.875'],
-        [8, '5'],
-      ]);
+      const suppliers = await pg.query<{ id: string; balance: string }>(
+        'SELECT id, balance FROM suppliers ORDER BY id',
+      );
+      assert.deepEqual(
+        suppliers.rows.map((r) => [Number(r.id), String(r.balance)]),
+        [
+          [7, '19.875'],
+          [8, '5'],
+        ],
+      );
       // One audit log per successful run, written after commit.
       assert.equal(auditCalls.length, 2);
       console.log('balance-repair-book-digits: phase 1 OK');
@@ -140,4 +161,7 @@ async function main() {
   console.log('balance-repair-book-digits: OK');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

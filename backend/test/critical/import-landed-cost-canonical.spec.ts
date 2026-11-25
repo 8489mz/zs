@@ -110,13 +110,14 @@ function testFxFailClosed(): void {
   const oneItem = [{ id: '1', productId: 101, quantity: 10, factoryUnitPriceUsd: 10 }];
   for (const bad of [undefined, null, 0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
     assert.throws(
-      () => calculateLandedCostBreakdown({
-        items: oneItem,
-        exchangeRate: bad as number,
-        shippingCostUsd: 0,
-        customsCostEgp: 0,
-        internalTransportCostEgp: 0,
-      }),
+      () =>
+        calculateLandedCostBreakdown({
+          items: oneItem,
+          exchangeRate: bad as number,
+          shippingCostUsd: 0,
+          customsCostEgp: 0,
+          internalTransportCostEgp: 0,
+        }),
       /exchange rate/i,
       `rate ${String(bad)} must fail closed`,
     );
@@ -207,16 +208,32 @@ async function testLiveCallerWiring(): Promise<void> {
     const service = makeService(db);
 
     // EGP tenant: 3 equal items, 100 EGP overhead -> 2dp split.
-    await db.insertInto('import_shipments' as never).values({
-      id: 'sh-egp', tenant_id: 't1', status: 'Pending', exchange_rate_at_arrival: 50,
-      shipping_cost_usd: 0, customs_cost_egp: 100, internal_transport_cost_egp: 0,
-    } as never).execute();
+    await db
+      .insertInto('import_shipments' as never)
+      .values({
+        id: 'sh-egp',
+        tenant_id: 't1',
+        status: 'Pending',
+        exchange_rate_at_arrival: 50,
+        shipping_cost_usd: 0,
+        customs_cost_egp: 100,
+        internal_transport_cost_egp: 0,
+      } as never)
+      .execute();
     for (let i = 1; i <= 3; i++) {
-      await db.insertInto('import_shipment_items' as never).values({
-        id: `item-egp-${i}`, tenant_id: 't1', shipment_id: 'sh-egp', product_id: 100 + i,
-        quantity: 10, received_quantity: 10, factory_unit_price_usd: 10,
-        shortage_handling_method: 'capitalize',
-      } as never).execute();
+      await db
+        .insertInto('import_shipment_items' as never)
+        .values({
+          id: `item-egp-${i}`,
+          tenant_id: 't1',
+          shipment_id: 'sh-egp',
+          product_id: 100 + i,
+          quantity: 10,
+          received_quantity: 10,
+          factory_unit_price_usd: 10,
+          shortage_handling_method: 'capitalize',
+        } as never)
+        .execute();
     }
     const egp = await service.calculateLandedCost('t1', 'sh-egp');
     assert.equal(egp.breakdown.totalOverheadEgp, 100, 'Live EGP overhead total must be 100');
@@ -228,30 +245,63 @@ async function testLiveCallerWiring(): Promise<void> {
       [33.34, 33.33, 33.33],
       'Live EGP recalculation must split through the canonical allocator',
     );
-    const storedEgp: any[] = await (db as any).selectFrom('import_shipment_items')
+    const storedEgp: any[] = await (db as any)
+      .selectFrom('import_shipment_items')
       .select(['id', 'allocated_overhead_egp', 'landed_cost_egp'])
-      .where('shipment_id', '=', 'sh-egp').orderBy('id', 'asc').execute();
-    assert.equal(Number(storedEgp[0].allocated_overhead_egp), 3.334, 'Stored per-unit overhead matches the breakdown (33.34 / 10)');
-    assert.equal(Number(storedEgp[0].landed_cost_egp), 503.334, 'Stored landed cost matches the breakdown ((5000 + 33.34) / 10)');
-    assert.equal(Number(storedEgp[1].landed_cost_egp), 503.333, 'Stored landed cost of item 2 matches ((5000 + 33.33) / 10)');
+      .where('shipment_id', '=', 'sh-egp')
+      .orderBy('id', 'asc')
+      .execute();
+    assert.equal(
+      Number(storedEgp[0].allocated_overhead_egp),
+      3.334,
+      'Stored per-unit overhead matches the breakdown (33.34 / 10)',
+    );
+    assert.equal(
+      Number(storedEgp[0].landed_cost_egp),
+      503.334,
+      'Stored landed cost matches the breakdown ((5000 + 33.34) / 10)',
+    );
+    assert.equal(
+      Number(storedEgp[1].landed_cost_egp),
+      503.333,
+      'Stored landed cost of item 2 matches ((5000 + 33.33) / 10)',
+    );
 
     // KWD tenant: the same engine call must keep 100.125 — if the
     // service guessed EGP digits it would store 100.13 instead.
-    await db.insertInto('import_shipments' as never).values({
-      id: 'sh-kwd', tenant_id: 'tkwd', status: 'Pending', exchange_rate_at_arrival: 50,
-      shipping_cost_usd: 0, customs_cost_egp: 100.125, internal_transport_cost_egp: 0,
-    } as never).execute();
-    await db.insertInto('import_shipment_items' as never).values({
-      id: 'item-kwd-1', tenant_id: 'tkwd', shipment_id: 'sh-kwd', product_id: 201,
-      quantity: 1, received_quantity: 1, factory_unit_price_usd: 10,
-      shortage_handling_method: 'capitalize',
-    } as never).execute();
+    await db
+      .insertInto('import_shipments' as never)
+      .values({
+        id: 'sh-kwd',
+        tenant_id: 'tkwd',
+        status: 'Pending',
+        exchange_rate_at_arrival: 50,
+        shipping_cost_usd: 0,
+        customs_cost_egp: 100.125,
+        internal_transport_cost_egp: 0,
+      } as never)
+      .execute();
+    await db
+      .insertInto('import_shipment_items' as never)
+      .values({
+        id: 'item-kwd-1',
+        tenant_id: 'tkwd',
+        shipment_id: 'sh-kwd',
+        product_id: 201,
+        quantity: 1,
+        received_quantity: 1,
+        factory_unit_price_usd: 10,
+        shortage_handling_method: 'capitalize',
+      } as never)
+      .execute();
     const kwd = await service.calculateLandedCost('tkwd', 'sh-kwd');
     assert.equal(kwd.breakdown.totalOverheadEgp, 100.125, 'Live KWD overhead total must keep 100.125');
     assert.equal(kwd.breakdown.items[0].allocatedOverheadEgp, 100.125, 'Live KWD allocation must keep 100.125');
-    const storedKwd: any = await (db as any).selectFrom('import_shipment_items')
+    const storedKwd: any = await (db as any)
+      .selectFrom('import_shipment_items')
       .select(['allocated_overhead_egp', 'landed_cost_egp'])
-      .where('shipment_id', '=', 'sh-kwd').executeTakeFirstOrThrow();
+      .where('shipment_id', '=', 'sh-kwd')
+      .executeTakeFirstOrThrow();
     assert.equal(Number(storedKwd.landed_cost_egp), 600.125, 'Stored KWD landed cost matches ((500 + 100.125) / 1)');
   } finally {
     await db.destroy();

@@ -115,8 +115,14 @@ async function main(): Promise<void> {
     assert.equal(result, 'PAID', 'the committed result must still be returned');
     assert.equal(recoveryCalls.length, 1, 'the row must be flagged recovery_required');
     assert.equal(recoveryCalls[0][1], 'IDEMPOTENCY_FINALIZE_FAILED');
-    assert.ok(errorCalls.some((message) => message.includes('DB unavailable')), 'the finalize failure must be logged');
-    assert.ok(errorCalls.some((message) => message.includes('key-1')), 'the log must name the key');
+    assert.ok(
+      errorCalls.some((message) => message.includes('DB unavailable')),
+      'the finalize failure must be logged',
+    );
+    assert.ok(
+      errorCalls.some((message) => message.includes('key-1')),
+      'the log must name the key',
+    );
   }
 
   // Case 3: happy path — finalize once, no recovery flagging.

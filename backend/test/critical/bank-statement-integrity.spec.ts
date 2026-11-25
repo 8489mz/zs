@@ -11,16 +11,26 @@ async function scenario(isBank: boolean, failLines: boolean) {
     selectFrom(table: string) {
       assert.equal(table, 'accounting_accounts');
       const query: any = {
-        select() { return query; },
-        where() { return query; },
-        async executeTakeFirst() { return { id: 5, is_cash_bank: isBank }; },
+        select() {
+          return query;
+        },
+        where() {
+          return query;
+        },
+        async executeTakeFirst() {
+          return { id: 5, is_cash_bank: isBank };
+        },
       };
       return query;
     },
     insertInto(table: string) {
       const query: any = {
-        values() { return query; },
-        returning() { return query; },
+        values() {
+          return query;
+        },
+        returning() {
+          return query;
+        },
         async executeTakeFirstOrThrow() {
           assert.equal(table, 'bank_statements');
           headerWrites++;
@@ -35,21 +45,33 @@ async function scenario(isBank: boolean, failLines: boolean) {
       return query;
     },
   };
-  const db: any = { transaction() { return { execute: async (callback: (transaction: any) => Promise<unknown>) => {
-    transactionStarted++;
-    return callback(tx);
-  } }; } };
+  const db: any = {
+    transaction() {
+      return {
+        execute: async (callback: (transaction: any) => Promise<unknown>) => {
+          transactionStarted++;
+          return callback(tx);
+        },
+      };
+    },
+  };
   const service = new AccountingService(db, {} as any);
   // Split seam: createBankStatement re-reads through the S10 slice's
   // getBankStatement (slice L223), not the facade method — stub the slice.
   (service as any).bankStatementsService.getBankStatement = async (id: number) => ({ statement: { id }, lines: [] });
   const auth: any = { userId: 7, role: 'admin', permissions: [], tenantId: 'tenant-A', accountId: 'account-A' };
   const dto: any = {
-    accountId: 5, statementNo: 'S1', statementDate: '2026-10-21',
-    startingBalance: 0, endingBalance: 12,
+    accountId: 5,
+    statementNo: 'S1',
+    statementDate: '2026-10-21',
+    startingBalance: 0,
+    endingBalance: 12,
     lines: [{ lineDate: '2026-10-21', description: 'Deposit', amount: 12 }],
   };
-  return { run: () => service.createBankStatement(dto, auth), stats: () => ({ transactionStarted, headerWrites, lineWrites }) };
+  return {
+    run: () => service.createBankStatement(dto, auth),
+    stats: () => ({ transactionStarted, headerWrites, lineWrites }),
+  };
 }
 
 (async () => {
@@ -66,4 +88,7 @@ async function scenario(isBank: boolean, failLines: boolean) {
   assert.equal(result.statement.id, 99);
   assert.deepEqual(valid.stats(), { transactionStarted: 1, headerWrites: 1, lineWrites: 1 });
   console.log('Bank statement creation/eligibility unit regressions passed');
-})().catch((error) => { console.error(error); process.exitCode = 1; });
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

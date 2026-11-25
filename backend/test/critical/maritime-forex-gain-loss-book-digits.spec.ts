@@ -63,7 +63,11 @@ async function main(): Promise<void> {
 
     await pg.exec(`UPDATE settings SET value = 'EGP' WHERE tenant_id = 't1' AND key = 'currency'`);
     await assert.rejects(service.calculateJobForexGainLoss(auth, 1, 48.5), /لا يطابق/);
-    const jobAfterFail = await db.selectFrom('maritime_jobs' as any).selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+    const jobAfterFail = await db
+      .selectFrom('maritime_jobs' as any)
+      .selectAll()
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow();
     assert.equal(Number((jobAfterFail as any).actual_roe), 51);
 
     console.log('maritime forex gain loss book digits checks passed');

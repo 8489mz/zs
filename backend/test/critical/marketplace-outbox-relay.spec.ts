@@ -129,10 +129,15 @@ async function makeRelayDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   await signatureCaptureUp(db as never);
   await signatureCaptureUp(db as never);
   const anyDb = db as any;
-  await anyDb.insertInto('settings').values({
-    tenant_id: 't-relay', account_id: ACCOUNT, key: 'marketplace_amazon_config',
-    value: JSON.stringify({ enabled: true, sellerId: 'SELLER-R', webhookSecret: SECRET }),
-  }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({
+      tenant_id: 't-relay',
+      account_id: ACCOUNT,
+      key: 'marketplace_amazon_config',
+      value: JSON.stringify({ enabled: true, sellerId: 'SELLER-R', webhookSecret: SECRET }),
+    })
+    .execute();
   return { pg, db };
 }
 
@@ -154,8 +159,14 @@ async function makeSettlementDb(): Promise<{ pg: PGlite; db: Kysely<Database> }>
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: 't-settle' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: 't-settle', key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('settings').values({ tenant_id: 't-settle', key: 'timezone', value: 'America/New_York' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: 't-settle', currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: 't-settle', key: 'timezone', value: 'America/New_York' })
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: 't-settle', currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('accounting_settings').values({ id: 1, tenant_id: 't-settle' }).execute();
   const accounts: Array<[number, string, string, boolean]> = [
     [1120, '1120', 'asset', true],
@@ -164,10 +175,19 @@ async function makeSettlementDb(): Promise<{ pg: PGlite; db: Kysely<Database> }>
     [6700, '6700', 'expense', false],
   ];
   for (const [id, code, type, isCashBank] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({
-      id, tenant_id: 't-settle', code, name_ar: code, account_type: type,
-      is_active: true, is_cash_bank: isCashBank, allow_manual_entries: true,
-    }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id,
+        tenant_id: 't-settle',
+        code,
+        name_ar: code,
+        account_type: type,
+        is_active: true,
+        is_cash_bank: isCashBank,
+        allow_manual_entries: true,
+      })
+      .execute();
   }
   return { pg, db };
 }
@@ -177,17 +197,61 @@ async function main(): Promise<void> {
   {
     const raw = '{"eventType":"ORDER_CREATED"}';
     const good = sign(SECRET, raw);
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: SECRET, signature: good, rawBody: raw }), true, 'a correct signature verifies');
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: SECRET, signature: good.replace('sha256=', ''), rawBody: raw }), true, 'the sha256= prefix is optional');
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: SECRET, signature: good, rawBody: Buffer.from(raw) }), true, 'a Buffer body verifies the same bytes');
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: 'wrong-secret-0123456789-wrong', signature: good, rawBody: raw }), false, 'a wrong secret fails');
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: SECRET, signature: sign(SECRET, '{"tampered":true}'), rawBody: raw }), false, 'a signature over different bytes fails');
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: SECRET, signature: 'sha256=zzzz', rawBody: raw }), false, 'a malformed signature fails');
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: SECRET, signature: '', rawBody: raw }), false, 'a missing signature fails');
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: 'short', signature: good, rawBody: raw }), false, 'a secret shorter than 32 characters fails');
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: undefined, signature: good, rawBody: raw }), false, 'a missing secret fails');
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: SECRET, signature: good, rawBody: undefined }), false, 'a missing body fails');
-    assert.equal(verifyMarketplaceWebhookSignature({ secret: 42, signature: good, rawBody: raw }), false, 'a non-string secret fails without throwing');
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: SECRET, signature: good, rawBody: raw }),
+      true,
+      'a correct signature verifies',
+    );
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: SECRET, signature: good.replace('sha256=', ''), rawBody: raw }),
+      true,
+      'the sha256= prefix is optional',
+    );
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: SECRET, signature: good, rawBody: Buffer.from(raw) }),
+      true,
+      'a Buffer body verifies the same bytes',
+    );
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: 'wrong-secret-0123456789-wrong', signature: good, rawBody: raw }),
+      false,
+      'a wrong secret fails',
+    );
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: SECRET, signature: sign(SECRET, '{"tampered":true}'), rawBody: raw }),
+      false,
+      'a signature over different bytes fails',
+    );
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: SECRET, signature: 'sha256=zzzz', rawBody: raw }),
+      false,
+      'a malformed signature fails',
+    );
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: SECRET, signature: '', rawBody: raw }),
+      false,
+      'a missing signature fails',
+    );
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: 'short', signature: good, rawBody: raw }),
+      false,
+      'a secret shorter than 32 characters fails',
+    );
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: undefined, signature: good, rawBody: raw }),
+      false,
+      'a missing secret fails',
+    );
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: SECRET, signature: good, rawBody: undefined }),
+      false,
+      'a missing body fails',
+    );
+    assert.equal(
+      verifyMarketplaceWebhookSignature({ secret: 42, signature: good, rawBody: raw }),
+      false,
+      'a non-string secret fails without throwing',
+    );
     console.log('  pure-engine signature pins passed');
   }
 
@@ -204,13 +268,21 @@ async function main(): Promise<void> {
       });
       assert.equal(received.received, true);
       assert.ok(received.eventId);
-      const stored = await (db as any).selectFrom('marketplace_webhook_events').selectAll().where('id', '=', received.eventId).executeTakeFirstOrThrow();
+      const stored = await (db as any)
+        .selectFrom('marketplace_webhook_events')
+        .selectAll()
+        .where('id', '=', received.eventId)
+        .executeTakeFirstOrThrow();
       assert.equal(stored.status, 'pending', 'receipt never verifies or processes: status stays pending');
       assert.equal(stored.signature, sign(SECRET, raw), 'the signature header is stored as received');
       assert.equal(stored.raw_body, raw, 'the exact raw bytes are stored');
 
       const unsigned = await service.receiveMarketplaceWebhook('amazon', amazonPayload('701-UNSIGNED-1'));
-      const unsignedRow = await (db as any).selectFrom('marketplace_webhook_events').selectAll().where('id', '=', unsigned.eventId).executeTakeFirstOrThrow();
+      const unsignedRow = await (db as any)
+        .selectFrom('marketplace_webhook_events')
+        .selectAll()
+        .where('id', '=', unsigned.eventId)
+        .executeTakeFirstOrThrow();
       assert.equal(unsignedRow.status, 'pending');
       assert.equal(unsignedRow.signature, null, 'an unsigned receipt stores a NULL signature');
       assert.equal(unsignedRow.raw_body, null, 'an unsigned receipt stores a NULL raw body');
@@ -235,14 +307,19 @@ async function main(): Promise<void> {
       const payload = amazonPayload('701-ONCE-1');
       const raw = JSON.stringify(payload);
       const received = await service.receiveMarketplaceWebhook('amazon', payload, undefined, {
-        signature: sign(SECRET, raw), rawBody: raw,
+        signature: sign(SECRET, raw),
+        rawBody: raw,
       });
       const first = await service.relayMarketplaceWebhookEvents(auth('t-relay'));
       assert.equal(first.claimed, 1);
       assert.equal(first.processed, 1, 'the signed event is relayed');
       assert.equal(first.results[0].outcome, 'processed');
       assert.equal(handlerCalls, 1, 'the handler runs once');
-      const row = await (db as any).selectFrom('marketplace_webhook_events').selectAll().where('id', '=', received.eventId).executeTakeFirstOrThrow();
+      const row = await (db as any)
+        .selectFrom('marketplace_webhook_events')
+        .selectAll()
+        .where('id', '=', received.eventId)
+        .executeTakeFirstOrThrow();
       assert.equal(row.status, 'processed');
       assert.ok(row.processed_at, 'processed_at is set on the same transaction');
       const second = await service.relayMarketplaceWebhookEvents(auth('t-relay'));
@@ -275,7 +352,11 @@ async function main(): Promise<void> {
       assert.equal(result.rejected, 1, 'the tampered event is rejected');
       assert.equal(result.results[0].outcome, 'rejected');
       assert.equal(handlerCalls, 0, 'the handler NEVER runs for a bad signature');
-      const row = await (db as any).selectFrom('marketplace_webhook_events').selectAll().where('id', '=', received.eventId).executeTakeFirstOrThrow();
+      const row = await (db as any)
+        .selectFrom('marketplace_webhook_events')
+        .selectAll()
+        .where('id', '=', received.eventId)
+        .executeTakeFirstOrThrow();
       assert.equal(row.status, 'rejected');
       const again = await service.relayMarketplaceWebhookEvents(auth('t-relay'));
       assert.equal(again.claimed, 0, 'a rejected event is terminal, not re-claimed');
@@ -298,19 +379,32 @@ async function main(): Promise<void> {
       });
       await service.receiveMarketplaceWebhook('amazon', amazonPayload('701-UNSIGNED-2'));
       // A legacy row stored before migration 0298: no signature material.
-      await (db as any).insertInto('marketplace_webhook_events').values({
-        tenant_id: 't-relay', account_id: null, marketplace: 'amazon',
-        event_type: 'ORDER_CREATED', event_key: 'legacy-1', dedup_key: 'legacy-dedup-1',
-        payload: amazonPayload('701-LEGACY-1'), payload_hash: 'legacy-hash',
-        signature: null, raw_body: null, status: 'pending',
-      }).execute();
+      await (db as any)
+        .insertInto('marketplace_webhook_events')
+        .values({
+          tenant_id: 't-relay',
+          account_id: null,
+          marketplace: 'amazon',
+          event_type: 'ORDER_CREATED',
+          event_key: 'legacy-1',
+          dedup_key: 'legacy-dedup-1',
+          payload: amazonPayload('701-LEGACY-1'),
+          payload_hash: 'legacy-hash',
+          signature: null,
+          raw_body: null,
+          status: 'pending',
+        })
+        .execute();
       const result = await service.relayMarketplaceWebhookEvents(auth('t-relay'));
       assert.equal(result.claimed, 2);
       assert.equal(result.unverifiable, 2, 'both rows lack signature material');
       assert.equal(result.processed, 0);
       assert.equal(handlerCalls, 0, 'the handler NEVER runs for an unverifiable event');
       const rows = await (db as any).selectFrom('marketplace_webhook_events').select(['status']).execute();
-      assert.ok(rows.every((r: any) => r.status === 'pending'), 'unverifiable events stay pending for manual review');
+      assert.ok(
+        rows.every((r: any) => r.status === 'pending'),
+        'unverifiable events stay pending for manual review',
+      );
     } finally {
       await db.destroy();
     }
@@ -325,11 +419,16 @@ async function main(): Promise<void> {
       const payload = amazonPayload('701-NOHANDLER-1');
       const raw = JSON.stringify(payload);
       const received = await service.receiveMarketplaceWebhook('amazon', payload, undefined, {
-        signature: sign(SECRET, raw), rawBody: raw,
+        signature: sign(SECRET, raw),
+        rawBody: raw,
       });
       const first = await service.relayMarketplaceWebhookEvents(auth('t-relay'));
       assert.equal(first.skippedNoHandler, 1, 'a verified event with no handler is skipped, not failed');
-      let row = await (db as any).selectFrom('marketplace_webhook_events').selectAll().where('id', '=', received.eventId).executeTakeFirstOrThrow();
+      let row = await (db as any)
+        .selectFrom('marketplace_webhook_events')
+        .selectAll()
+        .where('id', '=', received.eventId)
+        .executeTakeFirstOrThrow();
       assert.equal(row.status, 'pending', 'the event waits for a handler to exist');
       let handlerCalls = 0;
       service.registerMarketplaceWebhookHandler('ORDER_CREATED', async () => {
@@ -339,7 +438,11 @@ async function main(): Promise<void> {
       const second = await service.relayMarketplaceWebhookEvents(auth('t-relay'));
       assert.equal(second.processed, 1);
       assert.equal(handlerCalls, 1);
-      row = await (db as any).selectFrom('marketplace_webhook_events').selectAll().where('id', '=', received.eventId).executeTakeFirstOrThrow();
+      row = await (db as any)
+        .selectFrom('marketplace_webhook_events')
+        .selectAll()
+        .where('id', '=', received.eventId)
+        .executeTakeFirstOrThrow();
       assert.equal(row.status, 'processed');
     } finally {
       await db.destroy();
@@ -358,13 +461,18 @@ async function main(): Promise<void> {
       const payload = amazonPayload('701-THROW-1');
       const raw = JSON.stringify(payload);
       const received = await service.receiveMarketplaceWebhook('amazon', payload, undefined, {
-        signature: sign(SECRET, raw), rawBody: raw,
+        signature: sign(SECRET, raw),
+        rawBody: raw,
       });
       const first = await service.relayMarketplaceWebhookEvents(auth('t-relay'));
       assert.equal(first.failed, 1, 'a handler throw is reported as failed');
       assert.equal(first.results[0].outcome, 'failed');
       assert.match(first.results[0].error || '', /downstream boom/);
-      let row = await (db as any).selectFrom('marketplace_webhook_events').selectAll().where('id', '=', received.eventId).executeTakeFirstOrThrow();
+      let row = await (db as any)
+        .selectFrom('marketplace_webhook_events')
+        .selectAll()
+        .where('id', '=', received.eventId)
+        .executeTakeFirstOrThrow();
       assert.equal(row.status, 'pending', 'the failed event rolls back to pending, retryable');
       service.unregisterMarketplaceWebhookHandler('ORDER_CREATED');
       let goodCalls = 0;
@@ -375,7 +483,11 @@ async function main(): Promise<void> {
       const second = await service.relayMarketplaceWebhookEvents(auth('t-relay'));
       assert.equal(second.processed, 1, 'the retry after a handler failure processes the event');
       assert.equal(goodCalls, 1);
-      row = await (db as any).selectFrom('marketplace_webhook_events').selectAll().where('id', '=', received.eventId).executeTakeFirstOrThrow();
+      row = await (db as any)
+        .selectFrom('marketplace_webhook_events')
+        .selectAll()
+        .where('id', '=', received.eventId)
+        .executeTakeFirstOrThrow();
       assert.equal(row.status, 'processed');
     } finally {
       await db.destroy();
@@ -400,11 +512,15 @@ async function main(): Promise<void> {
       const configAgain = await service.getConfig(auth('t-relay'));
       assert.equal(configAgain.amazon.webhookSecret, '••••••••', 'saving the masked value preserves the secret');
       // The preserved secret still verifies: a signed event relays.
-      service.registerMarketplaceWebhookHandler('ORDER_CREATED', async () => ({ handled: true, actionTaken: 'counted' }));
+      service.registerMarketplaceWebhookHandler('ORDER_CREATED', async () => ({
+        handled: true,
+        actionTaken: 'counted',
+      }));
       const payload = amazonPayload('701-SECRET-1');
       const raw = JSON.stringify(payload);
       await service.receiveMarketplaceWebhook('amazon', payload, undefined, {
-        signature: sign(SECRET, raw), rawBody: raw,
+        signature: sign(SECRET, raw),
+        rawBody: raw,
       });
       const result = await service.relayMarketplaceWebhookEvents(auth('t-relay'));
       assert.equal(result.processed, 1, 'the preserved secret still verifies after a masked save');
@@ -426,27 +542,64 @@ async function main(): Promise<void> {
       const posting = new AccountingPostingService(foundation);
       const service = new MarketplaceSyncService(db, new AuditService(db), posting);
       const settlementAuth: AuthContext = {
-        userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-        permissions: ['sales'], tenantId: 't-settle', accountId: 'a1',
+        userId: 1,
+        sessionId: 'spec',
+        username: 'admin',
+        role: 'admin',
+        permissions: ['sales'],
+        tenantId: 't-settle',
+        accountId: 'a1',
       } as unknown as AuthContext;
       // 2026-01-15T00:30:00Z is 2026-01-14 19:30 in America/New_York.
-      const instantResult = await service.reconcileSettlement({
-        marketplace: 'amazon', settlementId: 'SET-DATE-1',
-        periodStart: '2026-01-01', periodEnd: '2026-01-15T00:30:00.000Z', currency: 'EGP',
-        grossSales: 100, referralFees: 10, fulfillmentFees: 5,
-        refunds: 0, storageOrOtherFees: 0.5, netPayout: 84.5,
-      }, settlementAuth);
+      const instantResult = await service.reconcileSettlement(
+        {
+          marketplace: 'amazon',
+          settlementId: 'SET-DATE-1',
+          periodStart: '2026-01-01',
+          periodEnd: '2026-01-15T00:30:00.000Z',
+          currency: 'EGP',
+          grossSales: 100,
+          referralFees: 10,
+          fulfillmentFees: 5,
+          refunds: 0,
+          storageOrOtherFees: 0.5,
+          netPayout: 84.5,
+        },
+        settlementAuth,
+      );
       assert.equal(instantResult.ok, true);
-      const instantRow = await (db as any).selectFrom('journal_entries').select(['entry_date']).where('id', '=', instantResult.journalEntryId).executeTakeFirstOrThrow();
-      assert.equal(dateKey(instantRow.entry_date), '2026-01-14', 'a datetime periodEnd keys the tenant-local day, not the UTC day');
-      const plainResult = await service.reconcileSettlement({
-        marketplace: 'amazon', settlementId: 'SET-DATE-2',
-        periodStart: '2026-01-01', periodEnd: '2026-01-15', currency: 'EGP',
-        grossSales: 100, referralFees: 10, fulfillmentFees: 5,
-        refunds: 0, storageOrOtherFees: 0.5, netPayout: 84.5,
-      }, settlementAuth);
+      const instantRow = await (db as any)
+        .selectFrom('journal_entries')
+        .select(['entry_date'])
+        .where('id', '=', instantResult.journalEntryId)
+        .executeTakeFirstOrThrow();
+      assert.equal(
+        dateKey(instantRow.entry_date),
+        '2026-01-14',
+        'a datetime periodEnd keys the tenant-local day, not the UTC day',
+      );
+      const plainResult = await service.reconcileSettlement(
+        {
+          marketplace: 'amazon',
+          settlementId: 'SET-DATE-2',
+          periodStart: '2026-01-01',
+          periodEnd: '2026-01-15',
+          currency: 'EGP',
+          grossSales: 100,
+          referralFees: 10,
+          fulfillmentFees: 5,
+          refunds: 0,
+          storageOrOtherFees: 0.5,
+          netPayout: 84.5,
+        },
+        settlementAuth,
+      );
       assert.equal(plainResult.ok, true);
-      const plainRow = await (db as any).selectFrom('journal_entries').select(['entry_date']).where('id', '=', plainResult.journalEntryId).executeTakeFirstOrThrow();
+      const plainRow = await (db as any)
+        .selectFrom('journal_entries')
+        .select(['entry_date'])
+        .where('id', '=', plainResult.journalEntryId)
+        .executeTakeFirstOrThrow();
       assert.equal(dateKey(plainRow.entry_date), '2026-01-15', 'a plain YYYY-MM-DD periodEnd passes through untouched');
     } finally {
       await db.destroy();
@@ -463,11 +616,20 @@ async function main(): Promise<void> {
         CREATE TABLE settings (tenant_id text, key text, value text);
       `);
       const anyDb = db as any;
-      await anyDb.insertInto('settings').values({ tenant_id: 't-export', key: 'timezone', value: 'Pacific/Kiritimati' }).execute();
+      await anyDb
+        .insertInto('settings')
+        .values({ tenant_id: 't-export', key: 'timezone', value: 'Pacific/Kiritimati' })
+        .execute();
       const service = new MarketplaceSyncService(db, { log: async () => undefined } as never, {} as never);
       const exported = await service.exportFlatFile('amazon', auth('t-export'));
-      const expected = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Kiritimati' }).format(new Date()).replace(/-/g, '');
-      assert.equal(exported.filename, `Amazon_Inventory_Loader_${expected}.tsv`, 'the filename carries the tenant-local day (Kiritimati), not the UTC day');
+      const expected = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Kiritimati' })
+        .format(new Date())
+        .replace(/-/g, '');
+      assert.equal(
+        exported.filename,
+        `Amazon_Inventory_Loader_${expected}.tsv`,
+        'the filename carries the tenant-local day (Kiritimati), not the UTC day',
+      );
       assert.equal(exported.rowCount, 0, 'no mappings seeded, so no rows');
     } finally {
       await db.destroy();
@@ -492,15 +654,27 @@ async function main(): Promise<void> {
       path.join(__dirname, '../../src/modules/storefront/controllers/marketplace-sync.controller.ts'),
       'utf8',
     );
-    assert.equal(publicSource.includes('MARKETPLACE_WEBHOOK_SIGNATURE_HEADER'), true, 'the public route reads the signature header');
+    assert.equal(
+      publicSource.includes('MARKETPLACE_WEBHOOK_SIGNATURE_HEADER'),
+      true,
+      'the public route reads the signature header',
+    );
     assert.equal(publicSource.includes('rawBody'), true, 'the public route passes the raw body into receipt');
-    assert.equal(guardedSource.includes("webhooks/relay"), true, 'the guarded controller exposes the relay endpoint');
+    assert.equal(guardedSource.includes('webhooks/relay'), true, 'the guarded controller exposes the relay endpoint');
     assert.equal(guardedSource.includes('relayMarketplaceWebhookEvents'), true, 'the relay endpoint calls the relay');
     // \b excludes unregisterMarketplaceWebhookHandler (the "un" prefix
     // means no word boundary before "register" there).
     const registrations = (serviceSource.match(/\bregisterMarketplaceWebhookHandler\(/g) || []).length;
-    assert.equal(registrations, 1, 'only the registry method definition calls registerMarketplaceWebhookHandler -- production registers no handler');
-    assert.equal(serviceSource.includes('relayMarketplaceWebhookEvents'), true, 'the relay method exists on the service');
+    assert.equal(
+      registrations,
+      1,
+      'only the registry method definition calls registerMarketplaceWebhookHandler -- production registers no handler',
+    );
+    assert.equal(
+      serviceSource.includes('relayMarketplaceWebhookEvents'),
+      true,
+      'the relay method exists on the service',
+    );
     console.log('  source wiring pins passed');
   }
 

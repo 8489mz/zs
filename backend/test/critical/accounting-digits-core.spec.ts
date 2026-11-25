@@ -89,47 +89,117 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: code } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: code } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
-async function seedAccount(db: Kysely<Database>, id: number, code: string, type: string, group?: string | null): Promise<void> {
-  await db.insertInto('accounting_accounts' as never).values({
-    id, tenant_id: 't1', code, name_ar: code, name_en: code, account_type: type,
-    is_active: true, is_tax: false, account_group: group ?? null,
-  } as never).execute();
+async function seedAccount(
+  db: Kysely<Database>,
+  id: number,
+  code: string,
+  type: string,
+  group?: string | null,
+): Promise<void> {
+  await db
+    .insertInto('accounting_accounts' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      code,
+      name_ar: code,
+      name_en: code,
+      account_type: type,
+      is_active: true,
+      is_tax: false,
+      account_group: group ?? null,
+    } as never)
+    .execute();
 }
 
 async function seedPostedEntry(
   db: Kysely<Database>,
   lines: Array<{ accountId: number; debit: number; credit: number }>,
 ): Promise<number> {
-  const inserted = await db.insertInto('journal_entries' as never).values({
-    tenant_id: 't1', account_id: 'a1', entry_no: 'JE-SEED', dedup_key: null,
-    entry_date: '2025-06-15', description: 'seed', source_type: 'sale', source_id: 1,
-    status: 'posted', branch_id: null, location_id: null, created_by: 1, posted_by: 1,
-    posted_at: new Date(), cancelled_by: null, cancel_reason: null, cancelled_at: null,
-    reversal_of_entry_id: null, reversed_by_entry_id: null, updated_at: new Date(),
-  } as never).returning('id' as never).executeTakeFirstOrThrow() as unknown as { id: number };
+  const inserted = (await db
+    .insertInto('journal_entries' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 'a1',
+      entry_no: 'JE-SEED',
+      dedup_key: null,
+      entry_date: '2025-06-15',
+      description: 'seed',
+      source_type: 'sale',
+      source_id: 1,
+      status: 'posted',
+      branch_id: null,
+      location_id: null,
+      created_by: 1,
+      posted_by: 1,
+      posted_at: new Date(),
+      cancelled_by: null,
+      cancel_reason: null,
+      cancelled_at: null,
+      reversal_of_entry_id: null,
+      reversed_by_entry_id: null,
+      updated_at: new Date(),
+    } as never)
+    .returning('id' as never)
+    .executeTakeFirstOrThrow()) as unknown as { id: number };
   const entryId = Number((inserted as any).id);
   for (const line of lines) {
-    await db.insertInto('journal_entry_lines' as never).values({
-      tenant_id: 't1', journal_entry_id: entryId, account_id: line.accountId, cost_center_id: null,
-      description: 'seed', debit: line.debit, credit: line.credit,
-      partner_type: 'none', partner_id: null, branch_id: null, location_id: null, is_reconciled: false,
-    } as never).execute();
+    await db
+      .insertInto('journal_entry_lines' as never)
+      .values({
+        tenant_id: 't1',
+        journal_entry_id: entryId,
+        account_id: line.accountId,
+        cost_center_id: null,
+        description: 'seed',
+        debit: line.debit,
+        credit: line.credit,
+        partner_type: 'none',
+        partner_id: null,
+        branch_id: null,
+        location_id: null,
+        is_reconciled: false,
+      } as never)
+      .execute();
   }
   return entryId;
 }
 
-async function seedYear(db: Kysely<Database>, totals: { net: number; revenue: number; expense: number }): Promise<void> {
-  await db.insertInto('accounting_fiscal_years' as never).values({
-    id: 1, tenant_id: 't1', name: 'FY2025', code: 'FY25',
-    start_date: '2025-01-01', end_date: '2025-12-31', status: 'open',
-    closing_entry_id: null, net_profit_loss: totals.net, total_revenue: totals.revenue, total_expense: totals.expense,
-    retained_earnings_account_id: null, closed_at: null, closed_by: null, closing_notes: null,
-    updated_at: new Date(),
-  } as never).execute();
+async function seedYear(
+  db: Kysely<Database>,
+  totals: { net: number; revenue: number; expense: number },
+): Promise<void> {
+  await db
+    .insertInto('accounting_fiscal_years' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      name: 'FY2025',
+      code: 'FY25',
+      start_date: '2025-01-01',
+      end_date: '2025-12-31',
+      status: 'open',
+      closing_entry_id: null,
+      net_profit_loss: totals.net,
+      total_revenue: totals.revenue,
+      total_expense: totals.expense,
+      retained_earnings_account_id: null,
+      closed_at: null,
+      closed_by: null,
+      closing_notes: null,
+      updated_at: new Date(),
+    } as never)
+    .execute();
 }
 
 function buildBalanceSheet(db: Kysely<Database>): BalanceSheetService {
@@ -175,9 +245,12 @@ async function main(): Promise<void> {
     assert.equal(report.isBalanced, true);
     assert.equal(report.rows[0].debit, 100.125);
     assert.equal(report.rows[1].credit, 100.125);
-    const small = buildWithDigits('2025-12-31',
+    const small = buildWithDigits(
+      '2025-12-31',
       [{ id: 10, code: '1110', nameAr: 'نقد', nameEn: 'Cash', accountType: 'asset' }],
-      [{ accountId: 10, totalDebit: 0.125, totalCredit: 0 }], 3);
+      [{ accountId: 10, totalDebit: 0.125, totalCredit: 0 }],
+      3,
+    );
     assert.equal(small.rows[0].debit, 0.125, 'a single fils (0.125) must not round up to 0.13');
     assert.equal(small.totalDebit, 0.125);
   }
@@ -188,8 +261,9 @@ async function main(): Promise<void> {
     const sums = [{ accountId: 10, totalDebit: 100.12, totalCredit: 0 }];
     const report = buildWithDigits('2025-12-31', accounts, sums, 2);
     assert.equal(report.totalDebit, 100.12);
-    const fallback = buildTrialBalance('2025-12-31', accounts,
-      [{ accountId: 10, totalDebit: 100.125, totalCredit: 0 }]);
+    const fallback = buildTrialBalance('2025-12-31', accounts, [
+      { accountId: 10, totalDebit: 100.125, totalCredit: 0 },
+    ]);
     assert.equal(fallback.totalDebit, 100.13, 'no-digits callers keep the previous 2dp shaping');
   }
 
@@ -265,7 +339,7 @@ async function main(): Promise<void> {
         { accountId: 10, debit: 100.125, credit: 0 },
         { accountId: 20, debit: 0, credit: 100.125 },
       ]);
-      const result = await buildAccounting(db).getJournalEntry(entryId, auth) as any;
+      const result = (await buildAccounting(db).getJournalEntry(entryId, auth)) as any;
       assert.equal(result.entry.totals.debit, 100.125, 'journal totals must keep the third decimal');
       assert.equal(result.entry.totals.credit, 100.125);
       assert.equal(result.entry.totals.balanced, true);
@@ -286,19 +360,25 @@ async function main(): Promise<void> {
       await seedAccount(db, 20, '5100', 'expense', null);
       await seedAccount(db, 30, '7290', 'expense', null);
       const service = buildAccounting(db);
-      const exact = await service.validateBalancedLines([
-        { accountId: 10, debit: 100.125, credit: 0 },
-        { accountId: 20, debit: 0, credit: 100.125 },
-      ], auth);
+      const exact = await service.validateBalancedLines(
+        [
+          { accountId: 10, debit: 100.125, credit: 0 },
+          { accountId: 20, debit: 0, credit: 100.125 },
+        ],
+        auth,
+      );
       assert.equal(exact.ok, true);
       if (exact.ok) {
         assert.equal(exact.lines[0].debit, 100.125, 'draft lines must keep the third decimal');
         assert.equal(exact.lines[1].credit, 100.125);
       }
-      const plugged = await service.validateBalancedLines([
-        { accountId: 10, debit: 100.125, credit: 0 },
-        { accountId: 20, debit: 0, credit: 100.12 },
-      ], auth);
+      const plugged = await service.validateBalancedLines(
+        [
+          { accountId: 10, debit: 100.125, credit: 0 },
+          { accountId: 20, debit: 0, credit: 100.12 },
+        ],
+        auth,
+      );
       assert.equal(plugged.ok, true);
       if (plugged.ok) {
         assert.equal(plugged.lines.length, 3, 'a one-fils-scale difference plugs into 7290');
@@ -351,7 +431,10 @@ async function main(): Promise<void> {
       assert.ok(!source.includes('.toFixed(2)'), `${file} must not hardcode 2dp formatting`);
       assert.ok(source.includes('roundMoney('), `${file} must round through the canonical engine`);
     }
-    const serviceSource = readFileSync(resolve(__dirname, '../../', 'src/modules/accounting/services/trial-balance.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../', 'src/modules/accounting/services/trial-balance.service.ts'),
+      'utf8',
+    );
     assert.ok(!serviceSource.includes('.toFixed(2)'), 'trial-balance.service.ts must not hardcode 2dp formatting');
     assert.ok(serviceSource.includes('currencyMoneyDigits'), 'trial-balance.service.ts must resolve book digits');
   }

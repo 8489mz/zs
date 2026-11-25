@@ -12,7 +12,7 @@ import { AuthContext } from '../../../src/core/auth/interfaces/auth-context.inte
 
 /**
  * Z-SYSTEMS ERP — EXPENSE MANAGEMENT SIMULATION
- * 
+ *
  * Verifies:
  * 1. Foundation: Tenant, Chart of Accounts, Branch, and Stock Location.
  * 2. Opening Balance: Initial capital injection into Cash Account.
@@ -134,8 +134,8 @@ async function runExpensesSimulation() {
           partnerId: null,
           branchId,
           locationId,
-        }
-      ]
+        },
+      ],
     });
     console.log('[OK] تم إيداع 50,000 ر.س في حساب الخزينة بنجاح.');
 
@@ -152,15 +152,18 @@ async function runExpensesSimulation() {
 
     let totalExpensesAmount = 0;
     for (const exp of expensesData) {
-      const res = await treasuryService.createExpense({
-        title: exp.title,
-        amount: exp.amount,
-        date: new Date().toISOString(),
-        note: exp.note,
-        branchId,
-        locationId,
-        requestKey: randomUUID(),
-      }, auth);
+      const res = await treasuryService.createExpense(
+        {
+          title: exp.title,
+          amount: exp.amount,
+          date: new Date().toISOString(),
+          note: exp.note,
+          branchId,
+          locationId,
+          requestKey: randomUUID(),
+        },
+        auth,
+      );
 
       totalExpensesAmount += exp.amount;
       console.log(`   [EXPENSE] ${exp.title} بمبلغ ${exp.amount} ر.س -> تم التسجيل والترحيل الدفتري.`);
@@ -177,7 +180,9 @@ async function runExpensesSimulation() {
     `.execute(db);
 
     if (journalEntries.rows.length < expensesData.length) {
-      throw new Error(`Expected at least ${expensesData.length} expense journal entries, got ${journalEntries.rows.length}`);
+      throw new Error(
+        `Expected at least ${expensesData.length} expense journal entries, got ${journalEntries.rows.length}`,
+      );
     }
     console.log(`[OK] تم التحقق من إنشاء ${journalEntries.rows.length} قيد محاسبي مطابق للمصروفات.`);
 
@@ -195,7 +200,9 @@ async function runExpensesSimulation() {
     if (pagedExpenses.length !== 3) {
       throw new Error(`Pagination failed: expected 3 items per page, got ${pagedExpenses.length}`);
     }
-    console.log(`[OK] تم التحقق من التقسيم للصفحات (Pagination): تم جلب ${pagedExpenses.length} من أصل ${(pagedRes as any).summary?.totalItems} مصروف.`);
+    console.log(
+      `[OK] تم التحقق من التقسيم للصفحات (Pagination): تم جلب ${pagedExpenses.length} من أصل ${(pagedRes as any).summary?.totalItems} مصروف.`,
+    );
 
     // 6. Realized Balance and Double-Entry Invariant
     console.log('\n--- 6. التحقق من توازن الأرصدة ودفتر الأستاذ ---');
@@ -234,12 +241,15 @@ async function runExpensesSimulation() {
     // 7. Edge Case Testing
     console.log('\n--- 7. فحص الحالات الاستثنائية والمدخلات الخاطئة ---');
     try {
-      await treasuryService.createExpense({
-        title: 'مصروف غير صالح',
-        amount: -100,
-        date: new Date().toISOString(),
-        requestKey: randomUUID(),
-      }, auth);
+      await treasuryService.createExpense(
+        {
+          title: 'مصروف غير صالح',
+          amount: -100,
+          date: new Date().toISOString(),
+          requestKey: randomUUID(),
+        },
+        auth,
+      );
       console.log('[WARN] تم قبول مبلغ سالب.');
     } catch (e: any) {
       console.log(`[OK] تم منع المصروف ذو القيمة غير الصالحة: ${e.message}`);
@@ -248,7 +258,6 @@ async function runExpensesSimulation() {
     console.log('\n================================================================');
     console.log('[SUCCESS] اكتملت محاكاة إدارة المصروفات بنجاح 100%!');
     console.log('================================================================\n');
-
   } catch (err: any) {
     console.error('[ERROR] SIMULATION FAILED:', err.message || err);
     console.error(err.stack);

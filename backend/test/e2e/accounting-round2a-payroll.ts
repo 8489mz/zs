@@ -23,7 +23,7 @@ async function main() {
   const pgPort = process.env.PG_PORT || '5433';
   const pgDb = process.env.PG_DB || 'zs_dev';
   pg = new Client({
-    connectionString: process.env.DATABASE_URL || `postgres://postgres:postgres@127.0.0.1:${pgPort}/${pgDb}`
+    connectionString: process.env.DATABASE_URL || `postgres://postgres:postgres@127.0.0.1:${pgPort}/${pgDb}`,
   });
   await pg.connect();
 
@@ -39,25 +39,37 @@ async function main() {
     hireDate: '2026-08-01',
     departmentId: 1,
     jobTitleId: 1,
-    compensationType: 'monthly'
+    compensationType: 'monthly',
   });
-  const dbEmp = await pg.query("SELECT id FROM hr_employees WHERE employee_no = $1", [empCode]);
+  const dbEmp = await pg.query('SELECT id FROM hr_employees WHERE employee_no = $1', [empCode]);
   const employeeId = dbEmp.rows[0]?.id;
 
   // Set up contract so that employee has a salary
   await admin.post(`/api/hr/employees/${employeeId}/contracts`, {
     startDate: '2020-01-01',
     baseSalary: 5000,
-    status: 'active'
+    status: 'active',
   });
 
   // Helper to create a ready-to-approve payroll run
   async function createReviewedPayrollRun() {
     const randomYear = 2030 + Math.floor(Math.random() * 1000);
-    const period = randomYear + '-' + Math.floor(Math.random() * 12 + 1).toString().padStart(2, '0');
+    const period =
+      randomYear +
+      '-' +
+      Math.floor(Math.random() * 12 + 1)
+        .toString()
+        .padStart(2, '0');
     const runRes = await admin.post('/api/hr/payroll-runs', { periodMonth: period });
-    const runId = runRes?.data?.id || runRes?.id || (runRes as any)?.record?.id || Object.values(runRes || {}).find(v => (v as any)?.id)?.id;
-    if (!runId) { console.error("Could not find runId in:", runRes); throw new Error("runId missing"); }
+    const runId =
+      runRes?.data?.id ||
+      runRes?.id ||
+      (runRes as any)?.record?.id ||
+      Object.values(runRes || {}).find((v) => (v as any)?.id)?.id;
+    if (!runId) {
+      console.error('Could not find runId in:', runRes);
+      throw new Error('runId missing');
+    }
     // Recalculate to generate items
     await admin.post(`/api/hr/payroll-runs/${runId}/recalculate`, {});
     // Review
@@ -73,29 +85,55 @@ async function main() {
       const runId = await createReviewedPayrollRun();
       const approveRes = await admin.post(`/api/hr/payroll-runs/${runId}/approve`, {});
 
-      const journalQuery = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'hr_payroll_accrual' AND source_id = $1", [runId]);
-      const linesQuery = await pg.query("SELECT a.code as account_code, l.debit, l.credit FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE l.journal_entry_id = $1", [journalQuery.rows[0]?.id]);
+      const journalQuery = await pg.query(
+        "SELECT * FROM journal_entries WHERE source_type = 'hr_payroll_accrual' AND source_id = $1",
+        [runId],
+      );
+      const linesQuery = await pg.query(
+        'SELECT a.code as account_code, l.debit, l.credit FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE l.journal_entry_id = $1',
+        [journalQuery.rows[0]?.id],
+      );
 
       let pass = true;
       let actual = '';
-      if (journalQuery.rows.length !== 1) { pass = false; actual += `Found ${journalQuery.rows.length} journals. `; }
-      else {
-        let totalDebit = 0, totalCredit = 0;
-        let has6200 = false, has2140 = false;
+      if (journalQuery.rows.length !== 1) {
+        pass = false;
+        actual += `Found ${journalQuery.rows.length} journals. `;
+      } else {
+        let totalDebit = 0,
+          totalCredit = 0;
+        let has6200 = false,
+          has2140 = false;
         for (const line of linesQuery.rows) {
           totalDebit += Number(line.debit || 0);
           totalCredit += Number(line.credit || 0);
           if (line.account_code === '6200' && Number(line.debit) > 0) has6200 = true;
           if (line.account_code === '2140' && Number(line.credit) > 0) has2140 = true;
         }
-        if (totalDebit !== totalCredit) { pass = false; actual += `Debit ${totalDebit} != Credit ${totalCredit}. `; }
-        if (!has6200) { pass = false; actual += `Missing Debit 6200. `; }
-        if (!has2140) { pass = false; actual += `Missing Credit 2140. `; }
+        if (totalDebit !== totalCredit) {
+          pass = false;
+          actual += `Debit ${totalDebit} != Credit ${totalCredit}. `;
+        }
+        if (!has6200) {
+          pass = false;
+          actual += `Missing Debit 6200. `;
+        }
+        if (!has2140) {
+          pass = false;
+          actual += `Missing Credit 2140. `;
+        }
 
-        const resStatus = (approveRes as any)?.run?.status || approveRes?.data?.status || approveRes?.status || approveRes?.record?.status;
-        if (resStatus !== 'approved') { pass = false; actual += `Run status is ${resStatus}. `; }
+        const resStatus =
+          (approveRes as any)?.run?.status ||
+          approveRes?.data?.status ||
+          approveRes?.status ||
+          approveRes?.record?.status;
+        if (resStatus !== 'approved') {
+          pass = false;
+          actual += `Run status is ${resStatus}. `;
+        }
 
-        if (!pass) console.log("DB lines:", linesQuery.rows);
+        if (!pass) console.log('DB lines:', linesQuery.rows);
       }
       if (pass) actual = 'OK';
       logResult('PAY_ACC_1', pass ? 'PASS' : 'FAIL', 'Accrual journal created correctly', actual);
@@ -115,14 +153,22 @@ async function main() {
       try {
         const res: any = await admin.post(`/api/hr/payroll-runs/${runId}/approve`, undefined, 400);
         if (res.error?.code !== 'HR_PAYROLL_APPROVE_LOCKED') {
-          pass = false; actual += `Wrong error: ${res.error?.code}. `;
+          pass = false;
+          actual += `Wrong error: ${res.error?.code}. `;
         }
       } catch (e: any) {
-        pass = false; actual += `Unexpected exception: ${e.message}. `;
+        pass = false;
+        actual += `Unexpected exception: ${e.message}. `;
       }
 
-      const journalQuery = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'hr_payroll_accrual' AND source_id = $1", [runId]);
-      if (journalQuery.rows.length !== 1) { pass = false; actual += `Found ${journalQuery.rows.length} journals. `; }
+      const journalQuery = await pg.query(
+        "SELECT * FROM journal_entries WHERE source_type = 'hr_payroll_accrual' AND source_id = $1",
+        [runId],
+      );
+      if (journalQuery.rows.length !== 1) {
+        pass = false;
+        actual += `Found ${journalQuery.rows.length} journals. `;
+      }
 
       if (pass) actual = 'OK';
       logResult('PAY_ACC_DUP', pass ? 'PASS' : 'FAIL', 'Duplicate accrual prevented', actual);
@@ -139,32 +185,63 @@ async function main() {
 
       const payRes = await admin.post(`/api/hr/payroll-runs/${runId}/pay`, { paymentChannel: 'cash' });
 
-      const journalQuery = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'hr_payroll_payment' AND source_id = $1", [runId]);
-      const linesQuery = await pg.query("SELECT a.code as account_code, l.debit, l.credit FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE l.journal_entry_id = $1", [journalQuery.rows[0]?.id]);
-      const treasuryQuery = await pg.query("SELECT * FROM treasury_transactions WHERE reference_type = 'hr_payroll_payment' AND reference_id = $1", [runId]);
+      const journalQuery = await pg.query(
+        "SELECT * FROM journal_entries WHERE source_type = 'hr_payroll_payment' AND source_id = $1",
+        [runId],
+      );
+      const linesQuery = await pg.query(
+        'SELECT a.code as account_code, l.debit, l.credit FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE l.journal_entry_id = $1',
+        [journalQuery.rows[0]?.id],
+      );
+      const treasuryQuery = await pg.query(
+        "SELECT * FROM treasury_transactions WHERE reference_type = 'hr_payroll_payment' AND reference_id = $1",
+        [runId],
+      );
 
       let pass = true;
       let actual = '';
-      if (journalQuery.rows.length !== 1) { pass = false; actual += `Found ${journalQuery.rows.length} journals. `; }
-      else {
+      if (journalQuery.rows.length !== 1) {
+        pass = false;
+        actual += `Found ${journalQuery.rows.length} journals. `;
+      } else {
         let totalDebit = 0;
-        let has2140 = false, has1110 = false;
+        let has2140 = false,
+          has1110 = false;
         for (const line of linesQuery.rows) {
           totalDebit += Number(line.debit || 0);
           if (line.account_code === '2140' && Number(line.debit) > 0) has2140 = true;
           if (line.account_code === '1110' && Number(line.credit) > 0) has1110 = true;
         }
-        if (!has2140) { pass = false; actual += `Missing Debit 2140. `; }
-        if (!has1110) { pass = false; actual += `Missing Credit 1110. `; }
+        if (!has2140) {
+          pass = false;
+          actual += `Missing Debit 2140. `;
+        }
+        if (!has1110) {
+          pass = false;
+          actual += `Missing Credit 1110. `;
+        }
 
-        const treasuryQuery = await pg.query("SELECT * FROM treasury_transactions WHERE reference_type = 'hr_payroll_payment' AND reference_id = $1", [runId]);
-        if (treasuryQuery.rows.length !== 1) { pass = false; actual += `Expected 1 treasury tx, got ${treasuryQuery.rows.length}. `; }
-        else if (Number(treasuryQuery.rows[0].amount) !== -totalDebit) { pass = false; actual += `Treasury amount ${treasuryQuery.rows[0].amount} != ${-totalDebit}. `; }
+        const treasuryQuery = await pg.query(
+          "SELECT * FROM treasury_transactions WHERE reference_type = 'hr_payroll_payment' AND reference_id = $1",
+          [runId],
+        );
+        if (treasuryQuery.rows.length !== 1) {
+          pass = false;
+          actual += `Expected 1 treasury tx, got ${treasuryQuery.rows.length}. `;
+        } else if (Number(treasuryQuery.rows[0].amount) !== -totalDebit) {
+          pass = false;
+          actual += `Treasury amount ${treasuryQuery.rows[0].amount} != ${-totalDebit}. `;
+        }
 
-        const resStatus = (payRes as any)?.run?.status || payRes?.data?.status || payRes?.status || payRes?.record?.status;
-        if (resStatus !== 'paid') { pass = false; actual += `Run status is ${resStatus}. `; }
+        const resStatus =
+          (payRes as any)?.run?.status || payRes?.data?.status || payRes?.status || payRes?.record?.status;
+        if (resStatus !== 'paid') {
+          pass = false;
+          actual += `Run status is ${resStatus}. `;
+        }
 
-        if (!pass) console.log("DB lines CASH:", linesQuery.rows, "Treasury:", treasuryQuery.rows); if (pass) actual = 'OK';
+        if (!pass) console.log('DB lines CASH:', linesQuery.rows, 'Treasury:', treasuryQuery.rows);
+        if (pass) actual = 'OK';
       }
 
       logResult('PAY_CASH_1', pass ? 'PASS' : 'FAIL', 'Cash payment journal and treasury created', actual);
@@ -181,29 +258,57 @@ async function main() {
 
       const payRes = await admin.post(`/api/hr/payroll-runs/${runId}/pay`, { paymentChannel: 'bank' });
 
-      const journalQuery = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'hr_payroll_payment' AND source_id = $1", [runId]);
-      const linesQuery = await pg.query("SELECT a.code as account_code, l.debit, l.credit FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE l.journal_entry_id = $1", [journalQuery.rows[0]?.id]);
-      const treasuryQuery = await pg.query("SELECT * FROM treasury_transactions WHERE reference_type = 'hr_payroll_payment' AND reference_id = $1", [runId]);
+      const journalQuery = await pg.query(
+        "SELECT * FROM journal_entries WHERE source_type = 'hr_payroll_payment' AND source_id = $1",
+        [runId],
+      );
+      const linesQuery = await pg.query(
+        'SELECT a.code as account_code, l.debit, l.credit FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE l.journal_entry_id = $1',
+        [journalQuery.rows[0]?.id],
+      );
+      const treasuryQuery = await pg.query(
+        "SELECT * FROM treasury_transactions WHERE reference_type = 'hr_payroll_payment' AND reference_id = $1",
+        [runId],
+      );
 
       let pass = true;
       let actual = '';
-      if (journalQuery.rows.length !== 1) { pass = false; actual += `Found ${journalQuery.rows.length} journals. `; }
-      else {
-        let has2140 = false, has1120 = false;
+      if (journalQuery.rows.length !== 1) {
+        pass = false;
+        actual += `Found ${journalQuery.rows.length} journals. `;
+      } else {
+        let has2140 = false,
+          has1120 = false;
         for (const line of linesQuery.rows) {
           if (line.account_code === '2140' && Number(line.debit) > 0) has2140 = true;
           if (line.account_code === '1120' && Number(line.credit) > 0) has1120 = true;
         }
-        if (!has2140) { pass = false; actual += `Missing Debit 2140. `; }
-        if (!has1120) { pass = false; actual += `Missing Credit 1120. `; }
+        if (!has2140) {
+          pass = false;
+          actual += `Missing Debit 2140. `;
+        }
+        if (!has1120) {
+          pass = false;
+          actual += `Missing Credit 1120. `;
+        }
 
-        const treasuryQuery = await pg.query("SELECT * FROM treasury_transactions WHERE reference_type = 'hr_payroll_payment' AND reference_id = $1", [runId]);
-        if (treasuryQuery.rows.length !== 0) { pass = false; actual += `Expected 0 treasury tx, got ${treasuryQuery.rows.length}. `; }
+        const treasuryQuery = await pg.query(
+          "SELECT * FROM treasury_transactions WHERE reference_type = 'hr_payroll_payment' AND reference_id = $1",
+          [runId],
+        );
+        if (treasuryQuery.rows.length !== 0) {
+          pass = false;
+          actual += `Expected 0 treasury tx, got ${treasuryQuery.rows.length}. `;
+        }
 
-        const resStatus = (payRes as any)?.run?.status || payRes?.data?.status || payRes?.status || payRes?.record?.status;
-        if (resStatus !== 'paid') { pass = false; actual += `Run status is ${resStatus}. `; }
+        const resStatus =
+          (payRes as any)?.run?.status || payRes?.data?.status || payRes?.status || payRes?.record?.status;
+        if (resStatus !== 'paid') {
+          pass = false;
+          actual += `Run status is ${resStatus}. `;
+        }
 
-        if (!pass) console.log("DB lines BANK:", linesQuery.rows, "Treasury:", treasuryQuery.rows);
+        if (!pass) console.log('DB lines BANK:', linesQuery.rows, 'Treasury:', treasuryQuery.rows);
       }
       if (pass) actual = 'OK';
       logResult('PAY_BANK_1', pass ? 'PASS' : 'FAIL', 'Bank payment journal created, no treasury', actual);
@@ -224,20 +329,37 @@ async function main() {
       try {
         const res: any = await admin.post(`/api/hr/payroll-runs/${runId}/pay`, { paymentChannel: 'cash' }, 400);
         if (res.error?.code !== 'HR_PAYROLL_PAY_LOCKED') {
-          pass = false; actual += `Wrong error: ${res.error?.code}. `;
+          pass = false;
+          actual += `Wrong error: ${res.error?.code}. `;
         }
       } catch (e: any) {
-        pass = false; actual += `Unexpected exception: ${e.message}. `;
+        pass = false;
+        actual += `Unexpected exception: ${e.message}. `;
       }
 
-      const journalQuery = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'hr_payroll_payment' AND source_id = $1", [runId]);
-      const treasuryQuery = await pg.query("SELECT * FROM treasury_transactions WHERE reference_type = 'hr_payroll_payment' AND reference_id = $1", [runId]);
+      const journalQuery = await pg.query(
+        "SELECT * FROM journal_entries WHERE source_type = 'hr_payroll_payment' AND source_id = $1",
+        [runId],
+      );
+      const treasuryQuery = await pg.query(
+        "SELECT * FROM treasury_transactions WHERE reference_type = 'hr_payroll_payment' AND reference_id = $1",
+        [runId],
+      );
 
-      if (journalQuery.rows.length !== 1) { pass = false; actual += `Found ${journalQuery.rows.length} journals. `; }
-      if (treasuryQuery.rows.length !== 1) { pass = false; actual += `Found ${treasuryQuery.rows.length} treasury txns. `; }
+      if (journalQuery.rows.length !== 1) {
+        pass = false;
+        actual += `Found ${journalQuery.rows.length} journals. `;
+      }
+      if (treasuryQuery.rows.length !== 1) {
+        pass = false;
+        actual += `Found ${treasuryQuery.rows.length} treasury txns. `;
+      }
 
-      const statusQuery = await pg.query("SELECT status FROM hr_payroll_runs WHERE id = $1", [runId]);
-      if (statusQuery.rows[0]?.status !== 'paid') { pass = false; actual += `Run status is ${statusQuery.rows[0]?.status}. `; }
+      const statusQuery = await pg.query('SELECT status FROM hr_payroll_runs WHERE id = $1', [runId]);
+      if (statusQuery.rows[0]?.status !== 'paid') {
+        pass = false;
+        actual += `Run status is ${statusQuery.rows[0]?.status}. `;
+      }
 
       if (pass) actual = 'OK';
       logResult('PAY_DUP_1', pass ? 'PASS' : 'FAIL', 'Duplicate payment prevented', actual);
@@ -257,10 +379,12 @@ async function main() {
       // Try paying reviewed run
       try {
         await admin.post(`/api/hr/payroll-runs/${runId}/pay`, { paymentChannel: 'cash' });
-        pass = false; actual += `Paid reviewed run. `;
+        pass = false;
+        actual += `Paid reviewed run. `;
       } catch (e: any) {
         if (!e.message?.includes('HR_PAYROLL_PAY_LOCKED')) {
-           pass = false; actual += `Wrong error on pay reviewed: ${e.message}. `;
+          pass = false;
+          actual += `Wrong error on pay reviewed: ${e.message}. `;
         }
       }
 
@@ -271,30 +395,36 @@ async function main() {
       // Double pay
       try {
         await admin.post(`/api/hr/payroll-runs/${runId}/pay`, { paymentChannel: 'cash' });
-        pass = false; actual += `Double paid. `;
+        pass = false;
+        actual += `Double paid. `;
       } catch (e: any) {
         if (!e.message?.includes('HR_PAYROLL_PAY_LOCKED') && !e.message?.includes('HR_PAYROLL_PAYMENT_FAILED')) {
-           pass = false; actual += `Wrong error on double pay: ${e.message}. `;
+          pass = false;
+          actual += `Wrong error on double pay: ${e.message}. `;
         }
       }
 
       // Cancel paid
       try {
         await admin.post(`/api/hr/payroll-runs/${runId}/cancel`, {});
-        pass = false; actual += `Cancelled paid run. `;
+        pass = false;
+        actual += `Cancelled paid run. `;
       } catch (e: any) {
         if (!e.message?.includes('HR_PAYROLL_CANCEL_LOCKED')) {
-           pass = false; actual += `Wrong error on cancel paid run: ${e.message}. `;
+          pass = false;
+          actual += `Wrong error on cancel paid run: ${e.message}. `;
         }
       }
 
       // Recalculate paid
       try {
         await admin.post(`/api/hr/payroll-runs/${runId}/recalculate`, {});
-        pass = false; actual += `Recalculated paid run. `;
+        pass = false;
+        actual += `Recalculated paid run. `;
       } catch (e: any) {
         if (!e.message?.includes('HR_PAYROLL_RECALCULATE_LOCKED')) {
-           pass = false; actual += `Wrong error on recalculate paid run: ${e.message}. `;
+          pass = false;
+          actual += `Wrong error on recalculate paid run: ${e.message}. `;
         }
       }
 
@@ -309,7 +439,7 @@ async function main() {
   console.log('--- E2E Tests Complete ---');
 }
 
-main().catch(e => {
+main().catch((e) => {
   console.error('Fatal error', e);
   process.exit(1);
 });

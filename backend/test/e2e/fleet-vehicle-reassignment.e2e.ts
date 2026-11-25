@@ -30,7 +30,9 @@ const ACCOUNT = 'e2e-fleet-reassign';
 
 async function cleanup(db: Kysely<Database>): Promise<void> {
   const dbAny = db as any;
-  await sql`DELETE FROM journal_entry_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE tenant_id = ${TENANT})`.execute(db);
+  await sql`DELETE FROM journal_entry_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE tenant_id = ${TENANT})`.execute(
+    db,
+  );
   const tables = [
     'journal_entries',
     'accounting_posting_failures',
@@ -82,18 +84,40 @@ async function main(): Promise<void> {
 
     const warehouse = await dbAny
       .insertInto('stock_locations')
-      .values({ name: 'Main Warehouse', branch_id: branch.id, location_type: 'internal_warehouse', is_active: true, tenant_id: TENANT, account_id: ACCOUNT })
+      .values({
+        name: 'Main Warehouse',
+        branch_id: branch.id,
+        location_type: 'internal_warehouse',
+        is_active: true,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+      })
       .returning(['id'])
       .executeTakeFirstOrThrow();
 
     const product = await dbAny
       .insertInto('products')
-      .values({ name: 'Fleet Test Product', cost_price: 5, retail_price: 10, stock_qty: 50, tenant_id: TENANT, account_id: ACCOUNT, is_active: true })
+      .values({
+        name: 'Fleet Test Product',
+        cost_price: 5,
+        retail_price: 10,
+        stock_qty: 50,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        is_active: true,
+      })
       .returning(['id'])
       .executeTakeFirstOrThrow();
     await dbAny
       .insertInto('product_location_stock')
-      .values({ product_id: product.id, location_id: warehouse.id, branch_id: branch.id, qty: 50, tenant_id: TENANT, account_id: ACCOUNT })
+      .values({
+        product_id: product.id,
+        location_id: warehouse.id,
+        branch_id: branch.id,
+        qty: 50,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+      })
       .execute();
 
     const repA = await dbAny
@@ -120,8 +144,16 @@ async function main(): Promise<void> {
     assert.equal(vehicle1.assignedRepId, Number(repA.id));
     assert.equal(vehicle1.status, 'assigned');
 
-    let repARow = await dbAny.selectFrom('delivery_representatives').select(['van_location_id']).where('id', '=', repA.id).executeTakeFirstOrThrow();
-    assert.equal(Number(repARow.van_location_id), Number(vehicle1.vanLocationId), "Rep A's own pointer follows the vehicle they were assigned");
+    let repARow = await dbAny
+      .selectFrom('delivery_representatives')
+      .select(['van_location_id'])
+      .where('id', '=', repA.id)
+      .executeTakeFirstOrThrow();
+    assert.equal(
+      Number(repARow.van_location_id),
+      Number(vehicle1.vanLocationId),
+      "Rep A's own pointer follows the vehicle they were assigned",
+    );
 
     // --- 2. Register Vehicle 2, try to assign Rep A to it too -> must be rejected ----------
     const vehicles2 = await vanSales.createFleetVehicle(TENANT, ACCOUNT, { plateNumber: 'ABC-2' });
@@ -159,11 +191,27 @@ async function main(): Promise<void> {
     const vehicle1AfterHandover = afterHandover.find((v: any) => v.id === vehicle1.id)!;
     assert.equal(vehicle1AfterHandover.assignedRepId, Number(repB.id));
 
-    repARow = await dbAny.selectFrom('delivery_representatives').select(['van_location_id']).where('id', '=', repA.id).executeTakeFirstOrThrow();
-    assert.equal(repARow.van_location_id, null, "the OUTGOING rep's pointer must be cleared on handover — this was the exact bug that let two reps share one van's stock");
+    repARow = await dbAny
+      .selectFrom('delivery_representatives')
+      .select(['van_location_id'])
+      .where('id', '=', repA.id)
+      .executeTakeFirstOrThrow();
+    assert.equal(
+      repARow.van_location_id,
+      null,
+      "the OUTGOING rep's pointer must be cleared on handover — this was the exact bug that let two reps share one van's stock",
+    );
 
-    const repBRow = await dbAny.selectFrom('delivery_representatives').select(['van_location_id']).where('id', '=', repB.id).executeTakeFirstOrThrow();
-    assert.equal(Number(repBRow.van_location_id), Number(vehicle1.vanLocationId), "the INCOMING rep now points at the same vehicle location Rep A used to");
+    const repBRow = await dbAny
+      .selectFrom('delivery_representatives')
+      .select(['van_location_id'])
+      .where('id', '=', repB.id)
+      .executeTakeFirstOrThrow();
+    assert.equal(
+      Number(repBRow.van_location_id),
+      Number(vehicle1.vanLocationId),
+      'the INCOMING rep now points at the same vehicle location Rep A used to',
+    );
 
     // --- 6. Reassigning to the exact same rep already assigned is a harmless no-op ---------
     const noop = await vanSales.assignVehicleRep(TENANT, vehicle1.id, Number(repB.id));

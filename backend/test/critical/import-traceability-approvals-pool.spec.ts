@@ -180,7 +180,9 @@ async function approveRequest(db: Kysely<Database>, service: any, requestId: str
   await service.decideApprovalRequest('t1', 2, requestId, { decision: 'approved' });
 }
 
-async function payoutJournalLines(db: Kysely<Database>): Promise<Array<{ account_id: number; debit: number; credit: number }>> {
+async function payoutJournalLines(
+  db: Kysely<Database>,
+): Promise<Array<{ account_id: number; debit: number; credit: number }>> {
   const rows = await sql<{ account_id: string; debit: string; credit: string }>`
     SELECT l.account_id, l.debit, l.credit FROM journal_entry_lines l
     JOIN journal_entries e ON e.id = l.journal_entry_id
@@ -199,24 +201,48 @@ async function main(): Promise<void> {
       const trace = await service.listImportFlowEvents('t1');
       const byKind = (kind: string) => trace.events.filter((e: any) => e.kind === kind);
       assert.equal(byKind('project').length, 2, 'Both trial projects must trace');
-      assert.equal(byKind('project').find((e: any) => e.ref === 'IMP-261109-0001')?.state, 'active', 'The received project traces as active');
+      assert.equal(
+        byKind('project').find((e: any) => e.ref === 'IMP-261109-0001')?.state,
+        'active',
+        'The received project traces as active',
+      );
       const pi = byKind('proforma_invoice').find((e: any) => e.ref === 'PI-IMP-261109-0001-5287');
       assert.equal(pi?.state, 'approved', 'The approved PI traces as approved, not pending');
       assert.equal(Number(pi?.amountForeign), 10, 'The PI traces its real foreign amount');
-      assert.equal(byKind('shipment').find((e: any) => e.ref === 'MSCU-TEST-001')?.state, 'Arrived', 'The received container traces as Arrived');
+      assert.equal(
+        byKind('shipment').find((e: any) => e.ref === 'MSCU-TEST-001')?.state,
+        'Arrived',
+        'The received container traces as Arrived',
+      );
       const receipt = byKind('receipt').find((e: any) => e.label === 'MSCU-TEST-001');
       assert.equal(receipt?.state, 'posted', 'Receipt #1 traces as posted');
       assert.equal(receipt?.journalEntryNo, 'JE-00015025', 'The receipt traces its real journal number');
       assert.equal(receipt?.journalMatched, true, 'A posted receipt with a posted journal is matched');
-      assert.equal(byKind('supplier_payment').find((e: any) => e.ref === 'FT-261109-0001')?.amountEgp, 500, 'The supplier payment traces with its real EGP amount');
+      assert.equal(
+        byKind('supplier_payment').find((e: any) => e.ref === 'FT-261109-0001')?.amountEgp,
+        500,
+        'The supplier payment traces with its real EGP amount',
+      );
       assert.equal(trace.counts.receiptsPosted, 1, 'Counts derive from the traced events: 1 posted receipt');
       assert.equal(trace.counts.receiptsMatched, 1, 'Counts derive from the traced events: 1 matched receipt');
       assert.equal(trace.counts.proformaInvoicesApproved, 1, 'Counts derive from the traced events: 1 approved PI');
-      assert.equal(trace.counts.approvalsPending, 0, 'No approval request exists yet — the count is honestly 0, not a hidden flow');
+      assert.equal(
+        trace.counts.approvalsPending,
+        0,
+        'No approval request exists yet — the count is honestly 0, not a hidden flow',
+      );
       // Project-scoped trace: the second project sees only its own events.
       const scoped = await service.listImportFlowEvents('t1', 'proj-2');
-      assert.equal(scoped.events.filter((e: any) => e.kind === 'project').length, 1, 'A project trace lists only that project');
-      assert.equal(scoped.events.filter((e: any) => e.kind === 'receipt').length, 0, 'A project with no shipment traces no receipts');
+      assert.equal(
+        scoped.events.filter((e: any) => e.kind === 'project').length,
+        1,
+        'A project trace lists only that project',
+      );
+      assert.equal(
+        scoped.events.filter((e: any) => e.kind === 'receipt').length,
+        0,
+        'A project with no shipment traces no receipts',
+      );
       assert.equal(scoped.counts.proformaInvoices, 1, 'The second project traces its own pending PI');
     } finally {
       await db.destroy();
@@ -253,7 +279,11 @@ async function main(): Promise<void> {
       assert.equal(Number(proj1?.totalCost), 900, 'Project cost is the lot-attributed landed cost (10 x 90)');
       assert.equal(Number(proj1?.netProfitPool), 300, 'Project net pool is 300 EGP');
       assert.equal(proj1?.profitAttributionVerified, true, 'Fully lot-allocated sales verify the attribution');
-      assert.equal(proj1?.profitBasis, 'POSTED_LEDGER_ONLY', 'A project report uses the posted-ledger basis, never the company-wide aggregate');
+      assert.equal(
+        proj1?.profitBasis,
+        'POSTED_LEDGER_ONLY',
+        'A project report uses the posted-ledger basis, never the company-wide aggregate',
+      );
       const share1 = proj1?.partnerShares.find((p: any) => p.partnerId === 'par-1');
       assert.equal(Number(share1?.shareAmount), 150, 'Partner 1 share is 50% of the 300 EGP pool');
       const ship = proj1?.shipments.find((s: any) => s.containerNumber === 'MSCU-TEST-001');
@@ -289,7 +319,8 @@ async function main(): Promise<void> {
       );
       // An invented UUID fails closed naming the approval.
       await assert.rejects(
-        async () => service.recordPartnerPayout('t1', 1, 'par-1', 100, '00000000-0000-0000-0000-000000000000', 'proj-1', '12'),
+        async () =>
+          service.recordPartnerPayout('t1', 1, 'par-1', 100, '00000000-0000-0000-0000-000000000000', 'proj-1', '12'),
         /غير موجود/,
         'A UUID that does not exist must not pay out',
       );
@@ -303,17 +334,25 @@ async function main(): Promise<void> {
       const res = await service.recordPartnerPayout('t1', 1, 'par-1', 100, String(real.id), 'proj-1', '12');
       assert.equal(res.success, true, 'An approved real approval must pay out');
       const lines = await payoutJournalLines(db);
-      assert.deepEqual(lines, [
-        { account_id: 30, debit: 100, credit: 0 },
-        { account_id: 12, debit: 0, credit: 100 },
-      ], 'The payout posts a balanced JE: Dr partner equity 3100 / Cr bank 1120');
+      assert.deepEqual(
+        lines,
+        [
+          { account_id: 30, debit: 100, credit: 0 },
+          { account_id: 12, debit: 0, credit: 100 },
+        ],
+        'The payout posts a balanced JE: Dr partner equity 3100 / Cr bank 1120',
+      );
       const payouts = await db.selectFrom('import_partner_project_payouts').selectAll().execute();
       assert.equal(payouts.length, 1, 'Exactly one project payout row is recorded');
       assert.equal(Number(payouts[0].amount_egp), 100, 'The payout row carries the paid amount');
       assert.equal(String(payouts[0].project_id), 'proj-1', 'The payout row is attributed to the approved project');
       // The paid distribution now traces as an event too.
       const trace = await service.listImportFlowEvents('t1');
-      assert.equal(trace.events.filter((e: any) => e.kind === 'partner_payout').length, 1, 'The payout appears in the trace');
+      assert.equal(
+        trace.events.filter((e: any) => e.kind === 'partner_payout').length,
+        1,
+        'The payout appears in the trace',
+      );
       assert.equal(trace.counts.approvalsExecuted, 1, 'The consumed approval traces as executed');
     } finally {
       await db.destroy();
@@ -338,11 +377,23 @@ async function main(): Promise<void> {
       await approveRequest(db, service, String(closure.id));
       const res = await service.closeProject('t1', 1, 'proj-1', String(closure.id));
       assert.equal(res.success, true, 'An approved closure approval must close the project');
-      assert.equal(Number(res.closureData.financialReconciliation.netProfitPool), 300, 'The closure record carries the verified 300 EGP profit report');
-      const project = await db.selectFrom('import_projects').selectAll().where('id', '=', 'proj-1').executeTakeFirstOrThrow();
+      assert.equal(
+        Number(res.closureData.financialReconciliation.netProfitPool),
+        300,
+        'The closure record carries the verified 300 EGP profit report',
+      );
+      const project = await db
+        .selectFrom('import_projects')
+        .selectAll()
+        .where('id', '=', 'proj-1')
+        .executeTakeFirstOrThrow();
       assert.equal(project.status, 'closed', 'The project status is closed');
       const trace = await service.listImportFlowEvents('t1', 'proj-1');
-      assert.equal(trace.events.find((e: any) => e.kind === 'project')?.state, 'closed', 'The closed project traces as closed');
+      assert.equal(
+        trace.events.find((e: any) => e.kind === 'project')?.state,
+        'closed',
+        'The closed project traces as closed',
+      );
     } finally {
       await db.destroy();
     }

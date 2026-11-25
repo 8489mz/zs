@@ -80,7 +80,7 @@ async function testDeliveryAggregatorsAnd86StopList(): Promise<void> {
   ];
 
   const calculatePayout = (grossSales: number, channelName: 'talabat' | 'hungerstation' | 'jahez') => {
-    const channel = channels.find(c => c.name === channelName)!;
+    const channel = channels.find((c) => c.name === channelName)!;
     const commission = Number((grossSales * (channel.commissionPct / 100)).toFixed(2));
     const netPayout = Number((grossSales - commission).toFixed(2));
     return { commission, netPayout };
@@ -101,35 +101,41 @@ async function testDeliveryAggregatorsAnd86StopList(): Promise<void> {
     { id: 30, name: 'سلطة سيزر دجاج', is_86_stopped: false },
   ];
 
-  const availableForAggregators = catalog.filter(item => !item.is_86_stopped);
+  const availableForAggregators = catalog.filter((item) => !item.is_86_stopped);
   assert.equal(availableForAggregators.length, 2);
-  assert.equal(availableForAggregators.some(i => i.id === 20), false, '86-stopped item must be omitted');
+  assert.equal(
+    availableForAggregators.some((i) => i.id === 20),
+    false,
+    '86-stopped item must be omitted',
+  );
 }
 
 async function testFoodWasteVarianceEngine(): Promise<void> {
   // Theoretical BOM consumption:
   // 50 orders of "Double Burger" -> recipe: 0.200 kg beef per burger = 10.000 kg theoretical
   const ordersCount = 50;
-  const beefPerServing = 0.200;
+  const beefPerServing = 0.2;
   const theoreticalConsumption = ordersCount * beefPerServing; // 10.0 kg
 
   // Physical inventory deducted from cold room = 11.200 kg
-  const actualInventoryDeduction = 11.200;
+  const actualInventoryDeduction = 11.2;
 
   // Logged waste from kitchen waste logs = 0.500 kg (burnt patty during rush)
-  const loggedKitchenWaste = 0.500;
+  const loggedKitchenWaste = 0.5;
 
   // Cost per kg = 45.00 SAR
   const costPerKg = 45.0;
 
   // Unexplained variance (theft / over-portioning / unrecorded waste)
-  const unexplainedVarianceKg = Number((actualInventoryDeduction - (theoreticalConsumption + loggedKitchenWaste)).toFixed(3));
+  const unexplainedVarianceKg = Number(
+    (actualInventoryDeduction - (theoreticalConsumption + loggedKitchenWaste)).toFixed(3),
+  );
   const unexplainedVarianceCost = Number((unexplainedVarianceKg * costPerKg).toFixed(2));
   const totalFinancialLoss = Number(((loggedKitchenWaste + unexplainedVarianceKg) * costPerKg).toFixed(2));
 
-  assert.equal(unexplainedVarianceKg, 0.700, 'Unexplained variance = 11.2 - (10.0 + 0.5) = 0.700 kg');
-  assert.equal(unexplainedVarianceCost, 31.50, 'Cost of unexplained loss = 0.700 * 45 = 31.50 SAR');
-  assert.equal(totalFinancialLoss, 54.00, 'Total loss (logged waste + unexplained) = 1.200 * 45 = 54.00 SAR');
+  assert.equal(unexplainedVarianceKg, 0.7, 'Unexplained variance = 11.2 - (10.0 + 0.5) = 0.700 kg');
+  assert.equal(unexplainedVarianceCost, 31.5, 'Cost of unexplained loss = 0.700 * 45 = 31.50 SAR');
+  assert.equal(totalFinancialLoss, 54.0, 'Total loss (logged waste + unexplained) = 1.200 * 45 = 54.00 SAR');
 }
 
 async function testGuestCoversAndAverageSpend(): Promise<void> {
@@ -242,7 +248,9 @@ async function testSfdaNutritionalAndAllergenCompliance(): Promise<void> {
   }
 
   // Invariant 2: Allergen filter safely isolates items
-  const glutenFreeItems = menu.filter((item) => item.is_gluten_free === true && (!item.allergens || !item.allergens.includes('جلوتين')));
+  const glutenFreeItems = menu.filter(
+    (item) => item.is_gluten_free === true && (!item.allergens || !item.allergens.includes('جلوتين')),
+  );
   assert.equal(glutenFreeItems.length, 1);
   assert.equal(glutenFreeItems[0].id, 1);
 
@@ -268,7 +276,14 @@ async function testTableServiceCallsWorkflow(): Promise<void> {
   const calls: ServiceCall[] = [
     { id: 101, table_number: '5', call_type: 'waiter', status: 'pending', created_at: Date.now() - 120000 },
     { id: 102, table_number: '5', call_type: 'bill', status: 'pending', created_at: Date.now() - 30000 },
-    { id: 103, table_number: '8', call_type: 'water', status: 'resolved', created_at: Date.now() - 600000, resolved_at: Date.now() - 400000 },
+    {
+      id: 103,
+      table_number: '8',
+      call_type: 'water',
+      status: 'resolved',
+      created_at: Date.now() - 600000,
+      resolved_at: Date.now() - 400000,
+    },
   ];
 
   // Invariant 1: Pending calls count per table
@@ -277,7 +292,11 @@ async function testTableServiceCallsWorkflow(): Promise<void> {
 
   // Invariant 2: 1-Click resolve for all calls on a table
   const resolveTable = (tableNo: string) => {
-    return calls.map((c) => (c.table_number === tableNo && c.status === 'pending' ? { ...c, status: 'resolved' as ServiceCallStatus, resolved_at: Date.now() } : c));
+    return calls.map((c) =>
+      c.table_number === tableNo && c.status === 'pending'
+        ? { ...c, status: 'resolved' as ServiceCallStatus, resolved_at: Date.now() }
+        : c,
+    );
   };
 
   const updatedCalls = resolveTable('5');
@@ -318,12 +337,28 @@ async function testWalkInWaitlistQueueWorkflow(): Promise<void> {
   }
 
   const queue: WaitlistParty[] = [
-    { id: 1, guest_name: 'عبد الله السالم', guest_count: 4, reservation_type: 'waitlist', status: 'confirmed', created_at: Date.now() - 900000 }, // 15 mins ago
-    { id: 2, guest_name: 'فهد العتيبي', guest_count: 2, reservation_type: 'waitlist', status: 'confirmed', created_at: Date.now() - 300000 }, // 5 mins ago
+    {
+      id: 1,
+      guest_name: 'عبد الله السالم',
+      guest_count: 4,
+      reservation_type: 'waitlist',
+      status: 'confirmed',
+      created_at: Date.now() - 900000,
+    }, // 15 mins ago
+    {
+      id: 2,
+      guest_name: 'فهد العتيبي',
+      guest_count: 2,
+      reservation_type: 'waitlist',
+      status: 'confirmed',
+      created_at: Date.now() - 300000,
+    }, // 5 mins ago
   ];
 
   // Invariant 1: FIFO Queue priority
-  const activeQueue = queue.filter((p) => p.reservation_type === 'waitlist' && p.status === 'confirmed').sort((a, b) => a.created_at - b.created_at);
+  const activeQueue = queue
+    .filter((p) => p.reservation_type === 'waitlist' && p.status === 'confirmed')
+    .sort((a, b) => a.created_at - b.created_at);
   assert.equal(activeQueue[0].id, 1, 'First party in line gets #1 priority');
   assert.equal(activeQueue[1].id, 2, 'Second party gets #2');
 
@@ -523,9 +558,7 @@ async function testItemLevelTableTransferEngine(): Promise<void> {
     { productId: 3, name: 'بطاطس مقلية', qty: 3, price: 12 },
   ];
 
-  const table7Cart: CartItem[] = [
-    { productId: 4, name: 'كولا بارد', qty: 2, price: 8 },
-  ];
+  const table7Cart: CartItem[] = [{ productId: 4, name: 'كولا بارد', qty: 2, price: 8 }];
 
   // Transfer 1 Burger and 2 Fries from Table 4 to Table 7
   const itemsToTransfer = [
@@ -547,7 +580,10 @@ async function testItemLevelTableTransferEngine(): Promise<void> {
     if (existing) {
       existing.qty += t.qty;
     } else {
-      const sourceItem = [{ productId: 1, name: 'برجر كلاسيك', price: 35 }, { productId: 3, name: 'بطاطس مقلية', price: 12 }].find(i => i.productId === t.productId)!;
+      const sourceItem = [
+        { productId: 1, name: 'برجر كلاسيك', price: 35 },
+        { productId: 3, name: 'بطاطس مقلية', price: 12 },
+      ].find((i) => i.productId === t.productId)!;
       table7Cart.push({ ...sourceItem, qty: t.qty });
     }
   }
@@ -570,7 +606,10 @@ async function testStickyCupLabelFormattingAndPageDimensions(): Promise<void> {
     qty: 2,
     orderNumber: 'ORD-260914-0042',
     tableNumber: '4',
-    modifiers: [{ name: 'حليب شوفان', qty: 1 }, { name: 'سكر خفيف', qty: 1 }],
+    modifiers: [
+      { name: 'حليب شوفان', qty: 1 },
+      { name: 'سكر خفيف', qty: 1 },
+    ],
   };
 
   // Test label expansion: 2 items produce 2 distinct stickers with sequential indices
@@ -581,7 +620,7 @@ async function testStickyCupLabelFormattingAndPageDimensions(): Promise<void> {
       totalItems: item.qty,
       orderShortNo: item.orderNumber.slice(-4),
       title: item.productName,
-      modifiersText: item.modifiers.map(m => `+ ${m.name}`).join(' • '),
+      modifiersText: item.modifiers.map((m) => `+ ${m.name}`).join(' • '),
     });
   }
 
@@ -743,7 +782,7 @@ async function testSeatLevelOrderingAndSplitBySeatGrouping(): Promise<void> {
   const seat3Subtotal = seatMap.get(3)!.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
   assert.strictEqual(seat1Subtotal, 120 + 35); // 155
-  assert.strictEqual(seat2Subtotal, 65 + (20 * 2)); // 105
+  assert.strictEqual(seat2Subtotal, 65 + 20 * 2); // 105
   assert.strictEqual(seat3Subtotal, 40); // 40
 
   const totalAllSeats = seat1Subtotal + seat2Subtotal + seat3Subtotal;
@@ -795,7 +834,7 @@ async function testSmartUpsellRecommendationTriggerAndDiscount(): Promise<void> 
   // Discount math: Base price 25, 20% discount -> 20.00
   const originalPrice = 25;
   const discountedPrice = Number((originalPrice * (1 - recsForBurger[0].discount_pct / 100)).toFixed(2));
-  assert.strictEqual(discountedPrice, 20.00, 'Discounted price must be 20.00');
+  assert.strictEqual(discountedPrice, 20.0, 'Discounted price must be 20.00');
 
   // Cart without triggers -> no recommendations
   const recsForSalad = getRecommendations([99]);
@@ -921,30 +960,34 @@ async function testTableZoneMinimumSpendCalculationAndDeficitSurcharge(): Promis
 }
 
 async function testHeldDraftsModifierAndSeatResilience(): Promise<void> {
-  const mockRows = [{
-    id: 101,
-    table_number: 'T-05',
-    order_type: 'dine_in',
-    discount: 0,
-    note: 'طاولة بجانب النافذة',
-  }];
-  const mockItems = [{
-    id: 1,
-    held_sale_id: 101,
-    product_id: 50,
-    product_name: 'برجر دجاج سوبريم',
-    qty: 2,
-    unit_price: 3.5,
-    unit_name: 'وجبة',
-    unit_multiplier: 1,
-    price_type: 'retail',
-    notes: 'بدون بصل مع زيادة صوص',
-    modifiers: JSON.stringify({
-      mods: [{ name: 'جبنة إضافية', qty: 1, price: 0.5 }],
-      seatNumber: 2,
-      course: 'main',
-    }),
-  }];
+  const mockRows = [
+    {
+      id: 101,
+      table_number: 'T-05',
+      order_type: 'dine_in',
+      discount: 0,
+      note: 'طاولة بجانب النافذة',
+    },
+  ];
+  const mockItems = [
+    {
+      id: 1,
+      held_sale_id: 101,
+      product_id: 50,
+      product_name: 'برجر دجاج سوبريم',
+      qty: 2,
+      unit_price: 3.5,
+      unit_name: 'وجبة',
+      unit_multiplier: 1,
+      price_type: 'retail',
+      notes: 'بدون بصل مع زيادة صوص',
+      modifiers: JSON.stringify({
+        mods: [{ name: 'جبنة إضافية', qty: 1, price: 0.5 }],
+        seatNumber: 2,
+        course: 'main',
+      }),
+    },
+  ];
 
   const mapped = mapHeldSalesRows(mockRows, mockItems);
   assert.equal(mapped.length, 1);
@@ -995,7 +1038,9 @@ async function testKitchenOrderTicketContract(): Promise<void> {
     ],
   };
 
-  const headerCallout = ticketData.tableNumber ? `طاولة: ${ticketData.tableNumber}` : orderTypeMap[ticketData.orderType];
+  const headerCallout = ticketData.tableNumber
+    ? `طاولة: ${ticketData.tableNumber}`
+    : orderTypeMap[ticketData.orderType];
   assert.equal(headerCallout, 'طاولة: T-12');
   assert.equal(ticketData.isAddon, true);
   assert.equal(ticketData.guestCount, 4);
@@ -1112,5 +1157,3 @@ async function testTimedMenusDaypartEngine(): Promise<void> {
   console.error('Restaurant F&B Critical Audit FAILED:', err);
   process.exit(1);
 });
-
-

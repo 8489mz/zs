@@ -67,20 +67,14 @@ const normalizedEdge = buildNormalizedPurchaseItem(
   2,
 );
 assert.equal(normalizedEdge.total, 1);
-assert.throws(
-  () => calculatePurchaseSubtotal([{ total: Infinity }], 2),
-  /Non-finite monetary amount/,
-);
+assert.throws(() => calculatePurchaseSubtotal([{ total: Infinity }], 2), /Non-finite monetary amount/);
 
 // Sales: same discriminator through the offer/collectible paths.
 assert.equal(calculateCollectibleTotal(1.005, 0, 2), 1);
 assert.equal(calculateOfferAdjustedPrice(1.005, {}, 1, 2), 1);
 assert.equal(calculateCollectibleTotal(10.125, 0, 3), 10.125);
 assert.equal(calculateOfferAdjustedPrice(10, { offer_type: 'percent', value: 10 }, 1, 2), 9);
-assert.throws(
-  () => calculateCollectibleTotal(Infinity, 0, 2),
-  /Non-finite monetary amount/,
-);
+assert.throws(() => calculateCollectibleTotal(Infinity, 0, 2), /Non-finite monetary amount/);
 
 // Returns: same discriminator through the document total, plus the
 // previously pinned answers, which the canonical engine also gives.
@@ -98,23 +92,25 @@ assert.equal(returnEdge.lineTotal, 1);
 assert.equal(returnEdge.unitTotal, 1);
 
 // GRNI: minor units from the canonical rounding step, no EPSILON bump.
+assert.deepEqual([...allocateGrnAccrual([{ id: 1, acceptedQty: 1, unitCost: 1.005 }], 2).entries()], [[1, 100]]);
+assert.deepEqual([...allocateGrnAccrual([{ id: 1, acceptedQty: 1, unitCost: 1.005 }], 3).entries()], [[1, 1005]]);
 assert.deepEqual(
-  [...allocateGrnAccrual([{ id: 1, acceptedQty: 1, unitCost: 1.005 }], 2).entries()],
-  [[1, 100]],
-);
-assert.deepEqual(
-  [...allocateGrnAccrual([{ id: 1, acceptedQty: 1, unitCost: 1.005 }], 3).entries()],
-  [[1, 1005]],
-);
-assert.deepEqual(
-  [...allocateGrnAccrual([
-    { id: 1, acceptedQty: 1, unitCost: 1.005 },
-    { id: 2, acceptedQty: 1, unitCost: 2 },
-  ], 2).entries()],
+  [
+    ...allocateGrnAccrual(
+      [
+        { id: 1, acceptedQty: 1, unitCost: 1.005 },
+        { id: 2, acceptedQty: 1, unitCost: 2 },
+      ],
+      2,
+    ).entries(),
+  ],
   // The float sum of the two products lands just ABOVE the half, so the
   // total is 301 minor units; line 1 rounds down to 100 on its own edge
   // and the last line absorbs the residue (201), as designed.
-  [[1, 100], [2, 201]],
+  [
+    [1, 100],
+    [2, 201],
+  ],
 );
 
 console.log('canonical rounding checks passed');

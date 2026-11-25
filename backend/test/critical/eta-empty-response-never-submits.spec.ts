@@ -44,7 +44,9 @@ async function main(): Promise<void> {
     db as never,
     { getAccessToken: async () => 'token-1' } as never,
     { serializeSaleToEtaFormat: async () => ({}) } as never,
-    { getSettings: async () => ({ client_id: 'cid', client_secret: 'sec', is_active: true, environment: 'sandbox' }) } as never,
+    {
+      getSettings: async () => ({ client_id: 'cid', client_secret: 'sec', is_active: true, environment: 'sandbox' }),
+    } as never,
   );
 
   let payload: unknown = null;
@@ -66,13 +68,18 @@ async function main(): Promise<void> {
     `);
     const statusOf = async (id: number) => {
       const rows = await pg.query<{ eta_status: string; eta_uuid: string | null; eta_submission_id: string | null }>(
-        `SELECT eta_status, eta_uuid, eta_submission_id FROM sales WHERE id = $1`, [id],
+        `SELECT eta_status, eta_uuid, eta_submission_id FROM sales WHERE id = $1`,
+        [id],
       );
       return rows.rows[0];
     };
 
     // 1. Named acceptance only: INV-7 submits, INV-8 stays pending.
-    payload = { submissionId: 'SUB-1', acceptedDocuments: [{ internalId: 'INV-7', uuid: 'uuid-1' }], rejectedDocuments: [] };
+    payload = {
+      submissionId: 'SUB-1',
+      acceptedDocuments: [{ internalId: 'INV-7', uuid: 'uuid-1' }],
+      rejectedDocuments: [],
+    };
     const r1 = await svc.submitInvoices('t1', ['7', '8']);
     assert.equal(r1.acceptedCount, 1);
     assert.equal(r1.submissionId, 'SUB-1');
@@ -101,7 +108,11 @@ async function main(): Promise<void> {
     assert.equal((await statusOf(8)).eta_status, 'pending');
 
     // 4. Named rejection: INV-8 fails, INV-7 untouched.
-    payload = { submissionId: 'SUB-3', acceptedDocuments: [], rejectedDocuments: [{ internalId: 'INV-8', error: 'bad vat' }] };
+    payload = {
+      submissionId: 'SUB-3',
+      acceptedDocuments: [],
+      rejectedDocuments: [{ internalId: 'INV-8', error: 'bad vat' }],
+    };
     const r4 = await svc.submitInvoices('t1', ['7', '8']);
     assert.equal(r4.rejectedCount, 1);
     assert.equal((await statusOf(8)).eta_status, 'failed');

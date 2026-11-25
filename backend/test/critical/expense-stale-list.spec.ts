@@ -24,14 +24,20 @@ async function main() {
   const pg = new PGlite();
   const db = new Kysely<any>({ dialect: new PGliteDialect(pg) });
   try {
-    await sql`CREATE TABLE expenses (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, title TEXT, amount NUMERIC(14,2) NOT NULL DEFAULT 0, expense_date DATE, note TEXT, branch_id INTEGER, location_id INTEGER, created_by INTEGER, cancelled_at TIMESTAMPTZ NULL, cancelled_by BIGINT NULL, cancel_reason TEXT NULL)`.execute(db);
+    await sql`CREATE TABLE expenses (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, title TEXT, amount NUMERIC(14,2) NOT NULL DEFAULT 0, expense_date DATE, note TEXT, branch_id INTEGER, location_id INTEGER, created_by INTEGER, cancelled_at TIMESTAMPTZ NULL, cancelled_by BIGINT NULL, cancel_reason TEXT NULL)`.execute(
+      db,
+    );
     await sql`CREATE TABLE branches (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, name TEXT)`.execute(db);
     await sql`CREATE TABLE stock_locations (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, name TEXT)`.execute(db);
     await sql`CREATE TABLE users (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, username TEXT)`.execute(db);
     await sql`CREATE TABLE settings (tenant_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT)`.execute(db);
-    await sql`CREATE TABLE currency_exchange_rates (tenant_id TEXT NOT NULL, currency_code TEXT, exchange_rate NUMERIC(14,6), is_base BOOLEAN NOT NULL DEFAULT false)`.execute(db);
+    await sql`CREATE TABLE currency_exchange_rates (tenant_id TEXT NOT NULL, currency_code TEXT, exchange_rate NUMERIC(14,6), is_base BOOLEAN NOT NULL DEFAULT false)`.execute(
+      db,
+    );
 
-    await sql`INSERT INTO expenses (tenant_id, title, amount, expense_date) VALUES (${TENANT}, ${'قرطاسية'}, 50, ${'2026-11-06'}), (${'t2'}, ${'مصروف مستأجر آخر'}, 999, ${'2026-11-06'})`.execute(db);
+    await sql`INSERT INTO expenses (tenant_id, title, amount, expense_date) VALUES (${TENANT}, ${'قرطاسية'}, 50, ${'2026-11-06'}), (${'t2'}, ${'مصروف مستأجر آخر'}, 999, ${'2026-11-06'})`.execute(
+      db,
+    );
 
     const service = new TreasuryService(db as never, {} as never, {} as never, {} as never);
     const one = (await service.listExpenses({ page: 1, pageSize: 20 }, ACTOR)) as any;

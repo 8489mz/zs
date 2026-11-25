@@ -50,7 +50,11 @@ type Captures = {
 
 function makeDb(): { db: Record<string, any>; captures: Captures } {
   const captures: Captures = {
-    orderInserts: [], orderUpdates: [], itemInserts: [], approvalChecks: [], approvalNotifications: [],
+    orderInserts: [],
+    orderUpdates: [],
+    itemInserts: [],
+    approvalChecks: [],
+    approvalNotifications: [],
   };
   const rowFor = (table: string): Record<string, unknown> | undefined => {
     if (table === 'settings') return { value: 'EGP' };
@@ -152,8 +156,13 @@ function buildService(requiresApproval: boolean): { service: PurchaseOrdersServi
 }
 
 const auth: AuthContext = {
-  tenantId: 't1', accountId: 't1', userId: 1,
-  username: 'spec-admin', role: 'admin', permissions: [], sessionId: 'spec-session',
+  tenantId: 't1',
+  accountId: 't1',
+  userId: 1,
+  username: 'spec-admin',
+  role: 'admin',
+  permissions: [],
+  sessionId: 'spec-session',
 };
 
 // The reported live case: manual-test supplier, one manual-test
@@ -161,8 +170,11 @@ const auth: AuthContext = {
 function draftPayload(submitForApproval?: boolean): Record<string, unknown> {
   return {
     items: [{ productId: 5, productName: 'منتج اختبار يدوي', quantity: 2, unitCost: 100, taxRate: 0 }],
-    discountAmount: 0, supplierId: 9, warehouseId: 3,
-    supplierName: 'مورد اختبار يدوي', warehouseName: 'المستودع الرئيسي',
+    discountAmount: 0,
+    supplierId: 9,
+    warehouseId: 3,
+    supplierName: 'مورد اختبار يدوي',
+    warehouseName: 'المستودع الرئيسي',
     expectedDeliveryDate: '2026-11-10',
     ...(submitForApproval === undefined ? {} : { submitForApproval }),
   };
@@ -234,20 +246,23 @@ async function main(): Promise<void> {
   // did not bypass it by inserting 'confirmed' directly.
   {
     const service = readFileSync(
-      resolve(__dirname, '../../src/modules/purchases/services/purchase-orders.service.ts'), 'utf8');
+      resolve(__dirname, '../../src/modules/purchases/services/purchase-orders.service.ts'),
+      'utf8',
+    );
     assert.ok(service.includes('if (payload.submitForApproval)'));
     assert.ok(service.includes('status: finalStatus'));
     assert.ok(service.includes('checkAndInitiateApproval'));
     assert.ok(service.includes('async confirmOrder('));
     assert.ok(!service.includes("status: 'confirmed',\n        expected_delivery_date"));
-    const dto = readFileSync(
-      resolve(__dirname, '../../src/modules/purchases/dto/purchase-order.dto.ts'), 'utf8');
+    const dto = readFileSync(resolve(__dirname, '../../src/modules/purchases/dto/purchase-order.dto.ts'), 'utf8');
     assert.ok(dto.includes('submitForApproval?: boolean'));
     const createStart = dto.indexOf('export interface CreatePurchaseOrderDto');
     const updateStart = dto.indexOf('export interface UpdatePurchaseOrderDto');
     assert.ok(createStart > 0 && updateStart > createStart);
-    assert.ok(!dto.slice(createStart, updateStart).includes('status?:'),
-      'status itself must never be client-supplied on create');
+    assert.ok(
+      !dto.slice(createStart, updateStart).includes('status?:'),
+      'status itself must never be client-supplied on create',
+    );
   }
 
   // 5. Frontend pins: the draft button saves through the API (the old
@@ -256,18 +271,24 @@ async function main(): Promise<void> {
   // intent flag.
   {
     const page = readFileSync(
-      resolve(__dirname, '../../../frontend/src/features/purchases/pages/CreatePurchaseOrderPage.tsx'), 'utf8');
+      resolve(__dirname, '../../../frontend/src/features/purchases/pages/CreatePurchaseOrderPage.tsx'),
+      'utf8',
+    );
     assert.ok(!page.includes("toast.success(t('purchases.create_purchase_order_page.s4'"));
     assert.ok(page.includes('handleSaveDraft'));
     assert.ok(page.includes('saveDraftPurchaseOrder(payload)'));
     const hook = readFileSync(
-      resolve(__dirname, '../../../frontend/src/features/purchases/hooks/useCreatePurchaseOrderForm.ts'), 'utf8');
+      resolve(__dirname, '../../../frontend/src/features/purchases/hooks/useCreatePurchaseOrderForm.ts'),
+      'utf8',
+    );
     assert.ok(hook.includes('submitForApproval: true'));
     assert.ok(hook.includes("if (res.status === 'draft')"));
     assert.ok(hook.includes("toast.error('تعذر اعتماد أمر الشراء: ما زال في حالة مسودة')"));
     assert.ok(hook.includes('saveDraftPurchaseOrder'));
     const api = readFileSync(
-      resolve(__dirname, '../../../frontend/src/features/purchases/api/purchase-orders.api.ts'), 'utf8');
+      resolve(__dirname, '../../../frontend/src/features/purchases/api/purchase-orders.api.ts'),
+      'utf8',
+    );
     assert.ok(api.includes('submitForApproval?: boolean'));
     assert.ok(api.includes("status?: PurchaseOrderRecord['status']"));
   }
@@ -278,7 +299,9 @@ async function main(): Promise<void> {
   // stayed stale until reopen.
   {
     const listPage = readFileSync(
-      resolve(__dirname, '../../../frontend/src/features/purchases/pages/PurchaseOrdersPage.tsx'), 'utf8');
+      resolve(__dirname, '../../../frontend/src/features/purchases/pages/PurchaseOrdersPage.tsx'),
+      'utf8',
+    );
     const confirmStart = listPage.indexOf('const confirmMutation');
     const convertStart = listPage.indexOf('const convertMutation');
     assert.ok(confirmStart > 0 && convertStart > confirmStart);

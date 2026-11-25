@@ -134,25 +134,55 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function seedShipment(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', container_number: 'C1', supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: 'proj-1',
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'sh-1-item', tenant_id: 't1', shipment_id: 'sh-1', product_id: 1,
-    quantity: 10, factory_unit_price_usd: 50, shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      container_number: 'C1',
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'sh-1-item',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 1,
+      quantity: 10,
+      factory_unit_price_usd: 50,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function postReceipt(db: Kysely<Database>, service: any): Promise<number> {
-  await service.updateShipmentCosts('t1', 1, 'sh-1', { status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10 });
-  const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+  await service.updateShipmentCosts('t1', 1, 'sh-1', {
+    status: 'Arrived',
+    exchangeRateAtArrival: 50,
+    receiptLocationId: 10,
+  });
+  const receipt: any = await (db as any)
+    .selectFrom('import_inventory_receipts')
+    .selectAll()
+    .where('shipment_id', '=', 'sh-1')
+    .executeTakeFirstOrThrow();
   return Number(receipt.id);
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -161,7 +191,11 @@ async function journalLines(db: Kysely<Database>, entryId: number): Promise<any[
 }
 
 async function linesOnCustomersAccount(db: Kysely<Database>): Promise<any[]> {
-  return (db as any).selectFrom('journal_entry_lines').selectAll().where('account_id', '=', CUSTOMERS_ACCOUNT_ID).execute();
+  return (db as any)
+    .selectFrom('journal_entry_lines')
+    .selectAll()
+    .where('account_id', '=', CUSTOMERS_ACCOUNT_ID)
+    .execute();
 }
 
 function lineFor(lines: any[], accountId: number): any {
@@ -170,10 +204,20 @@ function lineFor(lines: any[], accountId: number): any {
   return line;
 }
 
-async function disburseTrialAdvance(db: Kysely<Database>, service: any, amount: number, shipmentId?: string): Promise<any> {
+async function disburseTrialAdvance(
+  db: Kysely<Database>,
+  service: any,
+  amount: number,
+  shipmentId?: string,
+): Promise<any> {
   return service.disburseBrokerAdvance('t1', 1, {
-    brokerId: 'br-1', advanceNo: 'ADV-TEST-001', amountEgp: amount,
-    projectId: 'proj-1', shipmentId: shipmentId || undefined, paymentMethod: 'bank_transfer', treasuryAccountId: BANK_ACCOUNT_ID,
+    brokerId: 'br-1',
+    advanceNo: 'ADV-TEST-001',
+    amountEgp: amount,
+    projectId: 'proj-1',
+    shipmentId: shipmentId || undefined,
+    paymentMethod: 'bank_transfer',
+    treasuryAccountId: BANK_ACCOUNT_ID,
   });
 }
 
@@ -187,7 +231,11 @@ async function main(): Promise<void> {
       await seedShipment(db);
       const advance = await disburseTrialAdvance(db, service, 50, 'sh-1');
       assert.equal(Number(advance.amount_egp), 50, 'The advance records 50 EGP');
-      const entries: any[] = await (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', 'import_broker_advance').execute();
+      const entries: any[] = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('source_type', '=', 'import_broker_advance')
+        .execute();
       assert.equal(entries.length, 1, 'Exactly one advance journal');
       const lines = await journalLines(db, Number(entries[0].id));
       assert.equal(lines.length, 2, 'Advance journal: one debit + one credit');
@@ -211,14 +259,27 @@ async function main(): Promise<void> {
       const advance = await disburseTrialAdvance(db, service, 50, 'sh-1');
       const journalsBefore = await countRows(db, 'journal_entries');
       const expense = await service.liquidateBrokerExpenses('t1', 1, {
-        brokerId: 'br-1', advanceId: advance.id, projectId: 'proj-1', shipmentId: 'sh-1',
-        receiptNo: 'RCP-TEST-001', category: 'customs_duty', amountEgp: 20,
+        brokerId: 'br-1',
+        advanceId: advance.id,
+        projectId: 'proj-1',
+        shipmentId: 'sh-1',
+        receiptNo: 'RCP-TEST-001',
+        category: 'customs_duty',
+        amountEgp: 20,
       });
       assert.equal(expense.capitalization_state, 'revalued', 'The settlement response carries the posted state');
       assert.equal(expense.is_verified, false, 'Verification is a separate step; the settlement itself is posted');
       assert.equal(await countRows(db, 'journal_entries'), journalsBefore + 1, 'Exactly one settlement journal');
-      const entry: any = await (db as any).selectFrom('journal_entries').selectAll().orderBy('id', 'desc').executeTakeFirstOrThrow();
-      assert.equal(entry.source_type, 'import_broker_capitalization', 'The settlement journal is the capitalisation journal');
+      const entry: any = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .orderBy('id', 'desc')
+        .executeTakeFirstOrThrow();
+      assert.equal(
+        entry.source_type,
+        'import_broker_capitalization',
+        'The settlement journal is the capitalisation journal',
+      );
       const lines = await journalLines(db, Number(entry.id));
       assert.equal(Number(lineFor(lines, INVENTORY_ACCOUNT_ID).debit), 20, 'Dr inventory 1140 20');
       assert.equal(Number(lineFor(lines, BROKER_ADVANCE_ACCOUNT_ID).credit), 20, 'Cr broker-advance account 1181 20');
@@ -238,14 +299,23 @@ async function main(): Promise<void> {
       await seedShipment(db);
       const advance = await disburseTrialAdvance(db, service, 50, 'sh-1');
       const expense = await service.liquidateBrokerExpenses('t1', 1, {
-        brokerId: 'br-1', advanceId: advance.id, projectId: 'proj-1', shipmentId: 'sh-1',
-        receiptNo: 'RCP-TEST-001', category: 'customs_duty', amountEgp: 20,
+        brokerId: 'br-1',
+        advanceId: advance.id,
+        projectId: 'proj-1',
+        shipmentId: 'sh-1',
+        receiptNo: 'RCP-TEST-001',
+        category: 'customs_duty',
+        amountEgp: 20,
       });
       assert.equal(expense.capitalization_state, 'folded', 'Pre-receipt capitalisation folds');
       const journalsBeforeReceipt = await countRows(db, 'journal_entries');
       assert.equal(journalsBeforeReceipt, 1, 'The fold posts no journal (only the advance journal exists)');
       const receiptId = await postReceipt(db, service);
-      const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('id', '=', receiptId).executeTakeFirstOrThrow();
+      const receipt: any = await (db as any)
+        .selectFrom('import_inventory_receipts')
+        .selectAll()
+        .where('id', '=', receiptId)
+        .executeTakeFirstOrThrow();
       const lines = await journalLines(db, Number(receipt.journal_entry_id));
       const advanceLine = lineFor(lines, BROKER_ADVANCE_ACCOUNT_ID);
       assert.equal(Number(advanceLine.credit), 20, 'Cr broker-advance account 1181 20 for the folded cost');
@@ -268,7 +338,11 @@ async function main(): Promise<void> {
         /تعذر تحديد حساب محاسبي/,
         'Without a broker-advance account the disburse must fail closed, never fall back to Customers',
       );
-      assert.equal(await countRows(db, 'import_broker_advances'), 0, 'No advance row is written by a rejected disburse');
+      assert.equal(
+        await countRows(db, 'import_broker_advances'),
+        0,
+        'No advance row is written by a rejected disburse',
+      );
       assert.equal(await countRows(db, 'journal_entries'), 0, 'No journal is written by a rejected disburse');
     } finally {
       await db.destroy();
@@ -279,12 +353,31 @@ async function main(): Promise<void> {
   // posted state from the response and never claims the posted
   // settlement awaits a second approval.
   {
-    const managerPath = join(__dirname, '..', '..', '..', 'frontend', 'src', 'features', 'import-sales', 'CustomsBrokerManager.tsx');
+    const managerPath = join(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      'frontend',
+      'src',
+      'features',
+      'import-sales',
+      'CustomsBrokerManager.tsx',
+    );
     const source = readFileSync(managerPath, 'utf8');
-    assert.ok(!source.includes('بانتظار التحقق بموافقة ثانية'), 'The settlement toast never says "awaiting second approval"');
+    assert.ok(
+      !source.includes('بانتظار التحقق بموافقة ثانية'),
+      'The settlement toast never says "awaiting second approval"',
+    );
     assert.ok(source.includes('capitalization_state'), 'The toast reads the settlement response posted state');
-    assert.ok(source.includes('تمت تسوية المصروف وترحيل قيدها'), 'The posted settlement toast states the journal is posted');
-    assert.ok(source.includes('بانتظار التحقق'), 'The per-expense verification state still shows in the statement table');
+    assert.ok(
+      source.includes('تمت تسوية المصروف وترحيل قيدها'),
+      'The posted settlement toast states the journal is posted',
+    );
+    assert.ok(
+      source.includes('بانتظار التحقق'),
+      'The per-expense verification state still shows in the statement table',
+    );
   }
 
   console.log('Import broker advance account tests passed');

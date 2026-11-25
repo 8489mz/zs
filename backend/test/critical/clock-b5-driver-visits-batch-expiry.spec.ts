@@ -82,17 +82,37 @@ async function driveItinerary(
     await pg.exec(ITINERARY_DDL);
     const anyDb = db as any;
     await anyDb.insertInto('settings').values({ tenant_id: tenant, key: 'currency', value: 'EGP' }).execute();
-    await anyDb.insertInto('settings').values({ tenant_id: tenant, key: 'timezone', value: `"${zone}"` }).execute();
-    await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: tenant, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+    await anyDb
+      .insertInto('settings')
+      .values({ tenant_id: tenant, key: 'timezone', value: `"${zone}"` })
+      .execute();
+    await anyDb
+      .insertInto('currency_exchange_rates')
+      .values({ tenant_id: tenant, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+      .execute();
     for (const v of visits) {
-      await anyDb.insertInto('customers').values({
-        id: v.customerId, tenant_id: tenant, name: 'عميل ' + v.customerId, is_active: true,
-        balance: 0, credit_limit: 0, metadata: JSON.stringify({ assigned_rep_ids: [1] }),
-      }).execute();
-      await anyDb.insertInto('van_field_visits').values({
-        tenant_id: tenant, rep_id: 1, customer_id: v.customerId,
-        visit_type: 'positive', visited_at: v.visitedAt,
-      }).execute();
+      await anyDb
+        .insertInto('customers')
+        .values({
+          id: v.customerId,
+          tenant_id: tenant,
+          name: 'عميل ' + v.customerId,
+          is_active: true,
+          balance: 0,
+          credit_limit: 0,
+          metadata: JSON.stringify({ assigned_rep_ids: [1] }),
+        })
+        .execute();
+      await anyDb
+        .insertInto('van_field_visits')
+        .values({
+          tenant_id: tenant,
+          rep_id: 1,
+          customer_id: v.customerId,
+          visit_type: 'positive',
+          visited_at: v.visitedAt,
+        })
+        .execute();
     }
     const service = new VanRoutesService(db, {} as never);
     return (await service.getDriverTodayItinerary(tenant, 1)) as any[];

@@ -46,11 +46,27 @@ import { Database } from '../../src/database/database.types';
 import { SalesOrdersService } from '../../src/modules/sales/services/sales-orders.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function reservedQty(db: Kysely<Database>, productId: number): Promise<{ global: number; location: number }> {
-  const product = await db.selectFrom('products').select([sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty')]).where('id', '=', productId).executeTakeFirstOrThrow();
-  const balance = await db.selectFrom('product_location_stock').select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty')).where('product_id', '=', productId).where('location_id', '=', 10).executeTakeFirstOrThrow();
+  const product = await db
+    .selectFrom('products')
+    .select([sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty')])
+    .where('id', '=', productId)
+    .executeTakeFirstOrThrow();
+  const balance = await db
+    .selectFrom('product_location_stock')
+    .select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty'))
+    .where('product_id', '=', productId)
+    .where('location_id', '=', 10)
+    .executeTakeFirstOrThrow();
   return { global: Number(product.reserved_qty), location: Number(balance.reserved_qty) };
 }
 
@@ -68,14 +84,86 @@ async function main() {
       CREATE TABLE operation_executions (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, idempotency_key text NOT NULL, operation_type text NOT NULL, status text NOT NULL, request_hash text NOT NULL, document_id text, response_payload text, error_code text, created_at timestamptz NOT NULL DEFAULT NOW(), updated_at timestamptz NOT NULL DEFAULT NOW(), completed_at timestamptz);
     `);
 
-    await db.insertInto('branches').values({ id: 1, tenant_id: 't1', account_id: 'a1', default_stock_location_id: 10 } as any).execute();
-    await db.insertInto('stock_locations').values({ id: 10, tenant_id: 't1', account_id: 'a1', name: 'Main', is_active: true, branch_id: 1 } as any).execute();
-    await db.insertInto('products').values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', item_type: 'product', stock_qty: 10, reserved_qty: 0 } as any).execute();
-    await db.insertInto('products').values({ id: 2, tenant_id: 't1', account_id: 'a1', name: 'Grinding', item_type: 'service', stock_qty: 0, reserved_qty: 0 } as any).execute();
-    await db.insertInto('products').values({ id: 3, tenant_id: 't1', account_id: 'a1', name: 'Zero Widget', item_type: 'product', stock_qty: 0, reserved_qty: 0 } as any).execute();
-    await db.insertInto('product_location_stock').values({ tenant_id: 't1', account_id: 'a1', product_id: 1, branch_id: 1, location_id: 10, qty: 10, reserved_qty: 0 } as any).execute();
-    await db.insertInto('product_location_stock').values({ tenant_id: 't1', account_id: 'a1', product_id: 2, branch_id: 1, location_id: 10, qty: 0, reserved_qty: 0 } as any).execute();
-    await db.insertInto('product_location_stock').values({ tenant_id: 't1', account_id: 'a1', product_id: 3, branch_id: 1, location_id: 10, qty: 0, reserved_qty: 0 } as any).execute();
+    await db
+      .insertInto('branches')
+      .values({ id: 1, tenant_id: 't1', account_id: 'a1', default_stock_location_id: 10 } as any)
+      .execute();
+    await db
+      .insertInto('stock_locations')
+      .values({ id: 10, tenant_id: 't1', account_id: 'a1', name: 'Main', is_active: true, branch_id: 1 } as any)
+      .execute();
+    await db
+      .insertInto('products')
+      .values({
+        id: 1,
+        tenant_id: 't1',
+        account_id: 'a1',
+        name: 'Widget',
+        item_type: 'product',
+        stock_qty: 10,
+        reserved_qty: 0,
+      } as any)
+      .execute();
+    await db
+      .insertInto('products')
+      .values({
+        id: 2,
+        tenant_id: 't1',
+        account_id: 'a1',
+        name: 'Grinding',
+        item_type: 'service',
+        stock_qty: 0,
+        reserved_qty: 0,
+      } as any)
+      .execute();
+    await db
+      .insertInto('products')
+      .values({
+        id: 3,
+        tenant_id: 't1',
+        account_id: 'a1',
+        name: 'Zero Widget',
+        item_type: 'product',
+        stock_qty: 0,
+        reserved_qty: 0,
+      } as any)
+      .execute();
+    await db
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: 1,
+        branch_id: 1,
+        location_id: 10,
+        qty: 10,
+        reserved_qty: 0,
+      } as any)
+      .execute();
+    await db
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: 2,
+        branch_id: 1,
+        location_id: 10,
+        qty: 0,
+        reserved_qty: 0,
+      } as any)
+      .execute();
+    await db
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: 3,
+        branch_id: 1,
+        location_id: 10,
+        qty: 0,
+        reserved_qty: 0,
+      } as any)
+      .execute();
 
     let calls = 0;
     let lastConversionRelease: unknown = 'not-called';
@@ -92,23 +180,39 @@ async function main() {
       return db.selectFrom('sales_orders').select(['status', 'sale_id']).where('id', '=', id).executeTakeFirstOrThrow();
     }
     async function orderItems(orderId: number) {
-      const rows = await db.selectFrom('sales_order_items').select(['product_id', 'quantity', 'reserved_quantity', 'delivered_quantity']).where('sales_order_id', '=', orderId).orderBy('product_id', 'asc').execute();
-      return rows.map((row) => ({ productId: Number(row.product_id), quantity: Number(row.quantity), reserved: Number(row.reserved_quantity), delivered: Number(row.delivered_quantity) }));
+      const rows = await db
+        .selectFrom('sales_order_items')
+        .select(['product_id', 'quantity', 'reserved_quantity', 'delivered_quantity'])
+        .where('sales_order_id', '=', orderId)
+        .orderBy('product_id', 'asc')
+        .execute();
+      return rows.map((row) => ({
+        productId: Number(row.product_id),
+        quantity: Number(row.quantity),
+        reserved: Number(row.reserved_quantity),
+        delivered: Number(row.delivered_quantity),
+      }));
     }
     async function orderCount() {
-      const row = await db.selectFrom('sales_orders').select(sql<number>`COUNT(*)`.as('n')).executeTakeFirstOrThrow();
+      const row = await db
+        .selectFrom('sales_orders')
+        .select(sql<number>`COUNT(*)`.as('n'))
+        .executeTakeFirstOrThrow();
       return Number((row as any).n);
     }
 
     // 1. createOrder with a 0-stock service line succeeds, confirmed, nothing reserved.
-    const created = await service.createOrder({
-      customerName: 'Cust',
-      subtotal: 100,
-      discountAmount: 0,
-      taxAmount: 0,
-      totalAmount: 100,
-      items: [{ productId: 2, productName: 'Grinding', quantity: 2, unitPrice: 50, total: 100 }],
-    } as any, AUTH);
+    const created = await service.createOrder(
+      {
+        customerName: 'Cust',
+        subtotal: 100,
+        discountAmount: 0,
+        taxAmount: 0,
+        totalAmount: 100,
+        items: [{ productId: 2, productName: 'Grinding', quantity: 2, unitPrice: 50, total: 100 }],
+      } as any,
+      AUTH,
+    );
     const serviceOrderId = Number((created as any).order.id);
     assert.equal(String((await orderRow(serviceOrderId)).status), 'confirmed');
     assert.deepEqual(await orderItems(serviceOrderId), [{ productId: 2, quantity: 2, reserved: 0, delivered: 0 }]);
@@ -116,50 +220,69 @@ async function main() {
 
     // 2. A 0-stock NON-service line still throws — the exemption is service-only.
     const countBefore = await orderCount();
-    await assert.rejects(() => service.createOrder({
-      customerName: 'Cust',
-      subtotal: 10,
-      discountAmount: 0,
-      taxAmount: 0,
-      totalAmount: 10,
-      items: [{ productId: 3, productName: 'Zero Widget', quantity: 1, unitPrice: 10, total: 10 }],
-    } as any, AUTH), /الرصيد المتاح/);
+    await assert.rejects(
+      () =>
+        service.createOrder(
+          {
+            customerName: 'Cust',
+            subtotal: 10,
+            discountAmount: 0,
+            taxAmount: 0,
+            totalAmount: 10,
+            items: [{ productId: 3, productName: 'Zero Widget', quantity: 1, unitPrice: 10, total: 10 }],
+          } as any,
+          AUTH,
+        ),
+      /الرصيد المتاح/,
+    );
     assert.equal(await orderCount(), countBefore);
 
     // 3. Mixed order: the stocked product reserves, the service does not.
-    const mixed = await service.createOrder({
-      customerName: 'Cust',
-      subtotal: 100,
-      discountAmount: 0,
-      taxAmount: 0,
-      totalAmount: 100,
-      items: [
-        { productId: 1, productName: 'Widget', quantity: 2, unitPrice: 25, total: 50 },
-        { productId: 2, productName: 'Grinding', quantity: 1, unitPrice: 50, total: 50 },
-      ],
-    } as any, AUTH);
+    const mixed = await service.createOrder(
+      {
+        customerName: 'Cust',
+        subtotal: 100,
+        discountAmount: 0,
+        taxAmount: 0,
+        totalAmount: 100,
+        items: [
+          { productId: 1, productName: 'Widget', quantity: 2, unitPrice: 25, total: 50 },
+          { productId: 2, productName: 'Grinding', quantity: 1, unitPrice: 50, total: 50 },
+        ],
+      } as any,
+      AUTH,
+    );
     const mixedId = Number((mixed as any).order.id);
     assert.equal(String((await orderRow(mixedId)).status), 'confirmed');
-    assert.deepEqual((await orderItems(mixedId)).map((row) => row.reserved), [2, 0]);
+    assert.deepEqual(
+      (await orderItems(mixedId)).map((row) => row.reserved),
+      [2, 0],
+    );
     assert.deepEqual(await reservedQty(db, 1), { global: 2, location: 2 });
     assert.deepEqual(await reservedQty(db, 2), { global: 0, location: 0 });
 
     // 4. A draft service order confirms with no reservation stamped.
-    const draft = await service.createOrder({
-      customerName: 'Cust',
-      subtotal: 100,
-      discountAmount: 0,
-      taxAmount: 0,
-      totalAmount: 100,
-      autoReserve: false,
-      items: [{ productId: 2, productName: 'Grinding', quantity: 2, unitPrice: 50, total: 100 }],
-    } as any, AUTH);
+    const draft = await service.createOrder(
+      {
+        customerName: 'Cust',
+        subtotal: 100,
+        discountAmount: 0,
+        taxAmount: 0,
+        totalAmount: 100,
+        autoReserve: false,
+        items: [{ productId: 2, productName: 'Grinding', quantity: 2, unitPrice: 50, total: 100 }],
+      } as any,
+      AUTH,
+    );
     const draftId = Number((draft as any).order.id);
     assert.equal(String((await orderRow(draftId)).status), 'draft');
     const confirmed = await service.confirmAndReserve(draftId, AUTH);
     assert.equal((confirmed as any).ok, true);
     assert.equal(String((await orderRow(draftId)).status), 'confirmed');
-    assert.deepEqual((await orderItems(draftId)).map((row) => row.reserved), [0]);
+    assert.deepEqual(
+      (await orderItems(draftId)).map((row) => row.reserved),
+      [0],
+    );
     assert.deepEqual(await reservedQty(db, 2), { global: 0, location: 0 });
 
     // 5. convertToSale on the confirmed service order succeeds, no release handed over.
@@ -170,7 +293,10 @@ async function main() {
     const convertedRow = await orderRow(serviceOrderId);
     assert.equal(String(convertedRow.status), 'converted');
     assert.equal(Number(convertedRow.sale_id), 99);
-    assert.deepEqual((await orderItems(serviceOrderId)).map((row) => ({ delivered: row.delivered, reserved: row.reserved })), [{ delivered: 2, reserved: 0 }]);
+    assert.deepEqual(
+      (await orderItems(serviceOrderId)).map((row) => ({ delivered: row.delivered, reserved: row.reserved })),
+      [{ delivered: 2, reserved: 0 }],
+    );
 
     console.log('sales order service stock checks passed');
   } finally {

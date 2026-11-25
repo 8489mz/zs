@@ -135,7 +135,9 @@ function trialDto(overrides: Record<string, unknown> = {}): any {
   };
 }
 
-async function journalLines(db: Kysely<Database>): Promise<Array<{ account_id: number; debit: number; credit: number }>> {
+async function journalLines(
+  db: Kysely<Database>,
+): Promise<Array<{ account_id: number; debit: number; credit: number }>> {
   const rows = await sql<{ account_id: string; debit: string; credit: string }>`
     SELECT l.account_id, l.debit, l.credit FROM journal_entry_lines l
     JOIN journal_entries e ON e.id = l.journal_entry_id

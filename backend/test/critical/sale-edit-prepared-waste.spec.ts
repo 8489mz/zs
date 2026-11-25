@@ -74,13 +74,23 @@ const ACCOUNT = 'a1';
 const MANAGER_PIN = '1234';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-cashier', username: 'cashier', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-cashier',
+  username: 'cashier',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -143,24 +153,65 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
 }
 
 async function seedRestaurant(db: Kysely<Database>): Promise<void> {
@@ -171,28 +222,56 @@ async function seedRestaurant(db: Kysely<Database>): Promise<void> {
     { id: 103, name: 'Drink 103', cost: 5, retail: 50, qty: 50 },
   ];
   for (const product of catalog) {
-    await anyDb.insertInto('products').values({
-      id: product.id, tenant_id: TENANT, account_id: ACCOUNT, name: product.name,
-      stock_qty: product.qty, cost_price: product.cost, retail_price: product.retail,
-      wholesale_price: product.retail, min_selling_price: 1,
-      is_active: true, item_type: 'product',
-    }).execute();
-    await anyDb.insertInto('product_location_stock').values({
-      tenant_id: TENANT, account_id: ACCOUNT, product_id: product.id, branch_id: 1, location_id: 10, qty: product.qty,
-    }).execute();
+    await anyDb
+      .insertInto('products')
+      .values({
+        id: product.id,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: product.name,
+        stock_qty: product.qty,
+        cost_price: product.cost,
+        retail_price: product.retail,
+        wholesale_price: product.retail,
+        min_selling_price: 1,
+        is_active: true,
+        item_type: 'product',
+      })
+      .execute();
+    await anyDb
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        product_id: product.id,
+        branch_id: 1,
+        location_id: 10,
+        qty: product.qty,
+      })
+      .execute();
   }
   // One cheese unit is consumed per meal, as a restaurant modifier.
-  await anyDb.insertInto('pos_modifier_options').values({
-    id: 1, tenant_id: TENANT, component_product_id: 102, consumption_qty: 1,
-  }).execute();
+  await anyDb
+    .insertInto('pos_modifier_options')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      component_product_id: 102,
+      consumption_qty: 1,
+    })
+    .execute();
 }
 
 async function seedKdsStage(db: Kysely<Database>, saleId: number, stage: string): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('settings').values({
-    tenant_id: TENANT, key: 'kds_tickets_runtime_state',
-    value: JSON.stringify({ tickets: { [String(saleId)]: { status: stage } } }),
-  }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({
+      tenant_id: TENANT,
+      key: 'kds_tickets_runtime_state',
+      value: JSON.stringify({ tickets: { [String(saleId)]: { status: stage } } }),
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): SalesWriteService {
@@ -210,11 +289,18 @@ function buildService(db: Kysely<Database>): SalesWriteService {
   const planFeatures = { hasFeature: (_planId: unknown, _extra: unknown, feature: string) => feature === 'restaurant' };
   const returnsStub = {};
   return new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
 }
-
 
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
   // P3 composition (test-only): createSale now requires an open
@@ -223,16 +309,29 @@ async function createAndGetId(service: SalesWriteService, payload: any, auth: Au
   // behaviour under test does not depend on shift linkage.
   const db: any = (service as any).db ?? (service as any).kysely ?? null;
   if (db && typeof db.insertInto === 'function') {
-    await db.insertInto('cashier_shifts').values({ tenant_id: TENANT, account_id: '1', opened_by: auth.userId, status: 'open', branch_id: 1 }).execute();
+    await db
+      .insertInto('cashier_shifts')
+      .values({ tenant_id: TENANT, account_id: '1', opened_by: auth.userId, status: 'open', branch_id: 1 })
+      .execute();
   }
   const created: any = await service.createSale(payload, auth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
 function mealItem(qty: number): any {
-  return { productId: 101, qty, price: 100, priceType: 'retail', unitMultiplier: 1, modifiers: [{ optionId: 1, qty: 1 }] };
+  return {
+    productId: 101,
+    qty,
+    price: 100,
+    priceType: 'retail',
+    unitMultiplier: 1,
+    modifiers: [{ optionId: 1, qty: 1 }],
+  };
 }
 
 function drinkItem(qty: number): any {
@@ -242,9 +341,16 @@ function drinkItem(qty: number): any {
 function salePayload(items: any[], extra: Record<string, unknown> = {}): any {
   const total = items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 0), 0);
   return {
-    items, discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+    items,
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
     payments: [{ paymentChannel: 'cash', amount: total }],
-    tenderedAmount: total, branchId: 1, locationId: 10, source: 'dashboard',
+    tenderedAmount: total,
+    branchId: 1,
+    locationId: 10,
+    source: 'dashboard',
     orderType: 'dine_in',
     ...extra,
   };
@@ -259,27 +365,42 @@ function editPayload(items: any[], extra: Record<string, unknown> = {}): any {
 }
 
 async function readSale(db: Kysely<Database>, saleId: number): Promise<any> {
-  return (db as any).selectFrom('sales').selectAll()
-    .where('id', '=', saleId).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .selectAll()
+    .where('id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function locationQtyFor(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await (db as any).selectFrom('product_location_stock').select('qty')
-    .where('tenant_id', '=', TENANT).where('product_id', '=', productId).where('location_id', '=', 10)
-    .executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('tenant_id', '=', TENANT)
+    .where('product_id', '=', productId)
+    .where('location_id', '=', 10)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.qty);
 }
 
 async function journalNets(db: Kysely<Database>, saleId: number): Promise<{ cogsNet: number; inventoryNet: number }> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_id', '=', saleId).where('tenant_id', '=', TENANT)
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
     .where('source_type', 'in', ['sale', 'sale_edit', 'sale_reversal'])
-    .where('status', '=', 'posted').execute();
+    .where('status', '=', 'posted')
+    .execute();
   const ids = entries.map((entry: any) => Number(entry.id));
   if (ids.length === 0) return { cogsNet: 0, inventoryNet: 0 };
-  const lines = await (db as any).selectFrom('journal_entry_lines')
+  const lines = await (db as any)
+    .selectFrom('journal_entry_lines')
     .select(['account_id', 'debit', 'credit'])
-    .where('journal_entry_id', 'in', ids).where('tenant_id', '=', TENANT).execute();
+    .where('journal_entry_id', 'in', ids)
+    .where('tenant_id', '=', TENANT)
+    .execute();
   let cogs = 0;
   let inventory = 0;
   for (const line of lines) {
@@ -332,7 +453,11 @@ async function main(): Promise<void> {
       await service.updateSale(saleId, editPayload([mealItem(2)]), adminAuth);
       assert.equal(await locationQtyFor(db, 101), 98, 'kept meals net to zero stock change');
       assert.equal(await locationQtyFor(db, 102), 98, 'kept cheese nets to zero stock change');
-      assert.deepEqual(await journalNets(db, saleId), { cogsNet: 28, inventoryNet: 28 }, 'kept lines re-post the same COGS');
+      assert.deepEqual(
+        await journalNets(db, saleId),
+        { cogsNet: 28, inventoryNet: 28 },
+        'kept lines re-post the same COGS',
+      );
     } finally {
       await db.destroy();
     }
@@ -356,7 +481,11 @@ async function main(): Promise<void> {
       assert.equal(await locationQtyFor(db, 101), 98, 'removed meals stay consumed');
       assert.equal(await locationQtyFor(db, 102), 98, 'removed cheese stays consumed');
       assert.equal(await locationQtyFor(db, 103), 49, 'kept drink restores and re-deducts');
-      assert.deepEqual(await journalNets(db, saleId), { cogsNet: 33, inventoryNet: 33 }, 'waste meal COGS plus drink COGS');
+      assert.deepEqual(
+        await journalNets(db, saleId),
+        { cogsNet: 33, inventoryNet: 33 },
+        'waste meal COGS plus drink COGS',
+      );
     } finally {
       await db.destroy();
     }
@@ -377,7 +506,11 @@ async function main(): Promise<void> {
       await service.updateSale(saleId, editPayload([mealItem(1)]), adminAuth);
       assert.equal(await locationQtyFor(db, 101), 99, 'pending ticket restores fully');
       assert.equal(await locationQtyFor(db, 102), 99, 'pending ticket cheese restores fully');
-      assert.deepEqual(await journalNets(db, saleId), { cogsNet: 14, inventoryNet: 14 }, 'pending ticket re-posts kept COGS only');
+      assert.deepEqual(
+        await journalNets(db, saleId),
+        { cogsNet: 14, inventoryNet: 14 },
+        'pending ticket re-posts kept COGS only',
+      );
     } finally {
       await db.destroy();
     }
@@ -395,13 +528,19 @@ async function main(): Promise<void> {
       const service = buildService(db);
       const saleId = await createAndGetId(service, salePayload([mealItem(2)]), adminAuth);
       await seedKdsStage(db, saleId, 'confirmed');
-      await (db as any).updateTable('sales')
+      await (db as any)
+        .updateTable('sales')
         .set({ created_at: new Date(Date.now() - 15 * 60 * 60 * 1000) })
-        .where('id', '=', saleId).execute();
+        .where('id', '=', saleId)
+        .execute();
       await service.updateSale(saleId, editPayload([mealItem(1)]), adminAuth);
       assert.equal(await locationQtyFor(db, 101), 98, 'old sale stays consumed');
       assert.equal(await locationQtyFor(db, 102), 98, 'old sale cheese stays consumed');
-      assert.deepEqual(await journalNets(db, saleId), { cogsNet: 28, inventoryNet: 28 }, 'old sale waste COGS stays posted');
+      assert.deepEqual(
+        await journalNets(db, saleId),
+        { cogsNet: 28, inventoryNet: 28 },
+        'old sale waste COGS stays posted',
+      );
     } finally {
       await db.destroy();
     }
@@ -422,12 +561,20 @@ async function main(): Promise<void> {
       await seedKdsStage(db, dineInId, 'served');
       await service.updateSale(dineInId, editPayload([drinkItem(1)]), adminAuth);
       assert.equal(await locationQtyFor(db, 103), 49, 'dine-in drink without modifiers restores fully');
-      assert.deepEqual(await journalNets(db, dineInId), { cogsNet: 5, inventoryNet: 5 }, 'dine-in drink re-posts kept COGS only');
+      assert.deepEqual(
+        await journalNets(db, dineInId),
+        { cogsNet: 5, inventoryNet: 5 },
+        'dine-in drink re-posts kept COGS only',
+      );
       const retailPayload = salePayload([drinkItem(2)], { orderType: null });
       const retailId = await createAndGetId(service, retailPayload, adminAuth);
       await service.updateSale(retailId, editPayload([drinkItem(1)], { orderType: null }), adminAuth);
       assert.equal(await locationQtyFor(db, 103), 48, 'retail drink restores fully');
-      assert.deepEqual(await journalNets(db, retailId), { cogsNet: 5, inventoryNet: 5 }, 'retail drink re-posts kept COGS only');
+      assert.deepEqual(
+        await journalNets(db, retailId),
+        { cogsNet: 5, inventoryNet: 5 },
+        'retail drink re-posts kept COGS only',
+      );
     } finally {
       await db.destroy();
     }
@@ -450,7 +597,11 @@ async function main(): Promise<void> {
       assert.equal(sale.status, 'cancelled', 'sale is cancelled');
       assert.equal(await locationQtyFor(db, 101), 98, 'cancel does not resurrect meals');
       assert.equal(await locationQtyFor(db, 102), 98, 'cancel does not resurrect cheese');
-      assert.deepEqual(await journalNets(db, saleId), { cogsNet: 28, inventoryNet: 28 }, 'cancel keeps waste COGS posted');
+      assert.deepEqual(
+        await journalNets(db, saleId),
+        { cogsNet: 28, inventoryNet: 28 },
+        'cancel keeps waste COGS posted',
+      );
     } finally {
       await db.destroy();
     }
@@ -466,16 +617,41 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/sales/services/sales-write.service.ts'), 'utf8');
-    assert.equal(serviceSource.split('detectPreparedWasteSale').length - 1, 3, 'one helper definition plus two call sites');
-    assert.ok(serviceSource.includes('preparedWasteCogsExclusion') === false, 'the write service never names the journal exclusion');
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/sales/services/sales-write.service.ts'),
+      'utf8',
+    );
+    assert.equal(
+      serviceSource.split('detectPreparedWasteSale').length - 1,
+      3,
+      'one helper definition plus two call sites',
+    );
+    assert.ok(
+      serviceSource.includes('preparedWasteCogsExclusion') === false,
+      'the write service never names the journal exclusion',
+    );
+    const postingSource = readFileSync(
+      resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'),
+      'utf8',
+    );
     assert.ok(postingSource.includes('preparedWasteCogsExclusion'), 'posting service carries the partial exclusion');
     assert.ok(postingSource.includes('reverseSaleJournalById'), 'remediation reversal is untouched');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-SALE-EDIT-PREPARED-WASTE').length - 1, 1, 'the invariant entry must exist exactly once');
-    assert.equal(invariants.split('INV-SALES-RETURN-COGS-RESIDUAL-MIRROR').length - 1, 1, 'the P2 mirror invariant must still exist exactly once');
-    assert.equal(invariants.split('INV-SALE-EDIT-COST-FLOOR').length - 1, 1, 'the P1 floor invariant must still exist exactly once');
+    assert.equal(
+      invariants.split('INV-SALE-EDIT-PREPARED-WASTE').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
+    assert.equal(
+      invariants.split('INV-SALES-RETURN-COGS-RESIDUAL-MIRROR').length - 1,
+      1,
+      'the P2 mirror invariant must still exist exactly once',
+    );
+    assert.equal(
+      invariants.split('INV-SALE-EDIT-COST-FLOOR').length - 1,
+      1,
+      'the P1 floor invariant must still exist exactly once',
+    );
     console.log('  source + invariant pins passed');
   }
 

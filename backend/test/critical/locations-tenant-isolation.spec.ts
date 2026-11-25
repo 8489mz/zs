@@ -109,22 +109,28 @@ async function runTenantIsolationTest() {
   }
   assert.ok(hasTenantPredicate, 'deleteLocation must apply tenantPredicate for tenant_id = secure-tenant-123');
 
-  console.log('locations-tenant-isolation.spec: ok (Locations operations are strictly isolated per tenant and account)');
+  console.log(
+    'locations-tenant-isolation.spec: ok (Locations operations are strictly isolated per tenant and account)',
+  );
 
   // 4. Test Preserve Location Type
   // mock DB executeTakeFirst is set to return { id: 1, is_active: true, total_qty: 0 } which in updateLocation will be used as location
   // We can mock executeTakeFirst to return a branch_stock location.
   mockQueryBuilder.executeTakeFirst = async () => ({ id: 1, is_active: true, location_type: 'branch_stock' });
-  
+
   let setArguments: any = null;
   mockQueryBuilder.set = (args: any) => {
     setArguments = args;
     return mockQueryBuilder;
   };
-  
+
   await settingsService.updateLocation(14, { name: 'New Name', branchId: 1 }, actor);
-  assert.equal(setArguments.location_type, 'branch_stock', 'updateLocation must preserve location_type when not provided');
-  
+  assert.equal(
+    setArguments.location_type,
+    'branch_stock',
+    'updateLocation must preserve location_type when not provided',
+  );
+
   console.log('locations-tenant-isolation.spec: ok (locationType is preserved correctly)');
 
   // 5. Test createLocation Validation
@@ -143,7 +149,11 @@ async function runTenantIsolationTest() {
   } catch (err) {
     errorObj = err;
   }
-  assert.equal(errorObj?.code, 'BRANCH_REQUIRED_FOR_BRANCH_STOCK', 'createLocation should reject branch_stock without branchId');
+  assert.equal(
+    errorObj?.code,
+    'BRANCH_REQUIRED_FOR_BRANCH_STOCK',
+    'createLocation should reject branch_stock without branchId',
+  );
 
   errorObj = null;
   try {

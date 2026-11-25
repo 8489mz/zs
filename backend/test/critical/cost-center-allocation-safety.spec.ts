@@ -13,47 +13,92 @@ function fakeDatabase(foundCount = 3) {
   const tx: any = {
     selectFrom(table: string) {
       const builder: any = {
-        select() { return builder; },
-        selectAll() { return builder; },
-        where() { return builder; },
-        forUpdate() { return builder; },
+        select() {
+          return builder;
+        },
+        selectAll() {
+          return builder;
+        },
+        where() {
+          return builder;
+        },
+        forUpdate() {
+          return builder;
+        },
         async execute() {
-          if (table.startsWith('cost_centers')) return splits.slice(0, foundCount).map(x => ({ id: x.costCenterId }));
-          if (table.startsWith('cost_center_allocation_splits')) return splits.map(x => ({
-            cost_center_id: x.costCenterId, percentage: x.percentage,
-            cost_center_name: String(x.costCenterId), cost_center_code: String(x.costCenterId),
-          }));
+          if (table.startsWith('cost_centers')) return splits.slice(0, foundCount).map((x) => ({ id: x.costCenterId }));
+          if (table.startsWith('cost_center_allocation_splits'))
+            return splits.map((x) => ({
+              cost_center_id: x.costCenterId,
+              percentage: x.percentage,
+              cost_center_name: String(x.costCenterId),
+              cost_center_code: String(x.costCenterId),
+            }));
           return [];
         },
         async executeTakeFirst() {
           if (table.startsWith('cost_center_allocations')) return { id: '100', name: 'Test' };
           return undefined;
         },
-        async executeTakeFirstOrThrow() { return { id: '100' }; },
+        async executeTakeFirstOrThrow() {
+          return { id: '100' };
+        },
       };
       return builder;
     },
     insertInto(table: string) {
       const b: any = {
-        values() { writes.push(table); return b; },
-        returningAll() { return b; },
-        async executeTakeFirstOrThrow() { return { id: '100' }; },
+        values() {
+          writes.push(table);
+          return b;
+        },
+        returningAll() {
+          return b;
+        },
+        async executeTakeFirstOrThrow() {
+          return { id: '100' };
+        },
         async execute() {},
       };
       return b;
     },
     updateTable(table: string) {
-      const b: any = { set() { writes.push(table); return b; }, where() { return b; }, async execute() {} };
+      const b: any = {
+        set() {
+          writes.push(table);
+          return b;
+        },
+        where() {
+          return b;
+        },
+        async execute() {},
+      };
       return b;
     },
     deleteFrom(table: string) {
-      const b: any = { where() { return b; }, async execute() { writes.push('delete:' + table); } };
+      const b: any = {
+        where() {
+          return b;
+        },
+        async execute() {
+          writes.push('delete:' + table);
+        },
+      };
       return b;
     },
-    leftJoin() { return this; },
+    leftJoin() {
+      return this;
+    },
   };
   const db: any = {
-    transaction() { return { execute: async (fn: (trx: unknown) => Promise<unknown>) => { transactions++; return fn(tx); } }; },
+    transaction() {
+      return {
+        execute: async (fn: (trx: unknown) => Promise<unknown>) => {
+          transactions++;
+          return fn(tx);
+        },
+      };
+    },
     selectFrom(table: string) {
       const b: any = tx.selectFrom(table);
       b.leftJoin = () => b;
@@ -66,10 +111,7 @@ function fakeDatabase(foundCount = 3) {
 (async () => {
   const absent = fakeDatabase(2);
   const missing = new CostCenterAllocationsService(absent.db);
-  await assert.rejects(
-    missing.createAllocation({ code: 'TEST', name: 'Test', splits }, auth),
-    /لا يتبع المنشأة/,
-  );
+  await assert.rejects(missing.createAllocation({ code: 'TEST', name: 'Test', splits }, auth), /لا يتبع المنشأة/);
   assert.deepEqual(absent.writes, [], 'no header or split is inserted on tenant ownership failure');
   assert.equal(absent.transactions(), 1);
 
@@ -85,7 +127,16 @@ function fakeDatabase(foundCount = 3) {
   );
 
   const result: any = await service.calculateSplitAmounts('100', 0.01, auth);
-  assert.equal(result.splits.reduce((sum: number, x: any) => sum + x.allocatedAmount, 0), 0.01);
-  assert.deepEqual(result.splits.map((x: any) => x.allocatedAmount), [0.01, 0, 0]);
+  assert.equal(
+    result.splits.reduce((sum: number, x: any) => sum + x.allocatedAmount, 0),
+    0.01,
+  );
+  assert.deepEqual(
+    result.splits.map((x: any) => x.allocatedAmount),
+    [0.01, 0, 0],
+  );
   console.log('Cost center tenant atomicity and cent-residual regressions passed');
-})().catch(e => { console.error(e); process.exitCode = 1; });
+})().catch((e) => {
+  console.error(e);
+  process.exitCode = 1;
+});

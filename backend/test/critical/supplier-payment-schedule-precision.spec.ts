@@ -55,14 +55,28 @@ console.log('Supplier payment schedules pure split assertions passed');
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const txHelper = new TransactionHelper();
   const financeService = new PurchasesFinanceService();
-  const idempotency = { reserveOperation: async () => null, commitOperation: async () => {}, recordFailure: async () => {} } as unknown as IdempotencyService;
+  const idempotency = {
+    reserveOperation: async () => null,
+    commitOperation: async () => {},
+    recordFailure: async () => {},
+  } as unknown as IdempotencyService;
   const service = new SupplierPaymentSchedulesService(db, txHelper, financeService, posting, idempotency);
 
-  const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['purchases', 'accounting'] } as unknown as AuthContext;
+  const auth = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 1,
+    username: 'admin',
+    permissions: ['purchases', 'accounting'],
+  } as unknown as AuthContext;
 
   try {
     await pg.exec(`
@@ -131,15 +145,19 @@ async function main() {
     `);
 
     // 1. Create schedule for purchase (100.123 KWD, 3 installments)
-    const created = await service.createForPurchase(1, {
-      mode: 'count',
-      installmentCount: 3,
-      scheduleAmount: 100.123,
-      // B4-P3: firstDueDate is bounded [today-7, today+5y] — use a relative
-      // UTC-today date (inside the window for every tenant zone).
-      firstDueDate: new Date().toISOString().slice(0, 10),
-      intervalDays: 30,
-    }, auth);
+    const created = await service.createForPurchase(
+      1,
+      {
+        mode: 'count',
+        installmentCount: 3,
+        scheduleAmount: 100.123,
+        // B4-P3: firstDueDate is bounded [today-7, today+5y] — use a relative
+        // UTC-today date (inside the window for every tenant zone).
+        firstDueDate: new Date().toISOString().slice(0, 10),
+        intervalDays: 30,
+      },
+      auth,
+    );
     const schedules = created.schedules as any[];
     assert.equal(schedules.length, 3);
     assert.equal(schedules[0].amount, 33.374);
@@ -168,10 +186,13 @@ async function main() {
       WHERE je.source_type='supplier_payment_schedule_settlement' AND je.source_id=1
       ORDER BY jel.account_id
     `);
-    assert.deepEqual(jLine1.rows.map(r => [Number(r.account_id), Number(r.debit), Number(r.credit)]), [
-      [1110, 0, 33.374],
-      [2110, 33.374, 0],
-    ]);
+    assert.deepEqual(
+      jLine1.rows.map((r) => [Number(r.account_id), Number(r.debit), Number(r.credit)]),
+      [
+        [1110, 0, 33.374],
+        [2110, 33.374, 0],
+      ],
+    );
 
     // 4. Pay installment 3: exact 33.375 KWD
     await service.payInstallment(Number(schedules[2].id), { amount: 33.375 }, auth);
@@ -186,10 +207,13 @@ async function main() {
       WHERE je.source_type='supplier_payment_schedule_settlement' AND je.source_id=2
       ORDER BY jel.account_id
     `);
-    assert.deepEqual(jLine3.rows.map(r => [Number(r.account_id), Number(r.debit), Number(r.credit)]), [
-      [1110, 0, 33.375],
-      [2110, 33.375, 0],
-    ]);
+    assert.deepEqual(
+      jLine3.rows.map((r) => [Number(r.account_id), Number(r.debit), Number(r.credit)]),
+      [
+        [1110, 0, 33.375],
+        [2110, 33.375, 0],
+      ],
+    );
 
     // 5. Verify supplier balance updated correctly: 100.123 - (33.374 + 33.375) = 33.374 remaining
     const supp = await pg.query<{ balance: string }>('SELECT balance FROM suppliers WHERE id=10');

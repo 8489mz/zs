@@ -63,18 +63,33 @@ const MANAGER_PIN = '1234';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-a', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-a',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierBAuth: AuthContext = {
-  userId: 3, sessionId: 'spec-b', username: 'cashier-b', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 3,
+  sessionId: 'spec-b',
+  username: 'cashier-b',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -142,43 +157,119 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 4, tenant_id: TENANT, username: 'other-login', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 4, tenant_id: TENANT, username: 'other-login', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
 /**
@@ -189,27 +280,69 @@ async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Pr
  * chained tree. withTreasury=false mirrors the van flow, which
  * writes no sale treasury row (field cash sits with the rep).
  */
-async function seedLegacySale(db: Kysely<Database>, saleId: number, createdBy: number, amount: number, collectionStatus: string | null, withTreasury: boolean): Promise<void> {
+async function seedLegacySale(
+  db: Kysely<Database>,
+  saleId: number,
+  createdBy: number,
+  amount: number,
+  collectionStatus: string | null,
+  withTreasury: boolean,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('sales').values({
-    id: saleId, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `S-${saleId}`,
-    payment_type: 'cash', payment_channel: 'cash', subtotal: amount, total: amount,
-    paid_amount: amount, status: 'posted', collection_status: collectionStatus,
-    branch_id: 1, location_id: 10, created_by: createdBy,
-  }).execute();
-  await anyDb.insertInto('sale_payments').values({
-    tenant_id: TENANT, account_id: ACCOUNT, sale_id: saleId, payment_channel: 'cash', amount,
-  }).execute();
+  await anyDb
+    .insertInto('sales')
+    .values({
+      id: saleId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `S-${saleId}`,
+      payment_type: 'cash',
+      payment_channel: 'cash',
+      subtotal: amount,
+      total: amount,
+      paid_amount: amount,
+      status: 'posted',
+      collection_status: collectionStatus,
+      branch_id: 1,
+      location_id: 10,
+      created_by: createdBy,
+    })
+    .execute();
+  await anyDb
+    .insertInto('sale_payments')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      sale_id: saleId,
+      payment_channel: 'cash',
+      amount,
+    })
+    .execute();
   if (withTreasury) {
-    await anyDb.insertInto('treasury_transactions').values({
-      tenant_id: TENANT, account_id: ACCOUNT, txn_type: 'sale', amount,
-      note: `فاتورة بيع S-${saleId} - نقدي`, reference_type: 'sale', reference_id: saleId,
-      created_by: createdBy, branch_id: 1, location_id: 10, payment_channel: 'cash',
-    }).execute();
+    await anyDb
+      .insertInto('treasury_transactions')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        txn_type: 'sale',
+        amount,
+        note: `فاتورة بيع S-${saleId} - نقدي`,
+        reference_type: 'sale',
+        reference_id: saleId,
+        created_by: createdBy,
+        branch_id: 1,
+        location_id: 10,
+        payment_channel: 'cash',
+      })
+      .execute();
   }
 }
 
-function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer: CashDrawerService; posting: AccountingPostingService } {
+function buildServices(db: Kysely<Database>): {
+  sales: SalesWriteService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -224,8 +357,16 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   return { sales, drawer, posting };
@@ -234,16 +375,25 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
 function salePayload(total: number): any {
   return {
     items: [{ productId: 101, qty: 1, price: total, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
     payments: [{ paymentChannel: 'cash', amount: total }],
-    tenderedAmount: total, branchId: 1, locationId: 10, source: 'dashboard',
+    tenderedAmount: total,
+    branchId: 1,
+    locationId: 10,
+    source: 'dashboard',
   };
 }
 
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
   const created: any = await service.createSale(payload, auth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
@@ -360,7 +510,9 @@ async function main(): Promise<void> {
       assert.equal(Number(row.expectedCash), 0, 'the cancelled shift nets to zero');
       const saleItems = (row.movementItems as any[]).filter((item) => String(item.id || '').startsWith('sale-tt-'));
       assert.equal(saleItems.length, 0, 'no sale item remains for the cancelled sale');
-      const refunds = (row.movementItems as any[]).filter((item) => String(item.kindLabel || '').includes('رد نقدية فاتورة بيع ملغاة'));
+      const refunds = (row.movementItems as any[]).filter((item) =>
+        String(item.kindLabel || '').includes('رد نقدية فاتورة بيع ملغاة'),
+      );
       assert.equal(refunds.length, 1, 'the refund shows as a shift-linked movement');
       assert.equal(Number(refunds[0].amount), 100, 'the refund carries the cash amount');
     } finally {
@@ -377,11 +529,25 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/cash-drawer-compute.service.ts'), 'utf8');
-    assert.ok(serviceSource.split('shiftSaleCashAttribution').length - 1 >= 4, 'one helper definition plus three call sites');
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/cash-drawer/cash-drawer-compute.service.ts'),
+      'utf8',
+    );
+    assert.ok(
+      serviceSource.split('shiftSaleCashAttribution').length - 1 >= 4,
+      'one helper definition plus three call sites',
+    );
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-SHIFT-SALE-CASH-ATTRIBUTION').length - 1, 1, 'the invariant entry must exist exactly once');
-    assert.equal(invariants.split('INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION').length - 1, 1, 'the P1 invariant must still exist exactly once');
+    assert.equal(
+      invariants.split('INV-SHIFT-SALE-CASH-ATTRIBUTION').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
+    assert.equal(
+      invariants.split('INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION').length - 1,
+      1,
+      'the P1 invariant must still exist exactly once',
+    );
     console.log('  source + invariant pins passed');
   }
 

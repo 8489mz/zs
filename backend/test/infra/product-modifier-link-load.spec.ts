@@ -32,7 +32,11 @@ import { AddonsController } from '../../src/modules/addons/addons.controller';
 import { AddonsService } from '../../src/modules/addons/addons.service';
 
 const AUTH = {
-  tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: ['products'],
 } as unknown as AuthContext;
 
@@ -80,7 +84,8 @@ async function main(): Promise<void> {
   {
     const perms = Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, AddonsController.prototype.getProductModifiers) || [];
     assert.deepEqual(perms, ['products'], 'GET products/:productId/modifiers must require products permission');
-    const postPerms = Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, AddonsController.prototype.linkProductModifiers) || [];
+    const postPerms =
+      Reflect.getMetadata(REQUIRED_PERMISSIONS_KEY, AddonsController.prototype.linkProductModifiers) || [];
     assert.deepEqual(postPerms, ['products'], 'POST sibling must keep requiring products permission');
     console.log('product-modifier-link-load: phase 1 (decorator present) OK');
   }
@@ -89,11 +94,7 @@ async function main(): Promise<void> {
   // handler and still blocks a user without the permission.
   {
     const guard = makeGuard();
-    assert.equal(
-      guard.canActivate(guardContext(AUTH)),
-      true,
-      'permitted user must pass the guard on the GET handler',
-    );
+    assert.equal(guard.canActivate(guardContext(AUTH)), true, 'permitted user must pass the guard on the GET handler');
     assert.throws(
       () => guard.canActivate(guardContext(NO_PRODUCTS_AUTH)),
       ForbiddenException,
@@ -107,15 +108,23 @@ async function main(): Promise<void> {
     const { db } = await makeDb();
     try {
       const service = new AddonsService(db, AUDIT_STUB);
-      const product = await sql<{ id: string }>`INSERT INTO products (tenant_id, name) VALUES ('t1', 'Test product') RETURNING id`
+      const product = await sql<{
+        id: string;
+      }>`INSERT INTO products (tenant_id, name) VALUES ('t1', 'Test product') RETURNING id`
         .execute(db)
         .then((r) => r.rows[0]);
       const productId = Number(product.id);
-      const created = await service.createModifierGroup({
-        name: 'Side dish', selectionType: 'multiple', isMandatory: false,
-        minSelections: 0, maxSelections: 10,
-        options: [{ name: 'Fries', price: 5, costPrice: 2 }],
-      }, AUTH);
+      const created = await service.createModifierGroup(
+        {
+          name: 'Side dish',
+          selectionType: 'multiple',
+          isMandatory: false,
+          minSelections: 0,
+          maxSelections: 10,
+          options: [{ name: 'Fries', price: 5, costPrice: 2 }],
+        },
+        AUTH,
+      );
       const groupId = Number(created.id);
 
       const before = await service.getProductModifiers(productId, AUTH);

@@ -56,7 +56,10 @@ function createMockDb(orders: MockOrder[], settingsMap: Record<string, string>) 
           const builder: any = {
             where: (col: any, op: any, val: any) => {
               if (col === 'id') selectedId = val;
-              else { filterCol = col; filterVal = val; }
+              else {
+                filterCol = col;
+                filterVal = val;
+              }
               return builder;
             },
             forUpdate: () => builder,
@@ -66,7 +69,8 @@ function createMockDb(orders: MockOrder[], settingsMap: Record<string, string>) 
             executeTakeFirst: async () => {
               if (selectedId != null) return orders.find((o) => o.id === selectedId) || orders[0];
               if (filterCol === 'order_number') return orders.find((o) => o.order_number === filterVal) || orders[0];
-              if (filterCol === 'gateway_order_id') return orders.find((o) => o.gateway_order_id === filterVal) || orders[0];
+              if (filterCol === 'gateway_order_id')
+                return orders.find((o) => o.gateway_order_id === filterVal) || orders[0];
               return orders[0];
             },
             execute: async () => {
@@ -312,7 +316,9 @@ async function testPaymobFailClosed(): Promise<void> {
     assert.equal(result.alreadyPaid, true);
   }
 
-  console.log('  -> Paymob: fail-closed without secret/signature, rejects forged HMAC, accepts valid signature, idempotent.');
+  console.log(
+    '  -> Paymob: fail-closed without secret/signature, rejects forged HMAC, accepts valid signature, idempotent.',
+  );
 }
 
 async function testXPayFailClosed(): Promise<void> {
@@ -482,7 +488,9 @@ async function testStripeFailClosed(): Promise<void> {
     assert.equal(result.status, 'paid');
   }
 
-  console.log('  -> Stripe: fail-closed without secret/signature, enforces 300s replay protection, accepts valid signature.');
+  console.log(
+    '  -> Stripe: fail-closed without secret/signature, enforces 300s replay protection, accepts valid signature.',
+  );
 }
 
 async function testTapFailClosed(): Promise<void> {
@@ -626,7 +634,11 @@ async function testOnlinePaidOrderSaleConversion(): Promise<void> {
   const actor: any = { userId: 1, username: 'admin', role: 'admin', tenantId: 'tenant-1', accountId: 'tenant-1:main' };
   const res = await storefrontService.convertToSale(10, actor);
   assert.equal(res.ok, true);
-  assert.equal(capturedSalePayload.collectionStatus, 'prepaid_online', 'Online paid orders must have collectionStatus = prepaid_online (createSale rejects collected)');
+  assert.equal(
+    capturedSalePayload.collectionStatus,
+    'prepaid_online',
+    'Online paid orders must have collectionStatus = prepaid_online (createSale rejects collected)',
+  );
   assert.equal(capturedSalePayload.paidAmount, 500, 'Online paid orders must have paidAmount equal to order total');
   // Was asserting 'paymob' — but normalizeSalePayload maps every channel outside
   // cash|card|wallet|instapay to 'cash', so that value booked card money into the cash drawer.
@@ -636,7 +648,9 @@ async function testOnlinePaidOrderSaleConversion(): Promise<void> {
   assert.ok(String(capturedSalePayload.note).includes('paymob'), 'The gateway is recorded on the invoice note');
   assert.equal(capturedSalePayload.discount, 0, 'An order without a coupon carries no discount');
 
-  console.log('  -> Storefront convertToSale: online paid order sets collectionStatus = prepaid_online and paidAmount.');
+  console.log(
+    '  -> Storefront convertToSale: online paid order sets collectionStatus = prepaid_online and paidAmount.',
+  );
 }
 
 async function testLatePaymentAndAmountVerification(): Promise<void> {
@@ -728,35 +742,42 @@ async function testLatePaymentAndAmountVerification(): Promise<void> {
     amount_cents: 5000,
     order: { id: 1000, merchant_order_id: 'tenant-1__ON-260920-0100' },
   };
-  const hmacMismatched = crypto.createHmac('sha512', 'my-paymob-secret').update([
-    objMismatched.amount_cents,
-    objMismatched.created_at,
-    objMismatched.currency,
-    objMismatched.error_occured,
-    objMismatched.has_parent_transaction,
-    objMismatched.id,
-    objMismatched.integration_id,
-    objMismatched.is_3d_secure,
-    objMismatched.is_auth,
-    objMismatched.is_capture,
-    objMismatched.is_refunded,
-    objMismatched.is_standalone_payment,
-    objMismatched.is_voided,
-    objMismatched.order?.id,
-    objMismatched.owner,
-    objMismatched.pending,
-    objMismatched.source_data?.pan,
-    objMismatched.source_data?.sub_type,
-    objMismatched.source_data?.type,
-    objMismatched.success,
-  ].join('')).digest('hex');
+  const hmacMismatched = crypto
+    .createHmac('sha512', 'my-paymob-secret')
+    .update(
+      [
+        objMismatched.amount_cents,
+        objMismatched.created_at,
+        objMismatched.currency,
+        objMismatched.error_occured,
+        objMismatched.has_parent_transaction,
+        objMismatched.id,
+        objMismatched.integration_id,
+        objMismatched.is_3d_secure,
+        objMismatched.is_auth,
+        objMismatched.is_capture,
+        objMismatched.is_refunded,
+        objMismatched.is_standalone_payment,
+        objMismatched.is_voided,
+        objMismatched.order?.id,
+        objMismatched.owner,
+        objMismatched.pending,
+        objMismatched.source_data?.pan,
+        objMismatched.source_data?.sub_type,
+        objMismatched.source_data?.type,
+        objMismatched.success,
+      ].join(''),
+    )
+    .digest('hex');
 
   const mismatchResult = await serviceMismatch.processPaymobWebhook({ hmac: hmacMismatched }, { obj: objMismatched });
   assert.equal(mismatchResult.ok, true);
   assert.equal(mismatchResult.status, 'review_required', 'Amount mismatch must be safely captured as review_required');
   assert.equal(mismatchOrder.status, 'review_required');
 
-  console.log('  -> Late payment on cancelled order safely diverted to review_required, amount mismatch safely captured as review_required.');
+  console.log(
+    '  -> Late payment on cancelled order safely diverted to review_required, amount mismatch safely captured as review_required.',
+  );
 }
 
 async function runAll(): Promise<void> {

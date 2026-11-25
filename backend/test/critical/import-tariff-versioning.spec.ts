@@ -121,7 +121,10 @@ async function main(): Promise<void> {
         .select('data_version')
         .where('tenant_id', '=', 't1')
         .execute();
-      assert.ok(stamped.every((r) => r.data_version === TARIFF_DATA_VERSION), 'Every inserted row carries the version');
+      assert.ok(
+        stamped.every((r) => r.data_version === TARIFF_DATA_VERSION),
+        'Every inserted row carries the version',
+      );
 
       const second = await service.syncOfficialTariffs('t1');
       assert.equal(second.inserted, 0);
@@ -139,21 +142,24 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const bundled = EGYPT_CUSTOMS_TARIFFS[0];
-      await (db as any).insertInto('import_customs_tariffs').values({
-        tenant_id: 't1',
-        hs_code: bundled.hs_code,
-        description_ar: 'Tenant corrected description',
-        description_en: null,
-        duty_rate_percent: 99,
-        vat_rate_percent: 14,
-        inspection_fees_percent: 1,
-        regulatory_body: 'GOEIC',
-        sector: bundled.sector,
-        category_ar: bundled.category_ar,
-        official_source: bundled.official_source,
-        is_official: true,
-        data_version: null,
-      }).execute();
+      await (db as any)
+        .insertInto('import_customs_tariffs')
+        .values({
+          tenant_id: 't1',
+          hs_code: bundled.hs_code,
+          description_ar: 'Tenant corrected description',
+          description_en: null,
+          duty_rate_percent: 99,
+          vat_rate_percent: 14,
+          inspection_fees_percent: 1,
+          regulatory_body: 'GOEIC',
+          sector: bundled.sector,
+          category_ar: bundled.category_ar,
+          official_source: bundled.official_source,
+          is_official: true,
+          data_version: null,
+        })
+        .execute();
 
       const res = await service.syncOfficialTariffs('t1');
       assert.equal(res.inserted, total - 1, 'Only the missing rows are inserted');
@@ -192,21 +198,24 @@ async function main(): Promise<void> {
       const expectedDuty = Number((200000 * (Number(bundled.duty_rate_percent) / 100)).toFixed(2));
       assert.equal(calc.customsDuty, expectedDuty);
 
-      await (db as any).insertInto('import_customs_tariffs').values({
-        tenant_id: 't1',
-        hs_code: '5555.55',
-        description_ar: 'Custom estimate',
-        description_en: null,
-        duty_rate_percent: 7,
-        vat_rate_percent: 14,
-        inspection_fees_percent: 0,
-        regulatory_body: null,
-        sector: null,
-        category_ar: null,
-        official_source: null,
-        is_official: false,
-        data_version: null,
-      }).execute();
+      await (db as any)
+        .insertInto('import_customs_tariffs')
+        .values({
+          tenant_id: 't1',
+          hs_code: '5555.55',
+          description_ar: 'Custom estimate',
+          description_en: null,
+          duty_rate_percent: 7,
+          vat_rate_percent: 14,
+          inspection_fees_percent: 0,
+          regulatory_body: null,
+          sector: null,
+          category_ar: null,
+          official_source: null,
+          is_official: false,
+          data_version: null,
+        })
+        .execute();
       const custom = await service.calculateCustomsTax('t1', '5555.55', 100000);
       assert.equal(custom.isDocumentedTariff, false, 'Custom rows are never presented as documented');
       assert.equal(custom.customsDuty, 7000);

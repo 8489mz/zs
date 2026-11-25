@@ -102,15 +102,21 @@ async function runAirFreightLifecycleTest() {
     // Air Freight Cost with FSC, SSC, and AWB fee
     const costCalc = calculateAirFreightCost({
       chargeableWeightKg: 667,
-      ratePerKg: 2.50,
-      fuelSurchargePerKg: 0.40,
+      ratePerKg: 2.5,
+      fuelSurchargePerKg: 0.4,
       securitySurchargePerKg: 0.15,
-      awbDocumentationFee: 50.00,
+      awbDocumentationFee: 50.0,
     });
-    assert(costCalc.baseWeightCharge === 1667.50, `Base weight charge expected 1667.50, got ${costCalc.baseWeightCharge}`);
-    assert(costCalc.fuelSurcharge === 266.80, `Fuel surcharge expected 266.80, got ${costCalc.fuelSurcharge}`);
-    assert(costCalc.securitySurcharge === 100.05, `Security surcharge expected 100.05, got ${costCalc.securitySurcharge}`);
-    assert(costCalc.awbFee === 50.00, `AWB fee expected 50.00, got ${costCalc.awbFee}`);
+    assert(
+      costCalc.baseWeightCharge === 1667.5,
+      `Base weight charge expected 1667.50, got ${costCalc.baseWeightCharge}`,
+    );
+    assert(costCalc.fuelSurcharge === 266.8, `Fuel surcharge expected 266.80, got ${costCalc.fuelSurcharge}`);
+    assert(
+      costCalc.securitySurcharge === 100.05,
+      `Security surcharge expected 100.05, got ${costCalc.securitySurcharge}`,
+    );
+    assert(costCalc.awbFee === 50.0, `AWB fee expected 50.00, got ${costCalc.awbFee}`);
     assert(costCalc.totalCost === 2084.35, `Total cost expected 2084.35, got ${costCalc.totalCost}`);
 
     // IATA Modulo-7 Check Digit Rule: 077-12345675 (1234567 % 7 = 5)
@@ -153,15 +159,24 @@ async function runAirFreightLifecycleTest() {
     assert(Boolean(inquiry.id), 'Inquiry ID must exist');
     assert(/^INQ-\d{6}-\d{4}$/.test(inquiry.inquiry_number), `Inquiry number format valid: ${inquiry.inquiry_number}`);
     assert(inquiry.transport_mode === 'air', 'Transport mode must be "air"');
-    assert(Number(inquiry.chargeable_weight_kg) === 667, `Chargeable weight auto-derived: ${inquiry.chargeable_weight_kg}`);
-    assert(Number(inquiry.volumetric_weight_kg) > 666, `Volumetric weight auto-derived: ${inquiry.volumetric_weight_kg}`);
+    assert(
+      Number(inquiry.chargeable_weight_kg) === 667,
+      `Chargeable weight auto-derived: ${inquiry.chargeable_weight_kg}`,
+    );
+    assert(
+      Number(inquiry.volumetric_weight_kg) > 666,
+      `Volumetric weight auto-derived: ${inquiry.volumetric_weight_kg}`,
+    );
     console.log('  [PASS] STEP 2 PASSED: Air Inquiry created with auto-derived chargeable weight.\n');
 
     // -------------------------------------------------------------------------
     // STEP 3: Convert Inquiry to Air RFQ (تحويل الاستفسار لطلب تسعير شركات طيران)
     // -------------------------------------------------------------------------
     console.log('[STEP 3] Converting Air Inquiry to RFQ targeting EgyptAir and Emirates...');
-    const rfq = await freightService.convertInquiryToRfq(auth, inquiry.id, [Number(egyptAir!.id), Number(emirates!.id)]);
+    const rfq = await freightService.convertInquiryToRfq(auth, inquiry.id, [
+      Number(egyptAir!.id),
+      Number(emirates!.id),
+    ]);
     console.log(`  -> Created Air RFQ #${rfq.rfq_number} (ID: ${rfq.id})`);
     assert(Boolean(rfq.id), 'RFQ ID must exist');
     assert(/^RFQ-\d{6}-\d{4}$/.test(rfq.rfq_number), `RFQ number format valid: ${rfq.rfq_number}`);
@@ -196,18 +211,18 @@ async function runAirFreightLifecycleTest() {
       rfqId: String(rfq.id),
       shippingLineId: String(emirates!.id),
       shippingLineName: emirates!.name_ar,
-      oceanFreight: 1867.60,
+      oceanFreight: 1867.6,
       currency: 'USD',
       thcOrigin: 0,
       thcDestination: 0,
-      bafCharges: 300.00,
-      otherCharges: 150.00,
+      bafCharges: 300.0,
+      otherCharges: 150.0,
       transitTimeDays: 1,
       freeDays: 4,
       notes: 'عرض طيران الإمارات للشحن الجوي EK SkyCargo',
     });
     console.log(`  -> Bid 2 (Emirates SkyCargo): Total ${bid2.total_freight_cost} ${bid2.currency}`);
-    assert(Number(bid2.total_freight_cost) === 2317.60, `Bid 2 cost must be 2317.60, got ${bid2.total_freight_cost}`);
+    assert(Number(bid2.total_freight_cost) === 2317.6, `Bid 2 cost must be 2317.60, got ${bid2.total_freight_cost}`);
     console.log('  [PASS] STEP 4 PASSED: Airline bids submitted.\n');
 
     // -------------------------------------------------------------------------
@@ -247,8 +262,8 @@ async function runAirFreightLifecycleTest() {
       baseCost: 2084.35,
       currency: 'USD',
       marginType: 'fixed' as const,
-      marginValue: 500.00, // Total $2,584.35 USD
-      exchangeRate: 48.50, // EGP per USD
+      marginValue: 500.0, // Total $2,584.35 USD
+      exchangeRate: 48.5, // EGP per USD
       notes: 'عرض أسعار شحن جوي شامل النولون والمصاريف الإضافية حتى مطار دبي',
     };
 
@@ -277,7 +292,10 @@ async function runAirFreightLifecycleTest() {
 
     // CRITICAL AIR INVARIANT: Zero Ocean Containers!
     const jobDetails = await freightService.getJobById(auth, String(job.id));
-    assert(jobDetails.containers.length === 0, `Air Freight shipment must have 0 ocean containers! Found: ${jobDetails.containers.length}`);
+    assert(
+      jobDetails.containers.length === 0,
+      `Air Freight shipment must have 0 ocean containers! Found: ${jobDetails.containers.length}`,
+    );
     console.log('  VERIFIED INVARIANT: Air job has exactly 0 ocean containers (No dummy MSKU containers).');
 
     // Verify Cost Center was automatically created under 'project'
@@ -295,7 +313,10 @@ async function runAirFreightLifecycleTest() {
     console.log(`  -> Verified Cost Center: ${costCenter?.code} - ${costCenter?.name}`);
 
     // Verify initial milestone is BKD (Cargo iQ Air Booking)
-    assert(jobDetails.milestone_status === 'BKD', `Initial air milestone must be "BKD", got: ${jobDetails.milestone_status}`);
+    assert(
+      jobDetails.milestone_status === 'BKD',
+      `Initial air milestone must be "BKD", got: ${jobDetails.milestone_status}`,
+    );
     console.log('  [PASS] STEP 7 PASSED: Air job converted with Cost Center, 0 containers, and BKD milestone.\n');
 
     // -------------------------------------------------------------------------
@@ -311,7 +332,10 @@ async function runAirFreightLifecycleTest() {
     } catch (err: any) {
       caughtInvalidMawb = true;
       console.log(`  -> Correctly blocked invalid MAWB 077-12345674: ${err.message}`);
-      assert(err.message.includes('Modulo-7') || err.message.includes('Check Digit'), 'Error must specify Modulo-7 check digit');
+      assert(
+        err.message.includes('Modulo-7') || err.message.includes('Check Digit'),
+        'Error must specify Modulo-7 check digit',
+      );
     }
     assert(caughtInvalidMawb, 'System MUST reject invalid IATA MAWB check digits');
 
@@ -323,7 +347,10 @@ async function runAirFreightLifecycleTest() {
       hawbNumber: 'HAWB-DXB-9901',
     });
     assert(updatedWithMawb.flight_number === 'MS-801', 'Flight number must be MS-801');
-    assert(updatedWithMawb.mawb_number === '077-1234 5675', `Formatted MAWB expected "077-1234 5675", got: ${updatedWithMawb.mawb_number}`);
+    assert(
+      updatedWithMawb.mawb_number === '077-1234 5675',
+      `Formatted MAWB expected "077-1234 5675", got: ${updatedWithMawb.mawb_number}`,
+    );
     assert(updatedWithMawb.hawb_number === 'HAWB-DXB-9901', 'HAWB must be recorded');
     console.log(`  -> Validated & formatted MAWB: ${updatedWithMawb.mawb_number}`);
     console.log('  [PASS] STEP 8 PASSED: IATA Modulo-7 validation gate enforced.\n');
@@ -332,17 +359,31 @@ async function runAirFreightLifecycleTest() {
     // STEP 9: Progress Cargo iQ Lifecycle Milestones & Multimodal WhatsApp Alerts
     // -------------------------------------------------------------------------
     console.log('[STEP 9] Progressing Cargo iQ Milestones (RCS -> MAN -> DEP -> ARR -> RCF -> CUST -> NFD)...');
-    
+
     // 9a: RCS - Cargo Received from Shipper at Cairo Cargo Village
-    await freightService.addJobMilestone(auth, String(job.id), 'RCS', 'تم استلام 15 طرد بمستودع قرية البضائع بالقاهرة ومطابقة الوزن 500 كجم والحجم 4 م3', 'CAI Cargo Village');
+    await freightService.addJobMilestone(
+      auth,
+      String(job.id),
+      'RCS',
+      'تم استلام 15 طرد بمستودع قرية البضائع بالقاهرة ومطابقة الوزن 500 كجم والحجم 4 م3',
+      'CAI Cargo Village',
+    );
     const track = await freightService.getJobById(auth, String(job.id));
     assert(track.milestone_status === 'RCS', 'Milestone status must be RCS');
     const lastMs = track.milestones[track.milestones.length - 1];
-    assert(lastMs.milestone_title.includes('استلام الشحنة بمستودع المطار'), `Bilingual title must exist: ${lastMs.milestone_title}`);
+    assert(
+      lastMs.milestone_title.includes('استلام الشحنة بمستودع المطار'),
+      `Bilingual title must exist: ${lastMs.milestone_title}`,
+    );
 
     // 9b: MAN - Manifested on Flight
-    await freightService.addJobMilestone(auth, String(job.id), 'MAN', 'تم إدراج الشحنة على مانيفست رحلة مصر للطيران MS-801');
-    
+    await freightService.addJobMilestone(
+      auth,
+      String(job.id),
+      'MAN',
+      'تم إدراج الشحنة على مانيفست رحلة مصر للطيران MS-801',
+    );
+
     // 9c: DEP - Flight Departed CAI
     await freightService.addJobMilestone(auth, String(job.id), 'DEP', 'أقلعت طائرة الشحن متجهة إلى دبي (ATD)', 'CAI');
 
@@ -354,16 +395,38 @@ async function runAirFreightLifecycleTest() {
     console.log(`  -> Verified Air WhatsApp Alert Template: ${waMsgDep.milestoneTitle}`);
 
     // 9d: ARR - Flight Arrived DXB
-    await freightService.addJobMilestone(auth, String(job.id), 'ARR', 'هبوط ووصول الطائرة بمطار دبي الدولي (ATA)', 'DXB');
+    await freightService.addJobMilestone(
+      auth,
+      String(job.id),
+      'ARR',
+      'هبوط ووصول الطائرة بمطار دبي الدولي (ATA)',
+      'DXB',
+    );
 
     // 9e: RCF - Cargo Received from Flight into DXB Cargo Terminal
-    await freightService.addJobMilestone(auth, String(job.id), 'RCF', 'تفريغ ودخول الشحنة لمستودع الشحن بدبي', 'DXB Dnata Terminal');
+    await freightService.addJobMilestone(
+      auth,
+      String(job.id),
+      'RCF',
+      'تفريغ ودخول الشحنة لمستودع الشحن بدبي',
+      'DXB Dnata Terminal',
+    );
 
     // 9f: CUST - Customs Cleared at DXB Airport
-    await freightService.addJobMilestone(auth, String(job.id), 'CUST', 'تم إنهاء الإفراج والتخليص الجمركي بمطار دبي بنجاح');
+    await freightService.addJobMilestone(
+      auth,
+      String(job.id),
+      'CUST',
+      'تم إنهاء الإفراج والتخليص الجمركي بمطار دبي بنجاح',
+    );
 
     // 9g: NFD - Consignee Notified
-    await freightService.addJobMilestone(auth, String(job.id), 'NFD', 'تم إشعار العميل المستلم بوصول الشحنة وجاهزيتها للتسليم');
+    await freightService.addJobMilestone(
+      auth,
+      String(job.id),
+      'NFD',
+      'تم إشعار العميل المستلم بوصول الشحنة وجاهزيتها للتسليم',
+    );
     console.log('  [PASS] STEP 9 PASSED: All Cargo iQ milestones progressed with bilingual titles & alerts.\n');
 
     // -------------------------------------------------------------------------
@@ -383,8 +446,13 @@ async function runAirFreightLifecycleTest() {
     // STEP 11: Final Delivery POD & Shipment Completion
     // -------------------------------------------------------------------------
     console.log('[STEP 11] Recording Final Proof of Delivery (DLV) & Completing Job...');
-    await freightService.addJobMilestone(auth, String(job.id), 'DLV', 'تم تسليم الشحنة للعميل نهائياً بمقر دبي وتوقيع استلام POD');
-    
+    await freightService.addJobMilestone(
+      auth,
+      String(job.id),
+      'DLV',
+      'تم تسليم الشحنة للعميل نهائياً بمقر دبي وتوقيع استلام POD',
+    );
+
     // Mark Job completed
     const completedJob = await freightService.updateJob(auth, String(job.id), {
       status: 'completed',
@@ -396,7 +464,6 @@ async function runAirFreightLifecycleTest() {
     console.log('========================================================================');
     console.log('  ALL AIR FREIGHT LIFECYCLE AUDIT & VERIFICATION TESTS PASSED 100%!');
     console.log('========================================================================\n');
-
   } catch (error: any) {
     console.error('[FAIL] AIR FREIGHT LIFECYCLE TEST FAILED:', error);
     process.exit(1);

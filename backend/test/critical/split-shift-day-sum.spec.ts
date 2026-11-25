@@ -20,14 +20,23 @@ import { TransactionHelper } from '../../src/database/helpers/transaction.helper
 import { summarizeHourlyAttendance } from '../../src/modules/hr/engines/hourly-attendance-pay.engine';
 import { todayTenantDate } from '../../src/common/utils/tenant-timezone.util';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', userId: 1, username: 'tester', role: 'admin', permissions: [] } as never;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  userId: 1,
+  username: 'tester',
+  role: 'admin',
+  permissions: [],
+} as never;
 const AUDIT_STUB = { log: async () => ({}) } as never;
 const FOUNDATION_STUB = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as never;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_resolve, reject) => setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms)),
+    new Promise<T>((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms),
+    ),
   ]);
 }
 
@@ -65,20 +74,44 @@ async function main(): Promise<void> {
     const upsert = (payload: Record<string, unknown>, label: string) =>
       withTimeout(service.upsertAttendanceRecord(payload as never, AUTH), 25000, label);
 
-    await upsert({
-      employeeId: 1, workDate: WORK_DATE, status: 'present',
-      checkInAt: `${WORK_DATE}T08:00:00.000Z`, checkOutAt: `${WORK_DATE}T12:00:00.000Z`, source: 'manual',
-    }, 'session 1');
-    await upsert({
-      employeeId: 1, workDate: WORK_DATE, status: 'present',
-      checkInAt: `${WORK_DATE}T13:00:00.000Z`, mode: 'new_session', source: 'manual',
-    }, 'session 2 check-in');
-    await upsert({
-      employeeId: 1, workDate: WORK_DATE, status: 'present',
-      checkOutAt: `${WORK_DATE}T17:00:00.000Z`, source: 'manual',
-    }, 'session 2 check-out');
+    await upsert(
+      {
+        employeeId: 1,
+        workDate: WORK_DATE,
+        status: 'present',
+        checkInAt: `${WORK_DATE}T08:00:00.000Z`,
+        checkOutAt: `${WORK_DATE}T12:00:00.000Z`,
+        source: 'manual',
+      },
+      'session 1',
+    );
+    await upsert(
+      {
+        employeeId: 1,
+        workDate: WORK_DATE,
+        status: 'present',
+        checkInAt: `${WORK_DATE}T13:00:00.000Z`,
+        mode: 'new_session',
+        source: 'manual',
+      },
+      'session 2 check-in',
+    );
+    await upsert(
+      {
+        employeeId: 1,
+        workDate: WORK_DATE,
+        status: 'present',
+        checkOutAt: `${WORK_DATE}T17:00:00.000Z`,
+        source: 'manual',
+      },
+      'session 2 check-out',
+    );
 
-    const readRow = async () => db.selectFrom('hr_attendance_records').selectAll().executeTakeFirstOrThrow() as unknown as Record<string, unknown>;
+    const readRow = async () =>
+      db.selectFrom('hr_attendance_records').selectAll().executeTakeFirstOrThrow() as unknown as Record<
+        string,
+        unknown
+      >;
     let row = await readRow();
     assert.equal(Number(row.prior_sessions_minutes), 240, 'stored prior minutes after session 2');
     assert.match(String(row.notes || ''), /وردية سابقة/, 'earlier session still recorded as a note');
@@ -87,14 +120,27 @@ async function main(): Promise<void> {
     assert.equal(summary.baseWage, 400, 'two sessions pay 400 at 50/hr');
 
     // A third session accumulates again: 480 prior + 60 current.
-    await upsert({
-      employeeId: 1, workDate: WORK_DATE, status: 'present',
-      checkInAt: `${WORK_DATE}T18:00:00.000Z`, mode: 'new_session', source: 'manual',
-    }, 'session 3 check-in');
-    await upsert({
-      employeeId: 1, workDate: WORK_DATE, status: 'present',
-      checkOutAt: `${WORK_DATE}T19:00:00.000Z`, source: 'manual',
-    }, 'session 3 check-out');
+    await upsert(
+      {
+        employeeId: 1,
+        workDate: WORK_DATE,
+        status: 'present',
+        checkInAt: `${WORK_DATE}T18:00:00.000Z`,
+        mode: 'new_session',
+        source: 'manual',
+      },
+      'session 3 check-in',
+    );
+    await upsert(
+      {
+        employeeId: 1,
+        workDate: WORK_DATE,
+        status: 'present',
+        checkOutAt: `${WORK_DATE}T19:00:00.000Z`,
+        source: 'manual',
+      },
+      'session 3 check-out',
+    );
     row = await readRow();
     assert.equal(Number(row.prior_sessions_minutes), 480, 'stored prior minutes after session 3');
     summary = summarizeHourlyAttendance([row as never], 50, 2);
@@ -109,5 +155,8 @@ async function main(): Promise<void> {
 
 main().then(
   () => process.exit(0),
-  (error) => { console.error(error); process.exit(1); },
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
 );

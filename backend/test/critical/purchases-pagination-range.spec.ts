@@ -11,14 +11,30 @@ type RowMap = Record<string, unknown[]>;
 
 class FakeQuery {
   constructor(private readonly rows: unknown[]) {}
-  select(): this { return this; }
-  where(): this { return this; }
-  leftJoin(): this { return this; }
-  orderBy(): this { return this; }
-  limit(): this { return this; }
-  offset(): this { return this; }
-  execute(): Promise<unknown[]> { return Promise.resolve(this.rows); }
-  executeTakeFirst(): Promise<unknown> { return Promise.resolve(this.rows[0]); }
+  select(): this {
+    return this;
+  }
+  where(): this {
+    return this;
+  }
+  leftJoin(): this {
+    return this;
+  }
+  orderBy(): this {
+    return this;
+  }
+  limit(): this {
+    return this;
+  }
+  offset(): this {
+    return this;
+  }
+  execute(): Promise<unknown[]> {
+    return Promise.resolve(this.rows);
+  }
+  executeTakeFirst(): Promise<unknown> {
+    return Promise.resolve(this.rows[0]);
+  }
 }
 
 class FakeDb {
@@ -72,9 +88,11 @@ const auth = { tenantId: 'tenant-a', accountId: 'account-a' } as never;
 
 (async () => {
   // The live defect: 2 purchases showed "0-0 of 2".
-  const two = new PurchasesQueryService(new FakeDb({
-    'purchases as p': [purchaseRow(2, 2, 100), purchaseRow(1, 2, 50)],
-  }) as never);
+  const two = new PurchasesQueryService(
+    new FakeDb({
+      'purchases as p': [purchaseRow(2, 2, 100), purchaseRow(1, 2, 50)],
+    }) as never,
+  );
   const twoResult = await two.listPurchases({ page: 1, pageSize: 25 }, auth);
   const twoPagination = twoResult.pagination as Record<string, unknown>;
   assert.equal((twoResult.purchases as unknown[]).length, 2);
@@ -83,9 +101,11 @@ const auth = { tenantId: 'tenant-a', accountId: 'account-a' } as never;
   assert.equal(twoPagination.rangeEnd, 2);
 
   // Same count yields the same range on a later page: 30 items, page 2 of 25.
-  const pageTwo = new PurchasesQueryService(new FakeDb({
-    'purchases as p': [30, 29, 28, 27, 26].map((id) => purchaseRow(id, 30)),
-  }) as never);
+  const pageTwo = new PurchasesQueryService(
+    new FakeDb({
+      'purchases as p': [30, 29, 28, 27, 26].map((id) => purchaseRow(id, 30)),
+    }) as never,
+  );
   const pageTwoResult = await pageTwo.listPurchases({ page: 2, pageSize: 25 }, auth);
   const pageTwoPagination = pageTwoResult.pagination as Record<string, unknown>;
   assert.equal(pageTwoPagination.totalItems, 30);

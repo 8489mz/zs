@@ -68,10 +68,22 @@ const TENANT3 = 't3';
 const SLUG3 = 'retail-shop';
 
 const ALL_TABLES = [
-  'tenants', 'settings', 'products', 'product_offers', 'branches',
-  'online_orders', 'sales', 'sale_items', 'storefront_abandoned_carts',
-  'cashier_shifts', 'pos_modifier_groups', 'pos_modifier_options',
-  'product_pos_modifiers', 'addons', 'restaurant_86_items', 'customers',
+  'tenants',
+  'settings',
+  'products',
+  'product_offers',
+  'branches',
+  'online_orders',
+  'sales',
+  'sale_items',
+  'storefront_abandoned_carts',
+  'cashier_shifts',
+  'pos_modifier_groups',
+  'pos_modifier_options',
+  'product_pos_modifiers',
+  'addons',
+  'restaurant_86_items',
+  'customers',
   'delivery_representatives',
 ].join(', ');
 
@@ -107,86 +119,309 @@ async function resetDb(pg: PGlite): Promise<void> {
 
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('tenants').values({
-    id: TENANT, slug: SLUG, activity_type: 'restaurant', plan_id: 'plan_basic',
-    extra_features: '["storefront", "restaurant"]', owner_phone: null,
-  }).execute();
-  await anyDb.insertInto('tenants').values({
-    id: TENANT2, slug: SLUG2, activity_type: 'restaurant', plan_id: 'plan_basic',
-    extra_features: '["storefront", "restaurant"]', owner_phone: null,
-  }).execute();
-  await anyDb.insertInto('tenants').values({
-    id: TENANT3, slug: SLUG3, activity_type: 'retail_general', plan_id: 'plan_basic',
-    extra_features: '["storefront"]', owner_phone: null,
-  }).execute();
+  await anyDb
+    .insertInto('tenants')
+    .values({
+      id: TENANT,
+      slug: SLUG,
+      activity_type: 'restaurant',
+      plan_id: 'plan_basic',
+      extra_features: '["storefront", "restaurant"]',
+      owner_phone: null,
+    })
+    .execute();
+  await anyDb
+    .insertInto('tenants')
+    .values({
+      id: TENANT2,
+      slug: SLUG2,
+      activity_type: 'restaurant',
+      plan_id: 'plan_basic',
+      extra_features: '["storefront", "restaurant"]',
+      owner_phone: null,
+    })
+    .execute();
+  await anyDb
+    .insertInto('tenants')
+    .values({
+      id: TENANT3,
+      slug: SLUG3,
+      activity_type: 'retail_general',
+      plan_id: 'plan_basic',
+      extra_features: '["storefront"]',
+      owner_phone: null,
+    })
+    .execute();
   for (const tenantId of [TENANT, TENANT2, TENANT3]) {
     await anyDb.insertInto('settings').values({ tenant_id: tenantId, key: 'currency', value: 'EGP' }).execute();
-    await anyDb.insertInto('settings').values({ tenant_id: tenantId, key: 'timezone', value: 'Africa/Cairo' }).execute();
+    await anyDb
+      .insertInto('settings')
+      .values({ tenant_id: tenantId, key: 'timezone', value: 'Africa/Cairo' })
+      .execute();
   }
   // The retail tenant allows out-of-stock ordering, so its cases stay
   // on the modifier-contract gate instead of detouring into the
   // location-stock scope (pinned by other specs).
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT3, key: 'storefront_allow_out_of_stock', value: 'true' }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true, default_stock_location_id: 10 }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values({ tenant_id: TENANT3, key: 'storefront_allow_out_of_stock', value: 'true' })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true, default_stock_location_id: 10 })
+    .execute();
   await anyDb.insertInto('branches').values({ id: 2, tenant_id: TENANT2, name: 'Main', is_active: true }).execute();
   await anyDb.insertInto('branches').values({ id: 3, tenant_id: TENANT3, name: 'Main', is_active: true }).execute();
   // Burger 101 (retail 100) + cheese component 102 (retail 5, cost 2).
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: `${TENANT}:main`, name: 'Burger',
-    stock_qty: 100, cost_price: 40, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('products').values({
-    id: 102, tenant_id: TENANT, account_id: `${TENANT}:main`, name: 'Cheese',
-    stock_qty: 100, cost_price: 2, retail_price: 5,
-    wholesale_price: 5, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('products').values({
-    id: 103, tenant_id: TENANT, account_id: `${TENANT}:main`, name: 'Fries, no groups',
-    stock_qty: 100, cost_price: 5, retail_price: 30,
-    wholesale_price: 30, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('products').values({
-    id: 201, tenant_id: TENANT2, account_id: `${TENANT2}:main`, name: 'T2 Shawarma',
-    stock_qty: 100, cost_price: 20, retail_price: 50,
-    wholesale_price: 50, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('products').values({
-    id: 301, tenant_id: TENANT3, account_id: `${TENANT3}:main`, name: 'Retail Shirt',
-    stock_qty: 100, cost_price: 30, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      name: 'Burger',
+      stock_qty: 100,
+      cost_price: 40,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 102,
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      name: 'Cheese',
+      stock_qty: 100,
+      cost_price: 2,
+      retail_price: 5,
+      wholesale_price: 5,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 103,
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      name: 'Fries, no groups',
+      stock_qty: 100,
+      cost_price: 5,
+      retail_price: 30,
+      wholesale_price: 30,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 201,
+      tenant_id: TENANT2,
+      account_id: `${TENANT2}:main`,
+      name: 'T2 Shawarma',
+      stock_qty: 100,
+      cost_price: 20,
+      retail_price: 50,
+      wholesale_price: 50,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 301,
+      tenant_id: TENANT3,
+      account_id: `${TENANT3}:main`,
+      name: 'Retail Shirt',
+      stock_qty: 100,
+      cost_price: 30,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
   // Groups for the burger: 1 Sauces (mandatory, single) + 2 Extras
   // (optional, multiple) + 3 inactive (never served).
-  await anyDb.insertInto('pos_modifier_groups').values([
-    { id: 1, tenant_id: TENANT, account_id: `${TENANT}:main`, name: 'Sauces', selection_type: 'single', is_mandatory: true, min_selections: 1, max_selections: 1, display_order: 1, is_active: true },
-    { id: 2, tenant_id: TENANT, account_id: `${TENANT}:main`, name: 'Extras', selection_type: 'multiple', is_mandatory: false, min_selections: 0, max_selections: 10, display_order: 2, is_active: true },
-    { id: 3, tenant_id: TENANT, account_id: `${TENANT}:main`, name: 'Retired', selection_type: 'multiple', is_mandatory: false, min_selections: 0, max_selections: 10, display_order: 3, is_active: false },
-    { id: 4, tenant_id: TENANT2, account_id: `${TENANT2}:main`, name: 'T2 Group', selection_type: 'multiple', is_mandatory: false, min_selections: 0, max_selections: 10, display_order: 1, is_active: true },
-    { id: 5, tenant_id: TENANT3, account_id: `${TENANT3}:main`, name: 'Retail Mandatory', selection_type: 'single', is_mandatory: true, min_selections: 1, max_selections: 1, display_order: 1, is_active: true },
-  ]).execute();
-  await anyDb.insertInto('pos_modifier_options').values([
-    { id: 11, tenant_id: TENANT, account_id: `${TENANT}:main`, group_id: 1, name: 'Ketchup', price: 0, cost_price: 0, is_default: true, is_active: true, display_order: 1 },
-    { id: 12, tenant_id: TENANT, account_id: `${TENANT}:main`, group_id: 1, name: 'Mayo', price: 5, cost_price: 1, is_default: false, is_active: true, display_order: 2 },
-    { id: 13, tenant_id: TENANT, account_id: `${TENANT}:main`, group_id: 2, name: 'Extra cheese', price: 20, cost_price: 2, is_default: false, is_active: true, display_order: 1, component_product_id: 102 },
-    { id: 14, tenant_id: TENANT, account_id: `${TENANT}:main`, group_id: 2, name: 'Hidden', price: 99, cost_price: 50, is_default: false, is_active: false, display_order: 2 },
-    { id: 15, tenant_id: TENANT2, account_id: `${TENANT2}:main`, group_id: 4, name: 'T2 Option', price: 7, cost_price: 1, is_default: false, is_active: true, display_order: 1 },
-    { id: 16, tenant_id: TENANT3, account_id: `${TENANT3}:main`, group_id: 5, name: 'Retail Option', price: 9, cost_price: 1, is_default: false, is_active: true, display_order: 1 },
-  ]).execute();
-  await anyDb.insertInto('product_pos_modifiers').values([
-    { id: 1, tenant_id: TENANT, account_id: `${TENANT}:main`, product_id: 101, modifier_group_id: 1 },
-    { id: 2, tenant_id: TENANT, account_id: `${TENANT}:main`, product_id: 101, modifier_group_id: 2 },
-    { id: 3, tenant_id: TENANT, account_id: `${TENANT}:main`, product_id: 101, modifier_group_id: 3 },
-    { id: 4, tenant_id: TENANT2, account_id: `${TENANT2}:main`, product_id: 201, modifier_group_id: 4 },
-    { id: 5, tenant_id: TENANT3, account_id: `${TENANT3}:main`, product_id: 301, modifier_group_id: 5 },
-  ]).execute();
+  await anyDb
+    .insertInto('pos_modifier_groups')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        account_id: `${TENANT}:main`,
+        name: 'Sauces',
+        selection_type: 'single',
+        is_mandatory: true,
+        min_selections: 1,
+        max_selections: 1,
+        display_order: 1,
+        is_active: true,
+      },
+      {
+        id: 2,
+        tenant_id: TENANT,
+        account_id: `${TENANT}:main`,
+        name: 'Extras',
+        selection_type: 'multiple',
+        is_mandatory: false,
+        min_selections: 0,
+        max_selections: 10,
+        display_order: 2,
+        is_active: true,
+      },
+      {
+        id: 3,
+        tenant_id: TENANT,
+        account_id: `${TENANT}:main`,
+        name: 'Retired',
+        selection_type: 'multiple',
+        is_mandatory: false,
+        min_selections: 0,
+        max_selections: 10,
+        display_order: 3,
+        is_active: false,
+      },
+      {
+        id: 4,
+        tenant_id: TENANT2,
+        account_id: `${TENANT2}:main`,
+        name: 'T2 Group',
+        selection_type: 'multiple',
+        is_mandatory: false,
+        min_selections: 0,
+        max_selections: 10,
+        display_order: 1,
+        is_active: true,
+      },
+      {
+        id: 5,
+        tenant_id: TENANT3,
+        account_id: `${TENANT3}:main`,
+        name: 'Retail Mandatory',
+        selection_type: 'single',
+        is_mandatory: true,
+        min_selections: 1,
+        max_selections: 1,
+        display_order: 1,
+        is_active: true,
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('pos_modifier_options')
+    .values([
+      {
+        id: 11,
+        tenant_id: TENANT,
+        account_id: `${TENANT}:main`,
+        group_id: 1,
+        name: 'Ketchup',
+        price: 0,
+        cost_price: 0,
+        is_default: true,
+        is_active: true,
+        display_order: 1,
+      },
+      {
+        id: 12,
+        tenant_id: TENANT,
+        account_id: `${TENANT}:main`,
+        group_id: 1,
+        name: 'Mayo',
+        price: 5,
+        cost_price: 1,
+        is_default: false,
+        is_active: true,
+        display_order: 2,
+      },
+      {
+        id: 13,
+        tenant_id: TENANT,
+        account_id: `${TENANT}:main`,
+        group_id: 2,
+        name: 'Extra cheese',
+        price: 20,
+        cost_price: 2,
+        is_default: false,
+        is_active: true,
+        display_order: 1,
+        component_product_id: 102,
+      },
+      {
+        id: 14,
+        tenant_id: TENANT,
+        account_id: `${TENANT}:main`,
+        group_id: 2,
+        name: 'Hidden',
+        price: 99,
+        cost_price: 50,
+        is_default: false,
+        is_active: false,
+        display_order: 2,
+      },
+      {
+        id: 15,
+        tenant_id: TENANT2,
+        account_id: `${TENANT2}:main`,
+        group_id: 4,
+        name: 'T2 Option',
+        price: 7,
+        cost_price: 1,
+        is_default: false,
+        is_active: true,
+        display_order: 1,
+      },
+      {
+        id: 16,
+        tenant_id: TENANT3,
+        account_id: `${TENANT3}:main`,
+        group_id: 5,
+        name: 'Retail Option',
+        price: 9,
+        cost_price: 1,
+        is_default: false,
+        is_active: true,
+        display_order: 1,
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('product_pos_modifiers')
+    .values([
+      { id: 1, tenant_id: TENANT, account_id: `${TENANT}:main`, product_id: 101, modifier_group_id: 1 },
+      { id: 2, tenant_id: TENANT, account_id: `${TENANT}:main`, product_id: 101, modifier_group_id: 2 },
+      { id: 3, tenant_id: TENANT, account_id: `${TENANT}:main`, product_id: 101, modifier_group_id: 3 },
+      { id: 4, tenant_id: TENANT2, account_id: `${TENANT2}:main`, product_id: 201, modifier_group_id: 4 },
+      { id: 5, tenant_id: TENANT3, account_id: `${TENANT3}:main`, product_id: 301, modifier_group_id: 5 },
+    ])
+    .execute();
 }
 
 async function openShift(db: Kysely<Database>): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    tenant_id: TENANT, account_id: `${TENANT}:main`, opened_by: 7, status: 'open',
-    branch_id: 1, location_id: null,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      tenant_id: TENANT,
+      account_id: `${TENANT}:main`,
+      opened_by: 7,
+      status: 'open',
+      branch_id: 1,
+      location_id: null,
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>, salesService?: any): StorefrontService {
@@ -195,13 +430,11 @@ function buildService(db: Kysely<Database>, salesService?: any): StorefrontServi
 }
 
 async function readOrder(db: Kysely<Database>, orderId: number): Promise<any> {
-  return (db as any).selectFrom('online_orders').selectAll()
-    .where('id', '=', orderId).executeTakeFirstOrThrow();
+  return (db as any).selectFrom('online_orders').selectAll().where('id', '=', orderId).executeTakeFirstOrThrow();
 }
 
 async function countOrders(db: Kysely<Database>, tenantId: string): Promise<number> {
-  const rows = await (db as any).selectFrom('online_orders').select('id')
-    .where('tenant_id', '=', tenantId).execute();
+  const rows = await (db as any).selectFrom('online_orders').select('id').where('tenant_id', '=', tenantId).execute();
   return rows.length;
 }
 
@@ -235,14 +468,30 @@ async function main(): Promise<void> {
       const service = buildService(db);
       const fetched: any = await service.getProductModifiers(SLUG, 101);
       assert.equal(fetched.groups.length, 2, 'only the two active linked groups are served (inactive group excluded)');
-      assert.deepEqual(fetched.groups.map((g: any) => g.name), ['Sauces', 'Extras'], 'groups come back in display order');
+      assert.deepEqual(
+        fetched.groups.map((g: any) => g.name),
+        ['Sauces', 'Extras'],
+        'groups come back in display order',
+      );
       const sauces = fetched.groups[0];
       assert.equal(sauces.isMandatory, true, 'the mandatory flag travels with the group');
       assert.equal(sauces.selectionType, 'single', 'the single-select rule travels with the group');
-      assert.deepEqual(sauces.options.map((o: any) => o.name), ['Ketchup', 'Mayo'], 'both sauce options are served');
-      assert.deepEqual(sauces.options.map((o: any) => o.price), [0, 5], 'option prices are the server prices');
+      assert.deepEqual(
+        sauces.options.map((o: any) => o.name),
+        ['Ketchup', 'Mayo'],
+        'both sauce options are served',
+      );
+      assert.deepEqual(
+        sauces.options.map((o: any) => o.price),
+        [0, 5],
+        'option prices are the server prices',
+      );
       const extras = fetched.groups[1];
-      assert.deepEqual(extras.options.map((o: any) => o.name), ['Extra cheese'], 'the inactive option is excluded');
+      assert.deepEqual(
+        extras.options.map((o: any) => o.name),
+        ['Extra cheese'],
+        'the inactive option is excluded',
+      );
       assert.equal(extras.options[0].componentProductId, 102, 'the cheese option names its stock component');
       assert.ok(!JSON.stringify(fetched).includes('costPrice'), 'no cost price leaks into a public response');
       assert.ok(!JSON.stringify(fetched).includes('cost_price'), 'no cost price leaks under any key spelling');
@@ -280,10 +529,7 @@ async function main(): Promise<void> {
         items: [{ productId: 101, quantity: 1, modifiers: [{ optionId: 12, qty: 0, price: 5 }] }],
       });
       const badQtyErrors = await validate(badQty);
-      assert.ok(
-        JSON.stringify(badQtyErrors).includes('qty'),
-        'a modifier qty of 0 must fail DTO validation',
-      );
+      assert.ok(JSON.stringify(badQtyErrors).includes('qty'), 'a modifier qty of 0 must fail DTO validation');
       const notArray = plainToInstance(CreateOnlineOrderDto, {
         customerName: 'عميل اختبار',
         items: [{ productId: 101, quantity: 1, modifiers: 'not-an-array' }],
@@ -311,24 +557,46 @@ async function main(): Promise<void> {
       assert.equal(result.ok, true, 'the order with valid modifiers must be created');
       // 2 x (100 base + 5 mayo + 2 x 20 cheese) = 290 — the spoofed
       // 999 / 1 client prices must not reach the total.
-      assert.equal(Number(result.totalAmount), 290, 'the total is the server total with modifiers (2 x 145), not the spoofed sum');
+      assert.equal(
+        Number(result.totalAmount),
+        290,
+        'the total is the server total with modifiers (2 x 145), not the spoofed sum',
+      );
       assert.equal(Number(result.subtotal), 290, 'the subtotal carries the modifiers too');
       const order = await readOrder(db, Number(result.orderId));
       const mods = storedModifiers(order);
       assert.equal(mods.length, 2, 'both modifiers are stored in items_json');
-      assert.equal(Number(mods.find((m: any) => m.optionId === 12)?.price), 5, 'the spoofed mayo price 999 is re-priced to the server 5');
-      assert.equal(Number(mods.find((m: any) => m.optionId === 13)?.price), 20, 'the spoofed cheese price 1 is re-priced to the server 20');
+      assert.equal(
+        Number(mods.find((m: any) => m.optionId === 12)?.price),
+        5,
+        'the spoofed mayo price 999 is re-priced to the server 5',
+      );
+      assert.equal(
+        Number(mods.find((m: any) => m.optionId === 13)?.price),
+        20,
+        'the spoofed cheese price 1 is re-priced to the server 20',
+      );
       assert.equal(Number(result.items[0].total), 290, 'the returned line total carries the modifiers');
-      assert.equal(Number(result.items[0].unitPrice), 100, 'the returned unit price stays the base price (POS sale_items shape)');
+      assert.equal(
+        Number(result.items[0].unitPrice),
+        100,
+        'the returned unit price stays the base price (POS sale_items shape)',
+      );
       // Kitchen draft: the KDS reads sale_items, so the mods must be there.
-      const draftItems = await (db as any).selectFrom('sale_items').selectAll()
-        .where('sale_id', '=', Number(order.kitchen_draft_sale_id)).execute();
+      const draftItems = await (db as any)
+        .selectFrom('sale_items')
+        .selectAll()
+        .where('sale_id', '=', Number(order.kitchen_draft_sale_id))
+        .execute();
       assert.equal(draftItems.length, 1, 'the draft has one line');
-      const draftMods = typeof draftItems[0].modifiers === 'string'
-        ? JSON.parse(draftItems[0].modifiers)
-        : draftItems[0].modifiers;
+      const draftMods =
+        typeof draftItems[0].modifiers === 'string' ? JSON.parse(draftItems[0].modifiers) : draftItems[0].modifiers;
       assert.equal(draftMods.length, 2, 'the draft line carries both modifiers for the kitchen');
-      assert.equal(Number(draftMods.find((m: any) => m.optionId === 12)?.price), 5, 'the draft carries the re-priced mayo');
+      assert.equal(
+        Number(draftMods.find((m: any) => m.optionId === 12)?.price),
+        5,
+        'the draft carries the re-priced mayo',
+      );
       assert.equal(Number(draftItems[0].line_total), 290, 'the draft line total carries the modifiers');
       console.log('  order re-price + totals + storage passed');
     }
@@ -345,7 +613,13 @@ async function main(): Promise<void> {
           countryCode: 'EG',
           orderType: 'dine_in',
           tableNumber: '5',
-          items: [{ productId: 101, quantity: 1, modifiers: [{ optionId: 13, productId: 102, name: 'Extra cheese', qty: 1, price: 20 }] }],
+          items: [
+            {
+              productId: 101,
+              quantity: 1,
+              modifiers: [{ optionId: 13, productId: 102, name: 'Extra cheese', qty: 1, price: 20 }],
+            },
+          ],
           paymentMethod: 'cod',
         } as any),
         (error: unknown) => {
@@ -412,10 +686,16 @@ async function main(): Promise<void> {
           countryCode: 'EG',
           orderType: 'dine_in',
           tableNumber: '5',
-          items: [{ productId: 101, quantity: 1, modifiers: [
-            { optionId: 12, name: 'Mayo', qty: 1, price: 5 },
-            { productId: 102, name: 'Cheese', qty: 1, price: -5 },
-          ] }],
+          items: [
+            {
+              productId: 101,
+              quantity: 1,
+              modifiers: [
+                { optionId: 12, name: 'Mayo', qty: 1, price: 5 },
+                { productId: 102, name: 'Cheese', qty: 1, price: -5 },
+              ],
+            },
+          ],
           paymentMethod: 'cod',
         } as any),
         (error: unknown) => {
@@ -433,9 +713,16 @@ async function main(): Promise<void> {
       await resetDb(pg);
       await seedFoundation(db);
       await openShift(db);
-      await (db as any).insertInto('restaurant_86_items').values({
-        tenant_id: TENANT, branch_id: null, product_id: 102, product_name: 'Cheese', is_86ed: true,
-      }).execute();
+      await (db as any)
+        .insertInto('restaurant_86_items')
+        .values({
+          tenant_id: TENANT,
+          branch_id: null,
+          product_id: 102,
+          product_name: 'Cheese',
+          is_86ed: true,
+        })
+        .execute();
       const service = buildService(db);
       await assert.rejects(
         service.createOnlineOrder(SLUG, {
@@ -474,7 +761,11 @@ async function main(): Promise<void> {
         paymentMethod: 'cod',
       } as any);
       assert.equal(result.ok, true, 'the non-restaurant order must be created without contract enforcement');
-      assert.equal(Number(result.totalAmount), 177, 'the non-restaurant total keeps the client modifier price as sent (100 + 77)');
+      assert.equal(
+        Number(result.totalAmount),
+        177,
+        'the non-restaurant total keeps the client modifier price as sent (100 + 77)',
+      );
       const order = await readOrder(db, Number(result.orderId));
       assert.equal(Number(storedModifiers(order)[0]?.price), 77, 'the non-restaurant modifier is stored as sent');
       console.log('  non-restaurant gate pass-through passed');
@@ -493,9 +784,9 @@ async function main(): Promise<void> {
         customerAddress: 'شارع التحرير 12، القاهرة',
         orderType: 'delivery',
         fulfillmentType: 'delivery',
-        items: [{ productId: 101, quantity: 1, modifiers: [
-          { optionId: 12, groupId: 1, name: 'Mayo', qty: 1, price: 999 },
-        ] }],
+        items: [
+          { productId: 101, quantity: 1, modifiers: [{ optionId: 12, groupId: 1, name: 'Mayo', qty: 1, price: 999 }] },
+        ],
         paymentMethod: 'cod',
       } as any);
       assert.equal(Number(created.totalAmount), 105, 'the created delivery order totals 100 + 5 mayo');
@@ -504,12 +795,16 @@ async function main(): Promise<void> {
         customerPhone: '01012345678',
         countryCode: 'EG',
         customerAddress: 'شارع التحرير 12، القاهرة',
-        items: [{ productId: 101, quantity: 2, modifiers: [
-          { optionId: 12, groupId: 1, name: 'Mayo', qty: 1, price: 999 },
-        ] }],
+        items: [
+          { productId: 101, quantity: 2, modifiers: [{ optionId: 12, groupId: 1, name: 'Mayo', qty: 1, price: 999 }] },
+        ],
       } as any);
       assert.equal(updated.ok, true, 'the edit must succeed');
-      assert.equal(Number(updated.totalAmount), 210, 'the edited total follows the new quantity with the re-priced mayo (2 x 105)');
+      assert.equal(
+        Number(updated.totalAmount),
+        210,
+        'the edited total follows the new quantity with the re-priced mayo (2 x 105)',
+      );
       const order = await readOrder(db, Number(created.orderId));
       const mods = storedModifiers(order);
       assert.equal(mods.length, 1, 'the edit keeps the modifier instead of silently dropping it');
@@ -546,16 +841,31 @@ async function main(): Promise<void> {
       } as any);
       assert.equal(Number(created.totalAmount), 145, 'the delivery order totals 100 + 5 + 40 before conversion');
       const converted: any = await service.convertToSale(Number(created.orderId), {
-        tenantId: TENANT, accountId: `${TENANT}:main`, userId: 1, role: 'admin',
+        tenantId: TENANT,
+        accountId: `${TENANT}:main`,
+        userId: 1,
+        role: 'admin',
       } as any);
       assert.equal(converted.ok, true, 'the conversion must succeed');
       assert.equal(Number(converted.saleId), 999, 'the conversion returns the created sale id');
       assert.ok(captured, 'createSale must have been called');
       assert.equal(captured.items.length, 1, 'one sale line is created');
       assert.equal(captured.items[0].modifiers.length, 2, 'both modifiers ride into the sale line');
-      assert.equal(Number(captured.items[0].modifiers.find((m: any) => m.optionId === 12)?.price), 5, 'the sale line carries the re-priced mayo');
-      assert.equal(Number(captured.items[0].modifiers.find((m: any) => m.optionId === 13)?.price), 20, 'the sale line carries the re-priced cheese');
-      assert.equal(Number(captured.items[0].price), 100, 'the sale line price stays the base price (createSale adds the modifiers)');
+      assert.equal(
+        Number(captured.items[0].modifiers.find((m: any) => m.optionId === 12)?.price),
+        5,
+        'the sale line carries the re-priced mayo',
+      );
+      assert.equal(
+        Number(captured.items[0].modifiers.find((m: any) => m.optionId === 13)?.price),
+        20,
+        'the sale line carries the re-priced cheese',
+      );
+      assert.equal(
+        Number(captured.items[0].price),
+        100,
+        'the sale line price stays the base price (createSale adds the modifiers)',
+      );
       console.log('  conversion carries modifiers passed');
     }
 
@@ -576,7 +886,11 @@ async function main(): Promise<void> {
         items: [{ productId: 101, quantity: 1 }],
         paymentMethod: 'cod',
       } as any);
-      assert.equal(result.ok, true, 'a modifier-less order must still be created even when the product has a mandatory group');
+      assert.equal(
+        result.ok,
+        true,
+        'a modifier-less order must still be created even when the product has a mandatory group',
+      );
       assert.equal(Number(result.totalAmount), 100, 'the modifier-less total is the base price only');
       const order = await readOrder(db, Number(result.orderId));
       assert.deepEqual(storedModifiers(order), [], 'no modifiers are stored on a modifier-less line');

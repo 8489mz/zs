@@ -127,42 +127,158 @@ async function main(): Promise<void> {
     // read inside the open transaction never returns on PGlite and the
     // process exits 0 with no error. Shadow it on the lifecycle
     // instance too (same harness-only pattern as the nine specs).
-    (vanService as any).tripLifecycle.resolveSystemAuthContext = async () => ({ userId: 1, sessionId: 'spec', username: 'spec' });
-    const shopHelper = new SalesRestaurantAndSerialsHelper({ accountingPosting: {} as never, planFeatureService: {} as never });
+    (vanService as any).tripLifecycle.resolveSystemAuthContext = async () => ({
+      userId: 1,
+      sessionId: 'spec',
+      username: 'spec',
+    });
+    const shopHelper = new SalesRestaurantAndSerialsHelper({
+      accountingPosting: {} as never,
+      planFeatureService: {} as never,
+    });
     const returnsService = new ReturnsService(db, {} as never, {} as never, {} as never, {} as never);
 
     await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
     await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
     await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' }).execute();
-    await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 }).execute();
+    await anyDb
+      .insertInto('currency_exchange_rates')
+      .values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 })
+      .execute();
     await anyDb.insertInto('accounting_settings').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT }).execute();
-    await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+    await anyDb
+      .insertInto('stock_locations')
+      .values({
+        id: 10,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Main warehouse',
+        location_type: 'internal_warehouse',
+        is_active: true,
+      })
+      .execute();
 
     async function seedRep(repId: number): Promise<void> {
-      await anyDb.insertInto('delivery_representatives').values({ id: repId, tenant_id: TENANT, account_id: ACCOUNT, name: `Rep ${repId}`, is_van_rep: true }).execute();
+      await anyDb
+        .insertInto('delivery_representatives')
+        .values({ id: repId, tenant_id: TENANT, account_id: ACCOUNT, name: `Rep ${repId}`, is_van_rep: true })
+        .execute();
     }
     async function seedProduct(productId: number, stock: number): Promise<void> {
-      await anyDb.insertInto('products').values({ id: productId, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${productId}`, stock_qty: stock, cost_price: 10, retail_price: 100, wholesale_price: 90, credit_price: 100, consumer_price: 100, is_active: true }).execute();
-      await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: productId, location_id: 10, qty: stock }).execute();
+      await anyDb
+        .insertInto('products')
+        .values({
+          id: productId,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: `Product ${productId}`,
+          stock_qty: stock,
+          cost_price: 10,
+          retail_price: 100,
+          wholesale_price: 90,
+          credit_price: 100,
+          consumer_price: 100,
+          is_active: true,
+        })
+        .execute();
+      await anyDb
+        .insertInto('product_location_stock')
+        .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: productId, location_id: 10, qty: stock })
+        .execute();
     }
-    async function seedGenericBatch(productId: number, batch: string, expiry: string | null, qty: number, locationId = 10): Promise<number> {
-      const row = await anyDb.insertInto('inventory_batches').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: productId, batch_number: batch, expiry_date: expiry, quantity: qty, unit_cost: 10, location_id: locationId, status: 'active' }).returning(['id']).executeTakeFirstOrThrow();
+    async function seedGenericBatch(
+      productId: number,
+      batch: string,
+      expiry: string | null,
+      qty: number,
+      locationId = 10,
+    ): Promise<number> {
+      const row = await anyDb
+        .insertInto('inventory_batches')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          product_id: productId,
+          batch_number: batch,
+          expiry_date: expiry,
+          quantity: qty,
+          unit_cost: 10,
+          location_id: locationId,
+          status: 'active',
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
       return Number(row.id);
     }
-    async function seedPharmacyBatch(productId: number, batch: string, expiry: string, qty: number, drugId: number | null = null, locationId = 10): Promise<number> {
-      const row = await anyDb.insertInto('pharmacy_batches').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: productId, drug_id: drugId, batch_number: batch, expiry_date: expiry, quantity: qty, unit_cost: 10, location_id: locationId, status: 'active' }).returning(['id']).executeTakeFirstOrThrow();
+    async function seedPharmacyBatch(
+      productId: number,
+      batch: string,
+      expiry: string,
+      qty: number,
+      drugId: number | null = null,
+      locationId = 10,
+    ): Promise<number> {
+      const row = await anyDb
+        .insertInto('pharmacy_batches')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          product_id: productId,
+          drug_id: drugId,
+          batch_number: batch,
+          expiry_date: expiry,
+          quantity: qty,
+          unit_cost: 10,
+          location_id: locationId,
+          status: 'active',
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
       return Number(row.id);
     }
-    async function genericRows(productId: number): Promise<Array<{ id: number; locationId: number | null; batch: string; expiry: string | null; qty: number; status: string }>> {
-      const rows = await anyDb.selectFrom('inventory_batches').selectAll().where('product_id', '=', productId).where('tenant_id', '=', TENANT).orderBy('expiry_date', (ob: any) => ob.asc().nullsLast()).orderBy('id', 'asc').execute();
-      return rows.map((r: any) => ({ id: Number(r.id), locationId: r.location_id == null ? null : Number(r.location_id), batch: String(r.batch_number), expiry: r.expiry_date == null ? null : String(r.expiry_date), qty: Number(r.quantity), status: String(r.status) }));
+    async function genericRows(productId: number): Promise<
+      Array<{
+        id: number;
+        locationId: number | null;
+        batch: string;
+        expiry: string | null;
+        qty: number;
+        status: string;
+      }>
+    > {
+      const rows = await anyDb
+        .selectFrom('inventory_batches')
+        .selectAll()
+        .where('product_id', '=', productId)
+        .where('tenant_id', '=', TENANT)
+        .orderBy('expiry_date', (ob: any) => ob.asc().nullsLast())
+        .orderBy('id', 'asc')
+        .execute();
+      return rows.map((r: any) => ({
+        id: Number(r.id),
+        locationId: r.location_id == null ? null : Number(r.location_id),
+        batch: String(r.batch_number),
+        expiry: r.expiry_date == null ? null : String(r.expiry_date),
+        qty: Number(r.quantity),
+        status: String(r.status),
+      }));
     }
     async function scopedQty(productId: number, locationId: number): Promise<number> {
-      const row = await anyDb.selectFrom('product_location_stock').select('qty').where('product_id', '=', productId).where('location_id', '=', locationId).where('tenant_id', '=', TENANT).executeTakeFirst();
+      const row = await anyDb
+        .selectFrom('product_location_stock')
+        .select('qty')
+        .where('product_id', '=', productId)
+        .where('location_id', '=', locationId)
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirst();
       return row ? Number(row.qty) : 0;
     }
     async function vanLocationId(repId: number): Promise<number> {
-      const rep = await anyDb.selectFrom('delivery_representatives').select('van_location_id').where('id', '=', repId).executeTakeFirstOrThrow();
+      const rep = await anyDb
+        .selectFrom('delivery_representatives')
+        .select('van_location_id')
+        .where('id', '=', repId)
+        .executeTakeFirstOrThrow();
       return Number(rep.van_location_id);
     }
 
@@ -176,10 +292,23 @@ async function main(): Promise<void> {
     });
     assert.deepEqual(
       (await genericRows(201)).map((r) => [r.batch, r.qty, r.status]),
-      [['B-2MO', 0, 'depleted'], ['B-6MO', 2, 'active'], ['B-1Y', 5, 'active']],
+      [
+        ['B-2MO', 0, 'depleted'],
+        ['B-6MO', 2, 'active'],
+        ['B-1Y', 5, 'active'],
+      ],
     );
-    const allocsA = await anyDb.selectFrom('sale_inventory_batch_allocations').selectAll().where('sale_id', '=', 9001).where('tenant_id', '=', TENANT).orderBy('id', 'asc').execute();
-    assert.deepEqual(allocsA.map((a: any) => Number(a.quantity)), [5, 3]);
+    const allocsA = await anyDb
+      .selectFrom('sale_inventory_batch_allocations')
+      .selectAll()
+      .where('sale_id', '=', 9001)
+      .where('tenant_id', '=', TENANT)
+      .orderBy('id', 'asc')
+      .execute();
+    assert.deepEqual(
+      allocsA.map((a: any) => Number(a.quantity)),
+      [5, 3],
+    );
 
     // (c) a NULL-expiry batch is consumed ONLY after all dated batches.
     await seedProduct(202, 20);
@@ -190,7 +319,10 @@ async function main(): Promise<void> {
     });
     assert.deepEqual(
       (await genericRows(202)).map((r) => [r.batch, r.qty, r.status]),
-      [['B-DATED', 0, 'depleted'], ['B-NODATE', 3, 'active']],
+      [
+        ['B-DATED', 0, 'depleted'],
+        ['B-NODATE', 3, 'active'],
+      ],
     );
 
     // (d) an expired generic batch is skipped, never sold.
@@ -202,7 +334,10 @@ async function main(): Promise<void> {
     });
     assert.deepEqual(
       (await genericRows(203)).map((r) => [r.batch, r.qty]),
-      [['B-OLD', 5], ['B-NEW', 6]],
+      [
+        ['B-OLD', 5],
+        ['B-NEW', 6],
+      ],
     );
 
     // (e) an uncovered SHOP sale fails closed and rolls back (no partial deduction).
@@ -214,19 +349,34 @@ async function main(): Promise<void> {
       }),
       (err: any) => err && err.code === 'INVENTORY_FEFO_STOCK_UNAVAILABLE' && err.statusCode === 422,
     );
-    assert.deepEqual((await genericRows(204)).map((r) => [r.batch, r.qty]), [['B-ONLY', 3]]);
-    assert.equal((await anyDb.selectFrom('sale_inventory_batch_allocations').select('id').where('sale_id', '=', 9004).execute()).length, 0);
+    assert.deepEqual(
+      (await genericRows(204)).map((r) => [r.batch, r.qty]),
+      [['B-ONLY', 3]],
+    );
+    assert.equal(
+      (await anyDb.selectFrom('sale_inventory_batch_allocations').select('id').where('sale_id', '=', 9004).execute())
+        .length,
+      0,
+    );
 
     // (b) van field sale deducts the van's generic batches earliest-first.
     await seedRep(11);
     await seedProduct(205, 20);
     await seedGenericBatch(205, 'B-EARLY', '2027-01-31', 10);
     await seedGenericBatch(205, 'B-LATE', '2027-06-30', 10);
-    const tripB = await vanService.openTripAndLoad(11, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 205, qty: 12 }] });
+    const tripB = await vanService.openTripAndLoad(11, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 205, qty: 12 }],
+    });
     const vanB = await vanLocationId(11);
     assert.deepEqual(
       (await genericRows(205)).map((r) => [r.locationId, r.batch, r.qty, r.status]),
-      [[10, 'B-EARLY', 0, 'depleted'], [vanB, 'B-EARLY', 10, 'active'], [10, 'B-LATE', 8, 'active'], [vanB, 'B-LATE', 2, 'active']],
+      [
+        [10, 'B-EARLY', 0, 'depleted'],
+        [vanB, 'B-EARLY', 10, 'active'],
+        [10, 'B-LATE', 8, 'active'],
+        [vanB, 'B-LATE', 2, 'active'],
+      ],
     );
     const saleB = await vanService.executeFieldSale(11, TENANT, ACCOUNT, {
       tripId: tripB.tripId,
@@ -236,8 +386,16 @@ async function main(): Promise<void> {
     assert.ok(saleB.saleId > 0);
     assert.equal(await scopedQty(205, vanB), 8);
     const soldB = await genericRows(205);
-    assert.equal(soldB.filter((r) => r.locationId === vanB).reduce((s, r) => s + r.qty, 0), 8);
-    const allocsB = await anyDb.selectFrom('sale_inventory_batch_allocations').selectAll().where('sale_id', '=', saleB.saleId).where('tenant_id', '=', TENANT).execute();
+    assert.equal(
+      soldB.filter((r) => r.locationId === vanB).reduce((s, r) => s + r.qty, 0),
+      8,
+    );
+    const allocsB = await anyDb
+      .selectFrom('sale_inventory_batch_allocations')
+      .selectAll()
+      .where('sale_id', '=', saleB.saleId)
+      .where('tenant_id', '=', TENANT)
+      .execute();
     assert.equal(allocsB.length, 1);
     assert.equal(Number(allocsB[0].quantity), 4);
     const saleItemsB = await anyDb.selectFrom('sale_items').selectAll().where('sale_id', '=', saleB.saleId).execute();
@@ -248,7 +406,10 @@ async function main(): Promise<void> {
     await seedRep(12);
     await seedProduct(206, 5);
     await seedGenericBatch(206, 'B-ONLY', '2027-01-31', 3);
-    const tripE = await vanService.openTripAndLoad(12, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 206, qty: 5 }] });
+    const tripE = await vanService.openTripAndLoad(12, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 206, qty: 5 }],
+    });
     const vanE = await vanLocationId(12);
     await assert.rejects(
       vanService.executeFieldSale(12, TENANT, ACCOUNT, {
@@ -259,14 +420,25 @@ async function main(): Promise<void> {
       (err: any) => err && err.code === 'INVENTORY_FEFO_STOCK_UNAVAILABLE',
     );
     assert.equal(await scopedQty(206, vanE), 5);
-    assert.equal((await genericRows(206)).filter((r) => r.locationId === vanE).reduce((s, r) => s + r.qty, 0), 3);
-    const salesE = await anyDb.selectFrom('sales').select('id').where('van_trip_id', '=', tripE.tripId).where('tenant_id', '=', TENANT).execute();
+    assert.equal(
+      (await genericRows(206)).filter((r) => r.locationId === vanE).reduce((s, r) => s + r.qty, 0),
+      3,
+    );
+    const salesE = await anyDb
+      .selectFrom('sales')
+      .select('id')
+      .where('van_trip_id', '=', tripE.tripId)
+      .where('tenant_id', '=', TENANT)
+      .execute();
     assert.equal(salesE.length, 0);
 
     // (f) a no-batch product sells pooled-only, exactly as before.
     await seedRep(13);
     await seedProduct(207, 10);
-    const tripF = await vanService.openTripAndLoad(13, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 207, qty: 6 }] });
+    const tripF = await vanService.openTripAndLoad(13, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 207, qty: 6 }],
+    });
     const vanF = await vanLocationId(13);
     const saleF = await vanService.executeFieldSale(13, TENANT, ACCOUNT, {
       tripId: tripF.tripId,
@@ -276,15 +448,31 @@ async function main(): Promise<void> {
     assert.ok(saleF.saleId > 0);
     assert.equal(await scopedQty(207, vanF), 4);
     assert.equal((await genericRows(207)).length, 0);
-    assert.equal((await anyDb.selectFrom('sale_inventory_batch_allocations').select('id').where('sale_id', '=', saleF.saleId).execute()).length, 0);
+    assert.equal(
+      (
+        await anyDb
+          .selectFrom('sale_inventory_batch_allocations')
+          .select('id')
+          .where('sale_id', '=', saleF.saleId)
+          .execute()
+      ).length,
+      0,
+    );
 
     // (g) PRECEDENCE: a drug-linked product uses the pharmacy ledger only.
     await seedRep(14);
     await seedProduct(208, 20);
-    const drug208 = await anyDb.insertInto('pharmacy_drugs').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 208, name: 'Drug 208' }).returning(['id']).executeTakeFirstOrThrow();
+    const drug208 = await anyDb
+      .insertInto('pharmacy_drugs')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 208, name: 'Drug 208' })
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
     await seedPharmacyBatch(208, 'B-PHARM', '2027-01-31', 10, Number(drug208.id));
     await seedGenericBatch(208, 'B-GEN', '2027-01-31', 10);
-    const tripG = await vanService.openTripAndLoad(14, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 208, qty: 12 }] });
+    const tripG = await vanService.openTripAndLoad(14, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 208, qty: 12 }],
+    });
     const vanG = await vanLocationId(14);
     const saleG = await vanService.executeFieldSale(14, TENANT, ACCOUNT, {
       tripId: tripG.tripId,
@@ -292,11 +480,42 @@ async function main(): Promise<void> {
       items: [{ productId: 208, qty: 4, unitPrice: 100, unitName: 'قطعة', unitMultiplier: 1 }],
     });
     assert.ok(saleG.saleId > 0);
-    const pharmG = await anyDb.selectFrom('pharmacy_batches').selectAll().where('product_id', '=', 208).where('tenant_id', '=', TENANT).execute();
-    assert.equal(pharmG.filter((r: any) => Number(r.location_id) === vanG).reduce((s: number, r: any) => s + Number(r.quantity), 0), 6);
-    assert.deepEqual((await genericRows(208)).map((r) => [r.locationId, r.qty]), [[10, 10]]);
-    assert.equal((await anyDb.selectFrom('sale_inventory_batch_allocations').select('id').where('sale_id', '=', saleG.saleId).execute()).length, 0);
-    assert.equal((await anyDb.selectFrom('sale_pharmacy_batch_allocations').select('id').where('sale_id', '=', saleG.saleId).execute()).length, 1);
+    const pharmG = await anyDb
+      .selectFrom('pharmacy_batches')
+      .selectAll()
+      .where('product_id', '=', 208)
+      .where('tenant_id', '=', TENANT)
+      .execute();
+    assert.equal(
+      pharmG
+        .filter((r: any) => Number(r.location_id) === vanG)
+        .reduce((s: number, r: any) => s + Number(r.quantity), 0),
+      6,
+    );
+    assert.deepEqual(
+      (await genericRows(208)).map((r) => [r.locationId, r.qty]),
+      [[10, 10]],
+    );
+    assert.equal(
+      (
+        await anyDb
+          .selectFrom('sale_inventory_batch_allocations')
+          .select('id')
+          .where('sale_id', '=', saleG.saleId)
+          .execute()
+      ).length,
+      0,
+    );
+    assert.equal(
+      (
+        await anyDb
+          .selectFrom('sale_pharmacy_batch_allocations')
+          .select('id')
+          .where('sale_id', '=', saleG.saleId)
+          .execute()
+      ).length,
+      1,
+    );
 
     // (g, legacy half) a product with ACTIVE pharmacy rows and NO drug link
     // also stays on the pharmacy ledger until those rows drain.
@@ -304,7 +523,10 @@ async function main(): Promise<void> {
     await seedProduct(209, 20);
     await seedPharmacyBatch(209, 'B-LEG', '2027-01-31', 10, null);
     await seedGenericBatch(209, 'B-GEN2', '2027-01-31', 10);
-    const tripH = await vanService.openTripAndLoad(15, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 209, qty: 12 }] });
+    const tripH = await vanService.openTripAndLoad(15, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 209, qty: 12 }],
+    });
     const vanH = await vanLocationId(15);
     const saleH = await vanService.executeFieldSale(15, TENANT, ACCOUNT, {
       tripId: tripH.tripId,
@@ -312,47 +534,115 @@ async function main(): Promise<void> {
       items: [{ productId: 209, qty: 4, unitPrice: 100, unitName: 'قطعة', unitMultiplier: 1 }],
     });
     assert.ok(saleH.saleId > 0);
-    const pharmH = await anyDb.selectFrom('pharmacy_batches').selectAll().where('product_id', '=', 209).where('tenant_id', '=', TENANT).execute();
-    assert.equal(pharmH.filter((r: any) => Number(r.location_id) === vanH).reduce((s: number, r: any) => s + Number(r.quantity), 0), 6);
-    assert.deepEqual((await genericRows(209)).map((r) => [r.locationId, r.qty]), [[10, 10]]);
-    assert.equal((await anyDb.selectFrom('sale_inventory_batch_allocations').select('id').where('sale_id', '=', saleH.saleId).execute()).length, 0);
+    const pharmH = await anyDb
+      .selectFrom('pharmacy_batches')
+      .selectAll()
+      .where('product_id', '=', 209)
+      .where('tenant_id', '=', TENANT)
+      .execute();
+    assert.equal(
+      pharmH
+        .filter((r: any) => Number(r.location_id) === vanH)
+        .reduce((s: number, r: any) => s + Number(r.quantity), 0),
+      6,
+    );
+    assert.deepEqual(
+      (await genericRows(209)).map((r) => [r.locationId, r.qty]),
+      [[10, 10]],
+    );
+    assert.equal(
+      (
+        await anyDb
+          .selectFrom('sale_inventory_batch_allocations')
+          .select('id')
+          .where('sale_id', '=', saleH.saleId)
+          .execute()
+      ).length,
+      0,
+    );
 
     // (h) intake helper: batch+expiry creates the row; batch without
     // expiry creates a NULL-expiry row; same batch+expiry merges;
     // NULL merges with NULL; different expiry and expired expiry fail.
     await db.transaction().execute(async (trx) => {
       await upsertInventoryBatchFromReceipt(trx, {
-        tenantId: TENANT, accountId: ACCOUNT, productId: 210, batchNumber: 'GRN-1',
-        expiryDate: '2027-03-31', qty: 10, unitCost: 5, locationId: 10, supplierName: 'Sup', notes: 'وارد',
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        productId: 210,
+        batchNumber: 'GRN-1',
+        expiryDate: '2027-03-31',
+        qty: 10,
+        unitCost: 5,
+        locationId: 10,
+        supplierName: 'Sup',
+        notes: 'وارد',
       });
       await upsertInventoryBatchFromReceipt(trx, {
-        tenantId: TENANT, accountId: ACCOUNT, productId: 210, batchNumber: 'GRN-2',
-        expiryDate: '', qty: 4, unitCost: 5, locationId: 10, supplierName: 'Sup', notes: 'وارد',
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        productId: 210,
+        batchNumber: 'GRN-2',
+        expiryDate: '',
+        qty: 4,
+        unitCost: 5,
+        locationId: 10,
+        supplierName: 'Sup',
+        notes: 'وارد',
       });
     });
     assert.deepEqual(
       (await genericRows(210)).map((r) => [r.batch, r.expiry, r.qty]),
-      [['GRN-1', '2027-03-31', 10], ['GRN-2', null, 4]],
+      [
+        ['GRN-1', '2027-03-31', 10],
+        ['GRN-2', null, 4],
+      ],
     );
     await db.transaction().execute(async (trx) => {
       await upsertInventoryBatchFromReceipt(trx, {
-        tenantId: TENANT, accountId: ACCOUNT, productId: 210, batchNumber: 'GRN-1',
-        expiryDate: '2027-03-31', qty: 5, unitCost: 5, locationId: 10, supplierName: 'Sup', notes: 'وارد',
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        productId: 210,
+        batchNumber: 'GRN-1',
+        expiryDate: '2027-03-31',
+        qty: 5,
+        unitCost: 5,
+        locationId: 10,
+        supplierName: 'Sup',
+        notes: 'وارد',
       });
       await upsertInventoryBatchFromReceipt(trx, {
-        tenantId: TENANT, accountId: ACCOUNT, productId: 210, batchNumber: 'GRN-2',
-        expiryDate: '', qty: 2, unitCost: 5, locationId: 10, supplierName: 'Sup', notes: 'وارد',
+        tenantId: TENANT,
+        accountId: ACCOUNT,
+        productId: 210,
+        batchNumber: 'GRN-2',
+        expiryDate: '',
+        qty: 2,
+        unitCost: 5,
+        locationId: 10,
+        supplierName: 'Sup',
+        notes: 'وارد',
       });
     });
     assert.deepEqual(
       (await genericRows(210)).map((r) => [r.batch, r.qty]),
-      [['GRN-1', 15], ['GRN-2', 6]],
+      [
+        ['GRN-1', 15],
+        ['GRN-2', 6],
+      ],
     );
     await assert.rejects(
       db.transaction().execute(async (trx) => {
         await upsertInventoryBatchFromReceipt(trx, {
-          tenantId: TENANT, accountId: ACCOUNT, productId: 210, batchNumber: 'GRN-1',
-          expiryDate: '2027-06-30', qty: 1, unitCost: 5, locationId: 10, supplierName: 'Sup', notes: 'وارد',
+          tenantId: TENANT,
+          accountId: ACCOUNT,
+          productId: 210,
+          batchNumber: 'GRN-1',
+          expiryDate: '2027-06-30',
+          qty: 1,
+          unitCost: 5,
+          locationId: 10,
+          supplierName: 'Sup',
+          notes: 'وارد',
         });
       }),
       (err: any) => err && err.code === 'INVENTORY_BATCH_EXPIRY_MISMATCH' && err.statusCode === 422,
@@ -360,8 +650,16 @@ async function main(): Promise<void> {
     await assert.rejects(
       db.transaction().execute(async (trx) => {
         await upsertInventoryBatchFromReceipt(trx, {
-          tenantId: TENANT, accountId: ACCOUNT, productId: 210, batchNumber: 'GRN-3',
-          expiryDate: '2020-01-31', qty: 1, unitCost: 5, locationId: 10, supplierName: 'Sup', notes: 'وارد',
+          tenantId: TENANT,
+          accountId: ACCOUNT,
+          productId: 210,
+          batchNumber: 'GRN-3',
+          expiryDate: '2020-01-31',
+          qty: 1,
+          unitCost: 5,
+          locationId: 10,
+          supplierName: 'Sup',
+          notes: 'وارد',
         });
       }),
       (err: any) => err && err.code === 'INVENTORY_BATCH_EXPIRED' && err.statusCode === 422,
@@ -376,18 +674,34 @@ async function main(): Promise<void> {
     });
     assert.deepEqual(
       (await genericRows(201)).map((r) => [r.batch, r.qty, r.status]),
-      [['B-2MO', 5, 'active'], ['B-6MO', 5, 'active'], ['B-1Y', 5, 'active']],
+      [
+        ['B-2MO', 5, 'active'],
+        ['B-6MO', 5, 'active'],
+        ['B-1Y', 5, 'active'],
+      ],
     );
-    assert.equal((await anyDb.selectFrom('sale_inventory_batch_allocations').select('id').where('sale_id', '=', 9001).execute()).length, 0);
+    assert.equal(
+      (await anyDb.selectFrom('sale_inventory_batch_allocations').select('id').where('sale_id', '=', 9001).execute())
+        .length,
+      0,
+    );
     await db.transaction().execute(async (trx) => {
       await shopHelper.deductInventoryBatchesFefo(trx, 201, [{ locationId: 10, qty: 8 }], SCOPE, 9010, 1);
       await shopHelper.restoreSaleInventoryBatches(trx, 9010, [{ id: 1, product_id: 201 }], SCOPE, false);
     });
     assert.deepEqual(
       (await genericRows(201)).map((r) => [r.batch, r.qty]),
-      [['B-2MO', 5], ['B-6MO', 5], ['B-1Y', 5]],
+      [
+        ['B-2MO', 5],
+        ['B-6MO', 5],
+        ['B-1Y', 5],
+      ],
     );
-    assert.equal((await anyDb.selectFrom('sale_inventory_batch_allocations').select('id').where('sale_id', '=', 9010).execute()).length, 2);
+    assert.equal(
+      (await anyDb.selectFrom('sale_inventory_batch_allocations').select('id').where('sale_id', '=', 9010).execute())
+        .length,
+      2,
+    );
 
     // Shop return restore (real ReturnsService method): sale 9011 deducts
     // 6 (2MO 5 + 6MO 1); returning 2 restores newest-first (6MO 1, 2MO 1).
@@ -397,11 +711,23 @@ async function main(): Promise<void> {
     await db.transaction().execute(async (trx) => {
       await shopHelper.deductInventoryBatchesFefo(trx, 211, [{ locationId: 10, qty: 6 }], SCOPE, 9011, 1);
     });
-    assert.deepEqual((await genericRows(211)).map((r) => [r.batch, r.qty]), [['B-2MO', 0], ['B-6MO', 4]]);
+    assert.deepEqual(
+      (await genericRows(211)).map((r) => [r.batch, r.qty]),
+      [
+        ['B-2MO', 0],
+        ['B-6MO', 4],
+      ],
+    );
     await db.transaction().execute(async (trx) => {
       await (returnsService as any).restoreReturnedInventoryBatches(trx, 9011, 1, 211, 0, 2, AUTH);
     });
-    assert.deepEqual((await genericRows(211)).map((r) => [r.batch, r.qty, r.status]), [['B-2MO', 1, 'active'], ['B-6MO', 5, 'active']]);
+    assert.deepEqual(
+      (await genericRows(211)).map((r) => [r.batch, r.qty, r.status]),
+      [
+        ['B-2MO', 1, 'active'],
+        ['B-6MO', 5, 'active'],
+      ],
+    );
     // A return beyond what is left restorable fails closed.
     await assert.rejects(
       db.transaction().execute(async (trx) => {
@@ -439,7 +765,12 @@ async function main(): Promise<void> {
     assert.equal(trace.batchTracking.length, 2);
     assert.deepEqual(
       (await genericRows(212)).map((r) => [r.locationId, r.batch, r.qty, r.status]),
-      [[10, 'B-T1', 0, 'transferred'], [20, 'B-T1', 5, 'active'], [10, 'B-T2', 0, 'transferred'], [20, 'B-T2', 5, 'active']],
+      [
+        [10, 'B-T1', 0, 'transferred'],
+        [20, 'B-T1', 5, 'active'],
+        [10, 'B-T2', 0, 'transferred'],
+        [20, 'B-T2', 5, 'active'],
+      ],
     );
     await seedProduct(213, 20);
     await seedGenericBatch(213, 'B-P1', '2027-01-31', 10);
@@ -449,7 +780,6 @@ async function main(): Promise<void> {
       }),
       (err: any) => err && err.code === 'DIRECT_TRANSFER_BATCH_SELECTION_REQUIRED',
     );
-
   } finally {
     await db.destroy();
   }

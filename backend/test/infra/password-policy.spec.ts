@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { assertStrongPassword, assertSecurePasscode, MIN_PASSWORD_LENGTH } from '../../src/core/auth/utils/password-policy';
+import {
+  assertStrongPassword,
+  assertSecurePasscode,
+  MIN_PASSWORD_LENGTH,
+} from '../../src/core/auth/utils/password-policy';
 
 assert.throws(() => assertStrongPassword(''), /PASSWORD_REQUIRED/);
 assert.throws(() => assertStrongPassword('   '), /PASSWORD_REQUIRED/);
@@ -32,4 +36,3 @@ assert.doesNotThrow(() => assertSecurePasscode('StrongPass@2026'));
 assert.doesNotThrow(() => assertSecurePasscode('Ahmed#8391', { phone: '01012345678' }));
 
 console.log('password-policy.spec.ts passed');
-

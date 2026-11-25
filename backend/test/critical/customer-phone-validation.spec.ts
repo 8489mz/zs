@@ -52,8 +52,13 @@ const TENANT = 't-cust-phone';
 const ACCOUNT = 'a-cust-phone';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['customers'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['customers'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -134,7 +139,11 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<void
 }
 
 async function storedPhone(db: Kysely<Database>, id: number): Promise<string> {
-  const row = await (db as any).selectFrom('customers').select(['phone']).where('id', '=', id).executeTakeFirstOrThrow();
+  const row = await (db as any)
+    .selectFrom('customers')
+    .select(['phone'])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
   return String(row.phone || '');
 }
 
@@ -159,10 +168,7 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       const slice = buildSlice(db);
-      await expectCode(
-        slice.createCustomer(payload('عميل بلا هاتف'), adminAuth),
-        'CUSTOMER_PHONE_REQUIRED',
-      );
+      await expectCode(slice.createCustomer(payload('عميل بلا هاتف'), adminAuth), 'CUSTOMER_PHONE_REQUIRED');
     } finally {
       await db.destroy();
     }
@@ -174,10 +180,7 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       const slice = buildSlice(db);
-      await expectCode(
-        slice.createCustomer(payload('عميل هاتف فارغ', '   '), adminAuth),
-        'CUSTOMER_PHONE_REQUIRED',
-      );
+      await expectCode(slice.createCustomer(payload('عميل هاتف فارغ', '   '), adminAuth), 'CUSTOMER_PHONE_REQUIRED');
     } finally {
       await db.destroy();
     }
@@ -189,10 +192,7 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       const slice = buildSlice(db);
-      await expectCode(
-        slice.createCustomer(payload('عميل رقم قصير', '12345'), adminAuth),
-        'INVALID_PHONE',
-      );
+      await expectCode(slice.createCustomer(payload('عميل رقم قصير', '12345'), adminAuth), 'INVALID_PHONE');
     } finally {
       await db.destroy();
     }
@@ -261,7 +261,11 @@ async function main(): Promise<void> {
         slice.updateCustomer(Number(created.id), payload('عميل للتعديل', '01000000000'), adminAuth),
         'CUSTOMER_PHONE_PLACEHOLDER',
       );
-      assert.equal(await storedPhone(db, Number(created.id)), '01012345678', 'refused update must not change the stored phone');
+      assert.equal(
+        await storedPhone(db, Number(created.id)),
+        '01012345678',
+        'refused update must not change the stored phone',
+      );
     } finally {
       await db.destroy();
     }
@@ -274,7 +278,11 @@ async function main(): Promise<void> {
     try {
       const slice = buildSlice(db);
       const created: any = await slice.createCustomer(payload('عميل للتعديل', '01012345678'), adminAuth);
-      const res: any = await slice.updateCustomer(Number(created.id), payload('عميل للتعديل', '01198765432'), adminAuth);
+      const res: any = await slice.updateCustomer(
+        Number(created.id),
+        payload('عميل للتعديل', '01198765432'),
+        adminAuth,
+      );
       assert.equal(res.ok, true);
       assert.equal(await storedPhone(db, Number(created.id)), '01198765432');
     } finally {
@@ -286,4 +294,7 @@ async function main(): Promise<void> {
   console.log('customer-phone-validation: OK');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

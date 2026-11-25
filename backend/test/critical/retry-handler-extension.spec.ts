@@ -74,16 +74,23 @@ async function setupDb(): Promise<{ pg: PGlite; db: Kysely<Database>; recovery: 
   `);
   const accountTypes: Record<number, string> = { 2110: 'liability', 5300: 'expense', 5100: 'expense' };
   for (const code of [1110, 1120, 1122, 1130, 1140, 2110, 5300, 5100]) {
-    await sql`INSERT INTO accounting_accounts (id, tenant_id, code, is_tax, account_type) VALUES (${code}, 't1', ${String(code)}, false, ${accountTypes[code] || 'asset'})`.execute(db);
+    await sql`INSERT INTO accounting_accounts (id, tenant_id, code, is_tax, account_type) VALUES (${code}, 't1', ${String(code)}, false, ${accountTypes[code] || 'asset'})`.execute(
+      db,
+    );
   }
-  await sql`INSERT INTO accounting_settings VALUES (1, 't1', 1110, 1120, 1130, 2110, 1140, NULL, NULL, 5100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)`.execute(db);
+  await sql`INSERT INTO accounting_settings VALUES (1, 't1', 1110, 1120, 1130, 2110, 1140, NULL, NULL, 5100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)`.execute(
+    db,
+  );
   await sql`INSERT INTO settings VALUES ('t1', 'currency', 'EGP')`.execute(db);
   await sql`INSERT INTO currency_exchange_rates VALUES ('t1', 'EGP', true, 1)`.execute(db);
   // The race-window index is production DDL: replayed failures must hit
   // the 23505 catch and return the existing journal.
   await raceWindowMigrationUp(db as any);
 
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const recovery = new AccountingRecoveryService(db, foundation, posting);
   return { pg, db, recovery };
@@ -104,7 +111,11 @@ async function insertFailure(db: Kysely<Database>, sourceType: string, sourceId:
   `.execute(db);
 }
 
-async function failureRow(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<{ attempts: number; resolved: boolean; error_message: string }> {
+async function failureRow(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<{ attempts: number; resolved: boolean; error_message: string }> {
   const res = await sql<{ attempts: number; resolved_at: string | null; error_message: string }>`
     SELECT attempts, resolved_at, error_message FROM accounting_posting_failures
     WHERE source_type = ${sourceType} AND source_id = ${sourceId}
@@ -126,7 +137,9 @@ async function main(): Promise<void> {
     const { db, recovery } = await setupDb();
     try {
       await sql`INSERT INTO restaurant_food_waste_logs VALUES (11, 't1', 25.5, 'spoiled', NULL, NOW(), 1)`.execute(db);
-      await sql`INSERT INTO accounting_cheques VALUES (5, 't1', 'receivable', 'pending', NULL, 100, 100, 'CHK-1', 'Bank', 'Customer', NULL, 1, CURRENT_DATE, NULL, 0)`.execute(db);
+      await sql`INSERT INTO accounting_cheques VALUES (5, 't1', 'receivable', 'pending', NULL, 100, 100, 'CHK-1', 'Bank', 'Customer', NULL, 1, CURRENT_DATE, NULL, 0)`.execute(
+        db,
+      );
       await insertFailure(db, 'food_waste', 11);
       await insertFailure(db, 'pdc_cheque_receive', 5);
       const result = await recovery.retryFailedPostings();
@@ -177,6 +190,12 @@ async function main(): Promise<void> {
 }
 
 main().then(
-  () => { console.log('retry-handler-extension.spec: ok'); process.exit(0); },
-  (err) => { console.error(err); process.exit(1); },
+  () => {
+    console.log('retry-handler-extension.spec: ok');
+    process.exit(0);
+  },
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
 );

@@ -45,7 +45,10 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const inTx = <T>(fn: (trx: any) => Promise<T>): Promise<T> => db.transaction().execute(fn);
@@ -111,22 +114,33 @@ async function main() {
       INSERT INTO customers VALUES (25,'t1',0);
     `);
     for (const code of [1110, 1120, 1121, 1122, 1130, 7290]) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code) VALUES ($1,$2,$3)', [code, 't1', String(code)]);
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code) VALUES ($1,$2,$3)', [
+        code,
+        't1',
+        String(code),
+      ]);
     }
 
     const linesOf = async (entryId: number) => {
       const r = await pg.query<{ account_id: string; debit: string; credit: string }>(
-        'SELECT account_id, debit, credit FROM journal_entry_lines WHERE journal_entry_id=$1 ORDER BY account_id', [entryId]);
+        'SELECT account_id, debit, credit FROM journal_entry_lines WHERE journal_entry_id=$1 ORDER BY account_id',
+        [entryId],
+      );
       return r.rows.map((row) => [Number(row.account_id), Number(row.debit), Number(row.credit)] as const);
     };
     const assertBalanced = async () => {
-      const result = await pg.query(`SELECT journal_entry_id FROM journal_entry_lines GROUP BY journal_entry_id HAVING sum(debit) <> sum(credit)`);
+      const result = await pg.query(
+        `SELECT journal_entry_id FROM journal_entry_lines GROUP BY journal_entry_id HAVING sum(debit) <> sum(credit)`,
+      );
       assert.deepEqual(result.rows, [], 'every saved journal balances exactly');
     };
     // Mirrors updateChequeStatus ordering: sequence increments BEFORE posting,
     // status changes AFTER posting (posting methods read the pre-action status).
     const preStep = async (sequence: number, actionDate: string) => {
-      await pg.query('UPDATE accounting_cheques SET posting_sequence=$1, last_action_date=$2 WHERE id=1', [sequence, actionDate]);
+      await pg.query('UPDATE accounting_cheques SET posting_sequence=$1, last_action_date=$2 WHERE id=1', [
+        sequence,
+        actionDate,
+      ]);
     };
     const setStatus = async (status: string) => {
       await pg.query('UPDATE accounting_cheques SET status=$1 WHERE id=1', [status]);
@@ -142,21 +156,30 @@ async function main() {
     // 1. Receive (sequence 0, creation): Dr 1122 / Cr 1130.
     const j1 = await inTx((trx) => posting.postPdcChequeReceive(trx, 1, auth));
     assert.equal(j1.posted, true);
-    assert.deepEqual(await linesOf(Number(j1.journalEntryId)), [[1122, 100, 0], [1130, 0, 100]]);
+    assert.deepEqual(await linesOf(Number(j1.journalEntryId)), [
+      [1122, 100, 0],
+      [1130, 0, 100],
+    ]);
 
     // 2. Deposit (sequence 1): Dr 1121 / Cr 1122.
     await preStep(1, '2026-10-05');
     const j2 = await inTx((trx) => posting.postPdcChequeDeposit(trx, 1, auth));
     assert.equal(j2.posted, true);
     assert.notEqual(Number(j2.journalEntryId), Number(j1.journalEntryId));
-    assert.deepEqual(await linesOf(Number(j2.journalEntryId)), [[1121, 100, 0], [1122, 0, 100]]);
+    assert.deepEqual(await linesOf(Number(j2.journalEntryId)), [
+      [1121, 100, 0],
+      [1122, 0, 100],
+    ]);
     await setStatus('under_collection');
 
     // 3. Bounce from under_collection (sequence 2): Dr 1130 / Cr 1121.
     await preStep(2, '2026-10-10');
     const j3 = await inTx((trx) => posting.postPdcChequeBounce(trx, 1, 0, null, auth));
     assert.equal(j3.posted, true);
-    assert.deepEqual(await linesOf(Number(j3.journalEntryId)), [[1121, 0, 100], [1130, 100, 0]]);
+    assert.deepEqual(await linesOf(Number(j3.journalEntryId)), [
+      [1121, 0, 100],
+      [1130, 100, 0],
+    ]);
     await setStatus('bounced');
 
     // 4. Restore to safe (sequence 3): Dr 1122 / Cr 1130. Intentionally
@@ -165,10 +188,19 @@ async function main() {
     await preStep(3, '2026-10-12');
     const j4 = await inTx((trx) => posting.postPdcChequeRestore(trx, 1, 'bounced', auth));
     assert.equal(j4.posted, true);
-    assert.deepEqual(await linesOf(Number(j4.journalEntryId)), [[1122, 100, 0], [1130, 0, 100]]);
+    assert.deepEqual(await linesOf(Number(j4.journalEntryId)), [
+      [1122, 100, 0],
+      [1130, 0, 100],
+    ]);
     const j4row = await pg.query<{ reversal_of_entry_id: string | null }>(
-      'SELECT reversal_of_entry_id FROM journal_entries WHERE id=$1', [Number(j4.journalEntryId)]);
-    assert.equal(j4row.rows[0].reversal_of_entry_id, null, 'restore after under-collection bounce stays unlinked by design');
+      'SELECT reversal_of_entry_id FROM journal_entries WHERE id=$1',
+      [Number(j4.journalEntryId)],
+    );
+    assert.equal(
+      j4row.rows[0].reversal_of_entry_id,
+      null,
+      'restore after under-collection bounce stays unlinked by design',
+    );
     await setStatus('in_safe');
 
     // 5. RE-DEPOSIT (sequence 4): the step the old 0247 index broke. It must
@@ -176,16 +208,30 @@ async function main() {
     await preStep(4, '2026-10-15');
     const j5 = await inTx((trx) => posting.postPdcChequeDeposit(trx, 1, auth));
     assert.equal(j5.posted, true);
-    assert.notEqual(Number(j5.journalEntryId), Number(j2.journalEntryId), 're-deposit must post a new journal, not the first deposit');
-    assert.deepEqual(await linesOf(Number(j5.journalEntryId)), [[1121, 100, 0], [1122, 0, 100]]);
+    assert.notEqual(
+      Number(j5.journalEntryId),
+      Number(j2.journalEntryId),
+      're-deposit must post a new journal, not the first deposit',
+    );
+    assert.deepEqual(await linesOf(Number(j5.journalEntryId)), [
+      [1121, 100, 0],
+      [1122, 0, 100],
+    ]);
     await setStatus('under_collection');
 
     // 6. RE-BOUNCE (sequence 5): likewise a new journal, not the first bounce.
     await preStep(5, '2026-10-20');
     const j6 = await inTx((trx) => posting.postPdcChequeBounce(trx, 1, 0, null, auth));
     assert.equal(j6.posted, true);
-    assert.notEqual(Number(j6.journalEntryId), Number(j3.journalEntryId), 're-bounce must post a new journal, not the first bounce');
-    assert.deepEqual(await linesOf(Number(j6.journalEntryId)), [[1121, 0, 100], [1130, 100, 0]]);
+    assert.notEqual(
+      Number(j6.journalEntryId),
+      Number(j3.journalEntryId),
+      're-bounce must post a new journal, not the first bounce',
+    );
+    assert.deepEqual(await linesOf(Number(j6.journalEntryId)), [
+      [1121, 0, 100],
+      [1130, 100, 0],
+    ]);
     await setStatus('bounced');
 
     // 7. Whole-cycle GL nets to exactly zero on every touched account.
@@ -194,10 +240,18 @@ async function main() {
       FROM journal_entry_lines jel JOIN journal_entries je ON je.id = jel.journal_entry_id
       WHERE je.tenant_id='t1' AND je.source_type LIKE 'pdc_cheque_%' AND je.source_id=1
       GROUP BY jel.account_id ORDER BY jel.account_id`);
-    assert.deepEqual(nets.rows.map((r) => [Number(r.account_id), Number(r.net)]), [[1121, 0], [1122, 0], [1130, 0]]);
+    assert.deepEqual(
+      nets.rows.map((r) => [Number(r.account_id), Number(r.net)]),
+      [
+        [1121, 0],
+        [1122, 0],
+        [1130, 0],
+      ],
+    );
     await assertBalanced();
     const count = await pg.query<{ count: string }>(
-      `SELECT count(*) AS count FROM journal_entries WHERE tenant_id='t1' AND source_type LIKE 'pdc_cheque_%' AND source_id=1`);
+      `SELECT count(*) AS count FROM journal_entries WHERE tenant_id='t1' AND source_type LIKE 'pdc_cheque_%' AND source_id=1`,
+    );
     assert.equal(Number(count.rows[0].count), 6);
 
     // 8. Occurrence uniqueness still holds: replaying the re-deposit with its
@@ -206,13 +260,15 @@ async function main() {
     const replay = await inTx((trx) => posting.postPdcChequeDeposit(trx, 1, auth));
     assert.equal(Number(replay.journalEntryId), Number(j5.journalEntryId));
     const countAfter = await pg.query<{ count: string }>(
-      `SELECT count(*) AS count FROM journal_entries WHERE tenant_id='t1' AND source_type LIKE 'pdc_cheque_%' AND source_id=1`);
+      `SELECT count(*) AS count FROM journal_entries WHERE tenant_id='t1' AND source_type LIKE 'pdc_cheque_%' AND source_id=1`,
+    );
     assert.equal(Number(countAfter.rows[0].count), 6, 'same-sequence replay must not post a duplicate journal');
 
     // 9. The two deposit journals carry different dedup keys (the mechanism).
     const keys = await pg.query<{ dedup_key: string }>(
       'SELECT dedup_key FROM journal_entries WHERE id IN ($1,$2) ORDER BY id',
-      [Number(j2.journalEntryId), Number(j5.journalEntryId)]);
+      [Number(j2.journalEntryId), Number(j5.journalEntryId)],
+    );
     assert.notEqual(keys.rows[0].dedup_key, keys.rows[1].dedup_key);
     assert.match(keys.rows[0].dedup_key, /^pdc_cheque_deposit:1:1$/);
     assert.match(keys.rows[1].dedup_key, /^pdc_cheque_deposit:1:4$/);
@@ -221,4 +277,7 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

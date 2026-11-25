@@ -40,7 +40,10 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const inTx = <T>(fn: (trx: any) => Promise<T>): Promise<T> => db.transaction().execute(fn);
@@ -100,33 +103,55 @@ async function main() {
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
     `);
     const accountTypes: Record<number, string> = { 2155: 'liability', 3200: 'equity' };
-    for (const code of [1110,1120,1130,1140,2110,2140,2155,3200,4100,5100,7100,7290]) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), accountTypes[code] || '']);
+    for (const code of [1110, 1120, 1130, 1140, 2110, 2140, 2155, 3200, 4100, 5100, 7100, 7290]) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        accountTypes[code] || '',
+      ]);
     }
     const amount = async (id: number, code: number, side: 'debit' | 'credit') => {
-      const rows = await pg.query<{ amount: string }>(`SELECT coalesce(sum(${side}),0) AS amount FROM journal_entry_lines WHERE journal_entry_id=$1 AND account_id=$2`, [id, code]);
+      const rows = await pg.query<{ amount: string }>(
+        `SELECT coalesce(sum(${side}),0) AS amount FROM journal_entry_lines WHERE journal_entry_id=$1 AND account_id=$2`,
+        [id, code],
+      );
       return Number(rows.rows[0].amount);
     };
 
     // 1. Opening balance: 10.125 stays 10.125 (old: 10.13).
-    const opening = await inTx(trx => posting.postCustomerOpeningBalance(trx, 25, 10.125, auth));
+    const opening = await inTx((trx) => posting.postCustomerOpeningBalance(trx, 25, 10.125, auth));
     assert.equal(await amount(opening.journalEntryId!, 1130, 'debit'), 10.125);
     assert.equal(await amount(opening.journalEntryId!, 3200, 'credit'), 10.125);
 
     // 2. Payroll item payment: net pay 33.125 stays 33.125 (old: 33.13).
-    const payroll = await inTx(trx => posting.postPayrollItemPayment(trx, 1, 'cash', auth));
+    const payroll = await inTx((trx) => posting.postPayrollItemPayment(trx, 1, 'cash', auth));
     assert.equal(await amount(payroll.journalEntryId!, 2140, 'debit'), 33.125);
     assert.equal(await amount(payroll.journalEntryId!, 1110, 'credit'), 33.125);
 
     // 3. Van field collection: 20.125 stays 20.125 (old: 20.13).
-    const collection = await inTx(trx => posting.postVanFieldCollection(trx, 1, { amount: 20.125, customerId: 25, branchId: null, locationId: null, paymentMethod: 'cash' }, auth));
+    const collection = await inTx((trx) =>
+      posting.postVanFieldCollection(
+        trx,
+        1,
+        { amount: 20.125, customerId: 25, branchId: null, locationId: null, paymentMethod: 'cash' },
+        auth,
+      ),
+    );
     assert.equal(await amount(collection.journalEntryId!, 1130, 'debit'), 20.125);
     assert.equal(await amount(collection.journalEntryId!, 1130, 'credit'), 20.125);
 
     // 4. Van trip settlement: expected 50.125, counted 50.13. The 0.005
     // overage is journalled to 7100 (old: invisible under the 0.01
     // threshold, and both legs rounded to 50.13).
-    const trip = await inTx(trx => posting.postVanTripSettlement(trx, 1, { expectedCash: 50.125, countedCash: 50.13, branchId: null, locationId: null }, auth));
+    const trip = await inTx((trx) =>
+      posting.postVanTripSettlement(
+        trx,
+        1,
+        { expectedCash: 50.125, countedCash: 50.13, branchId: null, locationId: null },
+        auth,
+      ),
+    );
     assert.equal(await amount(trip.journalEntryId!, 1130, 'credit'), 50.125);
     assert.equal(await amount(trip.journalEntryId!, 1110, 'debit'), 50.13);
     assert.equal(await amount(trip.journalEntryId!, 7100, 'credit'), 0.005);
@@ -135,10 +160,12 @@ async function main() {
     // Since INV-INSTALLMENT-INTEREST-PRECISION, the allocation rows
     // created here also sum to exactly 7.125 at book precision, so
     // recognition can no longer over-release the 2155 deferred balance.
-    const interest = await inTx(trx => posting.postCustomerInstallmentInterest(trx, 1, auth));
+    const interest = await inTx((trx) => posting.postCustomerInstallmentInterest(trx, 1, auth));
     assert.equal(await amount(interest.journalEntryId!, 1130, 'debit'), 7.125);
     assert.equal(await amount(interest.journalEntryId!, 2155, 'credit'), 7.125);
-    const allocated = await pg.query<{ total: string }>(`SELECT coalesce(sum(amount),0) AS total FROM accounting_installment_interest WHERE tenant_id='t1' AND plan_id=1`);
+    const allocated = await pg.query<{ total: string }>(
+      `SELECT coalesce(sum(amount),0) AS total FROM accounting_installment_interest WHERE tenant_id='t1' AND plan_id=1`,
+    );
     assert.equal(Number(allocated.rows[0].total), 7.125);
 
     console.log('Posting book precision tests passed');
@@ -147,4 +174,7 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

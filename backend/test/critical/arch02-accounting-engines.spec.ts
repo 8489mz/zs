@@ -6,7 +6,12 @@ import { allocateInstallmentInterest } from '../../src/modules/accounting/engine
 import { classifyCashFlow } from '../../src/modules/accounting/engines/cash-flow-classification.engine';
 import { valueStockReceipt } from '../../src/modules/accounting/inventory-valuation';
 import { areOppositeJournalLines } from '../../src/modules/accounting/engines/journal-reversal.engine';
-import { roundMoney, currencyMoneyDigits, toMinorUnits, fromMinorUnits } from '../../src/modules/accounting/engines/money-minor-units.engine';
+import {
+  roundMoney,
+  currencyMoneyDigits,
+  toMinorUnits,
+  fromMinorUnits,
+} from '../../src/modules/accounting/engines/money-minor-units.engine';
 
 // Minor units and half-boundary precision guarantees:
 assert.equal(roundMoney(2.675, 2), 2.68);
@@ -41,7 +46,12 @@ for (const action of ['collect', 'bounce', 'restore_to_safe', 'cancel', 'endorse
 }
 assert.throws(() => assertPdcTransition('receivable', 'under_collection', 'endorse'));
 assert.throws(() => assertPdcTransition('payable', 'bounced', 'clear'));
-for (const [status, action] of [['in_safe', 'deposit'], ['under_collection', 'bounce'], ['bounced', 'restore_to_safe'], ['in_safe', 'deposit']]) {
+for (const [status, action] of [
+  ['in_safe', 'deposit'],
+  ['under_collection', 'bounce'],
+  ['bounced', 'restore_to_safe'],
+  ['in_safe', 'deposit'],
+]) {
   assert.doesNotThrow(() => assertPdcTransition('receivable', status, action));
 }
 assert.equal(pdcBookAmount({ amount: 100, base_amount: 5000 }, 2), 5000);
@@ -61,9 +71,23 @@ const restore = [
   { accountId: 1, debit: 0, credit: 100, partnerType: 'customer', partnerId: 7 },
 ];
 assert.equal(areOppositeJournalLines(bounce, restore, 2), true);
-assert.equal(areOppositeJournalLines(bounce, restore.map(line => ({ ...line, partnerId: line.partnerType === 'customer' ? 8 : null })), 2), false);
+assert.equal(
+  areOppositeJournalLines(
+    bounce,
+    restore.map((line) => ({ ...line, partnerId: line.partnerType === 'customer' ? 8 : null })),
+    2,
+  ),
+  false,
+);
 // Restoring custody leaves bank fees incurred; it cannot claim to fully reverse them.
-assert.equal(areOppositeJournalLines([...bounce, { accountId: 3, debit: 10, credit: 0 }, { accountId: 4, debit: 0, credit: 10 }], restore, 2), false);
+assert.equal(
+  areOppositeJournalLines(
+    [...bounce, { accountId: 3, debit: 10, credit: 0 }, { accountId: 4, debit: 0, credit: 10 }],
+    restore,
+    2,
+  ),
+  false,
+);
 assert.equal(areOppositeJournalLines(bounce, [{ accountId: 5, debit: 100, credit: 0 }, restore[1]], 2), false);
 // A reversal link is exact at the tenant's book digits, never in cents: at
 // 3 digits 0.011 vs 0.009 differ by 2 fils and must not link, while 0.011
@@ -88,7 +112,17 @@ assert.equal(areOppositeJournalLines(threeDpOriginal, threeDpShort, 3), false);
 assert.equal(areOppositeJournalLines(threeDpOriginal, threeDpSplit, 3), true);
 assert.equal(areOppositeJournalLines(threeDpOriginal, threeDpShort, 2), true);
 assert.equal(areOppositeJournalLines([], restore, 2), false);
-assert.equal(areOppositeJournalLines(bounce, [{ accountId: 2, debit: 100, credit: 0 }, { accountId: 1, debit: 0, credit: Number.NaN, partnerType: 'customer', partnerId: 7 }], 2), false);
+assert.equal(
+  areOppositeJournalLines(
+    bounce,
+    [
+      { accountId: 2, debit: 100, credit: 0 },
+      { accountId: 1, debit: 0, credit: Number.NaN, partnerType: 'customer', partnerId: 7 },
+    ],
+    2,
+  ),
+  false,
+);
 
 // Principal 100, two payments of 60: total interest 20 is earned over time.
 assert.deepEqual(allocateInstallmentInterest(100, [60, 60], 20, 2), [13.07, 6.93]);
@@ -103,7 +137,12 @@ assert.deepEqual(classifyCashFlow(0, 100, 0, -100), { operating: 0, investing: 0
 assert.deepEqual(classifyCashFlow(100, 100, 0, 0), { operating: 100, investing: 0, financing: 0, unclassified: 0 });
 // An asset sold for 150 with book value 100 and gain 50 needs explicit attribution.
 assert.deepEqual(classifyCashFlow(150, 50, 100, 0), { operating: 0, investing: 0, financing: 0, unclassified: 150 });
-assert.deepEqual(classifyCashFlow(150, 50, 100, 0, 'investing'), { operating: 0, investing: 150, financing: 0, unclassified: 0 });
+assert.deepEqual(classifyCashFlow(150, 50, 100, 0, 'investing'), {
+  operating: 0,
+  investing: 150,
+  financing: 0,
+  unclassified: 0,
+});
 // Asset 100 financed by debt 80 and cash 20 has ambiguous gross cash legs.
 assert.deepEqual(classifyCashFlow(-20, 0, -100, 80), { operating: 0, investing: 0, financing: 0, unclassified: -20 });
 
@@ -112,9 +151,15 @@ async function verifyReceiptAdapter(): Promise<void> {
   const predicates: Array<[string, unknown]> = [];
   const query = {
     select: () => query,
-    where: (column: string, _operator: string, value: unknown) => { predicates.push([column, value]); return query; },
+    where: (column: string, _operator: string, value: unknown) => {
+      predicates.push([column, value]);
+      return query;
+    },
     executeTakeFirstOrThrow: async () => ({ cost_price: currentCost }),
-    set: (values: { cost_price: number }) => { currentCost = values.cost_price; return query; },
+    set: (values: { cost_price: number }) => {
+      currentCost = values.cost_price;
+      return query;
+    },
     execute: async () => [],
   };
   const db = { selectFrom: () => query, updateTable: () => query } as any;
@@ -132,4 +177,7 @@ async function verifyReceiptAdapter(): Promise<void> {
   assert.equal(currentCost, 15);
 }
 
-void verifyReceiptAdapter().catch(error => { console.error(error); process.exitCode = 1; });
+void verifyReceiptAdapter().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

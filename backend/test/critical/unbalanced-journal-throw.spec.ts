@@ -76,8 +76,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makePosting(db: Kysely<Database>): AccountingPostingService {
@@ -105,18 +111,28 @@ function journalParams(debit: number, credit: number): Parameters<AccountingPost
 }
 
 async function entryCount(db: Kysely<Database>): Promise<number> {
-  const row = await (db as any).selectFrom('journal_entries').select((eb: any) => eb.fn.countAll().as('n')).executeTakeFirst() as unknown as { n: string };
+  const row = (await (db as any)
+    .selectFrom('journal_entries')
+    .select((eb: any) => eb.fn.countAll().as('n'))
+    .executeTakeFirst()) as unknown as { n: string };
   return Number(row.n);
 }
 
-async function postedLines(db: Kysely<Database>, entryId: number): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
-  const rows = await (db as any)
+async function postedLines(
+  db: Kysely<Database>,
+  entryId: number,
+): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
+  const rows = (await (db as any)
     .selectFrom('journal_entry_lines')
     .select(['account_id', 'debit', 'credit'])
     .where('journal_entry_id', '=', entryId)
     .orderBy('id')
-    .execute() as unknown as Array<{ account_id: number; debit: string; credit: string }>;
-  return rows.map((row) => ({ accountId: Number(row.account_id), debit: Number(row.debit), credit: Number(row.credit) }));
+    .execute()) as unknown as Array<{ account_id: number; debit: string; credit: string }>;
+  return rows.map((row) => ({
+    accountId: Number(row.account_id),
+    debit: Number(row.debit),
+    credit: Number(row.credit),
+  }));
 }
 
 function isUnbalancedThrow(error: unknown): boolean {
@@ -162,7 +178,11 @@ async function main(): Promise<void> {
       const entryId = await posting.postDomainJournal(db, journalParams(100, 100));
       assert.ok(Number(entryId) > 0);
       assert.equal(await entryCount(db), 1);
-      const entry = await (db as any).selectFrom('journal_entries').selectAll().where('id', '=', entryId).executeTakeFirst() as unknown as { status: string; entry_no: string; source_type: string };
+      const entry = (await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('id', '=', entryId)
+        .executeTakeFirst()) as unknown as { status: string; entry_no: string; source_type: string };
       assert.equal(entry.status, 'posted');
       assert.equal(entry.source_type, 'manual');
       assert.match(entry.entry_no, /^JE-\d{8}$/);
@@ -194,11 +214,20 @@ async function main(): Promise<void> {
   // Case 5: static pin — exactly two UNBALANCED_JOURNAL throw sites
   // in the core (pre-plug check + post-plug hard check).
   {
-    const core = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/journal-posting-core.service.ts'), 'utf8');
+    const core = readFileSync(
+      resolve(__dirname, '../../src/modules/accounting/services/journal-posting-core.service.ts'),
+      'utf8',
+    );
     const sites = core.split('UNBALANCED_JOURNAL').length - 1;
     assert.equal(sites, 2, 'the core must carry exactly two UNBALANCED_JOURNAL throw sites');
-    assert.ok(core.includes("throw new AppError(`Unbalanced journal for ${params.sourceType} #${params.sourceId}: debit="), 'pre-plug throw must name the totals');
-    assert.ok(core.includes("throw new AppError(`Unbalanced journal for ${params.sourceType} #${params.sourceId}`"), 'post-plug hard check must exist');
+    assert.ok(
+      core.includes('throw new AppError(`Unbalanced journal for ${params.sourceType} #${params.sourceId}: debit='),
+      'pre-plug throw must name the totals',
+    );
+    assert.ok(
+      core.includes('throw new AppError(`Unbalanced journal for ${params.sourceType} #${params.sourceId}`'),
+      'post-plug hard check must exist',
+    );
   }
 
   console.log('unbalanced-journal-throw: all cases passed');

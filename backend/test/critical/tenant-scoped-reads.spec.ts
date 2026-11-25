@@ -23,7 +23,9 @@ const hrSources = [
   'modules/hr/services/hr-payroll-runs.service.ts', // H7: MT-02, O28 callers
   'modules/hr/services/hr-payroll-rebuild.service.ts', // H8: O28 run lookup
   'modules/hr/services/hr-payroll-posting.service.ts', // H10: MT-12, O28 callers
-].map(read).join('\n');
+]
+  .map(read)
+  .join('\n');
 
 function testVanSalesReadsStayInTenant(): void {
   // Van-sales split: the reads now live across the facade + the extracted
@@ -59,7 +61,9 @@ function testVanSalesReadsStayInTenant(): void {
   ];
 
   for (const src of sources) {
-    for (const match of src.matchAll(/selectFrom\('(customers|products)'\)([\s\S]{0,400}?)\.executeTakeFirst(OrThrow)?\(\)/g)) {
+    for (const match of src.matchAll(
+      /selectFrom\('(customers|products)'\)([\s\S]{0,400}?)\.executeTakeFirst(OrThrow)?\(\)/g,
+    )) {
       assert.ok(
         match[2].includes("'tenant_id'") || match[2].includes('tenant_id'),
         `O27: read of ${match[1]} in van-sales must filter by tenant_id:\n${match[0].slice(0, 200)}`,
@@ -79,7 +83,10 @@ function testVanSalesReadsStayInTenant(): void {
   assert.ok(tripLookups.length >= 4, 'the trip lookups are still there');
   for (const match of tripLookups) {
     assert.ok(/\b(?:vt\.)?tenant_id\b/.test(match[1]), 'O27: trip lookup filters by tenant');
-    assert.ok(/\b(?:vt\.)?rep_id\b/.test(match[1]), `O27: trip lookup must also filter by rep_id:\n${match[0].slice(0, 200)}`);
+    assert.ok(
+      /\b(?:vt\.)?rep_id\b/.test(match[1]),
+      `O27: trip lookup must also filter by rep_id:\n${match[0].slice(0, 200)}`,
+    );
   }
 }
 
@@ -115,11 +122,31 @@ function testAuditIsolationRemediations(): void {
 
   // Directly reachable HR reads and money-moving loan updates (MT-01..04, 08, 12).
   expect(section(hr, 'async listLoans(', 'async createLoan('), /WHERE l\.tenant_id = \$\{tenantId\}/, 'MT-01');
-  expect(section(hr, 'async getPayrollRun(', 'async createPayrollRun('), /WHERE r\.id = \$\{id\} AND r\.tenant_id = \$\{tenantId\}/, 'MT-02');
-  expect(section(hr, 'async listEmployeeAssets(', 'async upsertEmployeeAsset('), /WHERE a\.tenant_id = \$\{tenantId\}/, 'MT-03');
-  expect(section(hr, 'async withdrawals(', 'async summary('), /WHERE id = \$\{employeeId\} AND tenant_id = \$\{tenantId\}/, 'MT-04');
-  expect(section(hr, 'async createLoan(', 'async updateLoan('), /\.where\('tenant_id', '=', requireTenantScope\(auth\)\.tenantId\)/, 'MT-08');
-  expect(section(hr, 'private async settlePayrollLoanDeductions(', 'async approvePayrollRun('), /WHERE id = \$\{row\.installment_id\} AND tenant_id = \$\{tenantId\}/, 'MT-12');
+  expect(
+    section(hr, 'async getPayrollRun(', 'async createPayrollRun('),
+    /WHERE r\.id = \$\{id\} AND r\.tenant_id = \$\{tenantId\}/,
+    'MT-02',
+  );
+  expect(
+    section(hr, 'async listEmployeeAssets(', 'async upsertEmployeeAsset('),
+    /WHERE a\.tenant_id = \$\{tenantId\}/,
+    'MT-03',
+  );
+  expect(
+    section(hr, 'async withdrawals(', 'async summary('),
+    /WHERE id = \$\{employeeId\} AND tenant_id = \$\{tenantId\}/,
+    'MT-04',
+  );
+  expect(
+    section(hr, 'async createLoan(', 'async updateLoan('),
+    /\.where\('tenant_id', '=', requireTenantScope\(auth\)\.tenantId\)/,
+    'MT-08',
+  );
+  expect(
+    section(hr, 'private async settlePayrollLoanDeductions(', 'async approvePayrollRun('),
+    /WHERE id = \$\{row\.installment_id\} AND tenant_id = \$\{tenantId\}/,
+    'MT-12',
+  );
 
   // Maritime split: the public-portal reads live in the public-portal
   // slice (MT-05 + MT-10 both). The facade is NOT included: its methods
@@ -128,23 +155,43 @@ function testAuditIsolationRemediations(): void {
   const tracking = section(maritime, 'async getPublicTrackingByToken(', 'private assertValidPublicQuoteToken');
   const trackingLookup = tracking.slice(0, tracking.indexOf('if (!job)'));
   expect(trackingLookup, /\.where\('tracking_token', '=', cleanToken\)/, 'MT-05');
-  assert.doesNotMatch(trackingLookup, /eb\('(?:job_number|mbl_number|hbl_number|booking_number)'/, 'MT-05: public lookup accepts only random tokens');
+  assert.doesNotMatch(
+    trackingLookup,
+    /eb\('(?:job_number|mbl_number|hbl_number|booking_number)'/,
+    'MT-05: public lookup accepts only random tokens',
+  );
   assert.doesNotMatch(tracking, /shipment: job\b/, 'MT-05: never return the full private job row');
-  expect(section(maritime, 'async getPublicRfqForQuote(', 'async '), /\.where\('tenant_id', '=', rfq\.tenant_id\)/, 'MT-10');
+  expect(
+    section(maritime, 'async getPublicRfqForQuote(', 'async '),
+    /\.where\('tenant_id', '=', rfq\.tenant_id\)/,
+    'MT-10',
+  );
 
   const support = read('modules/settings/services/settings-support.service.ts');
   const tenantBundle = section(support, 'async generateSupportBundle(', 'async generateSupportBundleInternal(');
   expect(tenantBundle, /\.where\('tenant_id', '=', tenantId\)/, 'MT-20');
-  assert.doesNotMatch(tenantBundle, /generateSupportBundleInternal\(/, 'MT-20: tenant download cannot include shared process logs');
+  assert.doesNotMatch(
+    tenantBundle,
+    /generateSupportBundleInternal\(/,
+    'MT-20: tenant download cannot include shared process logs',
+  );
   const webhook = read('modules/settings/services/whatsapp-gateway.service.ts');
   expect(webhook, /timingSafeEqual\(expected, Buffer\.from\(supplied, 'hex'\)\)/, 'MT-21');
   assert.doesNotMatch(webhook, /firstActive/, 'MT-21: no first-tenant fallback');
   const webhookController = read('modules/settings/controllers/whatsapp-gateway.controller.ts');
-  expect(webhookController, /handleVerifiedInboundWebhook\(body, tenantId, req\.headers\['x-zs-webhook-signature'\], req\.rawBody\)/, 'MT-21');
+  expect(
+    webhookController,
+    /handleVerifiedInboundWebhook\(body, tenantId, req\.headers\['x-zs-webhook-signature'\], req\.rawBody\)/,
+    'MT-21',
+  );
 
   const manufacturing = read('modules/manufacturing/services/manufacturing.service.ts');
   expect(manufacturing, /assertBomProductsOwned\(trx, payload, scope\.tenantId\)/, 'MT-07');
-  expect(manufacturing, /\.deleteFrom\('manufacturing_bom_lines'\)[\s\S]{0,170}\.selectFrom\('manufacturing_boms'\)/, 'MT-15');
+  expect(
+    manufacturing,
+    /\.deleteFrom\('manufacturing_bom_lines'\)[\s\S]{0,170}\.selectFrom\('manufacturing_boms'\)/,
+    'MT-15',
+  );
   const purchases = read('modules/purchases/services/purchases-query.service.ts');
   expect(purchases, /\.where\('pa\.tenant_id', '=', scope\.tenantId\)/, 'MT-13');
   // Accounting split: the reads now live in the extracted services (S1 holds

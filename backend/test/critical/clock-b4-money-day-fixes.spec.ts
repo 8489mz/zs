@@ -74,7 +74,9 @@ async function main(): Promise<void> {
   const childDir = fs.mkdtempSync(path.join(__dirname, '.tmp-b4p1-'));
   const childTmp = path.join(childDir, 'cairo-check.ts');
   try {
-    fs.writeFileSync(childTmp, `import { accountingDateKey } from '../../../src/modules/accounting/accounting-tax-lock';
+    fs.writeFileSync(
+      childTmp,
+      `import { accountingDateKey } from '../../../src/modules/accounting/accounting-tax-lock';
 import { formatLocalCalendarDay } from '../../../src/common/utils/tenant-timezone.util';
 async function main(): Promise<void> {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -91,7 +93,8 @@ async function main(): Promise<void> {
   console.log('CAIRO-CHILD-OK');
 }
 main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
-`);
+`,
+    );
     const out = execFileSync('npx', ['ts-node', childTmp], {
       cwd: path.resolve(__dirname, '../..'),
       env: { ...process.env, TZ: 'Africa/Cairo' },
@@ -101,14 +104,28 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     assert.ok(out.includes('CAIRO-CHILD-OK'), `Cairo child must pass (got: ${out.trim()})`);
     console.log('✓ §A passed: accountingDateKey keys a pg DATE to its stored day under Cairo TZ');
   } finally {
-    try { fs.unlinkSync(childTmp); } catch { /* already gone */ }
-    try { fs.rmSync(childDir, { recursive: true, force: true }); } catch { /* already gone */ }
+    try {
+      fs.unlinkSync(childTmp);
+    } catch {
+      /* already gone */
+    }
+    try {
+      fs.rmSync(childDir, { recursive: true, force: true });
+    } catch {
+      /* already gone */
+    }
   }
 
   // §B — fiscal-year end_date derivation pin.
   const postingCore = read('modules/accounting/services/journal-posting-core.service.ts');
-  assert.ok(postingCore.includes('formatLocalCalendarDay(fiscalYear.end_date)'), 'fiscal-year end_date derives via formatLocalCalendarDay');
-  assert.ok(!postingCore.includes('fiscalYear.end_date.toISOString().slice(0, 10)'), 'fiscal-year end_date no longer uses the UTC slice');
+  assert.ok(
+    postingCore.includes('formatLocalCalendarDay(fiscalYear.end_date)'),
+    'fiscal-year end_date derives via formatLocalCalendarDay',
+  );
+  assert.ok(
+    !postingCore.includes('fiscalYear.end_date.toISOString().slice(0, 10)'),
+    'fiscal-year end_date no longer uses the UTC slice',
+  );
   console.log('✓ §B passed: fiscal-year closing comparison keys on the stored year-end day');
 
   // §C — trip-expense date pin.
@@ -116,8 +133,14 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   // import-sales split (slice S2); the pin follows the method, the
   // assertion text is unchanged.
   const sourcing = read('modules/import-sales/services/import-sourcing.service.ts');
-  assert.ok(sourcing.includes('formatLocalCalendarDay(trip.start_date)'), 'trip expense date derives via formatLocalCalendarDay');
-  assert.ok(!sourcing.includes('trip.start_date.toISOString().slice(0, 10)'), 'trip expense date no longer uses the UTC slice');
+  assert.ok(
+    sourcing.includes('formatLocalCalendarDay(trip.start_date)'),
+    'trip expense date derives via formatLocalCalendarDay',
+  );
+  assert.ok(
+    !sourcing.includes('trip.start_date.toISOString().slice(0, 10)'),
+    'trip expense date no longer uses the UTC slice',
+  );
   console.log('✓ §C passed: trip expense posts on the trip start day, not the day before');
 
   // §D — quotation expiry normalizer pin.
@@ -125,8 +148,14 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   // import-sales split (slice S7); the pin follows the method, the
   // assertion text is unchanged.
   const commercial = read('modules/import-sales/services/import-commercial.service.ts');
-  assert.ok(commercial.includes('return formatLocalCalendarDay(v);'), 'quotation expiry derives via formatLocalCalendarDay');
-  assert.ok(!commercial.includes('return v.toISOString().slice(0, 10);'), 'quotation expiry no longer uses the UTC slice');
+  assert.ok(
+    commercial.includes('return formatLocalCalendarDay(v);'),
+    'quotation expiry derives via formatLocalCalendarDay',
+  );
+  assert.ok(
+    !commercial.includes('return v.toISOString().slice(0, 10);'),
+    'quotation expiry no longer uses the UTC slice',
+  );
   console.log('✓ §D passed: a quotation expiring today is selectable today');
 
   // §E — period-lock key pin + accountingDateKey doc correction pin.
@@ -134,13 +163,24 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   assert.ok(boundaries.includes('formatLocalCalendarDay(raw)'), 'lock day derives via formatLocalCalendarDay');
   assert.ok(!boundaries.includes('raw.toISOString().slice(0, 10)'), 'lock day no longer uses the UTC slice');
   const taxLock = read('modules/accounting/accounting-tax-lock.ts');
-  assert.ok(!taxLock.includes('slicing its UTC rendering is exact'), 'accountingDateKey doc no longer claims the UTC slice is exact');
+  assert.ok(
+    !taxLock.includes('slicing its UTC rendering is exact'),
+    'accountingDateKey doc no longer claims the UTC slice is exact',
+  );
   console.log('✓ §E passed: period-lock key is the stored lock day, and its doc states the correct premise');
 
   // §F — regression: unchanged behaviour on this (UTC) host.
   assert.equal(accountingDateKey('2026-11-08'), '2026-11-08', 'stored DATE string passes through');
-  assert.equal(accountingDateKey(new Date('2026-10-01T00:00:00Z')), '2026-10-01', 'UTC-midnight instant keys to its UTC day on a UTC host (existing pin)');
-  assert.equal(formatLocalCalendarDay(new Date(2026, 10, 14)), '2026-11-14', 'local-midnight Date keys to its own day on this host');
+  assert.equal(
+    accountingDateKey(new Date('2026-10-01T00:00:00Z')),
+    '2026-10-01',
+    'UTC-midnight instant keys to its UTC day on a UTC host (existing pin)',
+  );
+  assert.equal(
+    formatLocalCalendarDay(new Date(2026, 10, 14)),
+    '2026-11-14',
+    'local-midnight Date keys to its own day on this host',
+  );
   console.log('✓ §F passed: string passthrough and UTC-instant behaviour unchanged');
 
   console.log('CLOCK-B4-P1 CHECKS PASSED');

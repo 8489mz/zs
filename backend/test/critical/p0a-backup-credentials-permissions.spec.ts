@@ -4,7 +4,13 @@ import { SettingsBackupService } from '../../src/modules/settings/services/setti
 import { CloudBackupService } from '../../src/modules/settings/services/cloud-backup.service';
 
 async function run(): Promise<void> {
-  const cashier = { role: 'cashier', userId: 5, tenantId: 't1', accountId: 't1:main', permissions: ['settings', 'canManageSettings'] } as any;
+  const cashier = {
+    role: 'cashier',
+    userId: 5,
+    tenantId: 't1',
+    accountId: 't1:main',
+    permissions: ['settings', 'canManageSettings'],
+  } as any;
   const backup = new SettingsBackupService({} as any, {} as any, {} as any, {} as any);
   const cloud = new CloudBackupService({} as any, backup);
   await assert.rejects(() => backup.exportBackup(cashier), ForbiddenException);
@@ -17,8 +23,15 @@ async function run(): Promise<void> {
   const disabled = new CloudBackupService({} as any, backup);
   (disabled as any).getCloudConfig = async () => ({ enabled: false });
   await assert.rejects(
-    () => disabled.uploadBackupToCloud(Buffer.from('test'), 'backup.zip', { ...cashier, permissions: ['canManageBackups'] }),
+    () =>
+      disabled.uploadBackupToCloud(Buffer.from('test'), 'backup.zip', {
+        ...cashier,
+        permissions: ['canManageBackups'],
+      }),
     /النسخ الاحتياطي السحابي غير مفعل/,
   );
 }
-run().catch((err) => { console.error(err); process.exitCode = 1; });
+run().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

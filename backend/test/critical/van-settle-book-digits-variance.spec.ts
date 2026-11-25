@@ -182,9 +182,18 @@ const adminAuth: any = { tenantId: 't1', accountId: 'a1', userId: 99, role: 'adm
 
 async function settle(ctx: Ctx, countedCash: number, postCalls: unknown[]) {
   const service = buildService(ctx, postCalls);
-  return service.settleTrip(4, 't1', 'a1', {
-    tripId: 11, countedCash, unloadRemainingToWarehouse: false, endOdometer: 120,
-  }, adminAuth);
+  return service.settleTrip(
+    4,
+    't1',
+    'a1',
+    {
+      tripId: 11,
+      countedCash,
+      unloadRemainingToWarehouse: false,
+      endOdometer: 120,
+    },
+    adminAuth,
+  );
 }
 
 async function main(): Promise<void> {
@@ -251,7 +260,8 @@ async function main(): Promise<void> {
     const ctx = newCtx(100.005, 'KWD', 0);
     const service = buildService(ctx, []);
     const submitted = await service.submitTripSettlement(4, 't1', 'a1', {
-      countedCash: 100.0, endOdometer: 120,
+      countedCash: 100.0,
+      endOdometer: 120,
     } as any);
     assert.equal(submitted.variance, -0.005);
     const ctx2 = newCtx(100.005, 'KWD', 0);
@@ -263,7 +273,10 @@ async function main(): Promise<void> {
   // toFixed(2) variance/expected form; the 0.5 suspicion gate stays.
   // File #43 split: settleTrip lives in the S5 settle-trip slice.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts'),
+      'utf8',
+    );
     const settleStart = source.indexOf('async settleTrip(');
     const settleBody = source.slice(settleStart);
     assert.ok(settleBody.includes('computeCashDrawerVariance(countedCash, expectedCash, bookDigits)'));
@@ -275,7 +288,11 @@ async function main(): Promise<void> {
   // Invariant pin: the entry exists exactly once and is last.
   {
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-VAN-SETTLE-BOOK-DIGITS-VARIANCE').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-VAN-SETTLE-BOOK-DIGITS-VARIANCE').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
   }
 
   console.log('Van settle book-digits variance tests passed');

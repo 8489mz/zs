@@ -97,7 +97,10 @@ async function main(): Promise<void> {
           created_at: new Date('2026-01-01T00:00:00Z'),
         })
         .execute();
-      await anyDb.insertInto('users').values({ tenant_id: id, account_id: 'a1', username: 'admin', role: 'admin' }).execute();
+      await anyDb
+        .insertInto('users')
+        .values({ tenant_id: id, account_id: 'a1', username: 'admin', role: 'admin' })
+        .execute();
     }
 
     async function seedHandToggle(tenantId: string, key: string): Promise<void> {
@@ -135,9 +138,20 @@ async function main(): Promise<void> {
     await seedHandToggle('tu', 'clothingModuleEnabled');
     assert.deepEqual(await readMarker('tu'), [], 'no sync marker exists before the first sync');
     await service.syncTenantModuleSettingsForPlan('tu', 'plan_ultimate');
-    assert.equal(await readSetting('tu', 'weightedBarcodeEnabled'), 'true', 'hand-toggled weightedBarcodeEnabled must survive the Ultimate sync on a retail tenant');
-    assert.equal(await readSetting('tu', 'clothingModuleEnabled'), 'true', 'hand-toggled clothingModuleEnabled must survive the Ultimate sync on a retail tenant');
-    assert.ok((await readMarker('tu')).includes('clothingModuleEnabled'), 'the Ultimate sync grants clothingModuleEnabled, so the marker must list it');
+    assert.equal(
+      await readSetting('tu', 'weightedBarcodeEnabled'),
+      'true',
+      'hand-toggled weightedBarcodeEnabled must survive the Ultimate sync on a retail tenant',
+    );
+    assert.equal(
+      await readSetting('tu', 'clothingModuleEnabled'),
+      'true',
+      'hand-toggled clothingModuleEnabled must survive the Ultimate sync on a retail tenant',
+    );
+    assert.ok(
+      (await readMarker('tu')).includes('clothingModuleEnabled'),
+      'the Ultimate sync grants clothingModuleEnabled, so the marker must list it',
+    );
     console.log('  A. retail + Ultimate: hand toggles survive: passed');
 
     // B. Retail non-supermarket tenant on Pro (clothing is NOT a plan
@@ -146,15 +160,30 @@ async function main(): Promise<void> {
     await seedHandToggle('tp', 'weightedBarcodeEnabled');
     await seedHandToggle('tp', 'clothingModuleEnabled');
     await service.syncTenantModuleSettingsForPlan('tp', 'plan_pro');
-    assert.equal(await readSetting('tp', 'weightedBarcodeEnabled'), 'true', 'hand-toggled weightedBarcodeEnabled must survive the Pro sync on a retail tenant');
-    assert.equal(await readSetting('tp', 'clothingModuleEnabled'), 'true', 'hand-toggled clothingModuleEnabled must survive the Pro sync on a retail tenant');
+    assert.equal(
+      await readSetting('tp', 'weightedBarcodeEnabled'),
+      'true',
+      'hand-toggled weightedBarcodeEnabled must survive the Pro sync on a retail tenant',
+    );
+    assert.equal(
+      await readSetting('tp', 'clothingModuleEnabled'),
+      'true',
+      'hand-toggled clothingModuleEnabled must survive the Pro sync on a retail tenant',
+    );
     console.log('  B. retail + Pro: hand toggles survive: passed');
 
     // C. A supermarket tenant still gets weightedBarcode=true from the sync.
     await seedTenant('ts', 'supermarket', 'plan_basic');
     await service.syncTenantModuleSettingsForPlan('ts', 'plan_basic');
-    assert.equal(await readSetting('ts', 'weightedBarcodeEnabled'), 'true', 'the sync must grant weightedBarcodeEnabled to a supermarket tenant');
-    assert.ok((await readMarker('ts')).includes('weightedBarcodeEnabled'), 'the supermarket sync grants weightedBarcodeEnabled, so the marker must list it');
+    assert.equal(
+      await readSetting('ts', 'weightedBarcodeEnabled'),
+      'true',
+      'the sync must grant weightedBarcodeEnabled to a supermarket tenant',
+    );
+    assert.ok(
+      (await readMarker('ts')).includes('weightedBarcodeEnabled'),
+      'the supermarket sync grants weightedBarcodeEnabled, so the marker must list it',
+    );
     console.log('  C. supermarket still granted weightedBarcode=true: passed');
 
     // D. toRevoke still works: the same tenant stops being a
@@ -163,8 +192,15 @@ async function main(): Promise<void> {
     // toggle — the marker proves provenance).
     await anyDb.updateTable('tenants').set({ activity_type: 'retail_general' }).where('id', '=', 'ts').execute();
     await service.syncTenantModuleSettingsForPlan('ts', 'plan_basic');
-    assert.equal(await readSetting('ts', 'weightedBarcodeEnabled'), 'false', 'a previously-sync-granted weightedBarcodeEnabled must be revoked once the tenant is no longer a supermarket');
-    assert.ok(!(await readMarker('ts')).includes('weightedBarcodeEnabled'), 'the marker must drop weightedBarcodeEnabled after revocation');
+    assert.equal(
+      await readSetting('ts', 'weightedBarcodeEnabled'),
+      'false',
+      'a previously-sync-granted weightedBarcodeEnabled must be revoked once the tenant is no longer a supermarket',
+    );
+    assert.ok(
+      !(await readMarker('ts')).includes('weightedBarcodeEnabled'),
+      'the marker must drop weightedBarcodeEnabled after revocation',
+    );
     console.log('  D. previously-sync-granted weightedBarcode revoked on vertical change: passed');
 
     // E. toRevoke still works on plan downgrade: the Ultimate tenant
@@ -172,8 +208,16 @@ async function main(): Promise<void> {
     // switched off — while the hand-toggled weightedBarcode key from
     // (A), which no sync ever granted, still survives.
     await service.syncTenantModuleSettingsForPlan('tu', 'plan_pro');
-    assert.equal(await readSetting('tu', 'clothingModuleEnabled'), 'false', 'a previously-sync-granted clothingModuleEnabled must be revoked once the plan no longer grants clothing');
-    assert.equal(await readSetting('tu', 'weightedBarcodeEnabled'), 'true', 'the hand-toggled weightedBarcodeEnabled must still survive a later sync (no sync ever granted it)');
+    assert.equal(
+      await readSetting('tu', 'clothingModuleEnabled'),
+      'false',
+      'a previously-sync-granted clothingModuleEnabled must be revoked once the plan no longer grants clothing',
+    );
+    assert.equal(
+      await readSetting('tu', 'weightedBarcodeEnabled'),
+      'true',
+      'the hand-toggled weightedBarcodeEnabled must still survive a later sync (no sync ever granted it)',
+    );
     console.log('  E. previously-sync-granted clothing revoked on downgrade; hand toggle still survives: passed');
 
     console.log('pos-plan-sync-module-durability.spec: ok');

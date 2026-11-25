@@ -35,28 +35,92 @@ import {
 } from '../../src/modules/delivery-reps/van-trip-counters.engine';
 
 function testContributionTable(): void {
-  const cases: Array<[string, any, { salesAmount: number; cashCollected: number; creditSales: number; instapaySales: number }]> = [
-    ['cash', { total: 100, paidAmount: 0, paymentChannel: 'cash' }, { salesAmount: 100, cashCollected: 100, creditSales: 0, instapaySales: 0 }],
-    ['card', { total: 100, paidAmount: 100, paymentChannel: 'card' }, { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 0 }],
-    ['instapay', { total: 100, paidAmount: 100, paymentChannel: 'instapay' }, { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 100 }],
-    ['vodafone_cash', { total: 100, paidAmount: 100, paymentChannel: 'vodafone_cash' }, { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 100 }],
-    ['bank_transfer', { total: 100, paidAmount: 100, paymentChannel: 'bank_transfer' }, { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 100 }],
-    ['credit', { total: 100, paidAmount: 0, paymentChannel: 'credit' }, { salesAmount: 100, cashCollected: 0, creditSales: 100, instapaySales: 0 }],
-    ['credit + partial card tender', { total: 100, paidAmount: 30, paymentChannel: 'card' }, { salesAmount: 100, cashCollected: 0, creditSales: 70, instapaySales: 0 }],
-    ['split via ledger', { total: 100, paidAmount: 0, paymentChannel: 'mixed', ledgerCreditAmount: 60 }, { salesAmount: 100, cashCollected: 40, creditSales: 60, instapaySales: 0 }],
-    ['split via tender rows', { total: 100, paidAmount: 40, paymentChannel: 'mixed', payments: [{ amount: 40, payment_channel: 'cash' }] }, { salesAmount: 100, cashCollected: 40, creditSales: 60, instapaySales: 0 }],
-    ['split via tender rows incl. card', { total: 100, paidAmount: 70, paymentChannel: 'mixed', payments: [{ amount: 40, payment_channel: 'cash' }, { amount: 30, payment_channel: 'card' }] }, { salesAmount: 100, cashCollected: 40, creditSales: 30, instapaySales: 0 }],
-    ['split via paid fallback', { total: 100, paidAmount: 40, paymentChannel: 'mixed' }, { salesAmount: 100, cashCollected: 40, creditSales: 60, instapaySales: 0 }],
-    ['wallet', { total: 100, paidAmount: 100, paymentChannel: 'wallet' }, { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 0 }],
-    ['unknown channel stays sales-only', { total: 100, paidAmount: 100, paymentChannel: 'mystery' }, { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 0 }],
+  const cases: Array<
+    [string, any, { salesAmount: number; cashCollected: number; creditSales: number; instapaySales: number }]
+  > = [
+    [
+      'cash',
+      { total: 100, paidAmount: 0, paymentChannel: 'cash' },
+      { salesAmount: 100, cashCollected: 100, creditSales: 0, instapaySales: 0 },
+    ],
+    [
+      'card',
+      { total: 100, paidAmount: 100, paymentChannel: 'card' },
+      { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 0 },
+    ],
+    [
+      'instapay',
+      { total: 100, paidAmount: 100, paymentChannel: 'instapay' },
+      { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 100 },
+    ],
+    [
+      'vodafone_cash',
+      { total: 100, paidAmount: 100, paymentChannel: 'vodafone_cash' },
+      { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 100 },
+    ],
+    [
+      'bank_transfer',
+      { total: 100, paidAmount: 100, paymentChannel: 'bank_transfer' },
+      { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 100 },
+    ],
+    [
+      'credit',
+      { total: 100, paidAmount: 0, paymentChannel: 'credit' },
+      { salesAmount: 100, cashCollected: 0, creditSales: 100, instapaySales: 0 },
+    ],
+    [
+      'credit + partial card tender',
+      { total: 100, paidAmount: 30, paymentChannel: 'card' },
+      { salesAmount: 100, cashCollected: 0, creditSales: 70, instapaySales: 0 },
+    ],
+    [
+      'split via ledger',
+      { total: 100, paidAmount: 0, paymentChannel: 'mixed', ledgerCreditAmount: 60 },
+      { salesAmount: 100, cashCollected: 40, creditSales: 60, instapaySales: 0 },
+    ],
+    [
+      'split via tender rows',
+      { total: 100, paidAmount: 40, paymentChannel: 'mixed', payments: [{ amount: 40, payment_channel: 'cash' }] },
+      { salesAmount: 100, cashCollected: 40, creditSales: 60, instapaySales: 0 },
+    ],
+    [
+      'split via tender rows incl. card',
+      {
+        total: 100,
+        paidAmount: 70,
+        paymentChannel: 'mixed',
+        payments: [
+          { amount: 40, payment_channel: 'cash' },
+          { amount: 30, payment_channel: 'card' },
+        ],
+      },
+      { salesAmount: 100, cashCollected: 40, creditSales: 30, instapaySales: 0 },
+    ],
+    [
+      'split via paid fallback',
+      { total: 100, paidAmount: 40, paymentChannel: 'mixed' },
+      { salesAmount: 100, cashCollected: 40, creditSales: 60, instapaySales: 0 },
+    ],
+    [
+      'wallet',
+      { total: 100, paidAmount: 100, paymentChannel: 'wallet' },
+      { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 0 },
+    ],
+    [
+      'unknown channel stays sales-only',
+      { total: 100, paidAmount: 100, paymentChannel: 'mystery' },
+      { salesAmount: 100, cashCollected: 0, creditSales: 0, instapaySales: 0 },
+    ],
   ];
   for (const [name, input, expected] of cases) {
     assert.deepEqual(tripSaleContribution(input), expected, name);
   }
-  assert.deepEqual(
-    negateContribution({ salesAmount: 100, cashCollected: 40, creditSales: 60, instapaySales: 0 }),
-    { salesAmount: -100, cashCollected: -40, creditSales: -60, instapaySales: 0 },
-  );
+  assert.deepEqual(negateContribution({ salesAmount: 100, cashCollected: 40, creditSales: 60, instapaySales: 0 }), {
+    salesAmount: -100,
+    cashCollected: -40,
+    creditSales: -60,
+    instapaySales: 0,
+  });
   assert.deepEqual(
     diffContributions(
       { salesAmount: 60, cashCollected: 60, creditSales: 0, instapaySales: 0 },
@@ -80,11 +144,23 @@ const adminAuth: any = { tenantId: 't1', accountId: 'a1', role: 'admin', userId:
 
 function tripSaleRow(overrides: Record<string, any> = {}): Record<string, any> {
   return {
-    id: 7, tenant_id: 't1', status: 'posted', exchange_return_id: null,
-    zatca_status: 'not_submitted', van_trip_id: 11, delivery_rep_id: 4,
-    total: 100, paid_amount: 0, payment_type: 'cash', payment_channel: 'cash',
-    customer_id: null, branch_id: null, created_by: 1, created_at: new Date(),
-    delivery_status: null, order_type: 'pos',
+    id: 7,
+    tenant_id: 't1',
+    status: 'posted',
+    exchange_return_id: null,
+    zatca_status: 'not_submitted',
+    van_trip_id: 11,
+    delivery_rep_id: 4,
+    total: 100,
+    paid_amount: 0,
+    payment_type: 'cash',
+    payment_channel: 'cash',
+    customer_id: null,
+    branch_id: null,
+    created_by: 1,
+    created_at: new Date(),
+    delivery_status: null,
+    order_type: 'pos',
     ...overrides,
   };
 }
@@ -143,15 +219,11 @@ async function testCancelSaleWiring(): Promise<void> {
   {
     const captured: any = { tripUpdates: [] };
     const service = buildCancelService({ sale: tripSaleRow(), tripStatus: 'open', captured });
-    await assert.rejects(
-      async () => service.cancelSale(7, 'إلغاء', '1234', adminAuth),
-      /unexpected query on table/,
-    );
+    await assert.rejects(async () => service.cancelSale(7, 'إلغاء', '1234', adminAuth), /unexpected query on table/);
     assert.equal(captured.tripUpdates.length, 1, 'the trip counters must be reversed');
     // The set values are Kysely sql fragments; their bound parameters
     // carry the deltas.
-    const paramsOf = (set: any, key: string): unknown =>
-      (set[key] as any)?.toOperationNode?.()?.parameters?.[0]?.value;
+    const paramsOf = (set: any, key: string): unknown => (set[key] as any)?.toOperationNode?.()?.parameters?.[0]?.value;
     const setArg = captured.tripUpdates[0];
     assert.equal(paramsOf(setArg, 'sales_amount'), -100, 'sales_amount reverses the full total');
     assert.equal(paramsOf(setArg, 'cash_collected'), -100, 'cash_collected reverses the cash leg');
@@ -163,10 +235,7 @@ async function testCancelSaleWiring(): Promise<void> {
   {
     const captured: any = { tripUpdates: [] };
     const service = buildCancelService({ sale: tripSaleRow(), tripStatus: 'settled', captured });
-    await assert.rejects(
-      async () => service.cancelSale(7, 'إلغاء', '1234', adminAuth),
-      /unexpected query on table/,
-    );
+    await assert.rejects(async () => service.cancelSale(7, 'إلغاء', '1234', adminAuth), /unexpected query on table/);
     assert.equal(captured.tripUpdates.length, 0, 'settled-trip counters are history and must not move');
   }
 
@@ -174,10 +243,7 @@ async function testCancelSaleWiring(): Promise<void> {
   {
     const captured: any = { tripUpdates: [] };
     const service = buildCancelService({ sale: tripSaleRow({ van_trip_id: null }), tripStatus: 'open', captured });
-    await assert.rejects(
-      async () => service.cancelSale(7, 'إلغاء', '1234', adminAuth),
-      /unexpected query on table/,
-    );
+    await assert.rejects(async () => service.cancelSale(7, 'إلغاء', '1234', adminAuth), /unexpected query on table/);
     assert.equal(captured.tripUpdates.length, 0);
   }
 
@@ -238,4 +304,7 @@ async function main() {
   console.log('Van trip counter adjustment tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

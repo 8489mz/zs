@@ -61,17 +61,29 @@ async function main(): Promise<void> {
   const service = new MaritimeFreightService(db, {} as never, {} as never, {} as never);
 
   async function milestoneCount(jobId: number): Promise<number> {
-    const rows = await (db as any).selectFrom('maritime_job_milestones').select('id').where('job_id', '=', jobId).execute();
+    const rows = await (db as any)
+      .selectFrom('maritime_job_milestones')
+      .select('id')
+      .where('job_id', '=', jobId)
+      .execute();
     return rows.length;
   }
 
   async function milestoneNotes(jobId: number): Promise<string | null> {
-    const row = await (db as any).selectFrom('maritime_job_milestones').select('notes').where('job_id', '=', jobId).executeTakeFirst();
+    const row = await (db as any)
+      .selectFrom('maritime_job_milestones')
+      .select('notes')
+      .where('job_id', '=', jobId)
+      .executeTakeFirst();
     return row ? String(row.notes) : null;
   }
 
   async function released(jobId: number): Promise<boolean> {
-    const row = await (db as any).selectFrom('maritime_jobs').select('delivery_order_released').where('id', '=', jobId).executeTakeFirstOrThrow();
+    const row = await (db as any)
+      .selectFrom('maritime_jobs')
+      .select('delivery_order_released')
+      .where('id', '=', jobId)
+      .executeTakeFirstOrThrow();
     return Boolean(row.delivery_order_released);
   }
 
@@ -97,10 +109,7 @@ async function main(): Promise<void> {
     `);
 
     // 1. Unpaid + invoiced: strict rejection, nothing written.
-    await assert.rejects(
-      service.releaseDeliveryOrder(auth, '1'),
-      /اكتمال السداد/,
-    );
+    await assert.rejects(service.releaseDeliveryOrder(auth, '1'), /اكتمال السداد/);
     assert.equal(await milestoneCount(1), 0);
     assert.equal(await released(1), false);
 
@@ -140,15 +149,15 @@ async function main(): Promise<void> {
     assert.equal(await released(6), true);
 
     // 7. Payment gate runs for air too, before sequence checks.
-    await assert.rejects(
-      service.releaseDeliveryOrder(auth, '7'),
-      /اكتمال السداد/,
-    );
+    await assert.rejects(service.releaseDeliveryOrder(auth, '7'), /اكتمال السداد/);
     assert.equal(await milestoneCount(7), 0);
 
     // 8. Source pin: the controller passes the optional body through.
-    const controller = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.controller.ts'), 'utf8');
-    const releaseStart = controller.indexOf("jobs/:id/release-do");
+    const controller = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.controller.ts'),
+      'utf8',
+    );
+    const releaseStart = controller.indexOf('jobs/:id/release-do');
     const releaseBody = controller.slice(releaseStart, controller.indexOf('@Get', releaseStart));
     assert.ok(releaseBody.includes('ReleaseDeliveryOrderDto'), 'controller types the body');
     assert.ok(releaseBody.includes('releaseDeliveryOrder(req.authContext!, id, body)'), 'controller forwards the body');

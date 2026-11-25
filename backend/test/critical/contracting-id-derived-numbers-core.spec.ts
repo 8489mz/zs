@@ -84,9 +84,15 @@ async function main(): Promise<void> {
     assert.notEqual(p1.code, p2.code);
     assert.ok(p1.code.endsWith(String(p1.id).padStart(4, '0')), 'suffix must be the row id');
     assert.ok(p2.code.endsWith(String(p2.id).padStart(4, '0')), 'suffix must be the row id');
-    const ccRows = await db.selectFrom('cost_centers' as never).selectAll().execute();
+    const ccRows = await db
+      .selectFrom('cost_centers' as never)
+      .selectAll()
+      .execute();
     assert.equal(ccRows.length, 2);
-    assert.ok((ccRows as any[]).some((row) => row.code === `CC-${p1.code}`), 'cost center must use the final code');
+    assert.ok(
+      (ccRows as any[]).some((row) => row.code === `CC-${p1.code}`),
+      'cost center must use the final code',
+    );
     await db.deleteFrom('contracting_projects').where('id', '=', p1.id).execute();
     const p3: any = await service.createProject(AUTH, { name: 'Tower C' } as any);
     assert.notEqual(p3.code, p1.code, 'a deleted project code must never be reused');
@@ -94,7 +100,11 @@ async function main(): Promise<void> {
     // 2. Supplied codes and numbers are kept verbatim.
     const pSupplied: any = await service.createProject(AUTH, { name: 'Supplied', code: 'PRJ-CUSTOM-1' } as any);
     assert.equal(pSupplied.code, 'PRJ-CUSTOM-1');
-    const scSupplied: any = await service.createSubcontract(AUTH, '1', { subcontractorId: 1, scopeOfWork: 'Steel', contractNumber: 'SC-CUSTOM-9' } as any);
+    const scSupplied: any = await service.createSubcontract(AUTH, '1', {
+      subcontractorId: 1,
+      scopeOfWork: 'Steel',
+      contractNumber: 'SC-CUSTOM-9',
+    } as any);
     assert.equal(scSupplied.contract_number, 'SC-CUSTOM-9');
 
     // 3. Change orders: distinct, id-derived.
@@ -111,7 +121,10 @@ async function main(): Promise<void> {
     assert.notEqual(sc1.contract_number, sc2.contract_number);
     assert.ok(sc1.contract_number.endsWith(String(sc1.id).padStart(4, '0')));
     await db.deleteFrom('contracting_subcontracts').where('id', '=', sc1.id).execute();
-    const sc3: any = await service.createSubcontract(AUTH, '1', { subcontractorId: 1, scopeOfWork: 'Finishing' } as any);
+    const sc3: any = await service.createSubcontract(AUTH, '1', {
+      subcontractorId: 1,
+      scopeOfWork: 'Finishing',
+    } as any);
     assert.notEqual(sc3.contract_number, sc1.contract_number, 'a deleted subcontract number must never be reused');
 
     // 5. RFIs: distinct, id-derived.
@@ -122,12 +135,23 @@ async function main(): Promise<void> {
     assert.ok(rfi1.rfi_number.endsWith(String(rfi1.id).padStart(4, '0')));
 
     // 6. Material requisitions: distinct, id-derived, supplied kept.
-    const mr1: any = await service.createMaterialRequisition(AUTH, '1', { itemName: 'Cement', quantity: 10, unitCost: 5 } as any);
-    const mr2: any = await service.createMaterialRequisition(AUTH, '1', { itemName: 'Sand', quantity: 4, unitCost: 2 } as any);
+    const mr1: any = await service.createMaterialRequisition(AUTH, '1', {
+      itemName: 'Cement',
+      quantity: 10,
+      unitCost: 5,
+    } as any);
+    const mr2: any = await service.createMaterialRequisition(AUTH, '1', {
+      itemName: 'Sand',
+      quantity: 4,
+      unitCost: 2,
+    } as any);
     assert.match(mr1.requisition_number, NUMBER_PATTERN);
     assert.notEqual(mr1.requisition_number, mr2.requisition_number);
     assert.ok(mr1.requisition_number.endsWith(String(mr1.id).padStart(4, '0')));
-    const mrSupplied: any = await service.createMaterialRequisition(AUTH, '1', { itemName: 'Steel', requisitionNumber: 'MR-CUSTOM-3' } as any);
+    const mrSupplied: any = await service.createMaterialRequisition(AUTH, '1', {
+      itemName: 'Steel',
+      requisitionNumber: 'MR-CUSTOM-3',
+    } as any);
     assert.equal(mrSupplied.requisition_number, 'MR-CUSTOM-3');
 
     // 7. Source pin: the five converted bodies contain no COUNT(*) numbering.

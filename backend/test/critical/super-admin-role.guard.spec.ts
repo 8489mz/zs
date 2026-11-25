@@ -41,55 +41,67 @@ function run(): void {
 
   // Test 2: Throws if role is admin even on platform tenant
   expectThrows(() => {
-    guard.canActivate(createMockContext({
-      userId: 1,
-      role: 'admin',
-      tenantId: 'default',
-    }));
+    guard.canActivate(
+      createMockContext({
+        userId: 1,
+        role: 'admin',
+        tenantId: 'default',
+      }),
+    );
   }, 'Only SaaS Platform Super Admin');
 
   // Test 3: Throws if role is cashier
   expectThrows(() => {
-    guard.canActivate(createMockContext({
-      userId: 2,
-      role: 'cashier',
-      tenantId: 'default',
-    }));
+    guard.canActivate(
+      createMockContext({
+        userId: 2,
+        role: 'cashier',
+        tenantId: 'default',
+      }),
+    );
   }, 'Only SaaS Platform Super Admin');
 
   // Test 4: CRITICAL - Throws if role is super_admin but tenant is NOT platform tenant!
   expectThrows(() => {
-    guard.canActivate(createMockContext({
-      userId: 3,
-      role: 'super_admin',
-      tenantId: 'tenant-customer-store',
-    }));
+    guard.canActivate(
+      createMockContext({
+        userId: 3,
+        role: 'super_admin',
+        tenantId: 'tenant-customer-store',
+      }),
+    );
   }, 'Only SaaS Platform Super Admin');
 
   // Test 5: CRITICAL - Throws if role is super_admin on any random tenant ID
   expectThrows(() => {
-    guard.canActivate(createMockContext({
-      userId: 4,
-      role: 'super_admin',
-      tenantId: 'random-tenant-1234',
-    }));
+    guard.canActivate(
+      createMockContext({
+        userId: 4,
+        role: 'super_admin',
+        tenantId: 'random-tenant-1234',
+      }),
+    );
   }, 'Only SaaS Platform Super Admin');
 
   // Test 6: Allows super_admin on the configured cloud platform tenant
-  const allowedDefault = guard.canActivate(createMockContext({
-    userId: 5,
-    role: 'super_admin',
-    tenantId: 'zs',
-  }));
+  const allowedDefault = guard.canActivate(
+    createMockContext({
+      userId: 5,
+      role: 'super_admin',
+      tenantId: 'zs',
+    }),
+  );
   assert.equal(allowedDefault, true, 'Should allow super_admin on the configured platform tenant');
 
   // Test 7: Legacy aliases remain valid only in a local/self-contained install.
   process.env.APP_MODE = 'SELF_CONTAINED';
-  const allowedDev = guard.canActivate(createMockContext({
-    userId: 6,
-    role: 'super_admin',
-    tenantId: 'dev-tenant',
-  }));
+  const allowedDev = guard.canActivate(
+    createMockContext({
+      userId: 6,
+      role: 'super_admin',
+      tenantId: 'dev-tenant',
+    }),
+  );
   assert.equal(allowedDev, true, 'Should allow super_admin on dev-tenant');
 
   if (previousMode === undefined) delete process.env.APP_MODE;

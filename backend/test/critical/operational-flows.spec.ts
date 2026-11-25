@@ -18,12 +18,8 @@ import { mapSaleRows, summarizeSales } from '../../src/modules/sales/helpers/sal
     note: ' credit sale ',
     branchId: 1,
     locationId: 2,
-    items: [
-      { productId: 1, qty: 1, price: 75, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail' },
-    ],
-    payments: [
-      { paymentChannel: 'cash', amount: 75 },
-    ],
+    items: [{ productId: 1, qty: 1, price: 75, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail' }],
+    payments: [{ paymentChannel: 'cash', amount: 75 }],
   } as any);
 
   assert.equal(normalizedCredit.customerId, 10);
@@ -33,20 +29,19 @@ import { mapSaleRows, summarizeSales } from '../../src/modules/sales/helpers/sal
   assert.equal(normalizedCredit.note, 'credit sale');
 
   assert.throws(
-    () => normalizeSalePayload({
-      paymentType: 'credit',
-      paymentChannel: 'credit',
-      discount: 0,
-      taxRate: 0,
-      storeCreditUsed: 0,
-      note: '',
-      branchId: 1,
-      locationId: 2,
-      items: [
-        { productId: 1, qty: 1, price: 75, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail' },
-      ],
-      payments: [],
-    } as any),
+    () =>
+      normalizeSalePayload({
+        paymentType: 'credit',
+        paymentChannel: 'credit',
+        discount: 0,
+        taxRate: 0,
+        storeCreditUsed: 0,
+        note: '',
+        branchId: 1,
+        locationId: 2,
+        items: [{ productId: 1, qty: 1, price: 75, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail' }],
+        payments: [],
+      } as any),
     (error: any) => error?.code === 'CREDIT_SALE_REQUIRES_CUSTOMER',
   );
 
@@ -59,9 +54,7 @@ import { mapSaleRows, summarizeSales } from '../../src/modules/sales/helpers/sal
     note: '  test sale  ',
     branchId: 1,
     locationId: 2,
-    items: [
-      { productId: 1, qty: 2, price: 100, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail' },
-    ],
+    items: [{ productId: 1, qty: 2, price: 100, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail' }],
     payments: [
       { paymentChannel: 'cash', amount: 50 },
       { paymentChannel: 'card', amount: 146.6 },
@@ -84,10 +77,11 @@ import { mapSaleRows, summarizeSales } from '../../src/modules/sales/helpers/sal
     { productId: 2, qty: 1, price: 50, unitMultiplier: 0 },
   ]) {
     assert.throws(
-      () => normalizeSalePayload({
-        paymentType: 'cash',
-        items: [{ productId: 1, qty: 1, price: 20 }, invalidItem],
-      } as any),
+      () =>
+        normalizeSalePayload({
+          paymentType: 'cash',
+          items: [{ productId: 1, qty: 1, price: 20 }, invalidItem],
+        } as any),
       (error: any) => error?.code === 'SALE_ITEM_INVALID',
     );
   }
@@ -141,8 +135,32 @@ import { mapSaleRows, summarizeSales } from '../../src/modules/sales/helpers/sal
       },
     ],
     [
-      { id: 11, sale_id: 1, product_id: 1, product_name: 'A', qty: 2, unit_price: 100, line_total: 200, unit_name: 'قطعة', unit_multiplier: 1, cost_price: 60, price_type: 'retail' },
-      { id: 12, sale_id: 2, product_id: 2, product_name: 'B', qty: 1, unit_price: 75, line_total: 75, unit_name: 'قطعة', unit_multiplier: 1, cost_price: 40, price_type: 'retail' },
+      {
+        id: 11,
+        sale_id: 1,
+        product_id: 1,
+        product_name: 'A',
+        qty: 2,
+        unit_price: 100,
+        line_total: 200,
+        unit_name: 'قطعة',
+        unit_multiplier: 1,
+        cost_price: 60,
+        price_type: 'retail',
+      },
+      {
+        id: 12,
+        sale_id: 2,
+        product_id: 2,
+        product_name: 'B',
+        qty: 1,
+        unit_price: 75,
+        line_total: 75,
+        unit_name: 'قطعة',
+        unit_multiplier: 1,
+        cost_price: 40,
+        price_type: 'retail',
+      },
     ],
     [
       { id: 21, sale_id: 1, payment_channel: 'cash', amount: 50 },
@@ -162,8 +180,28 @@ import { mapSaleRows, summarizeSales } from '../../src/modules/sales/helpers/sal
 
   const purchases = mapPurchaseRows(
     [
-      { id: 5, doc_no: 'P-5', supplier_id: 9, supplier_name: 'المورد الأول', payment_type: 'credit', subtotal: 300, total: 300, status: 'posted', created_at: new Date().toISOString() },
-      { id: 6, doc_no: 'P-6', supplier_id: 9, supplier_name: 'المورد الأول', payment_type: 'cash', subtotal: 50, total: 50, status: 'cancelled', created_at: new Date().toISOString() },
+      {
+        id: 5,
+        doc_no: 'P-5',
+        supplier_id: 9,
+        supplier_name: 'المورد الأول',
+        payment_type: 'credit',
+        subtotal: 300,
+        total: 300,
+        status: 'posted',
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 6,
+        doc_no: 'P-6',
+        supplier_id: 9,
+        supplier_name: 'المورد الأول',
+        payment_type: 'cash',
+        subtotal: 50,
+        total: 50,
+        status: 'cancelled',
+        created_at: new Date().toISOString(),
+      },
     ],
     [
       { id: 31, purchase_id: 5, product_id: 1, product_name: 'A', qty: 3, unit_cost: 100, line_total: 300 },
@@ -180,31 +218,31 @@ import { mapSaleRows, summarizeSales } from '../../src/modules/sales/helpers/sal
   const normalizedReturn = normalizeReturnItems({
     type: 'sale',
     invoiceId: 15,
-    items: [
-      { productId: 1, qty: 2, productName: 'A' },
-    ],
+    items: [{ productId: 1, qty: 2, productName: 'A' }],
     settlementMode: 'refund',
   } as any);
   assert.equal(normalizedReturn.length, 1);
   assert.equal(normalizedReturn[0]?.productId, 1);
 
   assert.throws(
-    () => normalizeReturnItems({
-      type: 'sale',
-      invoiceId: 15,
-      items: [{ productId: 0, qty: 1 }],
-      settlementMode: 'refund',
-    } as any),
+    () =>
+      normalizeReturnItems({
+        type: 'sale',
+        invoiceId: 15,
+        items: [{ productId: 0, qty: 1 }],
+        settlementMode: 'refund',
+      } as any),
     (error: any) => error?.code === 'RETURN_ITEM_INVALID',
   );
 
   assert.throws(
-    () => normalizeReturnItems({
-      type: 'purchase',
-      invoiceId: 22,
-      items: [{ productId: 1, qty: 1 }],
-      settlementMode: 'store_credit',
-    } as any),
+    () =>
+      normalizeReturnItems({
+        type: 'purchase',
+        invoiceId: 22,
+        items: [{ productId: 1, qty: 1 }],
+        settlementMode: 'store_credit',
+      } as any),
     (error: any) => error?.code === 'PURCHASE_RETURN_SETTLEMENT_INVALID',
   );
 

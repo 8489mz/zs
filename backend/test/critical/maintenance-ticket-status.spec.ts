@@ -37,8 +37,14 @@ import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
 import { UpsertMaintenanceTicketDto } from '../../src/modules/maintenance/dto/upsert-maintenance-ticket.dto';
 import { UpdateTicketStatusDto } from '../../src/modules/maintenance/dto/update-ticket-status.dto';
-import { up as statusCheckUp, down as statusCheckDown } from '../../src/database/migrations/2040000000299_maintenance_ticket_status_check';
-import { up as statusValidateUp, down as statusValidateDown } from '../../src/database/migrations/2040000000300_maintenance_ticket_status_check_validate';
+import {
+  up as statusCheckUp,
+  down as statusCheckDown,
+} from '../../src/database/migrations/2040000000299_maintenance_ticket_status_check';
+import {
+  up as statusValidateUp,
+  down as statusValidateDown,
+} from '../../src/database/migrations/2040000000300_maintenance_ticket_status_check_validate';
 
 const ALLOWED_STATUSES = [
   'received',
@@ -116,10 +122,7 @@ async function main(): Promise<void> {
     `);
 
     // 0299 up fails loudly while a legacy row is out of set.
-    await assert.rejects(
-      statusCheckUp(db as never),
-      /outside the allowed set/,
-    );
+    await assert.rejects(statusCheckUp(db as never), /outside the allowed set/);
 
     // Remove the bad row: 0299 up now succeeds (idempotent re-run ok).
     await pg.exec(`DELETE FROM maintenance_tickets WHERE status = 'bogus'`);

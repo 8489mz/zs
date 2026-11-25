@@ -114,7 +114,12 @@ async function main(): Promise<void> {
     }
 
     // 1. Amazon order-created payload: stored, tenant resolved, not a duplicate.
-    const amazonPayload = { eventType: 'ORDER_CREATED', AmazonOrderId: '701-1234567', SellerId: 'SELLER-1', total: 42.5 };
+    const amazonPayload = {
+      eventType: 'ORDER_CREATED',
+      AmazonOrderId: '701-1234567',
+      SellerId: 'SELLER-1',
+      total: 42.5,
+    };
     const first = await service.receiveMarketplaceWebhook('amazon', amazonPayload);
     assert.equal(first.received, true);
     assert.equal(first.duplicate, false);
@@ -217,13 +222,13 @@ async function main(): Promise<void> {
     assert.ok(keyWithId.startsWith('amazon:SELLER-1:701-1234567'));
     const noKeyIdentity = extractMarketplaceEventIdentity({ foo: 'bar' });
     assert.equal(noKeyIdentity.eventKey, '');
-    assert.equal(
-      marketplaceWebhookDedupKey('amazon', noKeyIdentity),
-      `amazon:unresolved:${noKeyIdentity.payloadHash}`,
-    );
+    assert.equal(marketplaceWebhookDedupKey('amazon', noKeyIdentity), `amazon:unresolved:${noKeyIdentity.payloadHash}`);
     assert.equal(
       matchMarketplaceTenant(
-        [{ tenantId: 't1', sellerIds: ['S1'] }, { tenantId: 't2', sellerIds: ['S2'] }],
+        [
+          { tenantId: 't1', sellerIds: ['S1'] },
+          { tenantId: 't2', sellerIds: ['S2'] },
+        ],
         ['S2'],
       ),
       't2',
@@ -231,7 +236,10 @@ async function main(): Promise<void> {
     assert.equal(matchMarketplaceTenant([{ tenantId: 't1', sellerIds: ['S1'] }], ['S9']), null);
     assert.equal(
       matchMarketplaceTenant(
-        [{ tenantId: 't1', sellerIds: ['S1'] }, { tenantId: 't2', sellerIds: ['S1'] }],
+        [
+          { tenantId: 't1', sellerIds: ['S1'] },
+          { tenantId: 't2', sellerIds: ['S1'] },
+        ],
         ['S1'],
       ),
       null,

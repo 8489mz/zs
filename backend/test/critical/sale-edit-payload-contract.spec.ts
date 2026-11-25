@@ -63,9 +63,7 @@ function buildCleanPayload(): Record<string, unknown> {
     pricesIncludeTax: false,
     branchId: null,
     locationId: null,
-    items: [
-      { productId: 7, qty: 1, unitName: 'قطعة', unitMultiplier: 1, price: 60, priceType: 'retail' },
-    ],
+    items: [{ productId: 7, qty: 1, unitName: 'قطعة', unitMultiplier: 1, price: 60, priceType: 'retail' }],
   };
 }
 
@@ -164,13 +162,10 @@ async function main(): Promise<void> {
 
   // (d) Source pin: the DTO declares none of the four properties.
   {
-    const dtoSource = readFileSync(
-      resolve(__dirname, '../../src/modules/sales/dto/upsert-sale.dto.ts'),
-      'utf8',
-    );
+    const dtoSource = readFileSync(resolve(__dirname, '../../src/modules/sales/dto/upsert-sale.dto.ts'), 'utf8');
     for (const field of ['paidAmount', 'subTotal', 'taxAmount', 'total']) {
       assert.equal(
-        new RegExp(`^\\s*${field}\\s*[?:!]`,'m').test(dtoSource),
+        new RegExp(`^\\s*${field}\\s*[?:!]`, 'm').test(dtoSource),
         false,
         `UpsertSaleDto declares no ${field} property to whitelist`,
       );

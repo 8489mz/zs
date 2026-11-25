@@ -78,23 +78,86 @@ async function main(): Promise<void> {
   {
     const { pg, db } = await makeDb();
     try {
-      await db.insertInto('delivery_representatives' as never).values({
-        id: 7, tenant_id: 't1', account_id: 'a1', name: 'كابتن تست', phone: '01000000007',
-        pin_hash: 'x', type: 'van', is_active: true, van_location_id: null, vehicle_plate: null,
-        require_gps_on_visit: true, can_give_discount: false, commission_rate: 1,
-      } as never).execute();
-      await db.insertInto('sales' as never).values({
-        id: 1, tenant_id: 't1', doc_no: 'S-1', customer_id: 1054, subtotal: 570,
-        discount: 0, tax_amount: 0, total: 570, paid_amount: 0, store_credit_used: 0,
-        exchange_return_id: null, branch_id: null, location_id: null, created_by: 1, created_at: new Date(),
-        delivery_fee: 0, delivery_fee_mode: null, service_charge: 0, tip_amount: 0, prices_include_tax: false,
-        sale_origin: 'van', payment_type: 'credit', collection_status: 'paid', status: 'posted',
-        delivery_rep_id: 7, van_trip_id: null,
-      } as never).execute();
-      await db.insertInto('customer_ledger' as never).values([
-        { customer_id: 1054, entry_type: 'sale', amount: 570, balance_after: 570, note: 'sale by rep 7', reference_type: 'sale', reference_id: 1, van_trip_id: null, tenant_id: 't1', account_id: 'a1', created_by: 1 },
-        { customer_id: 1054, entry_type: 'opening_balance', amount: 75, balance_after: 645, note: 'legacy opening balance', reference_type: 'opening_balance', reference_id: null, van_trip_id: null, tenant_id: 't1', account_id: 'a1', created_by: 1 },
-      ] as never).execute();
+      await db
+        .insertInto('delivery_representatives' as never)
+        .values({
+          id: 7,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'كابتن تست',
+          phone: '01000000007',
+          pin_hash: 'x',
+          type: 'van',
+          is_active: true,
+          van_location_id: null,
+          vehicle_plate: null,
+          require_gps_on_visit: true,
+          can_give_discount: false,
+          commission_rate: 1,
+        } as never)
+        .execute();
+      await db
+        .insertInto('sales' as never)
+        .values({
+          id: 1,
+          tenant_id: 't1',
+          doc_no: 'S-1',
+          customer_id: 1054,
+          subtotal: 570,
+          discount: 0,
+          tax_amount: 0,
+          total: 570,
+          paid_amount: 0,
+          store_credit_used: 0,
+          exchange_return_id: null,
+          branch_id: null,
+          location_id: null,
+          created_by: 1,
+          created_at: new Date(),
+          delivery_fee: 0,
+          delivery_fee_mode: null,
+          service_charge: 0,
+          tip_amount: 0,
+          prices_include_tax: false,
+          sale_origin: 'van',
+          payment_type: 'credit',
+          collection_status: 'paid',
+          status: 'posted',
+          delivery_rep_id: 7,
+          van_trip_id: null,
+        } as never)
+        .execute();
+      await db
+        .insertInto('customer_ledger' as never)
+        .values([
+          {
+            customer_id: 1054,
+            entry_type: 'sale',
+            amount: 570,
+            balance_after: 570,
+            note: 'sale by rep 7',
+            reference_type: 'sale',
+            reference_id: 1,
+            van_trip_id: null,
+            tenant_id: 't1',
+            account_id: 'a1',
+            created_by: 1,
+          },
+          {
+            customer_id: 1054,
+            entry_type: 'opening_balance',
+            amount: 75,
+            balance_after: 645,
+            note: 'legacy opening balance',
+            reference_type: 'opening_balance',
+            reference_id: null,
+            van_trip_id: null,
+            tenant_id: 't1',
+            account_id: 'a1',
+            created_by: 1,
+          },
+        ] as never)
+        .execute();
 
       const map = await getCustomerRepBalancesMap(db as any, 't1', {
         customerIds: [1054],
@@ -113,7 +176,9 @@ async function main(): Promise<void> {
       // field). The typed contract is proven by backend tsc on the
       // real call sites in partners.service.ts.
       const row = (mapCustomerRow as (...args: any[]) => any)(
-        customerRow(1054, 645), breakdown!.repBalances, breakdown!.unassignedBalance,
+        customerRow(1054, 645),
+        breakdown!.repBalances,
+        breakdown!.unassignedBalance,
       ) as any;
       assert.equal(row.unassignedBalance, 75, 'the customers-list row must carry unassignedBalance');
       assert.equal(Number(row.balance), 645);
@@ -127,22 +192,73 @@ async function main(): Promise<void> {
   {
     const { pg, db } = await makeDb();
     try {
-      await db.insertInto('delivery_representatives' as never).values({
-        id: 7, tenant_id: 't1', account_id: 'a1', name: 'كابتن تست', phone: '01000000007',
-        pin_hash: 'x', type: 'van', is_active: true, van_location_id: null, vehicle_plate: null,
-        require_gps_on_visit: true, can_give_discount: false, commission_rate: 1,
-      } as never).execute();
-      await db.insertInto('sales' as never).values({
-        id: 1, tenant_id: 't1', doc_no: 'S-1', customer_id: 1055, subtotal: 570,
-        discount: 0, tax_amount: 0, total: 570, paid_amount: 0, store_credit_used: 0,
-        exchange_return_id: null, branch_id: null, location_id: null, created_by: 1, created_at: new Date(),
-        delivery_fee: 0, delivery_fee_mode: null, service_charge: 0, tip_amount: 0, prices_include_tax: false,
-        sale_origin: 'van', payment_type: 'credit', collection_status: 'paid', status: 'posted',
-        delivery_rep_id: 7, van_trip_id: null,
-      } as never).execute();
-      await db.insertInto('customer_ledger' as never).values([
-        { customer_id: 1055, entry_type: 'sale', amount: 570, balance_after: 570, note: 'sale by rep 7', reference_type: 'sale', reference_id: 1, van_trip_id: null, tenant_id: 't1', account_id: 'a1', created_by: 1 },
-      ] as never).execute();
+      await db
+        .insertInto('delivery_representatives' as never)
+        .values({
+          id: 7,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'كابتن تست',
+          phone: '01000000007',
+          pin_hash: 'x',
+          type: 'van',
+          is_active: true,
+          van_location_id: null,
+          vehicle_plate: null,
+          require_gps_on_visit: true,
+          can_give_discount: false,
+          commission_rate: 1,
+        } as never)
+        .execute();
+      await db
+        .insertInto('sales' as never)
+        .values({
+          id: 1,
+          tenant_id: 't1',
+          doc_no: 'S-1',
+          customer_id: 1055,
+          subtotal: 570,
+          discount: 0,
+          tax_amount: 0,
+          total: 570,
+          paid_amount: 0,
+          store_credit_used: 0,
+          exchange_return_id: null,
+          branch_id: null,
+          location_id: null,
+          created_by: 1,
+          created_at: new Date(),
+          delivery_fee: 0,
+          delivery_fee_mode: null,
+          service_charge: 0,
+          tip_amount: 0,
+          prices_include_tax: false,
+          sale_origin: 'van',
+          payment_type: 'credit',
+          collection_status: 'paid',
+          status: 'posted',
+          delivery_rep_id: 7,
+          van_trip_id: null,
+        } as never)
+        .execute();
+      await db
+        .insertInto('customer_ledger' as never)
+        .values([
+          {
+            customer_id: 1055,
+            entry_type: 'sale',
+            amount: 570,
+            balance_after: 570,
+            note: 'sale by rep 7',
+            reference_type: 'sale',
+            reference_id: 1,
+            van_trip_id: null,
+            tenant_id: 't1',
+            account_id: 'a1',
+            created_by: 1,
+          },
+        ] as never)
+        .execute();
 
       const map = await getCustomerRepBalancesMap(db as any, 't1', {
         customerIds: [1055],
@@ -153,7 +269,9 @@ async function main(): Promise<void> {
       assert.ok(breakdown, 'breakdown must exist for 1055');
       assert.equal(breakdown!.unassignedBalance, 0, 'no legacy balance: unassigned is 0');
       const row = (mapCustomerRow as (...args: any[]) => any)(
-        customerRow(1055, 570), breakdown!.repBalances, breakdown!.unassignedBalance,
+        customerRow(1055, 570),
+        breakdown!.repBalances,
+        breakdown!.unassignedBalance,
       ) as any;
       assert.equal(row.unassignedBalance, 0, 'the row carries 0, not undefined');
     } finally {
@@ -164,14 +282,30 @@ async function main(): Promise<void> {
   // Case 3: source + invariant pins.
   {
     const here = __dirname;
-    const helperSource = readFileSync(resolve(here, '../../src/modules/partners/helpers/partners-listing.helper.ts'), 'utf8');
+    const helperSource = readFileSync(
+      resolve(here, '../../src/modules/partners/helpers/partners-listing.helper.ts'),
+      'utf8',
+    );
     assert.ok(helperSource.includes('unassignedBalance'), 'mapCustomerRow must carry unassignedBalance');
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/partners/partners/customer-listing.slice.ts'), 'utf8');
-    assert.ok(serviceSource.includes('unassignedBalance'), 'customer-listing slice must pass unassignedBalance into mapCustomerRow');
-    const editorSource = readFileSync(resolve(here, '../../../frontend/src/features/customers/components/CustomerEditorCard.tsx'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/partners/partners/customer-listing.slice.ts'),
+      'utf8',
+    );
+    assert.ok(
+      serviceSource.includes('unassignedBalance'),
+      'customer-listing slice must pass unassignedBalance into mapCustomerRow',
+    );
+    const editorSource = readFileSync(
+      resolve(here, '../../../frontend/src/features/customers/components/CustomerEditorCard.tsx'),
+      'utf8',
+    );
     assert.ok(editorSource.includes('unassignedBalance'), 'the editor card must render the unassigned chip');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-CUSTOMER-REP-BALANCES-UNASSIGNED').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-CUSTOMER-REP-BALANCES-UNASSIGNED').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
   }
 
   console.log('Customer rep-balances unassigned tests passed');

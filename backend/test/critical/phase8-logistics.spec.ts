@@ -41,7 +41,12 @@ export function calculateVanSale(params: {
 
 // --- 2. Pure Delivery Rep Settlement Engine ---
 export function calculateSettlementAmounts(params: {
-  orders: Array<{ id: number; total: number; deliveryFee: number; deliveryFeeMode: 'store_fleet' | 'freelance_courier' }>;
+  orders: Array<{
+    id: number;
+    total: number;
+    deliveryFee: number;
+    deliveryFeeMode: 'store_fleet' | 'freelance_courier';
+  }>;
 }) {
   let totalCashIn = 0;
   let totalDeductions = 0;
@@ -90,7 +95,7 @@ async function runPhase8CriticalTests() {
   // Test 1: Universal Document Numbering Standard
   {
     const today = new Date('2026-09-19T12:00:00Z');
-    
+
     // Check all Phase 8 prefixes
     const vanDoc = formatDailyDocumentNumber('VAN', 1, today);
     const colDoc = formatDailyDocumentNumber('COL', 42, today);
@@ -139,8 +144,13 @@ async function runPhase8CriticalTests() {
 
   // Test 3: Delivery Rep Settlement Fee Calculation
   {
-    const orders: Array<{ id: number; total: number; deliveryFee: number; deliveryFeeMode: 'store_fleet' | 'freelance_courier' }> = [
-      { id: 1, total: 500, deliveryFee: 30, deliveryFeeMode: 'store_fleet' },      // Store fleet: driver hands over full 500
+    const orders: Array<{
+      id: number;
+      total: number;
+      deliveryFee: number;
+      deliveryFeeMode: 'store_fleet' | 'freelance_courier';
+    }> = [
+      { id: 1, total: 500, deliveryFee: 30, deliveryFeeMode: 'store_fleet' }, // Store fleet: driver hands over full 500
       { id: 2, total: 300, deliveryFee: 25, deliveryFeeMode: 'freelance_courier' }, // Freelance: driver keeps 25, hands over 275
       { id: 3, total: 200, deliveryFee: 20, deliveryFeeMode: 'freelance_courier' }, // Freelance: driver keeps 20, hands over 180
     ];
@@ -148,35 +158,39 @@ async function runPhase8CriticalTests() {
     const result = calculateSettlementAmounts({ orders });
 
     assert.equal(result.totalCashIn, 500 + 275 + 180); // 955
-    assert.equal(result.totalDeductions, 45);           // 25 + 20
-    assert.equal(result.grossTotal, 1000);             // 500 + 300 + 200
-    console.log('✓ Test 3 Passed: Delivery Rep settlement correctly handles store_fleet vs freelance_courier deductions');
+    assert.equal(result.totalDeductions, 45); // 25 + 20
+    assert.equal(result.grossTotal, 1000); // 500 + 300 + 200
+    console.log(
+      '✓ Test 3 Passed: Delivery Rep settlement correctly handles store_fleet vs freelance_courier deductions',
+    );
   }
 
   // Test 4: Bosta COD determination logic
   {
     // Paid order -> COD must be 0
     const codPaid = determineBostaCod({
-      totalAmount: 1250.50,
+      totalAmount: 1250.5,
       paymentStatus: 'paid',
     });
     assert.equal(codPaid, 0);
 
     // COD order -> COD must match totalAmount
     const codUnpaid = determineBostaCod({
-      totalAmount: 1250.50,
+      totalAmount: 1250.5,
       paymentStatus: 'cod',
     });
-    assert.equal(codUnpaid, 1250.50);
+    assert.equal(codUnpaid, 1250.5);
 
     // Manual override takes precedence
     const codOverride = determineBostaCod({
-      totalAmount: 1250.50,
+      totalAmount: 1250.5,
       paymentStatus: 'paid',
       manualCodOverride: 50, // e.g. extra delivery fee collected at door
     });
     assert.equal(codOverride, 50);
-    console.log('✓ Test 4 Passed: Bosta COD correctly zeroes out online paid orders and preserves COD for unpaid orders');
+    console.log(
+      '✓ Test 4 Passed: Bosta COD correctly zeroes out online paid orders and preserves COD for unpaid orders',
+    );
   }
 
   // Test 5: Customer Ledger Balance Continuity on Field Collection

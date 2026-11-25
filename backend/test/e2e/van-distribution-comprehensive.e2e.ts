@@ -57,7 +57,9 @@ async function cleanup(db: Kysely<Database>): Promise<void> {
   ];
   for (const table of tables) {
     if (table === 'journal_entry_lines') {
-      await sql`DELETE FROM journal_entry_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE tenant_id = ${TENANT})`.execute(db);
+      await sql`DELETE FROM journal_entry_lines WHERE journal_entry_id IN (SELECT id FROM journal_entries WHERE tenant_id = ${TENANT})`.execute(
+        db,
+      );
       continue;
     }
     await dbAny.deleteFrom(table).where('tenant_id', '=', TENANT).execute();
@@ -92,7 +94,14 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
 
     const warehouse = await dbAny
       .insertInto('stock_locations')
-      .values({ name: 'Central Distribution Warehouse', branch_id: branch.id, location_type: 'internal_warehouse', is_active: true, tenant_id: TENANT, account_id: ACCOUNT })
+      .values({
+        name: 'Central Distribution Warehouse',
+        branch_id: branch.id,
+        location_type: 'internal_warehouse',
+        is_active: true,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+      })
       .returning(['id'])
       .executeTakeFirstOrThrow();
 
@@ -155,8 +164,22 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
     await dbAny
       .insertInto('product_location_stock')
       .values([
-        { product_id: productJuice.id, location_id: warehouse.id, branch_id: branch.id, qty: 120, tenant_id: TENANT, account_id: ACCOUNT },
-        { product_id: productRice.id, location_id: warehouse.id, branch_id: branch.id, qty: 50, tenant_id: TENANT, account_id: ACCOUNT },
+        {
+          product_id: productJuice.id,
+          location_id: warehouse.id,
+          branch_id: branch.id,
+          qty: 120,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+        },
+        {
+          product_id: productRice.id,
+          location_id: warehouse.id,
+          branch_id: branch.id,
+          qty: 50,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+        },
       ])
       .execute();
 
@@ -193,12 +216,7 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
     // Services
     const foundation = new AccountingTenantFoundationService();
     const accountingPosting = new AccountingPostingService(foundation);
-    const vanSales = new VanSalesService(
-      db,
-      {} as AuditService,
-      {} as DeliveryRepsService,
-      accountingPosting,
-    );
+    const vanSales = new VanSalesService(db, {} as AuditService, {} as DeliveryRepsService, accountingPosting);
 
     const repId = Number(rep.id);
 
@@ -208,7 +226,7 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
       sourceWarehouseId: Number(warehouse.id),
       items: [
         { productId: Number(productJuice.id), qty: 60 }, // 60 pieces = 5 cartons
-        { productId: Number(productRice.id), qty: 20 },  // 20 bags
+        { productId: Number(productRice.id), qty: 20 }, // 20 bags
       ],
     });
     assert.equal(loadResult.ok, true);
@@ -267,7 +285,11 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
     assert.equal(Number(vanJuiceStock.qty), 35, 'Van stock: 60 - (2*12 + 1) = 35 pieces remaining');
 
     // Verify sale_items records contain multi-UOM and bonus tags
-    const sale1Items = (await dbAny.selectFrom('sale_items').selectAll().where('sale_id', '=', sale1.saleId).execute()) as any[];
+    const sale1Items = (await dbAny
+      .selectFrom('sale_items')
+      .selectAll()
+      .where('sale_id', '=', sale1.saleId)
+      .execute()) as any[];
     assert.equal(sale1Items.length, 2);
     const bonusItem = sale1Items.find((it) => it.is_bonus === true);
     assert.ok(bonusItem, 'Bonus line item exists');
@@ -342,7 +364,11 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
     assert.equal(sale2Row.credit_override_reason, 'موافقة استثنائية لعميل استراتيجي معتمد من الإدارة');
 
     // Customer A balance: 500 + 400 = 900
-    const custAAfterSale = await db.selectFrom('customers').select(['balance']).where('id', '=', customerA.id).executeTakeFirstOrThrow();
+    const custAAfterSale = await db
+      .selectFrom('customers')
+      .select(['balance'])
+      .where('id', '=', customerA.id)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(custAAfterSale.balance), 900);
 
     process.stdout.write('     ✓ تم اعتماد البيع الآجل بنجاح بواسطة PIN المشرف وسجلت بيانات التدقيق\n');
@@ -356,7 +382,11 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
     });
     assert.equal(collection.newBalance, 600, '900 minus 300 collected = 600 EGP balance');
 
-    const tripAfterCol = await dbAny.selectFrom('van_sales_trips').select(['cash_collected']).where('id', '=', loadResult.tripId).executeTakeFirstOrThrow();
+    const tripAfterCol = await dbAny
+      .selectFrom('van_sales_trips')
+      .select(['cash_collected'])
+      .where('id', '=', loadResult.tripId)
+      .executeTakeFirstOrThrow();
     // Cash collected = 480 (cash sale) + 300 (collection) = 780 EGP
     assert.equal(Number(tripAfterCol.cash_collected), 780);
     process.stdout.write('     ✓ تم تحصيل 300 ج.م وأصبح إجمالي الكاش في عهدة المندوب 780 ج.م\n');
@@ -453,7 +483,12 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
     assert.equal(Number(warehouseRiceAfter.qty), 40);
 
     // Van stock completely empty (0)
-    const vanJuiceFinal = await dbAny.selectFrom('product_location_stock').select(['qty']).where('product_id', '=', productJuice.id).where('location_id', '=', vanLocation.id).executeTakeFirstOrThrow();
+    const vanJuiceFinal = await dbAny
+      .selectFrom('product_location_stock')
+      .select(['qty'])
+      .where('product_id', '=', productJuice.id)
+      .where('location_id', '=', vanLocation.id)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(vanJuiceFinal.qty), 0);
 
     // Verify Settlement Journal Entry:
@@ -467,7 +502,11 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
       .where('source_id', '=', loadResult.tripId)
       .executeTakeFirstOrThrow();
 
-    const setLines = await db.selectFrom('journal_entry_lines').selectAll().where('journal_entry_id', '=', setJournal.id).execute();
+    const setLines = await db
+      .selectFrom('journal_entry_lines')
+      .selectAll()
+      .where('journal_entry_id', '=', setJournal.id)
+      .execute();
     const setDebit = setLines.reduce((s, l) => s + Number(l.debit), 0);
     const setCredit = setLines.reduce((s, l) => s + Number(l.credit), 0);
     assert.ok(Math.abs(setDebit - setCredit) < 0.01, 'Settlement journal MUST balance');
@@ -494,7 +533,10 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
 
     const grandDebit = allLines.reduce((s, l) => s + Number(l.debit), 0);
     const grandCredit = allLines.reduce((s, l) => s + Number(l.credit), 0);
-    assert.ok(Math.abs(grandDebit - grandCredit) < 0.01, `All journal entries across tenant must balance (debit=${grandDebit}, credit=${grandCredit})`);
+    assert.ok(
+      Math.abs(grandDebit - grandCredit) < 0.01,
+      `All journal entries across tenant must balance (debit=${grandDebit}, credit=${grandCredit})`,
+    );
 
     process.stdout.write(`     ✓ قيد التسوية المحاسبي متزن بالمليم: مدين ${setDebit} ج.م = دائن ${setCredit} ج.م\n`);
     process.stdout.write(`     ✓ كافة قيود اليومية للشركة متزنة بالكامل: مدين ${grandDebit} = دائن ${grandCredit}\n`);

@@ -106,9 +106,7 @@ async function runTests() {
   assert.equal(plan1.installments.length, 6, 'Should have 6 installments');
 
   // Verify sum of installments equals exactly totalWithInterest (accounting precision)
-  const sumInstallments = Number(
-    plan1.installments.reduce((acc, cur) => acc + cur.amount, 0).toFixed(2),
-  );
+  const sumInstallments = Number(plan1.installments.reduce((acc, cur) => acc + cur.amount, 0).toFixed(2));
   assert.equal(sumInstallments, 8800, `Sum of installments (${sumInstallments}) must match totalWithInterest (8800)`);
   console.log('✓ Test 1 passed: Installment schedule & penny rounding are exact.');
 

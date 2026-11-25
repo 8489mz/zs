@@ -30,7 +30,6 @@ import cors from 'cors';
 import { buildCorsOriginCallback } from '../../src/common/utils/cors-options.util';
 import { MARKETING_SITE_ORIGIN } from '../../src/common/utils/public-cors-origin.util';
 
-
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 
 /**
@@ -38,12 +37,7 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
  * plus the cloud marketing origin: localhost / 127.0.0.1 / file:// are the
  * in-app updates callers, https://zsystemai.com is the marketing site.
  */
-const CONFIGURED_ORIGINS = [
-  'http://localhost:3001',
-  'http://127.0.0.1:3001',
-  'file://',
-  'https://zsystemai.com',
-];
+const CONFIGURED_ORIGINS = ['http://localhost:3001', 'http://127.0.0.1:3001', 'file://', 'https://zsystemai.com'];
 
 const EVIL_ORIGIN = 'https://evil.example';
 
@@ -74,11 +68,7 @@ function createMockResponse(): {
  * Access-Control-Allow-Origin header — undefined means no header was sent,
  * so the browser blocks the cross-origin read.
  */
-function allowOriginHeader(
-  method: string,
-  url: string,
-  origin: string | undefined,
-): string | undefined {
+function allowOriginHeader(method: string, url: string, origin: string | undefined): string | undefined {
   const middleware = cors(buildCorsOriginCallback(CONFIGURED_ORIGINS));
   const req: any = {
     method,
@@ -95,11 +85,7 @@ function allowOriginHeader(
 }
 
 /** Invokes the callback directly and returns the resolved `origin` option. */
-function resolveOriginOption(
-  method: string,
-  url: string,
-  origin: string | undefined,
-): unknown {
+function resolveOriginOption(method: string, url: string, origin: string | undefined): unknown {
   let resolved: unknown;
   buildCorsOriginCallback(CONFIGURED_ORIGINS)(
     { method, url, headers: origin === undefined ? {} : { origin } },
@@ -147,14 +133,8 @@ function run(): void {
     'evil origin must get no Access-Control-Allow-Origin on GET /api/updates/version',
   );
   // Lookalike / suffix tricks must not escape the allowlist either.
-  assert.equal(
-    allowOriginHeader('GET', '/api/updates/history', 'https://evil.example.evil.example'),
-    undefined,
-  );
-  assert.equal(
-    allowOriginHeader('GET', '/api/updates/history', `${EVIL_ORIGIN}/`),
-    undefined,
-  );
+  assert.equal(allowOriginHeader('GET', '/api/updates/history', 'https://evil.example.evil.example'), undefined);
+  assert.equal(allowOriginHeader('GET', '/api/updates/history', `${EVIL_ORIGIN}/`), undefined);
 
   // 2. The callback itself never resolves to the evil origin (not a string,
   //    not an array member, not reflect-all `true`).
@@ -176,80 +156,41 @@ function run(): void {
     'file://',
     'Electron renderer (file://) must still read the updates history',
   );
-  assert.equal(
-    allowOriginHeader('GET', '/api/updates/history', 'http://localhost:3001'),
-    'http://localhost:3001',
-  );
+  assert.equal(allowOriginHeader('GET', '/api/updates/history', 'http://localhost:3001'), 'http://localhost:3001');
   assert.equal(
     allowOriginHeader('GET', '/api/updates/check?version=1.0.0', 'http://127.0.0.1:3001'),
     'http://127.0.0.1:3001',
   );
-  assert.equal(
-    allowOriginHeader('GET', '/api/updates/history', MARKETING_SITE_ORIGIN),
-    MARKETING_SITE_ORIGIN,
-  );
+  assert.equal(allowOriginHeader('GET', '/api/updates/history', MARKETING_SITE_ORIGIN), MARKETING_SITE_ORIGIN);
 
   // 4. No Origin header (server-to-server, curl, Electron main process)
   //    needs no CORS header — and must not get the old allow-all `true`.
-  assert.equal(
-    allowOriginHeader('GET', '/api/updates/history', undefined),
-    undefined,
-  );
+  assert.equal(allowOriginHeader('GET', '/api/updates/history', undefined), undefined);
 
   // 5. POST /api/updates/* was never in the open branch; it stays on the
   //    allowlist (regression pin).
-  assert.equal(
-    allowOriginHeader('POST', '/api/updates/apply', EVIL_ORIGIN),
-    undefined,
-  );
-  assert.equal(
-    allowOriginHeader('POST', '/api/updates/apply', 'http://localhost:3001'),
-    'http://localhost:3001',
-  );
+  assert.equal(allowOriginHeader('POST', '/api/updates/apply', EVIL_ORIGIN), undefined);
+  assert.equal(allowOriginHeader('POST', '/api/updates/apply', 'http://localhost:3001'), 'http://localhost:3001');
 
   // 6. LAN-server Desktop: the default branch's 'null' allowance now also
   //    covers updates paths (the branch deletion must not drop it).
-  withEnv(
-    { APP_MODE: 'SELF_CONTAINED', ELECTRON_RUNTIME_MODE: 'lan_server' },
-    () => {
-      assert.equal(
-        allowOriginHeader('GET', '/api/updates/history', 'null'),
-        'null',
-      );
-    },
-  );
+  withEnv({ APP_MODE: 'SELF_CONTAINED', ELECTRON_RUNTIME_MODE: 'lan_server' }, () => {
+    assert.equal(allowOriginHeader('GET', '/api/updates/history', 'null'), 'null');
+  });
   // ... and outside lan_server mode 'null' is denied again.
-  withEnv(
-    { APP_MODE: 'SELF_CONTAINED', ELECTRON_RUNTIME_MODE: undefined },
-    () => {
-      assert.equal(
-        allowOriginHeader('GET', '/api/updates/history', 'null'),
-        undefined,
-      );
-    },
-  );
+  withEnv({ APP_MODE: 'SELF_CONTAINED', ELECTRON_RUNTIME_MODE: undefined }, () => {
+    assert.equal(allowOriginHeader('GET', '/api/updates/history', 'null'), undefined);
+  });
 
   // 7. The public branch is untouched by the extraction: evil denied,
   //    marketing allowed even when CORS_ORIGINS omits it.
-  assert.equal(
-    allowOriginHeader('GET', '/api/public/pricing-catalog', EVIL_ORIGIN),
-    undefined,
-  );
-  assert.equal(
-    allowOriginHeader('GET', '/api/public/pricing-catalog', MARKETING_SITE_ORIGIN),
-    MARKETING_SITE_ORIGIN,
-  );
+  assert.equal(allowOriginHeader('GET', '/api/public/pricing-catalog', EVIL_ORIGIN), undefined);
+  assert.equal(allowOriginHeader('GET', '/api/public/pricing-catalog', MARKETING_SITE_ORIGIN), MARKETING_SITE_ORIGIN);
 
   // 8. Static: no reflect-any and no updates special-case branch remain.
   const mainSrc = fs.readFileSync(path.join(REPO_ROOT, 'backend', 'src', 'main.ts'), 'utf8');
-  assert.ok(
-    mainSrc.includes('buildCorsOriginCallback'),
-    'main.ts must register the extracted CORS callback',
-  );
-  assert.ok(
-    !mainSrc.includes('originHeader || true'),
-    'main.ts must not contain the old reflect-any branch',
-  );
+  assert.ok(mainSrc.includes('buildCorsOriginCallback'), 'main.ts must register the extracted CORS callback');
+  assert.ok(!mainSrc.includes('originHeader || true'), 'main.ts must not contain the old reflect-any branch');
   const utilSrc = fs.readFileSync(
     path.join(REPO_ROOT, 'backend', 'src', 'common', 'utils', 'cors-options.util.ts'),
     'utf8',
@@ -264,17 +205,10 @@ function run(): void {
   );
 
   // 9. Wiring: this spec is in test:critical and its INV entry exists once.
-  const specs = JSON.parse(
-    fs.readFileSync(path.join(REPO_ROOT, 'backend', 'scripts', 'critical-specs.json'), 'utf8'),
-  ).specs as string[];
-  assert.ok(
-    specs.includes('test/critical/updates-cors.spec.ts'),
-    'this spec must be wired into test:critical',
-  );
-  const invariants = fs.readFileSync(
-    path.join(REPO_ROOT, 'ARCHITECTURE_INVARIANTS.md'),
-    'utf8',
-  );
+  const specs = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'backend', 'scripts', 'critical-specs.json'), 'utf8'))
+    .specs as string[];
+  assert.ok(specs.includes('test/critical/updates-cors.spec.ts'), 'this spec must be wired into test:critical');
+  const invariants = fs.readFileSync(path.join(REPO_ROOT, 'ARCHITECTURE_INVARIANTS.md'), 'utf8');
   assert.equal(
     invariants.split('INV-UPDATES-CORS-ALLOWLIST').length - 1,
     1,

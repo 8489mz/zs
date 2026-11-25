@@ -104,25 +104,60 @@ function makeService(db: Kysely<Database>): any {
 
 async function seedShipment(db: Kysely<Database>, projectStatus: string): Promise<void> {
   await (db as any).updateTable('import_projects').set({ status: projectStatus }).where('id', '=', 'proj-1').execute();
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', container_number: 'C1', supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: 'proj-1',
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'sh-1-item', tenant_id: 't1', shipment_id: 'sh-1', product_id: 1,
-    quantity: 10, factory_unit_price_usd: 50, shortage_handling_method: 'capitalize',
-  } as never).execute();
-  await db.insertInto('import_container_preorders' as never).values({
-    tenant_id: 't1', preorder_no: 'PO-1', shipment_id: 'sh-1', customer_id: 1,
-    product_id: 1, reserved_quantity: 4, status: 'reserved',
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      container_number: 'C1',
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'sh-1-item',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 1,
+      quantity: 10,
+      factory_unit_price_usd: 50,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_container_preorders' as never)
+    .values({
+      tenant_id: 't1',
+      preorder_no: 'PO-1',
+      shipment_id: 'sh-1',
+      customer_id: 1,
+      product_id: 1,
+      reserved_quantity: 4,
+      status: 'reserved',
+    } as never)
+    .execute();
 }
 
 /** Posts the receipt through the real costs path; returns the receipt id. */
 async function postReceipt(db: Kysely<Database>, service: any): Promise<number> {
-  await service.updateShipmentCosts('t1', 1, 'sh-1', { status: 'Arrived', exchangeRateAtArrival: 50, receiptLocationId: 10 });
-  const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('shipment_id', '=', 'sh-1').executeTakeFirstOrThrow();
+  await service.updateShipmentCosts('t1', 1, 'sh-1', {
+    status: 'Arrived',
+    exchangeRateAtArrival: 50,
+    receiptLocationId: 10,
+  });
+  const receipt: any = await (db as any)
+    .selectFrom('import_inventory_receipts')
+    .selectAll()
+    .where('shipment_id', '=', 'sh-1')
+    .executeTakeFirstOrThrow();
   return Number(receipt.id);
 }
 
@@ -133,11 +168,20 @@ async function insertApproval(
   shipmentId: string,
   receiptId: number,
 ): Promise<void> {
-  await db.insertInto('import_approval_requests' as never).values({
-    id, tenant_id: 't1', module: 'import', action_type: actionType,
-    reference_id: shipmentId, requested_by: 99, created_by: 99, status: 'approved',
-    request_payload: JSON.stringify({ shipmentId, receiptId: String(receiptId) }),
-  } as never).execute();
+  await db
+    .insertInto('import_approval_requests' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      module: 'import',
+      action_type: actionType,
+      reference_id: shipmentId,
+      requested_by: 99,
+      created_by: 99,
+      status: 'approved',
+      request_payload: JSON.stringify({ shipmentId, receiptId: String(receiptId) }),
+    } as never)
+    .execute();
 }
 
 async function readProduct(db: Kysely<Database>): Promise<any> {
@@ -145,18 +189,29 @@ async function readProduct(db: Kysely<Database>): Promise<any> {
 }
 
 async function readLocationQty(db: Kysely<Database>): Promise<number> {
-  const row: any = await (db as any).selectFrom('product_location_stock').select('qty')
-    .where('product_id', '=', 1).where('location_id', '=', 10).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('product_id', '=', 1)
+    .where('location_id', '=', 10)
+    .executeTakeFirstOrThrow();
   return Number(row.qty);
 }
 
 async function approvalStatus(db: Kysely<Database>, id: string): Promise<string> {
-  const row: any = await (db as any).selectFrom('import_approval_requests').select('status').where('id', '=', id).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom('import_approval_requests')
+    .select('status')
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
   return row.status;
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -177,11 +232,22 @@ async function main(): Promise<void> {
       assert.equal(Number(posted.stock_qty), 20, 'Posting adds the receipt to stock');
       assert.equal(Number(posted.cost_price), 2250, 'WAC blends 10 @ 2000 with 10 @ 2500');
       assert.equal(await readLocationQty(db), 20, 'Location balance carries the receipt');
-      const receipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('id', '=', receiptId).executeTakeFirstOrThrow();
+      const receipt: any = await (db as any)
+        .selectFrom('import_inventory_receipts')
+        .selectAll()
+        .where('id', '=', receiptId)
+        .executeTakeFirstOrThrow();
       assert.ok(receipt.journal_entry_id, 'The receipt posted a journal');
-      const originalLines: any[] = await (db as any).selectFrom('journal_entry_lines').selectAll().where('journal_entry_id', '=', Number(receipt.journal_entry_id)).execute();
+      const originalLines: any[] = await (db as any)
+        .selectFrom('journal_entry_lines')
+        .selectAll()
+        .where('journal_entry_id', '=', Number(receipt.journal_entry_id))
+        .execute();
       assert.equal(originalLines.length, 2, 'Original journal: inventory debit + payable credit');
-      const preorder: any = await (db as any).selectFrom('import_container_preorders').selectAll().executeTakeFirstOrThrow();
+      const preorder: any = await (db as any)
+        .selectFrom('import_container_preorders')
+        .selectAll()
+        .executeTakeFirstOrThrow();
       assert.equal(preorder.status, 'allocated', 'Posting allocates the preorder');
       const ledgerAfterPost: any[] = await (db as any).selectFrom('supplier_ledger').selectAll().execute();
       assert.equal(ledgerAfterPost.length, 1, 'Posting mirrors the payable line into the supplier subledger');
@@ -199,13 +265,23 @@ async function main(): Promise<void> {
       const lot: any = await (db as any).selectFrom('import_inventory_lots').selectAll().executeTakeFirstOrThrow();
       assert.equal(Number(lot.remaining_quantity), 0, 'The lot is zeroed');
       assert.equal(lot.status, 'reversed', 'The lot is marked reversed, not deleted');
-      const preorderAfter: any = await (db as any).selectFrom('import_container_preorders').selectAll().executeTakeFirstOrThrow();
+      const preorderAfter: any = await (db as any)
+        .selectFrom('import_container_preorders')
+        .selectAll()
+        .executeTakeFirstOrThrow();
       assert.equal(preorderAfter.status, 'reserved', 'The preorder returns to reserved');
-      const reversalRow: any = await (db as any).selectFrom('import_inventory_receipt_reversals').selectAll().executeTakeFirstOrThrow();
+      const reversalRow: any = await (db as any)
+        .selectFrom('import_inventory_receipt_reversals')
+        .selectAll()
+        .executeTakeFirstOrThrow();
       assert.equal(Number(reversalRow.receipt_id), receiptId);
       assert.equal(Number(reversalRow.journal_entry_id), Number(result.journalEntryId));
       assert.equal(reversalRow.reason, 'Wrong receiving location recorded');
-      const reversalLines: any[] = await (db as any).selectFrom('journal_entry_lines').selectAll().where('journal_entry_id', '=', Number(result.journalEntryId)).execute();
+      const reversalLines: any[] = await (db as any)
+        .selectFrom('journal_entry_lines')
+        .selectAll()
+        .where('journal_entry_id', '=', Number(result.journalEntryId))
+        .execute();
       assert.equal(reversalLines.length, 2, 'Mirror journal has the same line count');
       for (const original of originalLines) {
         const mirror = reversalLines.find((l) => Number(l.account_id) === Number(original.account_id));
@@ -213,19 +289,47 @@ async function main(): Promise<void> {
         assert.equal(Number(mirror.debit), Number(original.credit), 'Mirror debit equals original credit');
         assert.equal(Number(mirror.credit), Number(original.debit), 'Mirror credit equals original debit');
       }
-      const reversalEntry: any = await (db as any).selectFrom('journal_entries').selectAll().where('id', '=', Number(result.journalEntryId)).executeTakeFirstOrThrow();
-      assert.equal(Number(reversalEntry.reversal_of_entry_id), Number(receipt.journal_entry_id), 'The reversal entry links to the original');
-      const originalEntry: any = await (db as any).selectFrom('journal_entries').selectAll().where('id', '=', Number(receipt.journal_entry_id)).executeTakeFirstOrThrow();
-      assert.equal(Number(originalEntry.reversed_by_entry_id), Number(result.journalEntryId), 'The original entry is stamped reversed-by');
-      const untouchedReceipt: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('id', '=', receiptId).executeTakeFirstOrThrow();
+      const reversalEntry: any = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('id', '=', Number(result.journalEntryId))
+        .executeTakeFirstOrThrow();
+      assert.equal(
+        Number(reversalEntry.reversal_of_entry_id),
+        Number(receipt.journal_entry_id),
+        'The reversal entry links to the original',
+      );
+      const originalEntry: any = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('id', '=', Number(receipt.journal_entry_id))
+        .executeTakeFirstOrThrow();
+      assert.equal(
+        Number(originalEntry.reversed_by_entry_id),
+        Number(result.journalEntryId),
+        'The original entry is stamped reversed-by',
+      );
+      const untouchedReceipt: any = await (db as any)
+        .selectFrom('import_inventory_receipts')
+        .selectAll()
+        .where('id', '=', receiptId)
+        .executeTakeFirstOrThrow();
       assert.equal(untouchedReceipt.state, 'posted', 'The original receipt row is never rewritten');
-      assert.equal(Number(untouchedReceipt.journal_entry_id), Number(receipt.journal_entry_id), 'The original journal link is never rewritten');
+      assert.equal(
+        Number(untouchedReceipt.journal_entry_id),
+        Number(receipt.journal_entry_id),
+        'The original journal link is never rewritten',
+      );
       assert.equal(await approvalStatus(db, 'appr-1'), 'executed', 'The approval token is single-use');
       const allLines: any[] = await (db as any).selectFrom('journal_entry_lines').selectAll().execute();
       const debits = allLines.reduce((s, l) => s + Number(l.debit), 0);
       const credits = allLines.reduce((s, l) => s + Number(l.credit), 0);
       assert.equal(debits, credits, 'Original + reversal journals balance in total');
-      const ledgerAfterReversal: any[] = await (db as any).selectFrom('supplier_ledger').selectAll().orderBy('id', 'asc').execute();
+      const ledgerAfterReversal: any[] = await (db as any)
+        .selectFrom('supplier_ledger')
+        .selectAll()
+        .orderBy('id', 'asc')
+        .execute();
       assert.equal(ledgerAfterReversal.length, 2, 'The reversal mirrors into the subledger too');
       assert.equal(Number(ledgerAfterReversal[1].amount), -25000, 'The mirror ledger movement offsets the payable');
       assert.equal(Number(ledgerAfterReversal[1].balance_after), 0, 'The subledger returns to zero: profit equals GL');
@@ -242,7 +346,11 @@ async function main(): Promise<void> {
       await seedShipment(db, 'active');
       const receiptId = await postReceipt(db, service);
       await assert.rejects(
-        async () => service.reversePostedReceipt('t1', 1, 'sh-1', { approvalRequestId: '', reason: 'Wrong receiving location recorded' }),
+        async () =>
+          service.reversePostedReceipt('t1', 1, 'sh-1', {
+            approvalRequestId: '',
+            reason: 'Wrong receiving location recorded',
+          }),
         /موافقة Maker-Checker/,
         'Reversal without a token must fail closed',
       );
@@ -302,10 +410,18 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db, 'active');
       const receiptId = await postReceipt(db, service);
-      await db.insertInto('import_late_expense_events' as never).values({
-        tenant_id: 't1', shipment_id: 'sh-1', title: 'late', total_amount_egp: 100,
-        inventory_amount_egp: 100, cogs_amount_egp: 0, idempotency_key: 'le-1',
-      } as never).execute();
+      await db
+        .insertInto('import_late_expense_events' as never)
+        .values({
+          tenant_id: 't1',
+          shipment_id: 'sh-1',
+          title: 'late',
+          total_amount_egp: 100,
+          inventory_amount_egp: 100,
+          cogs_amount_egp: 0,
+          idempotency_key: 'le-1',
+        } as never)
+        .execute();
       await insertApproval(db, 'appr-1', 'import_receipt_reversal', 'sh-1', receiptId);
       await assert.rejects(
         async () => service.reversePostedReceipt('t1', 1, 'sh-1', REVERSAL_DTO('appr-1')),
@@ -382,7 +498,11 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db, 'active');
       const receiptId = await postReceipt(db, service);
-      await (db as any).updateTable('accounting_settings').set({ lock_date_all: '2099-01-01' }).where('id', '=', 1).execute();
+      await (db as any)
+        .updateTable('accounting_settings')
+        .set({ lock_date_all: '2099-01-01' })
+        .where('id', '=', 1)
+        .execute();
       await insertApproval(db, 'appr-1', 'import_receipt_reversal', 'sh-1', receiptId);
       await assert.rejects(
         async () => service.reversePostedReceipt('t1', 1, 'sh-1', REVERSAL_DTO('appr-1')),
@@ -391,8 +511,16 @@ async function main(): Promise<void> {
       );
       assert.equal(Number((await readProduct(db)).stock_qty), 20, 'The rollback restores the stock writes too');
       assert.equal(Number((await readProduct(db)).cost_price), 2250, 'The rollback restores the WAC write too');
-      assert.equal(await countRows(db, 'import_inventory_receipt_reversals'), 0, 'No reversal row survives the rollback');
-      assert.equal(await approvalStatus(db, 'appr-1'), 'approved', 'The token consumption rolls back with the transaction');
+      assert.equal(
+        await countRows(db, 'import_inventory_receipt_reversals'),
+        0,
+        'No reversal row survives the rollback',
+      );
+      assert.equal(
+        await approvalStatus(db, 'appr-1'),
+        'approved',
+        'The token consumption rolls back with the transaction',
+      );
     } finally {
       await db.destroy();
     }
@@ -404,32 +532,69 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, 'active');
-      const journal: any = await (db as any).insertInto('journal_entries').values({
-        tenant_id: 't1', account_id: 't1', entry_no: 'JE-1', entry_date: '2026-01-05',
-        description: 'legacy receipt journal', source_type: 'import_inventory_receipt', source_id: 1,
-        status: 'posted', posted_at: new Date('2026-01-05'),
-      }).returning('id').executeTakeFirstOrThrow();
-      const receipt: any = await (db as any).insertInto('import_inventory_receipts').values({
-        tenant_id: 't1', shipment_id: 'sh-1', state: 'legacy_review_required',
-        review_reason: 'legacy_arrived_without_verified_receipt', posted_at: null,
-        journal_entry_id: Number(journal.id),
-      }).returning('id').executeTakeFirstOrThrow();
+      const journal: any = await (db as any)
+        .insertInto('journal_entries')
+        .values({
+          tenant_id: 't1',
+          account_id: 't1',
+          entry_no: 'JE-1',
+          entry_date: '2026-01-05',
+          description: 'legacy receipt journal',
+          source_type: 'import_inventory_receipt',
+          source_id: 1,
+          status: 'posted',
+          posted_at: new Date('2026-01-05'),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const receipt: any = await (db as any)
+        .insertInto('import_inventory_receipts')
+        .values({
+          tenant_id: 't1',
+          shipment_id: 'sh-1',
+          state: 'legacy_review_required',
+          review_reason: 'legacy_arrived_without_verified_receipt',
+          posted_at: null,
+          journal_entry_id: Number(journal.id),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
       const receiptId = Number(receipt.id);
-      await (db as any).insertInto('stock_movements').values({
-        tenant_id: 't1', account_id: 't1', product_id: 1, movement_type: 'import_receipt',
-        qty: 10, before_qty: 10, after_qty: 20, total_cost: 25000,
-        reason: 'legacy', note: 'legacy', reference_type: 'import_inventory_receipt',
-        reference_id: receiptId, import_receipt_id: receiptId, created_at: new Date('2026-01-05T10:00:00Z'),
-      }).execute();
+      await (db as any)
+        .insertInto('stock_movements')
+        .values({
+          tenant_id: 't1',
+          account_id: 't1',
+          product_id: 1,
+          movement_type: 'import_receipt',
+          qty: 10,
+          before_qty: 10,
+          after_qty: 20,
+          total_cost: 25000,
+          reason: 'legacy',
+          note: 'legacy',
+          reference_type: 'import_inventory_receipt',
+          reference_id: receiptId,
+          import_receipt_id: receiptId,
+          created_at: new Date('2026-01-05T10:00:00Z'),
+        })
+        .execute();
       await insertApproval(db, 'appr-legacy', 'import_legacy_receipt_review', 'sh-1', receiptId);
       const result = await service.resolveLegacyReceipt('t1', 1, 'sh-1', {
         approvalRequestId: 'appr-legacy',
         reason: 'Verified against the posted journal and movements',
       });
       assert.equal(result.receiptId, receiptId);
-      const resolved: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('id', '=', receiptId).executeTakeFirstOrThrow();
+      const resolved: any = await (db as any)
+        .selectFrom('import_inventory_receipts')
+        .selectAll()
+        .where('id', '=', receiptId)
+        .executeTakeFirstOrThrow();
       assert.equal(resolved.state, 'posted', 'The frozen receipt is unfrozen by an approved review, never silently');
-      assert.ok(String(new Date(resolved.posted_at).toISOString()).startsWith('2026-01-05'), 'posted_at comes from the earliest movement, not from today');
+      assert.ok(
+        String(new Date(resolved.posted_at).toISOString()).startsWith('2026-01-05'),
+        'posted_at comes from the earliest movement, not from today',
+      );
       assert.equal(await approvalStatus(db, 'appr-legacy'), 'executed');
     } finally {
       await db.destroy();
@@ -442,21 +607,34 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, 'active');
-      const receipt: any = await (db as any).insertInto('import_inventory_receipts').values({
-        tenant_id: 't1', shipment_id: 'sh-1', state: 'legacy_review_required',
-        review_reason: 'legacy_arrived_without_verified_receipt', posted_at: null, journal_entry_id: null,
-      }).returning('id').executeTakeFirstOrThrow();
+      const receipt: any = await (db as any)
+        .insertInto('import_inventory_receipts')
+        .values({
+          tenant_id: 't1',
+          shipment_id: 'sh-1',
+          state: 'legacy_review_required',
+          review_reason: 'legacy_arrived_without_verified_receipt',
+          posted_at: null,
+          journal_entry_id: null,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
       const receiptId = Number(receipt.id);
       await insertApproval(db, 'appr-legacy', 'import_legacy_receipt_review', 'sh-1', receiptId);
       await assert.rejects(
-        async () => service.resolveLegacyReceipt('t1', 1, 'sh-1', {
-          approvalRequestId: 'appr-legacy',
-          reason: 'Verified against the posted journal and movements',
-        }),
+        async () =>
+          service.resolveLegacyReceipt('t1', 1, 'sh-1', {
+            approvalRequestId: 'appr-legacy',
+            reason: 'Verified against the posted journal and movements',
+          }),
         /IMPORT_LEGACY_REVIEW_NO_PROOF/,
         'The migration-0231 seed shape (no journal, no movements) can never be resolved',
       );
-      const stillFrozen: any = await (db as any).selectFrom('import_inventory_receipts').selectAll().where('id', '=', receiptId).executeTakeFirstOrThrow();
+      const stillFrozen: any = await (db as any)
+        .selectFrom('import_inventory_receipts')
+        .selectAll()
+        .where('id', '=', receiptId)
+        .executeTakeFirstOrThrow();
       assert.equal(stillFrozen.state, 'legacy_review_required');
     } finally {
       await db.destroy();
@@ -466,4 +644,7 @@ async function main(): Promise<void> {
   console.log('Import receipt reversal tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

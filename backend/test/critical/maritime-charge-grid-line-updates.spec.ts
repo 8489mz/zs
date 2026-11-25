@@ -68,12 +68,24 @@ async function main(): Promise<void> {
   const service = new MaritimeFreightService(db, {} as never, {} as never, {} as never);
 
   async function charges(jobId: number): Promise<any[]> {
-    return (db as any).selectFrom('maritime_job_charges').selectAll().where('job_id', '=', String(jobId)).orderBy('id', 'asc').execute();
+    return (db as any)
+      .selectFrom('maritime_job_charges')
+      .selectAll()
+      .where('job_id', '=', String(jobId))
+      .orderBy('id', 'asc')
+      .execute();
   }
 
   const row = (id: number, code: string, cost: number, sell: number, invoiced: boolean, extra: any = {}): any => ({
-    id, chargeCode: code, chargeNameAr: code, chargeNameEn: code, currency: 'USD',
-    costAmount: cost, sellAmount: sell, isInvoiced: invoiced, ...extra,
+    id,
+    chargeCode: code,
+    chargeNameAr: code,
+    chargeNameEn: code,
+    currency: 'USD',
+    costAmount: cost,
+    sellAmount: sell,
+    isInvoiced: invoiced,
+    ...extra,
   });
 
   try {
@@ -126,12 +138,18 @@ async function main(): Promise<void> {
     const added = rows1.find((r: any) => r.charge_code === 'SEAL');
     assert.ok(added, 'new row inserted');
     assert.equal(added.is_invoiced, false);
-    assert.equal(rows1.find((r: any) => Number(r.id) === 3), undefined, 'omitted plain row deleted');
+    assert.equal(
+      rows1.find((r: any) => Number(r.id) === 3),
+      undefined,
+      'omitted plain row deleted',
+    );
 
     // 2. A new row claiming invoiced throws; nothing changes.
     const before2 = await charges(1);
     await assert.rejects(
-      service.updateJobCharges(auth, 1, { charges: [row(2, 'THC', 25, 40, false), row(undefined as never, 'X', 1, 2, true)] } as never),
+      service.updateJobCharges(auth, 1, {
+        charges: [row(2, 'THC', 25, 40, false), row(undefined as never, 'X', 1, 2, true)],
+      } as never),
       /لا يمكن إنشاء بند جديد موسوماً/,
     );
     assert.deepEqual(await charges(1), before2);
@@ -142,7 +160,9 @@ async function main(): Promise<void> {
       /غير موجود/,
     );
     await assert.rejects(
-      service.updateJobCharges(auth, 1, { charges: [row(2, 'THC', 25, 40, false), row(2, 'THC', 25, 40, false)] } as never),
+      service.updateJobCharges(auth, 1, {
+        charges: [row(2, 'THC', 25, 40, false), row(2, 'THC', 25, 40, false)],
+      } as never),
       /مكرر/,
     );
     assert.deepEqual(await charges(1), before2);
@@ -152,8 +172,14 @@ async function main(): Promise<void> {
     await service.updateJobCharges(auth, 1, { charges: [row(2, 'THC', 26, 41, false)] } as never);
     const rows4 = await charges(1);
     assert.equal(rows4.length, 2, 'invoiced row survives, edited row survives, omitted plain row deleted');
-    assert.ok(rows4.find((r: any) => Number(r.id) === 1), 'invoiced row still present');
-    assert.equal(rows4.find((r: any) => r.charge_code === 'SEAL'), undefined);
+    assert.ok(
+      rows4.find((r: any) => Number(r.id) === 1),
+      'invoiced row still present',
+    );
+    assert.equal(
+      rows4.find((r: any) => r.charge_code === 'SEAL'),
+      undefined,
+    );
     assert.equal(Number(rows4.find((r: any) => Number(r.id) === 2).sell_amount), 41);
 
     // 5. The guard fires over stored invoiced rows even when the
@@ -175,7 +201,10 @@ async function main(): Promise<void> {
     // 7. Source pins.
     // Maritime split: updateJobCharges + calculateJobForexGainLoss both
     // live in the job-close slice.
-    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-job-close.service.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-job-close.service.ts'),
+      'utf8',
+    );
     const updateStart = source.indexOf('async updateJobCharges(');
     const forexStart = source.indexOf('async calculateJobForexGainLoss(');
     const updateBody = source.slice(updateStart, forexStart);
@@ -183,9 +212,15 @@ async function main(): Promise<void> {
     assert.ok(!updateBody.includes('resolveFreightExchangeRate'), 'no pool-handle rate read inside the transaction');
     assert.ok(updateBody.includes("where('id', 'in'"), 'deletion must be id-scoped');
     assert.ok(updateBody.includes('is_invoiced'), 'the stored flag must drive the logic');
-    const dtoSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/dto/itemized-charges.dto.ts'), 'utf8');
+    const dtoSource = readFileSync(
+      resolve(__dirname, '../../src/modules/maritime-freight/dto/itemized-charges.dto.ts'),
+      'utf8',
+    );
     assert.ok(dtoSource.includes('id?: number'), 'the DTO must carry the row id');
-    const tabSource = readFileSync(resolve(__dirname, '../../../frontend/src/features/maritime-freight/components/job-details/JobChargesTab.tsx'), 'utf8');
+    const tabSource = readFileSync(
+      resolve(__dirname, '../../../frontend/src/features/maritime-freight/components/job-details/JobChargesTab.tsx'),
+      'utf8',
+    );
     assert.ok(tabSource.includes('toChargePayload'), 'the tab must map rows to the DTO shape');
     assert.ok(tabSource.includes('id: c.id'), 'the tab must forward the row id');
     assert.ok(!tabSource.includes('isInvoiced: true'), 'no new row may claim invoiced from the tab');

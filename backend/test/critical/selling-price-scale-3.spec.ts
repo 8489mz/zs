@@ -77,7 +77,11 @@ const REQUIRED: Array<[string, string]> = [
   ['online_orders', 'total_amount'],
 ];
 
-async function columnScales(pg: InstanceType<typeof PGlite>, table: string, columns: string[]): Promise<Array<[string, number, number]>> {
+async function columnScales(
+  pg: InstanceType<typeof PGlite>,
+  table: string,
+  columns: string[],
+): Promise<Array<[string, number, number]>> {
   const info = await pg.query<{ column_name: string; numeric_precision: string; numeric_scale: string }>(
     `SELECT column_name, numeric_precision::text, numeric_scale::text FROM information_schema.columns WHERE table_name='${table}' AND column_name IN (${columns.map((c) => `'${c}'`).join(',')}) ORDER BY column_name`,
   );
@@ -110,8 +114,13 @@ async function main(): Promise<void> {
       assert.deepEqual(await columnScales(pg, 'products', ['credit_price']), [['credit_price', 15, 3]]);
       assert.deepEqual(await columnScales(pg, 'online_orders', ['total_amount']), [['total_amount', 16, 3]]);
       // Existing rows preserved byte-for-byte.
-      const kept = await pg.query<{ credit_price: string; total_amount: string }>('SELECT credit_price::text, total_amount::text FROM products, online_orders');
-      assert.deepEqual(kept.rows.map((r) => [Number(r.credit_price), Number(r.total_amount)]), [[10.12, 102.24]]);
+      const kept = await pg.query<{ credit_price: string; total_amount: string }>(
+        'SELECT credit_price::text, total_amount::text FROM products, online_orders',
+      );
+      assert.deepEqual(
+        kept.rows.map((r) => [Number(r.credit_price), Number(r.total_amount)]),
+        [[10.12, 102.24]],
+      );
       // 3dp values survive INSERT and read back exactly; 2dp identity holds.
       await pg.exec(`
         INSERT INTO products (credit_price, consumer_price, min_selling_price) VALUES (10.125, 10.12, 10.125);
@@ -155,11 +164,20 @@ async function main(): Promise<void> {
 
   // Case 3: source pin — exactly the remaining columns, nothing re-widened.
   {
-    const migrationSource = readFileSync(resolve(__dirname, '../../src/database/migrations/2040000000278_selling_price_minor_unit_precision.ts'), 'utf8');
+    const migrationSource = readFileSync(
+      resolve(__dirname, '../../src/database/migrations/2040000000278_selling_price_minor_unit_precision.ts'),
+      'utf8',
+    );
     for (const [table, column] of REQUIRED) {
       assert.ok(migrationSource.includes(`'${table}', '${column}', 3`), `missing required column ${table}.${column}`);
     }
-    for (const alreadyWidened of ["'sales', 'total'", "'sale_items', 'unit_price'", "'products', 'retail_price'", "'sale_payments', 'amount'", "'journal_entry_lines', 'debit'"]) {
+    for (const alreadyWidened of [
+      "'sales', 'total'",
+      "'sale_items', 'unit_price'",
+      "'products', 'retail_price'",
+      "'sale_payments', 'amount'",
+      "'journal_entry_lines', 'debit'",
+    ]) {
       assert.ok(!migrationSource.includes(alreadyWidened), `must not re-widen ${alreadyWidened}`);
     }
   }

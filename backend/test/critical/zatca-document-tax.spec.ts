@@ -113,7 +113,8 @@ async function main(): Promise<void> {
     /DOCUMENT_TAX_NO_LINES/,
   );
   assert.throws(
-    () => buildDocumentTax({ rate: 15, pricesIncludeTax: false, documentDigits: 2, lines: [{ lineTotal: Number.NaN }] }),
+    () =>
+      buildDocumentTax({ rate: 15, pricesIncludeTax: false, documentDigits: 2, lines: [{ lineTotal: Number.NaN }] }),
     /DOCUMENT_TAX_LINE_INVALID/,
   );
   assert.throws(
@@ -212,10 +213,17 @@ async function main(): Promise<void> {
   };
 
   // Stored 14% sale signs at 14.00 — the old builder signed 15.00/15.00/115.00.
-  const stored14 = await drive(
-    { ...baseSale, tax_rate: 14, prices_include_tax: false },
-    [{ qty: 1, unit_price: 100, line_total: 100, product_name: 'Widget', net_line_total: 100, allocated_discount: 0, allocated_tax: 14 }],
-  );
+  const stored14 = await drive({ ...baseSale, tax_rate: 14, prices_include_tax: false }, [
+    {
+      qty: 1,
+      unit_price: 100,
+      line_total: 100,
+      product_name: 'Widget',
+      net_line_total: 100,
+      allocated_discount: 0,
+      allocated_tax: 14,
+    },
+  ]);
   assert.equal(stored14.icv, 1);
   assert.match(stored14.ublXml, /<cbc:Percent>14\.00<\/cbc:Percent>/);
   assert.match(stored14.ublXml, /<cbc:TaxAmount currencyID="SAR">14\.00<\/cbc:TaxAmount>/);
@@ -223,19 +231,33 @@ async function main(): Promise<void> {
   assert.doesNotMatch(stored14.ublXml, /15\.00/);
 
   // Exempt sale signs at 0.00.
-  const exemptSale = await drive(
-    { ...baseSale, tax_rate: 0, tax_amount: 0, prices_include_tax: false },
-    [{ qty: 1, unit_price: 100, line_total: 100, product_name: 'Widget', net_line_total: 100, allocated_discount: 0, allocated_tax: 0 }],
-  );
+  const exemptSale = await drive({ ...baseSale, tax_rate: 0, tax_amount: 0, prices_include_tax: false }, [
+    {
+      qty: 1,
+      unit_price: 100,
+      line_total: 100,
+      product_name: 'Widget',
+      net_line_total: 100,
+      allocated_discount: 0,
+      allocated_tax: 0,
+    },
+  ]);
   assert.match(exemptSale.ublXml, /<cbc:Percent>0\.00<\/cbc:Percent>/);
   assert.match(exemptSale.ublXml, /<cbc:PayableAmount currencyID="SAR">100\.00<\/cbc:PayableAmount>/);
   assert.doesNotMatch(exemptSale.ublXml, /15\.00/);
 
   // Legacy tax-inclusive sale without allocations: stored 14% extracted.
-  const legacySale = await drive(
-    { ...baseSale, tax_rate: 14, tax_amount: 14, prices_include_tax: true },
-    [{ qty: 1, unit_price: 114, line_total: 114, product_name: 'Widget', net_line_total: null, allocated_discount: null, allocated_tax: null }],
-  );
+  const legacySale = await drive({ ...baseSale, tax_rate: 14, tax_amount: 14, prices_include_tax: true }, [
+    {
+      qty: 1,
+      unit_price: 114,
+      line_total: 114,
+      product_name: 'Widget',
+      net_line_total: null,
+      allocated_discount: null,
+      allocated_tax: null,
+    },
+  ]);
   assert.match(legacySale.ublXml, /<cbc:Percent>14\.00<\/cbc:Percent>/);
   assert.match(legacySale.ublXml, /<cbc:TaxAmount currencyID="SAR">14\.00<\/cbc:TaxAmount>/);
   assert.match(legacySale.ublXml, /<cbc:PayableAmount currencyID="SAR">114\.00<\/cbc:PayableAmount>/);
@@ -253,7 +275,9 @@ async function main(): Promise<void> {
     sellerVatNumber: '300000000000003',
     sellerAddress: { street: 'S', buildingNumber: '1', city: 'Riyadh', postalCode: '12211', district: 'D' },
     customerName: 'Cash',
-    lineItems: [{ id: 1, name: 'Widget', quantity: 1, unitPrice: 100, subtotal: 100, vatAmount: 0, vatRate: 0, total: 100 }],
+    lineItems: [
+      { id: 1, name: 'Widget', quantity: 1, unitPrice: 100, subtotal: 100, vatAmount: 0, vatRate: 0, total: 100 },
+    ],
     subtotal: 100,
     vatTotal: 0,
     totalWithVat: 100,

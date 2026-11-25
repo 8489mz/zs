@@ -59,17 +59,34 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 async function seedTenant(db: Kysely<Database>): Promise<void> {
-  await (db as any).insertInto('tenants').values({
-    id: TENANT, slug: 'test-shop', activity_type: 'restaurant', plan_id: null,
-    extra_features: '[]', business_name: 'متجر الاختبار', owner_phone: null,
-    owner_name: null, owner_email: null, country_code: 'EG', status: 'active',
-  }).execute();
+  await (db as any)
+    .insertInto('tenants')
+    .values({
+      id: TENANT,
+      slug: 'test-shop',
+      activity_type: 'restaurant',
+      plan_id: null,
+      extra_features: '[]',
+      business_name: 'متجر الاختبار',
+      owner_phone: null,
+      owner_name: null,
+      owner_email: null,
+      country_code: 'EG',
+      status: 'active',
+    })
+    .execute();
 }
 
 async function seedPin(db: Kysely<Database>, storedValue: string): Promise<void> {
-  await (db as any).insertInto('settings').values({
-    key: 'managerPin', value: JSON.stringify(storedValue), tenant_id: TENANT, account_id: ACCOUNT,
-  }).execute();
+  await (db as any)
+    .insertInto('settings')
+    .values({
+      key: 'managerPin',
+      value: JSON.stringify(storedValue),
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+    })
+    .execute();
 }
 
 async function readPinRow(db: Kysely<Database>): Promise<string | null> {
@@ -154,10 +171,17 @@ async function main(): Promise<void> {
     try {
       await seedTenant(db);
       const record = await createPasswordRecord('adminpass');
-      await (db as any).insertInto('users').values({
-        username: 'manager', role: 'admin', password_hash: record.hash,
-        password_salt: record.salt, is_active: true, tenant_id: TENANT,
-      }).execute();
+      await (db as any)
+        .insertInto('users')
+        .values({
+          username: 'manager',
+          role: 'admin',
+          password_hash: record.hash,
+          password_salt: record.salt,
+          is_active: true,
+          tenant_id: TENANT,
+        })
+        .execute();
       const service = buildService(db);
       await (service as any).assertManagerPin('adminpass', cashier);
       await expectCode((service as any).assertManagerPin('wrongpass', cashier), 'MANAGER_PIN_INVALID');

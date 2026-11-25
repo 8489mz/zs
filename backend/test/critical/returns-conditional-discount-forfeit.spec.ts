@@ -71,8 +71,22 @@ four forfeit columns on return_documents):
   flag rejects FORFEIT_EXCHANGE_NOT_SUPPORTED and posts nothing.
 */
 
-const ADMIN = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
-const CASHIER = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 2, username: 'cashier', permissions: [] } as unknown as AuthContext;
+const ADMIN = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
+const CASHIER = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'cashier',
+  userId: 2,
+  username: 'cashier',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -197,18 +211,35 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1','a1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 4100, 4200, 4300, 4400, 5100, 2150]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,account_id,code) VALUES ($1,$2,$3,$4)',
-      [code, 't1', 'a1', String(code)]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,account_id,code) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      'a1',
+      String(code),
+    ]);
   }
   return { pg, db };
 }
 
-function makeServices(db: Kysely<Database>): { returns: ReturnsService; posting: AccountingPostingService; reps: DeliveryRepsService } {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+function makeServices(db: Kysely<Database>): {
+  returns: ReturnsService;
+  posting: AccountingPostingService;
+  reps: DeliveryRepsService;
+} {
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auditStub = { log: async () => undefined, logWithExecutor: async () => undefined };
   const idempotencyStub = { check: async () => null, commitOperation: async () => undefined };
-  const returns = new ReturnsService(db as any, new TransactionHelper(), auditStub as any, posting as any, idempotencyStub as any);
+  const returns = new ReturnsService(
+    db as any,
+    new TransactionHelper(),
+    auditStub as any,
+    posting as any,
+    idempotencyStub as any,
+  );
   const salesFinance = new SalesFinanceService(db as any);
   const reps = new DeliveryRepsService(db as any, auditStub as any, posting as any, salesFinance as any);
   return { returns, posting, reps };
@@ -218,12 +249,18 @@ async function seedBase(db: Kysely<Database>): Promise<void> {
   await sql`INSERT INTO settings VALUES ('t1', 'currency', 'EGP')`.execute(db);
   await sql`INSERT INTO settings VALUES ('t1', 'managerPin', '"2468"')`.execute(db);
   const adminRecord = await createPasswordRecord('admin-pass');
-  await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${adminRecord.hash}, ${adminRecord.salt}, true)`.execute(db);
+  await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${adminRecord.hash}, ${adminRecord.salt}, true)`.execute(
+    db,
+  );
   await sql`INSERT INTO users VALUES (2, 't1', 'cashier', 1, 'cashier', '', '', true)`.execute(db);
   await sql`INSERT INTO cashier_shifts VALUES (1, 't1', 'a1', 'SHIFT-1', 1, 'open', 1, 1, 0, NOW())`.execute(db);
   await sql`INSERT INTO cashier_shifts VALUES (2, 't1', 'a1', 'SHIFT-2', 2, 'open', 1, 1, 0, NOW())`.execute(db);
-  await sql`INSERT INTO products VALUES (10, 't1', 'a1', 'Widget', '', '', '', 100, 0, 10, true, false, NOW())`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty, updated_at) VALUES ('t1', 'a1', 10, 1, 1, 100, 0, NOW())`.execute(db);
+  await sql`INSERT INTO products VALUES (10, 't1', 'a1', 'Widget', '', '', '', 100, 0, 10, true, false, NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty, updated_at) VALUES ('t1', 'a1', 10, 1, 1, 100, 0, NOW())`.execute(
+    db,
+  );
   await sql`INSERT INTO customers VALUES (25, 't1', 'Cash customer', 0, 0, 0, 0, false, NOW())`.execute(db);
   await sql`INSERT INTO delivery_representatives VALUES (7, 't1', 'a1', 'Courier', true)`.execute(db);
 }
@@ -232,10 +269,16 @@ async function seedBase(db: Kysely<Database>): Promise<void> {
    taking 3, paid 800 cash. Frozen cost 150 per piece. */
 async function seedHeaderDiscountSale(db: Kysely<Database>, saleId = 1): Promise<number> {
   await sql`INSERT INTO sales (id, tenant_id, account_id, doc_no, customer_id, status, total, paid_amount, store_credit_used, discount, tax_amount, subtotal, prices_include_tax, payment_type, payment_channel, branch_id, location_id, tip_amount, delivery_fee, delivery_fee_mode, service_charge)
-    VALUES (${saleId}, 't1', 'a1', ${'S-' + saleId}, 25, 'posted', 800, 800, 0, 100, 0, 900, false, 'cash', 'cash', 1, 1, 0, 0, 'freelance_courier', 0)`.execute(db);
+    VALUES (${saleId}, 't1', 'a1', ${'S-' + saleId}, 25, 'posted', 800, 800, 0, 100, 0, 900, false, 'cash', 'cash', 1, 1, 0, 0, 'freelance_courier', 0)`.execute(
+    db,
+  );
   await sql`INSERT INTO sale_items (id, tenant_id, account_id, sale_id, product_id, product_name, qty, unit_price, line_total, net_unit_price, net_line_total, allocated_discount, allocated_tax, cost_price, unit_multiplier, line_discount)
-    VALUES (${saleId * 10}, 't1', 'a1', ${saleId}, 10, 'Widget', 3, 300, 900, 266.67, 800, 100, 0, 150, 1, 0)`.execute(db);
-  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', ${saleId}, 'cash', 800)`.execute(db);
+    VALUES (${saleId * 10}, 't1', 'a1', ${saleId}, 10, 'Widget', 3, 300, 900, 266.67, 800, 100, 0, 150, 1, 0)`.execute(
+    db,
+  );
+  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', ${saleId}, 'cash', 800)`.execute(
+    db,
+  );
   return saleId;
 }
 
@@ -244,12 +287,16 @@ async function seedHeaderDiscountSale(db: Kysely<Database>, saleId = 1): Promise
    header shares: 47.37 on the discounted line, 52.63 on the other. */
 async function seedLineDiscountSale(db: Kysely<Database>, saleId = 2): Promise<number> {
   await sql`INSERT INTO sales (id, tenant_id, account_id, doc_no, customer_id, status, total, paid_amount, store_credit_used, discount, tax_amount, subtotal, prices_include_tax, payment_type, payment_channel, branch_id, location_id, tip_amount, delivery_fee, delivery_fee_mode, service_charge)
-    VALUES (${saleId}, 't1', 'a1', ${'S-' + saleId}, 25, 'posted', 470, 470, 0, 100, 0, 570, false, 'cash', 'cash', 1, 1, 0, 0, 'freelance_courier', 0)`.execute(db);
+    VALUES (${saleId}, 't1', 'a1', ${'S-' + saleId}, 25, 'posted', 470, 470, 0, 100, 0, 570, false, 'cash', 'cash', 1, 1, 0, 0, 'freelance_courier', 0)`.execute(
+    db,
+  );
   await sql`INSERT INTO sale_items (id, tenant_id, account_id, sale_id, product_id, product_name, qty, unit_price, line_total, net_unit_price, net_line_total, allocated_discount, allocated_tax, cost_price, unit_multiplier, line_discount)
     VALUES (20, 't1', 'a1', ${saleId}, 10, 'Widget', 1, 300, 270, 222.63, 222.63, 47.37, 0, 150, 1, 30)`.execute(db);
   await sql`INSERT INTO sale_items (id, tenant_id, account_id, sale_id, product_id, product_name, qty, unit_price, line_total, net_unit_price, net_line_total, allocated_discount, allocated_tax, cost_price, unit_multiplier, line_discount)
     VALUES (21, 't1', 'a1', ${saleId}, 10, 'Widget', 1, 300, 300, 247.37, 247.37, 52.63, 0, 150, 1, 0)`.execute(db);
-  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', ${saleId}, 'cash', 470)`.execute(db);
+  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', ${saleId}, 'cash', 470)`.execute(
+    db,
+  );
   return saleId;
 }
 
@@ -263,53 +310,95 @@ async function returnDocCount(db: Kysely<Database>): Promise<number> {
 }
 
 async function treasurySum(db: Kysely<Database>, txnType: string): Promise<number> {
-  const row = await sql<{ s: string }>`SELECT COALESCE(SUM(amount), 0) AS s FROM treasury_transactions WHERE txn_type = ${txnType}`.execute(db);
+  const row = await sql<{
+    s: string;
+  }>`SELECT COALESCE(SUM(amount), 0) AS s FROM treasury_transactions WHERE txn_type = ${txnType}`.execute(db);
   return Number(row.rows[0].s);
 }
 
 async function locationStockQty(db: Kysely<Database>, productId: number): Promise<number> {
   // The restock also provisions an unassigned (location NULL) balance
   // row at 0 — scope the read to the sale's branch/location row.
-  const row = await db.selectFrom('product_location_stock').select('qty')
-    .where('product_id', '=', productId).where('branch_id', '=', 1).where('location_id', '=', 1)
+  const row = await db
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('product_id', '=', productId)
+    .where('branch_id', '=', 1)
+    .where('location_id', '=', 1)
     .executeTakeFirstOrThrow();
   return Number((row as any).qty || 0);
 }
 
 async function latestStockMovementCost(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await sql<{ c: string }>`SELECT unit_cost AS c FROM stock_movements WHERE product_id = ${productId} ORDER BY id DESC LIMIT 1`.execute(db);
+  const row = await sql<{
+    c: string;
+  }>`SELECT unit_cost AS c FROM stock_movements WHERE product_id = ${productId} ORDER BY id DESC LIMIT 1`.execute(db);
   return Number(row.rows[0]?.c || 0);
 }
 
 async function accountNet(pg: PGlite, code: string): Promise<number> {
   const rows = await pg.query<{ net: string }>(
     `SELECT COALESCE(SUM(l.debit) - SUM(l.credit), 0) AS net FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE a.code = $1`,
-    [code]);
+    [code],
+  );
   return Number(rows.rows[0].net);
 }
 
-async function createReturn(returns: ReturnsService, saleId: number, qty: number, auth: AuthContext, extra: Record<string, unknown> = {}, saleItemId?: number): Promise<{ ok: boolean; id: number }> {
-  const result = await returns.createReturn({
-    type: 'sale', invoiceId: saleId, note: 'spec return',
-    items: [{ productId: 10, productName: 'Widget', qty, saleItemId: saleItemId ?? saleId * 10 }],
-    settlementMode: 'refund', refundMethod: 'cash',
-    ...extra,
-  } as never, auth) as unknown as { ok: boolean; id: number };
+async function createReturn(
+  returns: ReturnsService,
+  saleId: number,
+  qty: number,
+  auth: AuthContext,
+  extra: Record<string, unknown> = {},
+  saleItemId?: number,
+): Promise<{ ok: boolean; id: number }> {
+  const result = (await returns.createReturn(
+    {
+      type: 'sale',
+      invoiceId: saleId,
+      note: 'spec return',
+      items: [{ productId: 10, productName: 'Widget', qty, saleItemId: saleItemId ?? saleId * 10 }],
+      settlementMode: 'refund',
+      refundMethod: 'cash',
+      ...extra,
+    } as never,
+    auth,
+  )) as unknown as { ok: boolean; id: number };
   assert.equal(result.ok, true);
   return result;
 }
 
-async function previewReturn(returns: ReturnsService, saleId: number, qty: number, extra: Record<string, unknown> = {}, saleItemId?: number): Promise<any> {
-  return (returns as any).previewReturnRelief({
-    type: 'sale', invoiceId: saleId,
-    items: [{ productId: 10, productName: 'Widget', qty, saleItemId: saleItemId ?? saleId * 10 }],
-    ...extra,
-  } as never, ADMIN) as unknown as any;
+async function previewReturn(
+  returns: ReturnsService,
+  saleId: number,
+  qty: number,
+  extra: Record<string, unknown> = {},
+  saleItemId?: number,
+): Promise<any> {
+  return (returns as any).previewReturnRelief(
+    {
+      type: 'sale',
+      invoiceId: saleId,
+      items: [{ productId: 10, productName: 'Widget', qty, saleItemId: saleItemId ?? saleId * 10 }],
+      ...extra,
+    } as never,
+    ADMIN,
+  ) as unknown as any;
 }
 
 function engineInput(overrides: Record<string, unknown> = {}): Parameters<typeof computeConditionalDiscountForfeit>[0] {
   return {
-    lines: [{ saleItemId: 10, soldQty: 3, unitPrice: 300, lineTotal: 900, lineDiscount: 0, allocatedDiscount: 100, allocatedTax: 0 }],
+    lines: [
+      {
+        saleItemId: 10,
+        soldQty: 3,
+        unitPrice: 300,
+        lineTotal: 900,
+        lineDiscount: 0,
+        allocatedDiscount: 100,
+        allocatedTax: 0,
+      },
+    ],
     returns: [{ saleItemId: 10, qty: 2 }],
     priorReturnedQtyByLine: new Map<number, number>(),
     headerDiscount: 100,
@@ -351,22 +440,32 @@ async function main(): Promise<void> {
   // Engine E3 — goodwill 250 on a return-1: computed 200 + 50
   // goodwill, lines sum exactly to the requested 250.
   {
-    const result = computeConditionalDiscountForfeit(engineInput({
-      returns: [{ saleItemId: 10, qty: 1 }], requestedGoodsRefund: 250,
-    }));
+    const result = computeConditionalDiscountForfeit(
+      engineInput({
+        returns: [{ saleItemId: 10, qty: 1 }],
+        requestedGoodsRefund: 250,
+      }),
+    );
     assert.equal(result.applies, true);
     assert.equal(result.computedGoodsRefund, 200);
     assert.equal(result.goodwillAmount, 50);
-    assert.equal(result.lines.reduce((sum, line) => sum + line.lineTotal, 0), 250);
+    assert.equal(
+      result.lines.reduce((sum, line) => sum + line.lineTotal, 0),
+      250,
+    );
   }
 
   // Engine E4 — goodwill above the returned pieces' gross price
   // (cap 300) fails closed.
   {
     assert.throws(
-      () => computeConditionalDiscountForfeit(engineInput({
-        returns: [{ saleItemId: 10, qty: 1 }], requestedGoodsRefund: 350,
-      })),
+      () =>
+        computeConditionalDiscountForfeit(
+          engineInput({
+            returns: [{ saleItemId: 10, qty: 1 }],
+            requestedGoodsRefund: 350,
+          }),
+        ),
       (error: any) => error.code === 'GOODWILL_REFUND_ABOVE_CAP',
     );
   }
@@ -375,9 +474,13 @@ async function main(): Promise<void> {
   // closed instead of silently underpaying the customer.
   {
     assert.throws(
-      () => computeConditionalDiscountForfeit(engineInput({
-        returns: [{ saleItemId: 10, qty: 1 }], requestedGoodsRefund: 150,
-      })),
+      () =>
+        computeConditionalDiscountForfeit(
+          engineInput({
+            returns: [{ saleItemId: 10, qty: 1 }],
+            requestedGoodsRefund: 150,
+          }),
+        ),
       (error: any) => error.code === 'GOODWILL_REFUND_BELOW_COMPUTED',
     );
   }
@@ -391,9 +494,13 @@ async function main(): Promise<void> {
     assert.equal(result.computedGoodsRefund, 800);
     assert.equal(result.forfeitedHeaderDiscount, 0);
     assert.throws(
-      () => computeConditionalDiscountForfeit(engineInput({
-        returns: [{ saleItemId: 10, qty: 3 }], requestedGoodsRefund: 800,
-      })),
+      () =>
+        computeConditionalDiscountForfeit(
+          engineInput({
+            returns: [{ saleItemId: 10, qty: 3 }],
+            requestedGoodsRefund: 800,
+          }),
+        ),
       (error: any) => error.code === 'CONDITIONAL_DISCOUNT_GOODWILL_REQUIRES_FORFEIT',
     );
   }
@@ -401,11 +508,24 @@ async function main(): Promise<void> {
   // Engine E7 — no header discount, no forfeit: return 1 of 3x300
   // computes the plain 300.
   {
-    const result = computeConditionalDiscountForfeit(engineInput({
-      headerDiscount: 0, invoiceTotal: 900,
-      lines: [{ saleItemId: 10, soldQty: 3, unitPrice: 300, lineTotal: 900, lineDiscount: 0, allocatedDiscount: 0, allocatedTax: 0 }],
-      returns: [{ saleItemId: 10, qty: 1 }],
-    }));
+    const result = computeConditionalDiscountForfeit(
+      engineInput({
+        headerDiscount: 0,
+        invoiceTotal: 900,
+        lines: [
+          {
+            saleItemId: 10,
+            soldQty: 3,
+            unitPrice: 300,
+            lineTotal: 900,
+            lineDiscount: 0,
+            allocatedDiscount: 0,
+            allocatedTax: 0,
+          },
+        ],
+        returns: [{ saleItemId: 10, qty: 1 }],
+      }),
+    );
     assert.equal(result.applies, false);
     assert.equal(result.computedGoodsRefund, 300);
     assert.equal(result.remainingNetAtOriginal, 600);
@@ -415,11 +535,13 @@ async function main(): Promise<void> {
   // anchor: an earlier return priced under the old pro-rata rule
   // (266.67) plus this return of the second piece totals 500.
   {
-    const result = computeConditionalDiscountForfeit(engineInput({
-      returns: [{ saleItemId: 10, qty: 1 }],
-      priorReturnedQtyByLine: new Map<number, number>([[10, 1]]),
-      priorGoodsRefunded: 266.67,
-    }));
+    const result = computeConditionalDiscountForfeit(
+      engineInput({
+        returns: [{ saleItemId: 10, qty: 1 }],
+        priorReturnedQtyByLine: new Map<number, number>([[10, 1]]),
+        priorGoodsRefunded: 266.67,
+      }),
+    );
     assert.equal(result.applies, true);
     assert.equal(result.computedGoodsRefund, 233.33);
     assert.equal(result.remainingNetAtOriginal, 300);
@@ -501,7 +623,11 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedHeaderDiscountSale(db);
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 1, 2, ADMIN, { forfeitHeaderDiscount: true }) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 1, 2, ADMIN, { forfeitHeaderDiscount: true })) as unknown as {
+        ok: boolean;
+        id: number;
+        refundTotal: number;
+      };
       assert.equal(result.refundTotal, 500);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.total), 500);
@@ -516,7 +642,15 @@ async function main(): Promise<void> {
       assert.equal(await accountNet(pg, '1110'), -500);
       assert.equal(await accountNet(pg, '1140'), 300);
       assert.equal(await accountNet(pg, '5100'), -300);
-      const detail = await returns.getReturnById(result.id, ADMIN) as unknown as { returnDocument: { total: number; forfeitedHeaderDiscount: number; goodwillAmount: number; headerDiscountMode: string; refundTotal: number } };
+      const detail = (await returns.getReturnById(result.id, ADMIN)) as unknown as {
+        returnDocument: {
+          total: number;
+          forfeitedHeaderDiscount: number;
+          goodwillAmount: number;
+          headerDiscountMode: string;
+          refundTotal: number;
+        };
+      };
       assert.equal(detail.returnDocument.total, 500);
       assert.equal(detail.returnDocument.forfeitedHeaderDiscount, 100);
       assert.equal(detail.returnDocument.goodwillAmount, 0);
@@ -535,7 +669,11 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedHeaderDiscountSale(db);
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 1, 2, ADMIN) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 1, 2, ADMIN)) as unknown as {
+        ok: boolean;
+        id: number;
+        refundTotal: number;
+      };
       assert.equal(result.refundTotal, 533.33);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.total), 533.33);
@@ -556,7 +694,11 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedHeaderDiscountSale(db);
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 1, 1, ADMIN, { forfeitHeaderDiscount: true }) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 1, 1, ADMIN, { forfeitHeaderDiscount: true })) as unknown as {
+        ok: boolean;
+        id: number;
+        refundTotal: number;
+      };
       assert.equal(result.refundTotal, 200);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.total), 200);
@@ -577,7 +719,11 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedHeaderDiscountSale(db);
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 1, 1, ADMIN) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 1, 1, ADMIN)) as unknown as {
+        ok: boolean;
+        id: number;
+        refundTotal: number;
+      };
       assert.equal(result.refundTotal, 266.67);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.total), 266.67);
@@ -597,9 +743,11 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedHeaderDiscountSale(db);
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 1, 1, ADMIN, {
-        forfeitHeaderDiscount: true, goodwillRefundAmount: 250, goodwillRefundReason: 'عميلة قديمة',
-      }) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 1, 1, ADMIN, {
+        forfeitHeaderDiscount: true,
+        goodwillRefundAmount: 250,
+        goodwillRefundReason: 'عميلة قديمة',
+      })) as unknown as { ok: boolean; id: number; refundTotal: number };
       assert.equal(result.refundTotal, 250);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.total), 250);
@@ -623,9 +771,10 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedHeaderDiscountSale(db);
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 1, 1, ADMIN, {
-        goodwillRefundAmount: 280, goodwillRefundReason: 'عميلة قديمة',
-      }) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 1, 1, ADMIN, {
+        goodwillRefundAmount: 280,
+        goodwillRefundReason: 'عميلة قديمة',
+      })) as unknown as { ok: boolean; id: number; refundTotal: number };
       assert.equal(result.refundTotal, 280);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.total), 280);
@@ -650,7 +799,8 @@ async function main(): Promise<void> {
       const { returns } = makeServices(db);
       await assert.rejects(
         createReturn(returns, 1, 1, ADMIN, {
-          goodwillRefundAmount: 350, goodwillRefundReason: 'too generous',
+          goodwillRefundAmount: 350,
+          goodwillRefundReason: 'too generous',
         }),
         (error: any) => error.code === 'GOODWILL_REFUND_ABOVE_CAP',
       );
@@ -672,7 +822,8 @@ async function main(): Promise<void> {
       const { returns } = makeServices(db);
       await assert.rejects(
         createReturn(returns, 1, 1, ADMIN, {
-          goodwillRefundAmount: 250, goodwillRefundReason: 'too little',
+          goodwillRefundAmount: 250,
+          goodwillRefundReason: 'too little',
         }),
         (error: any) => error.code === 'GOODWILL_REFUND_BELOW_COMPUTED',
       );
@@ -692,7 +843,9 @@ async function main(): Promise<void> {
       const { returns } = makeServices(db);
       await assert.rejects(
         createReturn(returns, 1, 1, ADMIN, {
-          forfeitHeaderDiscount: true, goodwillRefundAmount: 350, goodwillRefundReason: 'too generous',
+          forfeitHeaderDiscount: true,
+          goodwillRefundAmount: 350,
+          goodwillRefundReason: 'too generous',
         }),
         (error: any) => error.code === 'GOODWILL_REFUND_ABOVE_CAP',
       );
@@ -731,7 +884,9 @@ async function main(): Promise<void> {
       const { returns } = makeServices(db);
       await assert.rejects(
         createReturn(returns, 1, 1, CASHIER, {
-          forfeitHeaderDiscount: true, goodwillRefundAmount: 250, goodwillRefundReason: 'عميلة قديمة',
+          forfeitHeaderDiscount: true,
+          goodwillRefundAmount: 250,
+          goodwillRefundReason: 'عميلة قديمة',
         }),
         (error: any) => error.code === 'MANAGER_AUTH_REQUIRED',
       );
@@ -751,9 +906,12 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedHeaderDiscountSale(db);
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 1, 1, CASHIER, {
-        forfeitHeaderDiscount: true, goodwillRefundAmount: 250, goodwillRefundReason: 'عميلة قديمة', managerPin: '2468',
-      }) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 1, 1, CASHIER, {
+        forfeitHeaderDiscount: true,
+        goodwillRefundAmount: 250,
+        goodwillRefundReason: 'عميلة قديمة',
+        managerPin: '2468',
+      })) as unknown as { ok: boolean; id: number; refundTotal: number };
       assert.equal(result.refundTotal, 250);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.total), 250);
@@ -776,7 +934,8 @@ async function main(): Promise<void> {
       const { returns } = makeServices(db);
       await assert.rejects(
         createReturn(returns, 1, 1, CASHIER, {
-          goodwillRefundAmount: 280, goodwillRefundReason: 'عميلة قديمة',
+          goodwillRefundAmount: 280,
+          goodwillRefundReason: 'عميلة قديمة',
         }),
         (error: any) => error.code === 'MANAGER_AUTH_REQUIRED',
       );
@@ -791,9 +950,11 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedHeaderDiscountSale(db);
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 1, 1, CASHIER, {
-        goodwillRefundAmount: 280, goodwillRefundReason: 'عميلة قديمة', managerPin: '2468',
-      }) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 1, 1, CASHIER, {
+        goodwillRefundAmount: 280,
+        goodwillRefundReason: 'عميلة قديمة',
+        managerPin: '2468',
+      })) as unknown as { ok: boolean; id: number; refundTotal: number };
       assert.equal(result.refundTotal, 280);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.total), 280);
@@ -814,7 +975,11 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedLineDiscountSale(db);
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 2, 1, ADMIN, { forfeitHeaderDiscount: true }, 20) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 2, 1, ADMIN, { forfeitHeaderDiscount: true }, 20)) as unknown as {
+        ok: boolean;
+        id: number;
+        refundTotal: number;
+      };
       assert.equal(result.refundTotal, 170);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.total), 170);
@@ -830,7 +995,11 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedLineDiscountSale(db);
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 2, 1, ADMIN, { forfeitHeaderDiscount: true }, 21) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 2, 1, ADMIN, { forfeitHeaderDiscount: true }, 21)) as unknown as {
+        ok: boolean;
+        id: number;
+        refundTotal: number;
+      };
       assert.equal(result.refundTotal, 200);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.total), 200);
@@ -850,11 +1019,19 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedHeaderDiscountSale(db);
       const { returns } = makeServices(db);
-      const first = await createReturn(returns, 1, 1, ADMIN) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const first = (await createReturn(returns, 1, 1, ADMIN)) as unknown as {
+        ok: boolean;
+        id: number;
+        refundTotal: number;
+      };
       assert.equal(first.refundTotal, 266.67);
       const firstDoc = await returnDoc(db, first.id);
       assert.equal(String(firstDoc.header_discount_mode), 'original');
-      const second = await createReturn(returns, 1, 1, ADMIN, { forfeitHeaderDiscount: true }) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const second = (await createReturn(returns, 1, 1, ADMIN, { forfeitHeaderDiscount: true })) as unknown as {
+        ok: boolean;
+        id: number;
+        refundTotal: number;
+      };
       assert.equal(second.refundTotal, 233.33);
       const secondDoc = await returnDoc(db, second.id);
       assert.equal(String(secondDoc.header_discount_mode), 'forfeit');
@@ -875,12 +1052,20 @@ async function main(): Promise<void> {
       const { returns } = makeServices(db);
       await assert.rejects(
         db.transaction().execute(async (trx) => {
-          await returns.prepareExchangeReturn(trx, {
-            type: 'sale', invoiceId: 1, note: 'spec exchange',
-            items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 10 }],
-            settlementMode: 'refund', refundMethod: 'cash',
-            managerPin: '2468', forfeitHeaderDiscount: true,
-          } as never, ADMIN);
+          await returns.prepareExchangeReturn(
+            trx,
+            {
+              type: 'sale',
+              invoiceId: 1,
+              note: 'spec exchange',
+              items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 10 }],
+              settlementMode: 'refund',
+              refundMethod: 'cash',
+              managerPin: '2468',
+              forfeitHeaderDiscount: true,
+            } as never,
+            ADMIN,
+          );
         }),
         (error: any) => error.code === 'FORFEIT_EXCHANGE_NOT_SUPPORTED',
       );

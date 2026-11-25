@@ -112,37 +112,70 @@ async function seedShipment(
   // fundingType undefined omits the column (NULL in the harness:
   // the legacy row that predates the column). An explicit value
   // seeds the declared funding type.
-  await db.insertInto('import_shipments' as never).values({
-    id, tenant_id: 't1', container_number: containerNumber, supplier_id: 1, status: 'Pending',
-    exchange_rate_at_arrival: 50, cost_allocation_method: 'value', project_id: 'proj-1',
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-    ...(fundingType !== undefined ? { funding_type: fundingType } : {}),
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: `${id}-item`, tenant_id: 't1', shipment_id: id, product_id: 1,
-    quantity, factory_unit_price_usd: unitPrice,
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      container_number: containerNumber,
+      supplier_id: 1,
+      status: 'Pending',
+      exchange_rate_at_arrival: 50,
+      cost_allocation_method: 'value',
+      project_id: 'proj-1',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+      ...(fundingType !== undefined ? { funding_type: fundingType } : {}),
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: `${id}-item`,
+      tenant_id: 't1',
+      shipment_id: id,
+      product_id: 1,
+      quantity,
+      factory_unit_price_usd: unitPrice,
+    } as never)
+    .execute();
 }
 
-async function seedFunding(
-  db: Kysely<Database>,
-  method: string,
-  form4Number: string | null,
-): Promise<void> {
-  await db.insertInto('supplier_payments' as never).values({
-    tenant_id: 't1', account_id: 't1', supplier_id: 1, amount: 50000, amount_foreign: 1000,
-    note: 'funding', currency: 'USD', exchange_rate: 50, proforma_invoice_id: 'pi-a',
-    payment_method: method, form4_number: form4Number,
-  } as never).execute();
+async function seedFunding(db: Kysely<Database>, method: string, form4Number: string | null): Promise<void> {
+  await db
+    .insertInto('supplier_payments' as never)
+    .values({
+      tenant_id: 't1',
+      account_id: 't1',
+      supplier_id: 1,
+      amount: 50000,
+      amount_foreign: 1000,
+      note: 'funding',
+      currency: 'USD',
+      exchange_rate: 50,
+      proforma_invoice_id: 'pi-a',
+      payment_method: method,
+      form4_number: form4Number,
+    } as never)
+    .execute();
 }
 
 async function shipmentStatus(db: Kysely<Database>, id: string): Promise<string> {
-  const row: any = await (db as any).selectFrom('import_shipments').select('status').where('id', '=', id).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom('import_shipments')
+    .select('status')
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
   return row.status;
 }
 
 async function shipmentFundingType(db: Kysely<Database>, id: string): Promise<string | null> {
-  const row: any = await (db as any).selectFrom('import_shipments').select('funding_type').where('id', '=', id).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom('import_shipments')
+    .select('funding_type')
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
   return row.funding_type;
 }
 
@@ -175,7 +208,11 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db, 'sh-1', 100, 50);
       await seedFunding(db, 'bank_transfer', null);
-      const updated = await service.updateShipmentCosts('t1', 1, 'sh-1', { status: 'In Customs', form4Number: 'F4-100', form4Date: '2026-02-01' });
+      const updated = await service.updateShipmentCosts('t1', 1, 'sh-1', {
+        status: 'In Customs',
+        form4Number: 'F4-100',
+        form4Date: '2026-02-01',
+      });
       assert.equal(updated.status, 'In Customs', 'The transition succeeds once a Form 4 is recorded');
       assert.equal(updated.form4_number, 'F4-100', 'The Form 4 number is stored on the shipment');
     } finally {
@@ -192,7 +229,11 @@ async function main(): Promise<void> {
       await seedFunding(db, 'bank_transfer', 'F4-200');
       const updated = await service.updateShipmentCosts('t1', 1, 'sh-1', { status: 'In Customs' });
       assert.equal(updated.status, 'In Customs');
-      assert.equal(updated.form4_number, null, 'No shipment-level Form 4 was recorded; the transfer Form 4 satisfied the gate');
+      assert.equal(
+        updated.form4_number,
+        null,
+        'No shipment-level Form 4 was recorded; the transfer Form 4 satisfied the gate',
+      );
     } finally {
       await db.destroy();
     }
@@ -316,7 +357,12 @@ async function main(): Promise<void> {
       // bank > $2k WITH a Form 4 → gate passes (location check is the failure).
       await seedShipment(db, 'sh-f4', 100, 50);
       await assert.rejects(
-        async () => service.updateShipmentCosts('t1', 1, 'sh-f4', { status: 'Arrived', exchangeRateAtArrival: 50, form4Number: 'F4-300' }),
+        async () =>
+          service.updateShipmentCosts('t1', 1, 'sh-f4', {
+            status: 'Arrived',
+            exchangeRateAtArrival: 50,
+            form4Number: 'F4-300',
+          }),
         /مخزن الاستلام/,
         'A Form 4 lets the receipt clear the gate and reach the receipt-location check',
       );
@@ -333,7 +379,10 @@ async function main(): Promise<void> {
       const service = makeService(db);
       const created = await service.createShipment('t1', { containerNumber: 'C-CREATE-1' });
       assert.equal((created as any).funding_type, 'bank_transfer', 'Create defaults the funding type to bank_transfer');
-      const createdCash = await service.createShipment('t1', { containerNumber: 'C-CREATE-2', fundingType: 'cash_carried' });
+      const createdCash = await service.createShipment('t1', {
+        containerNumber: 'C-CREATE-2',
+        fundingType: 'cash_carried',
+      });
       assert.equal((createdCash as any).funding_type, 'cash_carried', 'An explicit cash_carried is stored on create');
     } finally {
       await db.destroy();
@@ -360,7 +409,11 @@ async function main(): Promise<void> {
       const service2 = makeService(db2);
       await seedShipment(db2, 'sh-2', 100, 50, 'cash_carried');
       await service2.updateShipmentCosts('t1', 1, 'sh-2', { fundingType: 'bank_transfer' });
-      assert.equal(await shipmentFundingType(db2, 'sh-2'), 'bank_transfer', 'The funding type change back is persisted');
+      assert.equal(
+        await shipmentFundingType(db2, 'sh-2'),
+        'bank_transfer',
+        'The funding type change back is persisted',
+      );
       await assert.rejects(
         async () => service2.updateShipmentCosts('t1', 1, 'sh-2', { status: 'In Customs' }),
         /IMPORT_FORM4_REQUIRED/,
@@ -423,12 +476,21 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedShipment(db, 'sh-f4-probe', 2001, 1, undefined, 'MSCU-TEST-F4');
       await assert.rejects(
-        async () => service.updateShipmentCosts('t1', 1, 'sh-f4-probe', { status: 'Arrived', exchangeRateAtArrival: 50 }),
+        async () =>
+          service.updateShipmentCosts('t1', 1, 'sh-f4-probe', { status: 'Arrived', exchangeRateAtArrival: 50 }),
         /IMPORT_FORM4_REQUIRED/,
         'The live probe shape ($2,001, Form 4 blank, Arrived) must not post a receipt',
       );
-      assert.equal(await shipmentStatus(db, 'sh-f4-probe'), 'Pending', 'The blocked receipt leaves the status unchanged');
-      const receipts: any[] = await (db as any).selectFrom('import_inventory_receipts').select('id').where('shipment_id', '=', 'sh-f4-probe').execute();
+      assert.equal(
+        await shipmentStatus(db, 'sh-f4-probe'),
+        'Pending',
+        'The blocked receipt leaves the status unchanged',
+      );
+      const receipts: any[] = await (db as any)
+        .selectFrom('import_inventory_receipts')
+        .select('id')
+        .where('shipment_id', '=', 'sh-f4-probe')
+        .execute();
       assert.equal(receipts.length, 0, 'The blocked receipt posts no inventory receipt: no JE, no stock movement');
     } finally {
       await db.destroy();
@@ -438,4 +500,7 @@ async function main(): Promise<void> {
   console.log('Import Form 4 clearance gate tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

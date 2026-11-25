@@ -47,7 +47,11 @@ function testUnreservedOrdersExpireByCreatedAt(): void {
     stock_reserved_at: null,
     created_at: oldDate,
   };
-  assert.equal(isReservationExpired(notReservedExpired, now), true, 'Unreserved order past the 30-min window must expire by created_at');
+  assert.equal(
+    isReservationExpired(notReservedExpired, now),
+    true,
+    'Unreserved order past the 30-min window must expire by created_at',
+  );
 
   // stock_reserved NULL behaves the same as false.
   const nullReservedExpired: OrderReservationCandidate = {
@@ -59,7 +63,11 @@ function testUnreservedOrdersExpireByCreatedAt(): void {
     stock_reserved_at: null,
     created_at: oldDate,
   };
-  assert.equal(isReservationExpired(nullReservedExpired, now), true, 'Order with null stock_reserved past the window must expire by created_at');
+  assert.equal(
+    isReservationExpired(nullReservedExpired, now),
+    true,
+    'Order with null stock_reserved past the window must expire by created_at',
+  );
 
   // Unreserved + inside the window (10 min old) -> NOT expired.
   const notReservedRecent: OrderReservationCandidate = {
@@ -71,7 +79,11 @@ function testUnreservedOrdersExpireByCreatedAt(): void {
     stock_reserved_at: null,
     created_at: recentDate,
   };
-  assert.equal(isReservationExpired(notReservedRecent, now), false, 'Unreserved order inside the 30-min window must not expire');
+  assert.equal(
+    isReservationExpired(notReservedRecent, now),
+    false,
+    'Unreserved order inside the 30-min window must not expire',
+  );
 
   console.log('  -> Unreserved orders expire by created_at, same thresholds as reserved ones.');
 }
@@ -99,7 +111,11 @@ function testPaidOrConvertedOrdersNeverExpire(): void {
     sale_id: 105,
     stock_reserved_at: oldDate,
   };
-  assert.equal(isReservationExpired(convertedOrder, now), false, 'Orders converted to formal sales must NEVER be reaped');
+  assert.equal(
+    isReservationExpired(convertedOrder, now),
+    false,
+    'Orders converted to formal sales must NEVER be reaped',
+  );
 
   const processingOrder: OrderReservationCandidate = {
     id: 5,
@@ -109,7 +125,11 @@ function testPaidOrConvertedOrdersNeverExpire(): void {
     payment_status: 'pending',
     stock_reserved_at: oldDate,
   };
-  assert.equal(isReservationExpired(processingOrder, now), false, 'Orders being prepared (processing) must NEVER be auto-cancelled');
+  assert.equal(
+    isReservationExpired(processingOrder, now),
+    false,
+    'Orders being prepared (processing) must NEVER be auto-cancelled',
+  );
 
   console.log('  -> Paid, converted, and in-progress orders are safely protected from reaping.');
 }

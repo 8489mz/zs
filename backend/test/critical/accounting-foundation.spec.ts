@@ -46,15 +46,16 @@ function testSeedCoversEveryRequiredCode(): void {
   for (const code of REQUIRED_ACCOUNT_CODES) {
     assert.ok(
       seededCodes.has(code),
-      `account ${code} is read by accounting_settings but DEFAULT_SEED_ACCOUNTS never creates it — `
-      + 'every journal for a freshly seeded tenant would fail with "Invalid accounting setting account id"',
+      `account ${code} is read by accounting_settings but DEFAULT_SEED_ACCOUNTS never creates it — ` +
+        'every journal for a freshly seeded tenant would fail with "Invalid accounting setting account id"',
     );
   }
 
   // الخريطة والبذور يجب أن تبقيا متطابقتين: كود في الخريطة غير مزروع يعيد نفس العطل.
   const engineSource = read('modules/accounting/engines/accounting-foundation.engine.ts');
-  const mappedCodes = Array.from(engineSource.matchAll(/codes: \[([^\]]+)\]/g))
-    .flatMap((m) => m[1].split(',').map((part) => part.trim().replace(/'/g, '')));
+  const mappedCodes = Array.from(engineSource.matchAll(/codes: \[([^\]]+)\]/g)).flatMap((m) =>
+    m[1].split(',').map((part) => part.trim().replace(/'/g, '')),
+  );
   for (const code of mappedCodes) {
     assert.ok(seededCodes.has(code), `settings map points at account ${code}, which the seed never creates`);
   }
@@ -99,8 +100,17 @@ function testCompletenessNotExistence(): void {
 /** ACC-3 — الخريطة تُبنى من الموجود فعلاً، وتحترم البديل. */
 function testSettingsMappingResolution(): void {
   const ids = new Map<string, number>([
-    ['1110', 11], ['1120', 12], ['1130', 13], ['1140', 14], ['1150', 15],
-    ['2110', 21], ['2120', 22], ['4100', 41], ['4300', 43], ['5100', 51], ['6000', 60],
+    ['1110', 11],
+    ['1120', 12],
+    ['1130', 13],
+    ['1140', 14],
+    ['1150', 15],
+    ['2110', 21],
+    ['2120', 22],
+    ['4100', 41],
+    ['4300', 43],
+    ['5100', 51],
+    ['6000', 60],
   ]);
   const mapping = buildSettingsMapping(ids);
   assert.equal(mapping.cash_account_id, 11);
@@ -159,29 +169,41 @@ function testForbiddenPatternsAreGone(): void {
   // New sales must fail atomically; durable recovery remains for historical failures.
   for (const path of ['modules/sales/services/sales-write.service.ts', 'modules/delivery-reps/van-sales.service.ts']) {
     const salesWrite = read(path);
-    assert.ok(!/recordPostingFailure\(/.test(salesWrite),
-      'new sale transactions must propagate journal errors, not commit an unposted invoice into the recovery queue');
+    assert.ok(
+      !/recordPostingFailure\(/.test(salesWrite),
+      'new sale transactions must propagate journal errors, not commit an unposted invoice into the recovery queue',
+    );
   }
   // File #52 split: the field-sale posting now lives in the S1 slice — read it directly.
-  for (const path of ['modules/sales/services/create-sale/finalize-sale.ts', 'modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts']) {
+  for (const path of [
+    'modules/sales/services/create-sale/finalize-sale.ts',
+    'modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts',
+  ]) {
     const salesWrite = read(path);
     assert.ok(/await this\.accountingPosting\.postSale\(trx,/.test(salesWrite));
-    assert.ok(/clearPostingFailure\(trx,/.test(salesWrite),
-      'a successful posting must still resolve a historical failure');
+    assert.ok(
+      /clearPostingFailure\(trx,/.test(salesWrite),
+      'a successful posting must still resolve a historical failure',
+    );
   }
 
   // File #44 split: updateSale now lives in the S1 slice — read it directly
   // (the old slice() from 'async updateSale(' to 'async cancelSale(' broke
   // once cancelSale left the facade file).
   const updateSaleBody = read('modules/sales/services/sales-edit-and-cancel/update-sale.service.ts');
-  assert.ok(/postSaleEdit\(trx,/.test(updateSaleBody),
-    'updateSale must post the edit via postSaleEdit in the same transaction');
-  assert.ok(!/reverseSaleJournal\(trx,/.test(updateSaleBody),
-    'updateSale must not reverse explicitly before postSaleEdit, or postSaleEdit throws SALE_ALREADY_REVERSED');
+  assert.ok(
+    /postSaleEdit\(trx,/.test(updateSaleBody),
+    'updateSale must post the edit via postSaleEdit in the same transaction',
+  );
+  assert.ok(
+    !/reverseSaleJournal\(trx,/.test(updateSaleBody),
+    'updateSale must not reverse explicitly before postSaleEdit, or postSaleEdit throws SALE_ALREADY_REVERSED',
+  );
 
   const posting = read('modules/accounting/services/journal-posting-core.service.ts');
   assert.ok(
-    /INSERT INTO accounting_posting_failures/.test(posting) && /ON CONFLICT \(tenant_id, source_type, source_id\) DO UPDATE/.test(posting),
+    /INSERT INTO accounting_posting_failures/.test(posting) &&
+      /ON CONFLICT \(tenant_id, source_type, source_id\) DO UPDATE/.test(posting),
     'the failure record must be upserted per source, counting attempts rather than piling up rows',
   );
 
@@ -214,7 +236,9 @@ function run(): void {
   testSettingsMappingResolution();
   testForbiddenPatternsAreGone();
   testMigrationContract();
-  console.log('accounting-foundation.spec: ACC-1..ACC-4 hold — no tenant can sell without books, and no failed journal is silent');
+  console.log(
+    'accounting-foundation.spec: ACC-1..ACC-4 hold — no tenant can sell without books, and no failed journal is silent',
+  );
 }
 
 try {

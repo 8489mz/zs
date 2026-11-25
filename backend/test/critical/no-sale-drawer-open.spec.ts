@@ -44,8 +44,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-a', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-a',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -112,15 +117,46 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('cashier_shifts').values({
-    id: 7, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-7',
-    opened_by: 2, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: '2026-01-01T00:00:00.000Z',
-  }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'SHIFT-7',
+      opened_by: 2,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): SalesWriteService {
@@ -137,8 +173,16 @@ function buildService(db: Kysely<Database>): SalesWriteService {
   const audit = new AuditService(db);
   const planFeatures = { hasFeature: () => false };
   return new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, {} as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    {} as never,
   );
 }
 
@@ -150,7 +194,11 @@ async function main(): Promise<void> {
 
     // Case 1: a one-word reason with no manager PIN succeeds and is logged.
     await service.logPosAuditEvent({ eventType: 'no_sale', branchId: 1, note: 'فكة' } as never, cashierAuth);
-    const events = await sql<{ event_type: string; reason: string; metadata: unknown }>`SELECT event_type, reason, metadata FROM pos_audit_events`.execute(db);
+    const events = await sql<{
+      event_type: string;
+      reason: string;
+      metadata: unknown;
+    }>`SELECT event_type, reason, metadata FROM pos_audit_events`.execute(db);
     assert.equal(events.rows.length, 1);
     assert.equal(events.rows[0].event_type, 'no_sale');
     assert.equal(events.rows[0].reason, 'فكة');

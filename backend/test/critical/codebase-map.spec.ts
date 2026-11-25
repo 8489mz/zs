@@ -62,10 +62,7 @@ async function main(): Promise<void> {
   const modules = listDirectories(modulesDir);
   assert.ok(modules.length > 0, 'backend/src/modules must contain module directories');
   for (const mod of modules) {
-    assert.ok(
-      map.includes(`backend/src/modules/${mod}/`),
-      `map must name backend module directory ${mod}`,
-    );
+    assert.ok(map.includes(`backend/src/modules/${mod}/`), `map must name backend module directory ${mod}`);
   }
 
   // 4. Every frontend feature directory is named in the map.
@@ -73,10 +70,7 @@ async function main(): Promise<void> {
   const features = listDirectories(featuresDir);
   assert.ok(features.length > 0, 'frontend/src/features must contain feature directories');
   for (const feature of features) {
-    assert.ok(
-      map.includes(`frontend/src/features/${feature}/`),
-      `map must name frontend feature directory ${feature}`,
-    );
+    assert.ok(map.includes(`frontend/src/features/${feature}/`), `map must name frontend feature directory ${feature}`);
   }
 
   // 5. ENGINE_MAP is the referenced source of truth for money engines.

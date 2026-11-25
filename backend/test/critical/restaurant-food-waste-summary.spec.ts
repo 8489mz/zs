@@ -63,12 +63,29 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: '"EGP"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({
-    tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Branch A', default_stock_location_id: null }).execute();
-  await anyDb.insertInto('branches').values({ id: 2, tenant_id: TENANT, name: 'Branch B', default_stock_location_id: null }).execute();
-  for (const [id, name] of [[101, 'Rice'], [102, 'Chicken'], [103, 'Sauce'], [104, 'Bread']] as const) {
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({
+      tenant_id: TENANT,
+      currency_code: 'EGP',
+      is_base: true,
+      exchange_rate: 1,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Branch A', default_stock_location_id: null })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 2, tenant_id: TENANT, name: 'Branch B', default_stock_location_id: null })
+    .execute();
+  for (const [id, name] of [
+    [101, 'Rice'],
+    [102, 'Chicken'],
+    [103, 'Sauce'],
+    [104, 'Bread'],
+  ] as const) {
     await anyDb.insertInto('products').values({ id, tenant_id: TENANT, name }).execute();
   }
   // log 1: branch A, posted (has a stock movement), cost 100.
@@ -78,18 +95,37 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const logs = [
     { branch_id: 1, product_id: 101, quantity: 2, cost_price: 50, total_cost: 100, reason: 'spoilage' },
     { branch_id: 2, product_id: 102, quantity: 5, cost_price: 100, total_cost: 500, reason: 'expired' },
-    { branch_id: 1, product_id: 103, quantity: 1, cost_price: 70, total_cost: 70, reason: 'prep_error', notes: '[بانتظار تسوية المخزون]' },
+    {
+      branch_id: 1,
+      product_id: 103,
+      quantity: 1,
+      cost_price: 70,
+      total_cost: 70,
+      reason: 'prep_error',
+      notes: '[بانتظار تسوية المخزون]',
+    },
     { branch_id: 1, product_id: 104, quantity: 3, cost_price: 10, total_cost: 30, reason: 'spoilage' },
   ];
   for (const log of logs) {
-    await anyDb.insertInto('restaurant_food_waste_logs').values({
-      tenant_id: TENANT, account_id: ACCOUNT, ...log,
-    }).execute();
+    await anyDb
+      .insertInto('restaurant_food_waste_logs')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        ...log,
+      })
+      .execute();
   }
   for (const refId of [1, 2, 4]) {
-    await anyDb.insertInto('stock_movements').values({
-      tenant_id: TENANT, product_id: 101, reference_type: 'food_waste', reference_id: refId,
-    }).execute();
+    await anyDb
+      .insertInto('stock_movements')
+      .values({
+        tenant_id: TENANT,
+        product_id: 101,
+        reference_type: 'food_waste',
+        reference_id: refId,
+      })
+      .execute();
   }
   await anyDb.deleteFrom('products').where('id', '=', 104).execute();
   return { pg, db };
@@ -109,10 +145,10 @@ async function main() {
   const { pg, db } = await makeDb();
   const service = buildService(db);
   try {
-  // 1. Branch A summary: only A's POSTED cost (100 + 30); the pending
-  // 70 is reported separately, never inside totalWasteCost; branch B's
-  // 500 does not leak in.
-  {
+    // 1. Branch A summary: only A's POSTED cost (100 + 30); the pending
+    // 70 is reported separately, never inside totalWasteCost; branch B's
+    // 500 does not leak in.
+    {
       const summary = await service.getVarianceSummary(auth, 1);
       assert.equal(Number(summary.totalWasteCost), 130);
       assert.equal(Number(summary.totalWasteIncidents), 2);
@@ -122,21 +158,21 @@ async function main() {
       const spoilage = byReason.find((r) => r.reason === 'spoilage');
       assert.equal(Number(spoilage?.cost), 130);
       assert.equal(Number(spoilage?.count), 2);
-  }
+    }
 
-  // 2. No branch filter: all branches' POSTED cost (630), pending
-  // still separate (70).
-  {
+    // 2. No branch filter: all branches' POSTED cost (630), pending
+    // still separate (70).
+    {
       const summary = await service.getVarianceSummary(auth);
       assert.equal(Number(summary.totalWasteCost), 630);
       assert.equal(Number(summary.totalWasteIncidents), 3);
       assert.equal(Number((summary as any).pendingWasteCost), 70);
       assert.equal(Number((summary as any).pendingWasteIncidents), 1);
-  }
+    }
 
-  // 3. listLogs still returns the log whose product was deleted
-  // (product_name null), and the branch filter still applies.
-  {
+    // 3. listLogs still returns the log whose product was deleted
+    // (product_name null), and the branch filter still applies.
+    {
       const all = await service.listLogs(auth);
       assert.equal(all.length, 4);
       const deleted = (all as any[]).find((row) => Number(row.id) === 4);
@@ -145,10 +181,15 @@ async function main() {
       const branchB = await service.listLogs(auth, { branchId: 2 });
       assert.equal(branchB.length, 1);
       assert.equal(Number((branchB as any[])[0].id), 2);
+    }
+  } finally {
+    await db.destroy();
   }
-  } finally { await db.destroy(); }
 
   console.log('Food waste summary tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

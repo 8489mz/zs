@@ -69,13 +69,21 @@ async function main() {
     // Stock -5 at WAC 5, return 8 units at original cost 6: beforeQty -5, new WAC
     // (-25 + 48) / 3 = 7.666667. Before this package this call threw.
     await valueStockReceipt(db, 't1', 1, 3, 8, 48);
-    const afterReturn = await db.selectFrom('products').select('cost_price')
-      .where('id', '=', 1).where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
+    const afterReturn = await db
+      .selectFrom('products')
+      .select('cost_price')
+      .where('id', '=', 1)
+      .where('tenant_id', '=', 't1')
+      .executeTakeFirstOrThrow();
     assert.equal(Number(afterReturn.cost_price), 7.666667);
     // Exact-empty pool through the integrated path: stock -8, receipt 8, keep 5.
     await valueStockReceipt(db, 't1', 2, 0, 8, 48);
-    const afterEmpty = await db.selectFrom('products').select('cost_price')
-      .where('id', '=', 2).where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
+    const afterEmpty = await db
+      .selectFrom('products')
+      .select('cost_price')
+      .where('id', '=', 2)
+      .where('tenant_id', '=', 't1')
+      .executeTakeFirstOrThrow();
     assert.equal(Number(afterEmpty.cost_price), 5);
   } finally {
     await db.destroy();

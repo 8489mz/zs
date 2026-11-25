@@ -12,7 +12,8 @@ async function run(): Promise<void> {
   const env = process.env.APP_MODE;
   const portable = process.env.PORTABLE_MODE;
   const service = new SettingsBackupService(
-    {} as any, {} as any,
+    {} as any,
+    {} as any,
     { invalidateTenant: () => undefined } as any,
     {} as any,
   );
@@ -29,4 +30,7 @@ async function run(): Promise<void> {
     else process.env.PORTABLE_MODE = portable;
   }
 }
-run().catch(error => { console.error(error); process.exitCode = 1; });
+run().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

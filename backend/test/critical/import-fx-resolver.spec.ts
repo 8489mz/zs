@@ -103,17 +103,40 @@ function makeService(db: Kysely<Database>): any {
   return new (ImportSalesService as any)(db, posting);
 }
 
-async function seedShipment(db: Kysely<Database>, tenantId: string, shipmentId: string, rates: { arrival?: number | null; pricing?: number | null }): Promise<void> {
-  await db.insertInto('import_shipments' as never).values({
-    id: shipmentId, tenant_id: tenantId, container_number: 'C-FX', supplier_id: 1, status: 'Arrived',
-    shipping_cost_usd: 0, customs_cost_egp: 0, internal_transport_cost_egp: 0,
-    exchange_rate_at_arrival: rates.arrival ?? null, pricing_exchange_rate: rates.pricing ?? null,
-    project_id: null,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: `${shipmentId}-item`, tenant_id: tenantId, shipment_id: shipmentId, product_id: 1,
-    quantity: 10, factory_unit_price_usd: 100, received_quantity: 10,
-  } as never).execute();
+async function seedShipment(
+  db: Kysely<Database>,
+  tenantId: string,
+  shipmentId: string,
+  rates: { arrival?: number | null; pricing?: number | null },
+): Promise<void> {
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: shipmentId,
+      tenant_id: tenantId,
+      container_number: 'C-FX',
+      supplier_id: 1,
+      status: 'Arrived',
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+      exchange_rate_at_arrival: rates.arrival ?? null,
+      pricing_exchange_rate: rates.pricing ?? null,
+      project_id: null,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: `${shipmentId}-item`,
+      tenant_id: tenantId,
+      shipment_id: shipmentId,
+      product_id: 1,
+      quantity: 10,
+      factory_unit_price_usd: 100,
+      received_quantity: 10,
+    } as never)
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -137,12 +160,13 @@ async function main(): Promise<void> {
     // Case 2 — quotation with no supplied rate and no registered
     // rate fails closed instead of inventing one.
     await assert.rejects(
-      () => svc.createQuotation('t2', {
-        supplierId: '1',
-        quotationNo: 'RFQ-NORATE',
-        itemName: 'Widget',
-        unitPriceForeign: 100,
-      }),
+      () =>
+        svc.createQuotation('t2', {
+          supplierId: '1',
+          quotationNo: 'RFQ-NORATE',
+          itemName: 'Widget',
+          unitPriceForeign: 100,
+        }),
       /سعر صرف USD غير متاح/,
     );
     console.log('Case 2 passed: quotation without a registered rate fails closed');
@@ -164,13 +188,14 @@ async function main(): Promise<void> {
     // Case 4 — a non-finite supplied rate rejects instead of
     // storing NaN.
     await assert.rejects(
-      () => svc.createQuotation('t1', {
-        supplierId: '1',
-        quotationNo: 'RFQ-NAN',
-        itemName: 'Widget',
-        unitPriceForeign: 100,
-        exchangeRate: NaN,
-      }),
+      () =>
+        svc.createQuotation('t1', {
+          supplierId: '1',
+          quotationNo: 'RFQ-NAN',
+          itemName: 'Widget',
+          unitPriceForeign: 100,
+          exchangeRate: NaN,
+        }),
       /موجباً/,
     );
     console.log('Case 4 passed: non-finite supplied rate rejects');
@@ -206,10 +231,7 @@ async function main(): Promise<void> {
     // Case 7 — autopsy with no shipment rates and no registered
     // rate fails closed instead of inventing one.
     await seedShipment(db, 't2', 'sh-norate', {});
-    await assert.rejects(
-      () => svc.getContainerAutopsySheet('t2', 'sh-norate'),
-      /سعر صرف USD غير متاح/,
-    );
+    await assert.rejects(() => svc.getContainerAutopsySheet('t2', 'sh-norate'), /سعر صرف USD غير متاح/);
     console.log('Case 7 passed: autopsy without a registered rate fails closed');
 
     // Case 8 — a recorded arrival rate still wins over the live rate.

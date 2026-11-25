@@ -57,7 +57,12 @@ function activeOffer(patch: Partial<RawStorefrontOffer>): RawStorefrontOffer {
 
 async function main(): Promise<void> {
   // Variant / base pricing.
-  const variants = { variants: [{ name: 'وسط', extraPrice: 0.125 }, { name: 'كبير', price: 10.125 }] };
+  const variants = {
+    variants: [
+      { name: 'وسط', extraPrice: 0.125 },
+      { name: 'كبير', price: 10.125 },
+    ],
+  };
   assert.deepEqual(resolveOrderLinePrice(10.125, {}, null, 3), { ok: true, unitPrice: 10.125, variantName: null });
   assert.deepEqual(resolveOrderLinePrice(10.125, {}, null, 2), { ok: true, unitPrice: 10.13, variantName: null });
   assert.deepEqual(resolveOrderLinePrice(10, variants, 'وسط', 3), { ok: true, unitPrice: 10.125, variantName: 'وسط' });
@@ -72,14 +77,30 @@ async function main(): Promise<void> {
   assert.equal(calculateOfferAdjustedPrice(10.126, activeOffer({ offer_type: 'fixed', value: 0.001 }), 1, 2), 10.13);
   assert.equal(calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'price', value: 9.999 }), 1, 3), 9.999);
   assert.equal(calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'price', value: 9.999 }), 1, 2), 10);
-  assert.equal(calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bundle', value: 20.251, min_qty: 2 }), 2, 3), 10.126);
-  assert.equal(calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bundle', value: 20.251, min_qty: 2 }), 2, 2), 10.13);
   assert.equal(
-    calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bogo', bogo_buy_qty: 1, bogo_get_qty: 1, bogo_discount_percent: 100 }), 2, 3),
+    calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bundle', value: 20.251, min_qty: 2 }), 2, 3),
+    10.126,
+  );
+  assert.equal(
+    calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bundle', value: 20.251, min_qty: 2 }), 2, 2),
+    10.13,
+  );
+  assert.equal(
+    calculateOfferAdjustedPrice(
+      10.125,
+      activeOffer({ offer_type: 'bogo', bogo_buy_qty: 1, bogo_get_qty: 1, bogo_discount_percent: 100 }),
+      2,
+      3,
+    ),
     5.063,
   );
   assert.equal(
-    calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bogo', bogo_buy_qty: 1, bogo_get_qty: 1, bogo_discount_percent: 100 }), 2, 2),
+    calculateOfferAdjustedPrice(
+      10.125,
+      activeOffer({ offer_type: 'bogo', bogo_buy_qty: 1, bogo_get_qty: 1, bogo_discount_percent: 100 }),
+      2,
+      2,
+    ),
     5.06,
   );
   // Non-positive offers pass the base through unrounded, as before.
@@ -102,7 +123,10 @@ async function main(): Promise<void> {
 
   // Omitted digits must fail closed, not fall back to cents.
   assert.throws(() => resolveOrderLinePrice(10.125, {}, null, NO_DIGITS), /Invalid monetary minor units/);
-  assert.throws(() => calculateOfferAdjustedPrice(10.125, activeOffer({}), 1, NO_DIGITS), /Invalid monetary minor units/);
+  assert.throws(
+    () => calculateOfferAdjustedPrice(10.125, activeOffer({}), 1, NO_DIGITS),
+    /Invalid monetary minor units/,
+  );
   assert.throws(
     () => resolveBestStorefrontOffer(10.125, [activeOffer({})], 1, TODAY, NOW, 'Africa/Cairo', NO_DIGITS),
     /Invalid monetary minor units/,

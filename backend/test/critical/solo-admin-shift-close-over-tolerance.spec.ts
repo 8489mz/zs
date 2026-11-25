@@ -61,27 +61,73 @@ const LONG_NOTE = 'فرق كبير في الدرج يستدعي المراجعة
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
-  const admin1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin1', permissions: [] } as unknown as AuthContext;
-  const manager2 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 2, username: 'manager2', permissions: [] } as unknown as AuthContext;
-  const cashier3 = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 3, username: 'cashier3', permissions: [] } as unknown as AuthContext;
-  const manager6 = { tenantId: 't1', accountId: 'a1', role: 'manager', userId: 6, username: 'manager6', permissions: [] } as unknown as AuthContext;
-  const superAdmin = { tenantId: 't1', accountId: 'a1', role: 'super_admin', userId: 9, username: 'owner', permissions: [] } as unknown as AuthContext;
+  const admin1 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 1,
+    username: 'admin1',
+    permissions: [],
+  } as unknown as AuthContext;
+  const manager2 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 2,
+    username: 'manager2',
+    permissions: [],
+  } as unknown as AuthContext;
+  const cashier3 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'cashier',
+    userId: 3,
+    username: 'cashier3',
+    permissions: [],
+  } as unknown as AuthContext;
+  const manager6 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'manager',
+    userId: 6,
+    username: 'manager6',
+    permissions: [],
+  } as unknown as AuthContext;
+  const superAdmin = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'super_admin',
+    userId: 9,
+    username: 'owner',
+    permissions: [],
+  } as unknown as AuthContext;
 
   const shiftRow = async (id: number) => {
-    const r = await pg.query<{ status: string; close_note: string; variance: string | null; variance_approved_by: string | null }>(
-      'SELECT status, close_note, variance, variance_approved_by FROM cashier_shifts WHERE id=$1', [id]);
+    const r = await pg.query<{
+      status: string;
+      close_note: string;
+      variance: string | null;
+      variance_approved_by: string | null;
+    }>('SELECT status, close_note, variance, variance_approved_by FROM cashier_shifts WHERE id=$1', [id]);
     return r.rows[0];
   };
   const journalCount = async () => {
-    const r = await pg.query<{ count: string }>(`SELECT count(*) AS count FROM journal_entries WHERE source_type='cashier_shift_variance'`);
+    const r = await pg.query<{ count: string }>(
+      `SELECT count(*) AS count FROM journal_entries WHERE source_type='cashier_shift_variance'`,
+    );
     return Number(r.rows[0].count);
   };
   const shiftIdOf = async (opener: number): Promise<number> => {
     const r = await pg.query<{ id: string }>(
-      'SELECT id FROM cashier_shifts WHERE opened_by=$1 ORDER BY id DESC LIMIT 1', [opener]);
+      'SELECT id FROM cashier_shifts WHERE opened_by=$1 ORDER BY id DESC LIMIT 1',
+      [opener],
+    );
     return Number(r.rows[0].id);
   };
   const expectCode = async (promise: Promise<unknown>, code: string, message: string) => {
@@ -155,12 +201,34 @@ async function main() {
       INSERT INTO accounting_settings VALUES
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
     `);
-    for (const [code, type] of [[1110, 'asset'], [7110, 'revenue'], [7210, 'expense'], [1135, 'asset']] as const) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), type]);
+    for (const [code, type] of [
+      [1110, 'asset'],
+      [7110, 'revenue'],
+      [7210, 'expense'],
+      [1135, 'asset'],
+    ] as const) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        type,
+      ]);
     }
-    const passwords: Record<number, string> = { 1: 'pw-admin-1', 2: 'pw-manager-2', 3: 'pw-cashier-3', 6: 'pw-manager-6', 9: 'pw-owner-9' };
+    const passwords: Record<number, string> = {
+      1: 'pw-admin-1',
+      2: 'pw-manager-2',
+      3: 'pw-cashier-3',
+      6: 'pw-manager-6',
+      9: 'pw-owner-9',
+    };
     const usernames: Record<number, string> = { 1: 'admin1', 2: 'manager2', 3: 'cashier3', 6: 'manager6', 9: 'owner' };
-    for (const [id, role, branch] of [[1, 'admin', null], [2, 'admin', null], [3, 'cashier', 1], [6, 'manager', null], [9, 'super_admin', null]] as const) {
+    for (const [id, role, branch] of [
+      [1, 'admin', null],
+      [2, 'admin', null],
+      [3, 'cashier', 1],
+      [6, 'manager', null],
+      [9, 'super_admin', null],
+    ] as const) {
       const rec = await createPasswordRecord(passwords[id as number]);
       await pg.query(
         'INSERT INTO users(id,tenant_id,username,role,is_active,password_hash,password_salt,default_branch_id) VALUES ($1,$2,$3,$4,true,$5,$6,$7)',
@@ -178,48 +246,101 @@ async function main() {
     assert.equal(soloRow.status, 'closed', 'a solo admin closing over tolerance with a recorded reason must close');
     assert.equal(Number(soloRow.variance), -20, 'the -20 variance must be recorded on the closed shift');
     assert.equal(Number(soloRow.variance_approved_by), 1, 'the solo closer stays the approver of record');
-    assert.equal(await journalCount(), journalsBeforeSolo + 1, 'a solo-admin override close must still post the variance journal');
-    assert.ok(String(soloRow.close_note || '').includes('اعتماد فرق منفرد بقرار إداري'), 'the close note must carry the solo-admin override stamp');
+    assert.equal(
+      await journalCount(),
+      journalsBeforeSolo + 1,
+      'a solo-admin override close must still post the variance journal',
+    );
+    assert.ok(
+      String(soloRow.close_note || '').includes('اعتماد فرق منفرد بقرار إداري'),
+      'the close note must carry the solo-admin override stamp',
+    );
     assert.ok(String(soloRow.close_note || '').includes('admin1'), 'the override stamp must name who closed');
     assert.ok(String(soloRow.close_note || '').includes('الفرق -20'), 'the override stamp must record the variance');
-    assert.ok(String(soloRow.close_note || '').includes('حد التسامح 0.001'), 'the override stamp must record the tolerance cap');
-    assert.ok(String(soloRow.close_note || '').includes('لا يوجد مدير ثانٍ متاح'), 'the override stamp must record that no second admin was available');
+    assert.ok(
+      String(soloRow.close_note || '').includes('حد التسامح 0.001'),
+      'the override stamp must record the tolerance cap',
+    );
+    assert.ok(
+      String(soloRow.close_note || '').includes('لا يوجد مدير ثانٍ متاح'),
+      'the override stamp must record that no second admin was available',
+    );
 
     // ---------- Solo super_admin: same override, stamped with their name. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, superAdmin);
     const shiftSuper = await shiftIdOf(9);
-    await drawer.closeCashierShift(shiftSuper, { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-owner-9' }, superAdmin);
+    await drawer.closeCashierShift(
+      shiftSuper,
+      { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-owner-9' },
+      superAdmin,
+    );
     const superRow = await shiftRow(shiftSuper);
-    assert.equal(superRow.status, 'closed', 'a solo super_admin closing over tolerance with a recorded reason must close');
+    assert.equal(
+      superRow.status,
+      'closed',
+      'a solo super_admin closing over tolerance with a recorded reason must close',
+    );
     assert.equal(Number(superRow.variance_approved_by), 9, 'the solo super_admin stays the approver of record');
-    assert.ok(String(superRow.close_note || '').includes('اعتماد فرق منفرد بقرار إداري'), 'the super_admin close note must carry the solo-admin override stamp');
-    assert.ok(String(superRow.close_note || '').includes('owner'), 'the override stamp must name the super_admin who closed');
+    assert.ok(
+      String(superRow.close_note || '').includes('اعتماد فرق منفرد بقرار إداري'),
+      'the super_admin close note must carry the solo-admin override stamp',
+    );
+    assert.ok(
+      String(superRow.close_note || '').includes('owner'),
+      'the override stamp must name the super_admin who closed',
+    );
 
     // ---------- Second-admin approval still works as before. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
     const shiftSecond = await shiftIdOf(1);
-    await drawer.closeCashierShift(shiftSecond, { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-admin-1', approverSecret: 'pw-manager-2' }, admin1);
+    await drawer.closeCashierShift(
+      shiftSecond,
+      { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-admin-1', approverSecret: 'pw-manager-2' },
+      admin1,
+    );
     const secondRow = await shiftRow(shiftSecond);
     assert.equal(secondRow.status, 'closed', 'an admin closing with a second admin approval must still close');
-    assert.equal(Number(secondRow.variance_approved_by), 2, 'variance_approved_by must be the second approver, not the closer');
-    assert.ok(String(secondRow.close_note || '').includes('اعتماد فرق فوق حد التسامح بواسطة manager2'), 'the second-approval stamp must name the approver');
-    assert.ok(!String(secondRow.close_note || '').includes('اعتماد فرق منفرد'), 'a second-approval close must not carry the solo-override stamp');
+    assert.equal(
+      Number(secondRow.variance_approved_by),
+      2,
+      'variance_approved_by must be the second approver, not the closer',
+    );
+    assert.ok(
+      String(secondRow.close_note || '').includes('اعتماد فرق فوق حد التسامح بواسطة manager2'),
+      'the second-approval stamp must name the approver',
+    );
+    assert.ok(
+      !String(secondRow.close_note || '').includes('اعتماد فرق منفرد'),
+      'a second-approval close must not carry the solo-override stamp',
+    );
 
     // ---------- Non-privileged closer still refused without a second approval. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, manager6);
     const shiftManager = await shiftIdOf(6);
     const journalsBeforeManager = await journalCount();
     await expectCode(
-      drawer.closeCashierShift(shiftManager, { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-manager-6' }, manager6),
+      drawer.closeCashierShift(
+        shiftManager,
+        { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-manager-6' },
+        manager6,
+      ),
       'SHIFT_SECOND_APPROVAL_REQUIRED',
       'a manager closing their own shift over tolerance with no second approval must still be refused',
     );
     assert.equal((await shiftRow(shiftManager)).status, 'open', 'a refused close must leave the shift open');
     assert.equal(await journalCount(), journalsBeforeManager, 'a refused close must post no variance journal');
-    await drawer.closeCashierShift(shiftManager, { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-manager-6', approverSecret: 'pw-admin-1' }, manager6);
+    await drawer.closeCashierShift(
+      shiftManager,
+      { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-manager-6', approverSecret: 'pw-admin-1' },
+      manager6,
+    );
     const managerRow = await shiftRow(shiftManager);
     assert.equal(managerRow.status, 'closed', 'the same manager closes once a different admin approves');
-    assert.equal(Number(managerRow.variance_approved_by), 1, 'variance_approved_by must be the approving admin, not the manager closer');
+    assert.equal(
+      Number(managerRow.variance_approved_by),
+      1,
+      'variance_approved_by must be the approving admin, not the manager closer',
+    );
 
     // ---------- Solo admin with a short note and no approver: refused until the reason is recorded. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
@@ -233,7 +354,8 @@ async function main() {
 
     // ---------- Wiring: this spec is in both critical lists, in identical order (326 specs — the solo-admin-carrier-invoice-override spec is the last entry). ----------
     {
-      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+        .specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
@@ -250,4 +372,7 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

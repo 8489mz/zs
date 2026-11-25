@@ -64,8 +64,13 @@ const ACCOUNT = 'a1';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-loyalty', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-loyalty',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -136,41 +141,116 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
-  await anyDb.insertInto('customers').values({
-    id: 7, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer Seven',
-    balance: 0, credit_limit: 0, is_credit_blocked: false, is_active: true,
-    loyalty_points: 1000,
-  }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer Seven',
+      balance: 0,
+      credit_limit: 0,
+      is_credit_blocked: false,
+      is_active: true,
+      loyalty_points: 1000,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep One',
+      is_active: true,
+    })
+    .execute();
 }
 
 /** Loyalty tenant settings. The award is set to 0 points per 100 on
@@ -191,11 +271,22 @@ async function seedLoyalty(db: Kysely<Database>, maxDiscountPercentage: number):
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): { sales: SalesWriteService } {
@@ -213,8 +304,16 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService } {
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   return { sales };
 }
@@ -223,9 +322,15 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService } {
 function posPayload(total: number, overrides: Record<string, unknown> = {}): any {
   return {
     items: [{ productId: 101, qty: 1, price: total, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
     payments: [{ paymentChannel: 'cash', amount: total }],
-    tenderedAmount: total, branchId: 1, locationId: 10, source: 'pos',
+    tenderedAmount: total,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
     ...overrides,
   };
 }
@@ -233,29 +338,44 @@ function posPayload(total: number, overrides: Record<string, unknown> = {}): any
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
   const created: any = await service.createSale(payload, auth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
 async function customerPoints(db: Kysely<Database>): Promise<number> {
-  const row = await (db as any).selectFrom('customers').select('loyalty_points')
-    .where('id', '=', 7).executeTakeFirstOrThrow();
+  const row = await (db as any)
+    .selectFrom('customers')
+    .select('loyalty_points')
+    .where('id', '=', 7)
+    .executeTakeFirstOrThrow();
   return Number((row as any).loyalty_points);
 }
 
 async function redeemLogs(db: Kysely<Database>): Promise<any[]> {
-  return (db as any).selectFrom('customer_loyalty_logs')
+  return (db as any)
+    .selectFrom('customer_loyalty_logs')
     .select(['points_change', 'balance_after', 'action_type', 'sale_id'])
-    .where('customer_id', '=', 7).orderBy('id').execute();
+    .where('customer_id', '=', 7)
+    .orderBy('id')
+    .execute();
 }
 
 async function saleMoney(db: Kysely<Database>, id: number): Promise<any> {
-  return (db as any).selectFrom('sales').select(['discount', 'total', 'paid_amount'])
-    .where('id', '=', id).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('sales')
+    .select(['discount', 'total', 'paid_amount'])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
 }
 
 async function salesCount(db: Kysely<Database>): Promise<number> {
-  const row = await (db as any).selectFrom('sales').select(sql`count(*)`.as('n')).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('sales')
+    .select(sql`count(*)`.as('n'))
+    .executeTakeFirst();
   return Number((row as any).n);
 }
 
@@ -280,18 +400,30 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
       // Part 1: subtotal 100, 60 points x 0.1 = 6 discount, total 94.
-      const part1 = await createAndGetId(sales, posPayload(100, {
-        customerId: 7, loyaltyPointsRedeemed: 60,
-        payments: [{ paymentChannel: 'cash', amount: 94 }],
-        tenderedAmount: 94, expectedTotal: 94,
-      }), cashierAuth);
+      const part1 = await createAndGetId(
+        sales,
+        posPayload(100, {
+          customerId: 7,
+          loyaltyPointsRedeemed: 60,
+          payments: [{ paymentChannel: 'cash', amount: 94 }],
+          tenderedAmount: 94,
+          expectedTotal: 94,
+        }),
+        cashierAuth,
+      );
       assert.equal(await customerPoints(db), 940, '60 points deducted after part 1');
       // Part 2: subtotal 100, 40 points x 0.1 = 4 discount, total 96.
-      const part2 = await createAndGetId(sales, posPayload(100, {
-        customerId: 7, loyaltyPointsRedeemed: 40,
-        payments: [{ paymentChannel: 'cash', amount: 96 }],
-        tenderedAmount: 96, expectedTotal: 96,
-      }), cashierAuth);
+      const part2 = await createAndGetId(
+        sales,
+        posPayload(100, {
+          customerId: 7,
+          loyaltyPointsRedeemed: 40,
+          payments: [{ paymentChannel: 'cash', amount: 96 }],
+          tenderedAmount: 96,
+          expectedTotal: 96,
+        }),
+        cashierAuth,
+      );
       assert.equal(await customerPoints(db), 900, 'balance reduced by exactly 100 once');
       const first = await saleMoney(db, part1);
       assert.equal(Number(first.discount), 6, 'part 1 stores its own loyalty discount');
@@ -322,23 +454,41 @@ async function main(): Promise<void> {
       await seedLoyalty(db, 100);
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
-      await createAndGetId(sales, posPayload(100, {
-        customerId: 7, loyaltyPointsRedeemed: 60,
-        payments: [{ paymentChannel: 'cash', amount: 94 }],
-        tenderedAmount: 94, expectedTotal: 94,
-      }), cashierAuth);
-      await createAndGetId(sales, posPayload(100, {
-        customerId: 7, loyaltyPointsRedeemed: 40,
-        payments: [{ paymentChannel: 'cash', amount: 96 }],
-        tenderedAmount: 96, expectedTotal: 96,
-      }), cashierAuth);
+      await createAndGetId(
+        sales,
+        posPayload(100, {
+          customerId: 7,
+          loyaltyPointsRedeemed: 60,
+          payments: [{ paymentChannel: 'cash', amount: 94 }],
+          tenderedAmount: 94,
+          expectedTotal: 94,
+        }),
+        cashierAuth,
+      );
+      await createAndGetId(
+        sales,
+        posPayload(100, {
+          customerId: 7,
+          loyaltyPointsRedeemed: 40,
+          payments: [{ paymentChannel: 'cash', amount: 96 }],
+          tenderedAmount: 96,
+          expectedTotal: 96,
+        }),
+        cashierAuth,
+      );
       assert.equal(await customerPoints(db), 900, '900 points remain after the split');
       await assert.rejects(
-        createAndGetId(sales, posPayload(100, {
-          customerId: 7, loyaltyPointsRedeemed: 901,
-          payments: [{ paymentChannel: 'cash', amount: 100 }],
-          tenderedAmount: 100, expectedTotal: 100,
-        }), cashierAuth),
+        createAndGetId(
+          sales,
+          posPayload(100, {
+            customerId: 7,
+            loyaltyPointsRedeemed: 901,
+            payments: [{ paymentChannel: 'cash', amount: 100 }],
+            tenderedAmount: 100,
+            expectedTotal: 100,
+          }),
+          cashierAuth,
+        ),
         (err: any) => err && err.code === 'INSUFFICIENT_LOYALTY_POINTS' && err.statusCode === 400,
       );
       assert.equal(await salesCount(db), 2, 'the rejected sale writes nothing');
@@ -360,11 +510,17 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
       // Subtotal 100, cap 50%: 600 points are worth 60, capped to 50.
-      const saleId = await createAndGetId(sales, posPayload(100, {
-        customerId: 7, loyaltyPointsRedeemed: 600,
-        payments: [{ paymentChannel: 'cash', amount: 50 }],
-        tenderedAmount: 50, expectedTotal: 50,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        posPayload(100, {
+          customerId: 7,
+          loyaltyPointsRedeemed: 600,
+          payments: [{ paymentChannel: 'cash', amount: 50 }],
+          tenderedAmount: 50,
+          expectedTotal: 50,
+        }),
+        cashierAuth,
+      );
       const row = await saleMoney(db, saleId);
       assert.equal(Number(row.discount), 50, 'the loyalty discount is capped at subtotal x maxPct');
       assert.equal(Number(row.total), 50);
@@ -387,11 +543,19 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 2);
       const { sales } = buildServices(db);
       // Subtotal 100, manual 10 + 60 points x 0.1 = 6 loyalty: total 84.
-      const saleId = await createAndGetId(sales, posPayload(100, {
-        customerId: 7, discount: 10, managerPin: '1234', loyaltyPointsRedeemed: 60,
-        payments: [{ paymentChannel: 'cash', amount: 84 }],
-        tenderedAmount: 84, expectedTotal: 84,
-      }), cashierAuth);
+      const saleId = await createAndGetId(
+        sales,
+        posPayload(100, {
+          customerId: 7,
+          discount: 10,
+          managerPin: '1234',
+          loyaltyPointsRedeemed: 60,
+          payments: [{ paymentChannel: 'cash', amount: 84 }],
+          tenderedAmount: 84,
+          expectedTotal: 84,
+        }),
+        cashierAuth,
+      );
       const row = await saleMoney(db, saleId);
       assert.equal(Number(row.discount), 16, 'effective discount is manual + loyalty, once');
       assert.equal(Number(row.total), 84);

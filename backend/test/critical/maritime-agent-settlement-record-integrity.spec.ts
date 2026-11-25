@@ -72,19 +72,31 @@ async function main(): Promise<void> {
     // 1. KWD: 3dp conversion + id-derived APS number.
     const first = await service.createAgentSettlement(auth, dto({}) as never);
     assert.equal(Number(first.local_equivalent_amount), 4856.063);
-    assert.equal(first.reference_number, formatDailyDocumentNumber('APS', Number(first.id), new Date(), 4, 'Africa/Cairo'));
+    assert.equal(
+      first.reference_number,
+      formatDailyDocumentNumber('APS', Number(first.id), new Date(), 4, 'Africa/Cairo'),
+    );
     assert.equal(first.status, 'pending');
 
     // 2. Second settlement: different id-derived number.
     const second = await service.createAgentSettlement(auth, dto({ amount: 50 }) as never);
     assert.notEqual(second.reference_number, first.reference_number);
-    assert.equal(second.reference_number, formatDailyDocumentNumber('APS', Number(second.id), new Date(), 4, 'Africa/Cairo'));
+    assert.equal(
+      second.reference_number,
+      formatDailyDocumentNumber('APS', Number(second.id), new Date(), 4, 'Africa/Cairo'),
+    );
 
     // 3. Prefixes per settlement type.
     const debit = await service.createAgentSettlement(auth, dto({ settlementType: 'debit_note' }) as never);
-    assert.equal(debit.reference_number, formatDailyDocumentNumber('ADN', Number(debit.id), new Date(), 4, 'Africa/Cairo'));
+    assert.equal(
+      debit.reference_number,
+      formatDailyDocumentNumber('ADN', Number(debit.id), new Date(), 4, 'Africa/Cairo'),
+    );
     const credit = await service.createAgentSettlement(auth, dto({ settlementType: 'credit_note' }) as never);
-    assert.equal(credit.reference_number, formatDailyDocumentNumber('ACN', Number(credit.id), new Date(), 4, 'Africa/Cairo'));
+    assert.equal(
+      credit.reference_number,
+      formatDailyDocumentNumber('ACN', Number(credit.id), new Date(), 4, 'Africa/Cairo'),
+    );
 
     // 4. Caller-supplied reference number kept verbatim.
     const supplied = await service.createAgentSettlement(auth, dto({ referenceNumber: 'AGT-2026-001' }) as never);

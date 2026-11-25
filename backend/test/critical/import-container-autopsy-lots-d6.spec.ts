@@ -80,23 +80,49 @@ function makeService(db: Kysely<Database>): any {
 }
 
 /** Trial container MSCU-TEST-001: 10 units, $1 FOB, $5 freight, FX 50, customs 100, transport 50. */
-async function seedTrialShipment(db: Kysely<Database>, shipmentId: string, containerStatus: string | null, receivedQty: number): Promise<void> {
-  await (db as any).insertInto('import_shipments').values({
-    id: shipmentId, tenant_id: 't1', container_number: 'MSCU-TEST-001', supplier_id: 1,
-    bill_of_lading: 'BL-TEST-001', status: 'Arrived', project_id: 'proj-1',
-    exchange_rate_at_arrival: 50, pricing_exchange_rate: null,
-    shipping_cost_usd: 5, customs_cost_egp: 100, internal_transport_cost_egp: 50,
-    actual_demurrage_fees: 0, late_expenses_total_egp: 0,
-    container_status: containerStatus,
-  } as never).execute();
-  await (db as any).insertInto('import_shipment_items').values({
-    id: `${shipmentId}-item`, tenant_id: 't1', shipment_id: shipmentId, product_id: 1,
-    quantity: 10, received_quantity: receivedQty, factory_unit_price_usd: 1,
-    // Stored PER-UNIT, exactly as calculateLandedCostInTransaction
-    // writes the engine's landedCostEgp: (10 x $1 x 50 + 400) / 10.
-    allocated_overhead_egp: 40, landed_cost_egp: 90,
-    shortage_handling_method: 'capitalize',
-  } as never).execute();
+async function seedTrialShipment(
+  db: Kysely<Database>,
+  shipmentId: string,
+  containerStatus: string | null,
+  receivedQty: number,
+): Promise<void> {
+  await (db as any)
+    .insertInto('import_shipments')
+    .values({
+      id: shipmentId,
+      tenant_id: 't1',
+      container_number: 'MSCU-TEST-001',
+      supplier_id: 1,
+      bill_of_lading: 'BL-TEST-001',
+      status: 'Arrived',
+      project_id: 'proj-1',
+      exchange_rate_at_arrival: 50,
+      pricing_exchange_rate: null,
+      shipping_cost_usd: 5,
+      customs_cost_egp: 100,
+      internal_transport_cost_egp: 50,
+      actual_demurrage_fees: 0,
+      late_expenses_total_egp: 0,
+      container_status: containerStatus,
+    } as never)
+    .execute();
+  await (db as any)
+    .insertInto('import_shipment_items')
+    .values({
+      id: `${shipmentId}-item`,
+      tenant_id: 't1',
+      shipment_id: shipmentId,
+      product_id: 1,
+      quantity: 10,
+      received_quantity: receivedQty,
+      factory_unit_price_usd: 1,
+      // Stored PER-UNIT, exactly as calculateLandedCostInTransaction
+      // writes the engine's landedCostEgp: (10 x $1 x 50 + 400) / 10.
+      allocated_overhead_egp: 40,
+      landed_cost_egp: 90,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function main(): Promise<void> {
@@ -120,7 +146,11 @@ async function main(): Promise<void> {
       const rowTotals = autopsy.items.reduce((s: number, i: any) => s + Number(i.total_landed_cost_egp), 0);
       assert.equal(rowTotals, autopsy.landedCosts.totalLandedCostEgp, 'Lots rows sum to the summary total');
       assert.equal(autopsy.operational.containerStatus, 'warehouse_received');
-      assert.equal(autopsy.operational.containerStatusLabel, 'تم الوصول للمخزن', 'P&L status reads the actual container status');
+      assert.equal(
+        autopsy.operational.containerStatusLabel,
+        'تم الوصول للمخزن',
+        'P&L status reads the actual container status',
+      );
     } finally {
       await db.destroy();
     }
@@ -155,7 +185,11 @@ async function main(): Promise<void> {
       await seedTrialShipment(db, 'sh-unknown', 'bogus_status', 10);
       const unknown: any = await service.getContainerAutopsySheet('t1', 'sh-unknown');
       assert.equal(unknown.operational.containerStatus, 'bogus_status', 'Raw status still passes through');
-      assert.equal(unknown.operational.containerStatusLabel, 'حالة غير معروفة', 'Unknown status gets an honest fallback');
+      assert.equal(
+        unknown.operational.containerStatusLabel,
+        'حالة غير معروفة',
+        'Unknown status gets an honest fallback',
+      );
     } finally {
       await db.destroy();
     }

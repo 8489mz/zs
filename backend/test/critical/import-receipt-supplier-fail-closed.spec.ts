@@ -94,39 +94,103 @@ async function seedReceiptFixture(
   db: Kysely<Database>,
   opts: { shipmentSupplierId: number | null; projectId: string | null; feasibilitySupplierId: number | null },
 ): Promise<void> {
-  await db.insertInto('products' as never).values({
-    id: 5, tenant_id: 't1', account_id: 't1', name: 'Widget', stock_qty: 0,
-    reserved_qty: 0, cost_price: 0, updated_at: new Date(),
-  } as never).execute();
-  await db.insertInto('suppliers' as never).values({
-    id: 1, tenant_id: 't1', name: 'First Supplier', phone: '', address: '', balance: 0, is_active: true, updated_at: new Date(),
-  } as never).execute();
-  await db.insertInto('suppliers' as never).values({
-    id: 7, tenant_id: 't1', name: 'Project Supplier', phone: '', address: '', balance: 0, is_active: true, updated_at: new Date(),
-  } as never).execute();
-  await db.insertInto('suppliers' as never).values({
-    id: 9, tenant_id: 't1', name: 'Shipment Supplier', phone: '', address: '', balance: 0, is_active: true, updated_at: new Date(),
-  } as never).execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 5,
+      tenant_id: 't1',
+      account_id: 't1',
+      name: 'Widget',
+      stock_qty: 0,
+      reserved_qty: 0,
+      cost_price: 0,
+      updated_at: new Date(),
+    } as never)
+    .execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      name: 'First Supplier',
+      phone: '',
+      address: '',
+      balance: 0,
+      is_active: true,
+      updated_at: new Date(),
+    } as never)
+    .execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({
+      id: 7,
+      tenant_id: 't1',
+      name: 'Project Supplier',
+      phone: '',
+      address: '',
+      balance: 0,
+      is_active: true,
+      updated_at: new Date(),
+    } as never)
+    .execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({
+      id: 9,
+      tenant_id: 't1',
+      name: 'Shipment Supplier',
+      phone: '',
+      address: '',
+      balance: 0,
+      is_active: true,
+      updated_at: new Date(),
+    } as never)
+    .execute();
   if (opts.projectId) {
-    await db.insertInto('import_projects' as never).values({
-      id: opts.projectId, tenant_id: 't1',
-      project_no: 'IMP-261109-0001', title: 'اختبار مشروع استيراد 001', allocated_capital: 100,
-      feasibility_data: opts.feasibilitySupplierId
-        ? JSON.stringify({ supplierId: opts.feasibilitySupplierId })
-        : JSON.stringify({}),
-    } as never).execute();
+    await db
+      .insertInto('import_projects' as never)
+      .values({
+        id: opts.projectId,
+        tenant_id: 't1',
+        project_no: 'IMP-261109-0001',
+        title: 'اختبار مشروع استيراد 001',
+        allocated_capital: 100,
+        feasibility_data: opts.feasibilitySupplierId
+          ? JSON.stringify({ supplierId: opts.feasibilitySupplierId })
+          : JSON.stringify({}),
+      } as never)
+      .execute();
   }
-  await db.insertInto('import_shipments' as never).values({
-    id: 'sh-1', tenant_id: 't1', supplier_id: opts.shipmentSupplierId,
-    project_id: opts.projectId, container_number: 'MSCU-1', status: 'Arrived',
-    exchange_rate_at_arrival: 50, shipping_cost_usd: 0, customs_cost_egp: 0,
-    internal_transport_cost_egp: 0, actual_demurrage_fees: 0,
-  } as never).execute();
-  await db.insertInto('import_shipment_items' as never).values({
-    id: 'item-1', tenant_id: 't1', shipment_id: 'sh-1', product_id: 5,
-    quantity: 10, received_quantity: 10, factory_unit_price_usd: 10,
-    landed_cost_egp: 500, shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await db
+    .insertInto('import_shipments' as never)
+    .values({
+      id: 'sh-1',
+      tenant_id: 't1',
+      supplier_id: opts.shipmentSupplierId,
+      project_id: opts.projectId,
+      container_number: 'MSCU-1',
+      status: 'Arrived',
+      exchange_rate_at_arrival: 50,
+      shipping_cost_usd: 0,
+      customs_cost_egp: 0,
+      internal_transport_cost_egp: 0,
+      actual_demurrage_fees: 0,
+    } as never)
+    .execute();
+  await db
+    .insertInto('import_shipment_items' as never)
+    .values({
+      id: 'item-1',
+      tenant_id: 't1',
+      shipment_id: 'sh-1',
+      product_id: 5,
+      quantity: 10,
+      received_quantity: 10,
+      factory_unit_price_usd: 10,
+      landed_cost_egp: 500,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 async function postReceipt(db: Kysely<Database>, service: any): Promise<void> {
@@ -136,7 +200,10 @@ async function postReceipt(db: Kysely<Database>, service: any): Promise<void> {
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -156,7 +223,11 @@ async function main(): Promise<void> {
       assert.equal(await countRows(db, 'stock_movements'), 0, 'No stock movement may be written');
       assert.equal(await countRows(db, 'import_inventory_receipts'), 0, 'No receipt row may be written');
       assert.equal(await countRows(db, 'suppliers'), 3, 'No generic supplier may be auto-created');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 5).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 5)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.stock_qty), 0, 'Product stock must be untouched');
     } finally {
       await db.destroy();
@@ -184,11 +255,23 @@ async function main(): Promise<void> {
       const entry: any = await (db as any).selectFrom('journal_entries').selectAll().executeTakeFirstOrThrow();
       assert.equal(Number(entry.location_id), 10);
       assert.equal(Number(entry.branch_id), 2);
-      const supplier: any = await (db as any).selectFrom('suppliers').selectAll().where('id', '=', 9).executeTakeFirstOrThrow();
+      const supplier: any = await (db as any)
+        .selectFrom('suppliers')
+        .selectAll()
+        .where('id', '=', 9)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(supplier.balance), 5000, 'Supplier subledger balance follows the journal');
-      const first: any = await (db as any).selectFrom('suppliers').selectAll().where('id', '=', 1).executeTakeFirstOrThrow();
+      const first: any = await (db as any)
+        .selectFrom('suppliers')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(first.balance), 0, 'The first supplier by id must stay untouched');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 5).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 5)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.stock_qty), 10);
       assert.equal(Number(product.cost_price), 500, 'WAC blends to the receipt landed cost');
     } finally {
@@ -216,26 +299,51 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       await seedReceiptFixture(db, { shipmentSupplierId: null, projectId: null, feasibilitySupplierId: null });
-      await db.insertInto('import_inventory_receipts' as never).values({
-        tenant_id: 't1', shipment_id: 'sh-1', state: 'posted', review_reason: null,
-        posted_at: new Date(), created_by: 1, journal_entry_id: null,
-      } as never).execute();
-      await db.insertInto('import_inventory_lots' as never).values({
-        tenant_id: 't1', lot_number: 'LOT-MSCU1-5-item-1', project_id: null, shipment_id: 'sh-1',
-        shipment_item_id: 'item-1', product_id: 5, location_id: 10, initial_quantity: 10,
-        remaining_quantity: 10, unit_landed_cost_egp: 500, status: 'active', receipt_date: '2026-11-02',
-        updated_at: new Date(),
-      } as never).execute();
+      await db
+        .insertInto('import_inventory_receipts' as never)
+        .values({
+          tenant_id: 't1',
+          shipment_id: 'sh-1',
+          state: 'posted',
+          review_reason: null,
+          posted_at: new Date(),
+          created_by: 1,
+          journal_entry_id: null,
+        } as never)
+        .execute();
+      await db
+        .insertInto('import_inventory_lots' as never)
+        .values({
+          tenant_id: 't1',
+          lot_number: 'LOT-MSCU1-5-item-1',
+          project_id: null,
+          shipment_id: 'sh-1',
+          shipment_item_id: 'item-1',
+          product_id: 5,
+          location_id: 10,
+          initial_quantity: 10,
+          remaining_quantity: 10,
+          unit_landed_cost_egp: 500,
+          status: 'active',
+          receipt_date: '2026-11-02',
+          updated_at: new Date(),
+        } as never)
+        .execute();
       await (db as any).updateTable('products').set({ cost_price: 500, stock_qty: 10 }).where('id', '=', 5).execute();
       const service = makeService(db);
       await assert.rejects(
-        async () => service.processLateShipmentExpense('t1', 1, 'sh-1', { lateExpenseAmount: 1000, title: 'Demurrage' }),
+        async () =>
+          service.processLateShipmentExpense('t1', 1, 'sh-1', { lateExpenseAmount: 1000, title: 'Demurrage' }),
         /IMPORT_LATE_EXPENSE_PAYEE_REQUIRED/,
         'A late expense with no payee must fail closed with its own named error (INV-IMPORT-SUPPLIER-ATTRIBUTION: late expenses are never defaulted to the goods supplier)',
       );
       assert.equal(await countRows(db, 'journal_entries'), 0, 'No late-expense journal may be posted');
       assert.equal(await countRows(db, 'import_late_expense_events'), 0, 'No late-expense event may be recorded');
-      const product: any = await (db as any).selectFrom('products').selectAll().where('id', '=', 5).executeTakeFirstOrThrow();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', 5)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(product.cost_price), 500, 'WAC must be untouched by a rejected late expense');
     } finally {
       await db.destroy();
@@ -245,4 +353,7 @@ async function main(): Promise<void> {
   console.log('Import receipt supplier fail-closed tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

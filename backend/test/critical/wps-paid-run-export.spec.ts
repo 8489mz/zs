@@ -19,14 +19,30 @@ import { HrService } from '../../src/modules/hr/hr.service';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { TransactionHelper } from '../../src/database/helpers/transaction.helper';
 
-const MANAGE_AUTH = { tenantId: 't1', accountId: 'a1', userId: 1, username: 'tester', role: 'admin', permissions: ['hrPayrollManage'] } as never;
-const VIEW_AUTH = { tenantId: 't1', accountId: 'a1', userId: 2, username: 'viewer', role: 'admin', permissions: ['hrPayrollView'] } as never;
+const MANAGE_AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  userId: 1,
+  username: 'tester',
+  role: 'admin',
+  permissions: ['hrPayrollManage'],
+} as never;
+const VIEW_AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  userId: 2,
+  username: 'viewer',
+  role: 'admin',
+  permissions: ['hrPayrollView'],
+} as never;
 const FOUNDATION_STUB = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as never;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_resolve, reject) => setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms)),
+    new Promise<T>((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms),
+    ),
   ]);
 }
 
@@ -68,7 +84,11 @@ async function main(): Promise<void> {
     const service = new HrService(db, new TransactionHelper(), auditStub, {} as never, posting, undefined);
 
     // Paid run exports the review CSV (D5): 2 employees / 3,000, SIF empty.
-    const paid = await withTimeout(service.generatePayrollWps(1, {} as never, MANAGE_AUTH), 25000, 'generatePayrollWps(paid run)') as Record<string, any>;
+    const paid = (await withTimeout(
+      service.generatePayrollWps(1, {} as never, MANAGE_AUTH),
+      25000,
+      'generatePayrollWps(paid run)',
+    )) as Record<string, any>;
     assert.equal(paid.summary.totalEmployees, 2, 'paid run exports 2 employees');
     assert.equal(paid.summary.totalNetPay, 3000, 'paid run total net 3000');
     assert.equal(paid.sifContent, '', 'certified SIF stays disabled');
@@ -76,7 +96,11 @@ async function main(): Promise<void> {
     assert.match(String(paid.csvContent), /Sara/, 'paid CSV names Sara');
 
     // Approved control unchanged.
-    const approved = await withTimeout(service.generatePayrollWps(2, {} as never, MANAGE_AUTH), 25000, 'generatePayrollWps(approved run)') as Record<string, any>;
+    const approved = (await withTimeout(
+      service.generatePayrollWps(2, {} as never, MANAGE_AUTH),
+      25000,
+      'generatePayrollWps(approved run)',
+    )) as Record<string, any>;
     assert.equal(approved.summary.totalEmployees, 2, 'approved control 2 employees');
     assert.equal(approved.summary.totalNetPay, 3000, 'approved control total 3000');
 
@@ -90,7 +114,9 @@ async function main(): Promise<void> {
     let forbidden: unknown = null;
     try {
       await withTimeout(service.generatePayrollWps(1, {} as never, VIEW_AUTH), 25000, 'generatePayrollWps(view-only)');
-    } catch (error) { forbidden = error; }
+    } catch (error) {
+      forbidden = error;
+    }
     assert.ok(forbidden, 'view-only export throws');
     assert.equal((forbidden as any)?.code, 'HR_PAYROLL_EXPORT_FORBIDDEN', 'view-only code');
     assert.equal((forbidden as any)?.statusCode, 403, 'view-only status 403');
@@ -104,5 +130,8 @@ async function main(): Promise<void> {
 
 main().then(
   () => process.exit(0),
-  (error) => { console.error(error); process.exit(1); },
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
 );

@@ -54,7 +54,9 @@ function feasibility(): Record<string, unknown> {
 }
 
 async function seedProject(db: Kysely<Database>, id: string): Promise<void> {
-  await sql`INSERT INTO import_projects (id, tenant_id, project_no, feasibility_data, budget_currency, country_destination, status) VALUES (${id}, 't1', ${`IMP-${id}`}, ${JSON.stringify(feasibility())}::jsonb, 'USD', 'Alexandria', 'feasibility')`.execute(db);
+  await sql`INSERT INTO import_projects (id, tenant_id, project_no, feasibility_data, budget_currency, country_destination, status) VALUES (${id}, 't1', ${`IMP-${id}`}, ${JSON.stringify(feasibility())}::jsonb, 'USD', 'Alexandria', 'feasibility')`.execute(
+    db,
+  );
 }
 
 async function projectCount(db: Kysely<Database>): Promise<number> {
@@ -87,7 +89,13 @@ async function main(): Promise<void> {
     assert.equal(converted.cashFlowSchedule.length, 5);
     assert.equal(await projectCount(db), 1, 'convert must not create a second project');
     assert.equal(await proformaCount(db), 0, 'no supplier given, so no proforma');
-    const after = await sql<{ status: string; feasibility_converted_at: string | null; cash_flow_schedule: string | null }>`SELECT status, feasibility_converted_at, cash_flow_schedule FROM import_projects WHERE id = 'proj-1'`.execute(db);
+    const after = await sql<{
+      status: string;
+      feasibility_converted_at: string | null;
+      cash_flow_schedule: string | null;
+    }>`SELECT status, feasibility_converted_at, cash_flow_schedule FROM import_projects WHERE id = 'proj-1'`.execute(
+      db,
+    );
     assert.equal(after.rows[0].status, 'sourcing');
     assert.notEqual(after.rows[0].feasibility_converted_at, null);
     const schedule = JSON.parse(after.rows[0].cash_flow_schedule as string);
@@ -104,18 +112,26 @@ async function main(): Promise<void> {
     );
     assert.equal(await projectCount(db), 1);
     assert.equal(await proformaCount(db), 0);
-    const afterSecond = await sql<{ status: string; cash_flow_schedule: string | null }>`SELECT status, cash_flow_schedule FROM import_projects WHERE id = 'proj-1'`.execute(db);
+    const afterSecond = await sql<{
+      status: string;
+      cash_flow_schedule: string | null;
+    }>`SELECT status, cash_flow_schedule FROM import_projects WHERE id = 'proj-1'`.execute(db);
     assert.equal(afterSecond.rows[0].status, 'sourcing');
     assert.equal(afterSecond.rows[0].cash_flow_schedule, scheduleBeforeSecond);
 
     // 3. Convert with a supplier links the single proforma to the SAME project.
     await seedProject(db, 'proj-2');
-    const withSupplier = await service.convertFeasibilityToProject('t1', 'proj-2', { projectId: 'proj-2', supplierId: '7' } as never);
+    const withSupplier = await service.convertFeasibilityToProject('t1', 'proj-2', {
+      projectId: 'proj-2',
+      supplierId: '7',
+    } as never);
     assert.equal(withSupplier.projectId, 'proj-2');
     assert.notEqual(withSupplier.proformaId, null);
     assert.equal(await projectCount(db), 2, 'still exactly the two seeded projects');
     assert.equal(await proformaCount(db), 1);
-    const pi = await sql<{ project_id: string }>`SELECT project_id FROM import_proforma_invoices WHERE project_id = 'proj-2'`.execute(db);
+    const pi = await sql<{
+      project_id: string;
+    }>`SELECT project_id FROM import_proforma_invoices WHERE project_id = 'proj-2'`.execute(db);
     assert.equal(pi.rows.length, 1);
     assert.equal(pi.rows[0].project_id, 'proj-2');
 

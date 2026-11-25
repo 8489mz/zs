@@ -21,7 +21,10 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const accounting = new AccountingService(db, foundation, posting);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
@@ -97,17 +100,28 @@ async function main() {
         (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
       INSERT INTO cost_centers VALUES (7,'t1','CC7','Cost center');
     `);
-    for (const code of [1110,1120,1130,1140,1150,2110,2120,2125,2150,4100,4300,4400,5100,5190,7290,9001]) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-        [code, 't1', String(code), code === 1150 || code === 2120]);
+    for (const code of [
+      1110, 1120, 1130, 1140, 1150, 2110, 2120, 2125, 2150, 4100, 4300, 4400, 5100, 5190, 7290, 9001,
+    ]) {
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        code === 1150 || code === 2120,
+      ]);
     }
     await pg.exec(`INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES (9910,'t2','TAX',true)`);
     const amount = async (id: number, code: number, side: 'debit' | 'credit') => {
-      const rows = await pg.query<{ amount: string }>(`SELECT coalesce(sum(${side}),0) AS amount FROM journal_entry_lines WHERE journal_entry_id=$1 AND account_id=$2`, [id, code]);
+      const rows = await pg.query<{ amount: string }>(
+        `SELECT coalesce(sum(${side}),0) AS amount FROM journal_entry_lines WHERE journal_entry_id=$1 AND account_id=$2`,
+        [id, code],
+      );
       return Number(rows.rows[0].amount);
     };
     const assertBalanced = async () => {
-      const result = await pg.query(`SELECT journal_entry_id FROM journal_entry_lines GROUP BY journal_entry_id HAVING sum(debit) <> sum(credit)`);
+      const result = await pg.query(
+        `SELECT journal_entry_id FROM journal_entry_lines GROUP BY journal_entry_id HAVING sum(debit) <> sum(credit)`,
+      );
       assert.deepEqual(result.rows, [], 'every saved journal balances exactly');
     };
     await pg.exec(`
@@ -118,14 +132,14 @@ async function main() {
         VALUES (2,'t1','S2',25,114,11.4,12.6,102.6,true,'credit');
       INSERT INTO sale_items VALUES (2,'t1',2,10,2,30);
     `);
-    const sale = await inTx(trx => posting.postSale(trx, 1, auth));
+    const sale = await inTx((trx) => posting.postSale(trx, 1, auth));
     assert.equal(await amount(sale.journalEntryId, 1110, 'debit'), 102.6);
     assert.equal(await amount(sale.journalEntryId, 4100, 'credit'), 100);
     assert.equal(await amount(sale.journalEntryId, 4300, 'debit'), 10);
     assert.equal(await amount(sale.journalEntryId, 5100, 'debit'), 60);
     assert.equal(await amount(sale.journalEntryId, 2120, 'credit'), 12.6);
-    assert.equal((await inTx(trx => posting.postSale(trx, 1, auth))).posted, false, 'retry must not post twice');
-    const creditSale = await inTx(trx => posting.postSale(trx, 2, auth));
+    assert.equal((await inTx((trx) => posting.postSale(trx, 1, auth))).posted, false, 'retry must not post twice');
+    const creditSale = await inTx((trx) => posting.postSale(trx, 2, auth));
     assert.equal(await amount(creditSale.journalEntryId, 4100, 'credit'), 101.4);
     assert.equal(await amount(creditSale.journalEntryId, 1130, 'debit'), 102.6);
 
@@ -135,7 +149,7 @@ async function main() {
       INSERT INTO sale_payments VALUES ('t1',3,'cash',102.6);
       INSERT INTO sale_items VALUES (3,'t1',3,10,2,30);
     `);
-    const sale3 = await inTx(trx => posting.postSale(trx, 3, auth));
+    const sale3 = await inTx((trx) => posting.postSale(trx, 3, auth));
     assert.equal(sale3.posted, true);
 
     await pg.exec(`
@@ -143,23 +157,29 @@ async function main() {
       UPDATE sale_payments SET amount=153.9 WHERE sale_id=3;
       UPDATE sale_items SET qty=3, cost_price=30 WHERE sale_id=3;
     `);
-    const editResult = await inTx(trx => posting.postSaleEdit(trx, 3, auth));
+    const editResult = await inTx((trx) => posting.postSaleEdit(trx, 3, auth));
     assert.equal(editResult.posted, true);
-    const origJournal = await db.selectFrom('journal_entries').select(['id', 'reversed_by_entry_id']).where('id', '=', Number(sale3.journalEntryId)).executeTakeFirstOrThrow();
+    const origJournal = await db
+      .selectFrom('journal_entries')
+      .select(['id', 'reversed_by_entry_id'])
+      .where('id', '=', Number(sale3.journalEntryId))
+      .executeTakeFirstOrThrow();
     assert.ok(origJournal.reversed_by_entry_id != null, 'original journal must be marked reversed');
     assert.equal(await amount(editResult.journalEntryId, 1110, 'debit'), 153.9);
     assert.equal(await amount(editResult.journalEntryId, 4100, 'credit'), 150);
     assert.equal(await amount(editResult.journalEntryId, 4300, 'debit'), 15);
     assert.equal(await amount(editResult.journalEntryId, 5100, 'debit'), 90);
     assert.equal(await amount(editResult.journalEntryId, 2120, 'credit'), 18.9);
-    const activeJournals = await db.selectFrom('journal_entries')
+    const activeJournals = await db
+      .selectFrom('journal_entries')
       .select('id')
       .where('source_type', 'in', ['sale', 'sale_edit'])
       .where('source_id', '=', 3)
       .where('reversed_by_entry_id', 'is', null)
       .execute();
     assert.equal(activeJournals.length, 1, 'only exactly 1 active unreversed journal exists after edit');
-    const duplicateSaleCheck = await db.selectFrom('journal_entries')
+    const duplicateSaleCheck = await db
+      .selectFrom('journal_entries')
       .select(['source_id'])
       .where('tenant_id', '=', 't1')
       .where('status', '=', 'posted')
@@ -176,11 +196,19 @@ async function main() {
       UPDATE sale_payments SET amount=184.68 WHERE sale_id=3;
       UPDATE sale_items SET qty=4, cost_price=30 WHERE sale_id=3;
     `);
-    const secondEditResult = await inTx(trx => posting.postSaleEdit(trx, 3, auth));
+    const secondEditResult = await inTx((trx) => posting.postSaleEdit(trx, 3, auth));
     assert.equal(secondEditResult.posted, true);
-    const firstEditJournal = await db.selectFrom('journal_entries').select(['id', 'reversed_by_entry_id']).where('id', '=', Number(editResult.journalEntryId)).executeTakeFirstOrThrow();
-    assert.ok(firstEditJournal.reversed_by_entry_id != null, 'first edit journal must be marked reversed by second edit');
-    const activeJournalsSecond = await db.selectFrom('journal_entries')
+    const firstEditJournal = await db
+      .selectFrom('journal_entries')
+      .select(['id', 'reversed_by_entry_id'])
+      .where('id', '=', Number(editResult.journalEntryId))
+      .executeTakeFirstOrThrow();
+    assert.ok(
+      firstEditJournal.reversed_by_entry_id != null,
+      'first edit journal must be marked reversed by second edit',
+    );
+    const activeJournalsSecond = await db
+      .selectFrom('journal_entries')
       .select('id')
       .where('source_type', 'in', ['sale', 'sale_edit'])
       .where('source_id', '=', 3)
@@ -200,14 +228,14 @@ async function main() {
       INSERT INTO sale_payments VALUES ('t1',6,'cash',102.6);
       INSERT INTO sale_items VALUES (6,'t1',6,10,2,30);
     `);
-    const sale6 = await inTx(trx => posting.postSale(trx, 6, auth));
+    const sale6 = await inTx((trx) => posting.postSale(trx, 6, auth));
     assert.equal(sale6.posted, true);
     const oldSeqReversal = await posting.reverseSaleJournal(db, 6, 'edit reason', auth);
     assert.equal(oldSeqReversal.reversed, true);
     await assert.rejects(
-      inTx(trx => posting.postSaleEdit(trx, 6, auth)),
+      inTx((trx) => posting.postSaleEdit(trx, 6, auth)),
       (err: any) => err.code === 'SALE_ALREADY_REVERSED',
-      'an explicit reversal before postSaleEdit must leave postSaleEdit with nothing active'
+      'an explicit reversal before postSaleEdit must leave postSaleEdit with nothing active',
     );
     // NEW sequence (what fixed updateSale does: header/payments updated,
     // then postSaleEdit alone reverses and reposts):
@@ -216,27 +244,39 @@ async function main() {
       INSERT INTO sale_payments VALUES ('t1',7,'cash',102.6);
       INSERT INTO sale_items VALUES (7,'t1',7,10,2,30);
     `);
-    const sale7 = await inTx(trx => posting.postSale(trx, 7, auth));
+    const sale7 = await inTx((trx) => posting.postSale(trx, 7, auth));
     assert.equal(sale7.posted, true);
     await pg.exec(`
       UPDATE sales SET subtotal=150, discount=15, tax_amount=18.9, total=153.9, paid_amount=153.9 WHERE id=7;
       UPDATE sale_payments SET amount=153.9 WHERE sale_id=7;
       UPDATE sale_items SET qty=3, cost_price=30 WHERE sale_id=7;
     `);
-    const edit7 = await inTx(trx => posting.postSaleEdit(trx, 7, auth));
+    const edit7 = await inTx((trx) => posting.postSaleEdit(trx, 7, auth));
     assert.equal(edit7.posted, true);
-    const orig7 = await db.selectFrom('journal_entries').select(['id', 'reversed_by_entry_id']).where('id', '=', Number(sale7.journalEntryId)).executeTakeFirstOrThrow();
+    const orig7 = await db
+      .selectFrom('journal_entries')
+      .select(['id', 'reversed_by_entry_id'])
+      .where('id', '=', Number(sale7.journalEntryId))
+      .executeTakeFirstOrThrow();
     assert.ok(orig7.reversed_by_entry_id != null, 'original journal must be marked reversed by the edit');
     assert.equal(await amount(edit7.journalEntryId, 1110, 'debit'), 153.9);
     assert.equal(await amount(edit7.journalEntryId, 4100, 'credit'), 150);
     assert.equal(await amount(edit7.journalEntryId, 4300, 'debit'), 15);
     assert.equal(await amount(edit7.journalEntryId, 5100, 'debit'), 90);
     assert.equal(await amount(edit7.journalEntryId, 2120, 'credit'), 18.9);
-    const active7 = await db.selectFrom('journal_entries').select('id')
-      .where('source_type', 'in', ['sale', 'sale_edit']).where('source_id', '=', 7)
-      .where('reversed_by_entry_id', 'is', null).execute();
+    const active7 = await db
+      .selectFrom('journal_entries')
+      .select('id')
+      .where('source_type', 'in', ['sale', 'sale_edit'])
+      .where('source_id', '=', 7)
+      .where('reversed_by_entry_id', 'is', null)
+      .execute();
     assert.equal(active7.length, 1, 'only exactly 1 active unreversed journal exists after edit');
-    assert.equal(Number(active7[0].id), Number(edit7.journalEntryId), 'the active journal must be the new sale_edit journal');
+    assert.equal(
+      Number(active7[0].id),
+      Number(edit7.journalEntryId),
+      'the active journal must be the new sale_edit journal',
+    );
 
     // Exercise van sale split and edit
     await pg.exec(`
@@ -247,7 +287,7 @@ async function main() {
       INSERT INTO customer_ledger(tenant_id,customer_id,entry_type,amount,reference_type,reference_id)
         VALUES ('t1',25,'sale_credit',50,'sale',4);
     `);
-    const vanSale = await inTx(trx => posting.postSale(trx, 4, auth));
+    const vanSale = await inTx((trx) => posting.postSale(trx, 4, auth));
     assert.equal(vanSale.posted, true);
     assert.equal(await amount(vanSale.journalEntryId, 1130, 'debit'), 50);
     assert.equal(await amount(vanSale.journalEntryId, 1110, 'debit'), 64);
@@ -260,9 +300,13 @@ async function main() {
       UPDATE sale_payments SET amount=76.8 WHERE sale_id=4;
       UPDATE customer_ledger SET amount=60 WHERE reference_id=4 AND entry_type='sale_credit';
     `);
-    const vanEditResult = await inTx(trx => posting.postSaleEdit(trx, 4, auth));
+    const vanEditResult = await inTx((trx) => posting.postSaleEdit(trx, 4, auth));
     assert.equal(vanEditResult.posted, true);
-    const vanOrigJournal = await db.selectFrom('journal_entries').select(['id', 'reversed_by_entry_id']).where('id', '=', Number(vanSale.journalEntryId)).executeTakeFirstOrThrow();
+    const vanOrigJournal = await db
+      .selectFrom('journal_entries')
+      .select(['id', 'reversed_by_entry_id'])
+      .where('id', '=', Number(vanSale.journalEntryId))
+      .executeTakeFirstOrThrow();
     assert.ok(vanOrigJournal.reversed_by_entry_id != null, 'van original journal must be reversed on edit');
     assert.equal(await amount(vanEditResult.journalEntryId, 1130, 'debit'), 60);
     assert.equal(await amount(vanEditResult.journalEntryId, 1110, 'debit'), 76.8);
@@ -271,7 +315,7 @@ async function main() {
 
     // Direct inspectAccountingIntegrity test asserting SALE_EDIT_NET and overall report
     const integrityReport = await inspectAccountingIntegrity(db, 't1');
-    const saleEditCheck = integrityReport.checks.find(c => c.code === 'SALE_EDIT_NET');
+    const saleEditCheck = integrityReport.checks.find((c) => c.code === 'SALE_EDIT_NET');
     assert.ok(saleEditCheck != null, 'SALE_EDIT_NET check exists in integrity report');
     assert.equal(saleEditCheck.count, 0, 'SALE_EDIT_NET must report 0 issues in inspectAccountingIntegrity');
 
@@ -281,7 +325,7 @@ async function main() {
         VALUES (1,'t1','P1',9,'credit',228,22.8,25.2,205.2);
       INSERT INTO purchase_items VALUES ('t1',1,2,102.6,NULL,NULL);
     `);
-    const purchase = await inTx(trx => posting.postPurchase(trx, 1, auth));
+    const purchase = await inTx((trx) => posting.postPurchase(trx, 1, auth));
     assert.equal(await amount(purchase.journalEntryId, 1140, 'debit'), 180);
     assert.equal(await amount(purchase.journalEntryId, 1150, 'debit'), 25.2);
     assert.equal(await amount(purchase.journalEntryId, 2110, 'credit'), 205.2);
@@ -291,17 +335,17 @@ async function main() {
         (2,'t1','PR1','purchase',1,'[{"tender":"payable","amount":80},{"tender":"card","amount":22.6}]',102.6);
       INSERT INTO return_items VALUES ('t1',1,10,1,1,30,6.3), ('t1',2,10,NULL,1,90,12.6);
     `);
-    const saleReturn = await inTx(trx => posting.postSalesReturn(trx, 1, auth));
+    const saleReturn = await inTx((trx) => posting.postSalesReturn(trx, 1, auth));
     assert.equal(await amount(saleReturn.journalEntryId!, 4400, 'debit'), 45);
     assert.equal(await amount(saleReturn.journalEntryId!, 2120, 'debit'), 6.3);
     assert.equal(await amount(saleReturn.journalEntryId!, 1140, 'debit'), 30);
     assert.equal(await amount(saleReturn.journalEntryId!, 5100, 'credit'), 30);
-    const purchaseReturn = await inTx(trx => posting.postPurchaseReturn(trx, 2, auth));
+    const purchaseReturn = await inTx((trx) => posting.postPurchaseReturn(trx, 2, auth));
     assert.equal(await amount(purchaseReturn.journalEntryId!, 1140, 'credit'), 90);
     assert.equal(await amount(purchaseReturn.journalEntryId!, 1150, 'credit'), 12.6);
     assert.equal(await amount(purchaseReturn.journalEntryId!, 2110, 'debit'), 80);
     assert.equal(await amount(purchaseReturn.journalEntryId!, 1120, 'debit'), 22.6);
-    assert.equal((await inTx(trx => posting.postPurchaseReturn(trx, 2, auth))).posted, false);
+    assert.equal((await inTx((trx) => posting.postPurchaseReturn(trx, 2, auth))).posted, false);
 
     // Exercise exchange return guard on edit: if exchange return already has its own independent journal
     await pg.exec(`
@@ -311,9 +355,9 @@ async function main() {
       INSERT INTO sale_items VALUES (5,'t1',5,10,1,50);
     `);
     await assert.rejects(
-      inTx(trx => posting.postSaleEdit(trx, 5, auth)),
+      inTx((trx) => posting.postSaleEdit(trx, 5, auth)),
       (err: any) => err.code === 'EXCHANGE_LEDGER_CONFLICT' || /مرتجع الاستبدال مرتبط بقيد مستقل/.test(err.message),
-      'Editing an exchange sale whose return already has an independent journal must throw EXCHANGE_LEDGER_CONFLICT'
+      'Editing an exchange sale whose return already has an independent journal must throw EXCHANGE_LEDGER_CONFLICT',
     );
 
     // Both invoice reversals must link and retain every original analytical dimension.
@@ -323,39 +367,86 @@ async function main() {
     ] as const) {
       await pg.query('UPDATE journal_entry_lines SET cost_center_id=7 WHERE journal_entry_id=$1', [id]);
       const reversed = await reverse();
-      const original = await db.selectFrom('journal_entries').select('reversed_by_entry_id').where('id','=',id).executeTakeFirstOrThrow();
+      const original = await db
+        .selectFrom('journal_entries')
+        .select('reversed_by_entry_id')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(original.reversed_by_entry_id), reversed.journalEntryId);
-      const mirror = await db.selectFrom('journal_entries').select('reversal_of_entry_id').where('id','=',reversed.journalEntryId!).executeTakeFirstOrThrow();
+      const mirror = await db
+        .selectFrom('journal_entries')
+        .select('reversal_of_entry_id')
+        .where('id', '=', reversed.journalEntryId!)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(mirror.reversal_of_entry_id), id);
-      const lines = await db.selectFrom('journal_entry_lines').select('cost_center_id').where('journal_entry_id','=',reversed.journalEntryId!).execute();
-      assert.ok(lines.every(line => Number(line.cost_center_id) === 7));
+      const lines = await db
+        .selectFrom('journal_entry_lines')
+        .select('cost_center_id')
+        .where('journal_entry_id', '=', reversed.journalEntryId!)
+        .execute();
+      assert.ok(lines.every((line) => Number(line.cost_center_id) === 7));
       assert.equal((await reverse()).reversed, false);
     }
     // Attempting to post an edit for a fully reversed sale must throw SALE_ALREADY_REVERSED
     await assert.rejects(
-      inTx(trx => posting.postSaleEdit(trx, 1, auth)),
+      inTx((trx) => posting.postSaleEdit(trx, 1, auth)),
       (err: any) => err.code === 'SALE_ALREADY_REVERSED' || /ملغاة ومعكوسة/.test(err.message),
-      'Editing a fully reversed sale must fail with SALE_ALREADY_REVERSED'
+      'Editing a fully reversed sale must fail with SALE_ALREADY_REVERSED',
     );
-    for (const source of ['sale','purchase','sales_return','purchase_return','fiscal_year_closing','manual_reversal']) {
-      const entry = await db.insertInto('journal_entries').values({
-        tenant_id:'t1', entry_no:`BLOCK-${source}`, source_type:source, status:'posted',
-      } as any).returning('id').executeTakeFirstOrThrow();
-      await assert.rejects(accounting.reverseJournalEntry(Number(entry.id),'unsafe direct reversal',auth), /المستند الأصلي/);
+    for (const source of [
+      'sale',
+      'purchase',
+      'sales_return',
+      'purchase_return',
+      'fiscal_year_closing',
+      'manual_reversal',
+    ]) {
+      const entry = await db
+        .insertInto('journal_entries')
+        .values({
+          tenant_id: 't1',
+          entry_no: `BLOCK-${source}`,
+          source_type: source,
+          status: 'posted',
+        } as any)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await assert.rejects(
+        accounting.reverseJournalEntry(Number(entry.id), 'unsafe direct reversal', auth),
+        /المستند الأصلي/,
+      );
     }
     for (const invalid of [-5, -0.001, NaN, Infinity]) {
-      await assert.rejects(accounting.createManualJournalEntry({ entryDate:'2026-10-01', description:'invalid', lines:[
-        {accountId:1110,debit:100,credit:invalid}, {accountId:9001,debit:0,credit:Number.isFinite(invalid) ? 100-invalid : 100},
-      ] },auth));
+      await assert.rejects(
+        accounting.createManualJournalEntry(
+          {
+            entryDate: '2026-10-01',
+            description: 'invalid',
+            lines: [
+              { accountId: 1110, debit: 100, credit: invalid },
+              { accountId: 9001, debit: 0, credit: Number.isFinite(invalid) ? 100 - invalid : 100 },
+            ],
+          },
+          auth,
+        ),
+      );
     }
-    const manual = await accounting.createManualJournalEntry({ entryDate:'2026-10-01', description:'manual', lines:[
-      {accountId:1110,debit:75,credit:0,costCenterId:7}, {accountId:9001,debit:0,credit:75,costCenterId:7},
-    ] },auth) as any;
-    const reversal = await accounting.reverseJournalEntry(manual.entry.id,'correct manual entry',auth);
-    assert.equal(await amount(reversal.reversalEntryId,1110,'credit'),75);
-    const manualDetail = await accounting.getJournalEntry(manual.entry.id,auth) as any;
-    assert.equal(manualDetail.entry.canReverse,false);
-    await assert.rejects(accounting.reverseJournalEntry(manual.entry.id,'duplicate',auth), /بالفعل/);
+    const manual = (await accounting.createManualJournalEntry(
+      {
+        entryDate: '2026-10-01',
+        description: 'manual',
+        lines: [
+          { accountId: 1110, debit: 75, credit: 0, costCenterId: 7 },
+          { accountId: 9001, debit: 0, credit: 75, costCenterId: 7 },
+        ],
+      },
+      auth,
+    )) as any;
+    const reversal = await accounting.reverseJournalEntry(manual.entry.id, 'correct manual entry', auth);
+    assert.equal(await amount(reversal.reversalEntryId, 1110, 'credit'), 75);
+    const manualDetail = (await accounting.getJournalEntry(manual.entry.id, auth)) as any;
+    assert.equal(manualDetail.entry.canReverse, false);
+    await assert.rejects(accounting.reverseJournalEntry(manual.entry.id, 'duplicate', auth), /بالفعل/);
 
     // Exercise delayed receipt end to end: cartons, recoverable VAT, WAC, AP and journal.
     await pg.exec(`
@@ -378,86 +469,244 @@ async function main() {
       INSERT INTO purchase_items(tenant_id,purchase_id,product_id,qty,unit_cost,unit_multiplier)
         VALUES ('t1',10,10,1,1368,12),('t1',11,10,1,1368,12);
     `);
-    const purchaseWriter = new PurchasesWriteService(db, {} as any, {} as any, new PurchasesFinanceService(), {} as any, posting, {} as any);
-    const receiptLine = await db.selectFrom('purchase_items').select('id').where('purchase_id','=',10).executeTakeFirstOrThrow();
-    await purchaseWriter.receivePurchaseGoods(10,[{itemId:Number(receiptLine.id),receivedQty:1}],auth);
-    const product = await db.selectFrom('products').select(['stock_qty','cost_price']).where('id','=',10).executeTakeFirstOrThrow();
-    assert.equal(Number(product.stock_qty),24);
-    assert.equal(Number(product.cost_price),90,'12 units at 80 plus 12 units at net 100 gives WAC 90');
-    const movement = await db.selectFrom('stock_movements').select(['unit_cost','total_cost']).where('reference_id','=',10).executeTakeFirstOrThrow();
-    assert.equal(Number(movement.unit_cost),100);
-    assert.equal(Number(movement.total_cost),1200);
-    const receivedJournal = await db.selectFrom('journal_entries').select('id').where('source_type','=','purchase').where('source_id','=',10).executeTakeFirstOrThrow();
-    assert.equal(await amount(Number(receivedJournal.id),1140,'debit'),1200);
-    assert.equal(await amount(Number(receivedJournal.id),1150,'debit'),168);
-    assert.equal(Number((await db.selectFrom('suppliers').select('balance').where('id','=',9).executeTakeFirstOrThrow()).balance),1368);
+    const purchaseWriter = new PurchasesWriteService(
+      db,
+      {} as any,
+      {} as any,
+      new PurchasesFinanceService(),
+      {} as any,
+      posting,
+      {} as any,
+    );
+    const receiptLine = await db
+      .selectFrom('purchase_items')
+      .select('id')
+      .where('purchase_id', '=', 10)
+      .executeTakeFirstOrThrow();
+    await purchaseWriter.receivePurchaseGoods(10, [{ itemId: Number(receiptLine.id), receivedQty: 1 }], auth);
+    const product = await db
+      .selectFrom('products')
+      .select(['stock_qty', 'cost_price'])
+      .where('id', '=', 10)
+      .executeTakeFirstOrThrow();
+    assert.equal(Number(product.stock_qty), 24);
+    assert.equal(Number(product.cost_price), 90, '12 units at 80 plus 12 units at net 100 gives WAC 90');
+    const movement = await db
+      .selectFrom('stock_movements')
+      .select(['unit_cost', 'total_cost'])
+      .where('reference_id', '=', 10)
+      .executeTakeFirstOrThrow();
+    assert.equal(Number(movement.unit_cost), 100);
+    assert.equal(Number(movement.total_cost), 1200);
+    const receivedJournal = await db
+      .selectFrom('journal_entries')
+      .select('id')
+      .where('source_type', '=', 'purchase')
+      .where('source_id', '=', 10)
+      .executeTakeFirstOrThrow();
+    assert.equal(await amount(Number(receivedJournal.id), 1140, 'debit'), 1200);
+    assert.equal(await amount(Number(receivedJournal.id), 1150, 'debit'), 168);
+    assert.equal(
+      Number(
+        (await db.selectFrom('suppliers').select('balance').where('id', '=', 9).executeTakeFirstOrThrow()).balance,
+      ),
+      1368,
+    );
 
     // Legacy writers must use the same period rules as the central gateway.
     await pg.exec(`UPDATE accounting_settings SET lock_date_non_adviser='2099-12-31'`);
-    await assert.rejects(assertAutomatedJournalPeriodOpen(db,'t1','2026-10-01',[1110,9001]), /التشغيلية/);
+    await assert.rejects(assertAutomatedJournalPeriodOpen(db, 't1', '2026-10-01', [1110, 9001]), /التشغيلية/);
     await pg.exec(`UPDATE accounting_settings SET lock_date_non_adviser=NULL;
       INSERT INTO accounting_fiscal_periods VALUES ('t1','closed','October',10,'2026-10-01','2026-10-31');`);
-    await assert.rejects(assertAutomatedJournalPeriodOpen(db,'t1','2026-10-01',[1110,9001]), /الشهرية/);
+    await assert.rejects(assertAutomatedJournalPeriodOpen(db, 't1', '2026-10-01', [1110, 9001]), /الشهرية/);
     await pg.exec(`DELETE FROM accounting_fiscal_periods`);
     // Carrier service journeys run against the fully migrated PostgreSQL
     // acceptance database; the historical-rate allocator is checked below.
-    const taxManual = await accounting.createManualJournalEntry({entryDate:'2026-10-01',description:'VAT manual',lines:[
-      {accountId:1110,debit:14,credit:0},{accountId:2120,debit:0,credit:14},
-    ]},auth) as any;
+    const taxManual = (await accounting.createManualJournalEntry(
+      {
+        entryDate: '2026-10-01',
+        description: 'VAT manual',
+        lines: [
+          { accountId: 1110, debit: 14, credit: 0 },
+          { accountId: 2120, debit: 0, credit: 14 },
+        ],
+      },
+      auth,
+    )) as any;
     const aggregated: any[] = [];
     const addLine = (posting as any).addLine.bind(posting);
-    const template = {accountId:9001,description:'same description',partnerType:'none',partnerId:null,branchId:null,locationId:null};
-    addLine(aggregated,{...template,costCenterId:7,debit:10,credit:0},2);
-    addLine(aggregated,{...template,costCenterId:8,debit:20,credit:0},2);
-    addLine(aggregated,{...template,costCenterId:7,debit:0,credit:10},2);
-    assert.equal(aggregated.length,3,'different cost centers and opposite sides cannot merge');
-    assert.throws(() => addLine(aggregated,{...template,debit:-0.001,credit:1},2));
-    const draftLines = [{accountId:1110,debit:14,credit:0},{accountId:2120,debit:0,credit:14}];
-    const domain = (accountId: number, date = '2026-10-01') => posting.postDomainJournal(db, {
-      sourceType:'audit',sourceId:1,tenantId:'t1',accountId:'a1',entryDate:new Date(date),description:'tax lock',createdBy:1,
-      lines:[{accountId:1110,debit:14,credit:0,description:'cash',partnerType:'none',partnerId:null,branchId:null,locationId:null},
-        {accountId,debit:0,credit:14,description:'offset',partnerType:'none',partnerId:null,branchId:null,locationId:null}],
-    });
+    const template = {
+      accountId: 9001,
+      description: 'same description',
+      partnerType: 'none',
+      partnerId: null,
+      branchId: null,
+      locationId: null,
+    };
+    addLine(aggregated, { ...template, costCenterId: 7, debit: 10, credit: 0 }, 2);
+    addLine(aggregated, { ...template, costCenterId: 8, debit: 20, credit: 0 }, 2);
+    addLine(aggregated, { ...template, costCenterId: 7, debit: 0, credit: 10 }, 2);
+    assert.equal(aggregated.length, 3, 'different cost centers and opposite sides cannot merge');
+    assert.throws(() => addLine(aggregated, { ...template, debit: -0.001, credit: 1 }, 2));
+    const draftLines = [
+      { accountId: 1110, debit: 14, credit: 0 },
+      { accountId: 2120, debit: 0, credit: 14 },
+    ];
+    const domain = (accountId: number, date = '2026-10-01') =>
+      posting.postDomainJournal(db, {
+        sourceType: 'audit',
+        sourceId: 1,
+        tenantId: 't1',
+        accountId: 'a1',
+        entryDate: new Date(date),
+        description: 'tax lock',
+        createdBy: 1,
+        lines: [
+          {
+            accountId: 1110,
+            debit: 14,
+            credit: 0,
+            description: 'cash',
+            partnerType: 'none',
+            partnerId: null,
+            branchId: null,
+            locationId: null,
+          },
+          {
+            accountId,
+            debit: 0,
+            credit: 14,
+            description: 'offset',
+            partnerType: 'none',
+            partnerId: null,
+            branchId: null,
+            locationId: null,
+          },
+        ],
+      });
     await pg.exec(`UPDATE accounting_settings SET lock_date_tax='2099-12-31';
       UPDATE accounting_accounts SET is_tax=false WHERE id=2120;`);
-    await assert.rejects(accounting.reverseJournalEntry(taxManual.entry.id,'VAT reversal in locked period',auth), /الفترة الضريبية/);
-    const blockedReceiptLine = await db.selectFrom('purchase_items').select('id').where('purchase_id','=',11).executeTakeFirstOrThrow();
-    await assert.rejects(purchaseWriter.receivePurchaseGoods(11,[{itemId:Number(blockedReceiptLine.id),receivedQty:1}],auth), /الفترة الضريبية/);
-    assert.equal(Number((await db.selectFrom('products').select('stock_qty').where('id','=',10).executeTakeFirstOrThrow()).stock_qty),24);
-    assert.equal(Number((await db.selectFrom('suppliers').select('balance').where('id','=',9).executeTakeFirstOrThrow()).balance),1368);
-    assert.equal(Number((await db.selectFrom('purchase_items').select('received_qty').where('purchase_id','=',11).executeTakeFirstOrThrow()).received_qty),0);
-    await assert.rejects(domain(2120), /الفترة الضريبية/, 'configured tax accounts are protected even without the flag');
+    await assert.rejects(
+      accounting.reverseJournalEntry(taxManual.entry.id, 'VAT reversal in locked period', auth),
+      /الفترة الضريبية/,
+    );
+    const blockedReceiptLine = await db
+      .selectFrom('purchase_items')
+      .select('id')
+      .where('purchase_id', '=', 11)
+      .executeTakeFirstOrThrow();
+    await assert.rejects(
+      purchaseWriter.receivePurchaseGoods(11, [{ itemId: Number(blockedReceiptLine.id), receivedQty: 1 }], auth),
+      /الفترة الضريبية/,
+    );
+    assert.equal(
+      Number(
+        (await db.selectFrom('products').select('stock_qty').where('id', '=', 10).executeTakeFirstOrThrow()).stock_qty,
+      ),
+      24,
+    );
+    assert.equal(
+      Number(
+        (await db.selectFrom('suppliers').select('balance').where('id', '=', 9).executeTakeFirstOrThrow()).balance,
+      ),
+      1368,
+    );
+    assert.equal(
+      Number(
+        (
+          await db
+            .selectFrom('purchase_items')
+            .select('received_qty')
+            .where('purchase_id', '=', 11)
+            .executeTakeFirstOrThrow()
+        ).received_qty,
+      ),
+      0,
+    );
+    await assert.rejects(
+      domain(2120),
+      /الفترة الضريبية/,
+      'configured tax accounts are protected even without the flag',
+    );
     await assert.rejects(domain(1150), /الفترة الضريبية/);
-    await assert.rejects(accounting.createManualJournalEntry({entryDate:'2026-10-01',description:'VAT',lines:draftLines},auth), /الفترة الضريبية/);
-    await assert.rejects(accounting.createDraftJournalEntry({description:'VAT',lines:draftLines},auth), /الفترة الضريبية/);
+    await assert.rejects(
+      accounting.createManualJournalEntry({ entryDate: '2026-10-01', description: 'VAT', lines: draftLines }, auth),
+      /الفترة الضريبية/,
+    );
+    await assert.rejects(
+      accounting.createDraftJournalEntry({ description: 'VAT', lines: draftLines }, auth),
+      /الفترة الضريبية/,
+    );
     await domain(9001); // unrelated tax accounts in t2 cannot block t1's non-tax journal
-    await domain(2120,'2100-01-01');
+    await domain(2120, '2100-01-01');
     await pg.exec(`UPDATE return_documents SET refund_allocations='[{"tender":"payable","amount":102.6}]' WHERE id=2;
       INSERT INTO return_documents SELECT 3,tenant_id,'PR2',return_type,invoice_id,settlement_mode,refund_method,
         refund_allocations,total,branch_id,location_id,created_by,created_at FROM return_documents WHERE id=2;
       INSERT INTO return_items VALUES ('t1',3,10,NULL,1,90,12.6);`);
-    await assert.rejects(inTx(trx => posting.postPurchaseReturn(trx, 3, auth)), /الفترة الضريبية/);
+    await assert.rejects(
+      inTx((trx) => posting.postPurchaseReturn(trx, 3, auth)),
+      /الفترة الضريبية/,
+    );
     const before = await db.selectFrom('journal_entries').select('id').execute();
-    await assert.rejects(db.transaction().execute(async trx => {
-      await trx.insertInto('settings').values({tenant_id:'t1',key:'rollback-proof',value:'1'} as any).execute();
-      await posting.postDomainJournal(trx, {sourceType:'audit',sourceId:2,tenantId:'t1',accountId:'a1',entryDate:new Date('2026-10-01'),description:'rollback',createdBy:1,
-        lines:draftLines.map(l => ({...l,description:'VAT',partnerType:'none',partnerId:null,branchId:null,locationId:null}))});
-    }), /الفترة الضريبية/);
-    assert.equal((await db.selectFrom('settings').select('key').where('key','=','rollback-proof').execute()).length,0);
-    assert.equal((await db.selectFrom('journal_entries').select('id').execute()).length,before.length);
+    await assert.rejects(
+      db.transaction().execute(async (trx) => {
+        await trx
+          .insertInto('settings')
+          .values({ tenant_id: 't1', key: 'rollback-proof', value: '1' } as any)
+          .execute();
+        await posting.postDomainJournal(trx, {
+          sourceType: 'audit',
+          sourceId: 2,
+          tenantId: 't1',
+          accountId: 'a1',
+          entryDate: new Date('2026-10-01'),
+          description: 'rollback',
+          createdBy: 1,
+          lines: draftLines.map((l) => ({
+            ...l,
+            description: 'VAT',
+            partnerType: 'none',
+            partnerId: null,
+            branchId: null,
+            locationId: null,
+          })),
+        });
+      }),
+      /الفترة الضريبية/,
+    );
+    assert.equal(
+      (await db.selectFrom('settings').select('key').where('key', '=', 'rollback-proof').execute()).length,
+      0,
+    );
+    assert.equal((await db.selectFrom('journal_entries').select('id').execute()).length, before.length);
     await assertBalanced();
 
-    assert.equal(accountingDateKey(new Date('2026-10-01T00:00:00Z')),'2026-10-01');
-    assert.deepEqual([0,1,2].map(prior => calculateCarrierCreditBaseAmount(3,1,prior,1)),[0.33,0.34,0.33]);
-    assert.throws(() => calculateCarrierCreditBaseAmount(100,5000,90,20));
-    assert.ok(Math.abs(purchaseReceiptBaseUnitCost(1368,12,14,true) - 100) < 1e-10);
-    assert.equal(purchaseReceiptBaseUnitCost(1200,12,14,false),100);
-    assert.ok(Math.abs(purchaseReceiptBaseUnitCost(114,1,14,true) - 100) < 1e-10);
-    assert.equal(purchaseReceiptBaseUnitCost(0,12,14,true),0);
-    for (const args of [[-1,1,14],[100,0,14],[100,1,-1],[NaN,1,14]] as const) {
-      assert.throws(() => purchaseReceiptBaseUnitCost(args[0],args[1],args[2],true));
+    assert.equal(accountingDateKey(new Date('2026-10-01T00:00:00Z')), '2026-10-01');
+    assert.deepEqual(
+      [0, 1, 2].map((prior) => calculateCarrierCreditBaseAmount(3, 1, prior, 1)),
+      [0.33, 0.34, 0.33],
+    );
+    assert.throws(() => calculateCarrierCreditBaseAmount(100, 5000, 90, 20));
+    assert.ok(Math.abs(purchaseReceiptBaseUnitCost(1368, 12, 14, true) - 100) < 1e-10);
+    assert.equal(purchaseReceiptBaseUnitCost(1200, 12, 14, false), 100);
+    assert.ok(Math.abs(purchaseReceiptBaseUnitCost(114, 1, 14, true) - 100) < 1e-10);
+    assert.equal(purchaseReceiptBaseUnitCost(0, 12, 14, true), 0);
+    for (const args of [
+      [-1, 1, 14],
+      [100, 0, 14],
+      [100, 1, -1],
+      [NaN, 1, 14],
+    ] as const) {
+      assert.throws(() => purchaseReceiptBaseUnitCost(args[0], args[1], args[2], true));
     }
-    console.log('Commercial accounting: numerical sale/purchase/return postings, reversals, tenant tax locks, rollback and receipt costs passed');
-  } finally { await db.destroy(); }
+    console.log(
+      'Commercial accounting: numerical sale/purchase/return postings, reversals, tenant tax locks, rollback and receipt costs passed',
+    );
+  } finally {
+    await db.destroy();
+  }
 }
-main().catch(error => { console.error(error); process.exitCode=1; });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

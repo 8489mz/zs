@@ -61,14 +61,23 @@ async function setup() {
   const pg = new PGlite();
   const db = new Kysely<any>({ dialect: new PGliteDialect(pg) });
 
-  await sql`CREATE TABLE settings (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL DEFAULT '')`.execute(db);
-  await sql`CREATE TABLE currency_exchange_rates (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, currency_code TEXT NOT NULL, exchange_rate NUMERIC(14,6) NOT NULL DEFAULT 1, is_base BOOLEAN NOT NULL DEFAULT false)`.execute(db);
+  await sql`CREATE TABLE settings (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL DEFAULT '')`.execute(
+    db,
+  );
+  await sql`CREATE TABLE currency_exchange_rates (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, currency_code TEXT NOT NULL, exchange_rate NUMERIC(14,6) NOT NULL DEFAULT 1, is_base BOOLEAN NOT NULL DEFAULT false)`.execute(
+    db,
+  );
   // DDL mirrors migration 2040000000221 (fmcg_promotions): start_date and
   // end_date are pg DATE columns, which is what makes the mapping matter.
-  await sql`CREATE TABLE fmcg_promotions (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, name TEXT NOT NULL, code TEXT NOT NULL, promo_type TEXT NOT NULL, apply_type TEXT NOT NULL, buy_conditions JSONB, reward JSONB, customer_types JSONB, start_date DATE, end_date DATE, is_active BOOLEAN NOT NULL DEFAULT true, max_applications_per_order INTEGER NOT NULL DEFAULT 1, priority INTEGER NOT NULL DEFAULT 0, notes TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`.execute(db);
+  await sql`CREATE TABLE fmcg_promotions (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, name TEXT NOT NULL, code TEXT NOT NULL, promo_type TEXT NOT NULL, apply_type TEXT NOT NULL, buy_conditions JSONB, reward JSONB, customer_types JSONB, start_date DATE, end_date DATE, is_active BOOLEAN NOT NULL DEFAULT true, max_applications_per_order INTEGER NOT NULL DEFAULT 1, priority INTEGER NOT NULL DEFAULT 0, notes TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`.execute(
+    db,
+  );
 
   await db.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: '"EGP"' }).execute();
-  await db.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await db
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
 
   const promo = (code: string, startDate: string | null, endDate: string | null) => ({
     tenant_id: TENANT,
@@ -87,10 +96,22 @@ async function setup() {
     notes: null,
   });
 
-  await db.insertInto('fmcg_promotions').values(promo('PROMO-LIVE', '2026-11-01', '2026-12-31')).execute();
-  await db.insertInto('fmcg_promotions').values(promo('PROMO-EXPIRED', '2026-10-01', '2026-11-13')).execute();
-  await db.insertInto('fmcg_promotions').values(promo('PROMO-NODATES', null, null)).execute();
-  await db.insertInto('fmcg_promotions').values(promo('PROMO-FUTURE', '2026-11-15', '2026-12-31')).execute();
+  await db
+    .insertInto('fmcg_promotions')
+    .values(promo('PROMO-LIVE', '2026-11-01', '2026-12-31'))
+    .execute();
+  await db
+    .insertInto('fmcg_promotions')
+    .values(promo('PROMO-EXPIRED', '2026-10-01', '2026-11-13'))
+    .execute();
+  await db
+    .insertInto('fmcg_promotions')
+    .values(promo('PROMO-NODATES', null, null))
+    .execute();
+  await db
+    .insertInto('fmcg_promotions')
+    .values(promo('PROMO-FUTURE', '2026-11-15', '2026-12-31'))
+    .execute();
 
   return { db };
 }
@@ -119,9 +140,20 @@ async function main() {
         customerType: 'regular',
       });
       const applied = res.appliedPromotions.map((p) => p.promoCode).sort();
-      assert.deepEqual(applied, ['PROMO-LIVE', 'PROMO-NODATES'], `B: only the live and dateless promos must apply, got ${applied.join(',')}`);
-      assert.equal(res.bonusItemsToAdd.length, 2, `B: two bonus items (one per applied promo), got ${res.bonusItemsToAdd.length}`);
-      assert.ok(res.bonusItemsToAdd.every((b) => b.productId === 30 && b.qty === 1), 'B: bonus items are product 30 x1 each');
+      assert.deepEqual(
+        applied,
+        ['PROMO-LIVE', 'PROMO-NODATES'],
+        `B: only the live and dateless promos must apply, got ${applied.join(',')}`,
+      );
+      assert.equal(
+        res.bonusItemsToAdd.length,
+        2,
+        `B: two bonus items (one per applied promo), got ${res.bonusItemsToAdd.length}`,
+      );
+      assert.ok(
+        res.bonusItemsToAdd.every((b) => b.productId === 30 && b.qty === 1),
+        'B: bonus items are product 30 x1 each',
+      );
       console.log('✓ B Passed: evaluateCart applies live promos and skips expired/future ones');
     }
 

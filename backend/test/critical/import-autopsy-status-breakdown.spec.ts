@@ -102,22 +102,45 @@ async function seedShipment(
     storedPerUnit: number;
   },
 ): Promise<void> {
-  await (db as any).insertInto('import_shipments').values({
-    id: shipmentId, tenant_id: 't1', container_number: 'MSCU-TEST-001', supplier_id: 1,
-    bill_of_lading: 'BL-TEST-001', status: opts.status, project_id: 'proj-1',
-    exchange_rate_at_arrival: 50, pricing_exchange_rate: null,
-    shipping_cost_usd: 5, customs_cost_egp: 100, internal_transport_cost_egp: 50,
-    actual_demurrage_fees: 0, late_expenses_total_egp: opts.lateExpensesEgp,
-    container_status: opts.containerStatus,
-    customs_duty_rate_percent: opts.duty, vat_rate_percent: opts.vat,
-    insurance_cost_usd: opts.insuranceUsd, funding_type: 'bank_transfer',
-  } as never).execute();
-  await (db as any).insertInto('import_shipment_items').values({
-    id: `${shipmentId}-item`, tenant_id: 't1', shipment_id: shipmentId, product_id: 1,
-    quantity: 10, received_quantity: 10, factory_unit_price_usd: 1,
-    allocated_overhead_egp: 0, landed_cost_egp: opts.storedPerUnit,
-    shortage_handling_method: 'capitalize',
-  } as never).execute();
+  await (db as any)
+    .insertInto('import_shipments')
+    .values({
+      id: shipmentId,
+      tenant_id: 't1',
+      container_number: 'MSCU-TEST-001',
+      supplier_id: 1,
+      bill_of_lading: 'BL-TEST-001',
+      status: opts.status,
+      project_id: 'proj-1',
+      exchange_rate_at_arrival: 50,
+      pricing_exchange_rate: null,
+      shipping_cost_usd: 5,
+      customs_cost_egp: 100,
+      internal_transport_cost_egp: 50,
+      actual_demurrage_fees: 0,
+      late_expenses_total_egp: opts.lateExpensesEgp,
+      container_status: opts.containerStatus,
+      customs_duty_rate_percent: opts.duty,
+      vat_rate_percent: opts.vat,
+      insurance_cost_usd: opts.insuranceUsd,
+      funding_type: 'bank_transfer',
+    } as never)
+    .execute();
+  await (db as any)
+    .insertInto('import_shipment_items')
+    .values({
+      id: `${shipmentId}-item`,
+      tenant_id: 't1',
+      shipment_id: shipmentId,
+      product_id: 1,
+      quantity: 10,
+      received_quantity: 10,
+      factory_unit_price_usd: 1,
+      allocated_overhead_egp: 0,
+      landed_cost_egp: opts.storedPerUnit,
+      shortage_handling_method: 'capitalize',
+    } as never)
+    .execute();
 }
 
 /** The nine breakdown components the modal renders; they must sum to the total. */
@@ -147,15 +170,36 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, 'sh-001', {
-        status: 'Arrived', containerStatus: 'on_water',
-        duty: 0, vat: 0, insuranceUsd: 0, lateExpensesEgp: 20, storedPerUnit: 92,
+        status: 'Arrived',
+        containerStatus: 'on_water',
+        duty: 0,
+        vat: 0,
+        insuranceUsd: 0,
+        lateExpensesEgp: 20,
+        storedPerUnit: 92,
       });
       const autopsy: any = await service.getContainerAutopsySheet('t1', 'sh-001');
-      assert.equal(autopsy.operational.containerStatus, 'warehouse_received', 'Stale on_water default resolves from the Arrived shipment status');
-      assert.equal(autopsy.operational.containerStatusLabel, 'تم الوصول للمخزن', 'Arrived container never reads "في البحر"');
+      assert.equal(
+        autopsy.operational.containerStatus,
+        'warehouse_received',
+        'Stale on_water default resolves from the Arrived shipment status',
+      );
+      assert.equal(
+        autopsy.operational.containerStatusLabel,
+        'تم الوصول للمخزن',
+        'Arrived container never reads "في البحر"',
+      );
       assert.equal(autopsy.landedCosts.totalLandedCostEgp, 920, 'Total 500 + 250 + 100 + 50 + 20 late expenses');
-      assert.equal(autopsy.landedCosts.avgCostPerUnitEgp, 92, '92.00/unit is CORRECT (900 receipt + 20 late expense) / 10 — not 90.00');
-      assert.equal(breakdownSum(autopsy.landedCosts), autopsy.landedCosts.totalLandedCostEgp, 'Breakdown rows sum to the total');
+      assert.equal(
+        autopsy.landedCosts.avgCostPerUnitEgp,
+        92,
+        '92.00/unit is CORRECT (900 receipt + 20 late expense) / 10 — not 90.00',
+      );
+      assert.equal(
+        breakdownSum(autopsy.landedCosts),
+        autopsy.landedCosts.totalLandedCostEgp,
+        'Breakdown rows sum to the total',
+      );
     } finally {
       await db.destroy();
     }
@@ -171,19 +215,32 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, 'sh-003', {
-        status: 'Pending', containerStatus: 'on_water',
-        duty: 5, vat: 14, insuranceUsd: 1, lateExpensesEgp: 0, storedPerUnit: 110.76,
+        status: 'Pending',
+        containerStatus: 'on_water',
+        duty: 5,
+        vat: 14,
+        insuranceUsd: 1,
+        lateExpensesEgp: 0,
+        storedPerUnit: 110.76,
       });
       const autopsy: any = await service.getContainerAutopsySheet('t1', 'sh-003');
       assert.equal(autopsy.operational.containerStatus, 'on_water', 'Pending container stays on_water');
-      assert.equal(autopsy.operational.containerStatusLabel, 'في البحر', 'Pending container correctly reads "في البحر"');
+      assert.equal(
+        autopsy.operational.containerStatusLabel,
+        'في البحر',
+        'Pending container correctly reads "في البحر"',
+      );
       const costs = autopsy.landedCosts;
       assert.equal(costs.insuranceEgp, 50, 'Insurance $1 x FX 50');
       assert.equal(costs.dutyEgp, 40, 'Duty 5% of CIF 800');
       assert.equal(costs.vatEgp, 117.6, 'VAT 14% of CIF+duty 840');
       assert.equal(costs.totalLandedCostEgp, 1107.6, 'Total 500 + 250 + 50 + 40 + 117.60 + 100 + 50');
       assert.equal(costs.avgCostPerUnitEgp, 110.76, 'Avg per unit 1,107.60 / 10');
-      assert.equal(breakdownSum(costs), costs.totalLandedCostEgp, 'Breakdown rows sum to the total — the omitted 207.60 is now itemised');
+      assert.equal(
+        breakdownSum(costs),
+        costs.totalLandedCostEgp,
+        'Breakdown rows sum to the total — the omitted 207.60 is now itemised',
+      );
     } finally {
       await db.destroy();
     }
@@ -197,18 +254,36 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, 'sh-null', {
-        status: 'Arrived', containerStatus: null,
-        duty: 0, vat: 0, insuranceUsd: 0, lateExpensesEgp: 0, storedPerUnit: 90,
+        status: 'Arrived',
+        containerStatus: null,
+        duty: 0,
+        vat: 0,
+        insuranceUsd: 0,
+        lateExpensesEgp: 0,
+        storedPerUnit: 90,
       });
       const nullStatus: any = await service.getContainerAutopsySheet('t1', 'sh-null');
-      assert.equal(nullStatus.operational.containerStatus, 'warehouse_received', 'NULL container_status resolves from the Arrived shipment status');
+      assert.equal(
+        nullStatus.operational.containerStatus,
+        'warehouse_received',
+        'NULL container_status resolves from the Arrived shipment status',
+      );
       assert.equal(nullStatus.operational.containerStatusLabel, 'تم الوصول للمخزن');
       await seedShipment(db, 'sh-customs', {
-        status: 'In Customs', containerStatus: 'on_water',
-        duty: 0, vat: 0, insuranceUsd: 0, lateExpensesEgp: 0, storedPerUnit: 90,
+        status: 'In Customs',
+        containerStatus: 'on_water',
+        duty: 0,
+        vat: 0,
+        insuranceUsd: 0,
+        lateExpensesEgp: 0,
+        storedPerUnit: 90,
       });
       const inCustoms: any = await service.getContainerAutopsySheet('t1', 'sh-customs');
-      assert.equal(inCustoms.operational.containerStatus, 'port_arrived', 'In Customs resolves from the stale on_water default');
+      assert.equal(
+        inCustoms.operational.containerStatus,
+        'port_arrived',
+        'In Customs resolves from the stale on_water default',
+      );
       assert.equal(inCustoms.operational.containerStatusLabel, 'وصلت إلى الميناء');
     } finally {
       await db.destroy();
@@ -223,26 +298,45 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await seedShipment(db, 'sh-explicit', {
-        status: 'Arrived', containerStatus: 'warehouse_received',
-        duty: 0, vat: 0, insuranceUsd: 0, lateExpensesEgp: 0, storedPerUnit: 90,
+        status: 'Arrived',
+        containerStatus: 'warehouse_received',
+        duty: 0,
+        vat: 0,
+        insuranceUsd: 0,
+        lateExpensesEgp: 0,
+        storedPerUnit: 90,
       });
       const explicit: any = await service.getContainerAutopsySheet('t1', 'sh-explicit');
       assert.equal(explicit.operational.containerStatus, 'warehouse_received');
       assert.equal(explicit.operational.containerStatusLabel, 'تم الوصول للمخزن');
       await seedShipment(db, 'sh-empty', {
-        status: 'Arrived', containerStatus: 'empty_returned',
-        duty: 0, vat: 0, insuranceUsd: 0, lateExpensesEgp: 0, storedPerUnit: 90,
+        status: 'Arrived',
+        containerStatus: 'empty_returned',
+        duty: 0,
+        vat: 0,
+        insuranceUsd: 0,
+        lateExpensesEgp: 0,
+        storedPerUnit: 90,
       });
       const empty: any = await service.getContainerAutopsySheet('t1', 'sh-empty');
       assert.equal(empty.operational.containerStatus, 'empty_returned');
       assert.equal(empty.operational.containerStatusLabel, 'تم تسليم الفارغ والمطابقة');
       await seedShipment(db, 'sh-unknown', {
-        status: 'Arrived', containerStatus: 'bogus_status',
-        duty: 0, vat: 0, insuranceUsd: 0, lateExpensesEgp: 0, storedPerUnit: 90,
+        status: 'Arrived',
+        containerStatus: 'bogus_status',
+        duty: 0,
+        vat: 0,
+        insuranceUsd: 0,
+        lateExpensesEgp: 0,
+        storedPerUnit: 90,
       });
       const unknown: any = await service.getContainerAutopsySheet('t1', 'sh-unknown');
       assert.equal(unknown.operational.containerStatus, 'bogus_status', 'Raw status still passes through');
-      assert.equal(unknown.operational.containerStatusLabel, 'حالة غير معروفة', 'Unknown status gets an honest fallback, never a wrong specific state');
+      assert.equal(
+        unknown.operational.containerStatusLabel,
+        'حالة غير معروفة',
+        'Unknown status gets an honest fallback, never a wrong specific state',
+      );
     } finally {
       await db.destroy();
     }

@@ -23,7 +23,11 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 import { AddonsService } from '../../src/modules/addons/addons.service';
 
 const AUTH = {
-  tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin',
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
   permissions: [],
 } as unknown as AuthContext;
 
@@ -49,34 +53,56 @@ async function main(): Promise<void> {
     const { db } = await makeDb();
     try {
       const service = new AddonsService(db, AUDIT_STUB);
-      const created = await service.createModifierGroup({
-        name: 'Sauces', selectionType: 'multiple', isMandatory: false,
-        minSelections: 0, maxSelections: 10, displayOrder: 5,
-        isActive: false, isSplittableInHalf: true,
-        options: [{ name: 'Ketchup', price: 2, costPrice: 1 }],
-      }, AUTH);
+      const created = await service.createModifierGroup(
+        {
+          name: 'Sauces',
+          selectionType: 'multiple',
+          isMandatory: false,
+          minSelections: 0,
+          maxSelections: 10,
+          displayOrder: 5,
+          isActive: false,
+          isSplittableInHalf: true,
+          options: [{ name: 'Ketchup', price: 2, costPrice: 1 }],
+        },
+        AUTH,
+      );
       const groupId = Number(created.id);
       // The modifiers page payload: it never sends the three fields.
-      await service.updateModifierGroup(groupId, {
-        name: 'Sauces renamed', selectionType: 'multiple', isMandatory: false,
-        minSelections: 0, maxSelections: 10,
-        options: [{ name: 'Ketchup', price: 2, costPrice: 1 }],
-      }, AUTH);
-      const reloaded = (await service.listModifierGroups(AUTH)).groups
-        .find((g) => Number(g.id) === groupId)!;
+      await service.updateModifierGroup(
+        groupId,
+        {
+          name: 'Sauces renamed',
+          selectionType: 'multiple',
+          isMandatory: false,
+          minSelections: 0,
+          maxSelections: 10,
+          options: [{ name: 'Ketchup', price: 2, costPrice: 1 }],
+        },
+        AUTH,
+      );
+      const reloaded = (await service.listModifierGroups(AUTH)).groups.find((g) => Number(g.id) === groupId)!;
       assert.equal(reloaded.name, 'Sauces renamed');
       assert.equal(reloaded.displayOrder, 5, 'edit must not zero the display order');
       assert.equal(reloaded.isActive, false, 'edit must not reactivate the group');
       assert.equal(reloaded.isSplittableInHalf, true, 'edit must not clear splittable');
       // And an explicit send still wins over the stored value.
-      await service.updateModifierGroup(groupId, {
-        name: 'Sauces renamed', selectionType: 'multiple', isMandatory: false,
-        minSelections: 0, maxSelections: 10, displayOrder: 9,
-        isActive: true, isSplittableInHalf: false,
-        options: [{ name: 'Ketchup', price: 2, costPrice: 1 }],
-      }, AUTH);
-      const resent = (await service.listModifierGroups(AUTH)).groups
-        .find((g) => Number(g.id) === groupId)!;
+      await service.updateModifierGroup(
+        groupId,
+        {
+          name: 'Sauces renamed',
+          selectionType: 'multiple',
+          isMandatory: false,
+          minSelections: 0,
+          maxSelections: 10,
+          displayOrder: 9,
+          isActive: true,
+          isSplittableInHalf: false,
+          options: [{ name: 'Ketchup', price: 2, costPrice: 1 }],
+        },
+        AUTH,
+      );
+      const resent = (await service.listModifierGroups(AUTH)).groups.find((g) => Number(g.id) === groupId)!;
       assert.equal(resent.displayOrder, 9);
       assert.equal(resent.isActive, true);
       assert.equal(resent.isSplittableInHalf, false);
@@ -92,32 +118,57 @@ async function main(): Promise<void> {
     try {
       const service = new AddonsService(db, AUDIT_STUB);
       await assert.rejects(
-        service.createModifierGroup({
-          name: 'Bad prices', selectionType: 'multiple', isMandatory: false,
-          minSelections: 0, maxSelections: 10,
-          options: [{ name: 'Negative', price: -5, costPrice: 0 }],
-        }, AUTH),
+        service.createModifierGroup(
+          {
+            name: 'Bad prices',
+            selectionType: 'multiple',
+            isMandatory: false,
+            minSelections: 0,
+            maxSelections: 10,
+            options: [{ name: 'Negative', price: -5, costPrice: 0 }],
+          },
+          AUTH,
+        ),
         (e: any) => e.statusCode === 400,
       );
       await assert.rejects(
-        service.createModifierGroup({
-          name: 'Bad prices', selectionType: 'multiple', isMandatory: false,
-          minSelections: 0, maxSelections: 10,
-          options: [{ name: 'NaN price', price: NaN, costPrice: 0 }],
-        }, AUTH),
+        service.createModifierGroup(
+          {
+            name: 'Bad prices',
+            selectionType: 'multiple',
+            isMandatory: false,
+            minSelections: 0,
+            maxSelections: 10,
+            options: [{ name: 'NaN price', price: NaN, costPrice: 0 }],
+          },
+          AUTH,
+        ),
         (e: any) => e.statusCode === 400,
       );
-      const created = await service.createModifierGroup({
-        name: 'Good', selectionType: 'multiple', isMandatory: false,
-        minSelections: 0, maxSelections: 10,
-        options: [{ name: 'Ok', price: 3, costPrice: 1 }],
-      }, AUTH);
+      const created = await service.createModifierGroup(
+        {
+          name: 'Good',
+          selectionType: 'multiple',
+          isMandatory: false,
+          minSelections: 0,
+          maxSelections: 10,
+          options: [{ name: 'Ok', price: 3, costPrice: 1 }],
+        },
+        AUTH,
+      );
       await assert.rejects(
-        service.updateModifierGroup(Number(created.id), {
-          name: 'Good', selectionType: 'multiple', isMandatory: false,
-          minSelections: 0, maxSelections: 10,
-          options: [{ name: 'Ok', price: -1, costPrice: 1 }],
-        }, AUTH),
+        service.updateModifierGroup(
+          Number(created.id),
+          {
+            name: 'Good',
+            selectionType: 'multiple',
+            isMandatory: false,
+            minSelections: 0,
+            maxSelections: 10,
+            options: [{ name: 'Ok', price: -1, costPrice: 1 }],
+          },
+          AUTH,
+        ),
         (e: any) => e.statusCode === 400,
       );
       await assert.rejects(
@@ -142,16 +193,28 @@ async function main(): Promise<void> {
     const { db } = await makeDb();
     try {
       const service = new AddonsService(db, AUDIT_STUB);
-      const first = await service.createModifierGroup({
-        name: 'Group A', selectionType: 'multiple', isMandatory: false,
-        minSelections: 0, maxSelections: 10,
-        options: [{ name: 'A1', price: 1, costPrice: 0 }],
-      }, AUTH);
-      const second = await service.createModifierGroup({
-        name: 'Group B', selectionType: 'multiple', isMandatory: false,
-        minSelections: 0, maxSelections: 10,
-        options: [{ name: 'B1', price: 2, costPrice: 0 }],
-      }, AUTH);
+      const first = await service.createModifierGroup(
+        {
+          name: 'Group A',
+          selectionType: 'multiple',
+          isMandatory: false,
+          minSelections: 0,
+          maxSelections: 10,
+          options: [{ name: 'A1', price: 1, costPrice: 0 }],
+        },
+        AUTH,
+      );
+      const second = await service.createModifierGroup(
+        {
+          name: 'Group B',
+          selectionType: 'multiple',
+          isMandatory: false,
+          minSelections: 0,
+          maxSelections: 10,
+          options: [{ name: 'B1', price: 2, costPrice: 0 }],
+        },
+        AUTH,
+      );
       const unlinked = await service.getProductModifiers(101, AUTH);
       assert.deepEqual(unlinked.groups, [], 'unlinked product shows no groups');
       await service.linkProductModifiers(101, [Number(first.id)], AUTH);
@@ -169,4 +232,7 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

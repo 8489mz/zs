@@ -116,14 +116,22 @@ async function main(): Promise<void> {
       assert.equal(stats.nearCreditLimit, 1, 'only C1 sits in [80%, 100%] of its credit limit');
       assert.equal(stats.aboveCreditLimit, 1, 'only C2 exceeds its credit limit');
       assert.equal(topCustomers.length, 3, 'C4 (zero balance) and C5 (inactive) excluded');
-      assert.deepEqual(topCustomers.map((c) => c.total), [1200, 850, 500], 'ordered by balance desc');
+      assert.deepEqual(
+        topCustomers.map((c) => c.total),
+        [1200, 850, 500],
+        'ordered by balance desc',
+      );
 
       // Suppliers: same active/inactive split as customers.
       assert.equal(stats.suppliersCount, 3, 'S4 (inactive) excluded');
       assert.equal(stats.supplierDebt, 7499, '1500+999+0+5000 — sums ALL ledger rows, active or not');
       assert.equal(stats.highSupplierBalances, 1, 'only S1 is >= 1000');
       assert.equal(topSuppliers.length, 2, 'S3 (zero balance) and S4 (inactive) excluded');
-      assert.deepEqual(topSuppliers.map((s) => s.total), [1500, 999], 'ordered by balance desc');
+      assert.deepEqual(
+        topSuppliers.map((s) => s.total),
+        [1500, 999],
+        'ordered by balance desc',
+      );
 
       process.stdout.write('dashboard-overview-aggregates.e2e: all PO-2 aggregate checks passed\n');
       throw ROLLBACK_SENTINEL;

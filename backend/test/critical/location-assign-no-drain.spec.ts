@@ -49,8 +49,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['inventory'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['inventory'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -62,25 +67,52 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE product_location_stock (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, location_id bigint, branch_id bigint, qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, updated_at timestamptz DEFAULT NOW());
   `);
   const anyDb = db as any;
-  await anyDb.insertInto('stock_locations').values({ id: 5, tenant_id: TENANT, account_id: ACCOUNT, name: 'Warehouse A', branch_id: null, location_type: 'warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 5,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Warehouse A',
+      branch_id: null,
+      location_type: 'warehouse',
+      is_active: true,
+    })
+    .execute();
   // Product 10: 100 units floating, none assigned anywhere.
-  await anyDb.insertInto('products').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget', stock_qty: 100 }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 10, location_id: null, branch_id: null, qty: 100 }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget', stock_qty: 100 })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 10, location_id: null, branch_id: null, qty: 100 })
+    .execute();
   // Product 20: nothing anywhere.
-  await anyDb.insertInto('products').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Gadget', stock_qty: 0 }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Gadget', stock_qty: 0 })
+    .execute();
   return { pg, db };
 }
 
 async function balanceOf(db: Kysely<Database>, productId: number, locationId: number | null): Promise<number | null> {
-  let query = (db as any).selectFrom('product_location_stock').select('qty')
-    .where('product_id', '=', productId).where('tenant_id', '=', TENANT);
+  let query = (db as any)
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('product_id', '=', productId)
+    .where('tenant_id', '=', TENANT);
   query = locationId == null ? query.where('location_id', 'is', null) : query.where('location_id', '=', locationId);
   const row = await query.executeTakeFirst();
   return row == null ? null : Number(row.qty);
 }
 
 async function globalOf(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await (db as any).selectFrom('products').select('stock_qty').where('id', '=', productId).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('products')
+    .select('stock_qty')
+    .where('id', '=', productId)
+    .executeTakeFirst();
   return Number(row?.stock_qty || 0);
 }
 
@@ -109,8 +141,12 @@ async function main(): Promise<void> {
       await service.assignProductsToLocation(5, [10], adminAuth);
       await db.transaction().execute(async (trx) => {
         await applyStockDelta(trx as any, {
-          tenantId: TENANT, accountId: ACCOUNT, productId: 10,
-          branchId: null, locationId: 5, delta: -30,
+          tenantId: TENANT,
+          accountId: ACCOUNT,
+          productId: 10,
+          branchId: null,
+          locationId: 5,
+          delta: -30,
         });
       });
       assert.equal(await balanceOf(db, 10, 5), 70, 'the deduction lands at the location');

@@ -17,7 +17,11 @@ class MockQuery {
 
 const partner = applyPartnerLedgerSearch(new MockQuery(), '%sale%');
 assert.equal(partner.calls.length, 1, 'partner ledger search should add one where callback');
-assert.equal(typeof partner.calls[0]?.args[0], 'function', 'partner ledger search should use expression builder callback');
+assert.equal(
+  typeof partner.calls[0]?.args[0],
+  'function',
+  'partner ledger search should use expression builder callback',
+);
 
 const treasury = applyTreasurySearch(new MockQuery(), '%cash%');
 assert.equal(treasury.calls.length, 1, 'treasury search should add one where callback');

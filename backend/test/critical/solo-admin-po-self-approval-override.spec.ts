@@ -59,14 +59,44 @@ async function main() {
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   const whatsappStub = { sendRawMessage: async () => {} };
   const approvals = new ApprovalWorkflowService(db, whatsappStub as any);
-  const admin1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin1', permissions: [] } as unknown as AuthContext;
-  const admin2 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 2, username: 'admin2', permissions: [] } as unknown as AuthContext;
-  const cashier3 = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 3, username: 'cashier3', permissions: [] } as unknown as AuthContext;
-  const superAdmin = { tenantId: 't2', accountId: 'a2', role: 'super_admin', userId: 9, username: 'owner', permissions: [] } as unknown as AuthContext;
+  const admin1 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 1,
+    username: 'admin1',
+    permissions: [],
+  } as unknown as AuthContext;
+  const admin2 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'admin',
+    userId: 2,
+    username: 'admin2',
+    permissions: [],
+  } as unknown as AuthContext;
+  const cashier3 = {
+    tenantId: 't1',
+    accountId: 'a1',
+    role: 'cashier',
+    userId: 3,
+    username: 'cashier3',
+    permissions: [],
+  } as unknown as AuthContext;
+  const superAdmin = {
+    tenantId: 't2',
+    accountId: 'a2',
+    role: 'super_admin',
+    userId: 9,
+    username: 'owner',
+    permissions: [],
+  } as unknown as AuthContext;
 
   const requestRow = async (id: string) => {
     const r = await pg.query<{ status: string; current_tier: number }>(
-      'SELECT status, current_tier FROM approval_requests WHERE id=$1', [id]);
+      'SELECT status, current_tier FROM approval_requests WHERE id=$1',
+      [id],
+    );
     return r.rows[0];
   };
   const poStatus = async (id: number) => {
@@ -75,7 +105,9 @@ async function main() {
   };
   const logsFor = async (requestId: string) => {
     const r = await pg.query<{ action: string; action_by: number; notes: string }>(
-      'SELECT action, action_by, notes FROM approval_request_logs WHERE request_id=$1 ORDER BY created_at ASC', [requestId]);
+      'SELECT action, action_by, notes FROM approval_request_logs WHERE request_id=$1 ORDER BY created_at ASC',
+      [requestId],
+    );
     return r.rows;
   };
   const expectForbidden = async (promise: Promise<unknown>, message: string, label: string) => {
@@ -148,9 +180,15 @@ async function main() {
     assert.equal(logs1.length, 1, 'exactly one decision log row must be written');
     assert.equal(logs1[0].action, 'approved', 'the log action must be approved');
     assert.equal(Number(logs1[0].action_by), 1, 'the log must record the requester as the decider');
-    assert.ok(String(logs1[0].notes || '').includes('اعتماد منفرد بقرار إداري'), 'the log must carry the solo-admin override stamp');
+    assert.ok(
+      String(logs1[0].notes || '').includes('اعتماد منفرد بقرار إداري'),
+      'the log must carry the solo-admin override stamp',
+    );
     assert.ok(String(logs1[0].notes || '').includes('admin1'), 'the override stamp must name who decided');
-    assert.ok(String(logs1[0].notes || '').includes('لا يوجد مدير ثانٍ متاح'), 'the override stamp must record that no second admin was available');
+    assert.ok(
+      String(logs1[0].notes || '').includes('لا يوجد مدير ثانٍ متاح'),
+      'the override stamp must record that no second admin was available',
+    );
 
     // ---------- Solo admin rejects their OWN request: allowed + override logged. ----------
     const rejected = await approvals.rejectRequest('req-2', 'السعر مرتفع', admin1);
@@ -162,8 +200,14 @@ async function main() {
     assert.equal(logs2[0].action, 'rejected', 'the log action must be rejected');
     assert.equal(Number(logs2[0].action_by), 1, 'the log must record the requester as the decider');
     assert.ok(String(logs2[0].notes || '').includes('السعر مرتفع'), 'the rejection reason must stay in the log');
-    assert.ok(String(logs2[0].notes || '').includes('رفض منفرد بقرار إداري'), 'the log must carry the solo-admin override stamp');
-    assert.ok(String(logs2[0].notes || '').includes('لا يوجد مدير ثانٍ متاح'), 'the override stamp must record that no second admin was available');
+    assert.ok(
+      String(logs2[0].notes || '').includes('رفض منفرد بقرار إداري'),
+      'the log must carry the solo-admin override stamp',
+    );
+    assert.ok(
+      String(logs2[0].notes || '').includes('لا يوجد مدير ثانٍ متاح'),
+      'the override stamp must record that no second admin was available',
+    );
 
     // ---------- Solo admin clears a 2-tier request alone, tier by tier. ----------
     const tier1 = await approvals.approveRequest('req-3', '', admin1);
@@ -175,7 +219,10 @@ async function main() {
     assert.equal(await poStatus(103), 'confirmed', 'the order must confirm after the last tier');
     const logs3 = await logsFor('req-3');
     assert.equal(logs3.length, 2, 'one log row per tier must be written');
-    assert.ok(logs3.every((l) => String(l.notes || '').includes('اعتماد منفرد بقرار إداري')), 'both tier log rows must carry the override stamp');
+    assert.ok(
+      logs3.every((l) => String(l.notes || '').includes('اعتماد منفرد بقرار إداري')),
+      'both tier log rows must carry the override stamp',
+    );
 
     // ---------- Solo super_admin in their own tenant approves their own request. ----------
     const superApproved = await approvals.approveRequest('req-8', '', superAdmin);
@@ -183,8 +230,14 @@ async function main() {
     assert.equal(await poStatus(108), 'confirmed', 'the super_admin order must confirm');
     const logs8 = await logsFor('req-8');
     assert.equal(logs8.length, 1, 'exactly one decision log row must be written');
-    assert.ok(String(logs8[0].notes || '').includes('اعتماد منفرد بقرار إداري'), 'the log must carry the solo-admin override stamp');
-    assert.ok(String(logs8[0].notes || '').includes('owner'), 'the override stamp must name the super_admin who decided');
+    assert.ok(
+      String(logs8[0].notes || '').includes('اعتماد منفرد بقرار إداري'),
+      'the log must carry the solo-admin override stamp',
+    );
+    assert.ok(
+      String(logs8[0].notes || '').includes('owner'),
+      'the override stamp must name the super_admin who decided',
+    );
 
     // ---------- A non-admin requester still may NOT decide their own request. ----------
     await expectForbidden(
@@ -206,7 +259,10 @@ async function main() {
     const logs4 = await logsFor('req-4');
     assert.equal(logs4.length, 1, 'exactly one decision log row must be written');
     assert.equal(Number(logs4[0].action_by), 2, 'the log must record the second admin as the decider');
-    assert.ok(!String(logs4[0].notes || '').includes('منفرد'), 'a second-admin decision must not carry the solo-override stamp');
+    assert.ok(
+      !String(logs4[0].notes || '').includes('منفرد'),
+      'a second-admin decision must not carry the solo-override stamp',
+    );
 
     // ---------- Self-decision when a second admin EXISTS is still refused (approve). ----------
     await expectForbidden(
@@ -230,7 +286,8 @@ async function main() {
 
     // ---------- Wiring: this spec is in both critical lists, in identical order (326 specs — the solo-admin-carrier-invoice-override spec is the last entry). ----------
     {
-      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+      const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+        .specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
@@ -247,4 +304,7 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

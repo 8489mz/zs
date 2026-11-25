@@ -43,8 +43,13 @@ const LOCATION_ID = 10;
 const BRANCH_ID = 7;
 
 const adminAuth: AuthContext = {
-  userId: 2, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['cashDrawer'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['cashDrawer'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -111,19 +116,40 @@ async function seed(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('users').values({
-    id: 2, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      username: 'admin',
+      role: 'admin',
+      is_active: true,
+    })
+    .execute();
   // The trip's branch: the van location inherits the tenant's first
   // active branch, so settleTrip's branchId is this branch.
-  await anyDb.insertInto('branches').values({
-    id: BRANCH_ID, tenant_id: TENANT, name: 'Van Test Branch', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('branches')
+    .values({
+      id: BRANCH_ID,
+      tenant_id: TENANT,
+      name: 'Van Test Branch',
+      is_active: true,
+    })
+    .execute();
   // Mirrors the E2E-created location: internal warehouse with NO branch.
-  await anyDb.insertInto('stock_locations').values({
-    id: LOCATION_ID, tenant_id: TENANT, account_id: ACCOUNT, branch_id: null,
-    name: 'E2E warehouse', location_type: 'internal_warehouse', is_active: true,
-  }).execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: LOCATION_ID,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: null,
+      name: 'E2E warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
 }
 
 function buildDrawer(db: Kysely<Database>): CashDrawerService {
@@ -147,8 +173,7 @@ async function findReceivingShift(
   branchId: number | null,
   actorUserId: number,
 ): Promise<{ id: number; branch_id: number | null; location_id: number | null } | undefined> {
-  const branchMatch = (eb: any) =>
-    branchId == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', branchId);
+  const branchMatch = (eb: any) => (branchId == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', branchId));
   return db.transaction().execute(async (trx) => {
     let shift: { id: number; branch_id: number | null; location_id: number | null } | undefined;
     if (actorUserId > 0) {
@@ -244,4 +269,7 @@ async function main(): Promise<void> {
   console.log('van-sales-open-shift: OK');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

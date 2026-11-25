@@ -92,7 +92,10 @@ function createMockDb(orders: MockOrder[], tenants: MockTenant[], settingsMap: R
           const builder: any = {
             where: (col: any, op: any, val: any) => {
               if (col === 'id') selectedId = val;
-              else { filterCol = col; filterVal = val; }
+              else {
+                filterCol = col;
+                filterVal = val;
+              }
               return builder;
             },
             forUpdate: () => builder,
@@ -102,7 +105,8 @@ function createMockDb(orders: MockOrder[], tenants: MockTenant[], settingsMap: R
             executeTakeFirst: async () => {
               if (selectedId != null) return orders.find((o) => o.id === selectedId) || orders[0];
               if (filterCol === 'order_number') return orders.find((o) => o.order_number === filterVal) || orders[0];
-              if (filterCol === 'gateway_order_id') return orders.find((o) => o.gateway_order_id === filterVal) || orders[0];
+              if (filterCol === 'gateway_order_id')
+                return orders.find((o) => o.gateway_order_id === filterVal) || orders[0];
               return orders[0];
             },
             execute: async () => {
@@ -187,7 +191,9 @@ function withCapturedFetch(responseJson: any) {
   };
   return {
     captured,
-    restore: () => { (globalThis as any).fetch = previousFetch; },
+    restore: () => {
+      (globalThis as any).fetch = previousFetch;
+    },
   };
 }
 
@@ -224,9 +230,17 @@ async function testStripeInitiationAmounts(): Promise<void> {
         storefront_stripe_secret_key: 'sk_test_stripe_123',
       });
       const service = new StorefrontPaymentService(db);
-      const { captured, restore } = withCapturedFetch({ url: 'https://checkout.stripe.com/pay/cs_test', id: 'cs_test_kwd' });
+      const { captured, restore } = withCapturedFetch({
+        url: 'https://checkout.stripe.com/pay/cs_test',
+        id: 'cs_test_kwd',
+      });
       try {
-        const result = await service.initiatePaymentSession('test-store', 'ON-KWD-1', token, 'https://shop.example.com');
+        const result = await service.initiatePaymentSession(
+          'test-store',
+          'ON-KWD-1',
+          token,
+          'https://shop.example.com',
+        );
         assert.equal(result.ok, true);
       } finally {
         restore();
@@ -247,9 +261,17 @@ async function testStripeInitiationAmounts(): Promise<void> {
         storefront_stripe_secret_key: 'sk_test_stripe_123',
       });
       const service = new StorefrontPaymentService(db);
-      const { captured, restore } = withCapturedFetch({ url: 'https://checkout.stripe.com/pay/cs_test', id: 'cs_test_usd' });
+      const { captured, restore } = withCapturedFetch({
+        url: 'https://checkout.stripe.com/pay/cs_test',
+        id: 'cs_test_usd',
+      });
       try {
-        const result = await service.initiatePaymentSession('test-store', 'ON-USD-1', token, 'https://shop.example.com');
+        const result = await service.initiatePaymentSession(
+          'test-store',
+          'ON-USD-1',
+          token,
+          'https://shop.example.com',
+        );
         assert.equal(result.ok, true);
       } finally {
         restore();
@@ -280,9 +302,17 @@ async function testTapInitiationAmounts(): Promise<void> {
         storefront_tap_secret_key: 'sk_test_tap_123',
       });
       const service = new StorefrontPaymentService(db);
-      const { captured, restore } = withCapturedFetch({ id: 'chg_test_kwd', transaction: { url: 'https://checkout.tap.company/x' } });
+      const { captured, restore } = withCapturedFetch({
+        id: 'chg_test_kwd',
+        transaction: { url: 'https://checkout.tap.company/x' },
+      });
       try {
-        const result = await service.initiatePaymentSession('test-store', 'ON-TAP-KWD-1', token, 'https://shop.example.com');
+        const result = await service.initiatePaymentSession(
+          'test-store',
+          'ON-TAP-KWD-1',
+          token,
+          'https://shop.example.com',
+        );
         assert.equal(result.ok, true);
       } finally {
         restore();
@@ -303,9 +333,17 @@ async function testTapInitiationAmounts(): Promise<void> {
         storefront_tap_secret_key: 'sk_test_tap_123',
       });
       const service = new StorefrontPaymentService(db);
-      const { captured, restore } = withCapturedFetch({ id: 'chg_test_egp', transaction: { url: 'https://checkout.tap.company/y' } });
+      const { captured, restore } = withCapturedFetch({
+        id: 'chg_test_egp',
+        transaction: { url: 'https://checkout.tap.company/y' },
+      });
       try {
-        const result = await service.initiatePaymentSession('test-store', 'ON-TAP-EGP-1', token, 'https://shop.example.com');
+        const result = await service.initiatePaymentSession(
+          'test-store',
+          'ON-TAP-EGP-1',
+          token,
+          'https://shop.example.com',
+        );
         assert.equal(result.ok, true);
       } finally {
         restore();
@@ -334,11 +372,20 @@ async function testTapWebhookAmounts(): Promise<void> {
   // to review, not to paid.
   {
     const order: MockOrder = {
-      id: 4, tenant_id: 'tenant-1', order_number: 'ON-TAP-KWD-2', total_amount: 10.123,
-      payment_status: 'pending', status: 'pending', gateway_provider: 'tap', gateway_order_id: 'chg_test_456',
+      id: 4,
+      tenant_id: 'tenant-1',
+      order_number: 'ON-TAP-KWD-2',
+      total_amount: 10.123,
+      payment_status: 'pending',
+      status: 'pending',
+      gateway_provider: 'tap',
+      gateway_order_id: 'chg_test_456',
     };
     const body: any = {
-      id: 'chg_test_456', status: 'CAPTURED', amount: 10.12, currency: 'KWD',
+      id: 'chg_test_456',
+      status: 'CAPTURED',
+      amount: 10.12,
+      currency: 'KWD',
       metadata: { orderNumber: 'ON-TAP-KWD-2', tenantId: 'tenant-1' },
     };
     const db = createMockDb([{ ...order }], [], { currency: '"KWD"', storefront_tap_secret_key: secret });
@@ -351,11 +398,20 @@ async function testTapWebhookAmounts(): Promise<void> {
   // The full 10.123 charge marks the order paid.
   {
     const order: MockOrder = {
-      id: 5, tenant_id: 'tenant-1', order_number: 'ON-TAP-KWD-3', total_amount: 10.123,
-      payment_status: 'pending', status: 'pending', gateway_provider: 'tap', gateway_order_id: 'chg_test_457',
+      id: 5,
+      tenant_id: 'tenant-1',
+      order_number: 'ON-TAP-KWD-3',
+      total_amount: 10.123,
+      payment_status: 'pending',
+      status: 'pending',
+      gateway_provider: 'tap',
+      gateway_order_id: 'chg_test_457',
     };
     const body: any = {
-      id: 'chg_test_457', status: 'CAPTURED', amount: 10.123, currency: 'KWD',
+      id: 'chg_test_457',
+      status: 'CAPTURED',
+      amount: 10.123,
+      currency: 'KWD',
       metadata: { orderNumber: 'ON-TAP-KWD-3', tenantId: 'tenant-1' },
     };
     const db = createMockDb([{ ...order }], [], { currency: '"KWD"', storefront_tap_secret_key: secret });
@@ -368,11 +424,20 @@ async function testTapWebhookAmounts(): Promise<void> {
   // An EGP tenant's Tap webhook is verified in EGP, never SAR.
   {
     const order: MockOrder = {
-      id: 6, tenant_id: 'tenant-1', order_number: 'ON-TAP-EGP-2', total_amount: 100,
-      payment_status: 'pending', status: 'pending', gateway_provider: 'tap', gateway_order_id: 'chg_test_458',
+      id: 6,
+      tenant_id: 'tenant-1',
+      order_number: 'ON-TAP-EGP-2',
+      total_amount: 100,
+      payment_status: 'pending',
+      status: 'pending',
+      gateway_provider: 'tap',
+      gateway_order_id: 'chg_test_458',
     };
     const body: any = {
-      id: 'chg_test_458', status: 'CAPTURED', amount: 100, currency: 'EGP',
+      id: 'chg_test_458',
+      status: 'CAPTURED',
+      amount: 100,
+      currency: 'EGP',
       metadata: { orderNumber: 'ON-TAP-EGP-2', tenantId: 'tenant-1' },
     };
     const db = createMockDb([{ ...order }], [], { currency: '"EGP"', storefront_tap_secret_key: secret });
@@ -411,16 +476,18 @@ async function testStripeWebhookAmounts(): Promise<void> {
     const currentTimestamp = Math.floor(Date.now() / 1000);
     const signedPayload = `${currentTimestamp}.${rawBody.toString('utf8')}`;
     const validSig = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
-    return service.processStripeWebhook(
-      { 'stripe-signature': `t=${currentTimestamp},v1=${validSig}` },
-      body,
-      rawBody,
-    );
+    return service.processStripeWebhook({ 'stripe-signature': `t=${currentTimestamp},v1=${validSig}` }, body, rawBody);
   }
 
   const order: MockOrder = {
-    id: 7, tenant_id: 'tenant-1', order_number: 'ON-STR-KWD-1', total_amount: 10.123,
-    payment_status: 'pending', status: 'pending', gateway_provider: 'stripe', gateway_order_id: 'cs_test_kwd',
+    id: 7,
+    tenant_id: 'tenant-1',
+    order_number: 'ON-STR-KWD-1',
+    total_amount: 10.123,
+    payment_status: 'pending',
+    status: 'pending',
+    gateway_provider: 'stripe',
+    gateway_order_id: 'cs_test_kwd',
   };
 
   // The correct 10,123 fils charge marks the order paid.

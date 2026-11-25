@@ -100,7 +100,14 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 import { decideConversionRecovery, conversionRecoverySaleId } from '../../src/modules/sales/helpers/sales-write.helper';
 import { IdempotencyService } from '../../src/core/idempotency/idempotency.service';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 const STALE_MS = 120000;
 const staleDate = () => new Date(Date.now() - STALE_MS);
 
@@ -119,52 +126,154 @@ async function main() {
       CREATE TABLE operation_executions (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, idempotency_key text NOT NULL, operation_type text NOT NULL, status text NOT NULL, request_hash text NOT NULL, document_id text, response_payload text, error_code text, created_at timestamptz NOT NULL DEFAULT NOW(), updated_at timestamptz NOT NULL DEFAULT NOW(), completed_at timestamptz);
     `);
 
-    await db.insertInto('branches').values({ id: 1, tenant_id: 't1', default_stock_location_id: 10 } as any).execute();
-    await db.insertInto('products').values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: 100, reserved_qty: 0 } as any).execute();
-    await db.insertInto('product_location_stock').values({ tenant_id: 't1', account_id: 'a1', product_id: 1, branch_id: 1, location_id: 10, qty: 100, reserved_qty: 0 } as any).execute();
+    await db
+      .insertInto('branches')
+      .values({ id: 1, tenant_id: 't1', default_stock_location_id: 10 } as any)
+      .execute();
+    await db
+      .insertInto('products')
+      .values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: 100, reserved_qty: 0 } as any)
+      .execute();
+    await db
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: 1,
+        branch_id: 1,
+        location_id: 10,
+        qty: 100,
+        reserved_qty: 0,
+      } as any)
+      .execute();
 
     async function seedOrder(id: number, status: string, reserved: number, updatedAt?: Date): Promise<void> {
-      await db.insertInto('sales_orders').values({ id, tenant_id: 't1', account_id: 'a1', order_number: `SO-${id}`, customer_name: 'Cust', branch_id: 1, total_amount: 100, status, updated_at: updatedAt ?? new Date() } as any).execute();
-      await db.insertInto('sales_order_items').values({ tenant_id: 't1', account_id: 'a1', sales_order_id: id, product_id: 1, quantity: 4, reserved_quantity: reserved, unit_price: 25 } as any).execute();
+      await db
+        .insertInto('sales_orders')
+        .values({
+          id,
+          tenant_id: 't1',
+          account_id: 'a1',
+          order_number: `SO-${id}`,
+          customer_name: 'Cust',
+          branch_id: 1,
+          total_amount: 100,
+          status,
+          updated_at: updatedAt ?? new Date(),
+        } as any)
+        .execute();
+      await db
+        .insertInto('sales_order_items')
+        .values({
+          tenant_id: 't1',
+          account_id: 'a1',
+          sales_order_id: id,
+          product_id: 1,
+          quantity: 4,
+          reserved_quantity: reserved,
+          unit_price: 25,
+        } as any)
+        .execute();
     }
 
     async function seedQuotation(id: number, status: string, updatedAt?: Date): Promise<void> {
-      await db.insertInto('quotations').values({ id, tenant_id: 't1', account_id: 'a1', quotation_number: `Q-${id}`, customer_name: 'Cust', branch_id: 1, total_amount: 100, status, updated_at: updatedAt ?? new Date() } as any).execute();
-      await db.insertInto('quotation_items').values({ tenant_id: 't1', account_id: 'a1', quotation_id: id, product_id: 1, quantity: 4, unit_price: 25 } as any).execute();
+      await db
+        .insertInto('quotations')
+        .values({
+          id,
+          tenant_id: 't1',
+          account_id: 'a1',
+          quotation_number: `Q-${id}`,
+          customer_name: 'Cust',
+          branch_id: 1,
+          total_amount: 100,
+          status,
+          updated_at: updatedAt ?? new Date(),
+        } as any)
+        .execute();
+      await db
+        .insertInto('quotation_items')
+        .values({
+          tenant_id: 't1',
+          account_id: 'a1',
+          quotation_id: id,
+          product_id: 1,
+          quantity: 4,
+          unit_price: 25,
+        } as any)
+        .execute();
     }
 
-    async function seedOpRow(key: string, status: string, opts: { documentId?: string; payload?: any; updatedAt?: Date; hashInput: any } = { hashInput: {} }): Promise<void> {
+    async function seedOpRow(
+      key: string,
+      status: string,
+      opts: { documentId?: string; payload?: any; updatedAt?: Date; hashInput: any } = { hashInput: {} },
+    ): Promise<void> {
       // The seeded row must carry the exact deterministic hash the
       // service computes for this key, or reserveOperation
       // correctly rejects the retry as a payload mismatch.
       const requestHash = new IdempotencyService(db as any).generateRequestHash(opts.hashInput);
-      await db.insertInto('operation_executions').values({
-        tenant_id: 't1', account_id: 'a1', idempotency_key: key, operation_type: 'sale',
-        status, request_hash: requestHash, document_id: opts.documentId ?? null,
-        response_payload: opts.payload ? JSON.stringify(opts.payload) : null,
-        error_code: null, updated_at: opts.updatedAt ?? new Date(),
-      } as any).execute();
+      await db
+        .insertInto('operation_executions')
+        .values({
+          tenant_id: 't1',
+          account_id: 'a1',
+          idempotency_key: key,
+          operation_type: 'sale',
+          status,
+          request_hash: requestHash,
+          document_id: opts.documentId ?? null,
+          response_payload: opts.payload ? JSON.stringify(opts.payload) : null,
+          error_code: null,
+          updated_at: opts.updatedAt ?? new Date(),
+        } as any)
+        .execute();
     }
 
     async function orderRow(id: number): Promise<{ status: string; saleId: number | null; reserved: number }> {
-      const row = await db.selectFrom('sales_orders').select(['status', 'sale_id']).where('id', '=', id).executeTakeFirstOrThrow();
-      const item = await db.selectFrom('sales_order_items').select(['reserved_quantity', 'delivered_quantity']).where('sales_order_id', '=', id).executeTakeFirstOrThrow();
+      const row = await db
+        .selectFrom('sales_orders')
+        .select(['status', 'sale_id'])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+      const item = await db
+        .selectFrom('sales_order_items')
+        .select(['reserved_quantity', 'delivered_quantity'])
+        .where('sales_order_id', '=', id)
+        .executeTakeFirstOrThrow();
       return { status: String(row.status), saleId: row.sale_id, reserved: Number(item.reserved_quantity) };
     }
 
     async function quoteRow(id: number): Promise<{ status: string; saleId: number | null }> {
-      const row = await db.selectFrom('quotations').select(['status', 'sale_id']).where('id', '=', id).executeTakeFirstOrThrow();
+      const row = await db
+        .selectFrom('quotations')
+        .select(['status', 'sale_id'])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
       return { status: String(row.status), saleId: row.sale_id };
     }
 
     async function reservedQty(): Promise<{ global: number; location: number }> {
-      const product = await db.selectFrom('products').select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty')).where('id', '=', 1).executeTakeFirstOrThrow();
-      const balance = await db.selectFrom('product_location_stock').select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty')).where('product_id', '=', 1).where('location_id', '=', 10).executeTakeFirstOrThrow();
+      const product = await db
+        .selectFrom('products')
+        .select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty'))
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
+      const balance = await db
+        .selectFrom('product_location_stock')
+        .select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty'))
+        .where('product_id', '=', 1)
+        .where('location_id', '=', 10)
+        .executeTakeFirstOrThrow();
       return { global: Number(product.reserved_qty), location: Number(balance.reserved_qty) };
     }
 
     async function opRowStatus(key: string): Promise<string | null> {
-      const row = await db.selectFrom('operation_executions').select('status').where('idempotency_key', '=', key).executeTakeFirst();
+      const row = await db
+        .selectFrom('operation_executions')
+        .select('status')
+        .where('idempotency_key', '=', key)
+        .executeTakeFirst();
       return row ? String(row.status) : null;
     }
 
@@ -214,7 +323,11 @@ async function main() {
     // 2. Stuck order + committed row re-attaches; createSale uncalled.
     const callsBefore2 = calls;
     await seedOrder(2, 'converting', 4);
-    await seedOpRow('so_convert_t1_2', 'committed', { documentId: '77', payload: { ok: true, saleId: 77 }, hashInput: { conversion: 'sales_order', id: 2 } });
+    await seedOpRow('so_convert_t1_2', 'committed', {
+      documentId: '77',
+      payload: { ok: true, saleId: 77 },
+      hashInput: { conversion: 'sales_order', id: 2 },
+    });
     const attached: any = await orders.convertToSale(2, AUTH);
     assert.equal(Number(attached.saleId), 77);
     assert.equal(calls, callsBefore2);
@@ -222,7 +335,10 @@ async function main() {
 
     // 3. Stuck order + stale processing row retries and converts.
     await seedOrder(3, 'converting', 4, staleDate());
-    await seedOpRow('so_convert_t1_3', 'processing', { updatedAt: staleDate(), hashInput: { conversion: 'sales_order', id: 3 } });
+    await seedOpRow('so_convert_t1_3', 'processing', {
+      updatedAt: staleDate(),
+      hashInput: { conversion: 'sales_order', id: 3 },
+    });
     const recovered: any = await orders.convertToSale(3, AUTH);
     assert.equal(Number(recovered.saleId), 99);
     assert.deepEqual(await orderRow(3), { status: 'converted', saleId: 99, reserved: 0 });
@@ -274,13 +390,20 @@ async function main() {
     // 9. Quotation stuck + committed row attaches; stale retries;
     //    failure restores the previous status.
     await seedQuotation(2, 'converting');
-    await seedOpRow('quote_convert_t1_2', 'committed', { documentId: '88', payload: { ok: true, saleId: 88 }, hashInput: { conversion: 'quotation', id: 2 } });
+    await seedOpRow('quote_convert_t1_2', 'committed', {
+      documentId: '88',
+      payload: { ok: true, saleId: 88 },
+      hashInput: { conversion: 'quotation', id: 2 },
+    });
     const qattached: any = await quotations.convertToSale(2, AUTH);
     assert.equal(Number(qattached.saleId), 88);
     assert.deepEqual(await quoteRow(2), { status: 'converted', saleId: 88 });
 
     await seedQuotation(3, 'converting', staleDate());
-    await seedOpRow('quote_convert_t1_3', 'processing', { updatedAt: staleDate(), hashInput: { conversion: 'quotation', id: 3 } });
+    await seedOpRow('quote_convert_t1_3', 'processing', {
+      updatedAt: staleDate(),
+      hashInput: { conversion: 'quotation', id: 3 },
+    });
     const qrecovered: any = await quotations.convertToSale(3, AUTH);
     assert.equal(Number(qrecovered.saleId), 103);
     assert.deepEqual(await quoteRow(3), { status: 'converted', saleId: 103 });
@@ -307,7 +430,11 @@ async function main() {
     assert.equal(gone, undefined);
 
     await seedOrder(9, 'converting', 4);
-    await seedOpRow('so_convert_t1_9', 'committed', { documentId: '91', payload: { ok: true, saleId: 91 }, hashInput: { conversion: 'sales_order', id: 9 } });
+    await seedOpRow('so_convert_t1_9', 'committed', {
+      documentId: '91',
+      payload: { ok: true, saleId: 91 },
+      hashInput: { conversion: 'sales_order', id: 9 },
+    });
     await assert.rejects(() => orders.deleteOrder(9, AUTH), /فاتورة موجودة/);
     assert.equal((await orderRow(9)).status, 'converting');
     assert.deepEqual(await reservedQty(), { global: 0, location: 0 });
@@ -316,36 +443,104 @@ async function main() {
     const now = Date.now();
     const fresh = new Date(now - 1000);
     const stale = new Date(now - STALE_MS);
-    assert.equal(decideConversionRecovery({ status: 'committed', documentId: '5', responsePayload: null, updatedAt: fresh }, fresh, now), 'attach');
-    assert.equal(decideConversionRecovery({ status: 'failed', documentId: null, responsePayload: null, updatedAt: fresh }, fresh, now), 'stale-retry');
-    assert.equal(decideConversionRecovery({ status: 'processing', documentId: null, responsePayload: null, updatedAt: fresh }, fresh, now), 'in-flight');
-    assert.equal(decideConversionRecovery({ status: 'processing', documentId: null, responsePayload: null, updatedAt: stale }, stale, now), 'stale-retry');
-    assert.equal(decideConversionRecovery({ status: 'recovery_required', documentId: null, responsePayload: null, updatedAt: stale }, stale, now), 'in-flight');
+    assert.equal(
+      decideConversionRecovery(
+        { status: 'committed', documentId: '5', responsePayload: null, updatedAt: fresh },
+        fresh,
+        now,
+      ),
+      'attach',
+    );
+    assert.equal(
+      decideConversionRecovery(
+        { status: 'failed', documentId: null, responsePayload: null, updatedAt: fresh },
+        fresh,
+        now,
+      ),
+      'stale-retry',
+    );
+    assert.equal(
+      decideConversionRecovery(
+        { status: 'processing', documentId: null, responsePayload: null, updatedAt: fresh },
+        fresh,
+        now,
+      ),
+      'in-flight',
+    );
+    assert.equal(
+      decideConversionRecovery(
+        { status: 'processing', documentId: null, responsePayload: null, updatedAt: stale },
+        stale,
+        now,
+      ),
+      'stale-retry',
+    );
+    assert.equal(
+      decideConversionRecovery(
+        { status: 'recovery_required', documentId: null, responsePayload: null, updatedAt: stale },
+        stale,
+        now,
+      ),
+      'in-flight',
+    );
     assert.equal(decideConversionRecovery(null, fresh, now), 'in-flight');
     assert.equal(decideConversionRecovery(null, stale, now), 'stale-retry');
-    assert.equal(conversionRecoverySaleId({ status: 'committed', documentId: '42', responsePayload: null, updatedAt: fresh }), 42);
-    assert.equal(conversionRecoverySaleId({ status: 'committed', documentId: null, responsePayload: { saleId: 43 }, updatedAt: fresh }), 43);
-    assert.equal(conversionRecoverySaleId({ status: 'committed', documentId: null, responsePayload: null, updatedAt: fresh }), null);
+    assert.equal(
+      conversionRecoverySaleId({ status: 'committed', documentId: '42', responsePayload: null, updatedAt: fresh }),
+      42,
+    );
+    assert.equal(
+      conversionRecoverySaleId({
+        status: 'committed',
+        documentId: null,
+        responsePayload: { saleId: 43 },
+        updatedAt: fresh,
+      }),
+      43,
+    );
+    assert.equal(
+      conversionRecoverySaleId({ status: 'committed', documentId: null, responsePayload: null, updatedAt: fresh }),
+      null,
+    );
     assert.equal(conversionRecoverySaleId(null), null);
 
     // 12. Source pins + invariant pin.
     // File #119 (two-path): confirmAndReserve/cancelOrder moved to
     // sales-orders-confirmation.ts; the conversion presence pins moved to
     // sales-orders-conversion.ts. The facade holds neither.
-    const confirmSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-orders/sales-orders-confirmation.ts'), 'utf8');
-    const conversionSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-orders/sales-orders-conversion.ts'), 'utf8');
-    const confirmSlice = confirmSource.slice(confirmSource.indexOf('async confirmAndReserve'), confirmSource.indexOf('async cancelOrder'));
+    const confirmSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/sales-orders/sales-orders-confirmation.ts'),
+      'utf8',
+    );
+    const conversionSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/sales-orders/sales-orders-conversion.ts'),
+      'utf8',
+    );
+    const confirmSlice = confirmSource.slice(
+      confirmSource.indexOf('async confirmAndReserve'),
+      confirmSource.indexOf('async cancelOrder'),
+    );
     assert.ok(confirmSlice.includes('forUpdate()'), 'confirmAndReserve must lock the order row');
     assert.ok(confirmSlice.includes('transaction().execute'), 'confirmAndReserve must read inside one transaction');
     assert.ok(conversionSource.includes('reserveOperation'), 'order conversion must reserve the operation row');
     assert.ok(conversionSource.includes('recordFailure'), 'order conversion must record a failed sale attempt');
-    assert.ok(conversionSource.includes('getOperationState'), 'order conversion must read the operation row for recovery');
-    const quoteSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/quotations.service.ts'), 'utf8');
+    assert.ok(
+      conversionSource.includes('getOperationState'),
+      'order conversion must read the operation row for recovery',
+    );
+    const quoteSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/quotations.service.ts'),
+      'utf8',
+    );
     const quoteSlice = quoteSource.slice(quoteSource.indexOf('async convertToSale'));
     assert.ok(quoteSlice.includes("'converting'"), 'quotation conversion must claim a converting state');
     assert.ok(quoteSlice.includes('reserveOperation'), 'quotation conversion must reserve the operation row');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-CONVERSION-LIFECYCLE-RACES').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-CONVERSION-LIFECYCLE-RACES').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
     // Last-line ownership passes to newer entries:
     // INV-SALE-EDIT-COST-FLOOR appends after this entry, so the
     // last-line assertion that held at this package's own landing is

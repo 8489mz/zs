@@ -82,7 +82,14 @@ package keeps its reservation until that lifecycle is decided
 stays an open item.
 */
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['inventory'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['inventory'],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -99,15 +106,27 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedProduct(db: Kysely<Database>, id: number, qty: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, retail_price, is_active) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, 10, 0, true)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(db);
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, retail_price, is_active) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, 10, 0, true)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${qty}, 0)`.execute(
+    db,
+  );
 }
 
 type Balances = { stock: number; reserved: number; locQty: number; locReserved: number };
 
 async function balances(db: Kysely<Database>, productId: number): Promise<Balances> {
-  const prod = await sql<{ stock_qty: string; reserved_qty: string }>`SELECT stock_qty, reserved_qty FROM products WHERE id = ${productId}`.execute(db);
-  const loc = await sql<{ qty: string; reserved_qty: string }>`SELECT qty, reserved_qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = 1`.execute(db);
+  const prod = await sql<{
+    stock_qty: string;
+    reserved_qty: string;
+  }>`SELECT stock_qty, reserved_qty FROM products WHERE id = ${productId}`.execute(db);
+  const loc = await sql<{
+    qty: string;
+    reserved_qty: string;
+  }>`SELECT qty, reserved_qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = 1`.execute(
+    db,
+  );
   return {
     stock: Number(prod.rows[0].stock_qty),
     reserved: Number(prod.rows[0].reserved_qty),
@@ -121,13 +140,28 @@ async function packageCount(db: Kysely<Database>): Promise<number> {
   return Number(rows.rows[0].n);
 }
 
-async function packageItems(db: Kysely<Database>, packageId: string): Promise<Array<{ id: string; product_id: number; quantity: number }>> {
-  const rows = await sql<{ id: string; product_id: string; quantity: string }>`SELECT id, product_id, quantity FROM warehouse_package_items WHERE package_id = ${packageId} ORDER BY id`.execute(db);
+async function packageItems(
+  db: Kysely<Database>,
+  packageId: string,
+): Promise<Array<{ id: string; product_id: number; quantity: number }>> {
+  const rows = await sql<{
+    id: string;
+    product_id: string;
+    quantity: string;
+  }>`SELECT id, product_id, quantity FROM warehouse_package_items WHERE package_id = ${packageId} ORDER BY id`.execute(
+    db,
+  );
   return rows.rows.map((r) => ({ id: r.id, product_id: Number(r.product_id), quantity: Number(r.quantity) }));
 }
 
-async function packageRow(db: Kysely<Database>, packageId: string): Promise<{ status: string; parent_package_id: string | null }> {
-  const rows = await sql<{ status: string; parent_package_id: string | null }>`SELECT status, parent_package_id FROM warehouse_packages WHERE id = ${packageId}`.execute(db);
+async function packageRow(
+  db: Kysely<Database>,
+  packageId: string,
+): Promise<{ status: string; parent_package_id: string | null }> {
+  const rows = await sql<{
+    status: string;
+    parent_package_id: string | null;
+  }>`SELECT status, parent_package_id FROM warehouse_packages WHERE id = ${packageId}`.execute(db);
   return { status: rows.rows[0].status, parent_package_id: rows.rows[0].parent_package_id };
 }
 
@@ -137,7 +171,11 @@ async function main(): Promise<void> {
   try {
     // Case 1: pack 10 of 10 — reserved rises, on-hand untouched, sealed qty not sellable.
     await seedProduct(db, 1, 10);
-    const pack1 = await service.createPackage(AUTH, { packageType: 'box', locationId: 1, items: [{ productId: 1, quantity: 10 }] } as any);
+    const pack1 = await service.createPackage(AUTH, {
+      packageType: 'box',
+      locationId: 1,
+      items: [{ productId: 1, quantity: 10 }],
+    } as any);
     assert.equal(pack1.success, true);
     const bal = await balances(db, 1);
     assert.deepEqual(bal, { stock: 10, reserved: 10, locQty: 10, locReserved: 10 });
@@ -149,14 +187,24 @@ async function main(): Promise<void> {
     assert.equal(pack1Items[0].quantity, 10);
     // A sale-style reserve of 1 more unit is refused: the sealed qty is not sellable.
     await assert.rejects(
-      reserveLocationStock(db as any, { tenantId: 't1', accountId: 'a1', branchId: 1, locationId: 1, items: [{ productId: 1, qty: 1 }] }),
+      reserveLocationStock(db as any, {
+        tenantId: 't1',
+        accountId: 'a1',
+        branchId: 1,
+        locationId: 1,
+        items: [{ productId: 1, qty: 1 }],
+      }),
       /المتاح/,
     );
     assert.deepEqual(await balances(db, 1), { stock: 10, reserved: 10, locQty: 10, locReserved: 10 });
 
     // Case 2: packing the same 10 again is refused, with no second package row.
     await assert.rejects(
-      service.createPackage(AUTH, { packageType: 'box', locationId: 1, items: [{ productId: 1, quantity: 10 }] } as any),
+      service.createPackage(AUTH, {
+        packageType: 'box',
+        locationId: 1,
+        items: [{ productId: 1, quantity: 10 }],
+      } as any),
       /المتاح/,
     );
     assert.equal(await packageCount(db), 1);
@@ -173,17 +221,26 @@ async function main(): Promise<void> {
 
     // Case 4: nested pack does not double-count.
     const pallet = await service.createPackage(AUTH, { packageType: 'pallet', locationId: 1 } as any);
-    const child = await service.createPackage(AUTH, { packageType: 'box', parentPackageId: pallet.packageId, items: [{ productId: 1, quantity: 10 }] } as any);
+    const child = await service.createPackage(AUTH, {
+      packageType: 'box',
+      parentPackageId: pallet.packageId,
+      items: [{ productId: 1, quantity: 10 }],
+    } as any);
     assert.deepEqual(await balances(db, 1), { stock: 10, reserved: 10, locQty: 10, locReserved: 10 });
     assert.equal((await packageRow(db, child.packageId)).parent_package_id, pallet.packageId);
     // Detaching the child releases nothing — it stays sealed.
-    await service.unpack(AUTH, pallet.packageId, { action: 'remove_child_package', targetChildPackageId: child.packageId } as any);
+    await service.unpack(AUTH, pallet.packageId, {
+      action: 'remove_child_package',
+      targetChildPackageId: child.packageId,
+    } as any);
     assert.deepEqual(await balances(db, 1), { stock: 10, reserved: 10, locQty: 10, locReserved: 10 });
     assert.equal((await packageRow(db, child.packageId)).parent_package_id, null);
     assert.equal((await packageRow(db, child.packageId)).status, 'sealed');
     assert.equal((await packageItems(db, child.packageId)).length, 1);
     // Re-attach the child, then unpack the pallet: the child's reservation survives.
-    await sql`UPDATE warehouse_packages SET parent_package_id = ${pallet.packageId} WHERE id = ${child.packageId}`.execute(db);
+    await sql`UPDATE warehouse_packages SET parent_package_id = ${pallet.packageId} WHERE id = ${child.packageId}`.execute(
+      db,
+    );
     await service.unpack(AUTH, pallet.packageId, { action: 'unpack_all' } as any);
     assert.deepEqual(await balances(db, 1), { stock: 10, reserved: 10, locQty: 10, locReserved: 10 });
     assert.equal((await packageRow(db, child.packageId)).parent_package_id, null);
@@ -194,14 +251,26 @@ async function main(): Promise<void> {
     assert.deepEqual(await balances(db, 1), { stock: 10, reserved: 0, locQty: 10, locReserved: 0 });
 
     // Case 5: partial unpack returns only the unpacked qty.
-    const pack5 = await service.createPackage(AUTH, { packageType: 'box', locationId: 1, items: [{ productId: 1, quantity: 10 }] } as any);
+    const pack5 = await service.createPackage(AUTH, {
+      packageType: 'box',
+      locationId: 1,
+      items: [{ productId: 1, quantity: 10 }],
+    } as any);
     assert.deepEqual(await balances(db, 1), { stock: 10, reserved: 10, locQty: 10, locReserved: 10 });
     const item5 = (await packageItems(db, pack5.packageId))[0];
-    await service.unpack(AUTH, pack5.packageId, { action: 'remove_item', targetPackageItemId: item5.id, quantity: 4 } as any);
+    await service.unpack(AUTH, pack5.packageId, {
+      action: 'remove_item',
+      targetPackageItemId: item5.id,
+      quantity: 4,
+    } as any);
     assert.deepEqual(await packageItems(db, pack5.packageId), [{ id: item5.id, product_id: 1, quantity: 6 }]);
     assert.deepEqual(await balances(db, 1), { stock: 10, reserved: 6, locQty: 10, locReserved: 6 });
     await assert.rejects(
-      service.unpack(AUTH, pack5.packageId, { action: 'remove_item', targetPackageItemId: item5.id, quantity: 7 } as any),
+      service.unpack(AUTH, pack5.packageId, {
+        action: 'remove_item',
+        targetPackageItemId: item5.id,
+        quantity: 7,
+      } as any),
       /exceeds the packaged quantity/,
     );
     assert.deepEqual(await balances(db, 1), { stock: 10, reserved: 6, locQty: 10, locReserved: 6 });
@@ -215,11 +284,19 @@ async function main(): Promise<void> {
 
     // Case 6: 3dp pack reserves exactly; a 4dp pack is refused with no package created.
     await seedProduct(db, 2, 10.125);
-    const pack6 = await service.createPackage(AUTH, { packageType: 'box', locationId: 1, items: [{ productId: 2, quantity: 10.125 }] } as any);
+    const pack6 = await service.createPackage(AUTH, {
+      packageType: 'box',
+      locationId: 1,
+      items: [{ productId: 2, quantity: 10.125 }],
+    } as any);
     assert.deepEqual(await balances(db, 2), { stock: 10.125, reserved: 10.125, locQty: 10.125, locReserved: 10.125 });
     const countBefore = await packageCount(db);
     await assert.rejects(
-      service.createPackage(AUTH, { packageType: 'box', locationId: 1, items: [{ productId: 2, quantity: 1.1234 }] } as any),
+      service.createPackage(AUTH, {
+        packageType: 'box',
+        locationId: 1,
+        items: [{ productId: 2, quantity: 1.1234 }],
+      } as any),
       /three decimal places/,
     );
     assert.equal(await packageCount(db), countBefore);
@@ -229,8 +306,12 @@ async function main(): Promise<void> {
     // Case 7: unpacking a package packed before this fix (no reservation
     // on the books) succeeds and never drives reserved_qty below zero.
     await seedProduct(db, 3, 5);
-    await sql`INSERT INTO warehouse_packages (id, tenant_id, package_number, package_type, location_id, status, created_by) VALUES ('pkg_legacy', 't1', 'BOX-LEGACY-0001', 'box', 1, 'sealed', '1')`.execute(db);
-    await sql`INSERT INTO warehouse_package_items (id, tenant_id, package_id, product_id, quantity) VALUES ('pkgi_legacy', 't1', 'pkg_legacy', 3, 5)`.execute(db);
+    await sql`INSERT INTO warehouse_packages (id, tenant_id, package_number, package_type, location_id, status, created_by) VALUES ('pkg_legacy', 't1', 'BOX-LEGACY-0001', 'box', 1, 'sealed', '1')`.execute(
+      db,
+    );
+    await sql`INSERT INTO warehouse_package_items (id, tenant_id, package_id, product_id, quantity) VALUES ('pkgi_legacy', 't1', 'pkg_legacy', 3, 5)`.execute(
+      db,
+    );
     await service.unpack(AUTH, 'pkg_legacy', { action: 'unpack_all' } as any);
     assert.deepEqual(await balances(db, 3), { stock: 5, reserved: 0, locQty: 5, locReserved: 0 });
 

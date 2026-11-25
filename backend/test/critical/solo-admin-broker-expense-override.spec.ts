@@ -124,35 +124,52 @@ async function makeDb(opts: {
   `);
   const settlerRole = opts.settlerRole ?? 'admin';
   const settlerId = opts.settlerId ?? 1;
-  await db.insertInto('users').values({ id: settlerId, tenant_id: TENANT, role: settlerRole, is_active: true } as any).execute();
+  await db
+    .insertInto('users')
+    .values({ id: settlerId, tenant_id: TENANT, role: settlerRole, is_active: true } as any)
+    .execute();
   if (opts.secondAdmin === 'active' || opts.secondAdmin === 'inactive') {
-    await db.insertInto('users').values({ id: 2, tenant_id: TENANT, role: 'admin', is_active: opts.secondAdmin === 'active' } as any).execute();
+    await db
+      .insertInto('users')
+      .values({ id: 2, tenant_id: TENANT, role: 'admin', is_active: opts.secondAdmin === 'active' } as any)
+      .execute();
   }
   if (opts.secondAdmin === 'other-tenant') {
-    await db.insertInto('users').values({ id: 2, tenant_id: 't2', role: 'admin', is_active: true } as any).execute();
+    await db
+      .insertInto('users')
+      .values({ id: 2, tenant_id: 't2', role: 'admin', is_active: true } as any)
+      .execute();
   }
   // A cashier settler still needs the tenant's admin present for
   // case 5 to prove the role leg (not the tenant-size leg) refuses.
   if (settlerRole === 'cashier') {
-    await db.insertInto('users').values({ id: 4, tenant_id: TENANT, role: 'admin', is_active: true } as any).execute();
+    await db
+      .insertInto('users')
+      .values({ id: 4, tenant_id: TENANT, role: 'admin', is_active: true } as any)
+      .execute();
   }
   const expenseId = randomUUID();
-  await db.insertInto('import_broker_expenses').values({
-    id: expenseId,
-    tenant_id: TENANT,
-    broker_id: 'br-1',
-    receipt_no: 'RC-1',
-    expense_date: '2026-11-24',
-    category: 'broker_fee',
-    amount_egp: 1000,
-    is_verified: opts.preVerified ?? false,
-    verified_by: opts.preVerified ? settlerId : null,
-    verified_at: opts.preVerified ? new Date() : null,
-    notes: opts.expenseNotes ?? null,
-    created_by: settlerId,
-  } as any).execute();
+  await db
+    .insertInto('import_broker_expenses')
+    .values({
+      id: expenseId,
+      tenant_id: TENANT,
+      broker_id: 'br-1',
+      receipt_no: 'RC-1',
+      expense_date: '2026-11-24',
+      category: 'broker_fee',
+      amount_egp: 1000,
+      is_verified: opts.preVerified ?? false,
+      verified_by: opts.preVerified ? settlerId : null,
+      verified_at: opts.preVerified ? new Date() : null,
+      notes: opts.expenseNotes ?? null,
+      created_by: settlerId,
+    } as any)
+    .execute();
   const gate = new ImportApprovalGateSlice();
-  const neverCalled = () => { throw new Error('unexpected dep call'); };
+  const neverCalled = () => {
+    throw new Error('unexpected dep call');
+  };
   const service = new ImportTreasuryService({
     db: db as any,
     resolveTenantAccount: neverCalled,
@@ -164,24 +181,35 @@ async function makeDb(opts: {
 }
 
 async function insertToken(db: Kysely<Database>, id: string, expenseId: string, amount = 1000): Promise<void> {
-  await db.insertInto('import_approval_requests').values({
-    id,
-    tenant_id: TENANT,
-    module: 'import',
-    action_type: 'broker_expense_verification',
-    reference_id: expenseId,
-    requested_by: 99,
-    status: 'approved',
-    request_payload: JSON.stringify({ brokerExpenseId: expenseId, amount }),
-  } as any).execute();
+  await db
+    .insertInto('import_approval_requests')
+    .values({
+      id,
+      tenant_id: TENANT,
+      module: 'import',
+      action_type: 'broker_expense_verification',
+      reference_id: expenseId,
+      requested_by: 99,
+      status: 'approved',
+      request_payload: JSON.stringify({ brokerExpenseId: expenseId, amount }),
+    } as any)
+    .execute();
 }
 
 async function expenseRow(db: Kysely<Database>, expenseId: string): Promise<any> {
-  return await db.selectFrom('import_broker_expenses').selectAll().where('id', '=', expenseId).executeTakeFirstOrThrow();
+  return await db
+    .selectFrom('import_broker_expenses')
+    .selectAll()
+    .where('id', '=', expenseId)
+    .executeTakeFirstOrThrow();
 }
 
 async function tokenStatus(db: Kysely<Database>, id: string): Promise<string> {
-  const row = await db.selectFrom('import_approval_requests').select('status').where('id', '=', id).executeTakeFirstOrThrow();
+  const row = await db
+    .selectFrom('import_approval_requests')
+    .select('status')
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
   return String((row as any).status);
 }
 
@@ -246,7 +274,11 @@ async function main(): Promise<void> {
       assert.equal(row.is_verified, false, 'the expense must stay unverified');
       assert.equal(row.verified_by, null);
       assert.equal(row.notes, null, 'nothing must be logged on a refused verification');
-      assert.equal(await tokenStatus(db, 'tok-1'), 'approved', 'the refused self-verification does not consume the token');
+      assert.equal(
+        await tokenStatus(db, 'tok-1'),
+        'approved',
+        'the refused self-verification does not consume the token',
+      );
     } finally {
       await db.destroy();
     }
@@ -374,7 +406,8 @@ async function main(): Promise<void> {
 
   // 12. Wiring: this spec is in both critical lists, in identical order (326 specs — this spec is the last entry).
   {
-    const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+    const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+      .specs as string[];
     const pkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
@@ -390,15 +423,36 @@ async function main(): Promise<void> {
   // comparison keeps its Number() coercion (the P7 bigint hazard does
   // not apply here — see the header).
   {
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/import-sales/services/import-treasury.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../src/modules/import-sales/services/import-treasury.service.ts'),
+      'utf8',
+    );
     const helperSource = readFileSync(resolve(__dirname, '../../src/common/utils/manager-approval.ts'), 'utf8');
-    const gateSource = readFileSync(resolve(__dirname, '../../src/modules/import-sales/import-approval-gate/import-approval-gate.ts'), 'utf8');
-    assert.ok(serviceSource.includes('INV-SOLO-ADMIN-BROKER-EXPENSE-OVERRIDE'), 'the service names the solo-admin broker-expense override invariant');
+    const gateSource = readFileSync(
+      resolve(__dirname, '../../src/modules/import-sales/import-approval-gate/import-approval-gate.ts'),
+      'utf8',
+    );
+    assert.ok(
+      serviceSource.includes('INV-SOLO-ADMIN-BROKER-EXPENSE-OVERRIDE'),
+      'the service names the solo-admin broker-expense override invariant',
+    );
     assert.ok(serviceSource.includes('isSoloAdminOverride'), 'the service consults the shared solo-admin helper');
-    assert.ok(serviceSource.includes("from '../../../common/utils/manager-approval'"), 'the service imports the shared helper, it does not redefine it');
-    assert.ok(helperSource.split('export async function isSoloAdminOverride').length - 1 === 1, 'the shared helper is defined exactly once');
-    assert.ok(serviceSource.includes(OLD_MSG), 'the old maker-checker refusal message is still present byte-identically');
-    assert.ok(serviceSource.includes('Number(expense.created_by) === userId'), 'the identity comparison keeps its Number() coercion');
+    assert.ok(
+      serviceSource.includes("from '../../../common/utils/manager-approval'"),
+      'the service imports the shared helper, it does not redefine it',
+    );
+    assert.ok(
+      helperSource.split('export async function isSoloAdminOverride').length - 1 === 1,
+      'the shared helper is defined exactly once',
+    );
+    assert.ok(
+      serviceSource.includes(OLD_MSG),
+      'the old maker-checker refusal message is still present byte-identically',
+    );
+    assert.ok(
+      serviceSource.includes('Number(expense.created_by) === userId'),
+      'the identity comparison keeps its Number() coercion',
+    );
     assert.ok(serviceSource.includes(STAMP_HEAD), 'the service stamps the override');
     assert.ok(gateSource.includes("req.status !== 'approved'"), 'the gate still consumes only approved requests');
     console.log('  PASS S6 source pins');

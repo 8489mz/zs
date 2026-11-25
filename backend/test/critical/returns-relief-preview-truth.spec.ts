@@ -51,8 +51,22 @@ database per case; same schema harness as returns-payout-truth):
   same 65 with its relief split.
 */
 
-const ADMIN = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
-const CASHIER = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 2, username: 'cashier', permissions: [] } as unknown as AuthContext;
+const ADMIN = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
+const CASHIER = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'cashier',
+  userId: 2,
+  username: 'cashier',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -175,18 +189,35 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1','a1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 4100, 4200, 4300, 4400, 5100, 2150]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,account_id,code) VALUES ($1,$2,$3,$4)',
-      [code, 't1', 'a1', String(code)]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,account_id,code) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      'a1',
+      String(code),
+    ]);
   }
   return { pg, db };
 }
 
-function makeServices(db: Kysely<Database>): { returns: ReturnsService; posting: AccountingPostingService; reps: DeliveryRepsService } {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+function makeServices(db: Kysely<Database>): {
+  returns: ReturnsService;
+  posting: AccountingPostingService;
+  reps: DeliveryRepsService;
+} {
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auditStub = { log: async () => undefined, logWithExecutor: async () => undefined };
   const idempotencyStub = { check: async () => null, commitOperation: async () => undefined };
-  const returns = new ReturnsService(db as any, new TransactionHelper(), auditStub as any, posting as any, idempotencyStub as any);
+  const returns = new ReturnsService(
+    db as any,
+    new TransactionHelper(),
+    auditStub as any,
+    posting as any,
+    idempotencyStub as any,
+  );
   const salesFinance = new SalesFinanceService(db as any);
   const reps = new DeliveryRepsService(db as any, auditStub as any, posting as any, salesFinance as any);
   return { returns, posting, reps };
@@ -196,19 +227,37 @@ async function seedBase(db: Kysely<Database>): Promise<void> {
   await sql`INSERT INTO settings VALUES ('t1', 'currency', 'EGP')`.execute(db);
   await sql`INSERT INTO settings VALUES ('t1', 'managerPin', '"2468"')`.execute(db);
   const adminRecord = await createPasswordRecord('admin-pass');
-  await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${adminRecord.hash}, ${adminRecord.salt}, true)`.execute(db);
+  await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${adminRecord.hash}, ${adminRecord.salt}, true)`.execute(
+    db,
+  );
   await sql`INSERT INTO users VALUES (2, 't1', 'cashier', 1, 'cashier', '', '', true)`.execute(db);
   await sql`INSERT INTO cashier_shifts VALUES (1, 't1', 'a1', 'SHIFT-1', 1, 'open', 1, 1, 0, NOW())`.execute(db);
   await sql`INSERT INTO cashier_shifts VALUES (2, 't1', 'a1', 'SHIFT-2', 2, 'open', 1, 1, 0, NOW())`.execute(db);
-  await sql`INSERT INTO products VALUES (10, 't1', 'a1', 'Widget', '', '', '', 100, 0, 10, true, false, NOW())`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty, updated_at) VALUES ('t1', 'a1', 10, 1, 1, 100, 0, NOW())`.execute(db);
+  await sql`INSERT INTO products VALUES (10, 't1', 'a1', 'Widget', '', '', '', 100, 0, 10, true, false, NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty, updated_at) VALUES ('t1', 'a1', 10, 1, 1, 100, 0, NOW())`.execute(
+    db,
+  );
   await sql`INSERT INTO customers VALUES (25, 't1', 'Cash customer', 0, 0, 0, 0, false, NOW())`.execute(db);
   await sql`INSERT INTO delivery_representatives VALUES (7, 't1', 'a1', 'Courier', true)`.execute(db);
 }
 
 /* A sale of 2 units at 500 (goods 1000) + tip 50 + freelance fee 30
    + service 0 = total 1080, paid cash 1080, customer 25. */
-async function seedTippedCashSale(db: Kysely<Database>, opts: { saleId?: number; subtotal?: number; tip?: number; fee?: number; service?: number; qty?: number; paidCash?: number; paidCard?: number } = {}): Promise<number> {
+async function seedTippedCashSale(
+  db: Kysely<Database>,
+  opts: {
+    saleId?: number;
+    subtotal?: number;
+    tip?: number;
+    fee?: number;
+    service?: number;
+    qty?: number;
+    paidCash?: number;
+    paidCard?: number;
+  } = {},
+): Promise<number> {
   const saleId = opts.saleId ?? 1;
   const subtotal = opts.subtotal ?? 1000;
   const tip = opts.tip ?? 50;
@@ -220,16 +269,38 @@ async function seedTippedCashSale(db: Kysely<Database>, opts: { saleId?: number;
   const paidCard = opts.paidCard ?? 0;
   const unitPrice = subtotal / qty;
   await sql`INSERT INTO sales (id, tenant_id, account_id, doc_no, customer_id, status, total, paid_amount, store_credit_used, discount, tax_amount, subtotal, prices_include_tax, payment_type, payment_channel, branch_id, location_id, tip_amount, delivery_fee, delivery_fee_mode, service_charge)
-    VALUES (${saleId}, 't1', 'a1', ${'S-' + saleId}, 25, 'posted', ${total}, ${paidCash + paidCard}, 0, 0, 0, ${subtotal}, false, 'cash', 'cash', 1, 1, ${tip}, ${fee}, 'freelance_courier', ${service})`.execute(db);
+    VALUES (${saleId}, 't1', 'a1', ${'S-' + saleId}, 25, 'posted', ${total}, ${paidCash + paidCard}, 0, 0, 0, ${subtotal}, false, 'cash', 'cash', 1, 1, ${tip}, ${fee}, 'freelance_courier', ${service})`.execute(
+    db,
+  );
   await sql`INSERT INTO sale_items (id, tenant_id, account_id, sale_id, product_id, product_name, qty, unit_price, line_total, net_unit_price, net_line_total, allocated_discount, allocated_tax, cost_price, unit_multiplier)
-    VALUES (${saleId * 10}, 't1', 'a1', ${saleId}, 10, 'Widget', ${qty}, ${unitPrice}, ${subtotal}, ${unitPrice}, ${subtotal}, 0, 0, 0, 1)`.execute(db);
-  if (paidCash > 0) await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', ${saleId}, 'cash', ${paidCash})`.execute(db);
-  if (paidCard > 0) await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', ${saleId}, 'card', ${paidCard})`.execute(db);
+    VALUES (${saleId * 10}, 't1', 'a1', ${saleId}, 10, 'Widget', ${qty}, ${unitPrice}, ${subtotal}, ${unitPrice}, ${subtotal}, 0, 0, 0, 1)`.execute(
+    db,
+  );
+  if (paidCash > 0)
+    await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', ${saleId}, 'cash', ${paidCash})`.execute(
+      db,
+    );
+  if (paidCard > 0)
+    await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', ${saleId}, 'card', ${paidCard})`.execute(
+      db,
+    );
   return saleId;
 }
 
 /* A COD delivery sale for rep 7: goods + tip + fee + service, paid 0. */
-async function seedCodSale(db: Kysely<Database>, opts: { saleId: number; subtotal?: number; tip?: number; fee?: number; service?: number; qty?: number; storeCreditUsed?: number; mode?: string }): Promise<number> {
+async function seedCodSale(
+  db: Kysely<Database>,
+  opts: {
+    saleId: number;
+    subtotal?: number;
+    tip?: number;
+    fee?: number;
+    service?: number;
+    qty?: number;
+    storeCreditUsed?: number;
+    mode?: string;
+  },
+): Promise<number> {
   const saleId = opts.saleId;
   const subtotal = opts.subtotal ?? 100;
   const tip = opts.tip ?? 10;
@@ -239,9 +310,13 @@ async function seedCodSale(db: Kysely<Database>, opts: { saleId: number; subtota
   const total = subtotal + tip + fee + service;
   const unitPrice = subtotal / qty;
   await sql`INSERT INTO sales (id, tenant_id, account_id, doc_no, customer_id, status, total, paid_amount, store_credit_used, discount, tax_amount, subtotal, prices_include_tax, payment_type, payment_channel, branch_id, location_id, tip_amount, delivery_fee, delivery_fee_mode, service_charge, delivery_status, delivery_rep_id, collection_status, order_type)
-    VALUES (${saleId}, 't1', 'a1', ${'S-' + saleId}, 25, 'posted', ${total}, 0, ${opts.storeCreditUsed ?? 0}, 0, 0, ${subtotal}, false, 'credit', 'credit', 1, 1, ${tip}, ${fee}, ${opts.mode ?? 'freelance_courier'}, ${service}, NULL, 7, 'cod', 'delivery')`.execute(db);
+    VALUES (${saleId}, 't1', 'a1', ${'S-' + saleId}, 25, 'posted', ${total}, 0, ${opts.storeCreditUsed ?? 0}, 0, 0, ${subtotal}, false, 'credit', 'credit', 1, 1, ${tip}, ${fee}, ${opts.mode ?? 'freelance_courier'}, ${service}, NULL, 7, 'cod', 'delivery')`.execute(
+    db,
+  );
   await sql`INSERT INTO sale_items (id, tenant_id, account_id, sale_id, product_id, product_name, qty, unit_price, line_total, net_unit_price, net_line_total, allocated_discount, allocated_tax, cost_price, unit_multiplier)
-    VALUES (${saleId * 10}, 't1', 'a1', ${saleId}, 10, 'Widget', ${qty}, ${unitPrice}, ${subtotal}, ${unitPrice}, ${subtotal}, 0, 0, 0, 1)`.execute(db);
+    VALUES (${saleId * 10}, 't1', 'a1', ${saleId}, 10, 'Widget', ${qty}, ${unitPrice}, ${subtotal}, ${unitPrice}, ${subtotal}, 0, 0, 0, 1)`.execute(
+    db,
+  );
   return saleId;
 }
 
@@ -250,57 +325,105 @@ async function returnDoc(db: Kysely<Database>, id: number): Promise<any> {
 }
 
 async function treasurySum(db: Kysely<Database>, txnType: string): Promise<number> {
-  const row = await sql<{ s: string }>`SELECT COALESCE(SUM(amount), 0) AS s FROM treasury_transactions WHERE txn_type = ${txnType}`.execute(db);
+  const row = await sql<{
+    s: string;
+  }>`SELECT COALESCE(SUM(amount), 0) AS s FROM treasury_transactions WHERE txn_type = ${txnType}`.execute(db);
   return Number(row.rows[0].s);
 }
 
 async function shiftCash(db: Kysely<Database>, shiftId: number): Promise<number> {
-  const row = await db.selectFrom('cashier_shifts').select('expected_cash').where('id', '=', shiftId).executeTakeFirstOrThrow();
+  const row = await db
+    .selectFrom('cashier_shifts')
+    .select('expected_cash')
+    .where('id', '=', shiftId)
+    .executeTakeFirstOrThrow();
   return Number((row as any).expected_cash || 0);
 }
 
 async function customerBalance(db: Kysely<Database>): Promise<{ balance: number; storeCredit: number }> {
-  const row = await db.selectFrom('customers').select(['balance', 'store_credit_balance']).where('id', '=', 25).executeTakeFirstOrThrow();
+  const row = await db
+    .selectFrom('customers')
+    .select(['balance', 'store_credit_balance'])
+    .where('id', '=', 25)
+    .executeTakeFirstOrThrow();
   return { balance: Number((row as any).balance || 0), storeCredit: Number((row as any).store_credit_balance || 0) };
 }
 
-async function ledgerEntries(db: Kysely<Database>): Promise<Array<{ type: string; amount: number; balanceAfter: number }>> {
-  const rows = await db.selectFrom('customer_ledger').select(['entry_type', 'amount', 'balance_after']).where('customer_id', '=', 25).orderBy('id', 'asc').execute();
-  return rows.map((row: any) => ({ type: String(row.entry_type), amount: Number(row.amount), balanceAfter: Number(row.balance_after) }));
+async function ledgerEntries(
+  db: Kysely<Database>,
+): Promise<Array<{ type: string; amount: number; balanceAfter: number }>> {
+  const rows = await db
+    .selectFrom('customer_ledger')
+    .select(['entry_type', 'amount', 'balance_after'])
+    .where('customer_id', '=', 25)
+    .orderBy('id', 'asc')
+    .execute();
+  return rows.map((row: any) => ({
+    type: String(row.entry_type),
+    amount: Number(row.amount),
+    balanceAfter: Number(row.balance_after),
+  }));
 }
 
-async function journalBySource(pg: PGlite, db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Map<string, { debit: number; credit: number }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute() as Array<{ id: number }>;
+async function journalBySource(
+  pg: PGlite,
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Map<string, { debit: number; credit: number }>> {
+  const entries = (await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute()) as Array<{ id: number }>;
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
   const rows = await pg.query<{ code: string; debit: string; credit: string }>(
     `SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE l.journal_entry_id = $1`,
-    [Number(entries[0].id)]);
+    [Number(entries[0].id)],
+  );
   const byCode = new Map<string, { debit: number; credit: number }>();
   for (const row of rows.rows) byCode.set(row.code, { debit: Number(row.debit), credit: Number(row.credit) });
   return byCode;
 }
 
 async function journalCount(pg: PGlite, db: Kysely<Database>, sourceType: string, sourceId: number): Promise<number> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute() as Array<{ id: number }>;
+  const entries = (await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute()) as Array<{ id: number }>;
   return entries.length;
 }
 
 async function accountNet(pg: PGlite, code: string): Promise<number> {
   const rows = await pg.query<{ net: string }>(
     `SELECT COALESCE(SUM(l.debit) - SUM(l.credit), 0) AS net FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE a.code = $1`,
-    [code]);
+    [code],
+  );
   return Number(rows.rows[0].net);
 }
 
-async function createReturn(returns: ReturnsService, saleId: number, qty: number, auth: AuthContext, extra: Record<string, unknown> = {}): Promise<{ ok: boolean; id: number }> {
-  const result = await returns.createReturn({
-    type: 'sale', invoiceId: saleId, note: 'spec return',
-    items: [{ productId: 10, productName: 'Widget', qty, saleItemId: saleId * 10 }],
-    settlementMode: 'refund', refundMethod: 'cash',
-    ...extra,
-  } as never, auth) as unknown as { ok: boolean; id: number };
+async function createReturn(
+  returns: ReturnsService,
+  saleId: number,
+  qty: number,
+  auth: AuthContext,
+  extra: Record<string, unknown> = {},
+): Promise<{ ok: boolean; id: number }> {
+  const result = (await returns.createReturn(
+    {
+      type: 'sale',
+      invoiceId: saleId,
+      note: 'spec return',
+      items: [{ productId: 10, productName: 'Widget', qty, saleItemId: saleId * 10 }],
+      settlementMode: 'refund',
+      refundMethod: 'cash',
+      ...extra,
+    } as never,
+    auth,
+  )) as unknown as { ok: boolean; id: number };
   assert.equal(result.ok, true);
   return result;
 }
@@ -315,10 +438,20 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedTippedCashSale(db, { subtotal: 75, tip: 10, fee: 0, qty: 1 });
       const { returns } = makeServices(db);
-      const preview = await (returns as any).previewReturnRelief({
-        type: 'sale', invoiceId: 1,
-        items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 10 }],
-      } as never, ADMIN) as unknown as { goodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number };
+      const preview = (await (returns as any).previewReturnRelief(
+        {
+          type: 'sale',
+          invoiceId: 1,
+          items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 10 }],
+        } as never,
+        ADMIN,
+      )) as unknown as {
+        goodsTotal: number;
+        tipRelief: number;
+        courierRelief: number;
+        totalRelief: number;
+        refundTotal: number;
+      };
       assert.equal(preview.goodsTotal, 75);
       assert.equal(preview.tipRelief, 10);
       assert.equal(preview.courierRelief, 0);
@@ -340,10 +473,20 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedTippedCashSale(db, { subtotal: 100, tip: 10, fee: 20, qty: 2 });
       const { returns } = makeServices(db);
-      const preview = await (returns as any).previewReturnRelief({
-        type: 'sale', invoiceId: 1,
-        items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 10 }],
-      } as never, ADMIN) as unknown as { goodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number };
+      const preview = (await (returns as any).previewReturnRelief(
+        {
+          type: 'sale',
+          invoiceId: 1,
+          items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 10 }],
+        } as never,
+        ADMIN,
+      )) as unknown as {
+        goodsTotal: number;
+        tipRelief: number;
+        courierRelief: number;
+        totalRelief: number;
+        refundTotal: number;
+      };
       assert.equal(preview.goodsTotal, 50);
       assert.equal(preview.tipRelief, 5);
       assert.equal(preview.courierRelief, 10);
@@ -363,10 +506,20 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedTippedCashSale(db, { subtotal: 75, tip: 0, fee: 0, qty: 1 });
       const { returns } = makeServices(db);
-      const preview = await (returns as any).previewReturnRelief({
-        type: 'sale', invoiceId: 1,
-        items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 10 }],
-      } as never, ADMIN) as unknown as { goodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number };
+      const preview = (await (returns as any).previewReturnRelief(
+        {
+          type: 'sale',
+          invoiceId: 1,
+          items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 10 }],
+        } as never,
+        ADMIN,
+      )) as unknown as {
+        goodsTotal: number;
+        tipRelief: number;
+        courierRelief: number;
+        totalRelief: number;
+        refundTotal: number;
+      };
       assert.equal(preview.goodsTotal, 75);
       assert.equal(preview.tipRelief, 0);
       assert.equal(preview.courierRelief, 0);
@@ -387,10 +540,14 @@ async function main(): Promise<void> {
       await seedTippedCashSale(db, { subtotal: 75, tip: 10, fee: 0, qty: 1 });
       const { returns } = makeServices(db);
       await assert.rejects(
-        (returns as any).previewReturnRelief({
-          type: 'purchase', invoiceId: 1,
-          items: [{ productId: 10, productName: 'Widget', qty: 1, purchaseItemId: 10 }],
-        } as never, ADMIN),
+        (returns as any).previewReturnRelief(
+          {
+            type: 'purchase',
+            invoiceId: 1,
+            items: [{ productId: 10, productName: 'Widget', qty: 1, purchaseItemId: 10 }],
+          } as never,
+          ADMIN,
+        ),
         (error: any) => error.code === 'RETURN_TYPE_INVALID',
       );
     } finally {
@@ -408,7 +565,13 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedTippedCashSale(db, { subtotal: 75, tip: 10, fee: 0, qty: 1 });
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 1, 1, ADMIN) as unknown as { ok: boolean; id: number; refundTotal: number; tipRelief: number; courierRelief: number };
+      const result = (await createReturn(returns, 1, 1, ADMIN)) as unknown as {
+        ok: boolean;
+        id: number;
+        refundTotal: number;
+        tipRelief: number;
+        courierRelief: number;
+      };
       assert.equal(result.refundTotal, 85);
       assert.equal(result.tipRelief, 10);
       assert.equal(result.courierRelief, 0);
@@ -416,7 +579,9 @@ async function main(): Promise<void> {
       assert.equal(Number(doc.tip_relief), 10);
       assert.equal(Number(doc.courier_relief), 0);
       assert.equal(Number(doc.total), 75);
-      const detail = await returns.getReturnById(result.id, ADMIN) as unknown as { returnDocument: { total: number; tipRelief: number; courierRelief: number; refundTotal: number } };
+      const detail = (await returns.getReturnById(result.id, ADMIN)) as unknown as {
+        returnDocument: { total: number; tipRelief: number; courierRelief: number; refundTotal: number };
+      };
       assert.equal(detail.returnDocument.total, 75);
       assert.equal(detail.returnDocument.tipRelief, 10);
       assert.equal(detail.returnDocument.courierRelief, 0);
@@ -437,15 +602,23 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedTippedCashSale(db, { subtotal: 100, tip: 10, fee: 20, qty: 2 });
       const { returns } = makeServices(db);
-      const result = await createReturn(returns, 1, 1, ADMIN) as unknown as { ok: boolean; id: number; refundTotal: number };
+      const result = (await createReturn(returns, 1, 1, ADMIN)) as unknown as {
+        ok: boolean;
+        id: number;
+        refundTotal: number;
+      };
       assert.equal(result.refundTotal, 65);
       const doc = await returnDoc(db, result.id);
       assert.equal(Number(doc.tip_relief), 5);
       assert.equal(Number(doc.courier_relief), 10);
       assert.equal(Number(doc.total), 50);
-      const detail = await returns.getReturnById(result.id, ADMIN) as unknown as { returnDocument: { total: number; tipRelief: number; courierRelief: number; refundTotal: number } };
+      const detail = (await returns.getReturnById(result.id, ADMIN)) as unknown as {
+        returnDocument: { total: number; tipRelief: number; courierRelief: number; refundTotal: number };
+      };
       assert.equal(detail.returnDocument.refundTotal, 65);
-      const listed = await returns.listReturns({}, ADMIN) as unknown as { returns: Array<{ id: string; total: number; tipRelief: number; courierRelief: number; refundTotal: number }> };
+      const listed = (await returns.listReturns({}, ADMIN)) as unknown as {
+        returns: Array<{ id: string; total: number; tipRelief: number; courierRelief: number; refundTotal: number }>;
+      };
       assert.equal(listed.returns.length, 1);
       assert.equal(listed.returns[0].total, 50);
       assert.equal(listed.returns[0].tipRelief, 5);

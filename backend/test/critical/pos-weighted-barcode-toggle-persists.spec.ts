@@ -104,12 +104,28 @@ async function main(): Promise<void> {
       },
       adminAuth('t1'),
     );
-    assert.equal(returned.weightedBarcodePrefix, '23', 'operational barcode format field must still persist for tenant admin');
+    assert.equal(
+      returned.weightedBarcodePrefix,
+      '23',
+      'operational barcode format field must still persist for tenant admin',
+    );
     assert.equal(await rawSetting('t1', 'weightedBarcodePrefix'), '"23"');
-    assert.equal(await rawSetting('t1', 'weightedBarcodeEnabled'), undefined, 'weightedBarcodeEnabled must be protected for tenant admin');
-    assert.equal(await rawSetting('t1', 'clothingModuleEnabled'), undefined, 'clothingModuleEnabled must be protected for tenant admin');
+    assert.equal(
+      await rawSetting('t1', 'weightedBarcodeEnabled'),
+      undefined,
+      'weightedBarcodeEnabled must be protected for tenant admin',
+    );
+    assert.equal(
+      await rawSetting('t1', 'clothingModuleEnabled'),
+      undefined,
+      'clothingModuleEnabled must be protected for tenant admin',
+    );
     assert.equal(await rawSetting('t1', 'posModuleEnabled'), undefined, 'posModuleEnabled must remain protected');
-    assert.equal(await rawSetting('t1', 'inventoryModuleEnabled'), undefined, 'inventoryModuleEnabled must remain protected');
+    assert.equal(
+      await rawSetting('t1', 'inventoryModuleEnabled'),
+      undefined,
+      'inventoryModuleEnabled must remain protected',
+    );
     console.log('  tenant-admin module switches blocked while operational settings persist: passed');
 
     // 2. Platform impersonator (sessions.impersonated_by) can enable & disable modules cleanly.
@@ -119,10 +135,7 @@ async function main(): Promise<void> {
     );
     assert.equal(returnedImpOn.weightedBarcodeEnabled, true);
     assert.equal(await rawSetting('t1', 'weightedBarcodeEnabled'), 'true');
-    const returnedImpOff = await service.saveSettings(
-      { weightedBarcodeEnabled: false },
-      impersonatedAdminAuth('t1'),
-    );
+    const returnedImpOff = await service.saveSettings({ weightedBarcodeEnabled: false }, impersonatedAdminAuth('t1'));
     assert.equal(returnedImpOff.weightedBarcodeEnabled, false);
     assert.equal(await rawSetting('t1', 'weightedBarcodeEnabled'), 'false');
     console.log('  platform impersonation toggles persist (true & false): passed');

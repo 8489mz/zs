@@ -96,7 +96,10 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -106,12 +109,25 @@ async function main(): Promise<void> {
     const db = await makeDb();
     try {
       const service = makeService(db);
-      const shipment = await service.createShipment('t1', { containerNumber: 'MSCU-10', billOfLading: 'BL-10', supplierId: '9', exchangeRateAtArrival: 50 });
-      await db.insertInto('import_shipment_items' as never).values({
-        tenant_id: 't1', shipment_id: shipment.id, product_id: 5, quantity: 10,
-        received_quantity: 0, factory_unit_price_usd: 10, landed_cost_egp: 0,
-        shortage_handling_method: 'capitalize',
-      } as never).execute();
+      const shipment = await service.createShipment('t1', {
+        containerNumber: 'MSCU-10',
+        billOfLading: 'BL-10',
+        supplierId: '9',
+        exchangeRateAtArrival: 50,
+      });
+      await db
+        .insertInto('import_shipment_items' as never)
+        .values({
+          tenant_id: 't1',
+          shipment_id: shipment.id,
+          product_id: 5,
+          quantity: 10,
+          received_quantity: 0,
+          factory_unit_price_usd: 10,
+          landed_cost_egp: 0,
+          shortage_handling_method: 'capitalize',
+        } as never)
+        .execute();
       const item: any = await (db as any).selectFrom('import_shipment_items').selectAll().executeTakeFirstOrThrow();
       await assert.rejects(
         async () => service.updateShipmentItem('t1', item.id, { receivedQuantity: 11 }),
@@ -123,10 +139,18 @@ async function main(): Promise<void> {
         /تتجاوز البوليصة|دقة المخزون/,
         'Receiving beyond 3-decimal stock precision must be rejected',
       );
-      const unchanged: any = await (db as any).selectFrom('import_shipment_items').selectAll().where('id', '=', item.id).executeTakeFirstOrThrow();
+      const unchanged: any = await (db as any)
+        .selectFrom('import_shipment_items')
+        .selectAll()
+        .where('id', '=', item.id)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(unchanged.received_quantity), 0, 'Rejected updates must not change the stored quantity');
       await service.updateShipmentItem('t1', item.id, { receivedQuantity: 10 });
-      const stored: any = await (db as any).selectFrom('import_shipment_items').selectAll().where('id', '=', item.id).executeTakeFirstOrThrow();
+      const stored: any = await (db as any)
+        .selectFrom('import_shipment_items')
+        .selectAll()
+        .where('id', '=', item.id)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(stored.received_quantity), 10, 'Receiving exactly the B/L quantity succeeds');
     } finally {
       await db.destroy();
@@ -140,19 +164,26 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await service.createShipment('t1', { containerNumber: 'MSCU-20', billOfLading: 'BL-20', supplierId: '9' });
       await assert.rejects(
-        async () => service.createShipment('t1', { containerNumber: 'MSCU-20', billOfLading: 'BL-20', supplierId: '9' }),
+        async () =>
+          service.createShipment('t1', { containerNumber: 'MSCU-20', billOfLading: 'BL-20', supplierId: '9' }),
         /مسجلة بالفعل/,
         'The same container on the same B/L must be rejected',
       );
       await assert.rejects(
-        async () => service.createShipment('t1', { containerNumber: '  MSCU-20  ', billOfLading: 'BL-20', supplierId: '9' }),
+        async () =>
+          service.createShipment('t1', { containerNumber: '  MSCU-20  ', billOfLading: 'BL-20', supplierId: '9' }),
         /مسجلة بالفعل/,
         'Whitespace variants of the same pair must be rejected',
       );
-      const otherBl = await service.createShipment('t1', { containerNumber: 'MSCU-21', billOfLading: 'BL-20', supplierId: '9' });
+      const otherBl = await service.createShipment('t1', {
+        containerNumber: 'MSCU-21',
+        billOfLading: 'BL-20',
+        supplierId: '9',
+      });
       assert.ok(otherBl.id, 'The same B/L with a different container succeeds: one B/L covers many containers');
       await assert.rejects(
-        async () => service.createShipment('t1', { containerNumber: 'MSCU-20', billOfLading: 'BL-99', supplierId: '9' }),
+        async () =>
+          service.createShipment('t1', { containerNumber: 'MSCU-20', billOfLading: 'BL-99', supplierId: '9' }),
         /مسجل بالفعل/,
         'The same container number is stopped by the pre-existing unique index backstop',
       );
@@ -176,11 +207,19 @@ async function main(): Promise<void> {
         /عدم التكرار/,
         'A retry with the same key must be rejected as a duplicate',
       );
-      const stored: any = await (db as any).selectFrom('import_partners').selectAll().where('id', '=', partner.id).executeTakeFirstOrThrow();
+      const stored: any = await (db as any)
+        .selectFrom('import_partners')
+        .selectAll()
+        .where('id', '=', partner.id)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(stored.capital_amount), 1000, 'Capital moves once');
       assert.equal(await countRows(db, 'import_partner_ledger'), 1, 'Exactly one ledger row may exist');
       await service.recordCapitalTransaction('t1', 1, partner.id, { ...dto, idempotencyKey: 'cap-key-2' });
-      const after: any = await (db as any).selectFrom('import_partners').selectAll().where('id', '=', partner.id).executeTakeFirstOrThrow();
+      const after: any = await (db as any)
+        .selectFrom('import_partners')
+        .selectAll()
+        .where('id', '=', partner.id)
+        .executeTakeFirstOrThrow();
       assert.equal(Number(after.capital_amount), 2000, 'A different key posts again');
     } finally {
       await db.destroy();
@@ -206,13 +245,14 @@ async function main(): Promise<void> {
         'Range validation on percentage edits is kept',
       );
       await assert.rejects(
-        async () => service.createProject('t1', {
-          title: 'Over-subscribed',
-          partners: [
-            { partnerId: a.id, capitalShare: 0, profitPercentage: 60 },
-            { partnerId: b.id, capitalShare: 0, profitPercentage: 60 },
-          ],
-        }),
+        async () =>
+          service.createProject('t1', {
+            title: 'Over-subscribed',
+            partners: [
+              { partnerId: a.id, capitalShare: 0, profitPercentage: 60 },
+              { partnerId: b.id, capitalShare: 0, profitPercentage: 60 },
+            ],
+          }),
         /يتجاوز 100%/,
         'A project carrying 60% + 60% must be rejected',
       );
@@ -224,16 +264,21 @@ async function main(): Promise<void> {
           { partnerId: b.id, capitalShare: 0, profitPercentage: 40 },
         ],
       });
-      const pool: any[] = await (db as any).selectFrom('import_project_partners').selectAll().where('project_id', '=', project.id).execute();
+      const pool: any[] = await (db as any)
+        .selectFrom('import_project_partners')
+        .selectAll()
+        .where('project_id', '=', project.id)
+        .execute();
       assert.equal(pool.length, 2, 'Both project partners are stored');
       const total = pool.reduce((s, r) => s + Number(r.profit_percentage), 0);
       assert.equal(total, 100, 'The stored per-project pool sums to 100');
       // setProjectPartners still enforces the same ceiling (existing behaviour pinned).
       await assert.rejects(
-        async () => service.setProjectPartners('t1', project.id, [
-          { partnerId: a.id, profitPercentage: 60 },
-          { partnerId: b.id, profitPercentage: 60 },
-        ]),
+        async () =>
+          service.setProjectPartners('t1', project.id, [
+            { partnerId: a.id, profitPercentage: 60 },
+            { partnerId: b.id, profitPercentage: 60 },
+          ]),
         /يتجاوز 100%/,
         'setProjectPartners keeps enforcing the per-project ceiling',
       );
@@ -256,36 +301,71 @@ async function main(): Promise<void> {
       `);
       await migrate0282Up(db as any);
       const cols: any[] = await (db as any)
-        .selectFrom('information_schema.columns' as never).selectAll()
+        .selectFrom('information_schema.columns' as never)
+        .selectAll()
         .where('table_name', '=', 'import_partner_ledger')
         .where('column_name', '=', 'idempotency_key')
         .execute();
       assert.equal(cols.length, 1, 'Migration up() must add the idempotency_key column');
       const indexes: any[] = await (db as any)
-        .selectFrom('pg_indexes' as never).selectAll()
+        .selectFrom('pg_indexes' as never)
+        .selectAll()
         .where('indexname', '=', 'uq_partner_ledger_tenant_partner_key')
         .execute();
       assert.equal(indexes.length, 1, 'Migration up() must create the partial unique index');
-      await db.insertInto('import_partner_ledger' as never).values({
-        id: 'l1', tenant_id: 't1', partner_id: 'p1', type: 'DEPOSIT', amount: 10,
-        transaction_date: '2026-11-02', idempotency_key: 'k1',
-      } as never).execute();
+      await db
+        .insertInto('import_partner_ledger' as never)
+        .values({
+          id: 'l1',
+          tenant_id: 't1',
+          partner_id: 'p1',
+          type: 'DEPOSIT',
+          amount: 10,
+          transaction_date: '2026-11-02',
+          idempotency_key: 'k1',
+        } as never)
+        .execute();
       await assert.rejects(
-        async () => db.insertInto('import_partner_ledger' as never).values({
-          id: 'l2', tenant_id: 't1', partner_id: 'p1', type: 'DEPOSIT', amount: 10,
-          transaction_date: '2026-11-02', idempotency_key: 'k1',
-        } as never).execute(),
+        async () =>
+          db
+            .insertInto('import_partner_ledger' as never)
+            .values({
+              id: 'l2',
+              tenant_id: 't1',
+              partner_id: 'p1',
+              type: 'DEPOSIT',
+              amount: 10,
+              transaction_date: '2026-11-02',
+              idempotency_key: 'k1',
+            } as never)
+            .execute(),
         (err: any) => err?.code === '23505',
         'The index must reject a duplicate key for the same partner',
       );
-      await db.insertInto('import_partner_ledger' as never).values({
-        id: 'l3', tenant_id: 't1', partner_id: 'p1', type: 'DEPOSIT', amount: 10,
-        transaction_date: '2026-11-02', idempotency_key: null,
-      } as never).execute();
-      await db.insertInto('import_partner_ledger' as never).values({
-        id: 'l4', tenant_id: 't1', partner_id: 'p1', type: 'DEPOSIT', amount: 10,
-        transaction_date: '2026-11-02', idempotency_key: null,
-      } as never).execute();
+      await db
+        .insertInto('import_partner_ledger' as never)
+        .values({
+          id: 'l3',
+          tenant_id: 't1',
+          partner_id: 'p1',
+          type: 'DEPOSIT',
+          amount: 10,
+          transaction_date: '2026-11-02',
+          idempotency_key: null,
+        } as never)
+        .execute();
+      await db
+        .insertInto('import_partner_ledger' as never)
+        .values({
+          id: 'l4',
+          tenant_id: 't1',
+          partner_id: 'p1',
+          type: 'DEPOSIT',
+          amount: 10,
+          transaction_date: '2026-11-02',
+          idempotency_key: null,
+        } as never)
+        .execute();
     } finally {
       await db.destroy();
     }
@@ -294,4 +374,7 @@ async function main(): Promise<void> {
   console.log('Import shipment and capital guard tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

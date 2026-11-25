@@ -156,7 +156,7 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
     // STEP 2: SOV / BOQ Engineering Bill of Quantities Breakdown
     // -------------------------------------------------------------------------
     console.log('[STEP 2] Setting up Bill of Quantities (SOV / BOQ Items)...');
-    
+
     // BOQ Item 1: Earthworks
     const boq1 = await contractingService.createBoqItem(auth, String(project.id), {
       itemCode: 'BOQ-01',
@@ -195,8 +195,11 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
 
     const boqItems = await contractingService.getBoqItems(auth, String(project.id));
     assert(boqItems.length === 3, 'Project must have 3 BOQ items');
-    const totalBoqBudget = boqItems.reduce((acc, it) => acc + (Number(it.contractQty) * Number(it.unitPrice)), 0);
-    assert(totalBoqBudget === contractValue, `Total BOQ budget (${totalBoqBudget}) must equal contract value (${contractValue})`);
+    const totalBoqBudget = boqItems.reduce((acc, it) => acc + Number(it.contractQty) * Number(it.unitPrice), 0);
+    assert(
+      totalBoqBudget === contractValue,
+      `Total BOQ budget (${totalBoqBudget}) must equal contract value (${contractValue})`,
+    );
     console.log(`  -> Verified Total BOQ Budget: ${totalBoqBudget} EGP matches Contract Value`);
     console.log('  [PASS] STEP 2 PASSED: SOV / BOQ breakdown established.\n');
 
@@ -214,7 +217,9 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
       issueDate: '2026-01-01',
       expiryDate: '2026-12-31',
     });
-    console.log(`  -> Registered DB Advance Guarantee #${(registeredGuarantee as any).guarantee_number || (registeredGuarantee as any).guaranteeNumber} (Amount: 100,000 EGP)`);
+    console.log(
+      `  -> Registered DB Advance Guarantee #${(registeredGuarantee as any).guarantee_number || (registeredGuarantee as any).guaranteeNumber} (Amount: 100,000 EGP)`,
+    );
 
     const advanceGuarantee: BankGuarantee = {
       id: String(registeredGuarantee.id),
@@ -289,7 +294,10 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
       invoiceDate: '2026-06-01',
       activeGuarantees: [], // No guarantee!
     });
-    assert(blockedInterlock.isBlocked === true, 'Interlocking gate must block IPC when unrecovered advance has no active guarantee');
+    assert(
+      blockedInterlock.isBlocked === true,
+      'Interlocking gate must block IPC when unrecovered advance has no active guarantee',
+    );
     console.log(`  -> Interlocking correctly blocked unbacked subcontractor payment: ${blockedInterlock.blockReason}`);
     console.log('  [PASS] STEP 4 PASSED: Subcontractor guarantee interlocking verified.\n');
 
@@ -325,7 +333,9 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
       consultantNotes: 'معتمد ومطابق للمواصفات الهندسية وأصول الصناعة',
     });
     assert(approvedWir.status === 'approved', 'WIR must be approved');
-    console.log(`  -> Inspected & Approved Work Inspection Request [${(approvedWir as any).wir_number || (approvedWir as any).wirNumber}]`);
+    console.log(
+      `  -> Inspected & Approved Work Inspection Request [${(approvedWir as any).wir_number || (approvedWir as any).wirNumber}]`,
+    );
     console.log('  [PASS] STEP 5 PASSED: Site Daily Log & WIR Inspection recorded.\n');
 
     // -------------------------------------------------------------------------
@@ -388,9 +398,18 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
     // Window factor: (30% - 10%) / (80% - 10%) = 20/70 = 28.5714% of 100,000 = 28,571.43 EGP
     // Retention: 5% of 300,000 = 15,000 EGP
     // Net Payable: 300,000 - 28,571.43 - 15,000 = 256,428.57 EGP
-    assert(Math.abs(Number(ipc1.advance_recovery_amount) - 28_571.43) < 0.05, `Advance recovery must be ~28,571.43, got: ${ipc1.advance_recovery_amount}`);
-    assert(Number(ipc1.retention_held_amount) === 15_000, `Retention held must be 15,000, got: ${ipc1.retention_held_amount}`);
-    assert(Math.abs(Number(ipc1.net_payable) - 256_428.57) < 0.05, `Net payable must be ~256,428.57, got: ${ipc1.net_payable}`);
+    assert(
+      Math.abs(Number(ipc1.advance_recovery_amount) - 28_571.43) < 0.05,
+      `Advance recovery must be ~28,571.43, got: ${ipc1.advance_recovery_amount}`,
+    );
+    assert(
+      Number(ipc1.retention_held_amount) === 15_000,
+      `Retention held must be 15,000, got: ${ipc1.retention_held_amount}`,
+    );
+    assert(
+      Math.abs(Number(ipc1.net_payable) - 256_428.57) < 0.05,
+      `Net payable must be ~256,428.57, got: ${ipc1.net_payable}`,
+    );
     console.log('  -> Verified FIDIC 4-Layer IPC Math:', {
       grossWorkDone: ipc1.gross_work_done_amount,
       advanceRecovery: ipc1.advance_recovery_amount,
@@ -417,9 +436,17 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
 
     const sumDebit1 = journal1Lines.reduce((acc: number, l: any) => acc + Number(l.debit || 0), 0);
     const sumCredit1 = journal1Lines.reduce((acc: number, l: any) => acc + Number(l.credit || 0), 0);
-    assert(Math.abs(sumDebit1 - sumCredit1) < 0.01, `Journal 1 must be perfectly balanced: Debit ${sumDebit1} == Credit ${sumCredit1}`);
-    assert(Math.abs(sumDebit1 - 300_000) < 0.01, `Journal 1 total sum must equal Gross Work Done 300,000, got: ${sumDebit1}`);
-    console.log(`  -> Journal 1 Double-Entry Balance Verified: Debit ${sumDebit1} == Credit ${sumCredit1} (Delta: 0.00)`);
+    assert(
+      Math.abs(sumDebit1 - sumCredit1) < 0.01,
+      `Journal 1 must be perfectly balanced: Debit ${sumDebit1} == Credit ${sumCredit1}`,
+    );
+    assert(
+      Math.abs(sumDebit1 - 300_000) < 0.01,
+      `Journal 1 total sum must equal Gross Work Done 300,000, got: ${sumDebit1}`,
+    );
+    console.log(
+      `  -> Journal 1 Double-Entry Balance Verified: Debit ${sumDebit1} == Credit ${sumCredit1} (Delta: 0.00)`,
+    );
     console.log('  [PASS] STEP 7 PASSED: Client IPC #1 processed, approved and balanced.\n');
 
     // -------------------------------------------------------------------------
@@ -463,8 +490,14 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
 
     console.log(`  -> Created IPC #2: [${ipc2.ipc_number}]`);
     assert(Boolean(ipc2.id), 'IPC #2 ID must exist');
-    assert(Number(ipc2.gross_work_done_amount) === 360_000, `GWD for period must be 360,000, got: ${ipc2.gross_work_done_amount}`);
-    assert(Number(ipc2.cumulative_amount) === 660_000, `Cumulative GWD must be 660,000, got: ${ipc2.cumulative_amount}`);
+    assert(
+      Number(ipc2.gross_work_done_amount) === 360_000,
+      `GWD for period must be 360,000, got: ${ipc2.gross_work_done_amount}`,
+    );
+    assert(
+      Number(ipc2.cumulative_amount) === 660_000,
+      `Cumulative GWD must be 660,000, got: ${ipc2.cumulative_amount}`,
+    );
     assert(Number(ipc2.ld_amount) === 10_000, 'LD penalty amount must match 10,000');
 
     // Approve IPC #2
@@ -485,8 +518,13 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
 
     const sumDebit2 = journal2Lines.reduce((acc: number, l: any) => acc + Number(l.debit || 0), 0);
     const sumCredit2 = journal2Lines.reduce((acc: number, l: any) => acc + Number(l.credit || 0), 0);
-    assert(Math.abs(sumDebit2 - sumCredit2) < 0.01, `Journal 2 must be perfectly balanced: Debit ${sumDebit2} == Credit ${sumCredit2}`);
-    console.log(`  -> Journal 2 Double-Entry Balance Verified: Debit ${sumDebit2} == Credit ${sumCredit2} (Delta: 0.00)`);
+    assert(
+      Math.abs(sumDebit2 - sumCredit2) < 0.01,
+      `Journal 2 must be perfectly balanced: Debit ${sumDebit2} == Credit ${sumCredit2}`,
+    );
+    console.log(
+      `  -> Journal 2 Double-Entry Balance Verified: Debit ${sumDebit2} == Credit ${sumCredit2} (Delta: 0.00)`,
+    );
     console.log('  [PASS] STEP 8 PASSED: Client IPC #2 processed, approved and balanced.\n');
 
     // -------------------------------------------------------------------------
@@ -510,7 +548,9 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
       notes: 'تم الحقن والمعالجة تحت إشراف مهندس ضبط الجودة',
     });
     assert(resolvedSnag.status === 'rectified', 'Snag status must be rectified');
-    console.log(`  -> Rectified Snag Item [${(resolvedSnag as any).item_title || (resolvedSnag as any).itemTitle}]: ${resolvedSnag.notes}`);
+    console.log(
+      `  -> Rectified Snag Item [${(resolvedSnag as any).item_title || (resolvedSnag as any).itemTitle}]: ${resolvedSnag.notes}`,
+    );
     console.log('  [PASS] STEP 9 PASSED: Snag defect management audit passed.\n');
 
     // -------------------------------------------------------------------------
@@ -532,7 +572,9 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
       approvedBy: 'الاستشاري العام للمشروع',
     });
     assert(approvedHandover.status === 'approved', 'Handover must be approved');
-    console.log(`  -> Approved Handover Certificate [${(approvedHandover as any).certificate_ref || (approvedHandover as any).certificateRef}]`);
+    console.log(
+      `  -> Approved Handover Certificate [${(approvedHandover as any).certificate_ref || (approvedHandover as any).certificateRef}]`,
+    );
 
     // Create & Release Retention Record
     const retentionRecord = await contractingService.createRetentionRecord(auth, String(project.id), {
@@ -550,7 +592,9 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
       notes: 'صرف محتجز الضمان بعد اعتماد محضر الاستلام الابتدائي',
     });
     assert(releasedRetention.status === 'fully_released', 'Retention status must be fully_released');
-    console.log(`  -> Released Retention Record #${releasedRetention.id} (Amount: ${releasedRetention.released_amount} EGP)`);
+    console.log(
+      `  -> Released Retention Record #${releasedRetention.id} (Amount: ${releasedRetention.released_amount} EGP)`,
+    );
     console.log('  [PASS] STEP 10 PASSED: Project handover and retention release completed.\n');
 
     // -------------------------------------------------------------------------
@@ -576,7 +620,9 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
       const d = Number(j.total_debit);
       const c = Number(j.total_credit);
       const delta = Math.abs(d - c);
-      console.log(`  -> Journal #${j.entry_no}: Debit ${d.toFixed(2)} EGP == Credit ${c.toFixed(2)} EGP (Discrepancy: ${delta.toFixed(2)})`);
+      console.log(
+        `  -> Journal #${j.entry_no}: Debit ${d.toFixed(2)} EGP == Credit ${c.toFixed(2)} EGP (Discrepancy: ${delta.toFixed(2)})`,
+      );
       assert(delta === 0, `Journal #${j.entry_no} has non-zero discrepancy: ${delta}`);
     }
 
@@ -585,7 +631,6 @@ export async function runContractingConstructionMasterSimulation(): Promise<void
     console.log('========================================================================');
     console.log('  ALL 11 PHASES OF CONTRACTING & CONSTRUCTION PROJECTS PASSED 100%!');
     console.log('========================================================================\n');
-
   } catch (err: any) {
     console.error('[FAIL] CONTRACTING MASTER SIMULATION FAILED:', err?.message || err);
     console.error(err?.stack);

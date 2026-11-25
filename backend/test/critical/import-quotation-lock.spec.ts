@@ -91,10 +91,7 @@ function makeService(db: Kysely<Database>): any {
   return new (ImportSalesService as any)(db, posting);
 }
 
-async function makeQuote(
-  service: any,
-  overrides: Record<string, any> = {},
-): Promise<any> {
+async function makeQuote(service: any, overrides: Record<string, any> = {}): Promise<any> {
   return await service.createQuotation('t1', {
     projectId: 'proj-1',
     supplierId: '1',
@@ -122,10 +119,7 @@ async function expectReject(promise: Promise<any>, code: string): Promise<void> 
     err = e;
   }
   assert.ok(err, `Expected rejection with ${code}`);
-  assert.ok(
-    String(err.message || '').includes(code),
-    `Expected error to include ${code}, got: ${err?.message}`,
-  );
+  assert.ok(String(err.message || '').includes(code), `Expected error to include ${code}, got: ${err?.message}`);
 }
 
 function todayPlus(days: number): string {
@@ -163,10 +157,7 @@ async function main(): Promise<void> {
       const a = await makeQuote(service, { quotationNo: 'Q-A' });
       const b = await makeQuote(service, { quotationNo: 'Q-B' });
       await service.selectQuotation('t1', b.id, {});
-      await expectReject(
-        service.selectQuotation('t1', a.id, {}),
-        'IMPORT_QUOTATION_NOT_SELECTABLE',
-      );
+      await expectReject(service.selectQuotation('t1', a.id, {}), 'IMPORT_QUOTATION_NOT_SELECTABLE');
       assert.equal(await quoteStatus(db, a.id), 'rejected');
       assert.equal(await quoteStatus(db, b.id), 'selected', 'Winner untouched by the failed attempt');
     } finally {
@@ -180,12 +171,13 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const expired = await makeQuote(service, { quotationNo: 'Q-OLD', expiryDate: todayPlus(-1) });
-      await expectReject(
-        service.selectQuotation('t1', expired.id, {}),
-        'IMPORT_QUOTATION_EXPIRED',
-      );
+      await expectReject(service.selectQuotation('t1', expired.id, {}), 'IMPORT_QUOTATION_EXPIRED');
       assert.equal(await quoteStatus(db, expired.id), 'pending', 'Expired quote stays pending');
-      const today = await makeQuote(service, { quotationNo: 'Q-TODAY', expiryDate: todayPlus(0), itemName: 'Turbo Charger' });
+      const today = await makeQuote(service, {
+        quotationNo: 'Q-TODAY',
+        expiryDate: todayPlus(0),
+        itemName: 'Turbo Charger',
+      });
       const ok = await service.selectQuotation('t1', today.id, {});
       assert.equal(ok.status, 'selected', 'Expiry today is still selectable');
     } finally {
@@ -220,34 +212,52 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const seed = async (values: Record<string, any>): Promise<string> => {
-        const row: any = await (db as any).insertInto('import_quotations').values({
-          tenant_id: 't1', project_id: 'proj-1', supplier_id: 1,
-          quotation_no: `Q-${Math.random().toString(36).slice(2, 8)}`,
-          inquiry_date: '2026-01-01', expiry_date: null, incoterm: 'FOB', currency: 'USD',
-          item_name: 'Brake Kit', product_id: null, unit_price_foreign: 100, moq: 1,
-          production_lead_days: 30, port_of_loading: null, estimated_freight_usd: 0,
-          estimated_customs_rate_percent: 5, estimated_landed_cost_egp: 5000,
-          status: 'pending', selection_reason: null, notes: null,
-          ...values,
-        }).returning('id').executeTakeFirstOrThrow();
+        const row: any = await (db as any)
+          .insertInto('import_quotations')
+          .values({
+            tenant_id: 't1',
+            project_id: 'proj-1',
+            supplier_id: 1,
+            quotation_no: `Q-${Math.random().toString(36).slice(2, 8)}`,
+            inquiry_date: '2026-01-01',
+            expiry_date: null,
+            incoterm: 'FOB',
+            currency: 'USD',
+            item_name: 'Brake Kit',
+            product_id: null,
+            unit_price_foreign: 100,
+            moq: 1,
+            production_lead_days: 30,
+            port_of_loading: null,
+            estimated_freight_usd: 0,
+            estimated_customs_rate_percent: 5,
+            estimated_landed_cost_egp: 5000,
+            status: 'pending',
+            selection_reason: null,
+            notes: null,
+            ...values,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
         return String(row.id);
       };
       const winnerId = await seed({
-        status: 'selected', selection_reason: 'Locked decision',
-        created_at: '2026-01-01T00:00:00Z', updated_at: '2026-06-01T00:00:00Z',
+        status: 'selected',
+        selection_reason: 'Locked decision',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-06-01T00:00:00Z',
       });
       const staleId = await seed({
-        created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
       });
-      await expectReject(
-        service.selectQuotation('t1', staleId, {}),
-        'IMPORT_QUOTATION_SELECTION_LOCKED',
-      );
+      await expectReject(service.selectQuotation('t1', staleId, {}), 'IMPORT_QUOTATION_SELECTION_LOCKED');
       assert.equal(await quoteStatus(db, winnerId), 'selected');
       assert.equal(await quoteStatus(db, staleId), 'pending', 'Stale quote stays pending');
 
       const freshId = await seed({
-        created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:00:00Z',
+        created_at: '2026-07-01T00:00:00Z',
+        updated_at: '2026-07-01T00:00:00Z',
       });
       const winner2 = await service.selectQuotation('t1', freshId, {});
       assert.equal(winner2.status, 'selected', 'New-round quotation supersedes');

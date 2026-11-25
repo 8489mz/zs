@@ -52,18 +52,33 @@ const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 const configStub = { get: () => undefined } as never;
 
 const superAdminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec-root', username: 'root', role: 'super_admin',
-  permissions: [], tenantId: 'zs', accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec-root',
+  username: 'root',
+  role: 'super_admin',
+  permissions: [],
+  tenantId: 'zs',
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const tenantAdminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec-admin', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice', 'canManageSettings'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec-admin',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice', 'canManageSettings'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-cashier', username: 'cashier', role: 'cashier',
-  permissions: ['sales', 'cashDrawer'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-cashier',
+  username: 'cashier',
+  role: 'cashier',
+  permissions: ['sales', 'cashDrawer'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -140,55 +155,196 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('tenants').values({
-    id: TENANT, slug: 'van-client', business_name: 'Van Client', status: 'active',
-    activity_type: 'wholesale_van', plan_id: 'plan_basic', extra_features: '[]',
-  }).execute();
+  await anyDb
+    .insertInto('tenants')
+    .values({
+      id: TENANT,
+      slug: 'van-client',
+      business_name: 'Van Client',
+      status: 'active',
+      activity_type: 'wholesale_van',
+      plan_id: 'plan_basic',
+      extra_features: '[]',
+    })
+    .execute();
   // resolveAuthContext refuses an 'active' tenant without an active
   // subscription row (assertTenantLoginAllowed), so seed one.
-  await anyDb.insertInto('tenant_subscriptions').values({
-    tenant_id: TENANT, plan_id: 1, status: 'active', ends_at: '2099-01-01T00:00:00.000Z',
-  }).execute();
+  await anyDb
+    .insertInto('tenant_subscriptions')
+    .values({
+      tenant_id: TENANT,
+      plan_id: 1,
+      status: 'active',
+      ends_at: '2099-01-01T00:00:00.000Z',
+    })
+    .execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, username: 'admin', display_name: 'Admin', role: 'admin', permissions_json: '["sales","canEditPrice","canManageSettings"]', password_hash: '', password_salt: '', must_change_password: false, is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, username: 'cashier', display_name: 'Cashier', role: 'cashier', permissions_json: '["sales","cashDrawer"]', password_hash: '', password_salt: '', must_change_password: false, is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 11, tenant_id: TENANT, account_id: ACCOUNT, username: 'rep-11', display_name: 'Rep 11', role: 'cashier', permissions_json: '[]', password_hash: '', password_salt: '', must_change_password: false, is_active: true }).execute();
-  await anyDb.insertInto('sessions').values({ id: 'sess-admin', user_id: 1, tenant_id: TENANT, account_id: ACCOUNT, expires_at: '2099-01-01T00:00:00.000Z' }).execute();
-  await anyDb.insertInto('sessions').values({ id: 'sess-cashier', user_id: 2, tenant_id: TENANT, account_id: ACCOUNT, expires_at: '2099-01-01T00:00:00.000Z' }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      username: 'admin',
+      display_name: 'Admin',
+      role: 'admin',
+      permissions_json: '["sales","canEditPrice","canManageSettings"]',
+      password_hash: '',
+      password_salt: '',
+      must_change_password: false,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      username: 'cashier',
+      display_name: 'Cashier',
+      role: 'cashier',
+      permissions_json: '["sales","cashDrawer"]',
+      password_hash: '',
+      password_salt: '',
+      must_change_password: false,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 11,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      username: 'rep-11',
+      display_name: 'Rep 11',
+      role: 'cashier',
+      permissions_json: '[]',
+      password_hash: '',
+      password_salt: '',
+      must_change_password: false,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('sessions')
+    .values({
+      id: 'sess-admin',
+      user_id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      expires_at: '2099-01-01T00:00:00.000Z',
+    })
+    .execute();
+  await anyDb
+    .insertInto('sessions')
+    .values({
+      id: 'sess-cashier',
+      user_id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      expires_at: '2099-01-01T00:00:00.000Z',
+    })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
 interface Services {
@@ -219,14 +375,31 @@ function buildServices(db: Kysely<Database>): Services {
   const planFeatures = new PlanFeatureService(db);
   const returnsStub = {};
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const session = new SessionService(db, configStub, audit, authCache);
   const settings = new SettingsService(db, audit, authCache);
   const provisioning = new TrialTenantProvisioningService(db);
-  const saasAdmin = new SaasAdminService(db, audit, provisioning, configStub, session, {} as never, settings, authCache);
+  const saasAdmin = new SaasAdminService(
+    db,
+    audit,
+    provisioning,
+    configStub,
+    session,
+    {} as never,
+    settings,
+    authCache,
+  );
   const guard = new PermissionsGuard(new Reflector(), new PermissionService(), planFeatures, configStub);
   const postingStub = {
     postSale: async () => undefined,
@@ -235,7 +408,11 @@ function buildServices(db: Kysely<Database>): Services {
   };
   const van = new VanSalesService(db, {} as never, {} as never, postingStub as never);
   (van as any).resolveSystemAuthContext = async () => ({ userId: 1, sessionId: 'spec', username: 'spec' });
-  (van as any).tripLifecycle.resolveSystemAuthContext = async () => ({ userId: 1, sessionId: 'spec', username: 'spec' });
+  (van as any).tripLifecycle.resolveSystemAuthContext = async () => ({
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+  });
   return { sales, drawer, posting, planFeatures, session, settings, saasAdmin, guard, van };
 }
 
@@ -263,31 +440,49 @@ async function expectForbidden(fn: () => unknown): Promise<void> {
 function posPayload(): any {
   return {
     items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
-    payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
-    branchId: 1, locationId: 10, source: 'pos',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
+    payments: [{ paymentChannel: 'cash', amount: 100 }],
+    tenderedAmount: 100,
+    branchId: 1,
+    locationId: 10,
+    source: 'pos',
   };
 }
 
 async function settingValue(db: Kysely<Database>, key: string): Promise<string | null> {
-  const row = await (db as any).selectFrom('settings').select('value')
-    .where('tenant_id', '=', TENANT).where('key', '=', key).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('settings')
+    .select('value')
+    .where('tenant_id', '=', TENANT)
+    .where('key', '=', key)
+    .executeTakeFirst();
   return row ? String(row.value) : null;
 }
 
 async function settingBool(db: Kysely<Database>, key: string): Promise<boolean | null> {
   const raw = await settingValue(db, key);
   if (raw === null) return null;
-  try { return JSON.parse(raw) === true; } catch { return raw === 'true'; }
+  try {
+    return JSON.parse(raw) === true;
+  } catch {
+    return raw === 'true';
+  }
 }
 
 async function grantPos(db: Kysely<Database>, svc: Services): Promise<void> {
-  await svc.saasAdmin.updateTenantPlan(TENANT, {
-    featureOverrides: [
-      { featureCode: 'pos', granted: true, reason: 'wholesale client sells retail from warehouse' },
-      { featureCode: 'cashDrawer', granted: true, reason: 'wholesale client sells retail from warehouse' },
-    ],
-  }, superAdminAuth);
+  await svc.saasAdmin.updateTenantPlan(
+    TENANT,
+    {
+      featureOverrides: [
+        { featureCode: 'pos', granted: true, reason: 'wholesale client sells retail from warehouse' },
+        { featureCode: 'cashDrawer', granted: true, reason: 'wholesale client sells retail from warehouse' },
+      ],
+    },
+    superAdminAuth,
+  );
 }
 
 async function resolveAdminAuth(svc: Services): Promise<AuthContext> {
@@ -299,7 +494,9 @@ async function resolveAdminAuth(svc: Services): Promise<AuthContext> {
 @RequireFeature('cashDrawer')
 class DrawerEndpoint {
   @RequirePermissions('cashDrawer')
-  list(): boolean { return true; }
+  list(): boolean {
+    return true;
+  }
 }
 
 function guardContext(auth: AuthContext): any {
@@ -330,8 +527,14 @@ async function main(): Promise<void> {
     assert.equal(svc.planFeatures.hasFeature('plan_basic', [], 'vanSales', 'commerce', 'wholesale_van'), true);
     assert.equal(svc.planFeatures.hasFeature('plan_basic', [], 'deliveryReps', 'commerce', 'wholesale_van'), true);
     const features = resolvePillarScopedFeatures('wholesale_van', [], []);
-    assert.ok(!features.includes('pos') && !features.includes('cashDrawer'), 'tenant.features must not contain pos/cashDrawer');
-    assert.ok(features.includes('vanSales') && features.includes('deliveryReps'), 'tenant.features must keep the van suite');
+    assert.ok(
+      !features.includes('pos') && !features.includes('cashDrawer'),
+      'tenant.features must not contain pos/cashDrawer',
+    );
+    assert.ok(
+      features.includes('vanSales') && features.includes('deliveryReps'),
+      'tenant.features must keep the van suite',
+    );
     const settings: any = await svc.settings.getSettings(tenantAdminAuth);
     assert.equal(settings.posModuleEnabled, false, 'POS off by default on wholesale_van');
     assert.equal(settings.requireCashierShiftForSales, false, 'shift gate off by default on wholesale_van');
@@ -350,35 +553,70 @@ async function main(): Promise<void> {
   // writes the module switches, one audit event per feature.
   await freshCase(async (db, svc) => {
     await grantPos(db, svc);
-    const rows = await (db as any).selectFrom('tenant_feature_overrides').selectAll().where('tenant_id', '=', TENANT).execute();
+    const rows = await (db as any)
+      .selectFrom('tenant_feature_overrides')
+      .selectAll()
+      .where('tenant_id', '=', TENANT)
+      .execute();
     assert.equal(rows.length, 2, 'two override rows stored');
-    assert.deepEqual(
-      rows.map((r: any) => [String(r.feature_code), Boolean(r.granted)]).sort(),
-      [['cashDrawer', true], ['pos', true]],
-    );
-    const auditRows = await (db as any).selectFrom('audit_logs').select('event_code').where('event_code', '=', 'SAAS_TENANT_FEATURE_OVERRIDE').execute();
+    assert.deepEqual(rows.map((r: any) => [String(r.feature_code), Boolean(r.granted)]).sort(), [
+      ['cashDrawer', true],
+      ['pos', true],
+    ]);
+    const auditRows = await (db as any)
+      .selectFrom('audit_logs')
+      .select('event_code')
+      .where('event_code', '=', 'SAAS_TENANT_FEATURE_OVERRIDE')
+      .execute();
     assert.equal(auditRows.length, 2, 'one audit event per granted feature');
     assert.equal(await settingBool(db, 'posModuleEnabled'), true, 'sync wrote posModuleEnabled=true');
-    assert.equal(await settingBool(db, 'requireCashierShiftForSales'), true, 'sync wrote requireCashierShiftForSales=true');
+    assert.equal(
+      await settingBool(db, 'requireCashierShiftForSales'),
+      true,
+      'sync wrote requireCashierShiftForSales=true',
+    );
     const settings: any = await svc.settings.getSettings(tenantAdminAuth);
     assert.equal(settings.posModuleEnabled, true, 'getSettings reports POS on');
     assert.equal(settings.requireCashierShiftForSales, true, 'getSettings reports the shift gate on');
     assert.equal(settings.posGrantedByOverride, true, 'computed override flag is true');
     const adminAuth = await resolveAdminAuth(svc);
-    assert.deepEqual(adminAuth.featureOverrides, { pos: true, cashDrawer: true }, 'resolved auth carries the overrides');
-    assert.equal(svc.planFeatures.hasFeature('plan_basic', [], 'pos', adminAuth.pillar, adminAuth.activityType, adminAuth.featureOverrides), true);
+    assert.deepEqual(
+      adminAuth.featureOverrides,
+      { pos: true, cashDrawer: true },
+      'resolved auth carries the overrides',
+    );
+    assert.equal(
+      svc.planFeatures.hasFeature(
+        'plan_basic',
+        [],
+        'pos',
+        adminAuth.pillar,
+        adminAuth.activityType,
+        adminAuth.featureOverrides,
+      ),
+      true,
+    );
     const me: any = await svc.session.buildMePayload(adminAuth);
     assert.ok((me.tenant.features as string[]).includes('pos'), 'tenant.features contains pos');
     assert.ok((me.tenant.features as string[]).includes('cashDrawer'), 'tenant.features contains cashDrawer');
     assert.ok((me.tenant.features as string[]).includes('vanSales'), 'tenant.features keeps vanSales');
     const cashier = await svc.session.resolveAuthContext('sess-cashier');
     assert.ok(cashier, 'cashier auth resolves');
-    assert.deepEqual(cashier!.featureOverrides, { pos: true, cashDrawer: true }, 'cashier auth carries the overrides too');
+    assert.deepEqual(
+      cashier!.featureOverrides,
+      { pos: true, cashDrawer: true },
+      'cashier auth carries the overrides too',
+    );
     assert.equal(svc.guard.canActivate(guardContext(cashier!)), true, 'guard allows the drawer when granted');
     const detail: any = await svc.saasAdmin.getTenantById(TENANT, superAdminAuth);
     assert.deepEqual(
-      (detail.tenant.featureOverrides as Array<{ featureCode: string; granted: boolean }>).map((o) => [o.featureCode, o.granted]).sort(),
-      [['cashDrawer', true], ['pos', true]],
+      (detail.tenant.featureOverrides as Array<{ featureCode: string; granted: boolean }>)
+        .map((o) => [o.featureCode, o.granted])
+        .sort(),
+      [
+        ['cashDrawer', true],
+        ['pos', true],
+      ],
       'getTenantById returns the current overrides for the modal',
     );
   });
@@ -388,9 +626,13 @@ async function main(): Promise<void> {
   // holding the cashDrawer permission, and the POS sale is refused before
   // any branch/stock validation (no sale row, stock untouched).
   await freshCase(async (db, svc) => {
-    await svc.saasAdmin.updateTenantPlan(TENANT, {
-      featureOverrides: [{ featureCode: 'cashDrawer', granted: false, reason: 'hide the drawer' }],
-    }, superAdminAuth);
+    await svc.saasAdmin.updateTenantPlan(
+      TENANT,
+      {
+        featureOverrides: [{ featureCode: 'cashDrawer', granted: false, reason: 'hide the drawer' }],
+      },
+      superAdminAuth,
+    );
     const cashier = await svc.session.resolveAuthContext('sess-cashier');
     assert.ok(cashier, 'cashier auth resolves');
     assert.equal(cashier!.permissions.includes('cashDrawer'), true, 'cashier holds the permission');
@@ -398,7 +640,11 @@ async function main(): Promise<void> {
     const adminAuth = await resolveAdminAuth(svc);
     await expectCode(svc.sales.createSale(posPayload(), adminAuth), 'POS_FEATURE_NOT_AVAILABLE');
     assert.equal((await (db as any).selectFrom('sales').select('id').execute()).length, 0, 'no sale row written');
-    const stock = await (db as any).selectFrom('product_location_stock').select('qty').where('product_id', '=', 101).executeTakeFirstOrThrow();
+    const stock = await (db as any)
+      .selectFrom('product_location_stock')
+      .select('qty')
+      .where('product_id', '=', 101)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(stock.qty), 100, 'stock untouched');
   });
   console.log('  3. hide refuses guard + POS sale, nothing written — passed');
@@ -421,17 +667,29 @@ async function main(): Promise<void> {
     const created: any = await svc.sales.createSale(posPayload(), adminAuth);
     const saleId = Number(created?.sale?.id);
     assert.ok(saleId > 0, 'POS sale must post');
-    const sale = await (db as any).selectFrom('sales').select(['total', 'branch_id', 'location_id', 'van_trip_id', 'delivery_rep_id', 'status'])
-      .where('id', '=', saleId).executeTakeFirstOrThrow();
+    const sale = await (db as any)
+      .selectFrom('sales')
+      .select(['total', 'branch_id', 'location_id', 'van_trip_id', 'delivery_rep_id', 'status'])
+      .where('id', '=', saleId)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(sale.total), 100, 'sale total 100');
     assert.equal(Number(sale.branch_id), 1, 'sale on the warehouse branch');
     assert.equal(Number(sale.location_id), 10, 'sale from the warehouse location');
     assert.equal(sale.van_trip_id, null, 'POS sale carries no trip');
     assert.equal(sale.delivery_rep_id, null, 'POS sale carries no rep');
     assert.equal(String(sale.status), 'posted', 'sale posted');
-    const stock = await (db as any).selectFrom('product_location_stock').select('qty').where('product_id', '=', 101).where('location_id', '=', 10).executeTakeFirstOrThrow();
+    const stock = await (db as any)
+      .selectFrom('product_location_stock')
+      .select('qty')
+      .where('product_id', '=', 101)
+      .where('location_id', '=', 10)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(stock.qty), 99, 'warehouse stock deducted by 1');
-    const legs = await (db as any).selectFrom('sale_payments').select(['payment_channel', 'amount']).where('sale_id', '=', saleId).execute();
+    const legs = await (db as any)
+      .selectFrom('sale_payments')
+      .select(['payment_channel', 'amount'])
+      .where('sale_id', '=', saleId)
+      .execute();
     assert.equal(legs.length, 1, 'one payment leg');
     assert.equal(String(legs[0].payment_channel), 'cash', 'cash leg');
     assert.equal(Number(legs[0].amount), 100, 'leg amount 100');
@@ -462,7 +720,11 @@ async function main(): Promise<void> {
     assert.equal(settings.posModuleEnabled, true, 'POS on after the activity change');
     assert.equal(settings.requireCashierShiftForSales, true, 'shift gate on after the activity change');
     assert.equal(await settingBool(db, 'posModuleEnabled'), true, 'raw row still true after the activity change');
-    const tenant = await (db as any).selectFrom('tenants').select('activity_type').where('id', '=', TENANT).executeTakeFirstOrThrow();
+    const tenant = await (db as any)
+      .selectFrom('tenants')
+      .select('activity_type')
+      .where('id', '=', TENANT)
+      .executeTakeFirstOrThrow();
     assert.equal(String(tenant.activity_type), 'wholesale_van', 'activity stayed wholesale_van');
   });
   console.log('  7. grant survives activity change — passed');
@@ -471,10 +733,24 @@ async function main(): Promise<void> {
   // the removal is audited.
   await freshCase(async (db, svc) => {
     await grantPos(db, svc);
-    await svc.saasAdmin.updateTenantPlan(TENANT, {
-      featureOverrides: [{ featureCode: 'pos', granted: null }],
-    }, superAdminAuth);
-    assert.equal((await (db as any).selectFrom('tenant_feature_overrides').select('id').where('feature_code', '=', 'pos').execute()).length, 0, 'override row removed');
+    await svc.saasAdmin.updateTenantPlan(
+      TENANT,
+      {
+        featureOverrides: [{ featureCode: 'pos', granted: null }],
+      },
+      superAdminAuth,
+    );
+    assert.equal(
+      (
+        await (db as any)
+          .selectFrom('tenant_feature_overrides')
+          .select('id')
+          .where('feature_code', '=', 'pos')
+          .execute()
+      ).length,
+      0,
+      'override row removed',
+    );
     const settings: any = await svc.settings.getSettings(tenantAdminAuth);
     assert.equal(settings.posModuleEnabled, false, 'POS off after revoke');
     assert.equal(settings.requireCashierShiftForSales, false, 'shift gate off after revoke');
@@ -482,8 +758,11 @@ async function main(): Promise<void> {
     assert.equal(await settingBool(db, 'posModuleEnabled'), false, 'sync wrote posModuleEnabled=false on revoke');
     const adminAuth = await resolveAdminAuth(svc);
     await expectCode(svc.sales.createSale(posPayload(), adminAuth), 'POS_FEATURE_NOT_AVAILABLE');
-    const removals = await (db as any).selectFrom('audit_logs').select('event_code')
-      .where('event_code', '=', 'SAAS_TENANT_FEATURE_OVERRIDE').execute();
+    const removals = await (db as any)
+      .selectFrom('audit_logs')
+      .select('event_code')
+      .where('event_code', '=', 'SAAS_TENANT_FEATURE_OVERRIDE')
+      .execute();
     assert.equal(removals.length, 3, 'grant x2 + removal audited');
   });
   console.log('  8. revoke restores the wholesale_van default — passed');
@@ -495,26 +774,58 @@ async function main(): Promise<void> {
   await freshCase(async (db, svc) => {
     await grantPos(db, svc);
     await seedShift(db, 1, 1);
-    await (db as any).insertInto('delivery_representatives').values({ id: 11, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 11', is_van_rep: true }).execute();
-    await (db as any).insertInto('products').values({
-      id: 205, tenant_id: TENANT, account_id: ACCOUNT, name: 'Product 205',
-      stock_qty: 20, cost_price: 10, retail_price: 100, wholesale_price: 90,
-      credit_price: 100, consumer_price: 100, is_active: true,
-    }).execute();
-    await (db as any).insertInto('product_location_stock').values({
-      tenant_id: TENANT, account_id: ACCOUNT, product_id: 205, location_id: 10, qty: 20,
-    }).execute();
-    const trip = await svc.van.openTripAndLoad(11, TENANT, ACCOUNT, { sourceWarehouseId: 10, items: [{ productId: 205, qty: 12 }] });
+    await (db as any)
+      .insertInto('delivery_representatives')
+      .values({ id: 11, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 11', is_van_rep: true })
+      .execute();
+    await (db as any)
+      .insertInto('products')
+      .values({
+        id: 205,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Product 205',
+        stock_qty: 20,
+        cost_price: 10,
+        retail_price: 100,
+        wholesale_price: 90,
+        credit_price: 100,
+        consumer_price: 100,
+        is_active: true,
+      })
+      .execute();
+    await (db as any)
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        product_id: 205,
+        location_id: 10,
+        qty: 20,
+      })
+      .execute();
+    const trip = await svc.van.openTripAndLoad(11, TENANT, ACCOUNT, {
+      sourceWarehouseId: 10,
+      items: [{ productId: 205, qty: 12 }],
+    });
     const vanSale = await svc.van.executeFieldSale(11, TENANT, ACCOUNT, {
       tripId: trip.tripId,
       paymentMethod: 'cash',
       items: [{ productId: 205, qty: 4, unitPrice: 100, unitName: 'قطعة', unitMultiplier: 1 }],
     });
     assert.ok(Number(vanSale.saleId) > 0, 'van field sale posts');
-    const tripRow = await (db as any).selectFrom('van_sales_trips').select(['cash_collected', 'sales_amount']).where('id', '=', trip.tripId).executeTakeFirstOrThrow();
+    const tripRow = await (db as any)
+      .selectFrom('van_sales_trips')
+      .select(['cash_collected', 'sales_amount'])
+      .where('id', '=', trip.tripId)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(tripRow.cash_collected), 400, 'trip collected the 400 van cash');
     assert.equal(Number(tripRow.sales_amount), 400, 'trip sales 400');
-    const vanSaleRow = await (db as any).selectFrom('sales').select(['van_trip_id', 'delivery_rep_id']).where('id', '=', vanSale.saleId).executeTakeFirstOrThrow();
+    const vanSaleRow = await (db as any)
+      .selectFrom('sales')
+      .select(['van_trip_id', 'delivery_rep_id'])
+      .where('id', '=', vanSale.saleId)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(vanSaleRow.van_trip_id), Number(trip.tripId), 'van sale linked to its trip');
     assert.equal(Number(vanSaleRow.delivery_rep_id), 11, 'van sale linked to its rep');
     // The van cash lives ONLY in the trip totals — a cash field sale
@@ -523,23 +834,54 @@ async function main(): Promise<void> {
     // sale_payments leg and NO customer_payments row, so neither the
     // shift's sales breakdown nor its customer-collections computation
     // can ever see it.
-    const vanSaleRow2 = await (db as any).selectFrom('sales').select(['total', 'paid_amount']).where('id', '=', vanSale.saleId).executeTakeFirstOrThrow();
+    const vanSaleRow2 = await (db as any)
+      .selectFrom('sales')
+      .select(['total', 'paid_amount'])
+      .where('id', '=', vanSale.saleId)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(vanSaleRow2.total), 400, 'van sale total 400');
     assert.equal(Number(vanSaleRow2.paid_amount), 0, 'van sale paid_amount 0 — cash is trip-held, not sale-paid');
-    assert.equal((await (db as any).selectFrom('sale_payments').select('id').where('sale_id', '=', vanSale.saleId).execute()).length, 0, 'no sale_payments leg from a cash field sale');
-    assert.equal((await (db as any).selectFrom('customer_payments').select('id').execute()).length, 0, 'no customer_payments row from a cash field sale');
+    assert.equal(
+      (await (db as any).selectFrom('sale_payments').select('id').where('sale_id', '=', vanSale.saleId).execute())
+        .length,
+      0,
+      'no sale_payments leg from a cash field sale',
+    );
+    assert.equal(
+      (await (db as any).selectFrom('customer_payments').select('id').execute()).length,
+      0,
+      'no customer_payments row from a cash field sale',
+    );
 
     const adminAuth = await resolveAdminAuth(svc);
     const created: any = await svc.sales.createSale(posPayload(), adminAuth);
     assert.ok(Number(created?.sale?.id) > 0, 'POS sale posts on the same tenant');
-    assert.equal((await (db as any).selectFrom('cashier_shifts').select('id').execute()).length, 1, 'van flow created no drawer row');
-    assert.equal((await (db as any).selectFrom('treasury_transactions').select('id').where('reference_type', '=', 'van_trip').execute()).length, 0, 'no treasury row references a trip');
+    assert.equal(
+      (await (db as any).selectFrom('cashier_shifts').select('id').execute()).length,
+      1,
+      'van flow created no drawer row',
+    );
+    assert.equal(
+      (
+        await (db as any)
+          .selectFrom('treasury_transactions')
+          .select('id')
+          .where('reference_type', '=', 'van_trip')
+          .execute()
+      ).length,
+      0,
+      'no treasury row references a trip',
+    );
     // The close itself needs the closer's password (drawer rule: money-out
     // is password-gated); the seeded manager PIN satisfies it via the
     // manager-PIN fallback in assertCurrentUserPassword.
     const closed: any = await svc.drawer.closeCashierShift(1, { countedCash: 100, managerPin: '1234' }, adminAuth);
     assert.equal(closed.ok, true, 'shift close succeeds');
-    const shiftRow = await (db as any).selectFrom('cashier_shifts').select(['status', 'expected_cash', 'counted_cash', 'variance']).where('id', '=', 1).executeTakeFirstOrThrow();
+    const shiftRow = await (db as any)
+      .selectFrom('cashier_shifts')
+      .select(['status', 'expected_cash', 'counted_cash', 'variance'])
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow();
     assert.equal(String(shiftRow.status), 'closed', 'shift closed');
     assert.equal(Number(shiftRow.expected_cash), 100, 'shift expects exactly the 100 POS cash');
     assert.equal(Number(shiftRow.counted_cash), 100, 'counted 100');
@@ -551,16 +893,29 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale/load-sale-context.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/create-sale/load-sale-context.ts'),
+      'utf8',
+    );
     assert.ok(serviceSource.includes('POS_FEATURE_NOT_AVAILABLE'), 'create-sale carries the POS feature gate');
-    const guardSource = readFileSync(resolve(__dirname, '../../src/modules/cash-drawer/cash-drawer.controller.ts'), 'utf8');
+    const guardSource = readFileSync(
+      resolve(__dirname, '../../src/modules/cash-drawer/cash-drawer.controller.ts'),
+      'utf8',
+    );
     assert.ok(guardSource.includes("@RequireFeature('cashDrawer')"), 'drawer controller declares the feature gate');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('- INV-VAN-GENERAL-FEATURE-OVERRIDES ').length - 1, 1, 'invariant entry exists exactly once');
+    assert.equal(
+      invariants.split('- INV-VAN-GENERAL-FEATURE-OVERRIDES ').length - 1,
+      1,
+      'invariant entry exists exactly once',
+    );
   }
   console.log('  10. source + invariant pins passed');
 
   console.log('van-general-feature-overrides: OK');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

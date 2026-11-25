@@ -41,7 +41,10 @@ import { TransactionHelper } from '../../src/database/helpers/transaction.helper
 async function main() {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
@@ -100,8 +103,15 @@ async function main() {
     // Full aggregation: 100.123 opening + 25.125 net = 125.248 exactly.
     // The old computation produced 125.25 (100.12 + 30.13 - 5.00).
     const shift1 = {
-      id: 1, tenant_id: 't1', branch_id: null, location_id: null, opened_by: 1,
-      opening_cash: 100.123, created_at: new Date('2026-10-01T00:00:00.000Z'), closed_at: null, status: 'open',
+      id: 1,
+      tenant_id: 't1',
+      branch_id: null,
+      location_id: null,
+      opened_by: 1,
+      opening_cash: 100.123,
+      created_at: new Date('2026-10-01T00:00:00.000Z'),
+      closed_at: null,
+      status: 'open',
     };
     const expected1 = await (drawer as any).computeShiftExpectedCashFromShift(shift1, auth);
     assert.equal(expected1, 125.248);
@@ -109,8 +119,15 @@ async function main() {
     // Opening-only path (no opener, no movements): 50.005 survives whole.
     // The old computation produced 50.00.
     const shift2 = {
-      id: 2, tenant_id: 't1', branch_id: null, location_id: null, opened_by: 0,
-      opening_cash: 50.005, created_at: new Date('2026-10-01T00:00:00.000Z'), closed_at: null, status: 'open',
+      id: 2,
+      tenant_id: 't1',
+      branch_id: null,
+      location_id: null,
+      opened_by: 0,
+      opening_cash: 50.005,
+      created_at: new Date('2026-10-01T00:00:00.000Z'),
+      closed_at: null,
+      status: 'open',
     };
     const expected2 = await (drawer as any).computeShiftExpectedCashFromShift(shift2, auth);
     assert.equal(expected2, 50.005);
@@ -121,4 +138,7 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

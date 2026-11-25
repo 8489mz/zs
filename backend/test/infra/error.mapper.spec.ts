@@ -52,7 +52,8 @@ function run(): void {
   });
   assert.equal(duplicate.getStatus(), 409);
   assert.deepEqual(duplicate.getResponse(), {
-    message: '\u0631\u0642\u0645 \u0627\u0644\u0645\u0648\u0638\u0641 \u0645\u0633\u062a\u062e\u062f\u0645 \u0628\u0627\u0644\u0641\u0639\u0644.',
+    message:
+      '\u0631\u0642\u0645 \u0627\u0644\u0645\u0648\u0638\u0641 \u0645\u0633\u062a\u062e\u062f\u0645 \u0628\u0627\u0644\u0641\u0639\u0644.',
     code: 'DUPLICATE_EMPLOYEE_NO',
     details: { constraint: 'hr_employees_employee_no_key', source: 'hr_employees_employee_no_key' },
   });
@@ -63,7 +64,8 @@ function run(): void {
   });
   assert.equal(fk.getStatus(), 409);
   assert.deepEqual(fk.getResponse(), {
-    message: '\u0644\u0627 \u064a\u0645\u0643\u0646 \u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u0639\u0645\u0644\u064a\u0629 \u0644\u0623\u0646 \u0647\u0646\u0627\u0643 \u0628\u064a\u0627\u0646\u0627\u062a \u0645\u0631\u062a\u0628\u0637\u0629 \u0628\u0647\u0627.',
+    message:
+      '\u0644\u0627 \u064a\u0645\u0643\u0646 \u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u0639\u0645\u0644\u064a\u0629 \u0644\u0623\u0646 \u0647\u0646\u0627\u0643 \u0628\u064a\u0627\u0646\u0627\u062a \u0645\u0631\u062a\u0628\u0637\u0629 \u0628\u0647\u0627.',
     code: 'DB_FOREIGN_KEY_VIOLATION',
     details: null,
   });

@@ -14,12 +14,12 @@ function computeInstallmentSchedule(totalWithInterest: number, installmentCount:
 }
 
 const testCases = [
-  { total: 1000.00, count: 3 },
-  { total: 100.10, count: 3 },
+  { total: 1000.0, count: 3 },
+  { total: 100.1, count: 3 },
   { total: 100.05, count: 7 },
   { total: 4999.99, count: 12 },
   { total: 12345.67, count: 36 },
-  { total: 0.10, count: 3 },
+  { total: 0.1, count: 3 },
 ];
 
 for (const tc of testCases) {

@@ -83,52 +83,307 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seed(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('settings').values([
-    { tenant_id: TENANT, key: 'currency', value: 'EGP' },
-    { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
-  ]).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values([
-    { id: 2, tenant_id: TENANT, username: 'sup', role: 'admin', display_name: 'Admin', is_active: true },
-    { id: 3, tenant_id: TENANT, username: 'cashier', role: 'cashier', display_name: 'Cashier', is_active: true },
-    { id: 11, tenant_id: TENANT, username: 'vanrep1', role: 'cashier', display_name: 'مندوب تجربة 1', is_active: true },
-  ]).execute();
-  await anyDb.insertInto('products').values([
-    { id: 100, tenant_id: TENANT, account_id: ACCOUNT, name: 'صنف اختبار جمله ب', cost_price: 15, retail_price: 50, is_active: true },
-    { id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'صنف اختبار جمله ج', cost_price: 5, retail_price: 35, is_active: true },
-  ]).execute();
-  await anyDb.insertInto('delivery_representatives').values([
-    { id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مندوب تجربة 1', phone: null, van_location_id: null, is_van_rep: true, is_active: true, rep_type: 'van_sales' },
-    { id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'مندوب تجربة 2', phone: null, van_location_id: null, is_van_rep: true, is_active: true, rep_type: 'van_sales' },
-  ]).execute();
-  await anyDb.insertInto('delivery_rep_targets').values({ tenant_id: TENANT, rep_id: 1, period_month: '2026-11', target_amount: 1000, collection_target: null, visits_target: null }).execute();
+  await anyDb
+    .insertInto('settings')
+    .values([
+      { tenant_id: TENANT, key: 'currency', value: 'EGP' },
+      { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values([
+      { id: 2, tenant_id: TENANT, username: 'sup', role: 'admin', display_name: 'Admin', is_active: true },
+      { id: 3, tenant_id: TENANT, username: 'cashier', role: 'cashier', display_name: 'Cashier', is_active: true },
+      {
+        id: 11,
+        tenant_id: TENANT,
+        username: 'vanrep1',
+        role: 'cashier',
+        display_name: 'مندوب تجربة 1',
+        is_active: true,
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values([
+      {
+        id: 100,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'صنف اختبار جمله ب',
+        cost_price: 15,
+        retail_price: 50,
+        is_active: true,
+      },
+      {
+        id: 101,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'صنف اختبار جمله ج',
+        cost_price: 5,
+        retail_price: 35,
+        is_active: true,
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values([
+      {
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'مندوب تجربة 1',
+        phone: null,
+        van_location_id: null,
+        is_van_rep: true,
+        is_active: true,
+        rep_type: 'van_sales',
+      },
+      {
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'مندوب تجربة 2',
+        phone: null,
+        van_location_id: null,
+        is_van_rep: true,
+        is_active: true,
+        rep_type: 'van_sales',
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('delivery_rep_targets')
+    .values({
+      tenant_id: TENANT,
+      rep_id: 1,
+      period_month: '2026-11',
+      target_amount: 1000,
+      collection_target: null,
+      visits_target: null,
+    })
+    .execute();
   const at = (h: string) => `${DAY}T${h}+02:00`;
   // S1 full-price (rep NULL) · S2 invoice discount (rep 1) · S3 line
   // discount only (rep 1) · S4 one carton of 12 (rep NULL) · S5 other user.
-  await anyDb.insertInto('sales').values([
-    { id: 101, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'S-101', total: 100, subtotal: 100, discount: 0, tax_amount: 0, status: 'posted', created_by: 11, delivery_rep_id: null, created_at: at('10:00:00') },
-    { id: 102, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'S-102', total: 180, subtotal: 200, discount: 20, tax_amount: 0, status: 'posted', created_by: 11, delivery_rep_id: 1, created_at: at('11:00:00') },
-    { id: 103, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'S-103', total: 90, subtotal: 105, discount: 0, tax_amount: 0, status: 'posted', created_by: 11, delivery_rep_id: 1, created_at: at('12:00:00') },
-    { id: 104, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'S-104', total: 288, subtotal: 288, discount: 0, tax_amount: 0, status: 'posted', created_by: 11, delivery_rep_id: null, created_at: at('13:00:00') },
-    { id: 105, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'S-105', total: 50, subtotal: 50, discount: 0, tax_amount: 0, status: 'posted', created_by: 3, delivery_rep_id: null, created_at: at('14:00:00') },
-  ]).execute();
-  await anyDb.insertInto('sale_items').values([
-    { id: 1001, sale_id: 101, product_id: 100, product_name: 'صنف اختبار جمله ب', qty: 2, unit_price: 50, line_total: 100, line_discount: 0, cost_price: 15, unit_multiplier: 1, tenant_id: TENANT, account_id: ACCOUNT },
-    { id: 1002, sale_id: 102, product_id: 100, product_name: 'صنف اختبار جمله ب', qty: 4, unit_price: 50, line_total: 180, line_discount: 0, cost_price: 15, unit_multiplier: 1, tenant_id: TENANT, account_id: ACCOUNT },
-    { id: 1003, sale_id: 103, product_id: 101, product_name: 'صنف اختبار جمله ج', qty: 3, unit_price: 35, line_total: 90, line_discount: 15, cost_price: 5, unit_multiplier: 1, tenant_id: TENANT, account_id: ACCOUNT },
-    { id: 1004, sale_id: 104, product_id: 100, product_name: 'صنف اختبار جمله ب', qty: 1, unit_price: 288, line_total: 288, line_discount: 0, cost_price: 180, unit_multiplier: 12, unit_name: 'كرتونة', tenant_id: TENANT, account_id: ACCOUNT },
-    { id: 1005, sale_id: 105, product_id: 101, product_name: 'صنف اختبار جمله ج', qty: 1, unit_price: 50, line_total: 50, line_discount: 0, cost_price: 5, unit_multiplier: 1, tenant_id: TENANT, account_id: ACCOUNT },
-  ]).execute();
+  await anyDb
+    .insertInto('sales')
+    .values([
+      {
+        id: 101,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'S-101',
+        total: 100,
+        subtotal: 100,
+        discount: 0,
+        tax_amount: 0,
+        status: 'posted',
+        created_by: 11,
+        delivery_rep_id: null,
+        created_at: at('10:00:00'),
+      },
+      {
+        id: 102,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'S-102',
+        total: 180,
+        subtotal: 200,
+        discount: 20,
+        tax_amount: 0,
+        status: 'posted',
+        created_by: 11,
+        delivery_rep_id: 1,
+        created_at: at('11:00:00'),
+      },
+      {
+        id: 103,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'S-103',
+        total: 90,
+        subtotal: 105,
+        discount: 0,
+        tax_amount: 0,
+        status: 'posted',
+        created_by: 11,
+        delivery_rep_id: 1,
+        created_at: at('12:00:00'),
+      },
+      {
+        id: 104,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'S-104',
+        total: 288,
+        subtotal: 288,
+        discount: 0,
+        tax_amount: 0,
+        status: 'posted',
+        created_by: 11,
+        delivery_rep_id: null,
+        created_at: at('13:00:00'),
+      },
+      {
+        id: 105,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'S-105',
+        total: 50,
+        subtotal: 50,
+        discount: 0,
+        tax_amount: 0,
+        status: 'posted',
+        created_by: 3,
+        delivery_rep_id: null,
+        created_at: at('14:00:00'),
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('sale_items')
+    .values([
+      {
+        id: 1001,
+        sale_id: 101,
+        product_id: 100,
+        product_name: 'صنف اختبار جمله ب',
+        qty: 2,
+        unit_price: 50,
+        line_total: 100,
+        line_discount: 0,
+        cost_price: 15,
+        unit_multiplier: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+      },
+      {
+        id: 1002,
+        sale_id: 102,
+        product_id: 100,
+        product_name: 'صنف اختبار جمله ب',
+        qty: 4,
+        unit_price: 50,
+        line_total: 180,
+        line_discount: 0,
+        cost_price: 15,
+        unit_multiplier: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+      },
+      {
+        id: 1003,
+        sale_id: 103,
+        product_id: 101,
+        product_name: 'صنف اختبار جمله ج',
+        qty: 3,
+        unit_price: 35,
+        line_total: 90,
+        line_discount: 15,
+        cost_price: 5,
+        unit_multiplier: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+      },
+      {
+        id: 1004,
+        sale_id: 104,
+        product_id: 100,
+        product_name: 'صنف اختبار جمله ب',
+        qty: 1,
+        unit_price: 288,
+        line_total: 288,
+        line_discount: 0,
+        cost_price: 180,
+        unit_multiplier: 12,
+        unit_name: 'كرتونة',
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+      },
+      {
+        id: 1005,
+        sale_id: 105,
+        product_id: 101,
+        product_name: 'صنف اختبار جمله ج',
+        qty: 1,
+        unit_price: 50,
+        line_total: 50,
+        line_discount: 0,
+        cost_price: 5,
+        unit_multiplier: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+      },
+    ])
+    .execute();
   // R1 returns 1 pc of the DISCOUNTED sale S2 · R2 returns 1 pc of the
   // full-price sale S1.
-  await anyDb.insertInto('return_documents').values([
-    { id: 201, tenant_id: TENANT, account_id: ACCOUNT, return_type: 'sale', invoice_id: 102, doc_no: 'R-201', total: 45, created_by: 11, created_at: at('15:00:00') },
-    { id: 202, tenant_id: TENANT, account_id: ACCOUNT, return_type: 'sale', invoice_id: 101, doc_no: 'R-202', total: 50, created_by: 11, created_at: at('16:00:00') },
-  ]).execute();
-  await anyDb.insertInto('return_items').values([
-    { id: 2001, tenant_id: TENANT, account_id: ACCOUNT, return_document_id: 201, sale_item_id: 1002, product_id: 100, product_name: 'صنف اختبار جمله ب', qty: 1, line_total: 45, allocated_tax: 0, cost_price: null },
-    { id: 2002, tenant_id: TENANT, account_id: ACCOUNT, return_document_id: 202, sale_item_id: 1001, product_id: 100, product_name: 'صنف اختبار جمله ب', qty: 1, line_total: 50, allocated_tax: 0, cost_price: null },
-  ]).execute();
+  await anyDb
+    .insertInto('return_documents')
+    .values([
+      {
+        id: 201,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        return_type: 'sale',
+        invoice_id: 102,
+        doc_no: 'R-201',
+        total: 45,
+        created_by: 11,
+        created_at: at('15:00:00'),
+      },
+      {
+        id: 202,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        return_type: 'sale',
+        invoice_id: 101,
+        doc_no: 'R-202',
+        total: 50,
+        created_by: 11,
+        created_at: at('16:00:00'),
+      },
+    ])
+    .execute();
+  await anyDb
+    .insertInto('return_items')
+    .values([
+      {
+        id: 2001,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        return_document_id: 201,
+        sale_item_id: 1002,
+        product_id: 100,
+        product_name: 'صنف اختبار جمله ب',
+        qty: 1,
+        line_total: 45,
+        allocated_tax: 0,
+        cost_price: null,
+      },
+      {
+        id: 2002,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        return_document_id: 202,
+        sale_item_id: 1001,
+        product_id: 100,
+        product_name: 'صنف اختبار جمله ب',
+        qty: 1,
+        line_total: 50,
+        allocated_tax: 0,
+        cost_price: null,
+      },
+    ])
+    .execute();
 }
 
 function buildReports(db: Kysely<Database>): ReportsService {
@@ -143,12 +398,17 @@ async function main(): Promise<void> {
     try {
       await seed(db);
       const service = buildReports(db);
-      const summary = (await service.reportSummary({ from: FROM, to: TO, discountedOnly: true } as never, AUTH as never)) as any;
+      const summary = (await service.reportSummary(
+        { from: FROM, to: TO, discountedOnly: true } as never,
+        AUTH as never,
+      )) as any;
       assert.equal(summary.sales.count, 2);
       assert.equal(summary.sales.total, 270);
       assert.equal(summary.returns.discountsTotal, 20);
       console.log('1. discounted-only filter keeps invoice + line discounts, drops full-price, passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. Discounted-only returns + COGS + top products stay consistent:
@@ -158,7 +418,10 @@ async function main(): Promise<void> {
     try {
       await seed(db);
       const service = buildReports(db);
-      const summary = (await service.reportSummary({ from: FROM, to: TO, discountedOnly: true } as never, AUTH as never)) as any;
+      const summary = (await service.reportSummary(
+        { from: FROM, to: TO, discountedOnly: true } as never,
+        AUTH as never,
+      )) as any;
       assert.equal(summary.returns.salesTotal, 45);
       assert.equal(summary.returns.total, 65);
       assert.equal(summary.sales.netSales, 225);
@@ -170,7 +433,9 @@ async function main(): Promise<void> {
       assert.equal(top.find((r) => r.name === 'صنف اختبار جمله ج')?.qty, 3);
       assert.equal(top.find((r) => r.name === 'صنف اختبار جمله ج')?.revenue, 90);
       console.log('2. discounted-only returns/COGS/top-products consistent, passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. Top products count base pieces (problem 39): the 1-carton sale
@@ -193,7 +458,9 @@ async function main(): Promise<void> {
       assert.equal(top.find((r) => r.name === 'صنف اختبار جمله ج')?.qty, 4);
       assert.equal(top.find((r) => r.name === 'صنف اختبار جمله ج')?.revenue, 140);
       console.log('3. top products count base pieces (carton 1x12 = 12), passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 4. Row path (buildTopProducts): a carton row counts its base pieces,
@@ -238,7 +505,9 @@ async function main(): Promise<void> {
       assert.equal(staff.summary.totalSalesCogs, 260);
       assert.equal(staff.summary.totalSalesProfit, 353);
       console.log('5. employeeSummary per-user profit (308.00 / 45.00), passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 6. Rep targets VERIFY-ONLY (problem 18): the month actuals sum posted
@@ -261,14 +530,17 @@ async function main(): Promise<void> {
       assert.equal(rep2.actualSales, 0);
       assert.equal(rep2.achievementRate, 0);
       console.log('6. rep-target actuals include the F7-stamped POS sales, passed');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 7. This spec is wired into both critical lists, in identical order
   // (309 specs — F13 wired reports-discount-profit; F18 followed it
   // with the two van-presales specs and F20 followed them, so it is no longer the last entry).
   {
-    const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+    const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+      .specs as string[];
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));

@@ -66,10 +66,7 @@ import {
   addDaysToDayKey,
   firstDayOfTenantMonth,
 } from '../../src/common/utils/client-date-bounds.util';
-import {
-  AttendancePunchError,
-  resolveAttendancePunch,
-} from '../../src/modules/hr/attendance-punch.engine';
+import { AttendancePunchError, resolveAttendancePunch } from '../../src/modules/hr/attendance-punch.engine';
 import { TreasuryService } from '../../src/modules/treasury/treasury.service';
 import { HrService } from '../../src/modules/hr/hr.service';
 import { GoodsReceiptService } from '../../src/modules/purchases/services/goods-receipt.service';
@@ -80,15 +77,21 @@ import { SalesFinanceService } from '../../src/modules/sales/services/sales-fina
 import { ArCollectionsService } from '../../src/modules/accounting/services/ar-collections.service';
 
 const KW_TZ = 'Asia/Kuwait';
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 /** The tenant's today, in the tenant zone — the anchor every window hangs off. */
 const todayKuwait = (): string => todayTenantDate(KW_TZ, new Date());
 /** A tenant day key N days from today (negative = past). */
 const dayOffset = (days: number): string => addDaysToDayKey(todayKuwait(), days)!;
 /** An ISO instant N days from now (for datetime-valued fields). */
-const instantOffset = (days: number): string =>
-  new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+const instantOffset = (days: number): string => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 
 /** The service's real date normalizer, as the tenant-timezone-attendance spec defines it. */
 function normalizeDateOnly(value: unknown): string | null {
@@ -141,19 +144,20 @@ async function main(): Promise<void> {
     { ok: false, reason: 'TOO_FAR_FUTURE' },
     'tomorrow is too far for a past-by-nature date',
   );
-  assert.deepEqual(
-    checkClientBusinessDay('garbage', KW_TZ, pastWindow, frozenNow),
-    { ok: false, reason: 'INVALID' },
-  );
+  assert.deepEqual(checkClientBusinessDay('garbage', KW_TZ, pastWindow, frozenNow), { ok: false, reason: 'INVALID' });
 
   // Future window [today, today+365].
   const futureWindow = { minDayOffset: 0, maxDayOffset: 365 };
   assert.equal(checkClientBusinessDay('2026-11-15', KW_TZ, futureWindow, frozenNow).ok, true);
-  assert.equal(checkClientBusinessDay('2027-11-15', KW_TZ, futureWindow, frozenNow).ok, true, 'exactly today+365 is in');
-  assert.deepEqual(
-    checkClientBusinessDay('2027-11-16', KW_TZ, futureWindow, frozenNow),
-    { ok: false, reason: 'TOO_FAR_FUTURE' },
+  assert.equal(
+    checkClientBusinessDay('2027-11-15', KW_TZ, futureWindow, frozenNow).ok,
+    true,
+    'exactly today+365 is in',
   );
+  assert.deepEqual(checkClientBusinessDay('2027-11-16', KW_TZ, futureWindow, frozenNow), {
+    ok: false,
+    reason: 'TOO_FAR_FUTURE',
+  });
   assert.deepEqual(
     checkClientBusinessDay('2026-11-14', KW_TZ, futureWindow, frozenNow),
     { ok: false, reason: 'TOO_OLD' },
@@ -217,18 +221,32 @@ async function main(): Promise<void> {
 
       // In-window (3 days ago) posts, and the stored day is the sent day.
       const inWindow = await service.createExpense(
-        { title: 'In-window expense', amount: 100, note: '', date: instantOffset(-3), requestKey: 'p6-expense-in-001' } as never,
+        {
+          title: 'In-window expense',
+          amount: 100,
+          note: '',
+          date: instantOffset(-3),
+          requestKey: 'p6-expense-in-001',
+        } as never,
         AUTH,
       );
       assert.equal(inWindow.ok, true);
       assert.equal(await countExpenses(), 1);
-      const stored = await sql<{ expense_date: Date }>`SELECT expense_date FROM expenses WHERE request_key = 'p6-expense-in-001'`.execute(db);
+      const stored = await sql<{
+        expense_date: Date;
+      }>`SELECT expense_date FROM expenses WHERE request_key = 'p6-expense-in-001'`.execute(db);
       assert.equal(todayTenantDate(KW_TZ, stored.rows[0].expense_date), dayOffset(-3));
 
       // 30 days old rejects with the new code and stores nothing.
       await assert.rejects(
         service.createExpense(
-          { title: 'Old expense', amount: 100, note: '', date: instantOffset(-30), requestKey: 'p6-expense-old-001' } as never,
+          {
+            title: 'Old expense',
+            amount: 100,
+            note: '',
+            date: instantOffset(-30),
+            requestKey: 'p6-expense-old-001',
+          } as never,
           AUTH,
         ),
         (err: any) => err && err.code === 'EXPENSE_DATE_OUT_OF_RANGE' && err.statusCode === 400,
@@ -238,7 +256,13 @@ async function main(): Promise<void> {
       // Tomorrow rejects the same way.
       await assert.rejects(
         service.createExpense(
-          { title: 'Future expense', amount: 100, note: '', date: instantOffset(1), requestKey: 'p6-expense-fut-001' } as never,
+          {
+            title: 'Future expense',
+            amount: 100,
+            note: '',
+            date: instantOffset(1),
+            requestKey: 'p6-expense-fut-001',
+          } as never,
           AUTH,
         ),
         (err: any) => err && err.code === 'EXPENSE_DATE_OUT_OF_RANGE' && err.statusCode === 400,
@@ -248,7 +272,13 @@ async function main(): Promise<void> {
       // Garbage still rejects with the old parse code, unchanged.
       await assert.rejects(
         service.createExpense(
-          { title: 'Garbage expense', amount: 100, note: '', date: 'not-a-date', requestKey: 'p6-expense-bad-001' } as never,
+          {
+            title: 'Garbage expense',
+            amount: 100,
+            note: '',
+            date: 'not-a-date',
+            requestKey: 'p6-expense-bad-001',
+          } as never,
           AUTH,
         ),
         (err: any) => err && err.code === 'INVALID_EXPENSE_DATE' && err.statusCode === 400,
@@ -329,11 +359,21 @@ async function main(): Promise<void> {
       await service.bulkSaveAttendance(
         {
           workDate: today,
-          rows: [{ employeeId: 1, status: 'present', checkInAt: `${today}T09:00:00+03:00`, checkOutAt: `${today}T17:00:00+03:00`, source: 'manual' }],
+          rows: [
+            {
+              employeeId: 1,
+              status: 'present',
+              checkInAt: `${today}T09:00:00+03:00`,
+              checkOutAt: `${today}T17:00:00+03:00`,
+              source: 'manual',
+            },
+          ],
         } as never,
         AUTH,
       );
-      const saved = await sql<{ work_date: Date }>`SELECT work_date FROM hr_attendance_records WHERE employee_id = 1`.execute(db);
+      const saved = await sql<{
+        work_date: Date;
+      }>`SELECT work_date FROM hr_attendance_records WHERE employee_id = 1`.execute(db);
       assert.equal(saved.rows.length, 1);
       assert.equal(todayTenantDate(KW_TZ, saved.rows[0].work_date), today);
 
@@ -342,7 +382,15 @@ async function main(): Promise<void> {
         service.bulkSaveAttendance(
           {
             workDate: lastMonthDay,
-            rows: [{ employeeId: 1, status: 'present', checkInAt: `${lastMonthDay}T09:00:00+03:00`, checkOutAt: `${lastMonthDay}T17:00:00+03:00`, source: 'manual' }],
+            rows: [
+              {
+                employeeId: 1,
+                status: 'present',
+                checkInAt: `${lastMonthDay}T09:00:00+03:00`,
+                checkOutAt: `${lastMonthDay}T17:00:00+03:00`,
+                source: 'manual',
+              },
+            ],
           } as never,
           AUTH,
         ),
@@ -356,8 +404,18 @@ async function main(): Promise<void> {
       const imported = await service.bulkImportAttendanceRecords(
         {
           records: [
-            { employeeNo: 'E1', workDate: today, checkInAt: `${today}T09:00:00+03:00`, checkOutAt: `${today}T17:00:00+03:00` },
-            { employeeNo: 'E1', workDate: lastMonthDay, checkInAt: `${lastMonthDay}T09:00:00+03:00`, checkOutAt: `${lastMonthDay}T17:00:00+03:00` },
+            {
+              employeeNo: 'E1',
+              workDate: today,
+              checkInAt: `${today}T09:00:00+03:00`,
+              checkOutAt: `${today}T17:00:00+03:00`,
+            },
+            {
+              employeeNo: 'E1',
+              workDate: lastMonthDay,
+              checkInAt: `${lastMonthDay}T09:00:00+03:00`,
+              checkOutAt: `${lastMonthDay}T17:00:00+03:00`,
+            },
           ],
         } as never,
         AUTH,
@@ -411,7 +469,10 @@ async function main(): Promise<void> {
       };
 
       // In-window (3 days ago) creates, and the stored day is the sent day.
-      const inWindow = await service.createGoodsReceipt({ ...basePayload, receivedAt: instantOffset(-3) } as never, AUTH);
+      const inWindow = await service.createGoodsReceipt(
+        { ...basePayload, receivedAt: instantOffset(-3) } as never,
+        AUTH,
+      );
       assert.equal(inWindow.status, 'draft');
       assert.equal(todayTenantDate(KW_TZ, new Date(inWindow.receivedAt)), dayOffset(-3));
 
@@ -457,9 +518,26 @@ async function main(): Promise<void> {
         CREATE TABLE sales_order_items (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, sales_order_id bigint NOT NULL, product_id bigint NOT NULL, product_name text NOT NULL DEFAULT '', unit_name text, quantity numeric NOT NULL DEFAULT 0, reserved_quantity numeric NOT NULL DEFAULT 0, delivered_quantity numeric NOT NULL DEFAULT 0, unit_price numeric NOT NULL DEFAULT 0, discount numeric NOT NULL DEFAULT 0, total numeric NOT NULL DEFAULT 0, notes text, created_at timestamptz NOT NULL DEFAULT NOW());
         CREATE TABLE operation_executions (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, idempotency_key text NOT NULL, operation_type text NOT NULL, status text NOT NULL, request_hash text NOT NULL, document_id text, response_payload text, error_code text, created_at timestamptz NOT NULL DEFAULT NOW(), updated_at timestamptz NOT NULL DEFAULT NOW(), completed_at timestamptz);
       `);
-      await db.insertInto('branches').values({ id: 1, tenant_id: 't1', account_id: 'a1', default_stock_location_id: 10 } as any).execute();
-      await db.insertInto('stock_locations').values({ id: 10, tenant_id: 't1', account_id: 'a1', name: 'Main', branch_id: 1, location_type: 'branch_stock', is_active: true } as any).execute();
-      await db.insertInto('products').values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: 15, reserved_qty: 0 } as any).execute();
+      await db
+        .insertInto('branches')
+        .values({ id: 1, tenant_id: 't1', account_id: 'a1', default_stock_location_id: 10 } as any)
+        .execute();
+      await db
+        .insertInto('stock_locations')
+        .values({
+          id: 10,
+          tenant_id: 't1',
+          account_id: 'a1',
+          name: 'Main',
+          branch_id: 1,
+          location_type: 'branch_stock',
+          is_active: true,
+        } as any)
+        .execute();
+      await db
+        .insertInto('products')
+        .values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: 15, reserved_qty: 0 } as any)
+        .execute();
       const service = new SalesOrdersService(db as any, {} as any);
       const countOrders = async (): Promise<number> => {
         const rows = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM sales_orders`.execute(db);
@@ -479,7 +557,9 @@ async function main(): Promise<void> {
       const future = await service.createOrder(draftDto({ deliveryDate: dayOffset(30) }), AUTH);
       assert.ok((future as any).order.id);
       assert.equal(await countOrders(), 1);
-      const stored = await sql<{ delivery_date: Date }>`SELECT delivery_date FROM sales_orders WHERE id = ${Number((future as any).order.id)}`.execute(db);
+      const stored = await sql<{
+        delivery_date: Date;
+      }>`SELECT delivery_date FROM sales_orders WHERE id = ${Number((future as any).order.id)}`.execute(db);
       assert.equal(todayTenantDate(KW_TZ, stored.rows[0].delivery_date), dayOffset(30));
 
       // Yesterday's delivery, a garbage delivery date, and an expiry more
@@ -524,7 +604,12 @@ async function main(): Promise<void> {
         INSERT INTO customers VALUES (1, 't1', 'Customer', '0100', 0);
       `);
       const posting = new AccountingPostingService(FOUNDATION_STUB);
-      const service = new CustomerInstallmentsService(db, new TransactionHelper(), new SalesFinanceService(db), posting as any);
+      const service = new CustomerInstallmentsService(
+        db,
+        new TransactionHelper(),
+        new SalesFinanceService(db),
+        posting as any,
+      );
       const planDto = (extra: Record<string, unknown> = {}) =>
         ({
           customerId: 1,
@@ -594,51 +679,54 @@ async function main(): Promise<void> {
       const service = new ArCollectionsService(db);
 
       // A promise 30 days out logs, and the case carries the promised day.
-      const logged = await service.logInteraction(
-        AUTH,
-        'case-1',
-        { interactionType: 'call', resultStatus: 'promise_to_pay', promisedDate: dayOffset(30), promisedAmount: 100 } as never,
-      );
+      const logged = await service.logInteraction(AUTH, 'case-1', {
+        interactionType: 'call',
+        resultStatus: 'promise_to_pay',
+        promisedDate: dayOffset(30),
+        promisedAmount: 100,
+      } as never);
       assert.equal(logged.success, true);
-      const cased = await sql<{ promised_payment_date: Date }>`SELECT promised_payment_date FROM ar_collection_cases WHERE id = 'case-1'`.execute(db);
+      const cased = await sql<{
+        promised_payment_date: Date;
+      }>`SELECT promised_payment_date FROM ar_collection_cases WHERE id = 'case-1'`.execute(db);
       assert.equal(todayTenantDate(KW_TZ, cased.rows[0].promised_payment_date), dayOffset(30));
 
       // A promise for yesterday rejects.
       await assert.rejects(
-        service.logInteraction(
-          AUTH,
-          'case-1',
-          { interactionType: 'call', resultStatus: 'promise_to_pay', promisedDate: dayOffset(-1), promisedAmount: 100 } as never,
-        ),
+        service.logInteraction(AUTH, 'case-1', {
+          interactionType: 'call',
+          resultStatus: 'promise_to_pay',
+          promisedDate: dayOffset(-1),
+          promisedAmount: 100,
+        } as never),
         (err: any) => err && /Promised payment date/.test(String(err.message || '')),
       );
 
       // A garbage follow-up date rejects at the service bound too.
       await assert.rejects(
-        service.logInteraction(
-          AUTH,
-          'case-1',
-          { interactionType: 'call', resultStatus: 'answered', nextFollowupDate: 'garbage' } as never,
-        ),
+        service.logInteraction(AUTH, 'case-1', {
+          interactionType: 'call',
+          resultStatus: 'answered',
+          nextFollowupDate: 'garbage',
+        } as never),
         (err: any) => err && /Next follow-up date/.test(String(err.message || '')),
       );
 
       // A follow-up more than a year out rejects.
       await assert.rejects(
-        service.logInteraction(
-          AUTH,
-          'case-1',
-          { interactionType: 'call', resultStatus: 'answered', nextFollowupDate: dayOffset(400) } as never,
-        ),
+        service.logInteraction(AUTH, 'case-1', {
+          interactionType: 'call',
+          resultStatus: 'answered',
+          nextFollowupDate: dayOffset(400),
+        } as never),
         (err: any) => err && /Next follow-up date/.test(String(err.message || '')),
       );
 
       // recordPromiseToPay: 30 days out records; yesterday rejects.
-      const promised = await service.recordPromiseToPay(
-        AUTH,
-        'case-1',
-        { promisedDate: dayOffset(30), promisedAmount: 50 } as never,
-      );
+      const promised = await service.recordPromiseToPay(AUTH, 'case-1', {
+        promisedDate: dayOffset(30),
+        promisedAmount: 50,
+      } as never);
       assert.equal(promised.success, true);
       await assert.rejects(
         service.recordPromiseToPay(AUTH, 'case-1', { promisedDate: dayOffset(-1), promisedAmount: 50 } as never),
@@ -668,12 +756,24 @@ async function main(): Promise<void> {
   }
   const engineSource = readFileSync(resolve(__dirname, '../../src/modules/hr/attendance-punch.engine.ts'), 'utf8');
   assert.ok(engineSource.includes('HR_ATTENDANCE_DATE_OUT_OF_RANGE'), 'the manual punch must bound the work date');
-  const hrSource = readFileSync(resolve(__dirname, '../../src/modules/hr/services/hr-attendance-records.service.ts'), 'utf8');
+  const hrSource = readFileSync(
+    resolve(__dirname, '../../src/modules/hr/services/hr-attendance-records.service.ts'),
+    'utf8',
+  );
   assert.ok(hrSource.includes('HR_ATTENDANCE_DATE_OUT_OF_RANGE'), 'bulk save/import must bound the work date');
   const dtoSource = readFileSync(resolve(__dirname, '../../src/modules/accounting/dto/ar-collections.dto.ts'), 'utf8');
-  assert.ok(dtoSource.includes('@IsDateString()\n  promisedDate?: string;'), 'the log DTO promise date must be a date string');
-  assert.ok(dtoSource.includes('@IsDateString()\n  nextFollowupDate?: string;'), 'the log DTO follow-up date must be a date string');
-  assert.ok(dtoSource.includes('@IsDateString()\n  promisedDate!: string;'), 'the promise DTO date must be a date string');
+  assert.ok(
+    dtoSource.includes('@IsDateString()\n  promisedDate?: string;'),
+    'the log DTO promise date must be a date string',
+  );
+  assert.ok(
+    dtoSource.includes('@IsDateString()\n  nextFollowupDate?: string;'),
+    'the log DTO follow-up date must be a date string',
+  );
+  assert.ok(
+    dtoSource.includes('@IsDateString()\n  promisedDate!: string;'),
+    'the promise DTO date must be a date string',
+  );
 
   console.log('clock-p6-client-date-bounds.spec: all cases passed');
 }

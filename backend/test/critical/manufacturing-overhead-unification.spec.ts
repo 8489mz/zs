@@ -52,10 +52,26 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { scaledBomOverhead } from '../../src/modules/manufacturing/engines/manufacturing-overhead.engine';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
-async function journalLines(db: Kysely<Database>, workOrderId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
-  const rows = await sql<{ code: string; debit: string; credit: string }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'manufacturing_work_order' AND e.source_id = ${workOrderId} ORDER BY l.id`.execute(db);
+async function journalLines(
+  db: Kysely<Database>,
+  workOrderId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
+  const rows = await sql<{
+    code: string;
+    debit: string;
+    credit: string;
+  }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'manufacturing_work_order' AND e.source_id = ${workOrderId} ORDER BY l.id`.execute(
+    db,
+  );
   return rows.rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
@@ -63,23 +79,41 @@ async function seedOrder(
   db: Kysely<Database>,
   id: number,
   opts: {
-    bomQuantity: number; overhead: number; qty: number; storedTotal: number;
-    rm: number; ops: number; fgMovement: number | null; byMovement: number;
+    bomQuantity: number;
+    overhead: number;
+    qty: number;
+    storedTotal: number;
+    rm: number;
+    ops: number;
+    fgMovement: number | null;
+    byMovement: number;
   },
 ): Promise<void> {
-  await sql`INSERT INTO manufacturing_boms (id, product_id, quantity, overhead_cost, expected_cost, is_active, tenant_id, account_id) VALUES (${id}, 1, ${opts.bomQuantity}, ${opts.overhead}, 0, true, 't1', 'a1')`.execute(db);
-  await sql`INSERT INTO manufacturing_work_orders (id, bom_id, status, quantity_to_produce, produced_quantity, source_location_id, destination_location_id, total_cost, completed_at, created_by, tenant_id, account_id) VALUES (${id}, ${id}, 'done', ${opts.qty}, ${opts.qty}, 1, 1, ${opts.storedTotal}, NOW(), 1, 't1', 'a1')`.execute(db);
+  await sql`INSERT INTO manufacturing_boms (id, product_id, quantity, overhead_cost, expected_cost, is_active, tenant_id, account_id) VALUES (${id}, 1, ${opts.bomQuantity}, ${opts.overhead}, 0, true, 't1', 'a1')`.execute(
+    db,
+  );
+  await sql`INSERT INTO manufacturing_work_orders (id, bom_id, status, quantity_to_produce, produced_quantity, source_location_id, destination_location_id, total_cost, completed_at, created_by, tenant_id, account_id) VALUES (${id}, ${id}, 'done', ${opts.qty}, ${opts.qty}, 1, 1, ${opts.storedTotal}, NOW(), 1, 't1', 'a1')`.execute(
+    db,
+  );
   if (opts.rm > 0) {
-    await sql`INSERT INTO manufacturing_wo_consumptions (tenant_id, account_id, work_order_id, component_product_id, quantity_consumed, unit_cost, line_total) VALUES ('t1', 'a1', ${id}, 2, 1, ${opts.rm}, ${opts.rm})`.execute(db);
+    await sql`INSERT INTO manufacturing_wo_consumptions (tenant_id, account_id, work_order_id, component_product_id, quantity_consumed, unit_cost, line_total) VALUES ('t1', 'a1', ${id}, 2, 1, ${opts.rm}, ${opts.rm})`.execute(
+      db,
+    );
   }
   if (opts.ops > 0) {
-    await sql`INSERT INTO manufacturing_wo_operations (tenant_id, account_id, work_order_id, work_center_id, operation_name, sequence, duration_hours, hourly_cost, total_cost, status) VALUES ('t1', 'a1', ${id}, 1, 'Cutting', 1, 1, ${opts.ops}, ${opts.ops}, 'completed')`.execute(db);
+    await sql`INSERT INTO manufacturing_wo_operations (tenant_id, account_id, work_order_id, work_center_id, operation_name, sequence, duration_hours, hourly_cost, total_cost, status) VALUES ('t1', 'a1', ${id}, 1, 'Cutting', 1, 1, ${opts.ops}, ${opts.ops}, 'completed')`.execute(
+      db,
+    );
   }
   if (opts.fgMovement !== null) {
-    await sql`INSERT INTO stock_movements (tenant_id, account_id, product_id, movement_type, qty, before_qty, after_qty, reference_type, reference_id, location_id, created_by, unit_cost, total_cost) VALUES ('t1', 'a1', 1, 'manufacturing_production', ${opts.qty}, 0, ${opts.qty}, 'manufacturing_work_order', ${id}, 1, 1, 0, ${opts.fgMovement})`.execute(db);
+    await sql`INSERT INTO stock_movements (tenant_id, account_id, product_id, movement_type, qty, before_qty, after_qty, reference_type, reference_id, location_id, created_by, unit_cost, total_cost) VALUES ('t1', 'a1', 1, 'manufacturing_production', ${opts.qty}, 0, ${opts.qty}, 'manufacturing_work_order', ${id}, 1, 1, 0, ${opts.fgMovement})`.execute(
+      db,
+    );
   }
   if (opts.byMovement > 0) {
-    await sql`INSERT INTO stock_movements (tenant_id, account_id, product_id, movement_type, qty, before_qty, after_qty, reference_type, reference_id, location_id, created_by, unit_cost, total_cost) VALUES ('t1', 'a1', 3, 'manufacturing_byproduct', 1, 0, 1, 'manufacturing_work_order', ${id}, 1, 1, 0, ${opts.byMovement})`.execute(db);
+    await sql`INSERT INTO stock_movements (tenant_id, account_id, product_id, movement_type, qty, before_qty, after_qty, reference_type, reference_id, location_id, created_by, unit_cost, total_cost) VALUES ('t1', 'a1', 3, 'manufacturing_byproduct', 1, 0, 1, 'manufacturing_work_order', ${id}, 1, 1, 0, ${opts.byMovement})`.execute(
+      db,
+    );
   }
 }
 
@@ -98,7 +132,10 @@ async function main(): Promise<void> {
 
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
 
   try {
@@ -140,7 +177,16 @@ async function main(): Promise<void> {
     // Scaled overhead is 66.67; RM 33.33; FG movement 100. The 5400
     // credit must be exactly the scaled overhead (66.67), proving
     // the poster computes through the shared function.
-    await seedOrder(db, 11, { bomQuantity: 3, overhead: 100, qty: 2, storedTotal: 100, rm: 33.33, ops: 0, fgMovement: 100, byMovement: 0 });
+    await seedOrder(db, 11, {
+      bomQuantity: 3,
+      overhead: 100,
+      qty: 2,
+      storedTotal: 100,
+      rm: 33.33,
+      ops: 0,
+      fgMovement: 100,
+      byMovement: 0,
+    });
     const res = await posting.postManufacturingWorkOrder(db as never, 11, AUTH);
     assert.equal(res.posted, true);
     assert.deepEqual(await journalLines(db, 11), [
@@ -154,8 +200,13 @@ async function main(): Promise<void> {
     const readSrc = (rel: string): string => fs.readFileSync(path.resolve(__dirname, rel), 'utf8');
     const completion = readSrc('../../src/modules/manufacturing/services/manufacturing.service.ts');
     assert.ok(completion.includes('scaledBomOverhead('), 'completion must call scaledBomOverhead');
-    assert.ok(!completion.includes('overheadCost * (qtyToProduce / bomQuantity)'), 'inline formula must be gone from completion');
-    const posterSource = readSrc('../../src/modules/accounting/services/inventory-manufacturing-cash-posting/post-manufacturing-work-order.slice.ts');
+    assert.ok(
+      !completion.includes('overheadCost * (qtyToProduce / bomQuantity)'),
+      'inline formula must be gone from completion',
+    );
+    const posterSource = readSrc(
+      '../../src/modules/accounting/services/inventory-manufacturing-cash-posting/post-manufacturing-work-order.slice.ts',
+    );
     const posterStart = posterSource.indexOf('async postManufacturingWorkOrder(');
     assert.ok(posterStart > -1);
     // The S6 slice file contains only postManufacturingWorkOrder, so the
@@ -166,7 +217,10 @@ async function main(): Promise<void> {
     assert.ok(!posterBody.includes('overhead_cost || 0) * ('), 'inline formula must be gone from poster');
     const salesWrite = readSrc('../../src/modules/sales/services/sales-write.service.ts');
     assert.ok(salesWrite.includes('scaledBomOverhead('), 'auto-produce path must call scaledBomOverhead');
-    assert.ok(!salesWrite.includes('overhead_cost || 0) * (baseShortfall'), 'inline formula must be gone from auto-produce path');
+    assert.ok(
+      !salesWrite.includes('overhead_cost || 0) * (baseShortfall'),
+      'inline formula must be gone from auto-produce path',
+    );
     const engine = readSrc('../../src/modules/manufacturing/engines/manufacturing-overhead.engine.ts');
     assert.ok(engine.includes('export function scaledBomOverhead'), 'shared function must exist');
     const invariants = readSrc('../../../ARCHITECTURE_INVARIANTS.md');

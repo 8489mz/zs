@@ -65,7 +65,10 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -119,7 +122,11 @@ async function main(): Promise<void> {
         /IMPORT_GRN_ALREADY_RECORDED/,
         'A second GRN approval for the same shipment must fail closed',
       );
-      assert.equal(await countRows(db, 'import_qc_inspections'), 1, 'The refused second approval must not insert a row');
+      assert.equal(
+        await countRows(db, 'import_qc_inspections'),
+        1,
+        'The refused second approval must not insert a row',
+      );
     } finally {
       await db.destroy();
     }
@@ -186,7 +193,12 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await db
         .insertInto('import_inventory_receipts' as never)
-        .values({ tenant_id: 't1', shipment_id: 'sh-4', state: 'legacy_review_required', review_reason: 'old receipt' } as never)
+        .values({
+          tenant_id: 't1',
+          shipment_id: 'sh-4',
+          state: 'legacy_review_required',
+          review_reason: 'old receipt',
+        } as never)
         .execute();
       const row = await service.createQcInspection('t1', {
         shipmentId: 'sh-4',
@@ -206,4 +218,7 @@ async function main(): Promise<void> {
   console.log('Import GRN approval posted-gate tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

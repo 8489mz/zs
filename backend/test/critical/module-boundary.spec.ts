@@ -289,8 +289,30 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
   'updates->settings': 1,
 };
 
-const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|hr', 'accounting|manufacturing', 'accounting|purchases', 'delivery-reps|sales', 'reports|sales', 'returns|sales', 'sales|settings', 'sales|storefront'];
-const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|treasury', 'accounts|purchases', 'audit|settings', 'cash-drawer|pos', 'customers|sales', 'inventory|products', 'maintenance|products', 'pos|products', 'pos|sales', 'pos|settings', 'pos|storefront', 'products|settings'];
+const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = [
+  'accounting|hr',
+  'accounting|manufacturing',
+  'accounting|purchases',
+  'delivery-reps|sales',
+  'reports|sales',
+  'returns|sales',
+  'sales|settings',
+  'sales|storefront',
+];
+const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
+  'accounting|treasury',
+  'accounts|purchases',
+  'audit|settings',
+  'cash-drawer|pos',
+  'customers|sales',
+  'inventory|products',
+  'maintenance|products',
+  'pos|products',
+  'pos|sales',
+  'pos|settings',
+  'pos|storefront',
+  'products|settings',
+];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
 const PINNED_BACKEND_TOTAL = 760;
@@ -459,7 +481,10 @@ function scanBackend(): ScanResult {
         if (mod !== 'accounting' && targetFile === 'backend/src/modules/accounting/accounting-posting.service') {
           postingExternal += 1;
         }
-        if (mod !== 'accounting' && targetFile === 'backend/src/modules/accounting/accounting-tenant-foundation.service') {
+        if (
+          mod !== 'accounting' &&
+          targetFile === 'backend/src/modules/accounting/accounting-tenant-foundation.service'
+        ) {
           foundationExternal += 1;
         }
       }
@@ -536,30 +561,54 @@ async function main(): Promise<void> {
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
   assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 73, 'pinned backend edge table must list 73 edges');
   const backend = scanBackend();
-  assert.ok(backend.total >= BACKEND_TOTAL_FLOOR, `backend scan found only ${backend.total} statements (floor ${BACKEND_TOTAL_FLOOR}): the scanner is broken or the baseline needs re-pinning`);
-  assert.ok(backend.edges.size >= BACKEND_EDGE_FLOOR, `backend scan found only ${backend.edges.size} edges (floor ${BACKEND_EDGE_FLOOR})`);
+  assert.ok(
+    backend.total >= BACKEND_TOTAL_FLOOR,
+    `backend scan found only ${backend.total} statements (floor ${BACKEND_TOTAL_FLOOR}): the scanner is broken or the baseline needs re-pinning`,
+  );
+  assert.ok(
+    backend.edges.size >= BACKEND_EDGE_FLOOR,
+    `backend scan found only ${backend.edges.size} edges (floor ${BACKEND_EDGE_FLOOR})`,
+  );
   for (const [key, count] of backend.edges) {
-    assert.ok(key in PINNED_BACKEND_EDGES, `new backend edge ${key} (${count} statements): add it to the pinned table deliberately or route it through a public door`);
+    assert.ok(
+      key in PINNED_BACKEND_EDGES,
+      `new backend edge ${key} (${count} statements): add it to the pinned table deliberately or route it through a public door`,
+    );
     assert.ok(
       count <= PINNED_BACKEND_EDGES[key],
       `backend edge ${key} grew to ${count} statements (pinned ${PINNED_BACKEND_EDGES[key]})`,
     );
   }
-  assert.ok(backend.total <= PINNED_BACKEND_TOTAL, `backend cross-module statements grew to ${backend.total} (pinned ${PINNED_BACKEND_TOTAL}): shrink the coupling or re-pin deliberately`);
+  assert.ok(
+    backend.total <= PINNED_BACKEND_TOTAL,
+    `backend cross-module statements grew to ${backend.total} (pinned ${PINNED_BACKEND_TOTAL}): shrink the coupling or re-pin deliberately`,
+  );
 
   // 2. Frontend ratchet: same rules.
   assert.equal(Object.keys(PINNED_FRONTEND_EDGES).length, 57, 'pinned frontend edge table must list 57 edges');
   const frontend = scanFrontend();
-  assert.ok(frontend.total >= FRONTEND_TOTAL_FLOOR, `frontend scan found only ${frontend.total} statements (floor ${FRONTEND_TOTAL_FLOOR})`);
-  assert.ok(frontend.edges.size >= FRONTEND_EDGE_FLOOR, `frontend scan found only ${frontend.edges.size} edges (floor ${FRONTEND_EDGE_FLOOR})`);
+  assert.ok(
+    frontend.total >= FRONTEND_TOTAL_FLOOR,
+    `frontend scan found only ${frontend.total} statements (floor ${FRONTEND_TOTAL_FLOOR})`,
+  );
+  assert.ok(
+    frontend.edges.size >= FRONTEND_EDGE_FLOOR,
+    `frontend scan found only ${frontend.edges.size} edges (floor ${FRONTEND_EDGE_FLOOR})`,
+  );
   for (const [key, count] of frontend.edges) {
-    assert.ok(key in PINNED_FRONTEND_EDGES, `new frontend edge ${key} (${count} statements): add it to the pinned table deliberately or route it through the feature index.ts`);
+    assert.ok(
+      key in PINNED_FRONTEND_EDGES,
+      `new frontend edge ${key} (${count} statements): add it to the pinned table deliberately or route it through the feature index.ts`,
+    );
     assert.ok(
       count <= PINNED_FRONTEND_EDGES[key],
       `frontend edge ${key} grew to ${count} statements (pinned ${PINNED_FRONTEND_EDGES[key]})`,
     );
   }
-  assert.ok(frontend.total <= PINNED_FRONTEND_TOTAL, `frontend cross-feature statements grew to ${frontend.total} (pinned ${PINNED_FRONTEND_TOTAL})`);
+  assert.ok(
+    frontend.total <= PINNED_FRONTEND_TOTAL,
+    `frontend cross-feature statements grew to ${frontend.total} (pinned ${PINNED_FRONTEND_TOTAL})`,
+  );
 
   // 3. Deep-import caps on the two accounting facade files.
   assert.ok(

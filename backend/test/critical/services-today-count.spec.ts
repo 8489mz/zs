@@ -36,7 +36,14 @@ import { Database } from '../../src/database/database.types';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { ServicesService } from '../../src/modules/services/services.service';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 const TZ = 'Africa/Cairo';
 
 function cairoDay(date: Date): string {
@@ -120,8 +127,10 @@ async function main(): Promise<void> {
   const db = await createDb();
   try {
     await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Africa/Cairo')`.execute(db);
-  await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'currency', 'EGP')`.execute(db);
-  await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES ('t1', 'EGP', true, 1)`.execute(db);
+    await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'currency', 'EGP')`.execute(db);
+    await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES ('t1', 'EGP', true, 1)`.execute(
+      db,
+    );
     await sql`INSERT INTO branches (id, tenant_id, name) VALUES (1, 't1', 'Main')`.execute(db);
     await sql`INSERT INTO stock_locations (id, tenant_id, branch_id, name) VALUES (1, 't1', 1, 'Store')`.execute(db);
     await sql`INSERT INTO users (id, tenant_id, username) VALUES (1, 't1', 'admin')`.execute(db);
@@ -135,9 +144,15 @@ async function main(): Promise<void> {
     // Sanity: the early row really is a different UTC day from today.
     assert.notEqual(earlyToday.toISOString().slice(0, 10), today);
 
-    await sql`INSERT INTO services (tenant_id, name, amount, service_date, branch_id, location_id, created_by) VALUES ('t1', 'early today', 100, ${earlyToday}, 1, 1, 1)`.execute(db);
-    await sql`INSERT INTO services (tenant_id, name, amount, service_date, branch_id, location_id, created_by) VALUES ('t1', 'noon today', 200, ${noonToday}, 1, 1, 1)`.execute(db);
-    await sql`INSERT INTO services (tenant_id, name, amount, service_date, branch_id, location_id, created_by) VALUES ('t1', 'yesterday', 300, ${noonYesterday}, 1, 1, 1)`.execute(db);
+    await sql`INSERT INTO services (tenant_id, name, amount, service_date, branch_id, location_id, created_by) VALUES ('t1', 'early today', 100, ${earlyToday}, 1, 1, 1)`.execute(
+      db,
+    );
+    await sql`INSERT INTO services (tenant_id, name, amount, service_date, branch_id, location_id, created_by) VALUES ('t1', 'noon today', 200, ${noonToday}, 1, 1, 1)`.execute(
+      db,
+    );
+    await sql`INSERT INTO services (tenant_id, name, amount, service_date, branch_id, location_id, created_by) VALUES ('t1', 'yesterday', 300, ${noonYesterday}, 1, 1, 1)`.execute(
+      db,
+    );
 
     const service = new ServicesService(db as never, {} as never, {} as never, {} as never, {} as never);
 
@@ -152,10 +167,7 @@ async function main(): Promise<void> {
       services: Array<{ name: string }>;
       summary: { totalItems: number; todayCount: number };
     };
-    assert.deepEqual(
-      todayOnly.services.map((row) => row.name).sort(),
-      ['early today', 'noon today'],
-    );
+    assert.deepEqual(todayOnly.services.map((row) => row.name).sort(), ['early today', 'noon today']);
     assert.equal(todayOnly.summary.todayCount, 2);
 
     console.log('services today count checks passed');

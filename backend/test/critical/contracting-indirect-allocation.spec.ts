@@ -32,9 +32,30 @@ function runIndirectAllocationTestSuite() {
     };
 
     const items: BoqDriverMetricsInput[] = [
-      { boqItemId: 'item-1', boqCode: 'BOQ-01', description: 'خرسانات مسلحة', laborDays: 10, laborCost: 5000, equipmentHours: 20 },
-      { boqItemId: 'item-2', boqCode: 'BOQ-02', description: 'مباني وعزل', laborDays: 30, laborCost: 15000, equipmentHours: 5 },
-      { boqItemId: 'item-3', boqCode: 'BOQ-03', description: 'تشطيبات وديكور', laborDays: 60, laborCost: 30000, equipmentHours: 0 },
+      {
+        boqItemId: 'item-1',
+        boqCode: 'BOQ-01',
+        description: 'خرسانات مسلحة',
+        laborDays: 10,
+        laborCost: 5000,
+        equipmentHours: 20,
+      },
+      {
+        boqItemId: 'item-2',
+        boqCode: 'BOQ-02',
+        description: 'مباني وعزل',
+        laborDays: 30,
+        laborCost: 15000,
+        equipmentHours: 5,
+      },
+      {
+        boqItemId: 'item-3',
+        boqCode: 'BOQ-03',
+        description: 'تشطيبات وديكور',
+        laborDays: 60,
+        laborCost: 30000,
+        equipmentHours: 0,
+      },
     ];
 
     const result = computePoolAllocation(pool, items);
@@ -49,9 +70,9 @@ function runIndirectAllocationTestSuite() {
     const alloc2 = result.allocations.find((a) => a.boqItemId === 'item-2')!;
     const alloc3 = result.allocations.find((a) => a.boqItemId === 'item-3')!;
 
-    assert.strictEqual(alloc1.allocatedAmount, 5000);   // 10 * 500
-    assert.strictEqual(alloc2.allocatedAmount, 15000);  // 30 * 500
-    assert.strictEqual(alloc3.allocatedAmount, 30000);  // 60 * 500
+    assert.strictEqual(alloc1.allocatedAmount, 5000); // 10 * 500
+    assert.strictEqual(alloc2.allocatedAmount, 15000); // 30 * 500
+    assert.strictEqual(alloc3.allocatedAmount, 30000); // 60 * 500
     assert.strictEqual(alloc1.allocatedAmount + alloc2.allocatedAmount + alloc3.allocatedAmount, 50000);
     console.log('✓ Test 1 Passed: [Pool 1 - Labor Care] Allocated man-days proportionally with exact sum.');
   }
@@ -72,8 +93,22 @@ function runIndirectAllocationTestSuite() {
     };
 
     const items: BoqDriverMetricsInput[] = [
-      { boqItemId: 'item-1', boqCode: 'BOQ-01', description: 'حفر وردم', laborDays: 20, laborCost: 10000, equipmentHours: 50 },
-      { boqItemId: 'item-2', boqCode: 'BOQ-02', description: 'هيكل خرساني', laborDays: 80, laborCost: 40000, equipmentHours: 150 },
+      {
+        boqItemId: 'item-1',
+        boqCode: 'BOQ-01',
+        description: 'حفر وردم',
+        laborDays: 20,
+        laborCost: 10000,
+        equipmentHours: 50,
+      },
+      {
+        boqItemId: 'item-2',
+        boqCode: 'BOQ-02',
+        description: 'هيكل خرساني',
+        laborDays: 80,
+        laborCost: 40000,
+        equipmentHours: 150,
+      },
     ];
 
     const result = computePoolAllocation(pool, items);
@@ -137,13 +172,27 @@ function runIndirectAllocationTestSuite() {
       poolType: 'labor_care',
       driverType: 'labor_days',
       grossExpenseAmount: 15000, // Month 2 new expenses
-      deferredInAmount: 45000,   // Carried forward from Month 1 mobilization
+      deferredInAmount: 45000, // Carried forward from Month 1 mobilization
     };
 
     // Month 2: Production starts!
     const items: BoqDriverMetricsInput[] = [
-      { boqItemId: 'item-1', boqCode: 'BOQ-01', description: 'حفر وأساسات', laborDays: 150, laborCost: 75000, equipmentHours: 50 },
-      { boqItemId: 'item-2', boqCode: 'BOQ-02', description: 'هيكل خرساني', laborDays: 450, laborCost: 225000, equipmentHours: 150 },
+      {
+        boqItemId: 'item-1',
+        boqCode: 'BOQ-01',
+        description: 'حفر وأساسات',
+        laborDays: 150,
+        laborCost: 75000,
+        equipmentHours: 50,
+      },
+      {
+        boqItemId: 'item-2',
+        boqCode: 'BOQ-02',
+        description: 'هيكل خرساني',
+        laborDays: 450,
+        laborCost: 225000,
+        equipmentHours: 150,
+      },
     ];
 
     const result = computePoolAllocation(pool, items);
@@ -179,9 +228,30 @@ function runIndirectAllocationTestSuite() {
     };
 
     const items: BoqDriverMetricsInput[] = [
-      { boqItemId: 'item-1', boqCode: 'BOQ-01', description: 'أعمال الحفر', laborDays: 10, laborCost: 5000, equipmentHours: 50 },
-      { boqItemId: 'item-2', boqCode: 'BOQ-02', description: 'خرسانة مسلحة', laborDays: 40, laborCost: 20000, equipmentHours: 150 },
-      { boqItemId: 'item-3', boqCode: 'BOQ-03', description: 'دهانات يدوية', laborDays: 50, laborCost: 25000, equipmentHours: 0 },
+      {
+        boqItemId: 'item-1',
+        boqCode: 'BOQ-01',
+        description: 'أعمال الحفر',
+        laborDays: 10,
+        laborCost: 5000,
+        equipmentHours: 50,
+      },
+      {
+        boqItemId: 'item-2',
+        boqCode: 'BOQ-02',
+        description: 'خرسانة مسلحة',
+        laborDays: 40,
+        laborCost: 20000,
+        equipmentHours: 150,
+      },
+      {
+        boqItemId: 'item-3',
+        boqCode: 'BOQ-03',
+        description: 'دهانات يدوية',
+        laborDays: 50,
+        laborCost: 25000,
+        equipmentHours: 0,
+      },
     ];
 
     const result = computePoolAllocation(pool, items);
@@ -194,9 +264,9 @@ function runIndirectAllocationTestSuite() {
     const alloc2 = result.allocations.find((a) => a.boqItemId === 'item-2')!;
     const alloc3 = result.allocations.find((a) => a.boqItemId === 'item-3')!;
 
-    assert.strictEqual(alloc1.allocatedAmount, 6000);  // 50 * 120
+    assert.strictEqual(alloc1.allocatedAmount, 6000); // 50 * 120
     assert.strictEqual(alloc2.allocatedAmount, 18000); // 150 * 120
-    assert.strictEqual(alloc3.allocatedAmount, 0);     // 0 hours
+    assert.strictEqual(alloc3.allocatedAmount, 0); // 0 hours
     assert.strictEqual(result.allocatedAmountTotal, 24000);
     console.log('✓ Test 5 Passed: [Pool 3 - Equipment Shared] Machine hours allocated accurately.');
   }
@@ -380,10 +450,12 @@ function runIndirectAllocationTestSuite() {
     assert(summaryB.totalAllocatedIndirectCost > 0);
     assert.strictEqual(
       Math.round((summaryA.totalAllocatedIndirectCost + summaryB.totalAllocatedIndirectCost) * 1000) / 1000,
-      75000
+      75000,
     );
 
-    console.log(`✓ Test 8 Passed: Multi-pool batch aggregation (Item A = ${summaryA.totalAllocatedIndirectCost}, Item B = ${summaryB.totalAllocatedIndirectCost}, Total = 75000).`);
+    console.log(
+      `✓ Test 8 Passed: Multi-pool batch aggregation (Item A = ${summaryA.totalAllocatedIndirectCost}, Item B = ${summaryB.totalAllocatedIndirectCost}, Total = 75000).`,
+    );
   }
 
   console.log('\n=============================================================================');

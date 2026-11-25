@@ -27,16 +27,16 @@ async function run() {
     const files = [
       { path: 'backend/dist/main.js', content: 'console.log("backend");' },
       { path: 'backend/package.json', content: '{"version": "1.2.0"}' },
-      { path: 'frontend/dist/index.html', content: '<html></html>' }
+      { path: 'frontend/dist/index.html', content: '<html></html>' },
     ];
-    
+
     const manifestFiles = [];
-    
+
     for (const f of files) {
       zip.addFile(f.path, Buffer.from(f.content));
       manifestFiles.push({
         path: f.path,
-        sha256: crypto.createHash('sha256').update(f.content).digest('hex')
+        sha256: crypto.createHash('sha256').update(f.content).digest('hex'),
       });
     }
 
@@ -44,7 +44,7 @@ async function run() {
       version: '1.2.0',
       createdAt: new Date().toISOString(),
       expectedFolders: ['backend/dist', 'backend/package.json', 'frontend/dist'],
-      files: manifestFiles
+      files: manifestFiles,
     };
 
     zip.addFile('update-manifest.json', Buffer.from(JSON.stringify(manifest)));

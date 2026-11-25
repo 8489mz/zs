@@ -184,7 +184,9 @@ assert.equal(commissionResult.isTargetBonusEligible, false); // Target 50,000 no
 // Remaining to next tier (50,000 target bonus) = 8,000 EGP
 const remainingToBonus = Math.max(0, 50000 - 42000);
 assert.equal(remainingToBonus, 8000);
-console.log(`[PASS] Driver Live Booster: 84% achieved, Earned ${commissionResult.totalEarnedCommission} EGP, Remaining ${remainingToBonus} EGP to hit Target Bonus (+1.0%)`);
+console.log(
+  `[PASS] Driver Live Booster: 84% achieved, Earned ${commissionResult.totalEarnedCommission} EGP, Remaining ${remainingToBonus} EGP to hit Target Bonus (+1.0%)`,
+);
 
 // ============================================================================
 // VECTOR 4: INSTANT DAMAGED / BROKEN GOODS SWAP (استبدال التالف والمعيب الفوري)

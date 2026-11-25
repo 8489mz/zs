@@ -10,7 +10,12 @@ import { CashDrawerService } from '../../../src/modules/cash-drawer/cash-drawer.
 import { ReturnsService } from '../../../src/modules/returns/returns.service';
 import { TransactionHelper } from '../../../src/database/helpers/transaction.helper';
 import { AuthContext } from '../../../src/core/auth/interfaces/auth-context.interface';
-import { applyStockDelta, reserveLocationStock, releaseLocationStock, previewConsumableStockQty } from '../../../src/common/utils/location-stock-ledger';
+import {
+  applyStockDelta,
+  reserveLocationStock,
+  releaseLocationStock,
+  previewConsumableStockQty,
+} from '../../../src/common/utils/location-stock-ledger';
 import { createPasswordRecord } from '../../../src/core/auth/utils/password-hasher';
 import { allocateInvoiceDiscount } from '../../../src/modules/sales/engines/invoice-discount.engine';
 
@@ -161,8 +166,22 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     `.execute(db);
 
     // ضخ رصيد مخزون: 100 قميص + 120 عصير (10 كراتين)
-    await applyStockDelta(db as any, { productId: p1Id, delta: 100, branchId, locationId, tenantId: testTenantId, accountId: testAccountId });
-    await applyStockDelta(db as any, { productId: p2Id, delta: 120, branchId, locationId, tenantId: testTenantId, accountId: testAccountId });
+    await applyStockDelta(db as any, {
+      productId: p1Id,
+      delta: 100,
+      branchId,
+      locationId,
+      tenantId: testTenantId,
+      accountId: testAccountId,
+    });
+    await applyStockDelta(db as any, {
+      productId: p2Id,
+      delta: 120,
+      branchId,
+      locationId,
+      tenantId: testTenantId,
+      accountId: testAccountId,
+    });
 
     console.log(`✓ الصنف 1 (#${p1Id}): 100 قطعة | الصنف 2 (#${p2Id}): 120 قطعة في المعرض.`);
 
@@ -170,12 +189,15 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     // STEP 3: دورة الوردية وفتح الدرج وحركات النقدية (Cashier Shift Lifecycle)
     // -------------------------------------------------------------------------
     console.log('\n--- 3. افتتاح وردية الكاشير وحركة نقدية بداخلها ---');
-    const openShiftResult = await cashDrawerService.openCashierShift({
-      branchId,
-      locationId,
-      openingCash: 500.00,
-      note: 'افتتاح وردية الصباح التجريبية',
-    }, cashierAuth);
+    const openShiftResult = await cashDrawerService.openCashierShift(
+      {
+        branchId,
+        locationId,
+        openingCash: 500.0,
+        note: 'افتتاح وردية الصباح التجريبية',
+      },
+      cashierAuth,
+    );
 
     const openedShiftDb = await sql<{ id: number }>`
       SELECT id FROM cashier_shifts WHERE tenant_id = ${testTenantId} AND status = 'open' ORDER BY id DESC LIMIT 1
@@ -184,12 +206,16 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     console.log(`✓ تم فتح وردية الكاشير بنجاح (#${shiftId}) بعهدة افتتاحية 500.00 جنيه.`);
 
     // حركة إيداع نقدية إضافية بالدرج (فكة) بواسطة الكاشير
-    await cashDrawerService.recordCashMovement(shiftId, {
-      type: 'cash_in',
-      amount: 250.00,
-      note: 'توريد فكة إضافية للدرج',
-      managerPin: '123456',
-    }, cashierAuth);
+    await cashDrawerService.recordCashMovement(
+      shiftId,
+      {
+        type: 'cash_in',
+        amount: 250.0,
+        note: 'توريد فكة إضافية للدرج',
+        managerPin: '123456',
+      },
+      cashierAuth,
+    );
     console.log('✓ تم تسجيل إيداع نقدي بالدرج (Cash-In) بقيمة 250.00 جنيه.');
 
     // -------------------------------------------------------------------------
@@ -286,8 +312,10 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     `.execute(db);
 
     // ترحيل قيد الفاتورة
-    const postSale1 = await db.transaction().execute(trx => accountingPosting.postSale(trx, sale1Id, cashierAuth));
-    console.log(`✓ تم تسليم الطلب الإلكتروني وتحويله لفاتورة مبيعات (#${sale1Id}) وترحيل قيدها (#${postSale1.journalEntryId}).`);
+    const postSale1 = await db.transaction().execute((trx) => accountingPosting.postSale(trx, sale1Id, cashierAuth));
+    console.log(
+      `✓ تم تسليم الطلب الإلكتروني وتحويله لفاتورة مبيعات (#${sale1Id}) وترحيل قيدها (#${postSale1.journalEntryId}).`,
+    );
 
     // -------------------------------------------------------------------------
     // STEP 5: مبيعات التجزئة المباشرة (نقدي بخصم، مجزأ، وآجل)
@@ -295,8 +323,22 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     console.log('\n--- 5. مبيعات التجزئة المباشرة (نقدي بخصم، مجزأ، وآجل) ---');
 
     // أ. فاتورة 2: بيع نقدي بخصم (2 قميص @ 350 + 6 عصير @ 20 = 820، خصم 20 -> صافي 800)
-    await applyStockDelta(db as any, { productId: p1Id, delta: -2, branchId, locationId, tenantId: testTenantId, accountId: testAccountId });
-    await applyStockDelta(db as any, { productId: p2Id, delta: -6, branchId, locationId, tenantId: testTenantId, accountId: testAccountId });
+    await applyStockDelta(db as any, {
+      productId: p1Id,
+      delta: -2,
+      branchId,
+      locationId,
+      tenantId: testTenantId,
+      accountId: testAccountId,
+    });
+    await applyStockDelta(db as any, {
+      productId: p2Id,
+      delta: -6,
+      branchId,
+      locationId,
+      tenantId: testTenantId,
+      accountId: testAccountId,
+    });
 
     const sale2Res = await sql<{ id: number }>`
       INSERT INTO sales (
@@ -313,7 +355,10 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
 
     // توزيع الخصم على البنود
     const discountAllocations = allocateInvoiceDiscount({
-      lines: [{ lineTotal: 700, qty: 2 }, { lineTotal: 120, qty: 6 }],
+      lines: [
+        { lineTotal: 700, qty: 2 },
+        { lineTotal: 120, qty: 6 },
+      ],
       invoiceDiscount: 20,
       invoiceTax: 0,
       pricesIncludeTax: false,
@@ -350,11 +395,18 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
       VALUES (${testTenantId}, ${testAccountId}, ${sale2Id}, 'cash', 800.00, NOW())
     `.execute(db);
 
-    const postSale2 = await db.transaction().execute(trx => accountingPosting.postSale(trx, sale2Id, cashierAuth));
+    const postSale2 = await db.transaction().execute((trx) => accountingPosting.postSale(trx, sale2Id, cashierAuth));
     console.log(`✓ الفاتورة 2 (#${sale2Id}): بيع نقدي بخصم تجاري وترحيل قيدها (#${postSale2.journalEntryId}).`);
 
     // ب. فاتورة 3: سداد مجزأ (Split Tender: 2 كرتونة عصير @ 220 = 440 | 140 كاش + 200 كارت + 100 إنستاباي)
-    await applyStockDelta(db as any, { productId: p2Id, delta: -24, branchId, locationId, tenantId: testTenantId, accountId: testAccountId });
+    await applyStockDelta(db as any, {
+      productId: p2Id,
+      delta: -24,
+      branchId,
+      locationId,
+      tenantId: testTenantId,
+      accountId: testAccountId,
+    });
 
     const sale3Res = await sql<{ id: number }>`
       INSERT INTO sales (
@@ -390,11 +442,20 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
         (${testTenantId}, ${testAccountId}, ${sale3Id}, 'instapay', 100.00, NOW())
     `.execute(db);
 
-    const postSale3 = await db.transaction().execute(trx => accountingPosting.postSale(trx, sale3Id, cashierAuth));
-    console.log(`✓ الفاتورة 3 (#${sale3Id}): سداد مجزأ (140 كاش + 200 فيزا + 100 إنستاباي) وترحيل قيدها (#${postSale3.journalEntryId}).`);
+    const postSale3 = await db.transaction().execute((trx) => accountingPosting.postSale(trx, sale3Id, cashierAuth));
+    console.log(
+      `✓ الفاتورة 3 (#${sale3Id}): سداد مجزأ (140 كاش + 200 فيزا + 100 إنستاباي) وترحيل قيدها (#${postSale3.journalEntryId}).`,
+    );
 
     // ج. فاتورة 4: بيع آجل لعميل (Credit Sale: 1 قميص @ 350)
-    await applyStockDelta(db as any, { productId: p1Id, delta: -1, branchId, locationId, tenantId: testTenantId, accountId: testAccountId });
+    await applyStockDelta(db as any, {
+      productId: p1Id,
+      delta: -1,
+      branchId,
+      locationId,
+      tenantId: testTenantId,
+      accountId: testAccountId,
+    });
 
     const sale4Res = await sql<{ id: number }>`
       INSERT INTO sales (
@@ -434,8 +495,10 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     `.execute(db);
     await sql`UPDATE customers SET balance = 350.00, updated_at = NOW() WHERE id = ${customerId}`.execute(db);
 
-    const postSale4 = await db.transaction().execute(trx => accountingPosting.postSale(trx, sale4Id, cashierAuth));
-    console.log(`✓ الفاتورة 4 (#${sale4Id}): بيع آجل لعميل (مديونية 350 جنيه) وترحيل قيدها (#${postSale4.journalEntryId}).`);
+    const postSale4 = await db.transaction().execute((trx) => accountingPosting.postSale(trx, sale4Id, cashierAuth));
+    console.log(
+      `✓ الفاتورة 4 (#${sale4Id}): بيع آجل لعميل (مديونية 350 جنيه) وترحيل قيدها (#${postSale4.journalEntryId}).`,
+    );
 
     // -------------------------------------------------------------------------
     // STEP 6: دورة المرتجعات ورد الأموال ورد المخزون (Sales Returns Lifecycle)
@@ -443,42 +506,51 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     console.log('\n--- 6. دورة المرتجعات ورد المبالغ عبر ReturnsService ---');
 
     // أ. المرتجع 1: استرداد نقدي لقطعة من الفاتورة 2 (Sale #2)
-    const return1Res = await returnsService.createReturn({
-      type: 'sale',
-      invoiceId: sale2Id,
-      items: [{ productId: p1Id, qty: 1, saleItemId: s2Item1Id }],
-      settlementMode: 'refund',
-      refundMethod: 'cash',
-      managerPin: '123456',
-      note: 'مرتجع قميص نقدي سليم',
-    }, cashierAuth);
+    const return1Res = await returnsService.createReturn(
+      {
+        type: 'sale',
+        invoiceId: sale2Id,
+        items: [{ productId: p1Id, qty: 1, saleItemId: s2Item1Id }],
+        settlementMode: 'refund',
+        refundMethod: 'cash',
+        managerPin: '123456',
+        note: 'مرتجع قميص نقدي سليم',
+      },
+      cashierAuth,
+    );
 
     const retDoc1Id = Number(return1Res.id || return1Res.returnDocumentId);
     console.log(`✓ المرتجع 1 (#${retDoc1Id}): تم رد النقدية من الدرج واسترجاع قطعة للمخزون وترحيل قيد الاسترداد.`);
 
     // ب. المرتجع 2: استرداد برصيد متجر (Store Credit) من الفاتورة 3 (Sale #3)
-    const return2Res = await returnsService.createReturn({
-      type: 'sale',
-      invoiceId: sale3Id,
-      items: [{ productId: p2Id, qty: 1, saleItemId: s3Item1Id }],
-      settlementMode: 'store_credit',
-      managerPin: '123456',
-      note: 'مرتجع كرتونة عصير وإضافة القيمة كرصيد متجر',
-    }, cashierAuth);
+    const return2Res = await returnsService.createReturn(
+      {
+        type: 'sale',
+        invoiceId: sale3Id,
+        items: [{ productId: p2Id, qty: 1, saleItemId: s3Item1Id }],
+        settlementMode: 'store_credit',
+        managerPin: '123456',
+        note: 'مرتجع كرتونة عصير وإضافة القيمة كرصيد متجر',
+      },
+      cashierAuth,
+    );
 
     const retDoc2Id = Number(return2Res.id || return2Res.returnDocumentId);
     console.log(`✓ المرتجع 2 (#${retDoc2Id}): تم إضافة رصيد المتجر للعميل واسترجاع المخزون وترحيل قيده.`);
 
     // ج. المرتجع 3: استرداد لتخفيض مديونية العميل في الفاتورة الآجلة (Sale #4)
-    const return3Res = await returnsService.createReturn({
-      type: 'sale',
-      invoiceId: sale4Id,
-      items: [{ productId: p1Id, qty: 1, saleItemId: s4Item1Id }],
-      settlementMode: 'refund',
-      refundMethod: 'cash', // allocateRefundTenders يوجهه لـ receivable تلقائياً لحماية الكاش
-      managerPin: '123456',
-      note: 'مرتجع الفاتورة الآجلة وتصفير مديونية العميل',
-    }, cashierAuth);
+    const return3Res = await returnsService.createReturn(
+      {
+        type: 'sale',
+        invoiceId: sale4Id,
+        items: [{ productId: p1Id, qty: 1, saleItemId: s4Item1Id }],
+        settlementMode: 'refund',
+        refundMethod: 'cash', // allocateRefundTenders يوجهه لـ receivable تلقائياً لحماية الكاش
+        managerPin: '123456',
+        note: 'مرتجع الفاتورة الآجلة وتصفير مديونية العميل',
+      },
+      cashierAuth,
+    );
 
     const retDoc3Id = Number(return3Res.id || return3Res.returnDocumentId);
     console.log(`✓ المرتجع 3 (#${retDoc3Id}): تم تخفيض حساب العميل المدين وترحيل القيد العكسي.`);
@@ -487,7 +559,9 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     const custFinal = await sql<{ balance: string; store_credit_balance: string }>`
       SELECT balance, store_credit_balance FROM customers WHERE id = ${customerId}
     `.execute(db);
-    console.log(`✓ رصيد العميل الآجل: ${custFinal.rows[0].balance} جنيه (تم التصفير)، ورصيد المتجر: ${custFinal.rows[0].store_credit_balance} جنيه.`);
+    console.log(
+      `✓ رصيد العميل الآجل: ${custFinal.rows[0].balance} جنيه (تم التصفير)، ورصيد المتجر: ${custFinal.rows[0].store_credit_balance} جنيه.`,
+    );
 
     // -------------------------------------------------------------------------
     // STEP 7: إغلاق الوردية والمطابقة الصفرية للنقدية (Cashier Shift Reconciliation)
@@ -500,34 +574,50 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     console.log(`📊 النقدية المتوقعة المحسوبة في الدرج: ${expectedCashInDrawer} جنيه.`);
 
     // أ. إغلاق الكاشير الأعمى (Blind Close) -> تتحول الحالة إلى pending_review
-    await cashDrawerService.closeCashierShift(shiftId, {
-      countedCash: expectedCashInDrawer,
-      managerPin: '123456',
-      note: 'إغلاق الوردية وعد النقدية بالدرج مع مطابقة تامة 100%',
-    }, cashierAuth);
+    await cashDrawerService.closeCashierShift(
+      shiftId,
+      {
+        countedCash: expectedCashInDrawer,
+        managerPin: '123456',
+        note: 'إغلاق الوردية وعد النقدية بالدرج مع مطابقة تامة 100%',
+      },
+      cashierAuth,
+    );
 
     const pendingShiftRow = await sql<{ status: string; variance: string }>`
       SELECT status, variance FROM cashier_shifts WHERE id = ${shiftId}
     `.execute(db);
 
     if (pendingShiftRow.rows[0].status !== 'pending_review' || Number(pendingShiftRow.rows[0].variance) !== 0) {
-      throw new Error(`Blind shift close failed: status=${pendingShiftRow.rows[0].status}, variance=${pendingShiftRow.rows[0].variance}`);
+      throw new Error(
+        `Blind shift close failed: status=${pendingShiftRow.rows[0].status}, variance=${pendingShiftRow.rows[0].variance}`,
+      );
     }
-    console.log(`✓ إغلاق الكاشير الأعمى تم بنجاح: الحالة (${pendingShiftRow.rows[0].status})، الفارق الصفرى (${pendingShiftRow.rows[0].variance}).`);
+    console.log(
+      `✓ إغلاق الكاشير الأعمى تم بنجاح: الحالة (${pendingShiftRow.rows[0].status})، الفارق الصفرى (${pendingShiftRow.rows[0].variance}).`,
+    );
 
     // ب. مراجعة واعتماد مدير الفرع (Manager Review & Approval) -> تتحول الحالة إلى closed وترحيل فروق العجز/الزيادة
-    await cashDrawerService.reviewCashierShiftClose(shiftId, {
-      note: 'مراجعة وتدقيق الدرج واعتماد الإغلاق النهائي من مدير الفرع',
-    }, adminAuth);
+    await cashDrawerService.reviewCashierShiftClose(
+      shiftId,
+      {
+        note: 'مراجعة وتدقيق الدرج واعتماد الإغلاق النهائي من مدير الفرع',
+      },
+      adminAuth,
+    );
 
     const closedShiftRow = await sql<{ status: string; variance: string }>`
       SELECT status, variance FROM cashier_shifts WHERE id = ${shiftId}
     `.execute(db);
 
     if (closedShiftRow.rows[0].status !== 'closed' || Number(closedShiftRow.rows[0].variance) !== 0) {
-      throw new Error(`Shift manager review failed: status=${closedShiftRow.rows[0].status}, variance=${closedShiftRow.rows[0].variance}`);
+      throw new Error(
+        `Shift manager review failed: status=${closedShiftRow.rows[0].status}, variance=${closedShiftRow.rows[0].variance}`,
+      );
     }
-    console.log(`✓ تم اعتماد الإغلاق النهائي من المدير بنجاح: الحالة (${closedShiftRow.rows[0].status})، الفارق (${closedShiftRow.rows[0].variance} فرق صفرى).`);
+    console.log(
+      `✓ تم اعتماد الإغلاق النهائي من المدير بنجاح: الحالة (${closedShiftRow.rows[0].status})، الفارق (${closedShiftRow.rows[0].variance} فرق صفرى).`,
+    );
 
     // -------------------------------------------------------------------------
     // STEP 8: التدقيق المحاسبي الشامل وثبات القيد المزدوج (Double-Entry Invariants)
@@ -549,10 +639,14 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     const delta = Math.abs(totalDebit - totalCredit);
 
     console.log(`📊 إجمالي القيود المُرحلة: ${totalJournals} قيداً محاسبياً.`);
-    console.log(`📊 إجمالي المدين: ${totalDebit.toLocaleString()} جنيه | إجمالي الدائن: ${totalCredit.toLocaleString()} جنيه | الفارق: ${delta}`);
+    console.log(
+      `📊 إجمالي المدين: ${totalDebit.toLocaleString()} جنيه | إجمالي الدائن: ${totalCredit.toLocaleString()} جنيه | الفارق: ${delta}`,
+    );
 
     if (delta > 0.001) {
-      throw new Error(`CRITICAL: POS & Returns journal entries do not balance! Debit=${totalDebit}, Credit=${totalCredit}, Delta=${delta}`);
+      throw new Error(
+        `CRITICAL: POS & Returns journal entries do not balance! Debit=${totalDebit}, Credit=${totalCredit}, Delta=${delta}`,
+      );
     }
 
     const unbalancedEntries = await sql<{ id: number; diff: string }>`
@@ -574,7 +668,6 @@ async function runPosRetailStorefrontReturnsSimulation(): Promise<void> {
     console.log('\n=============================================================================');
     console.log('  تهانينا! فحص نقاط البيع والمتجر والمرتجعات (POS & Returns) اجتاز 100%');
     console.log('=============================================================================\n');
-
   } finally {
     // تنظيف بيانات الاختبار النظيفة
     await sql`DELETE FROM treasury_transactions WHERE tenant_id = ${testTenantId}`.execute(db);

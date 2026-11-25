@@ -76,8 +76,13 @@ const OTHER_TENANT = 't2';
 const ACCOUNT = 'a1';
 
 const ADMIN = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['accounts', 'purchases'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['accounts', 'purchases'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -117,20 +122,54 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   for (const [id, code, accountType] of [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'],
-    [1185, '1185', 'asset'], [2110, '2110', 'liability'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1185, '1185', 'asset'],
+    [2110, '2110', 'liability'],
   ] as Array<[number, string, string]>) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: accountType, is_active: true }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: accountType, is_active: true })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, supplier_payable_account_id: 2110,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'الفرع الرئيسي', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'المخزن الرئيسي', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      supplier_payable_account_id: 2110,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'الفرع الرئيسي', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'المخزن الرئيسي',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): { write: PurchasesWriteService; query: PurchasesQueryService } {
@@ -153,32 +192,109 @@ function buildServices(db: Kysely<Database>): { write: PurchasesWriteService; qu
 async function seed(db: Kysely<Database>): Promise<void> {
   await seedFoundation(db);
   const anyDb = db as any;
-  await anyDb.insertInto('suppliers').values({ id: 3, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد اختبار', phone: '020', balance: 880, is_active: true }).execute();
-  await anyDb.insertInto('suppliers').values({ id: 4, tenant_id: OTHER_TENANT, account_id: ACCOUNT, name: 'مورد آخر', phone: '021', balance: 0, is_active: true }).execute();
-  await anyDb.insertInto('supplier_payments').values({
-    id: 7, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'ZPV-261107-000002', supplier_id: 3,
-    amount: 120, payment_channel: 'instapay', instapay_address: 'test@instapay', note: 'دفعة اختبار',
-    branch_id: 1, location_id: 10, payment_date: '2026-11-05T10:00:00.000Z', created_by: 1,
-  }).execute();
-  await anyDb.insertInto('supplier_payments').values({
-    id: 8, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'ZPV-261107-000003', supplier_id: 3,
-    amount: 1, payment_channel: 'cash', instapay_address: null, note: 'دفعة نقدية بلا قيد بعد',
-    branch_id: 1, location_id: 10, payment_date: '2026-11-07T10:00:00.000Z', created_by: 1,
-  }).execute();
-  await anyDb.insertInto('supplier_payments').values({
-    id: 9, tenant_id: OTHER_TENANT, account_id: ACCOUNT, doc_no: 'ZPV-261107-000001', supplier_id: 4,
-    amount: 50, payment_channel: 'cash', instapay_address: null, note: 'دفعة مستأجر آخر',
-    branch_id: null, location_id: null, payment_date: '2026-11-07T10:00:00.000Z', created_by: 1,
-  }).execute();
-  await anyDb.insertInto('journal_entries').values({
-    id: 15002, tenant_id: TENANT, account_id: ACCOUNT, entry_no: 'JE-00015002',
-    entry_date: '2026-11-05', description: 'دفع إلى مورد اختبار', source_type: 'supplier_payment',
-    source_id: 7, status: 'posted', branch_id: 1, location_id: 10, created_by: 1,
-  }).execute();
+  await anyDb
+    .insertInto('suppliers')
+    .values({
+      id: 3,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'مورد اختبار',
+      phone: '020',
+      balance: 880,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('suppliers')
+    .values({
+      id: 4,
+      tenant_id: OTHER_TENANT,
+      account_id: ACCOUNT,
+      name: 'مورد آخر',
+      phone: '021',
+      balance: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('supplier_payments')
+    .values({
+      id: 7,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'ZPV-261107-000002',
+      supplier_id: 3,
+      amount: 120,
+      payment_channel: 'instapay',
+      instapay_address: 'test@instapay',
+      note: 'دفعة اختبار',
+      branch_id: 1,
+      location_id: 10,
+      payment_date: '2026-11-05T10:00:00.000Z',
+      created_by: 1,
+    })
+    .execute();
+  await anyDb
+    .insertInto('supplier_payments')
+    .values({
+      id: 8,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'ZPV-261107-000003',
+      supplier_id: 3,
+      amount: 1,
+      payment_channel: 'cash',
+      instapay_address: null,
+      note: 'دفعة نقدية بلا قيد بعد',
+      branch_id: 1,
+      location_id: 10,
+      payment_date: '2026-11-07T10:00:00.000Z',
+      created_by: 1,
+    })
+    .execute();
+  await anyDb
+    .insertInto('supplier_payments')
+    .values({
+      id: 9,
+      tenant_id: OTHER_TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'ZPV-261107-000001',
+      supplier_id: 4,
+      amount: 50,
+      payment_channel: 'cash',
+      instapay_address: null,
+      note: 'دفعة مستأجر آخر',
+      branch_id: null,
+      location_id: null,
+      payment_date: '2026-11-07T10:00:00.000Z',
+      created_by: 1,
+    })
+    .execute();
+  await anyDb
+    .insertInto('journal_entries')
+    .values({
+      id: 15002,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      entry_no: 'JE-00015002',
+      entry_date: '2026-11-05',
+      description: 'دفع إلى مورد اختبار',
+      source_type: 'supplier_payment',
+      source_id: 7,
+      status: 'posted',
+      branch_id: 1,
+      location_id: 10,
+      created_by: 1,
+    })
+    .execute();
 }
 
 /* Journal lines of one posted entry, keyed by account code. */
-async function journalLinesByCode(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
+async function journalLinesByCode(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
   const anyDb = db as any;
   const rows = await anyDb
     .selectFrom('journal_entry_lines as l')
@@ -195,7 +311,11 @@ async function journalLinesByCode(db: Kysely<Database>, sourceType: string, sour
 
 async function supplierBalance(db: Kysely<Database>, supplierId: number): Promise<number> {
   const anyDb = db as any;
-  const row = await anyDb.selectFrom('suppliers').select('balance').where('id', '=', supplierId).executeTakeFirstOrThrow();
+  const row = await anyDb
+    .selectFrom('suppliers')
+    .select('balance')
+    .where('id', '=', supplierId)
+    .executeTakeFirstOrThrow();
   return Number(row.balance);
 }
 
@@ -206,7 +326,7 @@ async function main(): Promise<void> {
     const service = new PurchasesQueryService(db as never);
 
     {
-      const result = await service.getSupplierPaymentById(7, ADMIN) as any;
+      const result = (await service.getSupplierPaymentById(7, ADMIN)) as any;
       const payment = result.supplierPayment;
       assert.equal(payment.id, '7');
       assert.equal(payment.docNo, 'ZPV-261107-000002');
@@ -224,7 +344,7 @@ async function main(): Promise<void> {
     }
 
     {
-      const result = await service.getSupplierPaymentById(8, ADMIN) as any;
+      const result = (await service.getSupplierPaymentById(8, ADMIN)) as any;
       const payment = result.supplierPayment;
       assert.equal(payment.docNo, 'ZPV-261107-000003');
       assert.equal(payment.paymentChannel, 'cash');
@@ -234,33 +354,27 @@ async function main(): Promise<void> {
     }
 
     {
-      await assert.rejects(
-        service.getSupplierPaymentById(999, ADMIN),
-        (error: unknown) => {
-          assert.ok(error instanceof AppError, 'missing payment must throw AppError');
-          assert.equal((error as AppError).code, 'PAYMENT_NOT_FOUND');
-          assert.notEqual((error as AppError).code, 'PURCHASE_NOT_FOUND');
-          assert.equal((error as AppError).statusCode, 404);
-          return true;
-        },
-      );
+      await assert.rejects(service.getSupplierPaymentById(999, ADMIN), (error: unknown) => {
+        assert.ok(error instanceof AppError, 'missing payment must throw AppError');
+        assert.equal((error as AppError).code, 'PAYMENT_NOT_FOUND');
+        assert.notEqual((error as AppError).code, 'PURCHASE_NOT_FOUND');
+        assert.equal((error as AppError).statusCode, 404);
+        return true;
+      });
       console.log('  missing payment throws PAYMENT_NOT_FOUND, never PURCHASE_NOT_FOUND passed');
     }
 
     {
-      await assert.rejects(
-        service.getSupplierPaymentById(9, ADMIN),
-        (error: unknown) => {
-          assert.ok(error instanceof AppError, 'other-tenant payment must throw AppError');
-          assert.equal((error as AppError).code, 'PAYMENT_NOT_FOUND');
-          return true;
-        },
-      );
+      await assert.rejects(service.getSupplierPaymentById(9, ADMIN), (error: unknown) => {
+        assert.ok(error instanceof AppError, 'other-tenant payment must throw AppError');
+        assert.equal((error as AppError).code, 'PAYMENT_NOT_FOUND');
+        return true;
+      });
       console.log('  other-tenant payment is invisible passed');
     }
 
     {
-      const result = await service.listSupplierPayments(ADMIN, {}) as any;
+      const result = (await service.listSupplierPayments(ADMIN, {})) as any;
       const listed = (result.supplierPayments as any[]).find((row) => row.id === '7');
       assert.ok(listed, 'payment 7 must be in the list');
       assert.equal(listed.docNo, 'ZPV-261107-000002');
@@ -279,7 +393,18 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد اختبار', phone: '020', balance: 300, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد اختبار',
+          phone: '020',
+          balance: 300,
+          is_active: true,
+        })
+        .execute();
       const { write } = buildServices(db);
       const result = await write.createSupplierPayment(
         { supplierId: 1, amount: 200, paymentChannel: 'cash', isAdvance: true, note: 'دفعة مقدمة D08' } as any,
@@ -287,11 +412,17 @@ async function main(): Promise<void> {
       );
       assert.equal((result as any).ok, true);
       assert.equal(await supplierBalance(db, 1), 300);
-      const payment = await anyDb.selectFrom('supplier_payments').select(['id', 'is_advance', 'applied_amount', 'amount']).executeTakeFirstOrThrow();
+      const payment = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['id', 'is_advance', 'applied_amount', 'amount'])
+        .executeTakeFirstOrThrow();
       assert.equal((payment as any).is_advance, true);
       assert.equal(Number((payment as any).applied_amount), 0);
       assert.equal(Number((payment as any).amount), 200);
-      const ledger = await anyDb.selectFrom('supplier_ledger').select(['entry_type', 'amount', 'balance_after']).execute();
+      const ledger = await anyDb
+        .selectFrom('supplier_ledger')
+        .select(['entry_type', 'amount', 'balance_after'])
+        .execute();
       /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: an advance now writes exactly
        * one zero-amount marker row — the payable is still never netted (the
        * D08 bug was a -amount entry); the marker only makes the withdrawal
@@ -320,7 +451,18 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد جديد', phone: '020', balance: 0, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد جديد',
+          phone: '020',
+          balance: 0,
+          is_active: true,
+        })
+        .execute();
       const { write } = buildServices(db);
       const result = await write.createSupplierPayment(
         { supplierId: 1, amount: 100, paymentChannel: 'cash', isAdvance: true } as any,
@@ -328,7 +470,10 @@ async function main(): Promise<void> {
       );
       assert.equal((result as any).ok, true);
       assert.equal(await supplierBalance(db, 1), 0);
-      const payment = await anyDb.selectFrom('supplier_payments').select(['id', 'is_advance']).executeTakeFirstOrThrow();
+      const payment = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['id', 'is_advance'])
+        .executeTakeFirstOrThrow();
       const lines = await journalLinesByCode(db, 'supplier_payment', Number((payment as any).id));
       assert.deepEqual(lines, [
         { code: '1110', debit: 0, credit: 100 },
@@ -346,7 +491,18 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد اختبار', phone: '020', balance: 50, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد اختبار',
+          phone: '020',
+          balance: 50,
+          is_active: true,
+        })
+        .execute();
       const { write } = buildServices(db);
       await write.createSupplierPayment(
         { supplierId: 1, amount: 75, paymentChannel: 'bank', isAdvance: true } as any,
@@ -372,7 +528,18 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد اختبار', phone: '020', balance: 300, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد اختبار',
+          phone: '020',
+          balance: 300,
+          is_active: true,
+        })
+        .execute();
       const { write } = buildServices(db);
       const result = await write.createSupplierPayment(
         { supplierId: 1, amount: 200, paymentChannel: 'cash' } as any,
@@ -380,7 +547,10 @@ async function main(): Promise<void> {
       );
       assert.equal((result as any).ok, true);
       assert.equal(await supplierBalance(db, 1), 100);
-      const payment = await anyDb.selectFrom('supplier_payments').select(['id', 'is_advance']).executeTakeFirstOrThrow();
+      const payment = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['id', 'is_advance'])
+        .executeTakeFirstOrThrow();
       assert.equal((payment as any).is_advance, false);
       const lines = await journalLinesByCode(db, 'supplier_payment', Number((payment as any).id));
       assert.deepEqual(lines, [
@@ -400,11 +570,31 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد اختبار', phone: '020', balance: 300, is_active: true }).execute();
-      await anyDb.insertInto('purchases').values({
-        id: 11, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'ZB-261114-0001', supplier_id: 1,
-        payment_type: 'credit', total: 300, status: 'posted',
-      }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد اختبار',
+          phone: '020',
+          balance: 300,
+          is_active: true,
+        })
+        .execute();
+      await anyDb
+        .insertInto('purchases')
+        .values({
+          id: 11,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          doc_no: 'ZB-261114-0001',
+          supplier_id: 1,
+          payment_type: 'credit',
+          total: 300,
+          status: 'posted',
+        })
+        .execute();
       const { write, query } = buildServices(db);
       await write.createSupplierPayment(
         { supplierId: 1, amount: 200, paymentChannel: 'cash', isAdvance: true } as any,
@@ -418,14 +608,22 @@ async function main(): Promise<void> {
       assert.equal(Number((first as any).appliedAmount), 150.55);
       assert.equal(Number((first as any).remainingAdvance), 49.45);
       assert.equal(await supplierBalance(db, 1), 149.45);
-      const afterFirst = await anyDb.selectFrom('supplier_payments').select(['applied_amount']).where('id', '=', advanceId).executeTakeFirstOrThrow();
+      const afterFirst = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['applied_amount'])
+        .where('id', '=', advanceId)
+        .executeTakeFirstOrThrow();
       assert.equal(Number((afterFirst as any).applied_amount), 150.55);
       const firstLines = await journalLinesByCode(db, 'supplier_advance_application', advanceId);
       assert.deepEqual(firstLines, [
         { code: '1185', debit: 0, credit: 150.55 },
         { code: '2110', debit: 150.55, credit: 0 },
       ]);
-      const firstLedger = await anyDb.selectFrom('supplier_ledger').select(['entry_type', 'amount', 'balance_after']).where('entry_type', '=', 'supplier_advance_application').execute();
+      const firstLedger = await anyDb
+        .selectFrom('supplier_ledger')
+        .select(['entry_type', 'amount', 'balance_after'])
+        .where('entry_type', '=', 'supplier_advance_application')
+        .execute();
       assert.equal(firstLedger.length, 1);
       assert.equal(Number(firstLedger[0].amount), -150.55);
       assert.equal(Number(firstLedger[0].balance_after), 149.45);
@@ -439,15 +637,19 @@ async function main(): Promise<void> {
       assert.equal((second as any).ok, true);
       assert.equal(Number((second as any).remainingAdvance), 0);
       assert.equal(await supplierBalance(db, 1), 100);
-      const afterSecond = await anyDb.selectFrom('supplier_payments').select(['applied_amount']).where('id', '=', advanceId).executeTakeFirstOrThrow();
+      const afterSecond = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['applied_amount'])
+        .where('id', '=', advanceId)
+        .executeTakeFirstOrThrow();
       assert.equal(Number((afterSecond as any).applied_amount), 200);
 
       // The detail + list reads show the advance split.
-      const detail = await query.getSupplierPaymentById(advanceId, ADMIN) as any;
+      const detail = (await query.getSupplierPaymentById(advanceId, ADMIN)) as any;
       assert.equal(detail.supplierPayment.isAdvance, true);
       assert.equal(detail.supplierPayment.appliedAmount, 200);
       assert.equal(detail.supplierPayment.remainingAdvance, 0);
-      const listed = await query.listSupplierPayments(ADMIN, {}) as any;
+      const listed = (await query.listSupplierPayments(ADMIN, {})) as any;
       const listedRow = (listed.supplierPayments as any[]).find((row) => row.id === String(advanceId));
       assert.ok(listedRow, 'advance must be in the list');
       assert.equal(listedRow.isAdvance, true);
@@ -456,7 +658,9 @@ async function main(): Promise<void> {
     } finally {
       await db.destroy();
     }
-    console.log('  apply 150.55 + 49.45 settles the advance to the piastre: payable 300 -> 100, Dr 2110 / Cr 1185 passed');
+    console.log(
+      '  apply 150.55 + 49.45 settles the advance to the piastre: payable 300 -> 100, Dr 2110 / Cr 1185 passed',
+    );
   }
 
   // 11. Over-applying, applying past the payable, and applying a
@@ -466,20 +670,48 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       const anyDb = db as any;
-      await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد اختبار', phone: '020', balance: 300, is_active: true }).execute();
-      await anyDb.insertInto('suppliers').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'مورد صغير', phone: '021', balance: 100, is_active: true }).execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد اختبار',
+          phone: '020',
+          balance: 300,
+          is_active: true,
+        })
+        .execute();
+      await anyDb
+        .insertInto('suppliers')
+        .values({
+          id: 2,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'مورد صغير',
+          phone: '021',
+          balance: 100,
+          is_active: true,
+        })
+        .execute();
       const { write } = buildServices(db);
       await write.createSupplierPayment(
         { supplierId: 1, amount: 200, paymentChannel: 'cash', isAdvance: true } as any,
         ADMIN,
       );
-      const advance = await anyDb.selectFrom('supplier_payments').select(['id']).where('supplier_id', '=', 1).executeTakeFirstOrThrow();
+      const advance = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['id'])
+        .where('supplier_id', '=', 1)
+        .executeTakeFirstOrThrow();
       const advanceId = Number((advance as any).id);
-      await write.createSupplierPayment(
-        { supplierId: 1, amount: 50, paymentChannel: 'cash' } as any,
-        ADMIN,
-      );
-      const ordinary = await anyDb.selectFrom('supplier_payments').select(['id']).where('supplier_id', '=', 1).where('is_advance', '=', false).executeTakeFirstOrThrow();
+      await write.createSupplierPayment({ supplierId: 1, amount: 50, paymentChannel: 'cash' } as any, ADMIN);
+      const ordinary = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['id'])
+        .where('supplier_id', '=', 1)
+        .where('is_advance', '=', false)
+        .executeTakeFirstOrThrow();
       const ordinaryId = Number((ordinary as any).id);
 
       await assert.rejects(
@@ -492,28 +724,30 @@ async function main(): Promise<void> {
       );
       // 200.01 was refused: nothing applied, payable untouched.
       assert.equal(await supplierBalance(db, 1), 250);
-      const untouched = await anyDb.selectFrom('supplier_payments').select(['applied_amount']).where('id', '=', advanceId).executeTakeFirstOrThrow();
+      const untouched = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['applied_amount'])
+        .where('id', '=', advanceId)
+        .executeTakeFirstOrThrow();
       assert.equal(Number((untouched as any).applied_amount), 0);
-      const applyJournals = await anyDb.selectFrom('journal_entries').select(['id']).where('source_type', '=', 'supplier_advance_application').execute();
+      const applyJournals = await anyDb
+        .selectFrom('journal_entries')
+        .select(['id'])
+        .where('source_type', '=', 'supplier_advance_application')
+        .execute();
       assert.equal(applyJournals.length, 0);
 
-      await assert.rejects(
-        write.applySupplierAdvance(ordinaryId, { amount: 10 } as any, ADMIN),
-        (error: unknown) => {
-          assert.ok(error instanceof AppError);
-          assert.equal((error as AppError).code, 'SUPPLIER_ADVANCE_NOT_ADVANCE');
-          return true;
-        },
-      );
+      await assert.rejects(write.applySupplierAdvance(ordinaryId, { amount: 10 } as any, ADMIN), (error: unknown) => {
+        assert.ok(error instanceof AppError);
+        assert.equal((error as AppError).code, 'SUPPLIER_ADVANCE_NOT_ADVANCE');
+        return true;
+      });
 
-      await assert.rejects(
-        write.applySupplierAdvance(999999, { amount: 10 } as any, ADMIN),
-        (error: unknown) => {
-          assert.ok(error instanceof AppError);
-          assert.equal((error as AppError).code, 'SUPPLIER_ADVANCE_NOT_FOUND');
-          return true;
-        },
-      );
+      await assert.rejects(write.applySupplierAdvance(999999, { amount: 10 } as any, ADMIN), (error: unknown) => {
+        assert.ok(error instanceof AppError);
+        assert.equal((error as AppError).code, 'SUPPLIER_ADVANCE_NOT_FOUND');
+        return true;
+      });
 
       // Advance 200 against a supplier who owes only 100: applying
       // 150 is past the payable even though the advance covers it.
@@ -521,7 +755,11 @@ async function main(): Promise<void> {
         { supplierId: 2, amount: 200, paymentChannel: 'cash', isAdvance: true } as any,
         ADMIN,
       );
-      const smallAdvance = await anyDb.selectFrom('supplier_payments').select(['id']).where('supplier_id', '=', 2).executeTakeFirstOrThrow();
+      const smallAdvance = await anyDb
+        .selectFrom('supplier_payments')
+        .select(['id'])
+        .where('supplier_id', '=', 2)
+        .executeTakeFirstOrThrow();
       await assert.rejects(
         write.applySupplierAdvance(Number((smallAdvance as any).id), { amount: 150 } as any, ADMIN),
         (error: unknown) => {
@@ -534,7 +772,9 @@ async function main(): Promise<void> {
     } finally {
       await db.destroy();
     }
-    console.log('  over-apply / non-advance / missing advance / past-payable all fail closed with nothing half-written passed');
+    console.log(
+      '  over-apply / non-advance / missing advance / past-payable all fail closed with nothing half-written passed',
+    );
   }
 
   console.log('supplier-payment-details checks passed');

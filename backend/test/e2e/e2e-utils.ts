@@ -8,7 +8,10 @@ const DEFAULT_PASSWORD = process.env.E2E_PASSWORD || process.env.DEFAULT_ADMIN_P
 type JsonValue = Record<string, any>;
 
 function safeJson(value: unknown): string {
-  return JSON.stringify(value, (key, item) => /password|secret|token|authorization/i.test(key) ? '[REDACTED]' : item) ?? 'null';
+  return (
+    JSON.stringify(value, (key, item) => (/password|secret|token|authorization/i.test(key) ? '[REDACTED]' : item)) ??
+    'null'
+  );
 }
 
 export function uniqueSuffix(prefix = 'e2e'): string {
@@ -38,9 +41,8 @@ export class E2EClient {
 
   private updateCookies(response: Response): void {
     const headers = response.headers as any;
-    const setCookies: string[] = typeof headers.getSetCookie === 'function'
-      ? headers.getSetCookie()
-      : (headers.raw?.()['set-cookie'] || []);
+    const setCookies: string[] =
+      typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : headers.raw?.()['set-cookie'] || [];
     for (const raw of setCookies) {
       const parsed = parseSetCookie(raw);
       if (!parsed) continue;
@@ -49,7 +51,12 @@ export class E2EClient {
     }
   }
 
-  async request(method: string, path: string, body?: unknown, customHeaders?: Record<string, string>): Promise<{ response: Response; json: JsonValue | null }> {
+  async request(
+    method: string,
+    path: string,
+    body?: unknown,
+    customHeaders?: Record<string, string>,
+  ): Promise<{ response: Response; json: JsonValue | null }> {
     const headers: Record<string, string> = { Accept: 'application/json', ...customHeaders };
     const cookieHeader = this.cookieHeader();
     if (cookieHeader) headers.Cookie = cookieHeader;
@@ -57,7 +64,11 @@ export class E2EClient {
       headers['Content-Type'] = 'application/json';
     }
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
-      const csrfToken = this.cookies.get('zs_cloud_csrf_token') || this.cookies.get('zs_dev_csrf_token') || this.cookies.get('zs_csrf_token') || this.cookies.get('csrf_token');
+      const csrfToken =
+        this.cookies.get('zs_cloud_csrf_token') ||
+        this.cookies.get('zs_dev_csrf_token') ||
+        this.cookies.get('zs_csrf_token') ||
+        this.cookies.get('csrf_token');
       if (csrfToken) headers['x-csrf-token'] = csrfToken;
     }
     const response = await fetch(`${this.baseUrl}${path}`, {
@@ -69,7 +80,11 @@ export class E2EClient {
     const text = await response.text();
     let json: JsonValue | null = null;
     if (text) {
-      try { json = JSON.parse(text); } catch { json = { raw: text }; }
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = { raw: text };
+      }
     }
     return { response, json };
   }
@@ -80,16 +95,25 @@ export class E2EClient {
     for (let attempts = 0; attempts < 5; attempts++) {
       const { response, json } = await this.request('POST', '/api/auth/login', { username, password });
       if (response.status === 429) {
-        console.log("Rate limited (429) during login, waiting 15 seconds...");
-        await new Promise(resolve => setTimeout(resolve, 15000));
+        console.log('Rate limited (429) during login, waiting 15 seconds...');
+        await new Promise((resolve) => setTimeout(resolve, 15000));
         continue;
       }
       assert.equal(response.status, 201, `Login failed: ${safeJson(json)}`);
-      assert.ok(this.cookies.get('zs_cloud_session') || this.cookies.get('zs_dev_session') || this.cookies.get('zs_session'), 'session cookie missing after login');
-      assert.ok(this.cookies.get('zs_cloud_csrf_token') || this.cookies.get('zs_dev_csrf_token') || this.cookies.get('zs_csrf_token') || this.cookies.get('csrf_token'), 'csrf_token cookie missing after login');
+      assert.ok(
+        this.cookies.get('zs_cloud_session') || this.cookies.get('zs_dev_session') || this.cookies.get('zs_session'),
+        'session cookie missing after login',
+      );
+      assert.ok(
+        this.cookies.get('zs_cloud_csrf_token') ||
+          this.cookies.get('zs_dev_csrf_token') ||
+          this.cookies.get('zs_csrf_token') ||
+          this.cookies.get('csrf_token'),
+        'csrf_token cookie missing after login',
+      );
       return json || {};
     }
-    assert.fail("Login failed after 5 retries due to 429");
+    assert.fail('Login failed after 5 retries due to 429');
   }
 
   async get(path: string, expectedStatus = 200): Promise<JsonValue> {
@@ -98,7 +122,12 @@ export class E2EClient {
     return json || {};
   }
 
-  async post(path: string, body: unknown, expectedStatus = 201, customHeaders?: Record<string, string>): Promise<JsonValue> {
+  async post(
+    path: string,
+    body: unknown,
+    expectedStatus = 201,
+    customHeaders?: Record<string, string>,
+  ): Promise<JsonValue> {
     const { response, json } = await this.request('POST', path, body, customHeaders);
     if (response.status !== expectedStatus) {
       console.log(`POST ${path} Payload:`, safeJson(body));

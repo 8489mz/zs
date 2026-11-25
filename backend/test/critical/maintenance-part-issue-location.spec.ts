@@ -109,10 +109,24 @@ const AUTH = { tenantId: TENANT, accountId: TENANT, userId: 7 } as any;
 
 // Required account codes (accounting-foundation.engine.ts), ids 1..18.
 const ACCOUNTS: Array<[number, string]> = [
-  [1, '1110'], [2, '1120'], [3, '1130'], [4, '1140'], [5, '1150'],
-  [6, '2110'], [7, '2120'], [8, '2150'], [9, '4100'], [10, '4300'],
-  [11, '4400'], [12, '5100'], [13, '5300'], [14, '6900'], [15, '6000'],
-  [16, '7290'], [17, '7110'], [18, '7210'],
+  [1, '1110'],
+  [2, '1120'],
+  [3, '1130'],
+  [4, '1140'],
+  [5, '1150'],
+  [6, '2110'],
+  [7, '2120'],
+  [8, '2150'],
+  [9, '4100'],
+  [10, '4300'],
+  [11, '4400'],
+  [12, '5100'],
+  [13, '5300'],
+  [14, '6900'],
+  [15, '6000'],
+  [16, '7290'],
+  [17, '7110'],
+  [18, '7210'],
 ];
 // Branches: 1 = الفرع الرئيسي, 2 = other branch. Locations: 10/11 on
 // branch 1, 12 on branch 2.
@@ -131,7 +145,11 @@ async function seedProduct(pg: PGlite, id: number, stock: number, cost: number):
 }
 
 async function seedLocationStock(
-  pg: PGlite, productId: number, branchId: number | null, locationId: number | null, qty: number,
+  pg: PGlite,
+  productId: number,
+  branchId: number | null,
+  locationId: number | null,
+  qty: number,
 ): Promise<void> {
   await pg.query(
     `INSERT INTO product_location_stock (product_id, branch_id, location_id, qty, reserved_qty, tenant_id, account_id)
@@ -140,7 +158,12 @@ async function seedLocationStock(
   );
 }
 
-async function seedTicket(pg: PGlite, ticketNo: string, branchId: number | null, locationId: number | null): Promise<number> {
+async function seedTicket(
+  pg: PGlite,
+  ticketNo: string,
+  branchId: number | null,
+  locationId: number | null,
+): Promise<number> {
   const res = await pg.query(
     `INSERT INTO maintenance_tickets
        (tenant_id, account_id, ticket_no, customer_name, customer_phone, device_model,
@@ -181,7 +204,10 @@ async function productCost(pg: PGlite, productId: number): Promise<number> {
   return Number((res.rows[0] as { cost_price: string }).cost_price);
 }
 
-async function partRows(pg: PGlite, ticketId: number): Promise<Array<{ id: number; location_id: number | null; qty: string }>> {
+async function partRows(
+  pg: PGlite,
+  ticketId: number,
+): Promise<Array<{ id: number; location_id: number | null; qty: string }>> {
   const res = await pg.query(
     `SELECT id, location_id, qty FROM maintenance_ticket_parts WHERE tenant_id = $1 AND ticket_id = $2 ORDER BY id`,
     [TENANT, ticketId],
@@ -189,7 +215,11 @@ async function partRows(pg: PGlite, ticketId: number): Promise<Array<{ id: numbe
   return res.rows as Array<{ id: number; location_id: number | null; qty: string }>;
 }
 
-async function movementFor(pg: PGlite, ticketId: number, movementType: string): Promise<{ id: number; branch_id: number | null; location_id: number | null; qty: string }> {
+async function movementFor(
+  pg: PGlite,
+  ticketId: number,
+  movementType: string,
+): Promise<{ id: number; branch_id: number | null; location_id: number | null; qty: string }> {
   const res = await pg.query(
     `SELECT id, branch_id, location_id, qty FROM stock_movements
      WHERE tenant_id = $1 AND reference_type = 'maintenance_ticket' AND reference_id = $2 AND movement_type = $3 ORDER BY id`,
@@ -199,7 +229,13 @@ async function movementFor(pg: PGlite, ticketId: number, movementType: string): 
   return res.rows[0] as { id: number; branch_id: number | null; location_id: number | null; qty: string };
 }
 
-async function journalLines(pg: PGlite, sourceType: string, sourceId: number): Promise<Array<{ code: string; debit: string; credit: string; branch_id: number | null; location_id: number | null }>> {
+async function journalLines(
+  pg: PGlite,
+  sourceType: string,
+  sourceId: number,
+): Promise<
+  Array<{ code: string; debit: string; credit: string; branch_id: number | null; location_id: number | null }>
+> {
   const res = await pg.query(
     `SELECT a.code, jel.debit, jel.credit, je.branch_id, je.location_id
      FROM journal_entries je
@@ -208,10 +244,21 @@ async function journalLines(pg: PGlite, sourceType: string, sourceId: number): P
      WHERE je.tenant_id = $1 AND je.source_type = $2 AND je.source_id = $3 ORDER BY jel.id`,
     [TENANT, sourceType, sourceId],
   );
-  return res.rows as Array<{ code: string; debit: string; credit: string; branch_id: number | null; location_id: number | null }>;
+  return res.rows as Array<{
+    code: string;
+    debit: string;
+    credit: string;
+    branch_id: number | null;
+    location_id: number | null;
+  }>;
 }
 
-function assertJournal(lines: Array<{ code: string; debit: string; credit: string }>, debitCode: string, creditCode: string, amount: number): void {
+function assertJournal(
+  lines: Array<{ code: string; debit: string; credit: string }>,
+  debitCode: string,
+  creditCode: string,
+  amount: number,
+): void {
   assert.equal(lines.length, 2, `expected exactly 2 journal lines, got ${JSON.stringify(lines)}`);
   const debit = lines.find((l) => l.code === debitCode);
   const credit = lines.find((l) => l.code === creditCode);
@@ -430,7 +477,10 @@ async function main(): Promise<void> {
       );
     `);
 
-    await pg.query(`INSERT INTO branches (id, tenant_id, account_id, name, code) VALUES (1, $1, $1, 'Main', 'B1'), (2, $1, $1, 'Other', 'B2')`, [TENANT]);
+    await pg.query(
+      `INSERT INTO branches (id, tenant_id, account_id, name, code) VALUES (1, $1, $1, 'Main', 'B1'), (2, $1, $1, 'Other', 'B2')`,
+      [TENANT],
+    );
     await pg.query(
       `INSERT INTO stock_locations (id, tenant_id, account_id, branch_id, name, code, location_type)
        VALUES (10, $1, $1, 1, 'Main Warehouse', 'L10', 'internal_warehouse'),
@@ -438,8 +488,13 @@ async function main(): Promise<void> {
               (12, $1, $1, 2, 'Other Warehouse', 'L12', 'internal_warehouse')`,
       [TENANT],
     );
-    await pg.query(`INSERT INTO settings (tenant_id, account_id, key, value) VALUES ($1, $1, 'currency', '"EGP"')`, [TENANT]);
-    await pg.query(`INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ($1, 'EGP', 1, true)`, [TENANT]);
+    await pg.query(`INSERT INTO settings (tenant_id, account_id, key, value) VALUES ($1, $1, 'currency', '"EGP"')`, [
+      TENANT,
+    ]);
+    await pg.query(
+      `INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ($1, 'EGP', 1, true)`,
+      [TENANT],
+    );
     for (const [id, code] of ACCOUNTS) {
       await pg.query(
         `INSERT INTO accounting_accounts (id, tenant_id, account_id, code, name_ar, name_en, account_type, is_active, is_system)
@@ -458,11 +513,25 @@ async function main(): Promise<void> {
 
     const foundation = new AccountingTenantFoundationService();
     const posting = new AccountingPostingService(foundation);
-    const service = new MaintenanceService(db as any, new TransactionHelper(), {} as any, posting as any, foundation as any);
+    const service = new MaintenanceService(
+      db as any,
+      new TransactionHelper(),
+      {} as any,
+      posting as any,
+      foundation as any,
+    );
     const issue = (ticketId: number, productId: number, qty: number, price = 75) =>
-      service.addPart(ticketId, { productId, productName: `Product ${productId}`, qty, unitCost: price, unitPrice: price } as any, AUTH);
+      service.addPart(
+        ticketId,
+        { productId, productName: `Product ${productId}`, qty, unitCost: price, unitPrice: price } as any,
+        AUTH,
+      );
     const issueAt = (ticketId: number, productId: number, qty: number, locationId: number, price = 75) =>
-      service.addPart(ticketId, { productId, productName: `Product ${productId}`, qty, unitCost: price, unitPrice: price, locationId } as any, AUTH);
+      service.addPart(
+        ticketId,
+        { productId, productName: `Product ${productId}`, qty, unitCost: price, unitPrice: price, locationId } as any,
+        AUTH,
+      );
 
     // S1 — the live bug: global 10, ALL 10 in ONE real location row,
     // unassigned 0, ticket with no branch/location.
@@ -500,7 +569,11 @@ async function main(): Promise<void> {
     const je2 = await journalLines(pg, 'maintenance_part_return', move2.id);
     assert.equal(je2[0].branch_id, BRANCH_MAIN, 'S2: return journal carries the resolved branch');
     assert.equal(je2[0].location_id, LOC_MAIN_A, 'S2: return journal carries the location');
-    assert.equal(await locationBranch(pg, 101, LOC_MAIN_A), BRANCH_MAIN, 'S2: return must not NULL the location row branch_id');
+    assert.equal(
+      await locationBranch(pg, 101, LOC_MAIN_A),
+      BRANCH_MAIN,
+      'S2: return must not NULL the location row branch_id',
+    );
 
     // S3 — genuinely insufficient stock still throws INSUFFICIENT_STOCK.
     await seedProduct(pg, 102, 0, 75);
@@ -579,7 +652,11 @@ async function main(): Promise<void> {
     const parts7 = await partRows(pg, t7);
     assert.equal(parts7[0].location_id, LOC_MAIN_A, 'S7: part row records the explicit location');
     assert.equal(await locationQty(pg, 107, LOC_MAIN_A), 9, 'S7: location stock 10 -> 9');
-    assert.equal(await locationBranch(pg, 107, LOC_MAIN_A), BRANCH_MAIN, 'S7: deduction must not NULL the location row branch_id');
+    assert.equal(
+      await locationBranch(pg, 107, LOC_MAIN_A),
+      BRANCH_MAIN,
+      'S7: deduction must not NULL the location row branch_id',
+    );
     assert.equal(await globalQty(pg, 107), 9, 'S7: global stock 10 -> 9');
     const move7 = await movementFor(pg, t7, 'maintenance_consumption');
     assert.equal(move7.branch_id, BRANCH_MAIN, 'S7: movement carries the derived branch');

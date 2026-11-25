@@ -67,10 +67,16 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 async function seedCurrency(db: Kysely<Database>, tenantId: string, currency: string): Promise<void> {
-  await sql`CREATE TABLE IF NOT EXISTS settings (tenant_id text, key text, value text, PRIMARY KEY (tenant_id, key))`.execute(db);
-  await sql`CREATE TABLE IF NOT EXISTS currency_exchange_rates (tenant_id text, currency_code text, is_base boolean, exchange_rate numeric)`.execute(db);
+  await sql`CREATE TABLE IF NOT EXISTS settings (tenant_id text, key text, value text, PRIMARY KEY (tenant_id, key))`.execute(
+    db,
+  );
+  await sql`CREATE TABLE IF NOT EXISTS currency_exchange_rates (tenant_id text, currency_code text, is_base boolean, exchange_rate numeric)`.execute(
+    db,
+  );
   await sql`INSERT INTO settings (tenant_id, key, value) VALUES (${tenantId}, 'currency', ${currency})`.execute(db);
-  await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES (${tenantId}, ${currency}, true, 1)`.execute(db);
+  await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES (${tenantId}, ${currency}, true, 1)`.execute(
+    db,
+  );
 }
 
 const LOT_TABLES = `
@@ -102,7 +108,10 @@ async function main(): Promise<void> {
       assert.equal(result.bucket, bucket);
       assert.equal(result.reason, reason);
       // The resolver result carries no money: no numeric field at all.
-      assert.ok(Object.values(result).every((v) => typeof v !== 'number'), 'resolver result must carry no money math');
+      assert.ok(
+        Object.values(result).every((v) => typeof v !== 'number'),
+        'resolver result must carry no money math',
+      );
     }
     console.log('phase A broker classification-only passed');
   }
@@ -121,37 +130,65 @@ async function main(): Promise<void> {
       await seedCurrency(db, 't3', 'EGP');
       await db.transaction().execute(async (trx) => {
         await allocateSaleFromImportLots(trx as never, {
-          tenantId: 't1', saleId: 1, locationId: 5,
+          tenantId: 't1',
+          saleId: 1,
+          locationId: 5,
           items: [{ productId: 7, qty: 1, netUnitPrice: 110.1375 }],
         });
         await allocateSaleFromImportLots(trx as never, {
-          tenantId: 't3', saleId: 2, locationId: 5,
+          tenantId: 't3',
+          saleId: 2,
+          locationId: 5,
           items: [{ productId: 7, qty: 1, netUnitPrice: 110.1375 }],
         });
       });
-      const kwdAlloc = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
-      const egpAlloc = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't3').executeTakeFirstOrThrow();
+      const kwdAlloc = await db
+        .selectFrom('import_sale_allocations')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .executeTakeFirstOrThrow();
+      const egpAlloc = await db
+        .selectFrom('import_sale_allocations')
+        .selectAll()
+        .where('tenant_id', '=', 't3')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(kwdAlloc.gross_margin_egp), 100.13);
       assert.equal(Number(egpAlloc.gross_margin_egp), 100.13);
       // Cancel-restore (site 2): reversal is the EGP-rounded negation.
       await db.transaction().execute(async (trx) => {
         await restoreImportLotsFromCancelledSale(trx as never, { tenantId: 't1', saleId: 1 });
       });
-      const cancelReversal = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't1').where('allocation_type', '=', 'cancellation').executeTakeFirstOrThrow();
+      const cancelReversal = await db
+        .selectFrom('import_sale_allocations')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .where('allocation_type', '=', 'cancellation')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(cancelReversal.gross_margin_egp), -100.13);
       // Return-restore (site 3): allocate a fresh sale, then return it.
       await db.transaction().execute(async (trx) => {
         await allocateSaleFromImportLots(trx as never, {
-          tenantId: 't1', saleId: 3, locationId: 5,
+          tenantId: 't1',
+          saleId: 3,
+          locationId: 5,
           items: [{ productId: 7, qty: 1, netUnitPrice: 110.1375 }],
         });
       });
       await db.transaction().execute(async (trx) => {
         await restoreImportLotsFromSalesReturn(trx as never, {
-          tenantId: 't1', saleId: 3, productId: 7, returnQty: 1,
+          tenantId: 't1',
+          saleId: 3,
+          productId: 7,
+          returnQty: 1,
         });
       });
-      const returnReversal = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't1').where('sale_id', '=', 3).where('allocation_type', '=', 'return').executeTakeFirstOrThrow();
+      const returnReversal = await db
+        .selectFrom('import_sale_allocations')
+        .selectAll()
+        .where('tenant_id', '=', 't1')
+        .where('sale_id', '=', 3)
+        .where('allocation_type', '=', 'return')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(returnReversal.gross_margin_egp), -100.13);
       console.log('phase B lot margins at EGP digits passed');
     } finally {
@@ -171,11 +208,17 @@ async function main(): Promise<void> {
       `);
       await db.transaction().execute(async (trx) => {
         await allocateSaleFromImportLots(trx as never, {
-          tenantId: 't9', saleId: 1, locationId: 5,
+          tenantId: 't9',
+          saleId: 1,
+          locationId: 5,
           items: [{ productId: 7, qty: 1, netUnitPrice: 110.1375 }],
         });
       });
-      const alloc = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't9').executeTakeFirstOrThrow();
+      const alloc = await db
+        .selectFrom('import_sale_allocations')
+        .selectAll()
+        .where('tenant_id', '=', 't9')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(alloc.gross_margin_egp), 100.13);
       console.log('phase C no-settings allocation passed');
     } finally {
@@ -187,7 +230,12 @@ async function main(): Promise<void> {
   // (no moneyDigits passed, as the preorder-conversion caller does)
   // rounds to EGP 2dp: 66.75 + 1 x 16.6875 = 83.4375 -> 83.44.
   {
-    const saleCost = calculateImportSaleCost({ qty: 3, allocatedQty: 2, allocCostEgp: 66.75, fallbackUnitCostEgp: 16.6875 });
+    const saleCost = calculateImportSaleCost({
+      qty: 3,
+      allocatedQty: 2,
+      allocCostEgp: 66.75,
+      fallbackUnitCostEgp: 16.6875,
+    });
     assert.equal(saleCost.totalCostEgp, 83.44);
     assert.equal(saleCost.shortfallQty, 1);
     assert.equal(saleCost.unitCostEgp, 27.813333);
@@ -197,5 +245,8 @@ async function main(): Promise<void> {
 
 main().then(
   () => console.log('import-broker-lot-canonical: all phases passed'),
-  (err) => { console.error(err); process.exit(1); },
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
 );

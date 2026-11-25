@@ -38,8 +38,30 @@ const purchase = {
 };
 
 const items = [
-  { id: 11, purchase_id: 7, product_id: 5, product_name: 'صنف أ', qty: 10, received_qty: 4, unit_cost: 100, line_total: 1000, unit_name: 'قطعة', unit_multiplier: 1 },
-  { id: 12, purchase_id: 7, product_id: 6, product_name: 'صنف ب', qty: 3, received_qty: 3, unit_cost: 50, line_total: 150, unit_name: 'قطعة', unit_multiplier: 1 },
+  {
+    id: 11,
+    purchase_id: 7,
+    product_id: 5,
+    product_name: 'صنف أ',
+    qty: 10,
+    received_qty: 4,
+    unit_cost: 100,
+    line_total: 1000,
+    unit_name: 'قطعة',
+    unit_multiplier: 1,
+  },
+  {
+    id: 12,
+    purchase_id: 7,
+    product_id: 6,
+    product_name: 'صنف ب',
+    qty: 3,
+    received_qty: 3,
+    unit_cost: 50,
+    line_total: 150,
+    unit_name: 'قطعة',
+    unit_multiplier: 1,
+  },
 ];
 
 const [row] = mapPurchaseRows([purchase], items);
@@ -51,7 +73,19 @@ assert.equal((row.items as Array<Record<string, unknown>>)[1].receivedQty, 3);
 // A row without received_qty (legacy rows) maps to 0, never undefined.
 const [legacyRow] = mapPurchaseRows(
   [{ ...purchase, id: 8 }],
-  [{ id: 13, purchase_id: 8, product_id: 5, product_name: 'صنف', qty: 2, unit_cost: 10, line_total: 20, unit_name: 'قطعة', unit_multiplier: 1 }],
+  [
+    {
+      id: 13,
+      purchase_id: 8,
+      product_id: 5,
+      product_name: 'صنف',
+      qty: 2,
+      unit_cost: 10,
+      line_total: 20,
+      unit_name: 'قطعة',
+      unit_multiplier: 1,
+    },
+  ],
 );
 assert.equal((legacyRow.items as Array<Record<string, unknown>>)[0].receivedQty, 0);
 

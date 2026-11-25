@@ -83,18 +83,32 @@ async function main(): Promise<void> {
 
   // 2. Every top-level docs/*.md file on disk is linked with a purpose.
   const files = topLevelDocs();
-  assert.equal(files.length, 21, 'docs/ must hold 21 top-level .md files (re-pin this spec + the index if a doc is added or removed)');
+  assert.equal(
+    files.length,
+    21,
+    'docs/ must hold 21 top-level .md files (re-pin this spec + the index if a doc is added or removed)',
+  );
   for (const file of files) {
     assert.ok(isLinked(indexText, file), `docs/README.md is missing the link for docs/${file}`);
     const row = indexText.split('\n').find((line) => line.includes(`](${file})`));
     assert.ok(row, `docs/README.md must have a table row for docs/${file}`);
-    const cells = row.split('|').map((cell) => cell.trim()).filter(Boolean);
-    assert.ok(cells.length >= 2 && cells[1].length > 10, `docs/README.md row for docs/${file} must carry a one-line purpose`);
+    const cells = row
+      .split('|')
+      .map((cell) => cell.trim())
+      .filter(Boolean);
+    assert.ok(
+      cells.length >= 2 && cells[1].length > 10,
+      `docs/README.md row for docs/${file} must carry a one-line purpose`,
+    );
   }
 
   // 3. Every docs/*/ subdirectory is linked.
   const dirs = subdirs();
-  assert.equal(dirs.length, 8, 'docs/ must hold 8 subdirectories (re-pin this spec + the index if one is added or removed)');
+  assert.equal(
+    dirs.length,
+    8,
+    'docs/ must hold 8 subdirectories (re-pin this spec + the index if one is added or removed)',
+  );
   for (const dir of dirs) {
     assert.ok(isSubdirLinked(indexText, dir), `docs/README.md is missing the link for docs/${dir}/`);
   }
@@ -122,7 +136,7 @@ async function main(): Promise<void> {
   } catch (error) {
     const failed = error as { stdout?: string; stderr?: string; status?: number };
     assert.fail(
-      `scripts/validate-capabilities-docs.mjs must exit 0 (got ${failed.status}): ${(failed.stdout || '')}${(failed.stderr || '')}`,
+      `scripts/validate-capabilities-docs.mjs must exit 0 (got ${failed.status}): ${failed.stdout || ''}${failed.stderr || ''}`,
     );
   }
   assert.ok(output.includes('Capability docs OK'), 'integrity check must print its OK verdict');

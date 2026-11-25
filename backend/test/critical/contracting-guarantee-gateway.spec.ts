@@ -66,11 +66,7 @@ function runGuaranteeGatewayTestSuite() {
     }
 
     assert.notStrictEqual(thrownError, null, 'يجب حظر الصرف قطيعاً عند عدم وجود خطاب ضمان');
-    assert.match(
-      thrownError.message,
-      /بوابة الاعتماد الرقابية G1/,
-      'رسالة الخطأ يجب أن تشير صراحة للبوابة G1'
-    );
+    assert.match(thrownError.message, /بوابة الاعتماد الرقابية G1/, 'رسالة الخطأ يجب أن تشير صراحة للبوابة G1');
     console.log('[PASS] اختبار 2: حظر صرف الدفعة المقدمة عند انعدام خطاب الضمان (نجاح)');
   }
 
@@ -322,7 +318,9 @@ function runGuaranteeGatewayTestSuite() {
     assert.notStrictEqual(step2Error, null, 'يجب سد ثغرة الصرف المجزأ وحظر الدفعة الثانية فوراً');
     assert.match(step2Error.message, /G1-C/);
     assert.match(step2Error.message, /300,000/);
-    console.log('[PASS] اختبار 11: (محاكاة سيناريو كلود التتابعي) نجاح الدفعة الأولى وسد ثغرة الدفعة الثانية بـ G1-C (نجاح)');
+    console.log(
+      '[PASS] اختبار 11: (محاكاة سيناريو كلود التتابعي) نجاح الدفعة الأولى وسد ثغرة الدفعة الثانية بـ G1-C (نجاح)',
+    );
   }
 
   console.log('\n=============================================================');

@@ -2,7 +2,10 @@ import * as assert from 'assert';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ZatcaPhase2Service, ZatcaInvoiceData } from '../../src/modules/tax-integration/services/zatca/zatca-phase2.service';
+import {
+  ZatcaPhase2Service,
+  ZatcaInvoiceData,
+} from '../../src/modules/tax-integration/services/zatca/zatca-phase2.service';
 import { ZatcaSubmissionService } from '../../src/modules/tax-integration/services/zatca/zatca-submission.service';
 
 /**
@@ -75,9 +78,18 @@ async function runZatcaTransmissionTests() {
 
     // Test environment URL resolution
     const submissionService = new ZatcaSubmissionService({} as any, {} as any, {} as any);
-    assert.strictEqual(submissionService.getZatcaBaseUrl('sandbox'), 'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal');
-    assert.strictEqual(submissionService.getZatcaBaseUrl('simulation'), 'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation');
-    assert.strictEqual(submissionService.getZatcaBaseUrl('production'), 'https://gw-fatoora.zatca.gov.sa/e-invoicing/core');
+    assert.strictEqual(
+      submissionService.getZatcaBaseUrl('sandbox'),
+      'https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal',
+    );
+    assert.strictEqual(
+      submissionService.getZatcaBaseUrl('simulation'),
+      'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
+    );
+    assert.strictEqual(
+      submissionService.getZatcaBaseUrl('production'),
+      'https://gw-fatoora.zatca.gov.sa/e-invoicing/core',
+    );
 
     console.log('  -> Passed: B2C Reporting payload structure, UBL encoding, and base URLs hold.');
   }
@@ -138,7 +150,7 @@ async function runZatcaTransmissionTests() {
       'Accept-Language': 'ar',
       'Accept-Version': 'V2',
       'Content-Type': 'application/json',
-      'Authorization': 'Basic dGVzdC1jc2lkOnRlc3Qtc2VjcmV0',
+      Authorization: 'Basic dGVzdC1jc2lkOnRlc3Qtc2VjcmV0',
     };
     if (isB2B) {
       headers['Clearance-Status'] = '1';
@@ -167,7 +179,9 @@ async function runZatcaTransmissionTests() {
       sellerVatNumber: '310000000000003',
       sellerAddress: { street: 'شارع 1', buildingNumber: '1', city: 'الرياض', postalCode: '12345', district: 'حي 1' },
       customerName: 'عميل 1',
-      lineItems: [{ id: 1, name: 'صنف 1', quantity: 1, unitPrice: 50, subtotal: 50, vatAmount: 7.5, vatRate: 15, total: 57.5 }],
+      lineItems: [
+        { id: 1, name: 'صنف 1', quantity: 1, unitPrice: 50, subtotal: 50, vatAmount: 7.5, vatRate: 15, total: 57.5 },
+      ],
       subtotal: 50,
       vatTotal: 7.5,
       totalWithVat: 57.5,
@@ -191,7 +205,9 @@ async function runZatcaTransmissionTests() {
       sellerVatNumber: '310000000000003',
       sellerAddress: { street: 'شارع 1', buildingNumber: '1', city: 'الرياض', postalCode: '12345', district: 'حي 1' },
       customerName: 'عميل 2',
-      lineItems: [{ id: 1, name: 'صنف 2', quantity: 2, unitPrice: 30, subtotal: 60, vatAmount: 9, vatRate: 15, total: 69 }],
+      lineItems: [
+        { id: 1, name: 'صنف 2', quantity: 2, unitPrice: 30, subtotal: 60, vatAmount: 9, vatRate: 15, total: 69 },
+      ],
       subtotal: 60,
       vatTotal: 9,
       totalWithVat: 69,
@@ -215,7 +231,7 @@ async function runZatcaTransmissionTests() {
     const evaluateZatcaResponse = (
       invoiceType: 'standard' | 'simplified',
       httpStatus: number,
-      body: any
+      body: any,
     ): { status: string; message: string; clearedXml?: string } => {
       if (httpStatus === 200) {
         if (invoiceType === 'standard') {
@@ -274,7 +290,10 @@ async function runZatcaTransmissionTests() {
   // ─── 5. Migration 146 Schema Invariants Check ───────────────────────────────
   console.log('\n[Test 5] Migration 146 Schema & Table Definition Invariants');
   {
-    const migrationPath = path.resolve(__dirname, '../../src/database/migrations/2040000000146_zatca_clearance_and_reporting.ts');
+    const migrationPath = path.resolve(
+      __dirname,
+      '../../src/database/migrations/2040000000146_zatca_clearance_and_reporting.ts',
+    );
     assert.ok(fs.existsSync(migrationPath), 'Migration 146 file must exist on disk');
 
     const content = fs.readFileSync(migrationPath, 'utf8');

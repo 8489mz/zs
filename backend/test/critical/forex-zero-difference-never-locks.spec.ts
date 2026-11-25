@@ -39,7 +39,12 @@ async function main(): Promise<void> {
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   let journalCalls = 0;
-  const postingStub = { postDomainJournal: async () => { journalCalls += 1; return 900; } };
+  const postingStub = {
+    postDomainJournal: async () => {
+      journalCalls += 1;
+      return 900;
+    },
+  };
   const service = new ForexRevaluationService(db, postingStub as never);
 
   try {
@@ -62,7 +67,12 @@ async function main(): Promise<void> {
       INSERT INTO journal_entry_lines (tenant_id, journal_entry_id, account_id, debit, credit) VALUES ('t1',1,10,4800,0);
     `);
 
-    const dto = { periodDate: '2026-10-31', currencyCode: 'USD', closingRate: 48, items: [{ accountId: 10, foreignBalance: 100 }] };
+    const dto = {
+      periodDate: '2026-10-31',
+      currencyCode: 'USD',
+      closingRate: 48,
+      items: [{ accountId: 10, foreignBalance: 100 }],
+    };
 
     // 1. Zero difference: recorded, no journal, no lock.
     const noop = await service.executeRevaluation({ ...dto } as never, auth);
@@ -77,7 +87,9 @@ async function main(): Promise<void> {
     assert.equal(real.ok, true);
     assert.equal(journalCalls, 1);
     assert.equal(real.netUnrealizedGainLoss, 200);
-    const realRow = await pg.query<{ status: string }>('SELECT status FROM forex_revaluation_runs ORDER BY id DESC LIMIT 1');
+    const realRow = await pg.query<{ status: string }>(
+      'SELECT status FROM forex_revaluation_runs ORDER BY id DESC LIMIT 1',
+    );
     assert.equal(realRow.rows[0].status, 'posted');
 
     // 3. A posted run still locks the period/currency.

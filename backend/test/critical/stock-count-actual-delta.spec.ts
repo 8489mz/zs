@@ -58,29 +58,73 @@ import { AccountingTenantFoundationService } from '../../src/modules/accounting/
 import { InventoryCountService } from '../../src/modules/inventory/services/inventory-count.service';
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 const APPROVER_PASSWORD = 'approver-pass';
 
-async function seedProduct(db: Kysely<Database>, id: number, globalQty: number, reserved: number, cost: number, trackSerials = false): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, ${reserved}, ${cost}, true, ${trackSerials})`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${globalQty === 80 ? 100 : globalQty}, ${reserved})`.execute(db);
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  globalQty: number,
+  reserved: number,
+  cost: number,
+  trackSerials = false,
+): Promise<void> {
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, ${reserved}, ${cost}, true, ${trackSerials})`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${globalQty === 80 ? 100 : globalQty}, ${reserved})`.execute(
+    db,
+  );
 }
 
-async function seedSession(db: Kysely<Database>, sessionId: number, productId: number, expected: number, counted: number, reason: string, serials: string[] | null): Promise<number> {
-  await sql`INSERT INTO stock_count_sessions (id, tenant_id, account_id, doc_no, branch_id, location_id, status, note, counted_by, created_at, updated_at) VALUES (${sessionId}, 't1', 'a1', ${`ZSC-${sessionId}`}, 1, 1, 'draft', '', 1, NOW(), NOW())`.execute(db);
-  const item = await sql<{ id: number }>`INSERT INTO stock_count_items (tenant_id, account_id, session_id, product_id, product_name, expected_qty, counted_qty, variance_qty, reason, note, counted_serials, batch_counts) VALUES ('t1', 'a1', ${sessionId}, ${productId}, ${`Product ${productId}`}, ${expected}, ${counted}, ${Number((counted - expected).toFixed(3))}, ${reason}, '', ${serials ? JSON.stringify(serials) : null}, null) RETURNING id`.execute(db);
+async function seedSession(
+  db: Kysely<Database>,
+  sessionId: number,
+  productId: number,
+  expected: number,
+  counted: number,
+  reason: string,
+  serials: string[] | null,
+): Promise<number> {
+  await sql`INSERT INTO stock_count_sessions (id, tenant_id, account_id, doc_no, branch_id, location_id, status, note, counted_by, created_at, updated_at) VALUES (${sessionId}, 't1', 'a1', ${`ZSC-${sessionId}`}, 1, 1, 'draft', '', 1, NOW(), NOW())`.execute(
+    db,
+  );
+  const item = await sql<{
+    id: number;
+  }>`INSERT INTO stock_count_items (tenant_id, account_id, session_id, product_id, product_name, expected_qty, counted_qty, variance_qty, reason, note, counted_serials, batch_counts) VALUES ('t1', 'a1', ${sessionId}, ${productId}, ${`Product ${productId}`}, ${expected}, ${counted}, ${Number((counted - expected).toFixed(3))}, ${reason}, '', ${serials ? JSON.stringify(serials) : null}, null) RETURNING id`.execute(
+    db,
+  );
   return Number(item.rows[0].id);
 }
 
-async function journalLines(db: Kysely<Database>, sourceId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
-  const rows = await sql<{ code: string; debit: string; credit: string }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'stock_count_chunk' AND e.source_id = ${sourceId} AND e.tenant_id = 't1' ORDER BY a.code`.execute(db);
+async function journalLines(
+  db: Kysely<Database>,
+  sourceId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
+  const rows = await sql<{
+    code: string;
+    debit: string;
+    credit: string;
+  }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'stock_count_chunk' AND e.source_id = ${sourceId} AND e.tenant_id = 't1' ORDER BY a.code`.execute(
+    db,
+  );
   return rows.rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new InventoryCountService(
     db as never,
@@ -132,15 +176,23 @@ async function main(): Promise<void> {
     // different admin than the counter (user 1) and the poster (AUTH,
     // user 1) — a second admin user with its own password.
     const approverRecord = await createPasswordRecord(APPROVER_PASSWORD);
-    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(db);
+    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(
+      db,
+    );
 
     // Case 1: reserved fixture -- the bug. Old code booked a 7100 gain of 50.
     await seedProduct(db, 1, 100, 10, 10);
     const item1 = await seedSession(db, 101, 1, 90, 95, 'count', null);
     await service.postStockCountSession(101, AUTH, APPROVER_PASSWORD);
-    const loc1 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 1 AND location_id = 1`.execute(db);
+    const loc1 = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE product_id = 1 AND location_id = 1`.execute(db);
     assert.equal(Number(loc1.rows[0].qty), 95);
-    const mov1 = await sql<{ qty: string; before_qty: string; after_qty: string }>`SELECT qty, before_qty, after_qty FROM stock_movements WHERE reference_id = 101`.execute(db);
+    const mov1 = await sql<{
+      qty: string;
+      before_qty: string;
+      after_qty: string;
+    }>`SELECT qty, before_qty, after_qty FROM stock_movements WHERE reference_id = 101`.execute(db);
     assert.equal(Number(mov1.rows[0].qty), -5);
     assert.equal(Number(mov1.rows[0].before_qty), 100);
     assert.equal(Number(mov1.rows[0].after_qty), 95);
@@ -178,15 +230,21 @@ async function main(): Promise<void> {
     const mov4 = await sql<{ qty: string }>`SELECT qty FROM stock_movements WHERE reference_id = 104`.execute(db);
     assert.equal(Number(mov4.rows[0].qty), 0);
     assert.deepEqual(await journalLines(db, item4), []);
-    const loc4 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 4 AND location_id = 1`.execute(db);
+    const loc4 = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE product_id = 4 AND location_id = 1`.execute(db);
     assert.equal(Number(loc4.rows[0].qty), 100);
 
     // Case 5: serial-tracked fixture -- trace reconciliation still runs, no mismatch.
     await seedProduct(db, 5, 3, 0, 10, true);
-    await sql`INSERT INTO product_serials (tenant_id, account_id, product_id, serial_number, status, branch_id, location_id, cost_price) VALUES ('t1','a1',5,'SN1','in_stock',1,1,10), ('t1','a1',5,'SN2','in_stock',1,1,10), ('t1','a1',5,'SN3','in_stock',1,1,10)`.execute(db);
+    await sql`INSERT INTO product_serials (tenant_id, account_id, product_id, serial_number, status, branch_id, location_id, cost_price) VALUES ('t1','a1',5,'SN1','in_stock',1,1,10), ('t1','a1',5,'SN2','in_stock',1,1,10), ('t1','a1',5,'SN3','in_stock',1,1,10)`.execute(
+      db,
+    );
     const item5 = await seedSession(db, 105, 5, 3, 2, 'count', ['SN1', 'SN2']);
     await service.postStockCountSession(105, AUTH, APPROVER_PASSWORD);
-    const scrapped = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM product_serials WHERE product_id = 5 AND status = 'scrapped'`.execute(db);
+    const scrapped = await sql<{
+      n: string;
+    }>`SELECT COUNT(*) AS n FROM product_serials WHERE product_id = 5 AND status = 'scrapped'`.execute(db);
     assert.equal(Number(scrapped.rows[0].n), 1);
     assert.deepEqual(await journalLines(db, item5), [
       { code: '1140', debit: 0, credit: 10 },

@@ -10,7 +10,9 @@ import { computeThreeWayMatch } from '../../src/modules/purchases/three-way-matc
 console.log('=== اختبارات المطابقة الثلاثية للمشتريات ===\n');
 
 const poItems = [{ id: 1, productId: 100, qty: 100, unitCost: 10 }];
-const grnLines = [{ id: 1, grnId: 1, poItemId: 1, productId: 100, receivedQty: 100, acceptedQty: 100, rejectedQty: 0, unitCost: 10 }];
+const grnLines = [
+  { id: 1, grnId: 1, poItemId: 1, productId: 100, receivedQty: 100, acceptedQty: 100, rejectedQty: 0, unitCost: 10 },
+];
 
 // --- MATCH-1: prior invoices consume the receipt -----------------------------
 const r1 = computeThreeWayMatch({

@@ -73,18 +73,26 @@ async function seedProject(
   convertedAt: string | null,
 ): Promise<void> {
   if (convertedAt) {
-    await sql`INSERT INTO import_projects (id, tenant_id, project_no, status, feasibility_converted_at) VALUES (${id}, 't1', ${`IMP-${id}`}, ${status}, NOW())`.execute(db);
+    await sql`INSERT INTO import_projects (id, tenant_id, project_no, status, feasibility_converted_at) VALUES (${id}, 't1', ${`IMP-${id}`}, ${status}, NOW())`.execute(
+      db,
+    );
   } else {
-    await sql`INSERT INTO import_projects (id, tenant_id, project_no, status, feasibility_converted_at) VALUES (${id}, 't1', ${`IMP-${id}`}, ${status}, NULL)`.execute(db);
+    await sql`INSERT INTO import_projects (id, tenant_id, project_no, status, feasibility_converted_at) VALUES (${id}, 't1', ${`IMP-${id}`}, ${status}, NULL)`.execute(
+      db,
+    );
   }
 }
 
 async function seedProforma(db: Kysely<Database>, projectId: string, status: string): Promise<void> {
-  await sql`INSERT INTO import_proforma_invoices (tenant_id, project_id, status) VALUES ('t1', ${projectId}, ${status})`.execute(db);
+  await sql`INSERT INTO import_proforma_invoices (tenant_id, project_id, status) VALUES ('t1', ${projectId}, ${status})`.execute(
+    db,
+  );
 }
 
 async function seedShipment(db: Kysely<Database>, id: string, projectId: string, status: string): Promise<void> {
-  await sql`INSERT INTO import_shipments (id, tenant_id, project_id, status) VALUES (${id}, 't1', ${projectId}, ${status})`.execute(db);
+  await sql`INSERT INTO import_shipments (id, tenant_id, project_id, status) VALUES (${id}, 't1', ${projectId}, ${status})`.execute(
+    db,
+  );
 }
 
 async function main(): Promise<void> {
@@ -112,7 +120,11 @@ async function main(): Promise<void> {
     // 1. Control: nothing approved, nothing shipped — still feasibility.
     assert.equal(byId.get('proj-feas')?.status, 'feasibility', 'plain study-stage project stays feasibility');
     // 2. Approved proforma on an unconverted project — the R9 shape.
-    assert.equal(byId.get('proj-pi')?.status, 'sourcing', 'approved PI on a stored-feasibility project must read sourcing, never feasibility');
+    assert.equal(
+      byId.get('proj-pi')?.status,
+      'sourcing',
+      'approved PI on a stored-feasibility project must read sourcing, never feasibility',
+    );
     // 3. A draft-only proforma proves nothing approved yet.
     assert.equal(byId.get('proj-draft-pi')?.status, 'feasibility', 'draft-only proforma must not move the state');
     // 4. Shipments move the state: Pending -> sourcing, Arrived -> warehousing.

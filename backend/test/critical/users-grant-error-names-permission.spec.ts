@@ -73,16 +73,81 @@ const GENERIC_403 = 'غير مسموح بتنفيذ هذه العملية.';
  * DEFAULT_ADMIN_PERMS (58 keys, order preserved — the guard names
  * the FIRST permission in this order the actor does not hold). */
 const UNSCOPED_TEMPLATE_PERMISSIONS = [
-  'dashboard', 'products', 'sales', 'kitchen', 'purchases', 'inventory', 'suppliers', 'customers', 'crm', 'accounts', 'accounting', 'returns', 'reports', 'audit', 'treasury', 'services', 'hr', 'hrEmployees', 'hrAttendance', 'hrContracts', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage', 'settings', 'pricingCenterView', 'pricingCenterManage', 'canEditUsers', 'canManageUsers', 'canManageSettings', 'canManageBackups', 'canPrint', 'canDiscount', 'canEditPrice', 'canSellWholesale', 'canViewProfit', 'canDelete', 'canEditInvoices', 'canDirectReturn', 'canAdjustInventory', 'canManageBranchStock', 'cashDrawer', 'deliveryReps', 'deliveryRepsAdmin',
-  'maritimeJobs', 'maritimeContainers', 'maritimeInquiries', 'maritimeQuotations', 'maritimeRfqs', 'maritimePolicies',
-  'contractingProjects', 'contractingInvoices', 'contractingBoq', 'contractingDailyLogs', 'contractingChangeOrders', 'contractingSubcontractors',
+  'dashboard',
+  'products',
+  'sales',
+  'kitchen',
+  'purchases',
+  'inventory',
+  'suppliers',
+  'customers',
+  'crm',
+  'accounts',
+  'accounting',
+  'returns',
+  'reports',
+  'audit',
+  'treasury',
+  'services',
+  'hr',
+  'hrEmployees',
+  'hrAttendance',
+  'hrContracts',
+  'hrLoans',
+  'hrPayrollView',
+  'hrPayrollManage',
+  'hrPayrollApprove',
+  'hrSalaryView',
+  'hrSalaryManage',
+  'settings',
+  'pricingCenterView',
+  'pricingCenterManage',
+  'canEditUsers',
+  'canManageUsers',
+  'canManageSettings',
+  'canManageBackups',
+  'canPrint',
+  'canDiscount',
+  'canEditPrice',
+  'canSellWholesale',
+  'canViewProfit',
+  'canDelete',
+  'canEditInvoices',
+  'canDirectReturn',
+  'canAdjustInventory',
+  'canManageBranchStock',
+  'cashDrawer',
+  'deliveryReps',
+  'deliveryRepsAdmin',
+  'maritimeJobs',
+  'maritimeContainers',
+  'maritimeInquiries',
+  'maritimeQuotations',
+  'maritimeRfqs',
+  'maritimePolicies',
+  'contractingProjects',
+  'contractingInvoices',
+  'contractingBoq',
+  'contractingDailyLogs',
+  'contractingChangeOrders',
+  'contractingSubcontractors',
 ];
 
 /* The 12 hidden keys: present in the template, absent from the
  * activation owner's holdings and from any retail tenant. */
 const HIDDEN_VERTICAL_KEYS = new Set([
-  'maritimeJobs', 'maritimeContainers', 'maritimeInquiries', 'maritimeQuotations', 'maritimeRfqs', 'maritimePolicies',
-  'contractingProjects', 'contractingInvoices', 'contractingBoq', 'contractingDailyLogs', 'contractingChangeOrders', 'contractingSubcontractors',
+  'maritimeJobs',
+  'maritimeContainers',
+  'maritimeInquiries',
+  'maritimeQuotations',
+  'maritimeRfqs',
+  'maritimePolicies',
+  'contractingProjects',
+  'contractingInvoices',
+  'contractingBoq',
+  'contractingDailyLogs',
+  'contractingChangeOrders',
+  'contractingSubcontractors',
 ]);
 
 /* The retail-scoped owner template (46 keys): the unscoped list
@@ -121,16 +186,37 @@ async function main(): Promise<void> {
     (service as any).ensureUniqueUsername = async () => undefined;
     (service as any).ensureUniquePhone = async () => undefined;
     (service as any).getPlanLimitForTenant = async () => ({
-      maxUsers: null, isUnlimited: true, isLimitReached: false,
-      activeUsersCount: 0, planName: 'spec', planCode: null,
+      maxUsers: null,
+      isUnlimited: true,
+      isLimitReached: false,
+      activeUsersCount: 0,
+      planName: 'spec',
+      planCode: null,
     });
 
-    async function seedUser(id: number, tenantId: string, username: string, role: string, permissions: string[]): Promise<void> {
-      await anyDb.insertInto('users').values({
-        id, username, phone: `010000000${String(id).padStart(2, '0')}`, password_hash: 'x', password_salt: 'y',
-        role, is_active: true, permissions_json: JSON.stringify(permissions),
-        display_name: username, tenant_id: tenantId, account_id: ACCOUNT,
-      }).execute();
+    async function seedUser(
+      id: number,
+      tenantId: string,
+      username: string,
+      role: string,
+      permissions: string[],
+    ): Promise<void> {
+      await anyDb
+        .insertInto('users')
+        .values({
+          id,
+          username,
+          phone: `010000000${String(id).padStart(2, '0')}`,
+          password_hash: 'x',
+          password_salt: 'y',
+          role,
+          is_active: true,
+          permissions_json: JSON.stringify(permissions),
+          display_name: username,
+          tenant_id: tenantId,
+          account_id: ACCOUNT,
+        })
+        .execute();
     }
     async function readUser(id: number): Promise<any> {
       return anyDb.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
@@ -150,8 +236,12 @@ async function main(): Promise<void> {
 
     function ownerCreatePayload(username: string, permissions: string[]): any {
       return {
-        username, phone: '01000000999', role: 'admin', name: username,
-        password: 'Str0ng!Pass9', permissions: [...permissions],
+        username,
+        phone: '01000000999',
+        role: 'admin',
+        name: username,
+        password: 'Str0ng!Pass9',
+        permissions: [...permissions],
       };
     }
 
@@ -224,7 +314,12 @@ async function main(): Promise<void> {
     // so the message still tells the user which checkbox blocks.
     let unknownThrown: any = null;
     try {
-      await service.updateUser(2, { username: 'clerk', phone: '01000000002', role: 'cashier', name: 'clerk', permissions: ['mysteryPerm'] }, retailOwner, 'sess-spec');
+      await service.updateUser(
+        2,
+        { username: 'clerk', phone: '01000000002', role: 'cashier', name: 'clerk', permissions: ['mysteryPerm'] },
+        retailOwner,
+        'sess-spec',
+      );
     } catch (err) {
       unknownThrown = err;
     }
@@ -238,7 +333,18 @@ async function main(): Promise<void> {
     // Case 6: the update path names the blocking permission too.
     let updateThrown: any = null;
     try {
-      await service.updateUser(2, { username: 'clerk', phone: '01000000002', role: 'admin', name: 'clerk', permissions: [...UNSCOPED_TEMPLATE_PERMISSIONS] }, retailOwner, 'sess-spec');
+      await service.updateUser(
+        2,
+        {
+          username: 'clerk',
+          phone: '01000000002',
+          role: 'admin',
+          name: 'clerk',
+          permissions: [...UNSCOPED_TEMPLATE_PERMISSIONS],
+        },
+        retailOwner,
+        'sess-spec',
+      );
     } catch (err) {
       updateThrown = err;
     }

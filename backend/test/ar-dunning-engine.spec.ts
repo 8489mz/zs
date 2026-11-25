@@ -18,7 +18,8 @@ const testLevels: DunningLevel[] = [
     days_past_due: 7,
     auto_block_sales: false,
     action_type: 'whatsapp',
-    template_text: 'مرحباً {customer_name}، نود تذكيركم بلطف بوجود رصيد مستحق بقيمة {total_overdue} {currency} متأخر منذ {days_overdue} يوماً.',
+    template_text:
+      'مرحباً {customer_name}، نود تذكيركم بلطف بوجود رصيد مستحق بقيمة {total_overdue} {currency} متأخر منذ {days_overdue} يوماً.',
   },
   {
     id: 'lvl-2',

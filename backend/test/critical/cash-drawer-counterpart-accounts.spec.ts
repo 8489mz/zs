@@ -69,24 +69,51 @@ const ACCOUNT = 'a1';
 // `accounting`, no manual checkbox — sees the counterpart accounts.
 // If the template ever changes, this list must change with it.
 const DEFAULT_CASHIER_PERMS = [
-  'sales', 'kitchen', 'cashDrawer', 'customers', 'suppliers', 'accounts',
-  'purchases', 'products', 'returns', 'deliveryReps', 'hr', 'hrAttendance',
-  'canPrint', 'services', 'treasury',
+  'sales',
+  'kitchen',
+  'cashDrawer',
+  'customers',
+  'suppliers',
+  'accounts',
+  'purchases',
+  'products',
+  'returns',
+  'deliveryReps',
+  'hr',
+  'hrAttendance',
+  'canPrint',
+  'services',
+  'treasury',
 ];
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec', username: 'cash', role: 'cashier',
-  permissions: [...DEFAULT_CASHIER_PERMS], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec',
+  username: 'cash',
+  role: 'cashier',
+  permissions: [...DEFAULT_CASHIER_PERMS],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const emptyTenantAuth: AuthContext = {
-  userId: 2, sessionId: 'spec', username: 'cash', role: 'cashier',
-  permissions: [...DEFAULT_CASHIER_PERMS], tenantId: 't-empty', accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec',
+  username: 'cash',
+  role: 'cashier',
+  permissions: [...DEFAULT_CASHIER_PERMS],
+  tenantId: 't-empty',
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -99,17 +126,100 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 }
 
 async function seedAccounts(db: Kysely<Database>): Promise<void> {
-  const rows: Array<{ id: number; tenant_id: string; code: string; name_ar: string; name_en: string; account_type: string; normal_balance: string; is_cash_bank: boolean; is_active: boolean }> = [
-    { id: 1, tenant_id: TENANT, code: '1110', name_ar: 'صندوق الدرج', name_en: '', account_type: 'asset', normal_balance: 'debit', is_cash_bank: true, is_active: true },
-    { id: 2, tenant_id: TENANT, code: '1111', name_ar: 'الخزينة الآمنة', name_en: 'Safe', account_type: 'asset', normal_balance: 'debit', is_cash_bank: true, is_active: true },
-    { id: 3, tenant_id: TENANT, code: '1120', name_ar: 'بنك', name_en: '', account_type: 'asset', normal_balance: 'debit', is_cash_bank: true, is_active: true },
-    { id: 4, tenant_id: TENANT, code: '1140', name_ar: 'مخزون', name_en: '', account_type: 'asset', normal_balance: 'debit', is_cash_bank: false, is_active: true },
-    { id: 5, tenant_id: TENANT, code: '1130', name_ar: 'ذمم مدينة معطلة', name_en: '', account_type: 'asset', normal_balance: 'debit', is_cash_bank: true, is_active: false },
-    { id: 6, tenant_id: TENANT, code: '2110', name_ar: 'ذمم دائنة', name_en: '', account_type: 'liability', normal_balance: 'credit', is_cash_bank: true, is_active: true },
-    { id: 99, tenant_id: 't2', code: '1111', name_ar: 'الخزينة الآمنة', name_en: 'Safe', account_type: 'asset', normal_balance: 'debit', is_cash_bank: true, is_active: true },
+  const rows: Array<{
+    id: number;
+    tenant_id: string;
+    code: string;
+    name_ar: string;
+    name_en: string;
+    account_type: string;
+    normal_balance: string;
+    is_cash_bank: boolean;
+    is_active: boolean;
+  }> = [
+    {
+      id: 1,
+      tenant_id: TENANT,
+      code: '1110',
+      name_ar: 'صندوق الدرج',
+      name_en: '',
+      account_type: 'asset',
+      normal_balance: 'debit',
+      is_cash_bank: true,
+      is_active: true,
+    },
+    {
+      id: 2,
+      tenant_id: TENANT,
+      code: '1111',
+      name_ar: 'الخزينة الآمنة',
+      name_en: 'Safe',
+      account_type: 'asset',
+      normal_balance: 'debit',
+      is_cash_bank: true,
+      is_active: true,
+    },
+    {
+      id: 3,
+      tenant_id: TENANT,
+      code: '1120',
+      name_ar: 'بنك',
+      name_en: '',
+      account_type: 'asset',
+      normal_balance: 'debit',
+      is_cash_bank: true,
+      is_active: true,
+    },
+    {
+      id: 4,
+      tenant_id: TENANT,
+      code: '1140',
+      name_ar: 'مخزون',
+      name_en: '',
+      account_type: 'asset',
+      normal_balance: 'debit',
+      is_cash_bank: false,
+      is_active: true,
+    },
+    {
+      id: 5,
+      tenant_id: TENANT,
+      code: '1130',
+      name_ar: 'ذمم مدينة معطلة',
+      name_en: '',
+      account_type: 'asset',
+      normal_balance: 'debit',
+      is_cash_bank: true,
+      is_active: false,
+    },
+    {
+      id: 6,
+      tenant_id: TENANT,
+      code: '2110',
+      name_ar: 'ذمم دائنة',
+      name_en: '',
+      account_type: 'liability',
+      normal_balance: 'credit',
+      is_cash_bank: true,
+      is_active: true,
+    },
+    {
+      id: 99,
+      tenant_id: 't2',
+      code: '1111',
+      name_ar: 'الخزينة الآمنة',
+      name_en: 'Safe',
+      account_type: 'asset',
+      normal_balance: 'debit',
+      is_cash_bank: true,
+      is_active: true,
+    },
   ];
   for (const row of rows) {
-    await db.insertInto('accounting_accounts').values(row as never).execute();
+    await db
+      .insertInto('accounting_accounts')
+      .values(row as never)
+      .execute();
   }
 }
 
@@ -121,7 +231,10 @@ async function main(): Promise<void> {
     try {
       await seedAccounts(db);
       const service = new CashDrawerCounterpartService(db);
-      assert.ok(!cashierAuth.permissions.includes('accounting'), 'the cashier auth must not carry the accounting permission');
+      assert.ok(
+        !cashierAuth.permissions.includes('accounting'),
+        'the cashier auth must not carry the accounting permission',
+      );
       assert.ok(cashierAuth.permissions.includes('cashDrawer'), 'the cashier auth carries the cashDrawer permission');
       const result = await service.listCounterpartAccounts(cashierAuth);
       assert.deepEqual(
@@ -136,14 +249,18 @@ async function main(): Promise<void> {
       );
       for (const row of result.accounts as Array<Record<string, unknown>>) {
         assert.ok(!('balance' in row), 'no balance is ever returned');
-        assert.ok(!('parentId' in row) && !('depth' in row) && !('sortOrder' in row), 'no chart-structure fields are returned');
+        assert.ok(
+          !('parentId' in row) && !('depth' in row) && !('sortOrder' in row),
+          'no chart-structure fields are returned',
+        );
         assert.deepEqual(row.flags, { isCashBank: true }, 'each row is stamped as a cash/bank account');
         assert.equal(row.accountType, 'asset', 'each row is an asset');
         assert.equal(row.normalBalance, 'debit', 'each row is debit-normal');
         assert.equal(row.isActive, true, 'each row is active');
       }
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  cashier with exactly DEFAULT_CASHIER_PERMS receives 1111+1120 with no balances passed');
   }
@@ -158,7 +275,8 @@ async function main(): Promise<void> {
       const asAdmin = await service.listCounterpartAccounts(adminAuth);
       assert.deepEqual(asAdmin, asCashier, 'admin and cashier receive the identical counterpart list');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  admin receives the identical list passed');
   }
@@ -173,7 +291,8 @@ async function main(): Promise<void> {
       const result = await service.listCounterpartAccounts(emptyTenantAuth);
       assert.deepEqual(result.accounts, [], 'a tenant with no accounts gets an empty list');
     } finally {
-      await db.destroy(); (globalThis as any).gc?.();
+      await db.destroy();
+      (globalThis as any).gc?.();
     }
     console.log('  empty chart returns an empty list passed');
   }
@@ -186,20 +305,51 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/cash-drawer-counterpart.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/cash-drawer/cash-drawer-counterpart.service.ts'),
+      'utf8',
+    );
     assert.ok(serviceSource.includes('async listCounterpartAccounts('), 'the service exposes listCounterpartAccounts');
     assert.ok(serviceSource.includes("where('is_cash_bank', '=', true)"), 'the service filters to cash/bank accounts');
-    assert.ok(!/import[^;]*accounting-access\.guard/.test(serviceSource) && !serviceSource.includes('assertAccountingAccess('), 'the counterpart service never touches the accounting gate');
-    const controllerSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/cash-drawer.controller.ts'), 'utf8');
-    assert.ok(controllerSource.includes("cashier-shifts/counterpart-accounts"), 'the controller exposes the counterpart route');
-    assert.ok(controllerSource.includes("@RequirePermissions('cashDrawer')"), 'the counterpart route requires only cashDrawer');
-    assert.ok(!/import[^;]*accounting-access\.guard/.test(controllerSource), 'the cash-drawer controller never imports the accounting guard');
-    const drawerServiceSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/cash-drawer.service.ts'), 'utf8');
-    assert.ok(!drawerServiceSource.includes('listCounterpartAccounts'), 'the 1654-line drawer service is untouched by this fix');
+    assert.ok(
+      !/import[^;]*accounting-access\.guard/.test(serviceSource) && !serviceSource.includes('assertAccountingAccess('),
+      'the counterpart service never touches the accounting gate',
+    );
+    const controllerSource = readFileSync(
+      resolve(here, '../../src/modules/cash-drawer/cash-drawer.controller.ts'),
+      'utf8',
+    );
+    assert.ok(
+      controllerSource.includes('cashier-shifts/counterpart-accounts'),
+      'the controller exposes the counterpart route',
+    );
+    assert.ok(
+      controllerSource.includes("@RequirePermissions('cashDrawer')"),
+      'the counterpart route requires only cashDrawer',
+    );
+    assert.ok(
+      !/import[^;]*accounting-access\.guard/.test(controllerSource),
+      'the cash-drawer controller never imports the accounting guard',
+    );
+    const drawerServiceSource = readFileSync(
+      resolve(here, '../../src/modules/cash-drawer/cash-drawer.service.ts'),
+      'utf8',
+    );
+    assert.ok(
+      !drawerServiceSource.includes('listCounterpartAccounts'),
+      'the 1654-line drawer service is untouched by this fix',
+    );
     const guardSource = readFileSync(resolve(here, '../../src/core/auth/guards/accounting-access.guard.ts'), 'utf8');
-    assert.ok(guardSource.includes("includes('accounting')"), 'the Sep-2026 accounting guard still requires the accounting permission');
+    assert.ok(
+      guardSource.includes("includes('accounting')"),
+      'the Sep-2026 accounting guard still requires the accounting permission',
+    );
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-CASH-DRAWER-COUNTERPART-CASHIER-ACCESS').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-CASH-DRAWER-COUNTERPART-CASHIER-ACCESS').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
     console.log('  source + invariant pins passed');
   }
 

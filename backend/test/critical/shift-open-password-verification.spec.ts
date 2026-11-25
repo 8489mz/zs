@@ -30,8 +30,13 @@ const ACCOUNT = 'a1';
 const PASSWORD = 'cashier-secret-1';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -100,14 +105,39 @@ async function seed(db: Kysely<Database>, requirePassword: boolean): Promise<voi
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   if (requirePassword) {
-    await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'requirePasswordOnShiftOpen', value: 'true' }).execute();
+    await anyDb
+      .insertInto('settings')
+      .values({ tenant_id: TENANT, key: 'requirePasswordOnShiftOpen', value: 'true' })
+      .execute();
   }
-  await anyDb.insertInto('users').values({
-    id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true,
-    password_hash: record.hash, password_salt: record.salt,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      username: 'cashier-a',
+      role: 'cashier',
+      is_active: true,
+      password_hash: record.hash,
+      password_salt: record.salt,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
   await anyDb.insertInto('user_branches').values({ tenant_id: TENANT, user_id: 2, branch_id: 1 }).execute();
 }
 
@@ -181,4 +211,7 @@ async function main(): Promise<void> {
   console.log('shift-open-password-verification: OK');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

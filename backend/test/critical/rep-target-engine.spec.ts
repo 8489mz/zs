@@ -276,6 +276,6 @@ const legacySingleRepView = resolveIsolatedRepCustomerBalance({
 assert.equal(legacySingleRepView.repBalance, 1200);
 assert.equal(legacySingleRepView.otherRepsBalance, 0);
 
-console.log('[OK] RepTargetEngine tests (targets, commissions, geofence, FEFO, Rep-to-Rep Isolation) passed successfully!');
-
-
+console.log(
+  '[OK] RepTargetEngine tests (targets, commissions, geofence, FEFO, Rep-to-Rep Isolation) passed successfully!',
+);

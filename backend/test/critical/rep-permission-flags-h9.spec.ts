@@ -154,22 +154,61 @@ async function main(): Promise<void> {
       postVanStockTransfer: async () => undefined,
     };
     const fraudStub = { recordSuspicionEvent: async () => undefined };
-    const service = new VanSalesService(db, {} as never, {} as never, postingStub as never,
-      undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+    const service = new VanSalesService(
+      db,
+      {} as never,
+      {} as never,
+      postingStub as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      fraudStub as never,
+    );
     (service as any).resolveSystemAuthContext = async () => ({
-      userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-      permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+      userId: 1,
+      sessionId: 'spec',
+      username: 'spec',
+      role: 'admin',
+      permissions: ['accounting'],
+      tenantId: TENANT,
+      accountId: ACCOUNT,
     });
     const fieldExecution = new VanFieldExecutionService(db, fraudStub as never);
     const routesService = new VanRoutesService(db, new VanFleetService(db), fraudStub as never);
 
-    await anyDb.insertInto('settings').values([
-      { tenant_id: TENANT, key: 'currency', value: 'EGP' },
-      { tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(PIN)) },
-    ]).execute();
-    await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-    await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, username: 'sys', display_name: 'Sys', phone: '01000000000', role: 'admin', password_hash: '', password_salt: '', is_active: true }).execute();
-    await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
+    await anyDb
+      .insertInto('settings')
+      .values([
+        { tenant_id: TENANT, key: 'currency', value: 'EGP' },
+        { tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(PIN)) },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('currency_exchange_rates')
+      .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+      .execute();
+    await anyDb
+      .insertInto('users')
+      .values({
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        username: 'sys',
+        display_name: 'Sys',
+        phone: '01000000000',
+        role: 'admin',
+        password_hash: '',
+        password_salt: '',
+        is_active: true,
+      })
+      .execute();
+    await anyDb
+      .insertInto('stock_locations')
+      .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+      .execute();
 
     const repRows: Array<[number, string, Record<string, unknown>]> = [
       [REP_NODISC, '01000000011', {}],
@@ -184,55 +223,201 @@ async function main(): Promise<void> {
       [REP_NOOVERLIMIT, '01000000020', { can_sell_over_credit_limit: false }],
     ];
     for (const [id, phone, over] of repRows) {
-      await anyDb.insertInto('delivery_representatives').values({
-        id, tenant_id: TENANT, account_id: ACCOUNT, name: `Rep ${id}`, phone,
-        permissions: flags(over), van_location_id: 20, is_van_rep: true, is_active: true,
-      }).execute();
+      await anyDb
+        .insertInto('delivery_representatives')
+        .values({
+          id,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: `Rep ${id}`,
+          phone,
+          permissions: flags(over),
+          van_location_id: 20,
+          is_van_rep: true,
+          is_active: true,
+        })
+        .execute();
     }
     // REP_LEGACY (21): no permissions object at all — the legacy case.
-    await anyDb.insertInto('delivery_representatives').values({
-      id: 21, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 21', phone: '01000000021',
-      permissions: null, van_location_id: 20, is_van_rep: true, is_active: true,
-    }).execute();
+    await anyDb
+      .insertInto('delivery_representatives')
+      .values({
+        id: 21,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Rep 21',
+        phone: '01000000021',
+        permissions: null,
+        van_location_id: 20,
+        is_van_rep: true,
+        is_active: true,
+      })
+      .execute();
 
     // One open trip per sale/collection/visit case (distinct trips dodge
     // the sale + collection dedup backstops, which key on trip + rep).
     const trips: Array<[number, number]> = [
-      [1, REP_NODISC], [2, REP_DISC10], [3, REP_DISC10], [4, REP_DISC10],
-      [5, REP_NODISC], [6, REP_DISC0], [7, REP_OVERLIMIT], [8, REP_NOOVERLIMIT],
-      [9, REP_OVERLIMIT], [10, REP_NOCASH], [11, REP_NOCASH], [12, REP_NODISC],
-      [13, REP_NODISC], [14, REP_NOGPS], [15, 21],
+      [1, REP_NODISC],
+      [2, REP_DISC10],
+      [3, REP_DISC10],
+      [4, REP_DISC10],
+      [5, REP_NODISC],
+      [6, REP_DISC0],
+      [7, REP_OVERLIMIT],
+      [8, REP_NOOVERLIMIT],
+      [9, REP_OVERLIMIT],
+      [10, REP_NOCASH],
+      [11, REP_NOCASH],
+      [12, REP_NODISC],
+      [13, REP_NODISC],
+      [14, REP_NOGPS],
+      [15, 21],
     ];
     for (const [id, repId] of trips) {
-      await anyDb.insertInto('van_sales_trips').values({
-        id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: repId, van_location_id: 20, status: 'open', settlement_status: 'open',
-      }).execute();
+      await anyDb
+        .insertInto('van_sales_trips')
+        .values({
+          id,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: repId,
+          van_location_id: 20,
+          status: 'open',
+          settlement_status: 'open',
+        })
+        .execute();
     }
 
-    for (const [id, retail, cost] of [[101, 100, 40], [102, 150, 60], [103, 50, 20]] as const) {
-      await anyDb.insertInto('products').values({
-        id, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${id}`,
-        stock_qty: 100, cost_price: cost, retail_price: retail, credit_price: 0, is_active: true,
-      }).execute();
-      await anyDb.insertInto('product_location_stock').values({
-        tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: 100,
-      }).execute();
+    for (const [id, retail, cost] of [
+      [101, 100, 40],
+      [102, 150, 60],
+      [103, 50, 20],
+    ] as const) {
+      await anyDb
+        .insertInto('products')
+        .values({
+          id,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: `Product ${id}`,
+          stock_qty: 100,
+          cost_price: cost,
+          retail_price: retail,
+          credit_price: 0,
+          is_active: true,
+        })
+        .execute();
+      await anyDb
+        .insertInto('product_location_stock')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          product_id: id,
+          location_id: 20,
+          qty: 100,
+        })
+        .execute();
     }
 
-    await anyDb.insertInto('customers').values([
-      { id: CUST_CREDIT, tenant_id: TENANT, account_id: ACCOUNT, name: 'Credit Customer', phone: '011100', balance: 0, credit_limit: 100, customer_type: 'credit', is_active: true, metadata: JSON.stringify({ assigned_rep_ids: [REP_OVERLIMIT, REP_NOOVERLIMIT] }) },
-      { id: CUST_DEBT14, tenant_id: TENANT, account_id: ACCOUNT, name: 'Debt Customer 14', phone: '011200', balance: 100, credit_limit: 0, customer_type: 'cash', is_active: true, metadata: JSON.stringify({ assigned_rep_ids: [REP_NOCASH] }) },
-      { id: CUST_DEBT11, tenant_id: TENANT, account_id: ACCOUNT, name: 'Debt Customer 11', phone: '011201', balance: 100, credit_limit: 0, customer_type: 'cash', is_active: true, metadata: JSON.stringify({ assigned_rep_ids: [REP_NODISC] }) },
-      { id: CUST_VISIT11, tenant_id: TENANT, account_id: ACCOUNT, name: 'Visit Customer 11', phone: '011300', balance: 0, credit_limit: 0, customer_type: 'cash', is_active: true, metadata: JSON.stringify({ assigned_rep_ids: [REP_NODISC] }) },
-      { id: CUST_VISIT16, tenant_id: TENANT, account_id: ACCOUNT, name: 'Visit Customer 16', phone: '011301', balance: 0, credit_limit: 0, customer_type: 'cash', is_active: true, metadata: JSON.stringify({ assigned_rep_ids: [REP_NOGPS] }) },
-      { id: CUST_ROUTE_A, tenant_id: TENANT, account_id: ACCOUNT, name: 'Route A', phone: '011400', balance: 0, credit_limit: 0, customer_type: 'cash', is_active: true, metadata: JSON.stringify({ route: 'R1', route_sequence: 0 }) },
-      { id: CUST_ROUTE_B, tenant_id: TENANT, account_id: ACCOUNT, name: 'Route B', phone: '011401', balance: 0, credit_limit: 0, customer_type: 'cash', is_active: true, metadata: JSON.stringify({ route: 'R1', route_sequence: 0 }) },
-    ]).execute();
+    await anyDb
+      .insertInto('customers')
+      .values([
+        {
+          id: CUST_CREDIT,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Credit Customer',
+          phone: '011100',
+          balance: 0,
+          credit_limit: 100,
+          customer_type: 'credit',
+          is_active: true,
+          metadata: JSON.stringify({ assigned_rep_ids: [REP_OVERLIMIT, REP_NOOVERLIMIT] }),
+        },
+        {
+          id: CUST_DEBT14,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Debt Customer 14',
+          phone: '011200',
+          balance: 100,
+          credit_limit: 0,
+          customer_type: 'cash',
+          is_active: true,
+          metadata: JSON.stringify({ assigned_rep_ids: [REP_NOCASH] }),
+        },
+        {
+          id: CUST_DEBT11,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Debt Customer 11',
+          phone: '011201',
+          balance: 100,
+          credit_limit: 0,
+          customer_type: 'cash',
+          is_active: true,
+          metadata: JSON.stringify({ assigned_rep_ids: [REP_NODISC] }),
+        },
+        {
+          id: CUST_VISIT11,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Visit Customer 11',
+          phone: '011300',
+          balance: 0,
+          credit_limit: 0,
+          customer_type: 'cash',
+          is_active: true,
+          metadata: JSON.stringify({ assigned_rep_ids: [REP_NODISC] }),
+        },
+        {
+          id: CUST_VISIT16,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Visit Customer 16',
+          phone: '011301',
+          balance: 0,
+          credit_limit: 0,
+          customer_type: 'cash',
+          is_active: true,
+          metadata: JSON.stringify({ assigned_rep_ids: [REP_NOGPS] }),
+        },
+        {
+          id: CUST_ROUTE_A,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Route A',
+          phone: '011400',
+          balance: 0,
+          credit_limit: 0,
+          customer_type: 'cash',
+          is_active: true,
+          metadata: JSON.stringify({ route: 'R1', route_sequence: 0 }),
+        },
+        {
+          id: CUST_ROUTE_B,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          name: 'Route B',
+          phone: '011401',
+          balance: 0,
+          credit_limit: 0,
+          customer_type: 'cash',
+          is_active: true,
+          metadata: JSON.stringify({ route: 'R1', route_sequence: 0 }),
+        },
+      ])
+      .execute();
 
     const isCode = (code: string, status: number) => (err: any) =>
       err && err.code === code && err.statusCode === status;
     const customerBalance = async (id: number): Promise<number> => {
-      const row = await anyDb.selectFrom('customers').select(['balance']).where('id', '=', id).where('tenant_id', '=', TENANT).executeTakeFirst();
+      const row = await anyDb
+        .selectFrom('customers')
+        .select(['balance'])
+        .where('id', '=', id)
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirst();
       return Number(row?.balance || 0);
     };
     const salesCount = async (): Promise<number> => {
@@ -240,9 +425,18 @@ async function main(): Promise<void> {
       return rows.length;
     };
     const routeSequence = async (id: number): Promise<number> => {
-      const row = await anyDb.selectFrom('customers').select(['metadata']).where('id', '=', id).where('tenant_id', '=', TENANT).executeTakeFirst();
+      const row = await anyDb
+        .selectFrom('customers')
+        .select(['metadata'])
+        .where('id', '=', id)
+        .where('tenant_id', '=', TENANT)
+        .executeTakeFirst();
       let meta: any = {};
-      try { meta = JSON.parse(String(row?.metadata || '{}')); } catch { meta = {}; }
+      try {
+        meta = JSON.parse(String(row?.metadata || '{}'));
+      } catch {
+        meta = {};
+      }
       return Number(meta.route_sequence || 0);
     };
     // actingRepId is built through `any` so this spec also COMPILES
@@ -261,14 +455,19 @@ async function main(): Promise<void> {
     const salesBefore = await salesCount();
     await assert.rejects(
       service.executeFieldSale(REP_NODISC, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', cashDiscountAmount: 10,
+        tripId: 1,
+        paymentMethod: 'cash',
+        cashDiscountAmount: 10,
         items: [{ productId: 101, qty: 1 }],
       }),
       isCode('REP_DISCOUNT_NOT_ALLOWED', 403),
     );
     await assert.rejects(
       service.executeFieldSale(REP_NODISC, TENANT, ACCOUNT, {
-        tripId: 5, paymentMethod: 'cash', cashDiscountAmount: 10, supervisorOverridePin: PIN,
+        tripId: 5,
+        paymentMethod: 'cash',
+        cashDiscountAmount: 10,
+        supervisorOverridePin: PIN,
         items: [{ productId: 101, qty: 1 }],
       }),
       isCode('REP_DISCOUNT_NOT_ALLOWED', 403),
@@ -278,7 +477,9 @@ async function main(): Promise<void> {
     // 2. (D3) Within the limit the discount applies: 10% off a 100
     // sale with max 10 stores total 90, discount 10.
     const within = await service.executeFieldSale(REP_DISC10, TENANT, ACCOUNT, {
-      tripId: 2, paymentMethod: 'cash', cashDiscountAmount: 10,
+      tripId: 2,
+      paymentMethod: 'cash',
+      cashDiscountAmount: 10,
       items: [{ productId: 101, qty: 1 }],
     });
     assert.equal(within.total, 90);
@@ -287,7 +488,9 @@ async function main(): Promise<void> {
     // 3. (D3) Above the limit without a PIN it is refused.
     await assert.rejects(
       service.executeFieldSale(REP_DISC10, TENANT, ACCOUNT, {
-        tripId: 3, paymentMethod: 'cash', cashDiscountAmount: 20,
+        tripId: 3,
+        paymentMethod: 'cash',
+        cashDiscountAmount: 20,
         items: [{ productId: 101, qty: 1 }],
       }),
       isCode('CASH_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN', 403),
@@ -295,7 +498,10 @@ async function main(): Promise<void> {
 
     // 4. (D3) Above the limit WITH a verified supervisor PIN it applies.
     const overPin = await service.executeFieldSale(REP_DISC10, TENANT, ACCOUNT, {
-      tripId: 4, paymentMethod: 'cash', cashDiscountAmount: 20, supervisorOverridePin: PIN,
+      tripId: 4,
+      paymentMethod: 'cash',
+      cashDiscountAmount: 20,
+      supervisorOverridePin: PIN,
       items: [{ productId: 101, qty: 1 }],
     });
     assert.equal(overPin.total, 80);
@@ -304,7 +510,9 @@ async function main(): Promise<void> {
     // 5. (D3) max 0 means any discount needs a PIN.
     await assert.rejects(
       service.executeFieldSale(REP_DISC0, TENANT, ACCOUNT, {
-        tripId: 6, paymentMethod: 'cash', cashDiscountAmount: 5,
+        tripId: 6,
+        paymentMethod: 'cash',
+        cashDiscountAmount: 5,
         items: [{ productId: 101, qty: 1 }],
       }),
       isCode('CASH_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN', 403),
@@ -313,7 +521,9 @@ async function main(): Promise<void> {
     // 6. (D4) Credit limit, in-limit first: 50 against a 100 limit
     // needs no PIN and the flag does not block it.
     const inLimit = await service.executeFieldSale(REP_OVERLIMIT, TENANT, ACCOUNT, {
-      tripId: 9, paymentMethod: 'credit', customerId: CUST_CREDIT,
+      tripId: 9,
+      paymentMethod: 'credit',
+      customerId: CUST_CREDIT,
       items: [{ productId: 103, qty: 1 }],
     });
     assert.equal(inLimit.total, 50);
@@ -322,19 +532,29 @@ async function main(): Promise<void> {
     // 7. (D4) Over the limit WITH a PIN and the flag true: allowed,
     // and recorded as a supervisor override.
     const overLimit = await service.executeFieldSale(REP_OVERLIMIT, TENANT, ACCOUNT, {
-      tripId: 7, paymentMethod: 'credit', customerId: CUST_CREDIT, supervisorOverridePin: PIN,
+      tripId: 7,
+      paymentMethod: 'credit',
+      customerId: CUST_CREDIT,
+      supervisorOverridePin: PIN,
       items: [{ productId: 102, qty: 1 }],
     });
     assert.equal(overLimit.total, 150);
     assert.equal(await customerBalance(CUST_CREDIT), 200);
-    const overSale = await anyDb.selectFrom('sales').select(['is_credit_overridden']).where('id', '=', overLimit.saleId).executeTakeFirst();
+    const overSale = await anyDb
+      .selectFrom('sales')
+      .select(['is_credit_overridden'])
+      .where('id', '=', overLimit.saleId)
+      .executeTakeFirst();
     assert.equal(Boolean((overSale as any)?.is_credit_overridden), true);
 
     // 8. (D4) Over the limit WITH a PIN but the flag false: refused —
     // the PIN alone is not enough. Balance stays 200.
     await assert.rejects(
       service.executeFieldSale(REP_NOOVERLIMIT, TENANT, ACCOUNT, {
-        tripId: 8, paymentMethod: 'credit', customerId: CUST_CREDIT, supervisorOverridePin: PIN,
+        tripId: 8,
+        paymentMethod: 'credit',
+        customerId: CUST_CREDIT,
+        supervisorOverridePin: PIN,
         items: [{ productId: 102, qty: 1 }],
       }),
       isCode('REP_CANNOT_SELL_OVER_CREDIT_LIMIT', 403),
@@ -345,7 +565,10 @@ async function main(): Promise<void> {
     // refused and the customer balance is untouched.
     await assert.rejects(
       service.recordFieldCollection(REP_NOCASH, TENANT, ACCOUNT, {
-        tripId: 10, customerId: CUST_DEBT14, amount: 40, paymentMethod: 'cash',
+        tripId: 10,
+        customerId: CUST_DEBT14,
+        amount: 40,
+        paymentMethod: 'cash',
       }),
       isCode('REP_CANNOT_COLLECT_CASH', 403),
     );
@@ -355,8 +578,12 @@ async function main(): Promise<void> {
     // (supervisor PIN + real transfer reference, the existing
     // non-cash evidence gate).
     const instapay = await service.recordFieldCollection(REP_NOCASH, TENANT, ACCOUNT, {
-      tripId: 11, customerId: CUST_DEBT14, amount: 40, paymentMethod: 'instapay',
-      transferReference: 'REF123', supervisorOverridePin: PIN,
+      tripId: 11,
+      customerId: CUST_DEBT14,
+      amount: 40,
+      paymentMethod: 'instapay',
+      transferReference: 'REF123',
+      supervisorOverridePin: PIN,
     });
     assert.equal(instapay.ok, true);
     assert.equal(instapay.amount, 40);
@@ -364,7 +591,10 @@ async function main(): Promise<void> {
 
     // 11. (D4 + B10) can_collect_cash true: a cash collection works.
     const cash = await service.recordFieldCollection(REP_NODISC, TENANT, ACCOUNT, {
-      tripId: 12, customerId: CUST_DEBT11, amount: 40, paymentMethod: 'cash',
+      tripId: 12,
+      customerId: CUST_DEBT11,
+      amount: 40,
+      paymentMethod: 'cash',
     });
     assert.equal(cash.ok, true);
     assert.equal(await customerBalance(CUST_DEBT11), 60);
@@ -374,13 +604,26 @@ async function main(): Promise<void> {
       service.createDriverCustomer(REP_NOCUST, TENANT, ACCOUNT, { name: 'Blocked Shop H9', phone: '011900' }),
       isCode('REP_CANNOT_ADD_CUSTOMERS', 403),
     );
-    const blocked = await anyDb.selectFrom('customers').select(['id']).where('name', '=', 'Blocked Shop H9').where('tenant_id', '=', TENANT).execute();
+    const blocked = await anyDb
+      .selectFrom('customers')
+      .select(['id'])
+      .where('name', '=', 'Blocked Shop H9')
+      .where('tenant_id', '=', TENANT)
+      .execute();
     assert.equal(blocked.length, 0, 'refused customer creation must not write a row');
 
     // 13. (D4) can_add_customers true allows it.
-    const created = await service.createDriverCustomer(REP_NODISC, TENANT, ACCOUNT, { name: 'Allowed Shop H9', phone: '011901' });
+    const created = await service.createDriverCustomer(REP_NODISC, TENANT, ACCOUNT, {
+      name: 'Allowed Shop H9',
+      phone: '011901',
+    });
     assert.equal((created as any)?.ok, true);
-    const allowed = await anyDb.selectFrom('customers').select(['id', 'name']).where('name', '=', 'Allowed Shop H9').where('tenant_id', '=', TENANT).executeTakeFirst();
+    const allowed = await anyDb
+      .selectFrom('customers')
+      .select(['id', 'name'])
+      .where('name', '=', 'Allowed Shop H9')
+      .where('tenant_id', '=', TENANT)
+      .executeTakeFirst();
     assert.ok(allowed, 'allowed customer creation must write a row');
 
     // 14. (D4) require_gps_on_visit true: check-in without GPS refused.
@@ -392,7 +635,9 @@ async function main(): Promise<void> {
     // the visit is unmapped — the gate is about the rep's fix, not
     // the customer's).
     const checkIn = await fieldExecution.checkInVisit(TENANT, 1, REP_NODISC, {
-      customerId: CUST_VISIT11, latitude: 30.05, longitude: 31.25,
+      customerId: CUST_VISIT11,
+      latitude: 30.05,
+      longitude: 31.25,
     });
     assert.equal(checkIn.ok, true);
 
@@ -404,12 +649,18 @@ async function main(): Promise<void> {
     // is refused; false: it is allowed.
     await assert.rejects(
       service.recordFieldVisit(TENANT, ACCOUNT, REP_NODISC, {
-        tripId: 13, customerId: CUST_VISIT11, visitType: 'negative', negativeReason: 'shop_closed',
+        tripId: 13,
+        customerId: CUST_VISIT11,
+        visitType: 'negative',
+        negativeReason: 'shop_closed',
       }),
       isCode('REP_VISIT_GPS_REQUIRED', 403),
     );
     const fieldVisit = await service.recordFieldVisit(TENANT, ACCOUNT, REP_NOGPS, {
-      tripId: 14, customerId: CUST_VISIT16, visitType: 'negative', negativeReason: 'shop_closed',
+      tripId: 14,
+      customerId: CUST_VISIT16,
+      visitType: 'negative',
+      negativeReason: 'shop_closed',
     });
     assert.equal(fieldVisit.ok, true);
 
@@ -440,7 +691,9 @@ async function main(): Promise<void> {
     // the legacy decision — it is what keeps the book-digits spec's
     // 3dp cash-discount case (whose rep carries no flags) green.
     const legacy = await service.executeFieldSale(21, TENANT, ACCOUNT, {
-      tripId: 15, paymentMethod: 'cash', cashDiscountAmount: 10,
+      tripId: 15,
+      paymentMethod: 'cash',
+      cashDiscountAmount: 10,
       items: [{ productId: 101, qty: 1 }],
     });
     assert.equal(legacy.total, 90);
@@ -449,7 +702,9 @@ async function main(): Promise<void> {
     // The specific errors name the problem (never a generic message).
     await assert.rejects(
       service.executeFieldSale(REP_NODISC, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', cashDiscountAmount: 10,
+        tripId: 1,
+        paymentMethod: 'cash',
+        cashDiscountAmount: 10,
         items: [{ productId: 101, qty: 1 }],
       }),
       (err: any) => err.code === 'REP_DISCOUNT_NOT_ALLOWED' && String(err.message || '').includes('can_give_discount'),

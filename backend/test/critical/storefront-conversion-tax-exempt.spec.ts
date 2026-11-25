@@ -40,7 +40,20 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 
 function chainable(terminal: Record<string, any>): any {
   const builder: any = {};
-  for (const key of ['selectAll', 'select', 'where', 'forUpdate', 'leftJoin', 'innerJoin', 'orderBy', 'limit', 'onRef', 'on', 'set', 'returning']) {
+  for (const key of [
+    'selectAll',
+    'select',
+    'where',
+    'forUpdate',
+    'leftJoin',
+    'innerJoin',
+    'orderBy',
+    'limit',
+    'onRef',
+    'on',
+    'set',
+    'returning',
+  ]) {
     builder[key] = (...args: any[]) => {
       if ((key === 'leftJoin' || key === 'innerJoin') && typeof args[1] === 'function') args[1](builder);
       return builder;
@@ -59,9 +72,7 @@ async function main(): Promise<void> {
     customer_name: 'Test Customer',
     customer_phone: '01012345678',
     customer_address: 'Cairo',
-    items_json: JSON.stringify([
-      { productId: 5, productName: 'Widget', quantity: 2, unitPrice: 100, total: 200 },
-    ]),
+    items_json: JSON.stringify([{ productId: 5, productName: 'Widget', quantity: 2, unitPrice: 100, total: 200 }]),
     subtotal: 200,
     delivery_fee: 0,
     delivery_zone_id: null,
@@ -88,7 +99,9 @@ async function main(): Promise<void> {
         return chainable({ executeTakeFirst: async () => orderRow, execute: async () => [orderRow] });
       }
       if (table === 'customers') {
-        return chainable({ executeTakeFirst: async () => ({ id: 9, name: 'Test Customer', phone: '01012345678', address: 'Cairo' }) });
+        return chainable({
+          executeTakeFirst: async () => ({ id: 9, name: 'Test Customer', phone: '01012345678', address: 'Cairo' }),
+        });
       }
       if (table === 'branches') {
         return chainable({ executeTakeFirst: async () => ({ id: 1, default_stock_location_id: 1 }) });
@@ -127,7 +140,11 @@ async function main(): Promise<void> {
   assert.ok(!('taxRate' in captured), 'conversion must not inject a tax rate');
   assert.ok(!('tax_rate' in captured), 'conversion must not inject a legacy tax rate');
   assert.equal(resolveSaleTaxRate(captured.taxRate, 14), 0, 'omitted rate resolves to exempt even on a 14% tenant');
-  const lineSum = captured.items.reduce((sum: number, line: any) => sum + Number(line.qty || line.quantity || 0) * Number(line.unitPrice ?? line.price ?? 0), 0);
+  const lineSum = captured.items.reduce(
+    (sum: number, line: any) =>
+      sum + Number(line.qty || line.quantity || 0) * Number(line.unitPrice ?? line.price ?? 0),
+    0,
+  );
   assert.equal(lineSum, 200, 'payload lines must sum to the order total with no tax added');
 
   // convertToSale lives in the T5 slice (storefront split 2026-11-16); the two

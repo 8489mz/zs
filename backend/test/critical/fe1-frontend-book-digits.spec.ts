@@ -41,7 +41,10 @@
  */
 
 import assert from 'node:assert/strict';
-import { currencyMoneyDigits as backendDigits, roundMoney as backendRoundMoney } from '../../src/modules/accounting/engines/money-minor-units.engine.ts';
+import {
+  currencyMoneyDigits as backendDigits,
+  roundMoney as backendRoundMoney,
+} from '../../src/modules/accounting/engines/money-minor-units.engine.ts';
 import { currencyMoneyDigits, roundMoneyValue } from '../../../frontend/src/shared/utils/money.ts';
 
 // 1. The 3-decimal set matches the backend exactly — including the
@@ -64,11 +67,37 @@ assert.throws(() => currencyMoneyDigits('EGPX'), /Invalid currency code/);
 // 2. Rounding parity with the backend on a battery of tricky floats,
 // at both book precisions. Any divergence here is a live defect: the
 // frontend total would print/post a different number than the journal.
-const tricky2dp = [0, 1, 1.005, 2.675, 0.125, 10.115, 100.125, 0.004, 0.005, 0.015, -1.005, -2.675, 1234.567, 99.995, 0.335, 250.555, 1.2345, 0.1 + 0.2, 42.875, 7.125, 0.045, 999.999];
+const tricky2dp = [
+  0,
+  1,
+  1.005,
+  2.675,
+  0.125,
+  10.115,
+  100.125,
+  0.004,
+  0.005,
+  0.015,
+  -1.005,
+  -2.675,
+  1234.567,
+  99.995,
+  0.335,
+  250.555,
+  1.2345,
+  0.1 + 0.2,
+  42.875,
+  7.125,
+  0.045,
+  999.999,
+];
 for (const value of tricky2dp) {
   assert.equal(roundMoneyValue(value, 2), backendRoundMoney(value, 2), `2dp parity for ${value}`);
 }
-const tricky3dp = [0, 1.0005, 2.6755, 0.0005, 0.0015, 10.1155, 100.1255, -1.0005, 42.8755, 0.12345, 99.9995, 1.23456, 0.0004, 7.1255, 250.5555];
+const tricky3dp = [
+  0, 1.0005, 2.6755, 0.0005, 0.0015, 10.1155, 100.1255, -1.0005, 42.8755, 0.12345, 99.9995, 1.23456, 0.0004, 7.1255,
+  250.5555,
+];
 for (const value of tricky3dp) {
   assert.equal(roundMoneyValue(value, 3), backendRoundMoney(value, 3), `3dp parity for ${value}`);
 }
@@ -130,9 +159,21 @@ function splitShares(total: number, count: number, digits: 2 | 3): number[] {
 assert.deepEqual(splitShares(100.125, 3, 3), [33.375, 33.375, 33.375]);
 assert.deepEqual(splitShares(100.13, 3, 2), [33.38, 33.38, 33.37]);
 assert.deepEqual(splitShares(10, 3, 2), [3.33, 3.33, 3.34]);
-for (const [total, count, digits] of [[100.125, 3, 3], [100.13, 3, 2], [10, 3, 2], [7.125, 2, 3]] as Array<[number, number, 2 | 3]>) {
+for (const [total, count, digits] of [
+  [100.125, 3, 3],
+  [100.13, 3, 2],
+  [10, 3, 2],
+  [7.125, 2, 3],
+] as Array<[number, number, 2 | 3]>) {
   const shares = splitShares(total, count, digits);
-  assert.equal(roundMoneyValue(shares.reduce((a, b) => a + b, 0), digits), roundMoneyValue(total, digits), `shares must sum to ${total} at ${digits}dp`);
+  assert.equal(
+    roundMoneyValue(
+      shares.reduce((a, b) => a + b, 0),
+      digits,
+    ),
+    roundMoneyValue(total, digits),
+    `shares must sum to ${total} at ${digits}dp`,
+  );
 }
 
 console.log('FE1 frontend book-digits helper parity passed');

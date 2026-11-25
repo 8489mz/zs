@@ -42,14 +42,7 @@ const BACKUP_SCRIPT = path.join(REPO_ROOT, 'deploy', 'scripts', 'zsystems-backup
 const RESTORE_SCRIPT = path.join(REPO_ROOT, 'deploy', 'scripts', 'zsystems-restore.sh');
 const DRILL_SCRIPT = path.join(REPO_ROOT, 'deploy', 'scripts', 'zsystems-restore-drill.sh');
 const DEPLOY_WORKFLOW = path.join(REPO_ROOT, '.github', 'workflows', 'deploy-oracle.yml');
-const HEALTH_CONTROLLER = path.join(
-  REPO_ROOT,
-  'backend',
-  'src',
-  'core',
-  'health',
-  'health.controller.ts',
-);
+const HEALTH_CONTROLLER = path.join(REPO_ROOT, 'backend', 'src', 'core', 'health', 'health.controller.ts');
 
 function scriptConstant(script: string, name: string): number {
   const match = script.match(new RegExp(`^${name}=(\\d+)`, 'm'));
@@ -58,21 +51,28 @@ function scriptConstant(script: string, name: string): number {
 }
 
 function tableRow(doc: string, firstCell: string): string {
-  const row = doc
-    .split('\n')
-    .find((line) => line.startsWith(`| ${firstCell} `));
+  const row = doc.split('\n').find((line) => line.startsWith(`| ${firstCell} `));
   assert.ok(row, `playbook backup table must have a ${firstCell} row`);
   return row as string;
 }
 
 async function main(): Promise<void> {
   // 0. Row-matcher self-check (fail-first for the matcher itself).
-  const sample = '| الساعية `hourly` | x | **3 أيام** | **7 أيام** |\n| اليومية `daily` | x | **14 يوماً** | **90 يوماً** |';
+  const sample =
+    '| الساعية `hourly` | x | **3 أيام** | **7 أيام** |\n| اليومية `daily` | x | **14 يوماً** | **90 يوماً** |';
   assert.ok(tableRow(sample, 'الساعية').includes('3 أيام'), 'sample hourly row must carry 3 days');
   assert.ok(!tableRow(sample, 'الساعية').includes('30 أيام'), 'sample hourly row must not carry 30 days');
   assert.ok(tableRow(sample, 'اليومية').includes('90 يوماً'), 'sample daily row must carry 90 days');
 
-  for (const file of [PLAYBOOK, DISASTER_RECOVERY, BACKUP_SCRIPT, RESTORE_SCRIPT, DRILL_SCRIPT, DEPLOY_WORKFLOW, HEALTH_CONTROLLER]) {
+  for (const file of [
+    PLAYBOOK,
+    DISASTER_RECOVERY,
+    BACKUP_SCRIPT,
+    RESTORE_SCRIPT,
+    DRILL_SCRIPT,
+    DEPLOY_WORKFLOW,
+    HEALTH_CONTROLLER,
+  ]) {
     assert.ok(fs.existsSync(file), `required file must exist: ${path.relative(REPO_ROOT, file)}`);
   }
   const playbook = fs.readFileSync(PLAYBOOK, 'utf8');
@@ -114,54 +114,108 @@ async function main(): Promise<void> {
   assert.ok(hourlyRow.includes(`${hourlyGdrive} أيام`), `playbook hourly row must state GDrive ${hourlyGdrive} days`);
   assert.ok(dailyRow.includes(`${dailyLocal} يوماً`), `playbook daily row must state local ${dailyLocal} days`);
   assert.ok(dailyRow.includes(`${dailyGdrive} يوماً`), `playbook daily row must state GDrive ${dailyGdrive} days`);
-  assert.ok(hourlyRow.includes('لا تُرفع عمداً'), 'playbook must state the hourly backup is deliberately NOT uploaded to Oracle');
+  assert.ok(
+    hourlyRow.includes('لا تُرفع عمداً'),
+    'playbook must state the hourly backup is deliberately NOT uploaded to Oracle',
+  );
   assert.ok(dailyRow.includes('نعم'), 'playbook must state the daily bundle IS uploaded to Oracle Object Storage');
   assert.ok(playbook.includes('zsystems_hourly_'), 'playbook must name the hourly file pattern');
   assert.ok(playbook.includes('zsystems_backup_'), 'playbook must name the daily bundle file pattern');
 
   // 3. The restore.sh `full` refusal trap is named, not papered over.
-  assert.ok(restoreScript.includes("The database already has $TABLES tables"), 'restore script must refuse a non-empty database');
+  assert.ok(
+    restoreScript.includes('The database already has $TABLES tables'),
+    'restore script must refuse a non-empty database',
+  );
   assert.ok(playbook.includes('zsystems-restore.sh full'), 'playbook must name zsystems-restore.sh full');
-  assert.ok(playbook.includes('يرفض العمل على قاعدة بيانات غير فاضية'), 'playbook must state that full refuses a non-empty database');
+  assert.ok(
+    playbook.includes('يرفض العمل على قاعدة بيانات غير فاضية'),
+    'playbook must state that full refuses a non-empty database',
+  );
   assert.ok(playbook.includes('لسيرفر جديد فقط'), 'playbook must state that full is for a new server only');
 
   // 4. The live-DB restore recipe matches the drill script's recipe.
-  assert.ok(drillScript.includes('openssl enc -d -aes-256-cbc -pbkdf2'), 'drill script must decrypt with openssl aes-256-cbc pbkdf2');
-  assert.ok(playbook.includes('openssl enc -d -aes-256-cbc -pbkdf2'), 'playbook must give the same openssl decrypt command');
+  assert.ok(
+    drillScript.includes('openssl enc -d -aes-256-cbc -pbkdf2'),
+    'drill script must decrypt with openssl aes-256-cbc pbkdf2',
+  );
+  assert.ok(
+    playbook.includes('openssl enc -d -aes-256-cbc -pbkdf2'),
+    'playbook must give the same openssl decrypt command',
+  );
   assert.ok(drillScript.includes('DROP DATABASE IF EXISTS $DRILL_DB'), 'drill script must drop before creating its DB');
-  assert.ok(playbook.includes('DROP DATABASE zsystems_db WITH (FORCE)'), 'playbook must include the DROP of the live DB');
+  assert.ok(
+    playbook.includes('DROP DATABASE zsystems_db WITH (FORCE)'),
+    'playbook must include the DROP of the live DB',
+  );
   assert.ok(playbook.includes('CREATE DATABASE zsystems_db'), 'playbook must include the CREATE of the live DB');
-  assert.ok(playbook.includes('grep -c "^ERROR" /tmp/restore.log'), 'playbook must count ERROR lines after the restore');
-  assert.ok(playbook.includes('zs-backup-tool.js extract'), 'playbook must extract the full dump from a daily bundle with zs-backup-tool');
+  assert.ok(
+    playbook.includes('grep -c "^ERROR" /tmp/restore.log'),
+    'playbook must count ERROR lines after the restore',
+  );
+  assert.ok(
+    playbook.includes('zs-backup-tool.js extract'),
+    'playbook must extract the full dump from a daily bundle with zs-backup-tool',
+  );
   assert.ok(playbook.includes('full/zsystems_db.sql.gz'), 'playbook must name the bundle entry holding the full dump');
   assert.ok(playbook.includes('pm2 stop zsystems-backend'), 'playbook must stop the backend before restoring');
-  assert.ok(playbook.includes('pre-restore-'), 'playbook must take a safety dump before dropping a live DB that still answers');
+  assert.ok(
+    playbook.includes('pre-restore-'),
+    'playbook must take a safety dump before dropping a live DB that still answers',
+  );
 
   // 5. The health endpoints exist and the deploy workflow probes both.
-  assert.ok(healthController.includes("@Controller(['health', 'api/health'])"), 'health controller must serve health + api/health');
+  assert.ok(
+    healthController.includes("@Controller(['health', 'api/health'])"),
+    'health controller must serve health + api/health',
+  );
   assert.ok(healthController.includes("@Get('live')"), 'health controller must define a live endpoint');
   assert.ok(healthController.includes("@Get('ready')"), 'health controller must define a ready endpoint');
   assert.ok(playbook.includes('/api/health/live'), 'playbook must probe /api/health/live');
   assert.ok(playbook.includes('/api/health/ready'), 'playbook must probe /api/health/ready');
-  assert.ok(deployWorkflow.includes('http://127.0.0.1:3000/api/health/live'), 'deploy workflow must probe /api/health/live');
-  assert.ok(deployWorkflow.includes('http://127.0.0.1:3000/api/health/ready'), 'deploy workflow must probe /api/health/ready');
+  assert.ok(
+    deployWorkflow.includes('http://127.0.0.1:3000/api/health/live'),
+    'deploy workflow must probe /api/health/live',
+  );
+  assert.ok(
+    deployWorkflow.includes('http://127.0.0.1:3000/api/health/ready'),
+    'deploy workflow must probe /api/health/ready',
+  );
   assert.ok(playbook.includes('npm run migration:list'), 'playbook must check the applied migrations');
   assert.ok(playbook.includes('npm run migration:run'), 'playbook must re-run migrations when behind');
 
   // 6. The passphrase requirement is named, not assumed.
   assert.ok(backupScript.includes('/etc/zsystems/backup-passphrase'), 'backup script must use the passphrase file');
   assert.ok(playbook.includes('/etc/zsystems/backup-passphrase'), 'playbook must name the passphrase file');
-  assert.ok(playbook.includes('من غيرها لا توجد نسخة واحدة تُفتح'), 'playbook must state that no backup opens without the passphrase');
+  assert.ok(
+    playbook.includes('من غيرها لا توجد نسخة واحدة تُفتح'),
+    'playbook must state that no backup opens without the passphrase',
+  );
 
   // 7. The playbook states the CURRENT deploy-failure DB behaviour and cites its source.
-  assert.ok(playbook.includes('deploy-oracle.yml'), 'playbook must cite the deploy workflow as the source of the failure-path behaviour');
-  assert.ok(playbook.includes('INV-MIGRATION-AUTO-REVERT'), 'playbook must name the automatic revert-or-restore invariant');
+  assert.ok(
+    playbook.includes('deploy-oracle.yml'),
+    'playbook must cite the deploy workflow as the source of the failure-path behaviour',
+  );
+  assert.ok(
+    playbook.includes('INV-MIGRATION-AUTO-REVERT'),
+    'playbook must name the automatic revert-or-restore invariant',
+  );
   assert.ok(playbook.includes('حي على `main`'), 'playbook must state that automatic revert-or-restore is live on main');
-  assert.ok(!playbook.includes('ليس حياً بعد'), 'playbook must not still claim automatic revert-or-restore is not live yet');
+  assert.ok(
+    !playbook.includes('ليس حياً بعد'),
+    'playbook must not still claim automatic revert-or-restore is not live yet',
+  );
 
   // 8. The playbook is reachable from the disaster-recovery doc, and vice versa.
-  assert.ok(disasterRecovery.includes('FIRE_DRILL_PLAYBOOK.md'), 'DISASTER_RECOVERY.md must link to the fire-drill playbook');
-  assert.ok(playbook.includes('DISASTER_RECOVERY.md'), 'the playbook must link back to DISASTER_RECOVERY.md for a new-server rebuild');
+  assert.ok(
+    disasterRecovery.includes('FIRE_DRILL_PLAYBOOK.md'),
+    'DISASTER_RECOVERY.md must link to the fire-drill playbook',
+  );
+  assert.ok(
+    playbook.includes('DISASTER_RECOVERY.md'),
+    'the playbook must link back to DISASTER_RECOVERY.md for a new-server rebuild',
+  );
 
   console.log(
     `backup fire-drill playbook checks passed (6 steps in order; retentions hourly ${hourlyLocal}d/${hourlyGdrive}d GDrive, daily ${dailyLocal}d/${dailyGdrive}d GDrive)`,

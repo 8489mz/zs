@@ -53,12 +53,12 @@ const STOREFRONT_FILES = [
 const readStorefront = () => STOREFRONT_FILES.map((f) => read(f)).join('\n');
 
 const LOCATIONS = [
-  { id: 1, location_type: 'internal_warehouse', branch_id: null },   // المخزن الرئيسي، بلا فرع
-  { id: 2, location_type: 'internal_warehouse', branch_id: 14 },     // مخزن فرع الاماراتي (الافتراضي)
-  { id: 3, location_type: 'internal_warehouse', branch_id: 99 },     // مخزن فرع آخر
-  { id: 4, location_type: 'external_warehouse', branch_id: null },   // مخزن خارجي
-  { id: 5, location_type: 'damaged', branch_id: 14 },                // تالف
-  { id: 6, location_type: 'in_transit', branch_id: 14 },             // في الطريق
+  { id: 1, location_type: 'internal_warehouse', branch_id: null }, // المخزن الرئيسي، بلا فرع
+  { id: 2, location_type: 'internal_warehouse', branch_id: 14 }, // مخزن فرع الاماراتي (الافتراضي)
+  { id: 3, location_type: 'internal_warehouse', branch_id: 99 }, // مخزن فرع آخر
+  { id: 4, location_type: 'external_warehouse', branch_id: null }, // مخزن خارجي
+  { id: 5, location_type: 'damaged', branch_id: 14 }, // تالف
+  { id: 6, location_type: 'in_transit', branch_id: 14 }, // في الطريق
 ];
 
 /** STK-1 — الوضع الافتراضي لا يتغيّر: مخزن الفرع وحده. */
@@ -67,8 +67,8 @@ function testDefaultModeIsUnchanged(): void {
   assert.deepEqual(
     resolveBranchSellableLocations(branch, 14, LOCATIONS),
     [{ id: 2, branchId: 14 }],
-    'a branch that is not in all-locations mode must keep selling from its own warehouse only — '
-    + 'this fix must not widen anyone’s reach',
+    'a branch that is not in all-locations mode must keep selling from its own warehouse only — ' +
+      'this fix must not widen anyone’s reach',
   );
   assert.deepEqual(resolveBranchSellableLocations(null, 14, LOCATIONS), []);
   assert.deepEqual(
@@ -100,21 +100,31 @@ function testAllOperationalLocations(): void {
 
 /** STK-3 — طلب المتجر يحجز في مخزن واحد، فالاختيار يجب أن يغطي كل الأسطر. */
 function testSingleLocationPick(): void {
-  const locations = [{ id: 2, branchId: 14 }, { id: 1, branchId: null }];
-  const required = new Map<number, number>([[100, 1], [200, 3]]);
+  const locations = [
+    { id: 2, branchId: 14 },
+    { id: 1, branchId: null },
+  ];
+  const required = new Map<number, number>([
+    [100, 1],
+    [200, 3],
+  ]);
 
   // مخزن الفرع فارغ (الحالة الحقيقية)، والرئيسي فيه كل شيء.
   const availability = new Map<string, number>([
-    ['2:100', 0], ['2:200', 0],
-    ['1:100', 50000], ['1:200', 50000],
+    ['2:100', 0],
+    ['2:200', 0],
+    ['1:100', 50000],
+    ['1:200', 50000],
   ]);
   const chosen = pickLocationCoveringOrder(locations, required, (l, p) => availability.get(`${l}:${p}`) || 0);
   assert.deepEqual(chosen, { id: 1, branchId: null }, 'the order must land where the stock actually is');
 
   // تغطية جزئية لا تكفي: نصف الطلب في مخزن ونصفه في آخر ⇒ لا اختيار، فتظهر رسالة النقص الحقيقية.
   const partial = new Map<string, number>([
-    ['2:100', 50], ['2:200', 0],
-    ['1:100', 0], ['1:200', 50],
+    ['2:100', 50],
+    ['2:200', 0],
+    ['1:100', 0],
+    ['1:200', 50],
   ]);
   assert.equal(
     pickLocationCoveringOrder(locations, required, (l, p) => partial.get(`${l}:${p}`) || 0),
@@ -122,7 +132,10 @@ function testSingleLocationPick(): void {
     'a location that covers only part of the order must not be chosen: a half reservation is worse than a clear refusal',
   );
 
-  assert.equal(pickLocationCoveringOrder([], required, () => 99), null);
+  assert.equal(
+    pickLocationCoveringOrder([], required, () => 99),
+    null,
+  );
 }
 
 /** كلا المسارين يمرّان بالمحرك — وهذا هو جوهر الإصلاح. */
@@ -130,7 +143,10 @@ function testBothPathsUseTheEngine(): void {
   const pos = codeOf(read('modules/sales/services/create-sale/load-sale-context.ts'));
   const storefront = codeOf(readStorefront());
 
-  for (const [name, source] of [['load-sale-context.ts', pos], ['storefront.service.ts', storefront]] as const) {
+  for (const [name, source] of [
+    ['load-sale-context.ts', pos],
+    ['storefront.service.ts', storefront],
+  ] as const) {
     assert.ok(
       /resolveBranchSellableLocations\(/.test(source),
       `${name} must resolve sellable warehouses through the shared engine, not its own copy of the rule`,
@@ -148,11 +164,16 @@ function testBothPathsUseTheEngine(): void {
   );
 }
 
-
 /** STK-4 — الكتالوج يعرض ما يستطيع الطلب حجزه، لا الرصيد العام. */
 function testCatalogueShowsWhatCanBeReserved(): void {
   // نفس حساب `reserveLocationStock`: مجموع المتاح في المخازن المؤهّلة + الرصيد غير المخصص.
-  assert.equal(availableAcrossLocations([{ qty: 10, reserved: 3 }, { qty: 5, reserved: 0 }]), 12);
+  assert.equal(
+    availableAcrossLocations([
+      { qty: 10, reserved: 3 },
+      { qty: 5, reserved: 0 },
+    ]),
+    12,
+  );
   assert.equal(
     availableAcrossLocations([{ qty: 10, reserved: 3 }], { qty: 4, reserved: 1 }),
     10,
@@ -178,9 +199,17 @@ function testCatalogueShowsWhatCanBeReserved(): void {
 
 /** STK-5 — المتجر يستطيع مخالفة الكاشير، والافتراضي أن يتبعه. */
 function testStorefrontModeOverride(): void {
-  assert.equal(normalizeStorefrontStockMode(undefined), 'follow_branch', 'an unset tenant must behave exactly as before');
+  assert.equal(
+    normalizeStorefrontStockMode(undefined),
+    'follow_branch',
+    'an unset tenant must behave exactly as before',
+  );
   assert.equal(normalizeStorefrontStockMode(''), 'follow_branch');
-  assert.equal(normalizeStorefrontStockMode('nonsense'), 'follow_branch', 'an unknown value must not silently widen the scope');
+  assert.equal(
+    normalizeStorefrontStockMode('nonsense'),
+    'follow_branch',
+    'an unknown value must not silently widen the scope',
+  );
   assert.equal(normalizeStorefrontStockMode('branch_only'), 'branch_only');
 
   // يتبع الفرع افتراضياً، في الاتجاهين.
@@ -203,7 +232,9 @@ function run(): void {
   testBothPathsUseTheEngine();
   testCatalogueShowsWhatCanBeReserved();
   testStorefrontModeOverride();
-  console.log('branch-sellable-locations.spec: STK-1..STK-5 hold — the website and the till sell from the same warehouses, and the catalogue shows only what can be reserved');
+  console.log(
+    'branch-sellable-locations.spec: STK-1..STK-5 hold — the website and the till sell from the same warehouses, and the catalogue shows only what can be reserved',
+  );
 }
 
 try {

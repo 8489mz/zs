@@ -88,16 +88,38 @@ async function main(): Promise<void> {
     (service as any).ensureUniqueUsername = async () => undefined;
     (service as any).ensureUniquePhone = async () => undefined;
     (service as any).getPlanLimitForTenant = async () => ({
-      maxUsers: null, isUnlimited: true, isLimitReached: false,
-      activeUsersCount: 0, planName: 'spec', planCode: null,
+      maxUsers: null,
+      isUnlimited: true,
+      isLimitReached: false,
+      activeUsersCount: 0,
+      planName: 'spec',
+      planCode: null,
     });
 
-    async function seedUser(id: number, tenantId: string, username: string, role: string, permissions: string[], isActive = true): Promise<void> {
-      await anyDb.insertInto('users').values({
-        id, username, phone: `010000000${String(id).padStart(2, '0')}`, password_hash: 'old-hash', password_salt: 'old-salt',
-        role, is_active: isActive, permissions_json: JSON.stringify(permissions),
-        display_name: username, tenant_id: tenantId, account_id: ACCOUNT,
-      }).execute();
+    async function seedUser(
+      id: number,
+      tenantId: string,
+      username: string,
+      role: string,
+      permissions: string[],
+      isActive = true,
+    ): Promise<void> {
+      await anyDb
+        .insertInto('users')
+        .values({
+          id,
+          username,
+          phone: `010000000${String(id).padStart(2, '0')}`,
+          password_hash: 'old-hash',
+          password_salt: 'old-salt',
+          role,
+          is_active: isActive,
+          permissions_json: JSON.stringify(permissions),
+          display_name: username,
+          tenant_id: tenantId,
+          account_id: ACCOUNT,
+        })
+        .execute();
     }
     async function readUser(id: number): Promise<any> {
       return anyDb.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
@@ -129,7 +151,11 @@ async function main(): Promise<void> {
 
     // 1. Admin resets a cashier's password: succeeds, hash changes, sessions revoked.
     await anyDb.insertInto('sessions').values({ id: 'sess-clerk', user_id: 3, tenant_id: TENANT }).execute();
-    const resetCashier = await service.updateUser(3, payload('clerk', 'cashier', [], { password: 'Str0ng!Pass9' }), adminActor);
+    const resetCashier = await service.updateUser(
+      3,
+      payload('clerk', 'cashier', [], { password: 'Str0ng!Pass9' }),
+      adminActor,
+    );
     assert.equal((resetCashier as any).ok, true);
     const clerkAfter = await readUser(3);
     assert.notEqual(clerkAfter.password_hash, 'old-hash');
@@ -138,7 +164,12 @@ async function main(): Promise<void> {
     // 2. Admin resets a peer admin's password: 403, row and sessions untouched.
     await anyDb.insertInto('sessions').values({ id: 'sess-peer', user_id: 2, tenant_id: TENANT }).execute();
     await assert.rejects(
-      () => service.updateUser(2, payload('admin-two', 'admin', ['canManageUsers'], { password: 'Str0ng!Pass9' }), adminActor),
+      () =>
+        service.updateUser(
+          2,
+          payload('admin-two', 'admin', ['canManageUsers'], { password: 'Str0ng!Pass9' }),
+          adminActor,
+        ),
       /PASSWORD_RESET_TARGET_RANK_FORBIDDEN/,
     );
     const peerAfter = await readUser(2);
@@ -154,19 +185,28 @@ async function main(): Promise<void> {
     assert.equal((await readUser(2)).is_active, true);
 
     // 4. Admin disables a cashier: succeeds.
-    const disableCashier = await service.updateUser(3, payload('clerk', 'cashier', [], { isActive: false }), adminActor);
+    const disableCashier = await service.updateUser(
+      3,
+      payload('clerk', 'cashier', [], { isActive: false }),
+      adminActor,
+    );
     assert.equal((disableCashier as any).ok, true);
     assert.equal((await readUser(3)).is_active, false);
 
     // 5. Admin re-enables a disabled peer admin: 403.
     await assert.rejects(
-      () => service.updateUser(5, payload('disabled-peer', 'admin', ['canManageUsers'], { isActive: true }), adminActor),
+      () =>
+        service.updateUser(5, payload('disabled-peer', 'admin', ['canManageUsers'], { isActive: true }), adminActor),
       /STATUS_CHANGE_TARGET_RANK_FORBIDDEN/,
     );
     assert.equal((await readUser(5)).is_active, false);
 
     // 6. Platform super_admin resets an admin's password: succeeds.
-    const platformReset = await service.updateUser(7, payload('platform-admin', 'admin', ['canManageUsers'], { password: 'Str0ng!Pass9' }), platformActor);
+    const platformReset = await service.updateUser(
+      7,
+      payload('platform-admin', 'admin', ['canManageUsers'], { password: 'Str0ng!Pass9' }),
+      platformActor,
+    );
     assert.equal((platformReset as any).ok, true);
     assert.notEqual((await readUser(7)).password_hash, 'old-hash');
 
@@ -174,13 +214,18 @@ async function main(): Promise<void> {
     // keeps role/permissions within the holder's own holdings so the
     // grant guard passes and only the peer-action guard can fire.
     await assert.rejects(
-      () => service.updateUser(2, payload('admin-two', 'cashier', [], { password: 'Str0ng!Pass9' }), cashierHolderActor),
+      () =>
+        service.updateUser(2, payload('admin-two', 'cashier', [], { password: 'Str0ng!Pass9' }), cashierHolderActor),
       /PASSWORD_RESET_TARGET_RANK_FORBIDDEN/,
     );
 
     // 8. Bulk disable by an admin: peer skipped, cashier disabled.
-    await anyDb.updateTable('users').set({ is_active: true } as any).where('id', '=', 3).execute();
-    const bulk = await service.bulkDisableUsers([2, 3], adminActor) as any;
+    await anyDb
+      .updateTable('users')
+      .set({ is_active: true } as any)
+      .where('id', '=', 3)
+      .execute();
+    const bulk = (await service.bulkDisableUsers([2, 3], adminActor)) as any;
     assert.equal(bulk.disabledCount, 1);
     assert.equal(bulk.skippedCount, 1);
     assert.equal(String(bulk.skipped[0].id), '2');
@@ -193,8 +238,16 @@ async function main(): Promise<void> {
     assert.equal((await readUser(2)).role, 'cashier');
 
     // 10. Status-neutral edit of a peer admin is not blocked by this guard.
-    await anyDb.updateTable('users').set({ role: 'admin' } as any).where('id', '=', 2).execute();
-    const neutral = await service.updateUser(2, payload('admin-two-renamed', 'admin', ['canManageUsers'], { isActive: true }), adminActor);
+    await anyDb
+      .updateTable('users')
+      .set({ role: 'admin' } as any)
+      .where('id', '=', 2)
+      .execute();
+    const neutral = await service.updateUser(
+      2,
+      payload('admin-two-renamed', 'admin', ['canManageUsers'], { isActive: true }),
+      adminActor,
+    );
     assert.equal((neutral as any).ok, true);
     assert.equal((await readUser(2)).username, 'admin-two-renamed');
 

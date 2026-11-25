@@ -58,7 +58,11 @@ async function testXpayWebhookFailClosed(): Promise<void> {
   await withEnv({ XPAY_WEBHOOK_SECRET: undefined }, async () => {
     const gateway = new XPayGatewayService();
     const body = { data: { status: 'successful', tenant_id: 't1', amount: 1000, custom_fields: [] } };
-    const result = await gateway.verifyAndParseWebhook({ 'x-xpay-signature': 'anything' }, body, Buffer.from(JSON.stringify(body)));
+    const result = await gateway.verifyAndParseWebhook(
+      { 'x-xpay-signature': 'anything' },
+      body,
+      Buffer.from(JSON.stringify(body)),
+    );
     assert.equal(result.isValid, false, 'XPay webhook must be rejected when XPAY_WEBHOOK_SECRET is unset');
   });
 
@@ -73,7 +77,9 @@ async function testXpayWebhookFailClosed(): Promise<void> {
   // 3. Valid HMAC-SHA256 over the raw body is accepted.
   await withEnv({ XPAY_WEBHOOK_SECRET: 'test-secret' }, async () => {
     const gateway = new XPayGatewayService();
-    const body = { data: { status: 'successful', tenant_id: 't1', total_amount: 500, currency: 'EGP', custom_fields: [] } };
+    const body = {
+      data: { status: 'successful', tenant_id: 't1', total_amount: 500, currency: 'EGP', custom_fields: [] },
+    };
     const rawBody = Buffer.from(JSON.stringify(body));
     const signature = crypto.createHmac('sha256', 'test-secret').update(rawBody).digest('hex');
     const result = await gateway.verifyAndParseWebhook({ 'x-xpay-signature': signature }, body, rawBody);
@@ -135,12 +141,21 @@ async function testStripeWebhookFailClosed(): Promise<void> {
   // 3. A correctly computed t=...,v1=... signature over the raw body is accepted.
   await withEnv({ STRIPE_WEBHOOK_SECRET: 'whsec_test' }, async () => {
     const gateway = new StripeGatewayService();
-    const body = { type: 'checkout.session.completed', data: { object: { id: 'cs_1', amount_total: 10000, currency: 'usd', metadata: { tenant_id: 't1', plan_id: '2' } } } };
+    const body = {
+      type: 'checkout.session.completed',
+      data: {
+        object: { id: 'cs_1', amount_total: 10000, currency: 'usd', metadata: { tenant_id: 't1', plan_id: '2' } },
+      },
+    };
     const rawBody = Buffer.from(JSON.stringify(body));
     const timestamp = Math.floor(Date.now() / 1000);
     const signedPayload = `${timestamp}.${rawBody.toString('utf8')}`;
     const signature = crypto.createHmac('sha256', 'whsec_test').update(signedPayload).digest('hex');
-    const result = await gateway.verifyAndParseWebhook({ 'stripe-signature': `t=${timestamp},v1=${signature}` }, body, rawBody);
+    const result = await gateway.verifyAndParseWebhook(
+      { 'stripe-signature': `t=${timestamp},v1=${signature}` },
+      body,
+      rawBody,
+    );
     assert.equal(result.isValid, true, 'Stripe webhook with a correct t=...,v1=... signature must be accepted');
     assert.equal(result.isSuccessful, true);
   });
@@ -153,11 +168,21 @@ async function testStripeWebhookFailClosed(): Promise<void> {
     const staleTimestamp = Math.floor(Date.now() / 1000) - 3600; // 1 hour old
     const signedPayload = `${staleTimestamp}.${rawBody.toString('utf8')}`;
     const signature = crypto.createHmac('sha256', 'whsec_test').update(signedPayload).digest('hex');
-    const result = await gateway.verifyAndParseWebhook({ 'stripe-signature': `t=${staleTimestamp},v1=${signature}` }, body, rawBody);
-    assert.equal(result.isValid, false, 'Stripe webhook with a stale (>300s) timestamp must be rejected (replay protection)');
+    const result = await gateway.verifyAndParseWebhook(
+      { 'stripe-signature': `t=${staleTimestamp},v1=${signature}` },
+      body,
+      rawBody,
+    );
+    assert.equal(
+      result.isValid,
+      false,
+      'Stripe webhook with a stale (>300s) timestamp must be rejected (replay protection)',
+    );
   });
 
-  console.log('  -> Stripe gateway: fail-closed without secret/signature, accepts valid signed payload, rejects replayed/stale timestamp.');
+  console.log(
+    '  -> Stripe gateway: fail-closed without secret/signature, accepts valid signed payload, rejects replayed/stale timestamp.',
+  );
 }
 
 async function run(): Promise<void> {

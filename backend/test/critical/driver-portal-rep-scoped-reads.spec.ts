@@ -89,43 +89,235 @@ async function main(): Promise<void> {
     // tenant's book digits through tenantBaseCurrency (settings +
     // currency_exchange_rates); the fixture answers with EGP (2dp).
     await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-    await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 }).execute();
+    await anyDb
+      .insertInto('currency_exchange_rates')
+      .values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 })
+      .execute();
 
-    await anyDb.insertInto('delivery_representatives').values([
-      { id: REP_OWN, tenant_id: TENANT, account_id: ACCOUNT, full_name: 'Own Rep', name: 'Own Rep', phone: '01000000001', is_active: true },
-      { id: REP_OTHER, tenant_id: TENANT, account_id: ACCOUNT, full_name: 'Other Rep', name: 'Other Rep', phone: '01000000002', is_active: true },
-    ]).execute();
-    await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main', location_type: 'internal_warehouse', is_active: true }).execute();
+    await anyDb
+      .insertInto('delivery_representatives')
+      .values([
+        {
+          id: REP_OWN,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          full_name: 'Own Rep',
+          name: 'Own Rep',
+          phone: '01000000001',
+          is_active: true,
+        },
+        {
+          id: REP_OTHER,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          full_name: 'Other Rep',
+          name: 'Other Rep',
+          phone: '01000000002',
+          is_active: true,
+        },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('stock_locations')
+      .values({
+        id: 10,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        name: 'Main',
+        location_type: 'internal_warehouse',
+        is_active: true,
+      })
+      .execute();
     await anyDb.insertInto('products').values({ id: 5, tenant_id: TENANT, name: 'Product 5' }).execute();
-    await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, display_name: 'Sys', username: 'sys' }).execute();
+    await anyDb
+      .insertInto('users')
+      .values({ id: 1, tenant_id: TENANT, display_name: 'Sys', username: 'sys' })
+      .execute();
     // Customers: 100 served by OWN via a field visit, 200 served by OTHER
     // via a delivered sale, 300 served by NOBODY.
-    await anyDb.insertInto('customers').values([
-      { id: 100, tenant_id: TENANT, name: 'Visited Customer', phone: '011100', address: 'Addr 100', balance: 50, credit_limit: 100, metadata: null },
-      { id: 200, tenant_id: TENANT, name: 'Sold-To Customer', phone: '011200', address: 'Addr 200', balance: 0, credit_limit: 0, metadata: null },
-      { id: 300, tenant_id: TENANT, name: 'Stranger Customer', phone: '011300', address: 'Addr 300', balance: 999, credit_limit: 500, metadata: null },
-    ]).execute();
+    await anyDb
+      .insertInto('customers')
+      .values([
+        {
+          id: 100,
+          tenant_id: TENANT,
+          name: 'Visited Customer',
+          phone: '011100',
+          address: 'Addr 100',
+          balance: 50,
+          credit_limit: 100,
+          metadata: null,
+        },
+        {
+          id: 200,
+          tenant_id: TENANT,
+          name: 'Sold-To Customer',
+          phone: '011200',
+          address: 'Addr 200',
+          balance: 0,
+          credit_limit: 0,
+          metadata: null,
+        },
+        {
+          id: 300,
+          tenant_id: TENANT,
+          name: 'Stranger Customer',
+          phone: '011300',
+          address: 'Addr 300',
+          balance: 999,
+          credit_limit: 500,
+          metadata: null,
+        },
+      ])
+      .execute();
 
     // Trips: 1 belongs to OWN, 2 belongs to OTHER.
-    await anyDb.insertInto('van_sales_trips').values([
-      { id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OWN, van_location_id: 10, source_warehouse_id: 10, status: 'open', settlement_status: 'open' },
-      { id: 2, tenant_id: TENANT, account_id: ACCOUNT, rep_id: REP_OTHER, van_location_id: 10, source_warehouse_id: 10, status: 'open', settlement_status: 'open' },
-    ]).execute();
-    await anyDb.insertInto('van_field_visits').values({ tenant_id: TENANT, account_id: ACCOUNT, trip_id: 1, rep_id: REP_OWN, customer_id: 100, visit_type: 'positive' }).execute();
-    await anyDb.insertInto('van_damaged_swaps').values({ tenant_id: TENANT, account_id: ACCOUNT, trip_id: 2, rep_id: REP_OTHER, customer_id: 200, damaged_product_id: 5, replacement_product_id: 5, damaged_qty: 1, replacement_qty: 1, price_difference: 7 }).execute();
-    await anyDb.insertInto('van_trip_expenses').values({ tenant_id: TENANT, account_id: ACCOUNT, trip_id: 2, expense_type: 'fuel', amount: 42, created_by_user_id: 1 }).execute();
-    await anyDb.insertInto('van_trip_packaging_movements').values({ tenant_id: TENANT, account_id: ACCOUNT, trip_id: 2, customer_id: 200, package_type: 'crate_plastic', delivered_qty: 3, returned_qty: 1 }).execute();
+    await anyDb
+      .insertInto('van_sales_trips')
+      .values([
+        {
+          id: 1,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: REP_OWN,
+          van_location_id: 10,
+          source_warehouse_id: 10,
+          status: 'open',
+          settlement_status: 'open',
+        },
+        {
+          id: 2,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          rep_id: REP_OTHER,
+          van_location_id: 10,
+          source_warehouse_id: 10,
+          status: 'open',
+          settlement_status: 'open',
+        },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('van_field_visits')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        trip_id: 1,
+        rep_id: REP_OWN,
+        customer_id: 100,
+        visit_type: 'positive',
+      })
+      .execute();
+    await anyDb
+      .insertInto('van_damaged_swaps')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        trip_id: 2,
+        rep_id: REP_OTHER,
+        customer_id: 200,
+        damaged_product_id: 5,
+        replacement_product_id: 5,
+        damaged_qty: 1,
+        replacement_qty: 1,
+        price_difference: 7,
+      })
+      .execute();
+    await anyDb
+      .insertInto('van_trip_expenses')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        trip_id: 2,
+        expense_type: 'fuel',
+        amount: 42,
+        created_by_user_id: 1,
+      })
+      .execute();
+    await anyDb
+      .insertInto('van_trip_packaging_movements')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        trip_id: 2,
+        customer_id: 200,
+        package_type: 'crate_plastic',
+        delivered_qty: 3,
+        returned_qty: 1,
+      })
+      .execute();
 
     // Pre-sale orders: 50 belongs to OWN (customer 100), 51 to OTHER.
-    await anyDb.insertInto('sales_orders').values([
-      { id: 50, tenant_id: TENANT, account_id: ACCOUNT, order_number: 'SO-50', customer_id: 100, customer_name: 'Visited Customer', customer_phone: '011100', customer_address: 'Addr 100', rep_id: REP_OWN, warehouse_location_id: 10, status: 'pending', subtotal: 100, total_amount: 100 },
-      { id: 51, tenant_id: TENANT, account_id: ACCOUNT, order_number: 'SO-51', customer_id: 200, customer_name: 'Sold-To Customer', customer_phone: '011200', customer_address: 'Addr 200', rep_id: REP_OTHER, warehouse_location_id: 10, status: 'pending', subtotal: 200, total_amount: 200 },
-    ]).execute();
-    await anyDb.insertInto('sales_order_items').values({ sales_order_id: 50, tenant_id: TENANT, account_id: ACCOUNT, product_id: 5, product_name: 'Product 5', quantity: 2, unit_price: 50, total: 100 }).execute();
+    await anyDb
+      .insertInto('sales_orders')
+      .values([
+        {
+          id: 50,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          order_number: 'SO-50',
+          customer_id: 100,
+          customer_name: 'Visited Customer',
+          customer_phone: '011100',
+          customer_address: 'Addr 100',
+          rep_id: REP_OWN,
+          warehouse_location_id: 10,
+          status: 'pending',
+          subtotal: 100,
+          total_amount: 100,
+        },
+        {
+          id: 51,
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          order_number: 'SO-51',
+          customer_id: 200,
+          customer_name: 'Sold-To Customer',
+          customer_phone: '011200',
+          customer_address: 'Addr 200',
+          rep_id: REP_OTHER,
+          warehouse_location_id: 10,
+          status: 'pending',
+          subtotal: 200,
+          total_amount: 200,
+        },
+      ])
+      .execute();
+    await anyDb
+      .insertInto('sales_order_items')
+      .values({
+        sales_order_id: 50,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        product_id: 5,
+        product_name: 'Product 5',
+        quantity: 2,
+        unit_price: 50,
+        total: 100,
+      })
+      .execute();
 
     // Delivered sale by OTHER to customer 200 (evidence row for OTHER).
-    await anyDb.insertInto('sales').values({ id: 70, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'INV-70', total: 500, paid_amount: 500, status: 'posted', payment_type: 'cash', customer_id: 200, delivery_rep_id: REP_OTHER, van_trip_id: 2 }).execute();
-    await anyDb.insertInto('sale_items').values({ sale_id: 70, tenant_id: TENANT, account_id: ACCOUNT, product_id: 5, unit_price: 123 }).execute();
+    await anyDb
+      .insertInto('sales')
+      .values({
+        id: 70,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'INV-70',
+        total: 500,
+        paid_amount: 500,
+        status: 'posted',
+        payment_type: 'cash',
+        customer_id: 200,
+        delivery_rep_id: REP_OTHER,
+        van_trip_id: 2,
+      })
+      .execute();
+    await anyDb
+      .insertInto('sale_items')
+      .values({ sale_id: 70, tenant_id: TENANT, account_id: ACCOUNT, product_id: 5, unit_price: 123 })
+      .execute();
 
     const forbidden = (err: any) => err && err.code === 'FORBIDDEN' && err.statusCode === 403;
 

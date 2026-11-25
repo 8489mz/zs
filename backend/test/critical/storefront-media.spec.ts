@@ -21,13 +21,20 @@ function testParse(): void {
   if (ok.ok) {
     assert.equal(ok.image.mime, 'image/webp');
     assert.deepEqual(ok.image.bytes, PIXEL_WEBP);
-    assert.equal(ok.image.sha256, createHash('sha256').update(PIXEL_WEBP).digest('hex'), 'content-addressed by sha256 of the bytes');
+    assert.equal(
+      ok.image.sha256,
+      createHash('sha256').update(PIXEL_WEBP).digest('hex'),
+      'content-addressed by sha256 of the bytes',
+    );
   }
   const jpg = parseImageDataUrl(dataUrl('image/jpg', PIXEL_WEBP));
   assert.ok(jpg.ok && jpg.image.mime === 'image/jpeg', 'image/jpg is normalised to image/jpeg');
 
   // SVG can carry script: never stored, never served.
-  assert.deepEqual(parseImageDataUrl(dataUrl('image/svg+xml', Buffer.from('<svg onload="x()"/>'))), { ok: false, reason: 'UNSUPPORTED_TYPE' });
+  assert.deepEqual(parseImageDataUrl(dataUrl('image/svg+xml', Buffer.from('<svg onload="x()"/>'))), {
+    ok: false,
+    reason: 'UNSUPPORTED_TYPE',
+  });
   assert.deepEqual(parseImageDataUrl('data:image/png;base64,'), { ok: false, reason: 'EMPTY' });
   assert.deepEqual(parseImageDataUrl('https://example.com/a.png'), { ok: false, reason: 'NOT_DATA_URL' });
   assert.deepEqual(parseImageDataUrl('data:image/png;charset=utf-8,abc'), { ok: false, reason: 'MALFORMED' });
@@ -46,7 +53,11 @@ function testRefs(): void {
   assert.equal(isAcceptableStoredImageRef('javascript:alert(1)'), false);
   assert.equal(isAcceptableStoredImageRef('/etc/passwd'), false);
   assert.equal(isAcceptableStoredImageRef('https://x.com/a.png" onerror="x'), false, 'no attribute injection');
-  assert.equal(isAcceptableStoredImageRef(dataUrl('image/webp', PIXEL_WEBP)), false, 'a data URL is never a stored reference');
+  assert.equal(
+    isAcceptableStoredImageRef(dataUrl('image/webp', PIXEL_WEBP)),
+    false,
+    'a data URL is never a stored reference',
+  );
   assert.equal(isImageDataUrl(' data:image/webp;base64,AAAA'), true);
   assert.equal(isImageDataUrl(url), false);
 }

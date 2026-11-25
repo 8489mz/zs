@@ -166,39 +166,115 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT, slug: 'test10k', activity_type: 'retail' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'taxRate', value: '14' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2115, '2115'], [2120, '2120'], [4100, '4100'], [4200, '4200'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2115, '2115'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4200, '4200'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('cashier_shifts').values({
-    tenant_id: TENANT, account_id: ACCOUNT, opened_by: 1, status: 'open', branch_id: 1,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('cashier_shifts')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      opened_by: 1,
+      status: 'open',
+      branch_id: 1,
+    })
+    .execute();
   // Product 101: 10 on hand, 2 reserved — the reservation the reaper must release.
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Product 101',
-    stock_qty: 10, reserved_qty: 2, cost_price: 10, retail_price: 50,
-    wholesale_price: 50, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 10, reserved_qty: 2,
-  }).execute();
-  await anyDb.insertInto('delivery_representatives').values({
-    id: 2, tenant_id: TENANT, account_id: ACCOUNT, name: 'Store Rep',
-    phone: null, is_active: true, rep_type: 'store_fleet',
-  }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Product 101',
+      stock_qty: 10,
+      reserved_qty: 2,
+      cost_price: 10,
+      retail_price: 50,
+      wholesale_price: 50,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 10,
+      reserved_qty: 2,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 2,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Store Rep',
+      phone: null,
+      is_active: true,
+      rep_type: 'store_fleet',
+    })
+    .execute();
 }
 
 function buildServices(db: Kysely<Database>): { storefront: StorefrontService; sales: SalesService } {
@@ -216,47 +292,76 @@ function buildServices(db: Kysely<Database>): { storefront: StorefrontService; s
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
   const salesWrite = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
   const salesService = new SalesService(query, salesWrite);
   const storefront = new StorefrontService(db, salesService, {} as never, {} as never);
   return { storefront, sales: salesService };
 }
 
-async function seedOrder(
-  db: Kysely<Database>,
-  overrides: Record<string, unknown>,
-): Promise<void> {
+async function seedOrder(db: Kysely<Database>, overrides: Record<string, unknown>): Promise<void> {
   const base: Record<string, unknown> = {
-    id: 77, tenant_id: TENANT, account_id: ACCOUNT, order_number: 'ON-1',
-    customer_name: 'Online Customer', customer_phone: '01012345678', customer_address: 'Cairo',
+    id: 77,
+    tenant_id: TENANT,
+    account_id: ACCOUNT,
+    order_number: 'ON-1',
+    customer_name: 'Online Customer',
+    customer_phone: '01012345678',
+    customer_address: 'Cairo',
     items_json: JSON.stringify([{ productId: 101, quantity: 2, unitPrice: 50, total: 100 }]),
-    subtotal: 100, delivery_fee: 0, total_amount: 100, status: 'pending',
-    payment_method: 'instapay_wallet', payment_status: 'pending', gateway_provider: null,
-    fulfillment_type: 'delivery', branch_id: 1, sale_id: null,
-    discount_amount: 0, coupon_code: null,
-    stock_reserved: true, reserved_branch_id: 1, reserved_location_id: 10,
+    subtotal: 100,
+    delivery_fee: 0,
+    total_amount: 100,
+    status: 'pending',
+    payment_method: 'instapay_wallet',
+    payment_status: 'pending',
+    gateway_provider: null,
+    fulfillment_type: 'delivery',
+    branch_id: 1,
+    sale_id: null,
+    discount_amount: 0,
+    coupon_code: null,
+    stock_reserved: true,
+    reserved_branch_id: 1,
+    reserved_location_id: 10,
     stock_reserved_at: new Date(Date.now() - 31 * 60 * 1000),
     created_at: new Date(Date.now() - 31 * 60 * 1000),
   };
-  await (db as any).insertInto('online_orders').values({ ...base, ...overrides }).execute();
+  await (db as any)
+    .insertInto('online_orders')
+    .values({ ...base, ...overrides })
+    .execute();
 }
 
 async function readOrder(db: Kysely<Database>, orderId: number): Promise<any> {
-  return (db as any).selectFrom('online_orders').selectAll()
-    .where('id', '=', orderId).executeTakeFirstOrThrow();
+  return (db as any).selectFrom('online_orders').selectAll().where('id', '=', orderId).executeTakeFirstOrThrow();
 }
 
 async function locationReserved(db: Kysely<Database>): Promise<{ qty: number; reserved: number }> {
-  const row = await (db as any).selectFrom('product_location_stock').select(['qty', 'reserved_qty'])
-    .where('product_id', '=', 101).where('location_id', '=', 10).executeTakeFirstOrThrow();
+  const row = await (db as any)
+    .selectFrom('product_location_stock')
+    .select(['qty', 'reserved_qty'])
+    .where('product_id', '=', 101)
+    .where('location_id', '=', 10)
+    .executeTakeFirstOrThrow();
   return { qty: Number(row.qty), reserved: Number(row.reserved_qty) };
 }
 
 async function productReserved(db: Kysely<Database>): Promise<number> {
-  const row = await (db as any).selectFrom('products').select('reserved_qty')
-    .where('id', '=', 101).executeTakeFirstOrThrow();
+  const row = await (db as any)
+    .selectFrom('products')
+    .select('reserved_qty')
+    .where('id', '=', 101)
+    .executeTakeFirstOrThrow();
   return Number(row.reserved_qty);
 }
 
@@ -316,15 +421,25 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       // Two orders hold 2 units each — raise the seeded reservation to 4.
-      await (db as any).updateTable('product_location_stock').set({ reserved_qty: 4 }).where('product_id', '=', 101).execute();
+      await (db as any)
+        .updateTable('product_location_stock')
+        .set({ reserved_qty: 4 })
+        .where('product_id', '=', 101)
+        .execute();
       await (db as any).updateTable('products').set({ reserved_qty: 4 }).where('id', '=', 101).execute();
       await seedOrder(db, {
-        id: 77, order_number: 'ON-COD-YOUNG', payment_method: 'cod',
-        stock_reserved_at: minutesAgo(23 * 60 + 59), created_at: minutesAgo(23 * 60 + 59),
+        id: 77,
+        order_number: 'ON-COD-YOUNG',
+        payment_method: 'cod',
+        stock_reserved_at: minutesAgo(23 * 60 + 59),
+        created_at: minutesAgo(23 * 60 + 59),
       });
       await seedOrder(db, {
-        id: 78, order_number: 'ON-COD-OLD', payment_method: 'cod',
-        stock_reserved_at: minutesAgo(24 * 60 + 1), created_at: minutesAgo(24 * 60 + 1),
+        id: 78,
+        order_number: 'ON-COD-OLD',
+        payment_method: 'cod',
+        stock_reserved_at: minutesAgo(24 * 60 + 1),
+        created_at: minutesAgo(24 * 60 + 1),
       });
       const { storefront } = buildServices(db);
       const result = await storefront.reapExpiredReservations();
@@ -350,19 +465,32 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       // Three orders hold 2 units each — raise the seeded reservation to 6.
-      await (db as any).updateTable('product_location_stock').set({ reserved_qty: 6 }).where('product_id', '=', 101).execute();
+      await (db as any)
+        .updateTable('product_location_stock')
+        .set({ reserved_qty: 6 })
+        .where('product_id', '=', 101)
+        .execute();
       await (db as any).updateTable('products').set({ reserved_qty: 6 }).where('id', '=', 101).execute();
       await seedOrder(db, {
-        id: 77, order_number: 'ON-PAID', payment_status: 'paid',
-        stock_reserved_at: minutesAgo(45), created_at: minutesAgo(45),
+        id: 77,
+        order_number: 'ON-PAID',
+        payment_status: 'paid',
+        stock_reserved_at: minutesAgo(45),
+        created_at: minutesAgo(45),
       });
       await seedOrder(db, {
-        id: 78, order_number: 'ON-CONVERTED', sale_id: 105,
-        stock_reserved_at: minutesAgo(45), created_at: minutesAgo(45),
+        id: 78,
+        order_number: 'ON-CONVERTED',
+        sale_id: 105,
+        stock_reserved_at: minutesAgo(45),
+        created_at: minutesAgo(45),
       });
       await seedOrder(db, {
-        id: 79, order_number: 'ON-PROCESSING', status: 'processing',
-        stock_reserved_at: minutesAgo(45), created_at: minutesAgo(45),
+        id: 79,
+        order_number: 'ON-PROCESSING',
+        status: 'processing',
+        stock_reserved_at: minutesAgo(45),
+        created_at: minutesAgo(45),
       });
       const { storefront } = buildServices(db);
       const result = await storefront.reapExpiredReservations();
@@ -409,8 +537,11 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await seedOrder(db, {
-        stock_reserved: false, reserved_branch_id: null, reserved_location_id: null,
-        stock_reserved_at: null, created_at: minutesAgo(31),
+        stock_reserved: false,
+        reserved_branch_id: null,
+        reserved_location_id: null,
+        stock_reserved_at: null,
+        created_at: minutesAgo(31),
       });
       const { storefront } = buildServices(db);
       const result = await storefront.reapExpiredReservations();
@@ -437,8 +568,11 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await seedOrder(db, {
-        stock_reserved: false, reserved_branch_id: null, reserved_location_id: null,
-        stock_reserved_at: null, created_at: minutesAgo(29),
+        stock_reserved: false,
+        reserved_branch_id: null,
+        reserved_location_id: null,
+        stock_reserved_at: null,
+        created_at: minutesAgo(29),
       });
       const { storefront } = buildServices(db);
       const result = await storefront.reapExpiredReservations();
@@ -460,20 +594,34 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db);
       await seedOrder(db, {
-        id: 77, order_number: 'ON-COD-UNRES-YOUNG', payment_method: 'cod',
-        stock_reserved: false, reserved_branch_id: null, reserved_location_id: null,
-        stock_reserved_at: null, created_at: minutesAgo(23 * 60 + 59),
+        id: 77,
+        order_number: 'ON-COD-UNRES-YOUNG',
+        payment_method: 'cod',
+        stock_reserved: false,
+        reserved_branch_id: null,
+        reserved_location_id: null,
+        stock_reserved_at: null,
+        created_at: minutesAgo(23 * 60 + 59),
       });
       await seedOrder(db, {
-        id: 78, order_number: 'ON-COD-UNRES-OLD', payment_method: 'cod',
-        stock_reserved: false, reserved_branch_id: null, reserved_location_id: null,
-        stock_reserved_at: null, created_at: minutesAgo(24 * 60 + 1),
+        id: 78,
+        order_number: 'ON-COD-UNRES-OLD',
+        payment_method: 'cod',
+        stock_reserved: false,
+        reserved_branch_id: null,
+        reserved_location_id: null,
+        stock_reserved_at: null,
+        created_at: minutesAgo(24 * 60 + 1),
       });
       const { storefront } = buildServices(db);
       const result = await storefront.reapExpiredReservations();
       assert.equal(result.scannedCount, 2, 'both unreserved COD rows pass the 30-min SQL pre-filter');
       assert.equal(result.reapedOrdersCount, 1, 'only the 24h01m unreserved COD order must be reaped');
-      assert.deepEqual(result.reapedOrderNumbers, ['ON-COD-UNRES-OLD'], 'the reaped order is the old unreserved COD one');
+      assert.deepEqual(
+        result.reapedOrderNumbers,
+        ['ON-COD-UNRES-OLD'],
+        'the reaped order is the old unreserved COD one',
+      );
       const young = await readOrder(db, 77);
       assert.equal(young.status, 'pending', 'the 23h59m unreserved COD order must stay pending');
       const old = await readOrder(db, 78);

@@ -35,7 +35,10 @@ function testPlatformTenantIdentity(): void {
 
 function testPlatformRestoreShield(): void {
   // Read service source code to verify structural invariants
-  const service = readFileSync(join(__dirname, '../../src/modules/settings/services/settings-backup.service.ts'), 'utf8');
+  const service = readFileSync(
+    join(__dirname, '../../src/modules/settings/services/settings-backup.service.ts'),
+    'utf8',
+  );
 
   // 1. Guard against restoring backup on platform tenant: the
   // shield lives in isProtectedTenantDataTarget (shared helper,
@@ -43,23 +46,20 @@ function testPlatformRestoreShield(): void {
   // restoreBackup — the literal inline check this spec used to
   // grep for was refactored into the helper, not removed.
   assert.ok(
-    service.includes("isProtectedTenantDataTarget(scope.tenantId)"),
+    service.includes('isProtectedTenantDataTarget(scope.tenantId)'),
 
-    'restoreBackup must explicitly check and reject platform tenant restore'
+    'restoreBackup must explicitly check and reject platform tenant restore',
   );
-  assert.ok(
-    service.includes('TENANT_MISMATCH'),
-    'restoreBackup must reject mismatched tenant backups'
-  );
+  assert.ok(service.includes('TENANT_MISMATCH'), 'restoreBackup must reject mismatched tenant backups');
 
   // 2. Sanitize users during restore
   assert.ok(
     service.includes("if (String(row.username || '').trim().toLowerCase() === 'zs') continue;"),
-    'restoreBackup must never restore a user named zs'
+    'restoreBackup must never restore a user named zs',
   );
   assert.ok(
     service.includes("if (row.role === 'super_admin') row.role = 'admin';"),
-    'restoreBackup must downgrade any super_admin role to admin'
+    'restoreBackup must downgrade any super_admin role to admin',
   );
   // The tenants/sessions exclusion was refactored: 'sessions'
   // rows are skipped inline in the restore loop, and 'tenants'
@@ -67,16 +67,16 @@ function testPlatformRestoreShield(): void {
   // clear/restore table lists. Both current forms are pinned.
   assert.ok(
     service.includes("if (String(table) === 'sessions') continue;"),
-    'restoreBackup must never wipe or restore sessions'
+    'restoreBackup must never wipe or restore sessions',
   );
-  assert.ok(
-    service.includes("name !== 'tenants'"),
-    'restoreBackup must never wipe or restore tenants table'
-  );
+  assert.ok(service.includes("name !== 'tenants'"), 'restoreBackup must never wipe or restore tenants table');
 }
 
 function testTenantTransferShield(): void {
-  const transferService = readFileSync(join(__dirname, '../../src/modules/settings/services/tenant-transfer.service.ts'), 'utf8');
+  const transferService = readFileSync(
+    join(__dirname, '../../src/modules/settings/services/tenant-transfer.service.ts'),
+    'utf8',
+  );
   const pkgService = readFileSync(join(__dirname, '../../src/core/tenant-transfer/tenant-package.ts'), 'utf8');
 
   // Both platform rejections were refactored into the shared
@@ -84,14 +84,13 @@ function testTenantTransferShield(): void {
   // platform id); the current call forms are pinned, not the old
   // inline literal comparisons.
   assert.ok(
-    transferService.includes("isProtectedTenantDataTarget(scope.tenantId)"),
-    'TenantTransferService.importForActor must reject platform tenant'
+    transferService.includes('isProtectedTenantDataTarget(scope.tenantId)'),
+    'TenantTransferService.importForActor must reject platform tenant',
   );
   assert.ok(
-    pkgService.includes("isProtectedTenantDataTarget(target.tenantId)"),
-    'tenant-package.importTenantPackage must reject platform tenant'
+    pkgService.includes('isProtectedTenantDataTarget(target.tenantId)'),
+    'tenant-package.importTenantPackage must reject platform tenant',
   );
-
 }
 
 function testUsersServiceImmunity(): void {
@@ -100,23 +99,23 @@ function testUsersServiceImmunity(): void {
   // 1. Reserved username zs
   assert.ok(
     usersService.includes('RESERVED_PLATFORM_USERNAME'),
-    'UsersService must reject non-platform tenants creating username zs'
+    'UsersService must reject non-platform tenants creating username zs',
   );
 
   // 2. Cannot delete super_admin
   assert.ok(
     usersService.includes('CANNOT_DELETE_PLATFORM_SUPER_ADMIN'),
-    'UsersService must protect super admin user from deletion'
+    'UsersService must protect super admin user from deletion',
   );
 
   // 3. Cannot rename or demote super_admin
   assert.ok(
     usersService.includes('CANNOT_RENAME_PLATFORM_SUPER_ADMIN'),
-    'UsersService must protect super admin user from renaming'
+    'UsersService must protect super admin user from renaming',
   );
   assert.ok(
     usersService.includes('CANNOT_DEMOTE_PLATFORM_SUPER_ADMIN'),
-    'UsersService must protect super admin user from demotion'
+    'UsersService must protect super admin user from demotion',
   );
 }
 
@@ -125,11 +124,11 @@ function testBootstrapAdminSelfHealing(): void {
 
   assert.ok(
     bootstrap.includes('ensurePlatformSuperAdminIntegrity'),
-    'BootstrapAdminService must include ensurePlatformSuperAdminIntegrity'
+    'BootstrapAdminService must include ensurePlatformSuperAdminIntegrity',
   );
   assert.ok(
     bootstrap.includes('await this.ensurePlatformSuperAdminIntegrity();'),
-    'BootstrapAdminService must execute ensurePlatformSuperAdminIntegrity on application bootstrap'
+    'BootstrapAdminService must execute ensurePlatformSuperAdminIntegrity on application bootstrap',
   );
 }
 

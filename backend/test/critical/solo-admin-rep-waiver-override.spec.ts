@@ -110,8 +110,13 @@ const REP_PASS = 'rep-pass';
 
 function authFor(userId: number, role: string, username: string): AuthContext {
   return {
-    userId, sessionId: `spec-m5-${userId}`, username, role,
-    permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId,
+    sessionId: `spec-m5-${userId}`,
+    username,
+    role,
+    permissions: ['deliveryReps', 'accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   } as unknown as AuthContext;
 }
 const adminOneAuth = authFor(1, 'admin', 'admin-one');
@@ -188,60 +193,185 @@ async function seedFoundation(db: Kysely<Database>, withSecondAdmin = true): Pro
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   const adminOne = await createPasswordRecord(ADMIN_ONE_PASS);
   const adminTwo = await createPasswordRecord(ADMIN_TWO_PASS);
   const rep = await createPasswordRecord(REP_PASS);
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin-one', role: 'admin', password_hash: adminOne.hash, password_salt: adminOne.salt, is_active: true }).execute();
-  if (withSecondAdmin) await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'admin-two', role: 'admin', password_hash: adminTwo.hash, password_salt: adminTwo.salt, is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'rep-user', phone: '01000000001', role: 'cashier', password_hash: rep.hash, password_salt: rep.salt, is_active: true }).execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      username: 'admin-one',
+      role: 'admin',
+      password_hash: adminOne.hash,
+      password_salt: adminOne.salt,
+      is_active: true,
+    })
+    .execute();
+  if (withSecondAdmin)
+    await anyDb
+      .insertInto('users')
+      .values({
+        id: 2,
+        tenant_id: TENANT,
+        username: 'admin-two',
+        role: 'admin',
+        password_hash: adminTwo.hash,
+        password_salt: adminTwo.salt,
+        is_active: true,
+      })
+      .execute();
+  await anyDb
+    .insertInto('users')
+    .values({
+      id: 3,
+      tenant_id: TENANT,
+      username: 'rep-user',
+      phone: '01000000001',
+      role: 'cashier',
+      password_hash: rep.hash,
+      password_salt: rep.salt,
+      is_active: true,
+    })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [1160, '1160'], [2120, '2120'], [4100, '4100'], [4300, '4300'],
-    [5100, '5100'], [6400, '6400'], [7100, '7100'], [7200, '7200'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [1160, '1160'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
+    [6400, '6400'],
+    [7100, '7100'],
+    [7200, '7200'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 4, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep One', phone: '01000000001', van_location_id: 10 }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Van',
+      location_type: 'van',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({
+      id: 4,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Rep One',
+      phone: '01000000001',
+      van_location_id: 10,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
 /** The trip, settled by admin 1 by default (settled_by = 1): admin 1 is
  * the supervisor who decided the shortage is charged to the rep. */
 async function seedTrip(db: Kysely<Database>, settledBy: number | null = 1): Promise<void> {
-  await (db as any).insertInto('van_sales_trips').values({
-    id: 11, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 4, vehicle_id: null,
-    start_odometer: 100, end_odometer: null, van_location_id: 10, source_warehouse_id: 10,
-    status: 'settled', settlement_status: 'settled', sales_amount: 0, cash_collected: 0,
-    credit_sales: 0, returns_amount: 0, cash_refunds: 0,
-    settled_by: settledBy, supervisor_id: settledBy,
-  }).execute();
+  await (db as any)
+    .insertInto('van_sales_trips')
+    .values({
+      id: 11,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: 4,
+      vehicle_id: null,
+      start_odometer: 100,
+      end_odometer: null,
+      van_location_id: 10,
+      source_warehouse_id: 10,
+      status: 'settled',
+      settlement_status: 'settled',
+      sales_amount: 0,
+      cash_collected: 0,
+      credit_sales: 0,
+      returns_amount: 0,
+      cash_refunds: 0,
+      settled_by: settledBy,
+      supervisor_id: settledBy,
+    })
+    .execute();
 }
 
 async function seedSettlementItem(db: Kysely<Database>, id: number, entryType: string, amount: number): Promise<void> {
-  await (db as any).insertInto('van_rep_financial_settlements').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 4, trip_id: 11,
-    entry_type: entryType, amount, status: 'pending', notes: 'shortage fixture',
-  }).execute();
+  await (db as any)
+    .insertInto('van_rep_financial_settlements')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: 4,
+      trip_id: 11,
+      entry_type: entryType,
+      amount,
+      status: 'pending',
+      notes: 'shortage fixture',
+    })
+    .execute();
 }
 
-function buildServices(db: Kysely<Database>): { van: VanSalesService; drawer: CashDrawerService; posting: AccountingPostingService; controller: VanSalesAdminController } {
+function buildServices(db: Kysely<Database>): {
+  van: VanSalesService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+  controller: VanSalesAdminController;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -253,7 +383,19 @@ function buildServices(db: Kysely<Database>): { van: VanSalesService; drawer: Ca
   // harness does not seed — the wrong-PIN cases assert the error code,
   // not the suspicion row.
   const fraudRadarStub = { recordSuspicionEvent: async () => {} } as never;
-  const van = new VanSalesService(db, audit, {} as never, posting, undefined, undefined, undefined, undefined, undefined, undefined, fraudRadarStub);
+  const van = new VanSalesService(
+    db,
+    audit,
+    {} as never,
+    posting,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudRadarStub,
+  );
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const controller = new VanSalesAdminController(van, {} as never, {} as never, {} as never, {} as never);
   return { van, drawer, posting, controller };
@@ -285,30 +427,53 @@ async function postTripSettlementJournal(
   );
 }
 
-async function journalByCode(db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Map<string, { debit: number; credit: number }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute();
+async function journalByCode(
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Map<string, { debit: number; credit: number }>> {
+  const entries = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute();
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
-  const rows = await (db as any).selectFrom('journal_entry_lines as l')
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines as l')
     .innerJoin('accounting_accounts as a', 'a.id', 'l.account_id')
     .select(['a.code as code', 'l.debit as debit', 'l.credit as credit'])
-    .where('l.journal_entry_id', '=', Number(entries[0].id)).execute();
+    .where('l.journal_entry_id', '=', Number(entries[0].id))
+    .execute();
   const byCode = new Map<string, { debit: number; credit: number }>();
   for (const row of rows) {
     const code = String((row as any).code);
     const prev = byCode.get(code) || { debit: 0, credit: 0 };
-    byCode.set(code, { debit: prev.debit + Number((row as any).debit || 0), credit: prev.credit + Number((row as any).credit || 0) });
+    byCode.set(code, {
+      debit: prev.debit + Number((row as any).debit || 0),
+      credit: prev.credit + Number((row as any).credit || 0),
+    });
   }
   return byCode;
 }
 
 async function journalCount(db: Kysely<Database>, sourceType: string): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entries').select('id').where('source_type', '=', sourceType).execute();
+  const rows = await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', sourceType)
+    .execute();
   return rows.length;
 }
 
-async function journalLeg(db: Kysely<Database>, entryId: number, accountId: number, side: 'debit' | 'credit'): Promise<number> {
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+async function journalLeg(
+  db: Kysely<Database>,
+  entryId: number,
+  accountId: number,
+  side: 'debit' | 'credit',
+): Promise<number> {
+  const rows = await (db as any)
+    .selectFrom('journal_entry_lines')
     .select([side])
     .where('journal_entry_id', '=', entryId)
     .where('account_id', '=', accountId)
@@ -325,7 +490,11 @@ async function auditRows(db: Kysely<Database>): Promise<Array<Record<string, any
 }
 
 async function itemRow(db: Kysely<Database>, id: number): Promise<Record<string, any>> {
-  return (db as any).selectFrom('van_rep_financial_settlements').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+  return (db as any)
+    .selectFrom('van_rep_financial_settlements')
+    .selectAll()
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
 }
 
 async function main(): Promise<void> {
@@ -347,45 +516,71 @@ async function main(): Promise<void> {
     ` — اعتماد منفرد بقرار إداري — سوّى admin-one الرحلة واعتمد إعفاء عجز ${amount} بنفسه — لا يوجد مدير ثانٍ متاح`;
 
   async function overrideAuditRows(db: Kysely<Database>): Promise<Array<Record<string, any>>> {
-    return (await auditRows(db)).filter((r) => String((r as any).event_code || '') === 'REP_WAIVER_SOLO_ADMIN_OVERRIDE');
+    return (await auditRows(db)).filter(
+      (r) => String((r as any).event_code || '') === 'REP_WAIVER_SOLO_ADMIN_OVERRIDE',
+    );
   }
 
   // 1. Solo admin settler waives his own trip's stock shortage below
   // the threshold with a reason: allowed, Dr 7200 / Cr 1160, status
   // waived, the override stamp on the item, one audit row.
-  await check('S4 solo-admin settler waives own-trip shortage below threshold: allowed, stamped + audited', async () => {
-    const { pg, db } = await makeDb();
-    try {
-      await seedFoundation(db, false);
-      await seedShift(db, 1, 1);
-      await seedTrip(db);
-      const { posting, controller } = buildServices(db);
-      const tripPosted = await postTripSettlementJournal(db, posting, 40, true);
-      assert.equal(tripPosted.posted, true, 'the charged trip journal posts');
-      const tripJournal = await journalByCode(db, 'van_trip_settlement', 11);
-      assert.equal(tripJournal.get('1160')?.debit, 40, 'trip settlement charged Dr 1160 40 to the rep');
-      await seedSettlementItem(db, 401, 'stock_shortage', 40);
-      const result: any = await controller.settleRepFinancialItem(controllerReqFor(adminOneAuth), 401, { method: 'waiver', notes: REASON });
-      assert.equal(result.status, 'waived');
-      assert.ok(Number(result.journalEntryId) > 0, 'the waiver journal id is returned');
-      assert.equal((await itemRow(db, 401)).status, 'waived');
-      const notes = String((await itemRow(db, 401)).notes || '');
-      assert.ok(notes.includes(REASON), 'the reason is recorded on the item');
-      assert.ok(notes.includes(stampFor(40)), 'the solo-override stamp is on the item');
-      const entries = await (db as any).selectFrom('journal_entries').select('id').where('source_type', '=', 'rep_shortage_waiver').execute();
-      assert.equal(entries.length, 1, 'exactly one waiver journal');
-      assert.equal(await journalLeg(db, Number(entries[0].id), 7200, 'debit'), 40, 'the custody debit is taken to expense');
-      assert.equal(await journalLeg(db, Number(entries[0].id), 1160, 'credit'), 40, 'the rep custody balance is cleared');
-      const overrides = await overrideAuditRows(db);
-      assert.equal(overrides.length, 1, 'exactly one solo-override audit row');
-      assert.equal(Number(overrides[0].created_by), 1, 'the audit row attributes the solo admin');
-      assert.ok(String(overrides[0].details || '').includes('admin-one'), 'the audit row names who settled and approved');
-      assert.ok(String(overrides[0].details || '').includes('40'), 'the audit row names the shortage amount');
-      assert.ok(String(overrides[0].details || '').includes('لا يوجد مدير ثانٍ متاح'), 'the audit row records that no second admin was available');
-    } finally {
-      await db.destroy();
-    }
-  });
+  await check(
+    'S4 solo-admin settler waives own-trip shortage below threshold: allowed, stamped + audited',
+    async () => {
+      const { pg, db } = await makeDb();
+      try {
+        await seedFoundation(db, false);
+        await seedShift(db, 1, 1);
+        await seedTrip(db);
+        const { posting, controller } = buildServices(db);
+        const tripPosted = await postTripSettlementJournal(db, posting, 40, true);
+        assert.equal(tripPosted.posted, true, 'the charged trip journal posts');
+        const tripJournal = await journalByCode(db, 'van_trip_settlement', 11);
+        assert.equal(tripJournal.get('1160')?.debit, 40, 'trip settlement charged Dr 1160 40 to the rep');
+        await seedSettlementItem(db, 401, 'stock_shortage', 40);
+        const result: any = await controller.settleRepFinancialItem(controllerReqFor(adminOneAuth), 401, {
+          method: 'waiver',
+          notes: REASON,
+        });
+        assert.equal(result.status, 'waived');
+        assert.ok(Number(result.journalEntryId) > 0, 'the waiver journal id is returned');
+        assert.equal((await itemRow(db, 401)).status, 'waived');
+        const notes = String((await itemRow(db, 401)).notes || '');
+        assert.ok(notes.includes(REASON), 'the reason is recorded on the item');
+        assert.ok(notes.includes(stampFor(40)), 'the solo-override stamp is on the item');
+        const entries = await (db as any)
+          .selectFrom('journal_entries')
+          .select('id')
+          .where('source_type', '=', 'rep_shortage_waiver')
+          .execute();
+        assert.equal(entries.length, 1, 'exactly one waiver journal');
+        assert.equal(
+          await journalLeg(db, Number(entries[0].id), 7200, 'debit'),
+          40,
+          'the custody debit is taken to expense',
+        );
+        assert.equal(
+          await journalLeg(db, Number(entries[0].id), 1160, 'credit'),
+          40,
+          'the rep custody balance is cleared',
+        );
+        const overrides = await overrideAuditRows(db);
+        assert.equal(overrides.length, 1, 'exactly one solo-override audit row');
+        assert.equal(Number(overrides[0].created_by), 1, 'the audit row attributes the solo admin');
+        assert.ok(
+          String(overrides[0].details || '').includes('admin-one'),
+          'the audit row names who settled and approved',
+        );
+        assert.ok(String(overrides[0].details || '').includes('40'), 'the audit row names the shortage amount');
+        assert.ok(
+          String(overrides[0].details || '').includes('لا يوجد مدير ثانٍ متاح'),
+          'the audit row records that no second admin was available',
+        );
+      } finally {
+        await db.destroy();
+      }
+    },
+  );
 
   // 2. Second admin present: the settler waiving his own trip's
   // shortage is STILL refused with the exact old code, row pending,
@@ -399,13 +594,17 @@ async function main(): Promise<void> {
       const { controller } = buildServices(db);
       await seedSettlementItem(db, 402, 'cash_shortage', 25);
       await assert.rejects(
-        () => controller.settleRepFinancialItem(controllerReqFor(adminOneAuth), 402, { method: 'waiver', notes: REASON }),
+        () =>
+          controller.settleRepFinancialItem(controllerReqFor(adminOneAuth), 402, { method: 'waiver', notes: REASON }),
         (err: any) => err && err.code === 'REP_WAIVER_MAKER_CHECKER',
         'the waiver must fail closed with the specific code',
       );
       assert.equal((await itemRow(db, 402)).status, 'pending', 'the row stays pending for manual review');
       assert.equal(await journalCount(db, 'rep_shortage_waiver'), 0, 'no waiver journal is posted');
-      assert.ok(!String((await itemRow(db, 402)).notes || '').includes('اعتماد منفرد'), 'no override stamp on a refused waiver');
+      assert.ok(
+        !String((await itemRow(db, 402)).notes || '').includes('اعتماد منفرد'),
+        'no override stamp on a refused waiver',
+      );
       assert.equal((await overrideAuditRows(db)).length, 0, 'no override audit row on a refused waiver');
     } finally {
       await db.destroy();
@@ -425,14 +624,21 @@ async function main(): Promise<void> {
       const tripPosted = await postTripSettlementJournal(db, posting, 40, true);
       assert.equal(tripPosted.posted, true, 'the charged trip journal posts');
       await seedSettlementItem(db, 403, 'stock_shortage', 40);
-      const result: any = await controller.settleRepFinancialItem(controllerReqFor(adminTwoAuth), 403, { method: 'waiver', notes: REASON });
+      const result: any = await controller.settleRepFinancialItem(controllerReqFor(adminTwoAuth), 403, {
+        method: 'waiver',
+        notes: REASON,
+      });
       assert.equal(result.status, 'waived');
       assert.ok(Number(result.journalEntryId) > 0, 'the waiver journal id is returned');
       assert.equal((await itemRow(db, 403)).status, 'waived');
       const notes = String((await itemRow(db, 403)).notes || '');
       assert.ok(notes.includes(REASON), 'the reason is recorded on the item');
       assert.ok(!notes.includes('اعتماد منفرد'), 'no override stamp when a different admin waives');
-      const entries = await (db as any).selectFrom('journal_entries').select('id').where('source_type', '=', 'rep_shortage_waiver').execute();
+      const entries = await (db as any)
+        .selectFrom('journal_entries')
+        .select('id')
+        .where('source_type', '=', 'rep_shortage_waiver')
+        .execute();
       assert.equal(entries.length, 1, 'exactly one waiver journal');
       assert.equal(await journalLeg(db, Number(entries[0].id), 7200, 'debit'), 40);
       assert.equal(await journalLeg(db, Number(entries[0].id), 1160, 'credit'), 40);
@@ -457,14 +663,22 @@ async function main(): Promise<void> {
       const tripJournal = await journalByCode(db, 'van_trip_settlement', 11);
       assert.equal(tripJournal.get('1160')?.debit, 600, 'trip settlement charged Dr 1160 600 to the rep');
       await seedSettlementItem(db, 404, 'stock_shortage', 600);
-      const result: any = await controller.settleRepFinancialItem(controllerReqFor(adminOneAuth), 404, { method: 'waiver', notes: REASON, supervisorPin: ADMIN_ONE_PASS });
+      const result: any = await controller.settleRepFinancialItem(controllerReqFor(adminOneAuth), 404, {
+        method: 'waiver',
+        notes: REASON,
+        supervisorPin: ADMIN_ONE_PASS,
+      });
       assert.equal(result.status, 'waived');
       assert.ok(Number(result.journalEntryId) > 0, 'the waiver journal id is returned');
       assert.equal((await itemRow(db, 404)).status, 'waived');
       const notes = String((await itemRow(db, 404)).notes || '');
       assert.ok(notes.includes(REASON), 'the reason is recorded on the item');
       assert.ok(notes.includes(stampFor(600)), 'the solo-override stamp is on the item');
-      const entries = await (db as any).selectFrom('journal_entries').select('id').where('source_type', '=', 'rep_shortage_waiver').execute();
+      const entries = await (db as any)
+        .selectFrom('journal_entries')
+        .select('id')
+        .where('source_type', '=', 'rep_shortage_waiver')
+        .execute();
       assert.equal(entries.length, 1, 'exactly one waiver journal');
       assert.equal(await journalLeg(db, Number(entries[0].id), 7200, 'debit'), 600);
       assert.equal(await journalLeg(db, Number(entries[0].id), 1160, 'credit'), 600);
@@ -481,27 +695,35 @@ async function main(): Promise<void> {
   // the TRIP SETTLER's (admin 1) password — a valid PIN, but the
   // approver is the load decision-maker and is NOT the actor, so the
   // solo override does not excuse him (M5 case 6 verbatim).
-  await check('S4 second admin present: settler-as-approver still refused REP_WAIVER_MAKER_CHECKER, even with a valid PIN', async () => {
-    const { pg, db } = await makeDb();
-    try {
-      await seedFoundation(db, true);
-      await seedShift(db, 1, 1);
-      await seedTrip(db);
-      const { posting, controller } = buildServices(db);
-      await postTripSettlementJournal(db, posting, 600, true);
-      await seedSettlementItem(db, 405, 'stock_shortage', 600);
-      await assert.rejects(
-        () => controller.settleRepFinancialItem(controllerReqFor(adminTwoAuth), 405, { method: 'waiver', notes: REASON, supervisorPin: ADMIN_ONE_PASS }),
-        (err: any) => err && err.code === 'REP_WAIVER_MAKER_CHECKER',
-        'the waiver must fail closed with the specific code',
-      );
-      assert.equal((await itemRow(db, 405)).status, 'pending', 'the row stays pending for manual review');
-      assert.equal(await journalCount(db, 'rep_shortage_waiver'), 0, 'no waiver journal is posted');
-      assert.equal((await overrideAuditRows(db)).length, 0, 'no override audit row on a refused waiver');
-    } finally {
-      await db.destroy();
-    }
-  });
+  await check(
+    'S4 second admin present: settler-as-approver still refused REP_WAIVER_MAKER_CHECKER, even with a valid PIN',
+    async () => {
+      const { pg, db } = await makeDb();
+      try {
+        await seedFoundation(db, true);
+        await seedShift(db, 1, 1);
+        await seedTrip(db);
+        const { posting, controller } = buildServices(db);
+        await postTripSettlementJournal(db, posting, 600, true);
+        await seedSettlementItem(db, 405, 'stock_shortage', 600);
+        await assert.rejects(
+          () =>
+            controller.settleRepFinancialItem(controllerReqFor(adminTwoAuth), 405, {
+              method: 'waiver',
+              notes: REASON,
+              supervisorPin: ADMIN_ONE_PASS,
+            }),
+          (err: any) => err && err.code === 'REP_WAIVER_MAKER_CHECKER',
+          'the waiver must fail closed with the specific code',
+        );
+        assert.equal((await itemRow(db, 405)).status, 'pending', 'the row stays pending for manual review');
+        assert.equal(await journalCount(db, 'rep_shortage_waiver'), 0, 'no waiver journal is posted');
+        assert.equal((await overrideAuditRows(db)).length, 0, 'no override audit row on a refused waiver');
+      } finally {
+        await db.destroy();
+      }
+    },
+  );
 
   // 6. Shared-PIN settlement (settled_by null): the settler leg is
   // skipped as before, so the solo admin waives below threshold with
@@ -515,7 +737,10 @@ async function main(): Promise<void> {
       await seedTrip(db, null);
       const { controller } = buildServices(db);
       await seedSettlementItem(db, 406, 'cash_shortage', 25);
-      const result: any = await controller.settleRepFinancialItem(controllerReqFor(adminOneAuth), 406, { method: 'waiver', notes: REASON });
+      const result: any = await controller.settleRepFinancialItem(controllerReqFor(adminOneAuth), 406, {
+        method: 'waiver',
+        notes: REASON,
+      });
       assert.equal(result.status, 'waived');
       assert.equal((await itemRow(db, 406)).status, 'waived');
       const notes = String((await itemRow(db, 406)).notes || '');
@@ -575,7 +800,8 @@ async function main(): Promise<void> {
 
   // 9. Wiring: this spec is in both critical lists, in identical order (326 specs — the solo-admin-carrier-invoice-override spec is the last entry).
   {
-    const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8')).specs as string[];
+    const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
+      .specs as string[];
     const pkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
@@ -592,23 +818,52 @@ async function main(): Promise<void> {
   // stamp + audit event code are named in the settle path.
   {
     const here = __dirname;
-    const s2Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/settle-rep-financial-item.slice.ts'), 'utf8');
-    const s3Source = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/rep-waiver-cluster.slice.ts'), 'utf8');
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
+    const s2Source = readFileSync(
+      resolve(
+        here,
+        '../../src/modules/delivery-reps/services/van-rep-financial-ledger/settle-rep-financial-item.slice.ts',
+      ),
+      'utf8',
+    );
+    const s3Source = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/rep-waiver-cluster.slice.ts'),
+      'utf8',
+    );
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'),
+      'utf8',
+    );
     const helperSource = readFileSync(resolve(here, '../../src/common/utils/manager-approval.ts'), 'utf8');
     const vanSource = s2Source + s3Source;
-    assert.ok(vanSource.includes('INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE'), 'the settle names the solo-admin rep-waiver override invariant');
-    assert.ok(vanSource.includes('INV-REP-WAIVER-APPROVAL-RULE'), 'the settle still names the waiver-approval invariant');
+    assert.ok(
+      vanSource.includes('INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE'),
+      'the settle names the solo-admin rep-waiver override invariant',
+    );
+    assert.ok(
+      vanSource.includes('INV-REP-WAIVER-APPROVAL-RULE'),
+      'the settle still names the waiver-approval invariant',
+    );
     assert.ok(s3Source.includes('isSoloAdminOverride'), 'the waiver gate consults the shared solo-admin helper');
-    assert.ok(s3Source.includes("from '../../../../common/utils/manager-approval'"), 'the waiver gate imports the shared helper, it does not redefine it');
-    assert.ok(helperSource.split('export async function isSoloAdminOverride').length - 1 === 1, 'the shared helper is defined exactly once');
-    assert.ok(serviceSource.includes('item, payload, actorUserId, auth'), 'the ledger service forwards the auth context to the waiver gate');
+    assert.ok(
+      s3Source.includes("from '../../../../common/utils/manager-approval'"),
+      'the waiver gate imports the shared helper, it does not redefine it',
+    );
+    assert.ok(
+      helperSource.split('export async function isSoloAdminOverride').length - 1 === 1,
+      'the shared helper is defined exactly once',
+    );
+    assert.ok(
+      serviceSource.includes('item, payload, actorUserId, auth'),
+      'the ledger service forwards the auth context to the waiver gate',
+    );
     assert.ok(s2Source.includes('REP_WAIVER_SOLO_ADMIN_OVERRIDE'), 'the settle writes the override audit event');
     assert.ok(s2Source.includes('اعتماد منفرد'), 'the settle stamps the override on the waived item');
     assert.ok(vanSource.includes('REP_WAIVER_MAKER_CHECKER'), 'the maker-checker code is still named');
     assert.equal(
-      s3Source.split('assertRepWaiverApproval(').length - 1 +
-        s2Source.split('this.assertRepWaiverApproval(').length - 1,
+      s3Source.split('assertRepWaiverApproval(').length -
+        1 +
+        s2Source.split('this.assertRepWaiverApproval(').length -
+        1,
       2,
       'the gate is defined once (S3) and called from the waiver branch (S2)',
     );
@@ -623,4 +878,3 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-

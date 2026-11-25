@@ -4,7 +4,7 @@ import { Kysely, PostgresDialect, sql } from 'kysely';
 
 /**
  * Z-SYSTEMS ERP — NOTIFICATIONS & EXECUTIVE ALERTS SIMULATION
- * 
+ *
  * Verifies:
  * 1. WhatsApp Gateway Configuration: Settings persistence and multi-tenant scoping.
  * 2. Automated WhatsApp Invoice Notification: Dynamic templating engine.
@@ -77,11 +77,9 @@ async function runNotificationsSimulation() {
     // -------------------------------------------------------------------------
     console.log('\n--- 2. محرك قوالب إشعارات الفواتير (Invoice WhatsApp Templating) ---');
     const docNo = `INV-260914-${simUid}`;
-    const invoiceTotal = 1500.50;
+    const invoiceTotal = 1500.5;
 
-    const renderedMessage = rawTemplate
-      .replace('{doc_no}', docNo)
-      .replace('{total}', invoiceTotal.toFixed(2));
+    const renderedMessage = rawTemplate.replace('{doc_no}', docNo).replace('{total}', invoiceTotal.toFixed(2));
 
     if (!renderedMessage.includes(docNo) || !renderedMessage.includes('1500.50')) {
       throw new Error(`Rendered message failed placeholder replacement: ${renderedMessage}`);
@@ -157,8 +155,10 @@ async function runNotificationsSimulation() {
     const cashTotal = Number(salesAgg.rows[0].cash_total);
     const cardTotal = Number(salesAgg.rows[0].card_total);
 
-    if (invoicesCount !== 3 || totalSales !== 4500.50 || cashTotal !== 4000.50 || cardTotal !== 500.00) {
-      throw new Error(`Sales aggregate mismatch: count ${invoicesCount}, total ${totalSales}, cash ${cashTotal}, card ${cardTotal}`);
+    if (invoicesCount !== 3 || totalSales !== 4500.5 || cashTotal !== 4000.5 || cardTotal !== 500.0) {
+      throw new Error(
+        `Sales aggregate mismatch: count ${invoicesCount}, total ${totalSales}, cash ${cashTotal}, card ${cardTotal}`,
+      );
     }
 
     // Compute shortages matching DailyDigestService logic
@@ -173,7 +173,9 @@ async function runNotificationsSimulation() {
       throw new Error(`Shortages count mismatch: expected 2, got ${shortagesCount}`);
     }
 
-    console.log(`[DIGEST-METRICS] فواتير اليوم: ${invoicesCount} | إجمالي المبيعات: ${totalSales} (نقدي: ${cashTotal}، شبكة: ${cardTotal}) | نواقص المخزون: ${shortagesCount}`);
+    console.log(
+      `[DIGEST-METRICS] فواتير اليوم: ${invoicesCount} | إجمالي المبيعات: ${totalSales} (نقدي: ${cashTotal}، شبكة: ${cardTotal}) | نواقص المخزون: ${shortagesCount}`,
+    );
     console.log('[OK] محرك احتساب أرقام الملخص التنفيذي دقيق 100%.');
 
     // -------------------------------------------------------------------------
@@ -205,7 +207,6 @@ async function runNotificationsSimulation() {
     console.log('\n================================================================');
     console.log('[SUCCESS] اكتملت محاكاة الإشعارات والتنبيهات والملخص التنفيذي بنجاح 100%!');
     console.log('================================================================\n');
-
   } catch (error: any) {
     console.error('[ERROR] SIMULATION FAILED:', error.message || error);
     console.error(error.stack);

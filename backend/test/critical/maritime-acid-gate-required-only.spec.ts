@@ -84,14 +84,17 @@ async function main(): Promise<void> {
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const service = new MaritimeFreightService(db, {} as never, {} as never, {} as never);
-  const baseDto: any = { transportMode: 'sea', containers: [], polCode: 'CNSHA', polName: 'Shanghai', podName: 'Alexandria' };
+  const baseDto: any = {
+    transportMode: 'sea',
+    containers: [],
+    polCode: 'CNSHA',
+    polName: 'Shanghai',
+    podName: 'Alexandria',
+  };
 
   try {
     // Required + missing / malformed: rejected with the ACID error.
-    await assert.rejects(
-      service.createJob(auth, { ...baseDto, direction: 'import', podCode: 'EGALY' }),
-      /ACID/,
-    );
+    await assert.rejects(service.createJob(auth, { ...baseDto, direction: 'import', podCode: 'EGALY' }), /ACID/);
     await assert.rejects(
       service.createJob(auth, { ...baseDto, direction: 'import', podCode: 'EGALY', acidNumber: '123456789012345678' }),
       /ACID/,
@@ -105,10 +108,7 @@ async function main(): Promise<void> {
       /ACID/,
     );
     // Unset direction defaults to import: still gated.
-    await assert.rejects(
-      service.createJob(auth, { ...baseDto, podCode: 'EGDAM' }),
-      /ACID/,
-    );
+    await assert.rejects(service.createJob(auth, { ...baseDto, podCode: 'EGDAM' }), /ACID/);
 
     // Passing the gate fails later on the missing tables -- and
     // crucially NOT with an ACID error.
@@ -119,7 +119,12 @@ async function main(): Promise<void> {
       );
     };
     await expectTableError({ ...baseDto, direction: 'import', podCode: 'EGALY', acidNumber: '1234567890123456789' });
-    await expectTableError({ ...baseDto, direction: 'import', podCode: 'EGALY', acidNumber: '  1234567890123456789  ' });
+    await expectTableError({
+      ...baseDto,
+      direction: 'import',
+      podCode: 'EGALY',
+      acidNumber: '  1234567890123456789  ',
+    });
     await expectTableError({ ...baseDto, direction: 'import', podCode: 'SAJED', acidNumber: 'bad' });
     await expectTableError({ ...baseDto, direction: 'export', podCode: 'EGALY', acidNumber: 'bad' });
     await expectTableError({ ...baseDto, direction: 'cross_trade', podCode: 'EGALY' });

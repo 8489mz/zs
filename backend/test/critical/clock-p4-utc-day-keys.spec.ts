@@ -136,23 +136,40 @@ async function main(): Promise<void> {
         (2, 't-kw', 'a1', 1, 2, 2, '${tenantToday}', 200, 0, 'pending'),
         (3, 't-kw', 'a1', 1, 2, 3, '${dueTomorrow}', 300, 0, 'pending');
     `);
-    const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+    const foundation = {
+      ensureForAuth: async () => undefined,
+      ensureForScope: async () => undefined,
+    } as unknown as AccountingTenantFoundationService;
     const posting = new AccountingPostingService(foundation);
-    const installments = new CustomerInstallmentsService(db, new TransactionHelper(), new SalesFinanceService(db), posting as any);
-    const authKw = { tenantId: KW, accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+    const installments = new CustomerInstallmentsService(
+      db,
+      new TransactionHelper(),
+      new SalesFinanceService(db),
+      posting as any,
+    );
+    const authKw = {
+      tenantId: KW,
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      permissions: [],
+    } as unknown as AuthContext;
 
-    const planDetails = await installments.getPlanDetails(1, authKw) as any;
+    const planDetails = (await installments.getPlanDetails(1, authKw)) as any;
     const byNumber = new Map<number, any>(planDetails.installments.map((r: any) => [Number(r.installment_number), r]));
     assert.equal(byNumber.get(1).display_status, 'overdue', 'due yesterday (tenant day) is overdue');
     assert.equal(byNumber.get(2).display_status, 'pending', 'due today (tenant day) is NOT overdue');
     assert.equal(byNumber.get(3).display_status, 'pending', 'due tomorrow is not overdue');
 
-    const overdueList = await installments.listInstallments({ status: 'overdue', pageSize: 100 }, authKw) as any;
-    assert.deepEqual(overdueList.installments.map((r: any) => Number(r.installment_number)), [1]);
-    const dueNowList = await installments.listInstallments({ status: 'due_now', pageSize: 100 }, authKw) as any;
+    const overdueList = (await installments.listInstallments({ status: 'overdue', pageSize: 100 }, authKw)) as any;
+    assert.deepEqual(
+      overdueList.installments.map((r: any) => Number(r.installment_number)),
+      [1],
+    );
+    const dueNowList = (await installments.listInstallments({ status: 'due_now', pageSize: 100 }, authKw)) as any;
     assert.deepEqual(dueNowList.installments.map((r: any) => Number(r.installment_number)).sort(), [1, 2]);
 
-    const summary = await installments.getSummaryMetrics(authKw) as any;
+    const summary = (await installments.getSummaryMetrics(authKw)) as any;
     assert.equal(Number(summary.overdue_count), 1, 'summary counts only the due-yesterday row as overdue');
     assert.equal(Number(summary.overdue_amount), 100);
 
@@ -162,7 +179,13 @@ async function main(): Promise<void> {
         (1, 't-cairo', 3, 'invoice', 100, 100, '', '2026-11-13T22:30:00Z');
     `);
     const aged = new AgedDebtsService(db);
-    const authCairo = { tenantId: CAIRO, accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+    const authCairo = {
+      tenantId: CAIRO,
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      permissions: [],
+    } as unknown as AuthContext;
     const report = await aged.getAgedReceivables(authCairo, { asOfDate: '2026-11-14' });
     assert.equal(report.totalPartnersCount, 1);
     const partner = (report as any).partners[0];
@@ -183,7 +206,13 @@ async function main(): Promise<void> {
     assert.equal(raw[0].issue_date, '2026-01-01');
     assert.equal(raw[0].expiry_date, '2026-11-14');
     assert.equal(raw[0].claim_expiry_date, '2026-12-01');
-    const authG = { tenantId: 't-g', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+    const authG = {
+      tenantId: 't-g',
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      permissions: [],
+    } as unknown as AuthContext;
     const listed = await contracting.getGuarantees(authG, {});
     assert.equal(listed[0].issueDate, '2026-01-01');
     assert.equal(listed[0].expiryDate, '2026-11-14');
@@ -280,12 +309,23 @@ async function main(): Promise<void> {
     zatca_qr: null,
     zatca_egs_id: null,
   };
-  const signed = await drive(
-    boundarySale,
-    [{ qty: 1, unit_price: 100, line_total: 100, product_name: 'Widget', net_line_total: 100, allocated_discount: 0, allocated_tax: 15 }],
-  );
+  const signed = await drive(boundarySale, [
+    {
+      qty: 1,
+      unit_price: 100,
+      line_total: 100,
+      product_name: 'Widget',
+      net_line_total: 100,
+      allocated_discount: 0,
+      allocated_tax: 15,
+    },
+  ]);
   assert.equal(signed.icv, 1);
-  assert.match(signed.ublXml, /<cbc:IssueDate>2026-11-14<\/cbc:IssueDate>/, '00:30 Cairo sale is issued on the Cairo day, not the UTC day');
+  assert.match(
+    signed.ublXml,
+    /<cbc:IssueDate>2026-11-14<\/cbc:IssueDate>/,
+    '00:30 Cairo sale is issued on the Cairo day, not the UTC day',
+  );
 
   console.log('clock-p4-utc-day-keys: all cases passed');
 }

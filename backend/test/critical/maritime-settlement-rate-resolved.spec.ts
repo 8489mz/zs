@@ -71,7 +71,10 @@ async function main(): Promise<void> {
 
     await pg.exec(`DELETE FROM currency_exchange_rates WHERE tenant_id = 't1' AND currency_code = 'USD'`);
     await assert.rejects(service.createAgentSettlement(auth, { ...base, currency: 'USD' } as never), /سعر صرف/);
-    await assert.rejects(service.createAgentSettlement(auth, { ...base, currency: 'USD', exchangeRate: 0 } as never), /سعر الصرف/);
+    await assert.rejects(
+      service.createAgentSettlement(auth, { ...base, currency: 'USD', exchangeRate: 0 } as never),
+      /سعر الصرف/,
+    );
 
     const count = await pg.query<{ n: string }>('SELECT count(*)::text AS n FROM maritime_agent_settlements');
     assert.equal(Number(count.rows[0].n), 4);

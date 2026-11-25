@@ -67,12 +67,20 @@ import {
   resolveQuoteFields,
 } from '../../src/modules/maintenance/maintenance.service';
 import { UpdateTicketStatusDto } from '../../src/modules/maintenance/dto/update-ticket-status.dto';
-import { up as diagnosisQuoteUp, down as diagnosisQuoteDown } from '../../src/database/migrations/2040000000302_maintenance_ticket_diagnosis_quote';
+import {
+  up as diagnosisQuoteUp,
+  down as diagnosisQuoteDown,
+} from '../../src/database/migrations/2040000000302_maintenance_ticket_diagnosis_quote';
 
 const NOW = new Date('2026-11-08T10:00:00.000Z');
 const NO_QUOTE = { diagnosis: null, quoted_cost: null, quote_approved_at: null, quote_approved_by: null };
 const QUOTED = { diagnosis: 'Screen cracked', quoted_cost: 850, quote_approved_at: null, quote_approved_by: null };
-const APPROVED = { diagnosis: 'Screen cracked', quoted_cost: 850, quote_approved_at: new Date('2026-11-08T09:00:00.000Z'), quote_approved_by: 7 };
+const APPROVED = {
+  diagnosis: 'Screen cracked',
+  quoted_cost: 850,
+  quote_approved_at: new Date('2026-11-08T09:00:00.000Z'),
+  quote_approved_by: 7,
+};
 
 function assertDtoValid(payload: unknown): void {
   const errors = validateSync(plainToInstance(UpdateTicketStatusDto, payload) as object);
@@ -187,7 +195,11 @@ async function columnInfo(pg: PGlite, column: string): Promise<{ exists: boolean
   );
   if (res.rows.length === 0) return { exists: false };
   const row = res.rows[0] as { data_type: string; numeric_scale: number | null };
-  return { exists: true, type: row.data_type, scale: row.numeric_scale === null ? undefined : Number(row.numeric_scale) };
+  return {
+    exists: true,
+    type: row.data_type,
+    scale: row.numeric_scale === null ? undefined : Number(row.numeric_scale),
+  };
 }
 
 async function main(): Promise<void> {
@@ -313,10 +325,7 @@ async function runLivePartB(): Promise<void> {
   }
   const url = new URL(target);
   assert.ok(['localhost', '127.0.0.1'].includes(url.hostname), 'Acceptance tests are local-only');
-  assert.ok(
-    /^\/(zs_core_audit_test|zs_acceptance_[a-z0-9_]+)$/.test(url.pathname),
-    'Refusing a non-test database',
-  );
+  assert.ok(/^\/(zs_core_audit_test|zs_acceptance_[a-z0-9_]+)$/.test(url.pathname), 'Refusing a non-test database');
   Object.assign(process.env, {
     NODE_ENV: 'test',
     APP_MODE: 'CLOUD_SAAS',
@@ -337,9 +346,8 @@ async function runLivePartB(): Promise<void> {
   const { Test } = await import('@nestjs/testing');
   const { AppModule } = await import('../../src/app.module');
   const { KYSELY_DB } = await import('../../src/database/database.constants');
-  const { AccountingTenantFoundationService } = await import(
-    '../../src/modules/accounting/accounting-tenant-foundation.service'
-  );
+  const { AccountingTenantFoundationService } =
+    await import('../../src/modules/accounting/accounting-tenant-foundation.service');
   const { createPasswordRecord } = await import('../../src/core/auth/utils/password-hasher');
   const { SUPER_ADMIN_PERMISSIONS } = await import('../../src/core/auth/constants/super-admin-permissions');
   const app = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -460,7 +468,10 @@ async function runLivePartB(): Promise<void> {
     await maintenance.updateTicketStatus(ticketId, { status: 'inspecting', approveQuote: true } as any, auth);
     const approvedView = await view();
     assert.ok(approvedView.quoteApprovedAt, 'approval stamps a time');
-    assert.ok(new Date(approvedView.quoteApprovedAt).getTime() >= before - 1000, 'approval time is now, not a past date');
+    assert.ok(
+      new Date(approvedView.quoteApprovedAt).getTime() >= before - 1000,
+      'approval time is now, not a past date',
+    );
     assert.equal(approvedView.quoteApprovedBy, auth.userId, 'approval records the authenticated staff user');
 
     // Approved: the move to in_progress passes, and waiting_parts is

@@ -170,7 +170,10 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -203,11 +206,19 @@ async function main(): Promise<void> {
       const service = makeService(db);
       const acquisition: any = await service.recordFxAcquisition('t1', 1, trialDto());
       assert.equal(acquisition.currency, 'USD', 'Currency is stored normalised');
-      assert.equal(Number(acquisition.effective_exchange_rate), 60, 'Rate is the live registered rate, never derived from amounts');
+      assert.equal(
+        Number(acquisition.effective_exchange_rate),
+        60,
+        'Rate is the live registered rate, never derived from amounts',
+      );
       assert.equal(Number(acquisition.egp_cost), 600000, 'EGP cost is foreignAmount x live rate (10,000 x 60)');
       assert.ok(acquisition.journal_entry_id, 'The journal is linked on the acquisition row');
       assert.ok(Number(acquisition.serial_id) > 0, 'The serial exists for journal/treasury references');
-      const entry: any = await (db as any).selectFrom('journal_entries').selectAll().where('id', '=', acquisition.journal_entry_id).executeTakeFirstOrThrow();
+      const entry: any = await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('id', '=', acquisition.journal_entry_id)
+        .executeTakeFirstOrThrow();
       assert.equal(entry.source_type, 'import_fx_acquisition');
       assert.equal(Number(entry.source_id), Number(acquisition.serial_id));
       const lines = await journalLines(db, acquisition.journal_entry_id);
@@ -222,9 +233,17 @@ async function main(): Promise<void> {
       assert.equal(Number(src.credit), 600000, 'Source cash 1110 is credited');
       const legs: any[] = await (db as any).selectFrom('treasury_transactions').selectAll().execute();
       assert.equal(legs.length, 2, 'Two treasury legs');
-      assert.equal(legs.reduce((s: number, l: any) => s + Number(l.amount), 0), 0, 'Treasury legs net to zero in EGP book value');
-      assert.ok(legs.some((l: any) => Number(l.amount) === 600000 && Number(l.reference_id) === Number(acquisition.serial_id)));
-      assert.ok(legs.some((l: any) => Number(l.amount) === -600000 && Number(l.reference_id) === Number(acquisition.serial_id)));
+      assert.equal(
+        legs.reduce((s: number, l: any) => s + Number(l.amount), 0),
+        0,
+        'Treasury legs net to zero in EGP book value',
+      );
+      assert.ok(
+        legs.some((l: any) => Number(l.amount) === 600000 && Number(l.reference_id) === Number(acquisition.serial_id)),
+      );
+      assert.ok(
+        legs.some((l: any) => Number(l.amount) === -600000 && Number(l.reference_id) === Number(acquisition.serial_id)),
+      );
       assert.ok(legs.every((l: any) => l.txn_type === 'import_fx_acquisition'));
     } finally {
       await db.destroy();
@@ -324,11 +343,20 @@ async function main(): Promise<void> {
       resolve(__dirname, '../../../frontend/src/features/import-sales/ImportFxTreasuryManager.tsx'),
       'utf8',
     );
-    assert.ok(page.includes('flags?.isCashBank'), 'Picker reads the nested flags.isCashBank the accounts endpoint returns');
+    assert.ok(
+      page.includes('flags?.isCashBank'),
+      'Picker reads the nested flags.isCashBank the accounts endpoint returns',
+    );
     assert.ok(!page.includes("accountGroup === 'current_assets'"), 'Picker never offers current_assets parents');
-    assert.ok(!page.includes('|| a.isCashBank'), 'Picker never reads the top-level isCashBank that is always undefined');
+    assert.ok(
+      !page.includes('|| a.isCashBank'),
+      'Picker never reads the top-level isCashBank that is always undefined',
+    );
     assert.ok(page.includes('/api/accounting/currencies'), 'Page fetches the live registered rate from the server');
-    assert.ok(!page.includes('egpCost / foreignAmount'), 'No displayed rate is ever computed from user-entered amounts');
+    assert.ok(
+      !page.includes('egpCost / foreignAmount'),
+      'No displayed rate is ever computed from user-entered amounts',
+    );
     assert.ok(!page.includes('485000'), 'The invented 48.5 pre-fill is gone');
     assert.ok(page.includes('exchangeRate: liveRate'), 'The mutation sends the live rate, never a user-typed one');
     assert.ok(page.includes('bankAccounts[1]'), 'The two legs default to two DIFFERENT eligible accounts');

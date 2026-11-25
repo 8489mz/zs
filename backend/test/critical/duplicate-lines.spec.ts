@@ -29,7 +29,11 @@ import { normalizeSalePayload } from '../../src/modules/sales/helpers/sales-payl
 
 function expectCode(fn: () => void, code: string): void {
   let caught: unknown;
-  try { fn(); } catch (error) { caught = error; }
+  try {
+    fn();
+  } catch (error) {
+    caught = error;
+  }
   assert.ok(caught, `expected AppError(${code})`);
   assert.ok(caught instanceof AppError);
   assert.equal((caught as AppError).code, code);
@@ -37,52 +41,104 @@ function expectCode(fn: () => void, code: string): void {
 
 async function main(): Promise<void> {
   // Sale lines: same product + unit at different prices pass.
-  ensureUniqueFlowItems([
-    { productId: 1, qty: 2, unitMultiplier: 1, price: 100 },
-    { productId: 1, qty: 1, unitMultiplier: 1, price: 80 },
-  ], 'SALE_DUPLICATE_PRODUCT', 'duplicate');
+  ensureUniqueFlowItems(
+    [
+      { productId: 1, qty: 2, unitMultiplier: 1, price: 100 },
+      { productId: 1, qty: 1, unitMultiplier: 1, price: 80 },
+    ],
+    'SALE_DUPLICATE_PRODUCT',
+    'duplicate',
+  );
 
   // Sale lines: an exact duplicate (same product, unit, price) still throws.
-  expectCode(() => ensureUniqueFlowItems([
-    { productId: 1, qty: 2, unitMultiplier: 1, price: 100 },
-    { productId: 1, qty: 1, unitMultiplier: 1, price: 100 },
-  ], 'SALE_DUPLICATE_PRODUCT', 'duplicate'), 'SALE_DUPLICATE_PRODUCT');
+  expectCode(
+    () =>
+      ensureUniqueFlowItems(
+        [
+          { productId: 1, qty: 2, unitMultiplier: 1, price: 100 },
+          { productId: 1, qty: 1, unitMultiplier: 1, price: 100 },
+        ],
+        'SALE_DUPLICATE_PRODUCT',
+        'duplicate',
+      ),
+    'SALE_DUPLICATE_PRODUCT',
+  );
 
   // Different units still pass even at the same price.
-  ensureUniqueFlowItems([
-    { productId: 1, qty: 2, unitMultiplier: 1, price: 100 },
-    { productId: 1, qty: 1, unitMultiplier: 12, price: 100 },
-  ], 'SALE_DUPLICATE_PRODUCT', 'duplicate');
+  ensureUniqueFlowItems(
+    [
+      { productId: 1, qty: 2, unitMultiplier: 1, price: 100 },
+      { productId: 1, qty: 1, unitMultiplier: 12, price: 100 },
+    ],
+    'SALE_DUPLICATE_PRODUCT',
+    'duplicate',
+  );
 
   // Purchase lines use `cost`: different costs pass, same cost throws.
-  ensureUniqueFlowItems([
-    { productId: 1, qty: 2, unitMultiplier: 1, cost: 50 },
-    { productId: 1, qty: 1, unitMultiplier: 1, cost: 55 },
-  ], 'PURCHASE_DUPLICATE_PRODUCT', 'duplicate');
-  expectCode(() => ensureUniqueFlowItems([
-    { productId: 1, qty: 2, unitMultiplier: 1, cost: 50 },
-    { productId: 1, qty: 1, unitMultiplier: 1, cost: 50 },
-  ], 'PURCHASE_DUPLICATE_PRODUCT', 'duplicate'), 'PURCHASE_DUPLICATE_PRODUCT');
+  ensureUniqueFlowItems(
+    [
+      { productId: 1, qty: 2, unitMultiplier: 1, cost: 50 },
+      { productId: 1, qty: 1, unitMultiplier: 1, cost: 55 },
+    ],
+    'PURCHASE_DUPLICATE_PRODUCT',
+    'duplicate',
+  );
+  expectCode(
+    () =>
+      ensureUniqueFlowItems(
+        [
+          { productId: 1, qty: 2, unitMultiplier: 1, cost: 50 },
+          { productId: 1, qty: 1, unitMultiplier: 1, cost: 50 },
+        ],
+        'PURCHASE_DUPLICATE_PRODUCT',
+        'duplicate',
+      ),
+    'PURCHASE_DUPLICATE_PRODUCT',
+  );
 
   // Transfer lines carry no price: the previous identity is unchanged.
-  ensureUniqueFlowItems([
-    { productId: 1, qty: 2, unitMultiplier: 1 },
-    { productId: 1, qty: 1, unitMultiplier: 2 },
-  ], 'TRANSFER_DUPLICATE_PRODUCT', 'duplicate');
-  expectCode(() => ensureUniqueFlowItems([
-    { productId: 1, qty: 2, unitMultiplier: 1 },
-    { productId: 1, qty: 1, unitMultiplier: 1 },
-  ], 'TRANSFER_DUPLICATE_PRODUCT', 'duplicate'), 'TRANSFER_DUPLICATE_PRODUCT');
+  ensureUniqueFlowItems(
+    [
+      { productId: 1, qty: 2, unitMultiplier: 1 },
+      { productId: 1, qty: 1, unitMultiplier: 2 },
+    ],
+    'TRANSFER_DUPLICATE_PRODUCT',
+    'duplicate',
+  );
+  expectCode(
+    () =>
+      ensureUniqueFlowItems(
+        [
+          { productId: 1, qty: 2, unitMultiplier: 1 },
+          { productId: 1, qty: 1, unitMultiplier: 1 },
+        ],
+        'TRANSFER_DUPLICATE_PRODUCT',
+        'duplicate',
+      ),
+    'TRANSFER_DUPLICATE_PRODUCT',
+  );
 
   // Line-id identity (returns) takes precedence over price.
-  expectCode(() => ensureUniqueFlowItems([
-    { productId: 1, qty: 1, lineId: 7, price: 100 },
-    { productId: 1, qty: 1, lineId: 7, price: 80 },
-  ], 'RETURN_DUPLICATE_PRODUCT', 'duplicate'), 'RETURN_DUPLICATE_PRODUCT');
-  ensureUniqueFlowItems([
-    { productId: 1, qty: 1, lineId: 7, price: 100 },
-    { productId: 1, qty: 1, lineId: 8, price: 100 },
-  ], 'RETURN_DUPLICATE_PRODUCT', 'duplicate');
+  expectCode(
+    () =>
+      ensureUniqueFlowItems(
+        [
+          { productId: 1, qty: 1, lineId: 7, price: 100 },
+          { productId: 1, qty: 1, lineId: 7, price: 80 },
+        ],
+        'RETURN_DUPLICATE_PRODUCT',
+        'duplicate',
+      ),
+    'RETURN_DUPLICATE_PRODUCT',
+  );
+  ensureUniqueFlowItems(
+    [
+      { productId: 1, qty: 1, lineId: 7, price: 100 },
+      { productId: 1, qty: 1, lineId: 8, price: 100 },
+    ],
+    'RETURN_DUPLICATE_PRODUCT',
+    'duplicate',
+  );
 
   // End-to-end through the real sale normalizer: a retail line and a
   // wholesale line for one product normalize with their prices intact

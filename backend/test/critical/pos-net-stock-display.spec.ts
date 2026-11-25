@@ -63,8 +63,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-cashier', username: 'cashier', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-cashier',
+  username: 'cashier',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -137,38 +142,134 @@ async function seedFoundation(db: Kysely<Database>, mode: string | null, globalQ
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10, sales_stock_mode: mode }).execute();
-  await anyDb.insertInto('branches').values({ id: 2, tenant_id: TENANT, name: 'Other', default_stock_location_id: 20, sales_stock_mode: null }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main store', location_type: 'branch_stock', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 11, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Back store', location_type: 'branch_stock', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 2, name: 'Other warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Product 101',
-    stock_qty: globalQty, reserved_qty: 8, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 0, is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 10, reserved_qty: 8,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 2, location_id: 20, qty: 50, reserved_qty: 0,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10, sales_stock_mode: mode })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 2, tenant_id: TENANT, name: 'Other', default_stock_location_id: 20, sales_stock_mode: null })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main store',
+      location_type: 'branch_stock',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 11,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Back store',
+      location_type: 'branch_stock',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 20,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 2,
+      name: 'Other warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Product 101',
+      stock_qty: globalQty,
+      reserved_qty: 8,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 0,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 10,
+      reserved_qty: 8,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 2,
+      location_id: 20,
+      qty: 50,
+      reserved_qty: 0,
+    })
+    .execute();
 }
 
 function buildCatalogService(db: Kysely<Database>): CatalogProductService {
@@ -192,21 +293,37 @@ function buildSalesService(db: Kysely<Database>): SalesWriteService {
   const planFeatures = { hasFeature: (_planId: any, _extra: any, feature: string) => feature === 'pos' };
   const returnsStub = {};
   return new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
   );
 }
 
 async function displayedStock(service: CatalogProductService, query: Record<string, unknown>): Promise<number> {
   const result: any = await service.listPosProducts(query, cashierAuth);
-  assert.equal(result.products.length, 1, `expected exactly one POS product, got ${JSON.stringify(result.products)?.slice(0, 120)}`);
+  assert.equal(
+    result.products.length,
+    1,
+    `expected exactly one POS product, got ${JSON.stringify(result.products)?.slice(0, 120)}`,
+  );
   return Number(result.products[0].stock);
 }
 
 async function locationQty(db: Kysely<Database>): Promise<{ qty: number; reserved: number }> {
-  const row = await (db as any).selectFrom('product_location_stock').select(['qty', 'reserved_qty'])
-    .where('tenant_id', '=', TENANT).where('product_id', '=', 101).where('location_id', '=', 10)
-    .executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('product_location_stock')
+    .select(['qty', 'reserved_qty'])
+    .where('tenant_id', '=', TENANT)
+    .where('product_id', '=', 101)
+    .where('location_id', '=', 10)
+    .executeTakeFirstOrThrow()) as any;
   return { qty: Number(row.qty), reserved: Number(row.reserved_qty) };
 }
 
@@ -252,12 +369,30 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db, 'all_operational_locations', 69);
       const anyDb = db as any;
-      await anyDb.insertInto('product_location_stock').values({
-        tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 11, qty: 5, reserved_qty: 1,
-      }).execute();
-      await anyDb.insertInto('product_location_stock').values({
-        tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: null, location_id: null, qty: 4, reserved_qty: 1,
-      }).execute();
+      await anyDb
+        .insertInto('product_location_stock')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          product_id: 101,
+          branch_id: 1,
+          location_id: 11,
+          qty: 5,
+          reserved_qty: 1,
+        })
+        .execute();
+      await anyDb
+        .insertInto('product_location_stock')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          product_id: 101,
+          branch_id: null,
+          location_id: null,
+          qty: 4,
+          reserved_qty: 1,
+        })
+        .execute();
       const catalog = buildCatalogService(db);
       assert.equal(await displayedStock(catalog, { branchId: 1 }), 9);
       console.log('  all-operational display passed');
@@ -273,17 +408,30 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db, null, 60);
       const anyDb = db as any;
-      await anyDb.insertInto('cashier_shifts').values({
-        tenant_id: TENANT, account_id: ACCOUNT, opened_by: 2, status: 'open', branch_id: 1,
-      }).execute();
+      await anyDb
+        .insertInto('cashier_shifts')
+        .values({
+          tenant_id: TENANT,
+          account_id: ACCOUNT,
+          opened_by: 2,
+          status: 'open',
+          branch_id: 1,
+        })
+        .execute();
       const catalog = buildCatalogService(db);
       const sales = buildSalesService(db);
       assert.equal(await displayedStock(catalog, { branchId: 1 }), 2);
       const payload = (qty: number) => ({
         items: [{ productId: 101, qty, price: 100, priceType: 'retail', unitMultiplier: 1 }],
-        discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+        discount: 0,
+        taxRate: 0,
+        paymentType: 'cash',
+        paymentChannel: 'cash',
         payments: [{ paymentChannel: 'cash', amount: 100 * qty }],
-        tenderedAmount: 100 * qty, branchId: 1, locationId: 10, source: 'pos',
+        tenderedAmount: 100 * qty,
+        branchId: 1,
+        locationId: 10,
+        source: 'pos',
       });
       await expectAppError(sales.createSale(payload(3) as any, cashierAuth), 'INSUFFICIENT_STOCK');
       await sales.createSale(payload(2) as any, cashierAuth);

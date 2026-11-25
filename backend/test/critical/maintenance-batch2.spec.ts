@@ -259,13 +259,7 @@ async function testReadSide(): Promise<void> {
     // listTickets / getTicket only touch this.db, so the remaining
     // constructor deps (transaction helper, audit, posting,
     // foundation) are never called on these paths.
-    const service = new MaintenanceService(
-      db as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-    );
+    const service = new MaintenanceService(db as never, {} as never, {} as never, {} as never, {} as never);
     const auth = { tenantId: 't1', accountId: 't1' } as AuthContext;
 
     // (a) read side: a ticket whose sale_id is set surfaces it in
@@ -349,10 +343,7 @@ async function runLive(): Promise<void> {
   }
   const url = new URL(target);
   assert.ok(['localhost', '127.0.0.1'].includes(url.hostname), 'Acceptance tests are local-only');
-  assert.ok(
-    /^\/(zs_core_audit_test|zs_acceptance_[a-z0-9_]+)$/.test(url.pathname),
-    'Refusing a non-test database',
-  );
+  assert.ok(/^\/(zs_core_audit_test|zs_acceptance_[a-z0-9_]+)$/.test(url.pathname), 'Refusing a non-test database');
   Object.assign(process.env, {
     NODE_ENV: 'test',
     APP_MODE: 'CLOUD_SAAS',
@@ -479,17 +470,16 @@ async function runLive(): Promise<void> {
   }
 
   const postingAmount = async (f: Fixture, code: string): Promise<number> => {
-    const rows = await sql<{ amount: string }>`select coalesce(sum(l.debit-l.credit),0) as amount from journal_entry_lines l
+    const rows = await sql<{
+      amount: string;
+    }>`select coalesce(sum(l.debit-l.credit),0) as amount from journal_entry_lines l
       join journal_entries j on j.id=l.journal_entry_id and j.tenant_id=l.tenant_id
       join accounting_accounts a on a.id=l.account_id and a.tenant_id=l.tenant_id
       where l.tenant_id=${f.auth.tenantId} and a.code=${code} and j.status='posted'`.execute(db);
     return Number(Number(rows.rows[0].amount).toFixed(2));
   };
 
-  const mkTicket = async (
-    f: Fixture,
-    overrides: Record<string, unknown> = {},
-  ): Promise<number> => {
+  const mkTicket = async (f: Fixture, overrides: Record<string, unknown> = {}): Promise<number> => {
     const created = await maintenance.createTicket(
       {
         customerName: 'Batch2 Customer',
@@ -573,7 +563,11 @@ async function runLive(): Promise<void> {
     await insertSerial(other, { serial_number: 'B2SERIAL001', imei_2: null, status: 'sold', sale_id: 9999 });
 
     const linkedId = await mkTicket(sf, { serialNumber: 'b2serial001' });
-    assert.equal((await ticketView(sf, linkedId)).saleId, '9001', 'lowercase serial links the sold row, not the foreign-tenant row');
+    assert.equal(
+      (await ticketView(sf, linkedId)).saleId,
+      '9001',
+      'lowercase serial links the sold row, not the foreign-tenant row',
+    );
     const listed = await maintenance.listTickets(sf.auth);
     assert.equal(
       listed.tickets.find((t) => Number(t.id) === linkedId)?.saleId,
@@ -588,7 +582,9 @@ async function runLive(): Promise<void> {
     assert.equal((await ticketView(sf, stockId)).saleId, null, 'in_stock serial stays unlinked');
     const unknownId = await mkTicket(sf, { serialNumber: 'B2UNKNOWN001' });
     assert.equal((await ticketView(sf, unknownId)).saleId, null, 'unknown serial stays unlinked');
-    pass('maintenance batch2 intake links sold serial (serial / imei_2 / case-insensitive / latest / tenant-scoped); unknown and unsold stay null');
+    pass(
+      'maintenance batch2 intake links sold serial (serial / imei_2 / case-insensitive / latest / tenant-scoped); unknown and unsold stay null',
+    );
 
     // (b) L2 — warranty_end = repaired_at + warranty_days at the
     // FIRST repair only; a later re-repair does not move it.
@@ -684,20 +680,28 @@ async function runLive(): Promise<void> {
     // financial edits are rejected with 409 and change nothing.
     const ef = await fixture('b2edit');
     const e0 = await mkTicket(ef, { advancePayment: 0 });
-    await maintenance.updateTicket(e0, {
-      customerName: 'Batch2 Customer',
-      customerPhone: '01088888888',
-      deviceModel: 'Test Model',
-      problemDescription: 'Repair',
-    } as any, ef.auth);
+    await maintenance.updateTicket(
+      e0,
+      {
+        customerName: 'Batch2 Customer',
+        customerPhone: '01088888888',
+        deviceModel: 'Test Model',
+        problemDescription: 'Repair',
+      } as any,
+      ef.auth,
+    );
     assert.equal((await ticketRow(ef, e0)).status, 'received');
     const e1 = await mkTicket(ef, { expectedCost: 100, finalCost: 100, advancePayment: 20 });
-    await maintenance.updateTicket(e1, {
-      customerName: 'Batch2 Customer',
-      customerPhone: '01099999999',
-      deviceModel: 'Test Model',
-      problemDescription: 'Repair — updated notes',
-    } as any, ef.auth);
+    await maintenance.updateTicket(
+      e1,
+      {
+        customerName: 'Batch2 Customer',
+        customerPhone: '01099999999',
+        deviceModel: 'Test Model',
+        problemDescription: 'Repair — updated notes',
+      } as any,
+      ef.auth,
+    );
     const e1After = await ticketRow(ef, e1);
     assert.equal(Number(e1After.final_cost), 100, 'non-financial edit leaves final_cost untouched');
     assert.equal(Number(e1After.advance_payment), 20, 'non-financial edit leaves the advance untouched');
@@ -707,11 +711,7 @@ async function runLive(): Promise<void> {
       deviceModel: 'Test Model',
       problemDescription: 'Repair',
     };
-    for (const financial of [
-      { finalCost: 120 },
-      { expectedCost: 120 },
-      { advancePayment: 30 },
-    ]) {
+    for (const financial of [{ finalCost: 120 }, { expectedCost: 120 }, { advancePayment: 30 }]) {
       await assert.rejects(
         maintenance.updateTicket(e1, { ...editBase, ...financial } as any, ef.auth),
         (e: unknown) => (e as { statusCode?: number }).statusCode === 409,
@@ -753,16 +753,23 @@ async function runLive(): Promise<void> {
       advancePayment: 20,
     });
     assert.equal((await ticketView(ff, f1)).saleId, '9005', 'flow ticket links its sold serial');
-    await maintenance.updateTicket(f1, {
-      customerName: 'Batch2 Customer',
-      customerPhone: '01077777777',
-      deviceModel: 'Test Model',
-      problemDescription: 'Repair',
-    } as any, ff.auth);
+    await maintenance.updateTicket(
+      f1,
+      {
+        customerName: 'Batch2 Customer',
+        customerPhone: '01077777777',
+        deviceModel: 'Test Model',
+        problemDescription: 'Repair',
+      } as any,
+      ff.auth,
+    );
     await maintenance.updateTicketStatus(f1, { status: 'repaired' }, ff.auth);
     const fRow = await ticketRow(ff, f1);
     const fDiff = new Date(fRow.warranty_end as Date).getTime() - new Date(fRow.repaired_at as Date).getTime();
-    assert.ok(Math.abs(fDiff - 14 * DAY_MS) <= 1000, `flow warranty_end must be repaired_at + 14 days, got diff ${fDiff}ms`);
+    assert.ok(
+      Math.abs(fDiff - 14 * DAY_MS) <= 1000,
+      `flow warranty_end must be repaired_at + 14 days, got diff ${fDiff}ms`,
+    );
     await maintenance.updateTicketStatus(
       f1,
       { status: 'delivered', finalCost: 100, collectedAmount: 80, paymentMethod: 'card' },

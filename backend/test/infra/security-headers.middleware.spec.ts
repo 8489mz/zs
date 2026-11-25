@@ -17,16 +17,25 @@ function createResponse() {
 const middleware = new SecurityHeadersMiddleware();
 let nextCalled = false;
 const secureResponse = createResponse();
-middleware.use({ secure: true, headers: {} } as any, secureResponse as any, () => { nextCalled = true; });
+middleware.use({ secure: true, headers: {} } as any, secureResponse as any, () => {
+  nextCalled = true;
+});
 assert.equal(nextCalled, true);
 assert.equal(secureResponse.headers.get('X-Content-Type-Options'), 'nosniff');
-assert.equal(secureResponse.headers.get('Content-Security-Policy'), "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+assert.equal(
+  secureResponse.headers.get('Content-Security-Policy'),
+  "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+);
 assert.equal(secureResponse.headers.get('Strict-Transport-Security'), 'max-age=15552000; includeSubDomains');
 assert.equal(secureResponse.headers.get('X-Permitted-Cross-Domain-Policies'), 'none');
 assert.equal(secureResponse.headers.get('Origin-Agent-Cluster'), '?1');
 
 const proxiedResponse = createResponse();
-middleware.use({ secure: false, headers: { 'x-forwarded-proto': 'https' } } as any, proxiedResponse as any, () => undefined);
+middleware.use(
+  { secure: false, headers: { 'x-forwarded-proto': 'https' } } as any,
+  proxiedResponse as any,
+  () => undefined,
+);
 assert.equal(proxiedResponse.headers.get('Strict-Transport-Security'), 'max-age=15552000; includeSubDomains');
 
 const insecureResponse = createResponse();

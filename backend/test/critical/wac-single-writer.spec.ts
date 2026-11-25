@@ -99,12 +99,7 @@ async function main(): Promise<void> {
       await setCost(beforeCost);
       const afterQty = beforeQty + qty;
       await valueStockReceipt(db as any, 't1', 1, afterQty, qty, value);
-      const expected = weightedReceiptCost(
-        recoverWacBeforeQty(afterQty, qty),
-        beforeCost,
-        qty,
-        value,
-      );
+      const expected = weightedReceiptCost(recoverWacBeforeQty(afterQty, qty), beforeCost, qty, value);
       assert.equal(await storedCost(), expected);
     }
 

@@ -87,13 +87,23 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec', username: 'cashier', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec',
+  username: 'cashier',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -149,60 +159,173 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product', track_serials: false,
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+      track_serials: false,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
 }
 
 async function setShiftSetting(db: Kysely<Database>, value: string): Promise<void> {
-  await (db as any).insertInto('settings').values({ tenant_id: TENANT, key: 'requireCashierShiftForSales', value }).execute();
+  await (db as any)
+    .insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'requireCashierShiftForSales', value })
+    .execute();
 }
 
 async function seedSale(db: Kysely<Database>, channel: 'cash' | 'card' = 'cash'): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('sales').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'S-1',
-    customer_id: null, payment_type: 'cash', payment_channel: channel,
-    subtotal: 100, discount: 0, tax_rate: 0, tax_amount: 0,
-    prices_include_tax: false, total: 100, paid_amount: 100,
-    store_credit_used: 0, status: 'posted', branch_id: 1, location_id: 10, created_by: 2,
-  }).execute();
-  await anyDb.insertInto('sale_items').values({
-    id: 11, tenant_id: TENANT, account_id: ACCOUNT, sale_id: 1, product_id: 101,
-    product_name: 'Widget 101', qty: 1, unit_price: 100, line_total: 100,
-    net_unit_price: 100, net_line_total: 100, allocated_discount: 0,
-    allocated_tax: 0, unit_multiplier: 1, cost_price: 10,
-  }).execute();
-  await anyDb.insertInto('sale_payments').values({
-    tenant_id: TENANT, account_id: ACCOUNT, sale_id: 1, payment_channel: channel, amount: 100,
-  }).execute();
+  await anyDb
+    .insertInto('sales')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'S-1',
+      customer_id: null,
+      payment_type: 'cash',
+      payment_channel: channel,
+      subtotal: 100,
+      discount: 0,
+      tax_rate: 0,
+      tax_amount: 0,
+      prices_include_tax: false,
+      total: 100,
+      paid_amount: 100,
+      store_credit_used: 0,
+      status: 'posted',
+      branch_id: 1,
+      location_id: 10,
+      created_by: 2,
+    })
+    .execute();
+  await anyDb
+    .insertInto('sale_items')
+    .values({
+      id: 11,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      sale_id: 1,
+      product_id: 101,
+      product_name: 'Widget 101',
+      qty: 1,
+      unit_price: 100,
+      line_total: 100,
+      net_unit_price: 100,
+      net_line_total: 100,
+      allocated_discount: 0,
+      allocated_tax: 0,
+      unit_multiplier: 1,
+      cost_price: 10,
+    })
+    .execute();
+  await anyDb
+    .insertInto('sale_payments')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      sale_id: 1,
+      payment_channel: channel,
+      amount: 100,
+    })
+    .execute();
 }
 
 async function seedPurchase(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('purchases').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'PUR-1',
-    supplier_id: null, payment_type: 'cash', payment_channel: 'cash',
-    subtotal: 100, discount: 0, tax_rate: 0, tax_amount: 0,
-    prices_include_tax: false, total: 100, paid_amount: 100,
-    status: 'posted', branch_id: 1, location_id: 10, created_by: 2,
-  }).execute();
-  await anyDb.insertInto('purchase_items').values({
-    id: 21, tenant_id: TENANT, account_id: ACCOUNT, purchase_id: 1, product_id: 101,
-    product_name: 'Widget 101', qty: 1, unit_price: 100, unit_cost: 10,
-    unit_multiplier: 1, line_total: 100, allocated_tax: 0, location_id: 10, branch_id: 1,
-  }).execute();
+  await anyDb
+    .insertInto('purchases')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'PUR-1',
+      supplier_id: null,
+      payment_type: 'cash',
+      payment_channel: 'cash',
+      subtotal: 100,
+      discount: 0,
+      tax_rate: 0,
+      tax_amount: 0,
+      prices_include_tax: false,
+      total: 100,
+      paid_amount: 100,
+      status: 'posted',
+      branch_id: 1,
+      location_id: 10,
+      created_by: 2,
+    })
+    .execute();
+  await anyDb
+    .insertInto('purchase_items')
+    .values({
+      id: 21,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      purchase_id: 1,
+      product_id: 101,
+      product_name: 'Widget 101',
+      qty: 1,
+      unit_price: 100,
+      unit_cost: 10,
+      unit_multiplier: 1,
+      line_total: 100,
+      allocated_tax: 0,
+      location_id: 10,
+      branch_id: 1,
+    })
+    .execute();
 }
 
 const MANAGER_PIN = '2468';
@@ -210,21 +333,24 @@ const ADMIN_PASSWORD = 'admin-pass-1';
 
 async function seedAdminPassword(db: Kysely<Database>): Promise<void> {
   const record = await createPasswordRecord(ADMIN_PASSWORD);
-  await (db as any).updateTable('users')
+  await (db as any)
+    .updateTable('users')
     .set({ password_hash: record.hash, password_salt: record.salt })
     .where('id', '=', 1)
     .execute();
 }
 
 async function seedManagerPin(db: Kysely<Database>, value: string): Promise<void> {
-  await (db as any).insertInto('settings')
-    .values({ tenant_id: TENANT, key: 'managerPin', value })
-    .execute();
+  await (db as any).insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value }).execute();
 }
 
 async function storedManagerPin(db: Kysely<Database>): Promise<string> {
-  const row: any = await (db as any).selectFrom('settings').select('value')
-    .where('tenant_id', '=', TENANT).where('key', '=', 'managerPin').executeTakeFirst();
+  const row: any = await (db as any)
+    .selectFrom('settings')
+    .select('value')
+    .where('tenant_id', '=', TENANT)
+    .where('key', '=', 'managerPin')
+    .executeTakeFirst();
   return String(row?.value || '');
 }
 
@@ -240,24 +366,56 @@ async function expectManagerAuthError(promise: Promise<unknown>, code: string, s
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: '2026-01-01T00:00:00.000Z',
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
+    .execute();
 }
 
 async function seedExchange(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('customers').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Customer',
-    balance: 0, store_credit_balance: 100, loyalty_points: 0, is_active: true,
-  }).execute();
-  await anyDb.insertInto('return_documents').values({
-    id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'ZR-1',
-    return_type: 'sale', invoice_id: 1, settlement_mode: 'store_credit',
-    refund_method: 'cash', total: 100, branch_id: 1, location_id: 10, created_by: 2,
-  }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Customer',
+      balance: 0,
+      store_credit_balance: 100,
+      loyalty_points: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('return_documents')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: 'ZR-1',
+      return_type: 'sale',
+      invoice_id: 1,
+      settlement_mode: 'store_credit',
+      refund_method: 'cash',
+      total: 100,
+      branch_id: 1,
+      location_id: 10,
+      created_by: 2,
+    })
+    .execute();
 }
 
 function buildReturnsService(db: Kysely<Database>): ReturnsService {
@@ -281,17 +439,23 @@ function buildReturnsService(db: Kysely<Database>): ReturnsService {
 
 function saleReturnPayload(refundMethod: 'cash' | 'card'): any {
   return {
-    type: 'sale', invoiceId: 1,
+    type: 'sale',
+    invoiceId: 1,
     items: [{ productId: 101, productName: 'Widget 101', qty: 1, saleItemId: 11 }],
-    settlementMode: 'refund', refundMethod, note: 'spec',
+    settlementMode: 'refund',
+    refundMethod,
+    note: 'spec',
   };
 }
 
 function purchaseReturnPayload(): any {
   return {
-    type: 'purchase', invoiceId: 1,
+    type: 'purchase',
+    invoiceId: 1,
     items: [{ productId: 101, productName: 'Widget 101', qty: 1, purchaseItemId: 21 }],
-    settlementMode: 'refund', refundMethod: 'cash', note: 'spec',
+    settlementMode: 'refund',
+    refundMethod: 'cash',
+    note: 'spec',
   };
 }
 
@@ -300,7 +464,10 @@ async function treasuryRows(db: Kysely<Database>): Promise<any[]> {
 }
 
 async function countTable(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select(sql`count(*)`.as('n')).executeTakeFirst();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select(sql`count(*)`.as('n'))
+    .executeTakeFirst();
   return Number(row?.n || 0);
 }
 
@@ -310,7 +477,11 @@ async function main(): Promise<void> {
   assert.equal(resolveRequireCashierShiftForSales(new Map()), true, 'empty map fails closed');
   assert.equal(resolveRequireCashierShiftForSales(new Map([['requireCashierShiftForSales', true]])), true);
   assert.equal(resolveRequireCashierShiftForSales(new Map([['requireCashierShiftForSales', 'true']])), true);
-  assert.equal(resolveRequireCashierShiftForSales(new Map([['requireCashierShiftForSales', 'yes']])), true, 'unrecognised value fails closed');
+  assert.equal(
+    resolveRequireCashierShiftForSales(new Map([['requireCashierShiftForSales', 'yes']])),
+    true,
+    'unrecognised value fails closed',
+  );
   assert.equal(resolveRequireCashierShiftForSales(new Map([['requireCashierShiftForSales', false]])), false);
   assert.equal(resolveRequireCashierShiftForSales(new Map([['requireCashierShiftForSales', 'false']])), false);
   assert.equal(resolveRequireCashierShiftForSales(new Map([['requireCashierShiftForSales', 0]])), false);
@@ -392,7 +563,11 @@ async function main(): Promise<void> {
       assert.equal(Number(rows[0].amount), -100, 'the cash refund leaves the treasury');
       assert.equal(rows[0].reference_type, 'cashier_shift', 'the row references the open shift');
       assert.equal(Number(rows[0].reference_id), 1, 'the row references the cashier shift');
-      const shift: any = await (db as any).selectFrom('cashier_shifts').selectAll().where('id', '=', 1).executeTakeFirst();
+      const shift: any = await (db as any)
+        .selectFrom('cashier_shifts')
+        .selectAll()
+        .where('id', '=', 1)
+        .executeTakeFirst();
       assert.equal(Number(shift.expected_cash), -100, 'expected cash falls by the refund');
     } finally {
       await db.destroy();
@@ -452,15 +627,24 @@ async function main(): Promise<void> {
       await seedExchange(db);
       const service = buildReturnsService(db);
       const context = {
-        returnId: 1, total: 100, customerId: 1, branchId: 1, locationId: 10,
+        returnId: 1,
+        total: 100,
+        customerId: 1,
+        branchId: 1,
+        locationId: 10,
         refundBase: {
-          originalCashPaid: 100, originalNonCashPaid: 0, originalDebt: 0,
-          previousCashRefunded: 0, previousNonCashRefunded: 0, previousDebtReversed: 0,
+          originalCashPaid: 100,
+          originalNonCashPaid: 0,
+          originalDebt: 0,
+          previousCashRefunded: 0,
+          previousNonCashRefunded: 0,
+          previousDebtReversed: 0,
           hasCustomer: true,
         },
       };
-      const settlement: any = await db.transaction().execute(async (trx) =>
-        service.settleExchangeReturn(trx as any, context as any, 70, 'cash', cashierAuth));
+      const settlement: any = await db
+        .transaction()
+        .execute(async (trx) => service.settleExchangeReturn(trx as any, context as any, 70, 'cash', cashierAuth));
       assert.equal(Number(settlement.refundAmount), 30, 'the exchange refunds the 30 net cash-out');
       const rows = await treasuryRows(db);
       assert.equal(rows.length, 1, 'one treasury row is written');
@@ -481,16 +665,25 @@ async function main(): Promise<void> {
       await seedExchange(db);
       const service = buildReturnsService(db);
       const context = {
-        returnId: 1, total: 100, customerId: 1, branchId: 1, locationId: 10,
+        returnId: 1,
+        total: 100,
+        customerId: 1,
+        branchId: 1,
+        locationId: 10,
         refundBase: {
-          originalCashPaid: 100, originalNonCashPaid: 0, originalDebt: 0,
-          previousCashRefunded: 0, previousNonCashRefunded: 0, previousDebtReversed: 0,
+          originalCashPaid: 100,
+          originalNonCashPaid: 0,
+          originalDebt: 0,
+          previousCashRefunded: 0,
+          previousNonCashRefunded: 0,
+          previousDebtReversed: 0,
           hasCustomer: true,
         },
       };
       await assert.rejects(
-        db.transaction().execute(async (trx) =>
-          service.settleExchangeReturn(trx as any, context as any, 70, 'cash', cashierAuth)),
+        db
+          .transaction()
+          .execute(async (trx) => service.settleExchangeReturn(trx as any, context as any, 70, 'cash', cashierAuth)),
         (err: any) => err && err.code === 'OPEN_SHIFT_REQUIRED',
       );
       assert.equal((await treasuryRows(db)).length, 0, 'no treasury row is written');
@@ -511,22 +704,37 @@ async function main(): Promise<void> {
       await (db as any).updateTable('customers').set({ store_credit_balance: 700 }).where('id', '=', 1).execute();
       const service = buildReturnsService(db);
       const largeContext = {
-        returnId: 1, total: 700, customerId: 1, branchId: 1, locationId: 10,
+        returnId: 1,
+        total: 700,
+        customerId: 1,
+        branchId: 1,
+        locationId: 10,
         refundBase: {
-          originalCashPaid: 700, originalNonCashPaid: 0, originalDebt: 0,
-          previousCashRefunded: 0, previousNonCashRefunded: 0, previousDebtReversed: 0,
+          originalCashPaid: 700,
+          originalNonCashPaid: 0,
+          originalDebt: 0,
+          previousCashRefunded: 0,
+          previousNonCashRefunded: 0,
+          previousDebtReversed: 0,
           hasCustomer: true,
         },
       };
       await assert.rejects(
-        db.transaction().execute(async (trx) =>
-          service.settleExchangeReturn(trx as any, largeContext as any, 100, 'cash', cashierAuth)),
+        db
+          .transaction()
+          .execute(async (trx) =>
+            service.settleExchangeReturn(trx as any, largeContext as any, 100, 'cash', cashierAuth),
+          ),
         (err: any) => err && err.code === 'MANAGER_AUTH_REQUIRED',
       );
-      await db.transaction().execute(async (trx) =>
-        service.settleExchangeReturn(trx as any, largeContext as any, 100, 'store_credit', cashierAuth));
-      await db.transaction().execute(async (trx) =>
-        service.settleExchangeReturn(trx as any, largeContext as any, 100, 'cash', adminAuth));
+      await db
+        .transaction()
+        .execute(async (trx) =>
+          service.settleExchangeReturn(trx as any, largeContext as any, 100, 'store_credit', cashierAuth),
+        );
+      await db
+        .transaction()
+        .execute(async (trx) => service.settleExchangeReturn(trx as any, largeContext as any, 100, 'cash', adminAuth));
     } finally {
       await db.destroy();
     }
@@ -559,13 +767,25 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/returns/returns-write-helpers.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/returns/returns-write-helpers.service.ts'),
+      'utf8',
+    );
     assert.ok(serviceSource.includes('INV-REST-RETURN-SHIFT-GATE'), 'the gate names the invariant');
     assert.ok(serviceSource.includes('resolveRequireCashierShiftForSales'), 'the gate uses the I23 resolver');
-    assert.ok(serviceSource.includes('requireCashierShiftForReturns'), 'the gate reads the setting on the transaction handle');
-    const authzSource = readFileSync(resolve(here, '../../src/modules/sales/services/sales-authorization.service.ts'), 'utf8');
+    assert.ok(
+      serviceSource.includes('requireCashierShiftForReturns'),
+      'the gate reads the setting on the transaction handle',
+    );
+    const authzSource = readFileSync(
+      resolve(here, '../../src/modules/sales/services/sales-authorization.service.ts'),
+      'utf8',
+    );
     assert.ok(authzSource.includes('INV-REST-RETURN-SHIFT-GATE'), 'the authorization note names the returns extension');
-    assert.ok(!authzSource.includes('return-refund and\n   * van-remittance gates stay strict'), 'the stale stay-strict note for returns is gone');
+    assert.ok(
+      !authzSource.includes('return-refund and\n   * van-remittance gates stay strict'),
+      'the stale stay-strict note for returns is gone',
+    );
     console.log('  10. source pins passed');
   }
 

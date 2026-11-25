@@ -29,7 +29,11 @@ function createService(db: Kysely<any>): SettingsBackupService {
     db as never,
     { log: async () => undefined } as never,
     { invalidateTenant: () => undefined } as never,
-    { invalidateSettingsCache: () => undefined, invalidateBranchesCache: () => undefined, invalidatePlanFeaturesCache: () => undefined } as never,
+    {
+      invalidateSettingsCache: () => undefined,
+      invalidateBranchesCache: () => undefined,
+      invalidatePlanFeaturesCache: () => undefined,
+    } as never,
   );
 }
 
@@ -37,7 +41,9 @@ async function main() {
   const pg = new PGlite();
   const db = new Kysely<any>({ dialect: new PGliteDialect(pg) });
   try {
-    await sql`CREATE TABLE settings (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, account_id TEXT, key TEXT NOT NULL, value TEXT)`.execute(db);
+    await sql`CREATE TABLE settings (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, account_id TEXT, key TEXT NOT NULL, value TEXT)`.execute(
+      db,
+    );
 
     const previousMode = process.env.APP_MODE;
 
@@ -51,7 +57,9 @@ async function main() {
 
     // 2. Desktop: the scheduler exists. The stored automation is disabled
     // so the config read must not attempt a real backup file write.
-    await sql`INSERT INTO settings (tenant_id, account_id, key, value) VALUES (${TENANT}, ${'a1'}, ${'backupAutomation'}, ${JSON.stringify({ enabled: false })})`.execute(db);
+    await sql`INSERT INTO settings (tenant_id, account_id, key, value) VALUES (${TENANT}, ${'a1'}, ${'backupAutomation'}, ${JSON.stringify({ enabled: false })})`.execute(
+      db,
+    );
     process.env.APP_MODE = 'LOCAL_PILOT';
     const desktop = await createService(db).getBackupConfig(ACTOR);
     assert.equal((desktop.automation as any).schedulerAvailable, true, 'desktop must report schedulerAvailable true');
@@ -60,7 +68,11 @@ async function main() {
     // 3. Unset mode defaults to cloud: no scheduler.
     delete process.env.APP_MODE;
     const unset = await createService(db).getBackupConfig(ACTOR);
-    assert.equal((unset.automation as any).schedulerAvailable, false, 'unset APP_MODE must default to schedulerAvailable false');
+    assert.equal(
+      (unset.automation as any).schedulerAvailable,
+      false,
+      'unset APP_MODE must default to schedulerAvailable false',
+    );
 
     if (previousMode === undefined) delete process.env.APP_MODE;
     else process.env.APP_MODE = previousMode;

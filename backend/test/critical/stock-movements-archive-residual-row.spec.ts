@@ -54,8 +54,13 @@ const TENANT = 't1';
 const ACCOUNT = 'a1';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['canAdjustInventory'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['canAdjustInventory'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -71,23 +76,64 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE audit_logs (id bigserial PRIMARY KEY, action text, details text, event_code text, target_tenant_id text, created_by bigint, impersonated_by bigint, tenant_id text, account_id text, created_at timestamptz DEFAULT NOW());
   `);
   await (db as any).insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: '"EGP"' }).execute();
-  await (db as any).insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await (db as any).insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
+  await (db as any)
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await (db as any)
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
   return { pg, db };
 }
 
 async function seedProduct(db: Kysely<Database>, stockQty: number, locationQty: number | null): Promise<void> {
-  await (db as any).insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    barcode: 'W101', sku: 'W101', style_code: null, item_kind: 'standard', item_type: 'product',
-    color: null, size: null, stock_qty: stockQty, reserved_qty: 0, cost_price: 5,
-    retail_price: 100, wholesale_price: 100, min_stock_qty: 0, is_active: true,
-    track_serials: false, default_location_id: 10,
-  }).execute();
+  await (db as any)
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      barcode: 'W101',
+      sku: 'W101',
+      style_code: null,
+      item_kind: 'standard',
+      item_type: 'product',
+      color: null,
+      size: null,
+      stock_qty: stockQty,
+      reserved_qty: 0,
+      cost_price: 5,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_stock_qty: 0,
+      is_active: true,
+      track_serials: false,
+      default_location_id: 10,
+    })
+    .execute();
   if (locationQty !== null) {
-    await (db as any).insertInto('product_location_stock').values({
-      tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: locationQty, reserved_qty: 0,
-    }).execute();
+    await (db as any)
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        product_id: 101,
+        branch_id: 1,
+        location_id: 10,
+        qty: locationQty,
+        reserved_qty: 0,
+      })
+      .execute();
   }
 }
 
@@ -128,10 +174,18 @@ async function main(): Promise<void> {
       assert.equal(residual.reference_type, 'inventory_adjustment');
       assert.equal(Number(residual.reference_id), 101);
       assert.equal(Number(residual.location_id), 10, 'residual row location is the fallback location');
-      const product: any = await (db as any).selectFrom('products').select(['stock_qty', 'is_active']).where('id', '=', 101).executeTakeFirst();
+      const product: any = await (db as any)
+        .selectFrom('products')
+        .select(['stock_qty', 'is_active'])
+        .where('id', '=', 101)
+        .executeTakeFirst();
       assert.equal(Number(product.stock_qty), 0, 'global stock ends at 0');
       assert.equal(product.is_active, false);
-      const loc: any = await (db as any).selectFrom('product_location_stock').select('qty').where('product_id', '=', 101).executeTakeFirst();
+      const loc: any = await (db as any)
+        .selectFrom('product_location_stock')
+        .select('qty')
+        .where('product_id', '=', 101)
+        .executeTakeFirst();
       assert.equal(Number(loc.qty), 0, 'location stock ends at 0');
     } finally {
       await db.destroy();

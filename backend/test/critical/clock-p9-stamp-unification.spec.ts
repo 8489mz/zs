@@ -125,14 +125,9 @@ const DATE_DEFAULT_COLUMNS: Array<{ table: string; column: string }> = [
   { table: 'import_broker_expenses', column: 'payment_date' },
 ];
 
-const readSource = (rel: string): string =>
-  readFileSync(resolve(__dirname, rel), 'utf8');
+const readSource = (rel: string): string => readFileSync(resolve(__dirname, rel), 'utf8');
 
-async function columnType(
-  db: Kysely<Database>,
-  table: string,
-  column: string,
-): Promise<string | null> {
+async function columnType(db: Kysely<Database>, table: string, column: string): Promise<string | null> {
   const row = await sql<{ data_type: string }>`
     SELECT data_type FROM information_schema.columns
     WHERE table_name = ${table} AND column_name = ${column}
@@ -140,11 +135,7 @@ async function columnType(
   return row.rows[0]?.data_type ?? null;
 }
 
-async function columnDefault(
-  db: Kysely<Database>,
-  table: string,
-  column: string,
-): Promise<string | null> {
+async function columnDefault(db: Kysely<Database>, table: string, column: string): Promise<string | null> {
   const row = await sql<{ column_default: string | null }>`
     SELECT column_default FROM information_schema.columns
     WHERE table_name = ${table} AND column_name = ${column}
@@ -175,11 +166,7 @@ async function main(): Promise<void> {
     false,
     'tomorrow is too far in the future for a payment date',
   );
-  assert.equal(
-    checkClientBusinessDay('not-a-date', KW_TZ, window, frozenNow).ok,
-    false,
-    'garbage rejects',
-  );
+  assert.equal(checkClientBusinessDay('not-a-date', KW_TZ, window, frozenNow).ok, false, 'garbage rejects');
 
   // ── §A. Migration 0328: naive TIMESTAMP → timestamptz, instants kept ───
   {
@@ -260,16 +247,8 @@ async function main(): Promise<void> {
       const trip = await sql<{ opened_at: Date; closed_at: Date | null }>`
         SELECT opened_at, closed_at FROM van_sales_trips WHERE id = 1
       `.execute(db);
-      assert.equal(
-        new Date(trip.rows[0]!.opened_at).getTime(),
-        Date.parse(openedAt),
-        'opened_at instant preserved',
-      );
-      assert.equal(
-        new Date(trip.rows[0]!.closed_at!).getTime(),
-        Date.parse(closedAt),
-        'closed_at instant preserved',
-      );
+      assert.equal(new Date(trip.rows[0]!.opened_at).getTime(), Date.parse(openedAt), 'opened_at instant preserved');
+      assert.equal(new Date(trip.rows[0]!.closed_at!).getTime(), Date.parse(closedAt), 'closed_at instant preserved');
       const nullClose = await sql<{ closed_at: Date | null }>`
         SELECT closed_at FROM van_sales_trips WHERE id = 3
       `.execute(db);
@@ -277,29 +256,18 @@ async function main(): Promise<void> {
       const visit = await sql<{ visited_at: Date }>`
         SELECT visited_at FROM van_field_visits WHERE id = 1
       `.execute(db);
-      assert.equal(
-        new Date(visit.rows[0]!.visited_at).getTime(),
-        Date.parse(openedAt),
-        'visited_at instant preserved',
-      );
+      assert.equal(new Date(visit.rows[0]!.visited_at).getTime(), Date.parse(openedAt), 'visited_at instant preserved');
       const sale = await sql<{ settled_at: Date }>`
         SELECT settled_at FROM sales WHERE id = 1
       `.execute(db);
-      assert.equal(
-        new Date(sale.rows[0]!.settled_at).getTime(),
-        Date.parse(settledAt),
-        'settled_at instant preserved',
-      );
+      assert.equal(new Date(sale.rows[0]!.settled_at).getTime(), Date.parse(settledAt), 'settled_at instant preserved');
       // The DEFAULT-now() row still has a recent instant (conversion did
       // not blank or shift it).
       const defaulted = await sql<{ opened_at: Date }>`
         SELECT opened_at FROM van_sales_trips WHERE id = 2
       `.execute(db);
       const defaultMs = new Date(defaulted.rows[0]!.opened_at).getTime();
-      assert.ok(
-        Math.abs(Date.now() - defaultMs) < 60_000,
-        'DEFAULT now() row keeps a recent instant after conversion',
-      );
+      assert.ok(Math.abs(Date.now() - defaultMs) < 60_000, 'DEFAULT now() row keeps a recent instant after conversion');
 
       const counts = await sql<{ n: string }>`
         SELECT (SELECT COUNT(*) FROM van_sales_trips)
@@ -352,13 +320,9 @@ async function main(): Promise<void> {
         tables.set(table, cols);
       }
       for (const [table, columns] of tables) {
-        let builder = db.schema
-          .createTable(table)
-          .addColumn('id', 'serial', (col) => col.primaryKey());
+        let builder = db.schema.createTable(table).addColumn('id', 'serial', (col) => col.primaryKey());
         for (const column of columns) {
-          builder = builder.addColumn(column, 'date', (col) =>
-            col.notNull().defaultTo(sql`CURRENT_DATE`),
-          );
+          builder = builder.addColumn(column, 'date', (col) => col.notNull().defaultTo(sql`CURRENT_DATE`));
         }
         await builder.execute();
       }
@@ -373,11 +337,7 @@ async function main(): Promise<void> {
       await p9Migration.up(db as never);
 
       for (const { table, column } of DATE_DEFAULT_COLUMNS) {
-        assert.equal(
-          await columnDefault(db, table, column),
-          null,
-          `${table}.${column} has no default after up()`,
-        );
+        assert.equal(await columnDefault(db, table, column), null, `${table}.${column} has no default after up()`);
       }
 
       // An insert that omits the date now FAILS (NOT NULL, no default to
@@ -397,9 +357,7 @@ async function main(): Promise<void> {
       );
 
       // An insert WITH the tenant day succeeds and reads back exactly.
-      await sql`INSERT INTO customer_installments (id, start_date) VALUES (2, '2026-04-08')`.execute(
-        db,
-      );
+      await sql`INSERT INTO customer_installments (id, start_date) VALUES (2, '2026-04-08')`.execute(db);
       const row = await sql<{ start_date: string }>`
         SELECT start_date::text AS start_date FROM customer_installments WHERE id = 2
       `.execute(db);
@@ -413,24 +371,12 @@ async function main(): Promise<void> {
   {
     const drawer = readSource('../../src/modules/cash-drawer/cash-drawer-write.service.ts');
     assert.ok(drawer.includes('const closeNow = new Date();'), 'close captures one instant');
-    assert.ok(
-      drawer.includes('closed_at = ${closeNow}'),
-      'close stamps closed_at with the captured instant',
-    );
+    assert.ok(drawer.includes('closed_at = ${closeNow}'), 'close stamps closed_at with the captured instant');
     assert.ok(!drawer.includes('closed_at = now()'), 'no DB now() left on the close stamp');
     assert.ok(drawer.includes('const reviewNow = new Date();'), 'review captures one instant');
-    assert.ok(
-      drawer.includes('rejectedAt: reviewNow.toISOString()'),
-      'rejection stamp uses the review instant',
-    );
-    assert.ok(
-      drawer.includes('reviewedAt: reviewNow.toISOString()'),
-      'review stamp uses the review instant',
-    );
-    assert.ok(
-      drawer.includes('updated_at = ${reviewNow}'),
-      'review stamps updated_at with the review instant',
-    );
+    assert.ok(drawer.includes('rejectedAt: reviewNow.toISOString()'), 'rejection stamp uses the review instant');
+    assert.ok(drawer.includes('reviewedAt: reviewNow.toISOString()'), 'review stamp uses the review instant');
+    assert.ok(drawer.includes('updated_at = ${reviewNow}'), 'review stamps updated_at with the review instant');
     assert.ok(
       drawer.includes('closed_at = coalesce(closed_at, ${reviewNow})'),
       'review stamps closed_at with the review instant',
@@ -453,9 +399,7 @@ async function main(): Promise<void> {
       'fuel-log host-local fallback is gone',
     );
     assert.ok(
-      contracting.includes(
-        'submission_date: dto.submissionDate || todayTenantDate(businessTz, new Date())',
-      ),
+      contracting.includes('submission_date: dto.submissionDate || todayTenantDate(businessTz, new Date())'),
       'submittal fallback is the tenant day',
     );
     assert.ok(
@@ -463,9 +407,7 @@ async function main(): Promise<void> {
       'submittal host-local fallback is gone',
     );
     assert.ok(
-      contracting.includes(
-        'occurrence_date: dto.occurrenceDate || todayTenantDate(businessTz, new Date())',
-      ),
+      contracting.includes('occurrence_date: dto.occurrenceDate || todayTenantDate(businessTz, new Date())'),
       'backcharge fallback is the tenant day',
     );
     assert.ok(
@@ -489,10 +431,7 @@ async function main(): Promise<void> {
       saas.includes('checkClientBusinessDay(body.date, tenantTz,'),
       'recordPayment bounds the supplied date through the P6 helper',
     );
-    assert.ok(
-      saas.includes('minDayOffset: -CLIENT_BUSINESS_DATE_PAST_DAYS'),
-      'recordPayment uses the P6 past window',
-    );
+    assert.ok(saas.includes('minDayOffset: -CLIENT_BUSINESS_DATE_PAST_DAYS'), 'recordPayment uses the P6 past window');
     assert.ok(
       !saas.includes('paid_at: body.date ? new Date(body.date) : now'),
       'recordPayment no longer stamps the client date verbatim',
@@ -513,9 +452,7 @@ async function main(): Promise<void> {
       '../../src/modules/delivery-reps/services/van-trip-lifecycle/submit-settlement.service.ts',
     );
     assert.ok(!submitSettlement.includes('visited_at: new Date()'), 'submit visit is never app-stamped');
-    const settleTrip = readSource(
-      '../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts',
-    );
+    const settleTrip = readSource('../../src/modules/delivery-reps/services/van-trip-lifecycle/settle-trip.service.ts');
     assert.ok(!settleTrip.includes('visited_at: new Date()'), 'settle visit is never app-stamped');
     // File #52 split: the field-visit insert now lives in the S1 slice.
     const fieldSales = readSource(

@@ -89,21 +89,36 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function insertApproval(db: Kysely<Database>, id: string, payload: Record<string, unknown>): Promise<void> {
-  await db.insertInto('import_approval_requests' as never).values({
-    id, tenant_id: 't1', module: 'import', action_type: 'large_transfer',
-    reference_id: '1', requested_by: 99, created_by: 99, status: 'approved',
-    request_payload: JSON.stringify(payload),
-  } as never).execute();
+  await db
+    .insertInto('import_approval_requests' as never)
+    .values({
+      id,
+      tenant_id: 't1',
+      module: 'import',
+      action_type: 'large_transfer',
+      reference_id: '1',
+      requested_by: 99,
+      created_by: 99,
+      status: 'approved',
+      request_payload: JSON.stringify(payload),
+    } as never)
+    .execute();
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
 const BOUND_PAYLOAD = {
-  amount: 1000, currency: 'USD', supplierId: '1',
-  proformaInvoiceId: 'pi-a', projectId: 'proj-1',
+  amount: 1000,
+  currency: 'USD',
+  supplierId: '1',
+  proformaInvoiceId: 'pi-a',
+  projectId: 'proj-1',
 };
 
 async function transfer(db: Kysely<Database>, service: any, dto: Record<string, unknown>): Promise<any> {
@@ -126,7 +141,13 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await insertApproval(db, 'appr-1', BOUND_PAYLOAD);
       await assert.rejects(
-        async () => transfer(db, service, { proformaInvoiceId: 'pi-b', projectId: 'proj-2', approvalRequestId: 'appr-1', idempotencyKey: 'key-pi-b' }),
+        async () =>
+          transfer(db, service, {
+            proformaInvoiceId: 'pi-b',
+            projectId: 'proj-2',
+            approvalRequestId: 'appr-1',
+            idempotencyKey: 'key-pi-b',
+          }),
         /الفاتورة المبدئية|المشروع/,
         'An approval bound to PI-A/project 1 must not authorize PI-B/project 2',
       );
@@ -143,7 +164,15 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await insertApproval(db, 'appr-1', BOUND_PAYLOAD);
       await assert.rejects(
-        async () => transfer(db, service, { proformaInvoiceId: 'pi-a', projectId: 'proj-1', amountForeign: 2000, amountEgp: 100000, approvalRequestId: 'appr-1', idempotencyKey: 'key-ceiling' }),
+        async () =>
+          transfer(db, service, {
+            proformaInvoiceId: 'pi-a',
+            projectId: 'proj-1',
+            amountForeign: 2000,
+            amountEgp: 100000,
+            approvalRequestId: 'appr-1',
+            idempotencyKey: 'key-ceiling',
+          }),
         /المعتمد/,
         'An approval with a 1,000 ceiling must not authorize 2,000',
       );
@@ -159,9 +188,20 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await insertApproval(db, 'appr-1', BOUND_PAYLOAD);
-      await transfer(db, service, { proformaInvoiceId: 'pi-a', projectId: 'proj-1', amountForeign: 1000, amountEgp: 51000, approvalRequestId: 'appr-1', idempotencyKey: 'key-ok' });
+      await transfer(db, service, {
+        proformaInvoiceId: 'pi-a',
+        projectId: 'proj-1',
+        amountForeign: 1000,
+        amountEgp: 51000,
+        approvalRequestId: 'appr-1',
+        idempotencyKey: 'key-ok',
+      });
       const payment: any = await (db as any).selectFrom('supplier_payments').selectAll().executeTakeFirstOrThrow();
-      assert.equal(Number(payment.forex_variance_egp), 1000, 'Variance is real: 51,000 paid vs 50,000 at the PI contract rate 50');
+      assert.equal(
+        Number(payment.forex_variance_egp),
+        1000,
+        'Variance is real: 51,000 paid vs 50,000 at the PI contract rate 50',
+      );
       assert.equal(Number(payment.amount), -50000, 'Payable relief is at the contract rate');
       const lines: any[] = await (db as any).selectFrom('journal_entry_lines').selectAll().execute();
       const debits = lines.reduce((s, l) => s + Number(l.debit), 0);
@@ -170,9 +210,17 @@ async function main(): Promise<void> {
       const loss = lines.find((l) => Number(l.account_id) === 25);
       assert.ok(loss, 'A forex loss line must exist');
       assert.equal(Number(loss.debit), 1000, 'Forex loss line is the real 1,000 variance');
-      const pi: any = await (db as any).selectFrom('import_proforma_invoices').selectAll().where('id', '=', 'pi-a').executeTakeFirstOrThrow();
+      const pi: any = await (db as any)
+        .selectFrom('import_proforma_invoices')
+        .selectAll()
+        .where('id', '=', 'pi-a')
+        .executeTakeFirstOrThrow();
       assert.equal(Number(pi.paid_amount_foreign), 1000, 'PI paid amount advances');
-      const approval: any = await (db as any).selectFrom('import_approval_requests').selectAll().where('id', '=', 'appr-1').executeTakeFirstOrThrow();
+      const approval: any = await (db as any)
+        .selectFrom('import_approval_requests')
+        .selectAll()
+        .where('id', '=', 'appr-1')
+        .executeTakeFirstOrThrow();
       assert.equal(approval.status, 'executed', 'The approval token is single-use');
     } finally {
       await db.destroy();
@@ -185,11 +233,27 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       // 200,000 JPY at 0.32 = 64,000 base: below the threshold, no approval needed.
-      await transfer(db, service, { currency: 'JPY', amountForeign: 200000, amountEgp: 64000, exchangeRateContract: 0.32, idempotencyKey: 'key-jpy' });
-      assert.equal(await countRows(db, 'supplier_payments'), 1, 'The sub-threshold JPY transfer must succeed without approval');
+      await transfer(db, service, {
+        currency: 'JPY',
+        amountForeign: 200000,
+        amountEgp: 64000,
+        exchangeRateContract: 0.32,
+        idempotencyKey: 'key-jpy',
+      });
+      assert.equal(
+        await countRows(db, 'supplier_payments'),
+        1,
+        'The sub-threshold JPY transfer must succeed without approval',
+      );
       // 200,000 USD = 10,000,000 base: approval required.
       await assert.rejects(
-        async () => transfer(db, service, { amountForeign: 200000, amountEgp: 10000000, exchangeRateContract: 50, idempotencyKey: 'key-usd-big' }),
+        async () =>
+          transfer(db, service, {
+            amountForeign: 200000,
+            amountEgp: 10000000,
+            exchangeRateContract: 50,
+            idempotencyKey: 'key-usd-big',
+          }),
         /اعتماداً ثنائياً/,
         'A 200,000 USD transfer without approval must be rejected',
       );
@@ -221,21 +285,40 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       await assert.rejects(
-        async () => service.createApprovalRequest('t1', 1, { actionType: 'large_transfer', referenceId: '1', requestPayload: { amount: 1000 } }),
+        async () =>
+          service.createApprovalRequest('t1', 1, {
+            actionType: 'large_transfer',
+            referenceId: '1',
+            requestPayload: { amount: 1000 },
+          }),
         /عملة صالحة/,
         'A large_transfer approval without a currency must be rejected at creation',
       );
       await assert.rejects(
-        async () => service.createApprovalRequest('t1', 1, { actionType: 'large_transfer', referenceId: '1', requestPayload: { amount: 0, currency: 'USD' } }),
+        async () =>
+          service.createApprovalRequest('t1', 1, {
+            actionType: 'large_transfer',
+            referenceId: '1',
+            requestPayload: { amount: 0, currency: 'USD' },
+          }),
         /سقف مبلغ موجب/,
         'A large_transfer approval without a positive ceiling must be rejected at creation',
       );
       await assert.rejects(
-        async () => service.createApprovalRequest('t1', 1, { actionType: 'large_transfer', referenceId: '1', requestPayload: { amount: 1000, currency: 'USD', supplierId: '2' } }),
+        async () =>
+          service.createApprovalRequest('t1', 1, {
+            actionType: 'large_transfer',
+            referenceId: '1',
+            requestPayload: { amount: 1000, currency: 'USD', supplierId: '2' },
+          }),
         /مطابقة المورد/,
         'A large_transfer approval whose supplier does not match the reference must be rejected at creation',
       );
-      const created = await service.createApprovalRequest('t1', 1, { actionType: 'large_transfer', referenceId: '1', requestPayload: BOUND_PAYLOAD });
+      const created = await service.createApprovalRequest('t1', 1, {
+        actionType: 'large_transfer',
+        referenceId: '1',
+        requestPayload: BOUND_PAYLOAD,
+      });
       assert.equal(created.status, 'pending', 'A well-formed large_transfer approval is created pending');
       assert.equal(await countRows(db, 'import_approval_requests'), 1, 'Only the valid approval is stored');
     } finally {
@@ -246,4 +329,7 @@ async function main(): Promise<void> {
   console.log('Import transfer approval binding tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

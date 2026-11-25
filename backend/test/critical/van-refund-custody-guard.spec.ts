@@ -60,12 +60,7 @@ async function main(): Promise<void> {
     return builder;
   }
 
-  function buildService(opts: {
-    ret: any;
-    currency: string;
-    sale: any;
-    saleLines: any[];
-  }) {
+  function buildService(opts: { ret: any; currency: string; sale: any; saleLines: any[] }) {
     const trx: any = {
       selectFrom: (table: string) => {
         if (table === 'van_field_returns') {
@@ -134,7 +129,16 @@ async function main(): Promise<void> {
   // INV-VAN-RETURN-METHOD-MATCH: the mock sale is a cash sale of
   // 1000 (the returns under test are cash refunds), so the
   // method-match leg check sees the leg the refunds draw on.
-  const sale = { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted', payment_type: 'cash', total: 1000, paid_amount: 0 };
+  const sale = {
+    id: 7,
+    doc_no: 'S-1',
+    customer_id: 21,
+    resolved_rep_id: 4,
+    status: 'posted',
+    payment_type: 'cash',
+    total: 1000,
+    paid_amount: 0,
+  };
   const saleLines = [{ id: 101, product_id: 1, qty: 10, line_total: 1000, product_name: 'Widget' }];
 
   // 1. Lock precedes the cash read, and an insufficient refund is
@@ -169,10 +173,7 @@ async function main(): Promise<void> {
     // The first approval's committed deduction: 100 - 80 = 20.
     cashHolder.cash = 20;
     const second = buildService({ ret: { ...retFixture(80), id: 32 }, currency: 'EGP', sale, saleLines });
-    await assert.rejects(
-      async () => second.approveFieldReturn('t1', 'a1', 32, 99),
-      /INSUFFICIENT_REP_CASH_FOR_REFUND/,
-    );
+    await assert.rejects(async () => second.approveFieldReturn('t1', 'a1', 32, 99), /INSUFFICIENT_REP_CASH_FOR_REFUND/);
   }
 
   // 3. Tolerance is one minor unit: KWD 100.126 passes, 100.127 fails.
@@ -185,10 +186,7 @@ async function main(): Promise<void> {
       'one minor unit over the balance passes the guard',
     );
     const over = buildService({ ret: retFixture(100.127), currency: 'KWD', sale, saleLines });
-    await assert.rejects(
-      async () => over.approveFieldReturn('t1', 'a1', 31, 99),
-      /INSUFFICIENT_REP_CASH_FOR_REFUND/,
-    );
+    await assert.rejects(async () => over.approveFieldReturn('t1', 'a1', 31, 99), /INSUFFICIENT_REP_CASH_FOR_REFUND/);
   }
 
   // 4. EGP behaviour is unchanged: 100.01 passes, 100.02 fails.
@@ -200,10 +198,7 @@ async function main(): Promise<void> {
       /unexpected query on table products/,
     );
     const over = buildService({ ret: retFixture(100.02), currency: 'EGP', sale, saleLines });
-    await assert.rejects(
-      async () => over.approveFieldReturn('t1', 'a1', 31, 99),
-      /INSUFFICIENT_REP_CASH_FOR_REFUND/,
-    );
+    await assert.rejects(async () => over.approveFieldReturn('t1', 'a1', 31, 99), /INSUFFICIENT_REP_CASH_FOR_REFUND/);
   }
 
   console.log('Van refund custody-guard tests passed.');

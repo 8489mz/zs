@@ -56,11 +56,18 @@ async function main(): Promise<void> {
     `);
 
     const statusOf = async (id: number): Promise<string> => {
-      const row = await db.selectFrom('maritime_quotations' as any).select('status').where('id', '=', id).executeTakeFirstOrThrow();
+      const row = await db
+        .selectFrom('maritime_quotations' as any)
+        .select('status')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
       return String((row as any).status);
     };
     const jobCount = async (): Promise<number> => {
-      const rows = await db.selectFrom('maritime_jobs' as any).selectAll().execute();
+      const rows = await db
+        .selectFrom('maritime_jobs' as any)
+        .selectAll()
+        .execute();
       return rows.length;
     };
 

@@ -240,7 +240,11 @@ async function main(): Promise<void> {
     // snapshot name wins over the customers-table name; the phone falls
     // back to the customers table because the snapshot phone is null.
     assert.equal((byImei2 as any).item.saleId, '1', 'sold serial carries its sale id');
-    assert.equal((byImei2 as any).item.saleDocNo, 'Z-261108-16322', 'sold serial returns the sale doc number (live defect: was null)');
+    assert.equal(
+      (byImei2 as any).item.saleDocNo,
+      'Z-261108-16322',
+      'sold serial returns the sale doc number (live defect: was null)',
+    );
     assert.equal((byImei2 as any).item.customerName, 'Sale Snapshot Name', 'sale-row customer snapshot wins');
     assert.equal((byImei2 as any).item.customerPhone, '+201000000000', 'phone falls back to the customers table');
     assert.equal((byImei2 as any).item.purchaseDocNo, null, 'sold serial with no purchase keeps purchaseDocNo null');
@@ -252,7 +256,11 @@ async function main(): Promise<void> {
     assert.equal(nullDocSale.found, true);
     assert.equal((nullDocSale as any).item.saleId, '2');
     assert.equal((nullDocSale as any).item.saleDocNo, 'Z-2', 'null doc_no falls back to Z-<sale id>');
-    assert.equal((nullDocSale as any).item.customerName, 'Walk-in Buyer', 'walk-in sale snapshot name, no customer row');
+    assert.equal(
+      (nullDocSale as any).item.customerName,
+      'Walk-in Buyer',
+      'walk-in sale snapshot name, no customer row',
+    );
     assert.equal((nullDocSale as any).item.customerPhone, '+203000000000');
 
     // R2-A: a purchase with no doc_no and no supplier returns honest
@@ -260,7 +268,11 @@ async function main(): Promise<void> {
     const nullDocPurchase = await service.lookupSerial('869123456789077', auth);
     assert.equal(nullDocPurchase.found, true);
     assert.equal((nullDocPurchase as any).item.purchaseId, '2');
-    assert.equal((nullDocPurchase as any).item.purchaseDocNo, null, 'purchase without doc_no stays null, never invented');
+    assert.equal(
+      (nullDocPurchase as any).item.purchaseDocNo,
+      null,
+      'purchase without doc_no stays null, never invented',
+    );
     assert.equal((nullDocPurchase as any).item.supplierName, null, 'purchase without supplier stays null');
     assert.equal((nullDocPurchase as any).item.saleDocNo, null, 'unsold serial keeps saleDocNo null');
 

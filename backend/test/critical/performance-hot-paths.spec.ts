@@ -51,8 +51,12 @@ function createCatalogService(rows: StockRow[]): any {
   return new CatalogProductPosService({
     db: fakeDbReturning(rows) as any,
     inventoryScope: {} as any,
-    bookDigits: async () => { throw new Error('PERF-2: bookDigits must not be called by resolveScopedStockByProduct'); },
-    getProductOfferColumnCapabilities: async () => { throw new Error('PERF-2: getProductOfferColumnCapabilities must not be called by resolveScopedStockByProduct'); },
+    bookDigits: async () => {
+      throw new Error('PERF-2: bookDigits must not be called by resolveScopedStockByProduct');
+    },
+    getProductOfferColumnCapabilities: async () => {
+      throw new Error('PERF-2: getProductOfferColumnCapabilities must not be called by resolveScopedStockByProduct');
+    },
     productIdAny: facade.productIdAny.bind(facade),
     normalizeUnitName: facade.normalizeUnitName.bind(facade),
     getListProductStock: facade.getListProductStock.bind(facade),
@@ -72,9 +76,9 @@ async function testScopedStockSemantics(): Promise<void> {
   ]);
   const products = [
     { id: 1, stock_qty: 10 }, // 5 + 3 assigned, 2 unassigned: no discrepancy
-    { id: 2, stock_qty: 9 },  // 4 assigned elsewhere, no unassigned row: INV-POS-NET-STOCK-DISPLAY — the old "discrepancy 5 is sellable" add is gone, because checkout never credits stock with no location row (it reads the pool row only); display must equal the checkout figure, 0 here
+    { id: 2, stock_qty: 9 }, // 4 assigned elsewhere, no unassigned row: INV-POS-NET-STOCK-DISPLAY — the old "discrepancy 5 is sellable" add is gone, because checkout never credits stock with no location row (it reads the pool row only); display must equal the checkout figure, 0 here
     { id: 3, stock_qty: 1 },
-    { id: 4, stock_qty: 7 },  // no stock rows at all: INV-POS-NET-STOCK-DISPLAY — no location row and no pool row means checkout can sell 0 at location 10, even though the global figure is 7
+    { id: 4, stock_qty: 7 }, // no stock rows at all: INV-POS-NET-STOCK-DISPLAY — no location row and no pool row means checkout can sell 0 at location 10, even though the global figure is 7
   ];
 
   const scoped = await service.resolveScopedStockByProduct([1, 2, 3, 4], [10], products, actor);
@@ -129,18 +133,32 @@ function testWholeCatalogIdListsUseArrayParameter(): void {
   // list slice.
   const posSource = read('modules/catalog/services/catalog-product-pos.service.ts');
   const body = posSource.slice(posSource.indexOf('async resolveScopedStockByProduct'));
-  assert.ok(!/stockRows\.(filter|find|some|reduce)\(/.test(body.slice(body.indexOf('for (const product of products)'))),
-    'the per-product loop must read pre-aggregated maps, never rescan stockRows');
-  assert.ok(body.includes("this.productIdAny('pls.product_id', productIds)"), 'stock rows filter uses the array parameter');
+  assert.ok(
+    !/stockRows\.(filter|find|some|reduce)\(/.test(body.slice(body.indexOf('for (const product of products)'))),
+    'the per-product loop must read pre-aggregated maps, never rescan stockRows',
+  );
+  assert.ok(
+    body.includes("this.productIdAny('pls.product_id', productIds)"),
+    'stock rows filter uses the array parameter',
+  );
   const listSource = read('modules/catalog/services/catalog-product-list.service.ts');
-  const contextBody = listSource.slice(listSource.indexOf('private async buildListProductsContext'), listSource.indexOf('private filterListProducts'));
-  assert.ok(!contextBody.includes("'in', productIds"), 'buildListProductsContext receives every product id — use productIdAny');
+  const contextBody = listSource.slice(
+    listSource.indexOf('private async buildListProductsContext'),
+    listSource.indexOf('private filterListProducts'),
+  );
+  assert.ok(
+    !contextBody.includes("'in', productIds"),
+    'buildListProductsContext receives every product id — use productIdAny',
+  );
 }
 
 // PERF-1 — no global ClassSerializerInterceptor (it deep-copied every response).
 function testNoGlobalClassSerializer(): void {
   const main = read('main.ts');
-  assert.ok(!/new\s+ClassSerializerInterceptor/.test(main), 'ClassSerializerInterceptor must not be registered globally');
+  assert.ok(
+    !/new\s+ClassSerializerInterceptor/.test(main),
+    'ClassSerializerInterceptor must not be registered globally',
+  );
 }
 
 // A cold checkout must not need a second pool connection while it holds a transaction.
@@ -148,25 +166,41 @@ function testNoGlobalClassSerializer(): void {
 // for another sale to release a connection (until the pool timeout).
 async function testCheckoutSettingsUseTransactionConnection(): Promise<void> {
   const service: any = Object.create(SalesWriteService.prototype);
-  service.db = { selectFrom: () => { throw new Error('opened a second pool connection'); } };
+  service.db = {
+    selectFrom: () => {
+      throw new Error('opened a second pool connection');
+    },
+  };
   const whereCalls: unknown[][] = [];
   const query: any = {
     select: () => query,
-    where: (...args: unknown[]) => { whereCalls.push(args); return query; },
+    where: (...args: unknown[]) => {
+      whereCalls.push(args);
+      return query;
+    },
     execute: async () => [{ key: 'requireCashierShiftForSales', value: 'false' }],
   };
-  const trx = { selectFrom: (table: string) => {
-    assert.equal(table, 'settings');
-    return query;
-  } };
+  const trx = {
+    selectFrom: (table: string) => {
+      assert.equal(table, 'settings');
+      return query;
+    },
+  };
   const settings = await service.getTenantSettingsMap(trx, 'perf-checkout-cold-cache');
   assert.equal(settings.get('requireCashierShiftForSales'), false);
-  assert.ok(whereCalls.some(([column, operator, keys]) => column === 'key' && operator === 'in' && Array.isArray(keys) && keys.includes('invoiceNumberingScheme')),
-    'checkout must read only its needed settings');
+  assert.ok(
+    whereCalls.some(
+      ([column, operator, keys]) =>
+        column === 'key' && operator === 'in' && Array.isArray(keys) && keys.includes('invoiceNumberingScheme'),
+    ),
+    'checkout must read only its needed settings',
+  );
 
   const source = read('modules/sales/services/sales-write.service.ts');
-  assert.ok(!/this\.getTenantSettingsMap\(scope\.tenantId\)|this\.getTenantSettingsMap\(tenantId\)/.test(source),
-    'every checkout settings call must pass its current transaction/query executor');
+  assert.ok(
+    !/this\.getTenantSettingsMap\(scope\.tenantId\)|this\.getTenantSettingsMap\(tenantId\)/.test(source),
+    'every checkout settings call must pass its current transaction/query executor',
+  );
 }
 
 // PERF-3 — the hot-path index migration (136) exists and keeps its contract.
@@ -178,10 +212,17 @@ function testHotPathIndexMigration(): void {
   assert.equal(typeof migration.up, 'function');
   assert.equal(typeof migration.down, 'function');
   const text = readFileSync(file, 'utf8');
-  for (const name of ['idx_held_sales_tenant_created', 'idx_purchase_items_tenant_product', 'idx_treasury_tenant_created']) {
+  for (const name of [
+    'idx_held_sales_tenant_created',
+    'idx_purchase_items_tenant_product',
+    'idx_treasury_tenant_created',
+  ]) {
     assert.ok(text.includes(name), `${name} must stay in migration 136`);
   }
-  assert.ok(!/DROP INDEX[^;]*(pkey|uidx|uniq|unique)/i.test(text), 'migration 136 must never drop a unique index or primary key');
+  assert.ok(
+    !/DROP INDEX[^;]*(pkey|uidx|uniq|unique)/i.test(text),
+    'migration 136 must never drop a unique index or primary key',
+  );
 }
 
 // PERF-4 — storefront catalog: stale data is served immediately while the refresh runs in background.
@@ -235,9 +276,17 @@ function testPosCatalogVersionIgnoresStock(): void {
   const base = { productCount: 100, unitCount: 120, offerCount: 3, lastUpdatedAt: '2026-09-21T10:00:00.000Z' };
   const v = buildPosCatalogVersion(base);
   assert.equal(buildPosCatalogVersion({ ...base }), v, 'deterministic');
-  assert.notEqual(buildPosCatalogVersion({ ...base, lastUpdatedAt: '2026-09-21T10:00:01.000Z' }), v, 'catalog edit moves it');
+  assert.notEqual(
+    buildPosCatalogVersion({ ...base, lastUpdatedAt: '2026-09-21T10:00:01.000Z' }),
+    v,
+    'catalog edit moves it',
+  );
   assert.notEqual(buildPosCatalogVersion({ ...base, productCount: 99 }), v, 'product removed moves it');
-  assert.notEqual(buildPosCatalogVersion({ ...base, unitCount: 119 }), v, 'deleted unit moves it (a deletion cannot raise MAX)');
+  assert.notEqual(
+    buildPosCatalogVersion({ ...base, unitCount: 119 }),
+    v,
+    'deleted unit moves it (a deletion cannot raise MAX)',
+  );
   assert.notEqual(buildPosCatalogVersion({ ...base, offerCount: 2 }), v, 'deactivated offer moves it');
   assert.equal(buildPosCatalogVersion({ ...base, lastUpdatedAt: '1969-12-31T22:00:00.000Z' }), 'v2-100-120-3-0');
 
@@ -246,7 +295,10 @@ function testPosCatalogVersionIgnoresStock(): void {
   const source = read('modules/catalog/services/catalog-product-pos.service.ts');
   const body = source.slice(source.indexOf('async getPosCatalogVersion'), source.indexOf('async listPosProducts'));
   assert.ok(body.includes('MAX(p.catalog_updated_at)'), 'version must read products.catalog_updated_at');
-  assert.ok(!/MAX\(p\.updated_at\)/.test(body), 'products.updated_at moves on every sale (applyStockDelta) — never use it for the POS version');
+  assert.ok(
+    !/MAX\(p\.updated_at\)/.test(body),
+    'products.updated_at moves on every sale (applyStockDelta) — never use it for the POS version',
+  );
 
   const file = join(SRC, 'database', 'migrations', '2040000000137_products_catalog_updated_at.ts');
   assert.ok(existsSync(file), 'migration 137 (catalog_updated_at trigger) must exist');
@@ -254,7 +306,10 @@ function testPosCatalogVersionIgnoresStock(): void {
   for (const column of ['stock_qty', 'reserved_qty']) {
     assert.ok(text.includes(`- '${column}'`), `the trigger must ignore ${column}`);
   }
-  assert.ok(/BEFORE UPDATE ON products/.test(text), 'catalog_updated_at is maintained by a trigger, not by each writer');
+  assert.ok(
+    /BEFORE UPDATE ON products/.test(text),
+    'catalog_updated_at is maintained by a trigger, not by each writer',
+  );
 }
 
 async function run(): Promise<void> {
@@ -269,7 +324,9 @@ async function run(): Promise<void> {
   testPublicCatalogIsSerializedOnce();
   testLoadSuiteIsUsable();
 
-  console.log('performance-hot-paths.spec: all performance invariants hold (PERF-1..PERF-4, PERF-9, PERF-10, PERF-15) and the load suite is wired');
+  console.log(
+    'performance-hot-paths.spec: all performance invariants hold (PERF-1..PERF-4, PERF-9, PERF-10, PERF-15) and the load suite is wired',
+  );
 }
 
 /**
@@ -312,7 +369,9 @@ function testPublicCatalogIsSerializedOnce(): void {
   );
   // الافتراضي بلا معاملات يبقى الكتالوج كاملاً: الواجهة تبحث وتفرز في المتصفح، وتغييره يكسرها.
   assert.ok(
-    /const wantsPage = \[/.test(controller) && /if \(wantsPage\) \{/.test(controller) && /getStorefrontCatalogPage/.test(controller),
+    /const wantsPage = \[/.test(controller) &&
+      /if \(wantsPage\) \{/.test(controller) &&
+      /getStorefrontCatalogPage/.test(controller),
     'pagination must be opt-in: the storefront page filters client-side and a changed default breaks it',
   );
   assert.ok(
@@ -323,7 +382,8 @@ function testPublicCatalogIsSerializedOnce(): void {
 
 function testLoadSuiteIsUsable(): void {
   const ROOT = join(__dirname, '..', '..', '..');
-  const loadFile = (relative: string) => readFileSync(join(ROOT, 'load-tests', relative), 'utf8').replace(/\r\n/g, '\n');
+  const loadFile = (relative: string) =>
+    readFileSync(join(ROOT, 'load-tests', relative), 'utf8').replace(/\r\n/g, '\n');
 
   // Parse every scenario the way k6 does, before checking anything about its contents.
   //
@@ -357,7 +417,10 @@ function testLoadSuiteIsUsable(): void {
   // The login handshake lived in three copies before a fourth scenario needed CSRF on top of it.
   // It is one function in config.js now, and these are its properties.
   assert.ok(/export function loginOrDie/.test(config), 'config.js must own the login handshake');
-  assert.ok(/throw new Error\(/.test(config), 'loginOrDie must abort on a bad login, not let scenarios iterate on 401s');
+  assert.ok(
+    /throw new Error\(/.test(config),
+    'loginOrDie must abort on a bad login, not let scenarios iterate on 401s',
+  );
   // The cookie name is deployment-specific (SESSION_COOKIE_NAME); this deployment uses zs_cloud_*
   // names, so anything hard-coded works on one server and silently 401s on another.
   assert.ok(
@@ -394,7 +457,14 @@ function testLoadSuiteIsUsable(): void {
   // using it silently fails to control the address it thinks it controls. Comments are stripped
   // first: the scenarios explain the distinction in prose, and prose is not what runs.
   const codeOf = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-  for (const scenario of ['auth-login-burst.js', 'pos-catalog-sync.js', 'storefront-checkout.js', 'stress-all.js', 'pos-sell.js', 'full-system.js']) {
+  for (const scenario of [
+    'auth-login-burst.js',
+    'pos-catalog-sync.js',
+    'storefront-checkout.js',
+    'stress-all.js',
+    'pos-sell.js',
+    'full-system.js',
+  ]) {
     const source = codeOf(loadFile(join('scenarios', scenario)));
     assert.ok(
       !/X-Forwarded-For/.test(source),
@@ -408,13 +478,20 @@ function testLoadSuiteIsUsable(): void {
   }
 
   // The three launchers must agree, or the profile you asked for is not the profile you ran.
-  const launchers: Array<[string, string]> = [['run.sh', loadFile('run.sh')], ['run.bat', loadFile('run.bat')], ['runner.cjs', loadFile('runner.cjs')]];
+  const launchers: Array<[string, string]> = [
+    ['run.sh', loadFile('run.sh')],
+    ['run.bat', loadFile('run.bat')],
+    ['runner.cjs', loadFile('runner.cjs')],
+  ];
   for (const [name, source] of launchers) {
     for (const profile of ['heavy', 'extreme', 'soak']) {
       assert.ok(source.includes(profile), `${name} is missing the ${profile} profile`);
     }
     assert.ok(/no-thresholds/.test(source), `${name} must drop SLA thresholds for the measurement profile`);
-    assert.ok(/PEAK_VUS/.test(source), `${name} must pass the load size to k6 explicitly (k6 does not inherit the shell env)`);
+    assert.ok(
+      /PEAK_VUS/.test(source),
+      `${name} must pass the load size to k6 explicitly (k6 does not inherit the shell env)`,
+    );
   }
 
   // `docker --version` succeeds without access to the daemon socket, so probing the binary told us
@@ -433,11 +510,23 @@ function testLoadSuiteIsUsable(): void {
   // A name used at runtime but never imported is a crash that only fires on the fallback path — the
   // one path nobody exercises. `stress-all.js` referenced SESSION_COOKIE_NAME without importing it,
   // so "could not spot the session cookie" would have thrown ReferenceError instead of falling back.
-  for (const scenario of ['pos-catalog-sync.js', 'storefront-checkout.js', 'stress-all.js', 'auth-login-burst.js', 'pos-sell.js']) {
+  for (const scenario of [
+    'pos-catalog-sync.js',
+    'storefront-checkout.js',
+    'stress-all.js',
+    'auth-login-burst.js',
+    'pos-sell.js',
+  ]) {
     const raw = loadFile(join('scenarios', scenario));
     const body = codeOf(raw);
     const imported = (raw.match(/import\s*\{([\s\S]*?)\}\s*from\s*'\.\.\/config\.js'/) || ['', ''])[1];
-    for (const name of ['SESSION_COOKIE_NAME', 'writerIpHeaders', 'classifyWriteFailure', 'clientIpHeaders', 'rampProfile']) {
+    for (const name of [
+      'SESSION_COOKIE_NAME',
+      'writerIpHeaders',
+      'classifyWriteFailure',
+      'clientIpHeaders',
+      'rampProfile',
+    ]) {
       if (new RegExp(`\\b${name}\\b`).test(body)) {
         assert.ok(
           new RegExp(`\\b${name}\\b`).test(imported),
@@ -450,8 +539,8 @@ function testLoadSuiteIsUsable(): void {
   // The per-iteration visitor address is a stronger spoof than the per-VU one, so it stays behind the
   // same explicit opt-in — otherwise a removed O60 limit would never show up in any run.
   assert.ok(
-    /export function writerIpHeaders/.test(config)
-    && /writerIpHeaders[\s\S]{0,400}SPOOF_CLIENT_IPS[\s\S]{0,120}!== 'true'\) return \{\}/.test(config),
+    /export function writerIpHeaders/.test(config) &&
+      /writerIpHeaders[\s\S]{0,400}SPOOF_CLIENT_IPS[\s\S]{0,120}!== 'true'\) return \{\}/.test(config),
     'writerIpHeaders must honour the same SPOOF_CLIENT_IPS opt-in as clientIpHeaders',
   );
 
@@ -590,7 +679,10 @@ function testLoadSuiteIsUsable(): void {
       ['catalogue sync', /pos-products\/version/],
       ['reports under write load', /\/api\/accounting\/reports\//],
     ] as Array<[string, RegExp]>) {
-      assert.ok(pattern.test(full), `full-system.js must exercise ${what}: a path it never touches is a path it never cleared`);
+      assert.ok(
+        pattern.test(full),
+        `full-system.js must exercise ${what}: a path it never touches is a path it never cleared`,
+      );
     }
     assert.ok(
       /preflight sale was refused/.test(full),
@@ -609,8 +701,8 @@ function testLoadSuiteIsUsable(): void {
     // A return needs manager authorization (MANAGER_AUTH_REQUIRED); the cashier's own password is
     // accepted. Omitting it refused 337 of 337 returns on the first run.
     assert.ok(
-      /managerPin: session\.password,\s*\}\), writeParams/.test(full)
-      || /note: 'load test return',[^]{0,400}managerPin: session\.password/.test(full),
+      /managerPin: session\.password,\s*\}\), writeParams/.test(full) ||
+        /note: 'load test return',[^]{0,400}managerPin: session\.password/.test(full),
       'a return must carry manager authorization, or every one of them is refused with 403',
     );
     // The accounting reports live under api/accounting. The bare /api/reports path 404s in 3ms and

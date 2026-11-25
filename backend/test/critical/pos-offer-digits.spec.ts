@@ -72,19 +72,40 @@ async function main(): Promise<void> {
   assert.equal(calculateOfferAdjustedPrice(10.126, activeOffer({ offer_type: 'fixed', value: 0.001 }), 1, 2), 10.13);
   assert.equal(calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'price', value: 9.999 }), 1, 3), 9.999);
   assert.equal(calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'price', value: 9.999 }), 1, 2), 10);
-  assert.equal(calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bundle', value: 20.251, min_qty: 2 }), 2, 3), 10.126);
-  assert.equal(calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bundle', value: 20.251, min_qty: 2 }), 2, 2), 10.13);
   assert.equal(
-    calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bogo', bogo_buy_qty: 1, bogo_get_qty: 1, bogo_discount_percent: 100 }), 2, 3),
+    calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bundle', value: 20.251, min_qty: 2 }), 2, 3),
+    10.126,
+  );
+  assert.equal(
+    calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bundle', value: 20.251, min_qty: 2 }), 2, 2),
+    10.13,
+  );
+  assert.equal(
+    calculateOfferAdjustedPrice(
+      10.125,
+      activeOffer({ offer_type: 'bogo', bogo_buy_qty: 1, bogo_get_qty: 1, bogo_discount_percent: 100 }),
+      2,
+      3,
+    ),
     5.063,
   );
   assert.equal(
-    calculateOfferAdjustedPrice(10.125, activeOffer({ offer_type: 'bogo', bogo_buy_qty: 1, bogo_get_qty: 1, bogo_discount_percent: 100 }), 2, 2),
+    calculateOfferAdjustedPrice(
+      10.125,
+      activeOffer({ offer_type: 'bogo', bogo_buy_qty: 1, bogo_get_qty: 1, bogo_discount_percent: 100 }),
+      2,
+      2,
+    ),
     5.06,
   );
   // A bogo offer with no explicit discount percent uses the offer value as the percent.
   assert.equal(
-    calculateOfferAdjustedPrice(10, activeOffer({ offer_type: 'bogo', value: 50, bogo_buy_qty: 1, bogo_get_qty: 1 }), 2, 2),
+    calculateOfferAdjustedPrice(
+      10,
+      activeOffer({ offer_type: 'bogo', value: 50, bogo_buy_qty: 1, bogo_get_qty: 1 }),
+      2,
+      2,
+    ),
     7.5,
   );
   // The non-positive guard returns the base rounded at the caller's digits.
@@ -95,35 +116,68 @@ async function main(): Promise<void> {
   const fixedOffer = activeOffer({ offer_type: 'fixed', value: 1.02 });
   const percentOffer = activeOffer({ offer_type: 'percent', value: 10 });
   const pickedAt2 = pickBestApplicableOffer([fixedOffer, percentOffer], TODAY, 1, 10.125, new Date(), 2);
-  assert.equal(pickedAt2, percentOffer, 'at cents the two offers tie at 9.11 and the tie-break picks the percent offer');
+  assert.equal(
+    pickedAt2,
+    percentOffer,
+    'at cents the two offers tie at 9.11 and the tie-break picks the percent offer',
+  );
   const pickedAt3 = pickBestApplicableOffer([fixedOffer, percentOffer], TODAY, 1, 10.125, new Date(), 3);
   assert.equal(pickedAt3, fixedOffer, 'at 3 decimals the fixed offer wins outright at 9.105 vs 9.113');
   assert.equal(pickBestApplicableOffer([], TODAY, 1, 10.125, new Date(), 3), null);
 
   // Allowed unit price: the ceiling the counter price is checked against.
   assert.equal(
-    calculateAllowedSaleUnitPrice({ retailPrice: 10.125, priceType: 'retail', offers: [activeOffer({})], qty: 1, todayIso: TODAY, moneyDigits: 3 }),
+    calculateAllowedSaleUnitPrice({
+      retailPrice: 10.125,
+      priceType: 'retail',
+      offers: [activeOffer({})],
+      qty: 1,
+      todayIso: TODAY,
+      moneyDigits: 3,
+    }),
     9.113,
   );
   assert.equal(
-    calculateAllowedSaleUnitPrice({ retailPrice: 10.125, priceType: 'retail', offers: [activeOffer({})], qty: 1, todayIso: TODAY, moneyDigits: 2 }),
+    calculateAllowedSaleUnitPrice({
+      retailPrice: 10.125,
+      priceType: 'retail',
+      offers: [activeOffer({})],
+      qty: 1,
+      todayIso: TODAY,
+      moneyDigits: 2,
+    }),
     9.12,
   );
   assert.equal(
-    calculateAllowedSaleUnitPrice({ retailPrice: 10.125, wholesalePrice: 10.125, priceType: 'wholesale', moneyDigits: 3 }),
+    calculateAllowedSaleUnitPrice({
+      retailPrice: 10.125,
+      wholesalePrice: 10.125,
+      priceType: 'wholesale',
+      moneyDigits: 3,
+    }),
     10.125,
   );
-  assert.equal(
-    calculateAllowedSaleUnitPrice({ retailPrice: 10.125, priceType: 'retail', moneyDigits: 3 }),
-    10.125,
-  );
+  assert.equal(calculateAllowedSaleUnitPrice({ retailPrice: 10.125, priceType: 'retail', moneyDigits: 3 }), 10.125);
 
   // Prepared lines: totals and costs keep three decimals at digits 3.
-  const item = { productId: 2, qty: 1, price: 10.125, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail' as const, notes: '', modifiers: [] };
-  const prepared3 = buildPreparedSaleItem({ id: 2, name: 'Tea', stock_qty: '10', cost_price: '3.333' }, item, { moneyDigits: 3 });
+  const item = {
+    productId: 2,
+    qty: 1,
+    price: 10.125,
+    unitName: 'قطعة',
+    unitMultiplier: 1,
+    priceType: 'retail' as const,
+    notes: '',
+    modifiers: [],
+  };
+  const prepared3 = buildPreparedSaleItem({ id: 2, name: 'Tea', stock_qty: '10', cost_price: '3.333' }, item, {
+    moneyDigits: 3,
+  });
   assert.equal(prepared3.lineTotal, 10.125);
   assert.equal(prepared3.costPrice, 3.333);
-  const prepared2 = buildPreparedSaleItem({ id: 2, name: 'Tea', stock_qty: '10', cost_price: '3.333' }, item, { moneyDigits: 2 });
+  const prepared2 = buildPreparedSaleItem({ id: 2, name: 'Tea', stock_qty: '10', cost_price: '3.333' }, item, {
+    moneyDigits: 2,
+  });
   assert.equal(prepared2.lineTotal, 10.13);
   assert.equal(prepared2.costPrice, 3.33);
 
@@ -134,7 +188,10 @@ async function main(): Promise<void> {
   assert.equal(calculatePaidAmount([{ amount: 10 }, { amount: 0.125 }], 2), 10.13);
 
   // Omitted digits must fail closed, not fall back to cents.
-  assert.throws(() => calculateOfferAdjustedPrice(10.125, activeOffer({}), 1, NO_DIGITS), /Invalid monetary minor units/);
+  assert.throws(
+    () => calculateOfferAdjustedPrice(10.125, activeOffer({}), 1, NO_DIGITS),
+    /Invalid monetary minor units/,
+  );
   assert.throws(
     () => pickBestApplicableOffer([fixedOffer, percentOffer], TODAY, 1, 10.125, new Date(), NO_DIGITS),
     /Invalid monetary minor units/,

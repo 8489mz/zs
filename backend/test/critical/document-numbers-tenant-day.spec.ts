@@ -66,12 +66,27 @@ async function main(): Promise<void> {
     await pg.exec(`
       CREATE TABLE settings (tenant_id text, key text, value text);
     `);
-    for (const [tenant, tz] of [[CAIRO, 'Africa/Cairo'], [KUWAIT, 'Asia/Kuwait']] as const) {
-      await anyDb.insertInto('settings').values({ tenant_id: tenant, key: 'timezone', value: JSON.stringify(tz) }).execute();
-      await anyDb.insertInto('settings').values({ tenant_id: tenant, key: 'invoiceNumberingScheme', value: JSON.stringify('daily') }).execute();
+    for (const [tenant, tz] of [
+      [CAIRO, 'Africa/Cairo'],
+      [KUWAIT, 'Asia/Kuwait'],
+    ] as const) {
+      await anyDb
+        .insertInto('settings')
+        .values({ tenant_id: tenant, key: 'timezone', value: JSON.stringify(tz) })
+        .execute();
+      await anyDb
+        .insertInto('settings')
+        .values({ tenant_id: tenant, key: 'invoiceNumberingScheme', value: JSON.stringify('daily') })
+        .execute();
     }
-    await anyDb.insertInto('settings').values({ tenant_id: SEQUENTIAL, key: 'timezone', value: JSON.stringify('Africa/Cairo') }).execute();
-    await anyDb.insertInto('settings').values({ tenant_id: SEQUENTIAL, key: 'invoiceNumberingScheme', value: JSON.stringify('sequential') }).execute();
+    await anyDb
+      .insertInto('settings')
+      .values({ tenant_id: SEQUENTIAL, key: 'timezone', value: JSON.stringify('Africa/Cairo') })
+      .execute();
+    await anyDb
+      .insertInto('settings')
+      .values({ tenant_id: SEQUENTIAL, key: 'invoiceNumberingScheme', value: JSON.stringify('sequential') })
+      .execute();
 
     // 1. Pure util: same instant, different tenant zones -> different days.
     assert.equal(formatDailyDocumentNumber('PO', 3, FROZEN, 4, 'Africa/Cairo'), 'PO-261031-0003');
@@ -79,9 +94,13 @@ async function main(): Promise<void> {
 
     // 2. POS writer, real method, real transaction handle, real settings reads.
     const svc = Object.create(SalesWriteService.prototype) as SalesWriteService;
-    const cairoNo = await db.transaction().execute(async (trx) => (svc as any).generateSaleDocNo(trx, 7, CAIRO, FROZEN));
+    const cairoNo = await db
+      .transaction()
+      .execute(async (trx) => (svc as any).generateSaleDocNo(trx, 7, CAIRO, FROZEN));
     assert.equal(cairoNo, 'Z-261031-0007');
-    const kuwaitNo = await db.transaction().execute(async (trx) => (svc as any).generateSaleDocNo(trx, 7, KUWAIT, FROZEN));
+    const kuwaitNo = await db
+      .transaction()
+      .execute(async (trx) => (svc as any).generateSaleDocNo(trx, 7, KUWAIT, FROZEN));
     assert.equal(kuwaitNo, 'Z-261101-0007');
 
     // 3. Online sale (no business date): today's tenant day.

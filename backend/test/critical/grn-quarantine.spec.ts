@@ -84,7 +84,14 @@ import {
 import { migration as quarantineMigration } from '../../src/database/migrations/2040000000316_quarantine_location_type';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
-const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'tester', permissions: [] } as unknown as AuthContext;
+const auth = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'tester',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -200,20 +207,36 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 2125, 4100, 5100, 5190, 7290]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-      [code, 't1', String(code), code === 1150 || code === 2120]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      String(code),
+      code === 1150 || code === 2120,
+    ]);
   }
   return { pg, db };
 }
 
 async function seedCurrency(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: 'EGP' } as never).execute();
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'timezone', value: 'Africa/Cairo' } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: 'EGP' } as never)
+    .execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'timezone', value: 'Africa/Cairo' } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeGrnService(db: Kysely<Database>): GoodsReceiptService {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const finance = new PurchasesFinanceService();
   return new GoodsReceiptService(db as any, posting as any, finance as any);
@@ -224,57 +247,131 @@ function makeQaService(db: Kysely<Database>): QualityAssuranceService {
 }
 
 async function seedBase(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('branches' as never).values({ id: 5, tenant_id: 't1', default_stock_location_id: 1 } as never).execute();
-  await db.insertInto('stock_locations' as never).values({ id: 1, tenant_id: 't1', branch_id: 5, name: 'Main', location_type: 'branch_stock', is_active: true } as never).execute();
-  await db.insertInto('stock_locations' as never).values({ id: 2, tenant_id: 't1', branch_id: 5, name: 'Quarantine', location_type: 'quarantine', is_active: true } as never).execute();
-  await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier', balance: 0 } as never).execute();
-  await db.insertInto('products' as never).values({
-    id: 10, tenant_id: 't1', account_id: 'a1', name: 'Widget 10',
-    stock_qty: 0, reserved_qty: 0, cost_price: 0, track_serials: false,
-  } as never).execute();
+  await db
+    .insertInto('branches' as never)
+    .values({ id: 5, tenant_id: 't1', default_stock_location_id: 1 } as never)
+    .execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      branch_id: 5,
+      name: 'Main',
+      location_type: 'branch_stock',
+      is_active: true,
+    } as never)
+    .execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values({
+      id: 2,
+      tenant_id: 't1',
+      branch_id: 5,
+      name: 'Quarantine',
+      location_type: 'quarantine',
+      is_active: true,
+    } as never)
+    .execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({ id: 9, tenant_id: 't1', name: 'Supplier', balance: 0 } as never)
+    .execute();
+  await db
+    .insertInto('products' as never)
+    .values({
+      id: 10,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'Widget 10',
+      stock_qty: 0,
+      reserved_qty: 0,
+      cost_price: 0,
+      track_serials: false,
+    } as never)
+    .execute();
 }
 
 async function seedPo(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('purchase_orders' as never).values({
-    id: 7, tenant_id: 't1', account_id: 'a1', order_number: 'PO-7', supplier_id: 9,
-    supplier_name: 'Supplier', warehouse_id: 1, subtotal: 1000, tax_amount: 0, discount_amount: 0,
-    total_amount: 1000, status: 'confirmed', updated_at: new Date('2026-10-01'),
-  } as never).execute();
-  await db.insertInto('purchase_order_items' as never).values({
-    id: 1, tenant_id: 't1', account_id: 'a1', purchase_order_id: 7, product_id: 10,
-    product_name: 'Widget 10', unit_name: 'piece', quantity: 10, received_quantity: 0,
-    unit_cost: 100, tax_rate: 0, discount: 0, total: 1000,
-  } as never).execute();
+  await db
+    .insertInto('purchase_orders' as never)
+    .values({
+      id: 7,
+      tenant_id: 't1',
+      account_id: 'a1',
+      order_number: 'PO-7',
+      supplier_id: 9,
+      supplier_name: 'Supplier',
+      warehouse_id: 1,
+      subtotal: 1000,
+      tax_amount: 0,
+      discount_amount: 0,
+      total_amount: 1000,
+      status: 'confirmed',
+      updated_at: new Date('2026-10-01'),
+    } as never)
+    .execute();
+  await db
+    .insertInto('purchase_order_items' as never)
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      purchase_order_id: 7,
+      product_id: 10,
+      product_name: 'Widget 10',
+      unit_name: 'piece',
+      quantity: 10,
+      received_quantity: 0,
+      unit_cost: 100,
+      tax_rate: 0,
+      discount: 0,
+      total: 1000,
+    } as never)
+    .execute();
 }
 
 async function createQuarantinedGrn(db: Kysely<Database>): Promise<number> {
   const grn = makeGrnService(db);
-  const created = await grn.createGoodsReceipt({
-    purchaseOrderId: 7,
-    supplierId: 9,
-    locationId: 1,
-    lines: [{
-      purchaseOrderItemId: 1,
-      productId: 10,
-      orderedQty: 10,
-      receivedQty: 10,
-      acceptedQty: 10,
-      rejectedQty: 0,
-      unitCost: 100,
-      quarantineLocationId: 2,
-    }],
-  } as any, auth);
+  const created = await grn.createGoodsReceipt(
+    {
+      purchaseOrderId: 7,
+      supplierId: 9,
+      locationId: 1,
+      lines: [
+        {
+          purchaseOrderItemId: 1,
+          productId: 10,
+          orderedQty: 10,
+          receivedQty: 10,
+          acceptedQty: 10,
+          rejectedQty: 0,
+          unitCost: 100,
+          quarantineLocationId: 2,
+        },
+      ],
+    } as any,
+    auth,
+  );
   return Number(created.id);
 }
 
 async function locationQty(db: Kysely<Database>, locationId: number): Promise<number> {
-  const row = await (db as any).selectFrom('product_location_stock').select('qty')
-    .where('product_id', '=', 10).where('location_id', '=', locationId).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('product_id', '=', 10)
+    .where('location_id', '=', locationId)
+    .executeTakeFirst();
   return Number(row?.qty || 0);
 }
 
 async function readProduct(db: Kysely<Database>): Promise<{ stockQty: number; costPrice: number }> {
-  const row = await (db as any).selectFrom('products').select(['stock_qty', 'cost_price']).where('id', '=', 10).executeTakeFirstOrThrow();
+  const row = await (db as any)
+    .selectFrom('products')
+    .select(['stock_qty', 'cost_price'])
+    .where('id', '=', 10)
+    .executeTakeFirstOrThrow();
   return { stockQty: Number(row.stock_qty), costPrice: Number(row.cost_price) };
 }
 
@@ -343,20 +440,36 @@ async function main(): Promise<void> {
       await grn.postGoodsReceipt(grnId, auth);
       // The ledger read the sales-order path uses, at the normal warehouse.
       const availability = await getLocationAvailability(db as any, {
-        tenantId: 't1', accountId: 'a1', productId: 10, locationId: 1, branchId: 5,
+        tenantId: 't1',
+        accountId: 'a1',
+        productId: 10,
+        locationId: 1,
+        branchId: 5,
       });
       assert.equal(availability.availableAtLocation, 0, 'nothing sellable at the normal warehouse');
-      assert.equal(availability.globalAvailable, 10, 'the global figure still counts the owned quarantined goods — the trap');
+      assert.equal(
+        availability.globalAvailable,
+        10,
+        'the global figure still counts the owned quarantined goods — the trap',
+      );
       // The sellable-locations engine the POS and catalog paths use.
       const sellable = resolveBranchSellableLocations(
-        { default_stock_location_id: 1, sales_stock_mode: 'all_operational_locations', allow_external_sales_stock: false },
+        {
+          default_stock_location_id: 1,
+          sales_stock_mode: 'all_operational_locations',
+          allow_external_sales_stock: false,
+        },
         5,
         [
           { id: 1, location_type: 'branch_stock', branch_id: 5 },
           { id: 2, location_type: 'quarantine', branch_id: 5 },
         ],
       );
-      assert.deepEqual(sellable.map((l) => l.id), [1], 'the quarantine location is never sellable');
+      assert.deepEqual(
+        sellable.map((l) => l.id),
+        [1],
+        'the quarantine location is never sellable',
+      );
       const sellableAvailable = availableAcrossLocations(
         sellable.map((l) => ({ qty: l.id === 1 ? 0 : 10, reserved: 0 })),
       );
@@ -410,7 +523,11 @@ async function main(): Promise<void> {
       assert.equal(Number(inLeg.after_qty), 10);
       assert.equal(inLeg.reason, 'quarantine_release');
       const availability = await getLocationAvailability(db as any, {
-        tenantId: 't1', accountId: 'a1', productId: 10, locationId: 1, branchId: 5,
+        tenantId: 't1',
+        accountId: 'a1',
+        productId: 10,
+        locationId: 1,
+        branchId: 5,
       });
       assert.equal(availability.availableAtLocation, 10, 'the released qty is sellable at the normal warehouse');
       const inspections = await (db as any).selectFrom('quality_inspections').selectAll().execute();
@@ -436,15 +553,16 @@ async function main(): Promise<void> {
       const receipt = await grn.getGoodsReceipt(grnId, auth);
       await sql`DELETE FROM stock_locations WHERE id = 1`.execute(db);
       await assert.rejects(
-        () => qa.recordInspection(auth, {
-          referenceDocType: 'goods_receipt',
-          referenceDocId: String(receipt.docNo),
-          productId: 10,
-          inspectedQty: 10,
-          acceptedQty: 10,
-          rejectedQty: 0,
-          passed: true,
-        } as any),
+        () =>
+          qa.recordInspection(auth, {
+            referenceDocType: 'goods_receipt',
+            referenceDocId: String(receipt.docNo),
+            productId: 10,
+            inspectedQty: 10,
+            acceptedQty: 10,
+            rejectedQty: 0,
+            passed: true,
+          } as any),
         /غير موجود/,
         'a missing target warehouse fails the approval closed',
       );
@@ -470,39 +588,50 @@ async function main(): Promise<void> {
       await seedPo(db);
       const grn = makeGrnService(db);
       await assert.rejects(
-        () => grn.createGoodsReceipt({
-          purchaseOrderId: 7,
-          supplierId: 9,
-          locationId: 1,
-          lines: [{
-            purchaseOrderItemId: 1,
-            productId: 10,
-            orderedQty: 10,
-            receivedQty: 10,
-            acceptedQty: 10,
-            rejectedQty: 0,
-            unitCost: 100,
-            quarantineLocationId: 1,
-          }],
-        } as any, auth),
+        () =>
+          grn.createGoodsReceipt(
+            {
+              purchaseOrderId: 7,
+              supplierId: 9,
+              locationId: 1,
+              lines: [
+                {
+                  purchaseOrderItemId: 1,
+                  productId: 10,
+                  orderedQty: 10,
+                  receivedQty: 10,
+                  acceptedQty: 10,
+                  rejectedQty: 0,
+                  unitCost: 100,
+                  quarantineLocationId: 1,
+                },
+              ],
+            } as any,
+            auth,
+          ),
         /حجر صحي/,
         'a branch-stock location cannot pose as quarantine',
       );
       const plainId = await (async () => {
-        const created = await grn.createGoodsReceipt({
-          purchaseOrderId: 7,
-          supplierId: 9,
-          locationId: 1,
-          lines: [{
-            purchaseOrderItemId: 1,
-            productId: 10,
-            orderedQty: 10,
-            receivedQty: 10,
-            acceptedQty: 10,
-            rejectedQty: 0,
-            unitCost: 100,
-          }],
-        } as any, auth);
+        const created = await grn.createGoodsReceipt(
+          {
+            purchaseOrderId: 7,
+            supplierId: 9,
+            locationId: 1,
+            lines: [
+              {
+                purchaseOrderItemId: 1,
+                productId: 10,
+                orderedQty: 10,
+                receivedQty: 10,
+                acceptedQty: 10,
+                rejectedQty: 0,
+                unitCost: 100,
+              },
+            ],
+          } as any,
+          auth,
+        );
         return Number(created.id);
       })();
       await grn.postGoodsReceipt(plainId, auth);
@@ -511,12 +640,23 @@ async function main(): Promise<void> {
       // Migration 0316 applies cleanly on a live-shaped table and enforces the new type.
       await quarantineMigration.up(db as any);
       await assert.rejects(
-        () => (db as any).insertInto('stock_locations').values({ id: 99, tenant_id: 't1', name: 'Bogus', location_type: 'bogus' }).execute(),
+        () =>
+          (db as any)
+            .insertInto('stock_locations')
+            .values({ id: 99, tenant_id: 't1', name: 'Bogus', location_type: 'bogus' })
+            .execute(),
         /constraint/i,
         'the CHECK rejects an unknown location type',
       );
-      await (db as any).insertInto('stock_locations').values({ id: 98, tenant_id: 't1', name: 'Q2', location_type: 'quarantine' }).execute();
-      const q2 = await (db as any).selectFrom('stock_locations').select('location_type').where('id', '=', 98).executeTakeFirstOrThrow();
+      await (db as any)
+        .insertInto('stock_locations')
+        .values({ id: 98, tenant_id: 't1', name: 'Q2', location_type: 'quarantine' })
+        .execute();
+      const q2 = await (db as any)
+        .selectFrom('stock_locations')
+        .select('location_type')
+        .where('id', '=', 98)
+        .executeTakeFirstOrThrow();
       assert.equal(q2.location_type, 'quarantine', 'the CHECK admits the quarantine type');
       console.log('  case 5 passed: creation guard, plain-receipt regression, migration 0316');
     } finally {
@@ -527,19 +667,40 @@ async function main(): Promise<void> {
   // Case 6: source pins — every layer names the quarantine type.
   {
     const here = __dirname;
-    const grnSource = readFileSync(resolve(here, '../../src/modules/purchases/services/goods-receipt-create.service.ts'), 'utf8');
+    const grnSource = readFileSync(
+      resolve(here, '../../src/modules/purchases/services/goods-receipt-create.service.ts'),
+      'utf8',
+    );
     assert.ok(grnSource.includes('INV-GRN-REAL-QUARANTINE'), 'postGoodsReceipt names the invariant');
     assert.ok(grnSource.includes('quarantineLocationId'), 'the acceptance path reads the quarantine id');
-    const qaSource = readFileSync(resolve(here, '../../src/modules/inventory/services/quality-assurance.service.ts'), 'utf8');
+    const qaSource = readFileSync(
+      resolve(here, '../../src/modules/inventory/services/quality-assurance.service.ts'),
+      'utf8',
+    );
     assert.ok(qaSource.includes('releaseQuarantinedReceipt'), 'the QA service owns the release');
-    assert.ok(qaSource.includes('relocateStockBetweenLocations'), 'the release routes through the canonical transfer primitive');
-    const engineSource = readFileSync(resolve(here, '../../src/common/engines/branch-sellable-locations.engine.ts'), 'utf8');
+    assert.ok(
+      qaSource.includes('relocateStockBetweenLocations'),
+      'the release routes through the canonical transfer primitive',
+    );
+    const engineSource = readFileSync(
+      resolve(here, '../../src/common/engines/branch-sellable-locations.engine.ts'),
+      'utf8',
+    );
     assert.ok(engineSource.includes("'quarantine'"), 'the sellable-locations engine excludes quarantine');
-    const createSaleSource = readFileSync(resolve(here, '../../src/modules/sales/services/create-sale/load-sale-context.ts'), 'utf8');
+    const createSaleSource = readFileSync(
+      resolve(here, '../../src/modules/sales/services/create-sale/load-sale-context.ts'),
+      'utf8',
+    );
     assert.ok(createSaleSource.includes("'damaged', 'in_transit', 'quarantine'"), 'the sale guards exclude quarantine');
-    const settingsSource = readFileSync(resolve(here, '../../src/modules/settings/settings/settings-branches-locations-write.ts'), 'utf8');
+    const settingsSource = readFileSync(
+      resolve(here, '../../src/modules/settings/settings/settings-branches-locations-write.ts'),
+      'utf8',
+    );
     assert.ok(settingsSource.includes("'damaged', 'quarantine'"), 'location creation accepts the quarantine type');
-    const locationsPage = readFileSync(resolve(here, '../../../frontend/src/features/inventory/pages/LocationsManagementPage.tsx'), 'utf8');
+    const locationsPage = readFileSync(
+      resolve(here, '../../../frontend/src/features/inventory/pages/LocationsManagementPage.tsx'),
+      'utf8',
+    );
     assert.ok(locationsPage.includes("'quarantine'"), 'the locations UI offers the quarantine type');
     console.log('  case 6 passed: source pins');
   }

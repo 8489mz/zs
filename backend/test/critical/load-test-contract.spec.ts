@@ -32,7 +32,8 @@ function dtoProperties(source: string, className: string): Set<string> {
   assert.ok(start >= 0, `DTO class ${className} not found`);
   // إلى بداية الصنف التالي أو نهاية الملف.
   const nextClass = source.indexOf('class ', start + className.length + 6);
-  const body = source.slice(start, nextClass > 0 ? nextClass : undefined)
+  const body = source
+    .slice(start, nextClass > 0 ? nextClass : undefined)
     // بعض الـDTO تكتب المزخرفات على نفس سطر الحقل (`@IsOptional() @IsNumber() openingCash?: number;`)
     // فتُجرَّد أولاً، وإلا بدت الحقول كأنها غير معلَنة.
     .replace(/@[A-Za-z]+\s*\([^()]*(?:\([^()]*\)[^()]*)*\)/g, ' ')
@@ -84,17 +85,55 @@ function testBodiesMatchDtos(): void {
   const returnDto = dtoProperties(readSrc('modules/returns/dto/create-return.dto.ts'), 'CreateReturnDto');
   const purchaseDto = dtoProperties(readSrc('modules/purchases/dto/upsert-purchase.dto.ts'), 'UpsertPurchaseDto');
   const purchaseItemDto = dtoProperties(readSrc('modules/purchases/dto/upsert-purchase.dto.ts'), 'PurchaseItemDto');
-  const shiftOpenDto = dtoProperties(readSrc('modules/cash-drawer/dto/open-cashier-shift.dto.ts'), 'OpenCashierShiftDto');
+  const shiftOpenDto = dtoProperties(
+    readSrc('modules/cash-drawer/dto/open-cashier-shift.dto.ts'),
+    'OpenCashierShiftDto',
+  );
 
   const cases: Array<{ what: string; source: string; anchor: string; allowed: Set<string> }> = [
     { what: 'the sale body in full-system.js', source: full, anchor: 'const base = {', allowed: saleDto },
-    { what: 'the sale line in full-system.js', source: full, anchor: 'const lines = items.map((p) => ({', allowed: saleItemDto },
-    { what: 'the credit-sale extras in full-system.js', source: full, anchor: "{ paymentType: 'credit'", allowed: saleDto },
-    { what: 'the return body in full-system.js', source: full, anchor: "JSON.stringify({\n    type: 'sale'", allowed: returnDto },
-    { what: 'the purchase body in full-system.js', source: full, anchor: 'JSON.stringify({\n    supplierId', allowed: purchaseDto },
-    { what: 'the shift-open body in full-system.js', source: full, anchor: "JSON.stringify({ openingCash", allowed: shiftOpenDto },
-    { what: 'the sale body in pos-sell.js', source: posSell, anchor: 'JSON.stringify({\n      paymentType', allowed: saleDto },
-    { what: 'the sale line in pos-sell.js', source: posSell, anchor: 'const lines = items.map((p) => ({', allowed: saleItemDto },
+    {
+      what: 'the sale line in full-system.js',
+      source: full,
+      anchor: 'const lines = items.map((p) => ({',
+      allowed: saleItemDto,
+    },
+    {
+      what: 'the credit-sale extras in full-system.js',
+      source: full,
+      anchor: "{ paymentType: 'credit'",
+      allowed: saleDto,
+    },
+    {
+      what: 'the return body in full-system.js',
+      source: full,
+      anchor: "JSON.stringify({\n    type: 'sale'",
+      allowed: returnDto,
+    },
+    {
+      what: 'the purchase body in full-system.js',
+      source: full,
+      anchor: 'JSON.stringify({\n    supplierId',
+      allowed: purchaseDto,
+    },
+    {
+      what: 'the shift-open body in full-system.js',
+      source: full,
+      anchor: 'JSON.stringify({ openingCash',
+      allowed: shiftOpenDto,
+    },
+    {
+      what: 'the sale body in pos-sell.js',
+      source: posSell,
+      anchor: 'JSON.stringify({\n      paymentType',
+      allowed: saleDto,
+    },
+    {
+      what: 'the sale line in pos-sell.js',
+      source: posSell,
+      anchor: 'const lines = items.map((p) => ({',
+      allowed: saleItemDto,
+    },
   ];
 
   for (const testCase of cases) {
@@ -103,9 +142,9 @@ function testBodiesMatchDtos(): void {
     for (const key of literalKeys(sliceObject(testCase.source, at))) {
       assert.ok(
         testCase.allowed.has(key),
-        `${testCase.what} sends "${key}", which is not a property of the DTO. `
-        + 'The global pipe runs forbidNonWhitelisted, so one unknown field is a 400 on EVERY request '
-        + '(this is exactly how 959 credit sales out of 959 were refused over a stray "total").',
+        `${testCase.what} sends "${key}", which is not a property of the DTO. ` +
+          'The global pipe runs forbidNonWhitelisted, so one unknown field is a 400 on EVERY request ' +
+          '(this is exactly how 959 credit sales out of 959 were refused over a stray "total").',
       );
     }
   }
@@ -151,20 +190,32 @@ function testRoutesExist(): void {
 
   // المسارات التي ينادِيها الجناح، بصيغتها بعد استبدال المتغيّرات.
   const called = [
-    'api/sales', 'api/returns', 'api/purchases', 'api/branches', 'api/customers', 'api/suppliers',
-    'api/cashier-shifts/open', 'api/cashier-shifts/:p/close',
-    'api/catalog/pos-products', 'api/catalog/pos-products/version',
-    'api/accounting/reports/financial-summary', 'api/accounting/reports/receivables-payables',
-    'api/accounting/reports/inventory-value', 'api/accounting/reports/cash-movement',
-    'api/storefront/:p/orders', 'api/storefront/:p/catalog', 'api/storefront/:p/info',
-    'api/storefront/:p/orders/:p/cancel', 'api/auth/login',
+    'api/sales',
+    'api/returns',
+    'api/purchases',
+    'api/branches',
+    'api/customers',
+    'api/suppliers',
+    'api/cashier-shifts/open',
+    'api/cashier-shifts/:p/close',
+    'api/catalog/pos-products',
+    'api/catalog/pos-products/version',
+    'api/accounting/reports/financial-summary',
+    'api/accounting/reports/receivables-payables',
+    'api/accounting/reports/inventory-value',
+    'api/accounting/reports/cash-movement',
+    'api/storefront/:p/orders',
+    'api/storefront/:p/catalog',
+    'api/storefront/:p/info',
+    'api/storefront/:p/orders/:p/cancel',
+    'api/auth/login',
   ];
   for (const route of called) {
     assert.ok(
       declared.has(route),
-      `the load suite calls "${route}", which no controller declares. `
-      + 'A wrong path returns 404 in about three milliseconds and looks exactly like a failing endpoint '
-      + '(this is how 244 report checks failed while the endpoint was never reached).',
+      `the load suite calls "${route}", which no controller declares. ` +
+        'A wrong path returns 404 in about three milliseconds and looks exactly like a failing endpoint ' +
+        '(this is how 244 report checks failed while the endpoint was never reached).',
     );
   }
 }

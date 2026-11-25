@@ -72,17 +72,22 @@ async function run(): Promise<void> {
   assert.equal(safeGetRequest.authContext.username, 'admin');
 
   await expectThrows(
-    () => guard.canActivate(createContext({
-      method: 'GET',
-      headers: { cookie: 'session_id=session-1', 'x-tenant-id': 'tenant-b' },
-    } as any)),
+    () =>
+      guard.canActivate(
+        createContext({
+          method: 'GET',
+          headers: { cookie: 'session_id=session-1', 'x-tenant-id': 'tenant-b' },
+        } as any),
+      ),
     ForbiddenException,
   );
 
-  const canAccessScopedGet = await guard.canActivate(createContext({
-    method: 'GET',
-    headers: { cookie: 'session_id=session-1', 'x-tenant-id': 'tenant-a', 'x-account-id': 'account-a' },
-  } as any));
+  const canAccessScopedGet = await guard.canActivate(
+    createContext({
+      method: 'GET',
+      headers: { cookie: 'session_id=session-1', 'x-tenant-id': 'tenant-a', 'x-account-id': 'account-a' },
+    } as any),
+  );
   assert.equal(canAccessScopedGet, true);
 
   const unsafeMissingCsrf: any = {
@@ -105,16 +110,27 @@ async function run(): Promise<void> {
 
   const blockedHeaderSessionGuard = new SessionAuthGuard(
     new FakeSessionService() as any,
-    new FakeConfigService({ SESSION_CSRF_SECRET: csrfSecret, ALLOW_SESSION_ID_HEADER: false, NODE_ENV: 'production' }) as any,
+    new FakeConfigService({
+      SESSION_CSRF_SECRET: csrfSecret,
+      ALLOW_SESSION_ID_HEADER: false,
+      NODE_ENV: 'production',
+    }) as any,
   );
   await expectThrows(
-    () => blockedHeaderSessionGuard.canActivate(createContext({ method: 'GET', headers: { 'x-session-id': 'session-1' } } as any)),
+    () =>
+      blockedHeaderSessionGuard.canActivate(
+        createContext({ method: 'GET', headers: { 'x-session-id': 'session-1' } } as any),
+      ),
     UnauthorizedException,
   );
 
   const allowedHeaderSessionGuard = new SessionAuthGuard(
     new FakeSessionService() as any,
-    new FakeConfigService({ SESSION_CSRF_SECRET: csrfSecret, ALLOW_SESSION_ID_HEADER: true, APP_MODE: 'SELF_CONTAINED' }) as any,
+    new FakeConfigService({
+      SESSION_CSRF_SECRET: csrfSecret,
+      ALLOW_SESSION_ID_HEADER: true,
+      APP_MODE: 'SELF_CONTAINED',
+    }) as any,
   );
   const allowed = await allowedHeaderSessionGuard.canActivate(
     createContext({ method: 'GET', headers: { 'x-session-id': 'session-1' } } as any),

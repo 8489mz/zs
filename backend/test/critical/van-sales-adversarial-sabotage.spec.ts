@@ -30,8 +30,8 @@ const grocerLat = 30.0444;
 const grocerLng = 31.2357;
 
 // Scenario 1.1: Rogue rep sitting at a cafe 880m away trying to bill credit sale
-const cafeRepLat = 30.0520;
-const cafeRepLng = 31.2400;
+const cafeRepLat = 30.052;
+const cafeRepLng = 31.24;
 const distCafe = calculateHaversineDistanceMeters(cafeRepLat, cafeRepLng, grocerLat, grocerLng);
 assert.ok(distCafe > 200, `Expected distance > 200m, got: ${distCafe}m`);
 
@@ -201,32 +201,35 @@ console.log('--- Test Suite 4: Interactive Van Physical Stock Audit ---');
 // Item 1: 100 pcs @ 15 EGP cost, retail 20 EGP
 // Item 2: 50 pcs @ 40 EGP cost, retail 50 EGP
 // Item 3: 20 pcs @ 80 EGP cost, retail 100 EGP
-const stockAudit = reconcileVanStockAudit([
-  {
-    productId: 1,
-    productName: 'جبنة بيضاء 500جم',
-    systemQty: 100,
-    countedQty: 75, // Shortage 25 pcs
-    costPrice: 15,
-    retailPrice: 20,
-  },
-  {
-    productId: 2,
-    productName: 'زيت خليط 800مل',
-    systemQty: 50,
-    countedQty: 40, // Shortage 10 pcs
-    costPrice: 40,
-    retailPrice: 50,
-  },
-  {
-    productId: 3,
-    productName: 'سمن نباتي 1كجم',
-    systemQty: 20,
-    countedQty: 20, // Balanced
-    costPrice: 80,
-    retailPrice: 100,
-  },
-], 2);
+const stockAudit = reconcileVanStockAudit(
+  [
+    {
+      productId: 1,
+      productName: 'جبنة بيضاء 500جم',
+      systemQty: 100,
+      countedQty: 75, // Shortage 25 pcs
+      costPrice: 15,
+      retailPrice: 20,
+    },
+    {
+      productId: 2,
+      productName: 'زيت خليط 800مل',
+      systemQty: 50,
+      countedQty: 40, // Shortage 10 pcs
+      costPrice: 40,
+      retailPrice: 50,
+    },
+    {
+      productId: 3,
+      productName: 'سمن نباتي 1كجم',
+      systemQty: 20,
+      countedQty: 20, // Balanced
+      costPrice: 80,
+      retailPrice: 100,
+    },
+  ],
+  2,
+);
 
 assert.equal(stockAudit.hasStockDiscrepancy, true);
 assert.equal(stockAudit.totalStockShortageCost, 775); // (25*15) + (10*40) = 375 + 400

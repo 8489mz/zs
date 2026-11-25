@@ -80,8 +80,12 @@ async function main(): Promise<void> {
     await anyDb
       .insertInto('tenants')
       .values({
-        id: ENTITLED_TENANT, plan_id: 'plan_basic', extra_features: '[]',
-        activity_type: 'ecommerce', status: 'active', trial_ends_at: null,
+        id: ENTITLED_TENANT,
+        plan_id: 'plan_basic',
+        extra_features: '[]',
+        activity_type: 'ecommerce',
+        status: 'active',
+        trial_ends_at: null,
       })
       .execute();
     // Non-entitled tenant: warehousing structurally excludes the
@@ -89,8 +93,12 @@ async function main(): Promise<void> {
     await anyDb
       .insertInto('tenants')
       .values({
-        id: BLOCKED_TENANT, plan_id: 'plan_basic', extra_features: '[]',
-        activity_type: 'warehousing', status: 'active', trial_ends_at: null,
+        id: BLOCKED_TENANT,
+        plan_id: 'plan_basic',
+        extra_features: '[]',
+        activity_type: 'warehousing',
+        status: 'active',
+        trial_ends_at: null,
       })
       .execute();
 
@@ -103,9 +111,14 @@ async function main(): Promise<void> {
       const inserted = await anyDb
         .insertInto('products')
         .values({
-          name, barcode: `SPEC-${name}`, retail_price: price,
-          stock_qty: stock, reserved_qty: 0,
-          tenant_id: tenantId, account_id: ACCOUNT, is_active: true,
+          name,
+          barcode: `SPEC-${name}`,
+          retail_price: price,
+          stock_qty: stock,
+          reserved_qty: 0,
+          tenant_id: tenantId,
+          account_id: ACCOUNT,
+          is_active: true,
         })
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -113,19 +126,20 @@ async function main(): Promise<void> {
       await anyDb
         .insertInto('product_location_stock')
         .values({
-          product_id: productId, branch_id: null, location_id: null,
-          qty: stock, reserved_qty: 0, tenant_id: tenantId, account_id: ACCOUNT,
+          product_id: productId,
+          branch_id: null,
+          location_id: null,
+          qty: stock,
+          reserved_qty: 0,
+          tenant_id: tenantId,
+          account_id: ACCOUNT,
         })
         .execute();
       return productId;
     }
 
     async function orderCount(tenantId: string): Promise<number> {
-      const rows = await anyDb
-        .selectFrom('online_orders')
-        .select(['id'])
-        .where('tenant_id', '=', tenantId)
-        .execute();
+      const rows = await anyDb.selectFrom('online_orders').select(['id']).where('tenant_id', '=', tenantId).execute();
       return rows.length;
     }
 
@@ -209,7 +223,10 @@ async function main(): Promise<void> {
       'utf8',
     );
     assert.ok(source.includes('isStorefrontEntitledForOrders'), 'simulate must call the canonical entitlement check');
-    assert.ok(source.includes('STOREFRONT_NOT_ENTITLED_MESSAGE'), 'simulate must refuse with the named entitlement message');
+    assert.ok(
+      source.includes('STOREFRONT_NOT_ENTITLED_MESSAGE'),
+      'simulate must refuse with the named entitlement message',
+    );
     assert.ok(!source.includes('retail_price || 150'), 'the 150 price fallback must be gone from the simulate path');
 
     console.log('storefront simulate-order gate checks passed');

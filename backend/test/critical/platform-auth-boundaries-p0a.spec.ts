@@ -19,11 +19,13 @@ async function run(): Promise<void> {
   assert.equal(isLocalAuthCookieHost('LOCAL_PILOT', '127.0.0.1:3001'), true);
   assert.equal(isLocalAuthCookieHost('UNKNOWN', 'localhost'), false);
 
-  const reflector = { getAllAndOverride: (key: string) => {
-    if (key === 'required_permissions') return ['settings'];
-    if (key === 'required_feature') return 'storefront';
-    return undefined;
-  }};
+  const reflector = {
+    getAllAndOverride: (key: string) => {
+      if (key === 'required_permissions') return ['settings'];
+      if (key === 'required_feature') return 'storefront';
+      return undefined;
+    },
+  };
   const guard = new PermissionsGuard(
     reflector as any,
     { hasAllPermissions: () => false, hasAnyPermission: () => false } as any,
@@ -31,9 +33,17 @@ async function run(): Promise<void> {
     {} as any,
   );
   assert.throws(() => guard.canActivate(context()), ForbiddenException);
-  assert.throws(() => guard.canActivate(context({
-    role: 'super_admin', tenantId: 'ordinary-merchant', permissions: [],
-  })), ForbiddenException);
+  assert.throws(
+    () =>
+      guard.canActivate(
+        context({
+          role: 'super_admin',
+          tenantId: 'ordinary-merchant',
+          permissions: [],
+        }),
+      ),
+    ForbiddenException,
+  );
 
   const oldMode = process.env.APP_MODE;
   try {
@@ -41,23 +51,49 @@ async function run(): Promise<void> {
     const cleared: any[] = [];
     const authGuard = new SessionAuthGuard(
       { resolveAuthContext: async () => null } as any,
-      { get: (key: string) => ({
-        APP_MODE: 'CLOUD_SAAS', SESSION_COOKIE_SECURE: true,
-        SESSION_COOKIE_NAME: 'session_id', SESSION_COOKIE_SAME_SITE: 'strict',
-      } as Record<string, unknown>)[key] } as any,
+      {
+        get: (key: string) =>
+          (
+            ({
+              APP_MODE: 'CLOUD_SAAS',
+              SESSION_COOKIE_SECURE: true,
+              SESSION_COOKIE_NAME: 'session_id',
+              SESSION_COOKIE_SAME_SITE: 'strict',
+            }) as Record<string, unknown>
+          )[key],
+      } as any,
     );
-    const request = { method: 'GET', headers: { host: 'erp.example.com', 'x-forwarded-host': 'localhost', cookie: 'session_id=%EG' } };
-    const response = { clearCookie: (_name: string, opts: any) => { cleared.push(opts); } };
-    await assert.rejects(() => authGuard.canActivate({ switchToHttp: () => ({
-      getRequest: () => request,
-      getResponse: () => response,
-    }) } as any), UnauthorizedException);
+    const request = {
+      method: 'GET',
+      headers: { host: 'erp.example.com', 'x-forwarded-host': 'localhost', cookie: 'session_id=%EG' },
+    };
+    const response = {
+      clearCookie: (_name: string, opts: any) => {
+        cleared.push(opts);
+      },
+    };
+    await assert.rejects(
+      () =>
+        authGuard.canActivate({
+          switchToHttp: () => ({
+            getRequest: () => request,
+            getResponse: () => response,
+          }),
+        } as any),
+      UnauthorizedException,
+    );
     assert.ok(cleared.length > 0);
-    assert.ok(cleared.every((options) => options.secure === true), 'Cloud must not clear/send insecure auth cookies based on spoofed host');
+    assert.ok(
+      cleared.every((options) => options.secure === true),
+      'Cloud must not clear/send insecure auth cookies based on spoofed host',
+    );
   } finally {
     if (oldMode === undefined) delete process.env.APP_MODE;
     else process.env.APP_MODE = oldMode;
   }
 }
 
-run().catch((error) => { console.error(error); process.exitCode = 1; });
+run().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

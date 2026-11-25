@@ -93,32 +93,97 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('van_sales_trips').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' }).execute();
-  await anyDb.insertInto('customers').values({ id: 21, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop 21', balance: 0, credit_limit: 0 }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true })
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' })
+    .execute();
+  await anyDb
+    .insertInto('customers')
+    .values({ id: 21, tenant_id: TENANT, account_id: ACCOUNT, name: 'Shop 21', balance: 0, credit_limit: 0 })
+    .execute();
 }
 
-async function seedProduct(db: Kysely<Database>, id: number, retail: number, cost: number, vanQty: number): Promise<void> {
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  retail: number,
+  cost: number,
+  vanQty: number,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({ id, tenant_id: TENANT, account_id: ACCOUNT, name: `Product ${id}`, stock_qty: vanQty, cost_price: cost, retail_price: retail, credit_price: 0, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Product ${id}`,
+      stock_qty: vanQty,
+      cost_price: cost,
+      retail_price: retail,
+      credit_price: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty })
+    .execute();
 }
 
 function buildService(db: Kysely<Database>): VanSalesService {
@@ -127,11 +192,27 @@ function buildService(db: Kysely<Database>): VanSalesService {
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: TENANT,
+    accountId: ACCOUNT,
   });
   return service;
 }
@@ -142,33 +223,45 @@ function clearCaches(): void {
 }
 
 async function salesCount(db: Kysely<Database>): Promise<number> {
-  const row = await (db as any).selectFrom('sales').select(sql`count(*)`.as('cnt')).where('tenant_id', '=', TENANT).executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('sales')
+    .select(sql`count(*)`.as('cnt'))
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.cnt);
 }
 
 async function vanQty(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await (db as any).selectFrom('product_location_stock').select('qty')
-    .where('tenant_id', '=', TENANT).where('product_id', '=', productId).where('location_id', '=', 20)
-    .executeTakeFirstOrThrow() as any;
+  const row = (await (db as any)
+    .selectFrom('product_location_stock')
+    .select('qty')
+    .where('tenant_id', '=', TENANT)
+    .where('product_id', '=', productId)
+    .where('location_id', '=', 20)
+    .executeTakeFirstOrThrow()) as any;
   return Number(row.qty);
 }
 
 async function ageSale(db: Kysely<Database>, saleId: number): Promise<void> {
   // Move the sale out of the 4-second database rapid-fire window so the
   // case isolates the in-process cache layer from the backstop.
-  await (db as any).updateTable('sales')
+  await (db as any)
+    .updateTable('sales')
     .set({ created_at: sql`NOW() - INTERVAL '10 seconds'` })
-    .where('id', '=', saleId).where('tenant_id', '=', TENANT).execute();
+    .where('id', '=', saleId)
+    .where('tenant_id', '=', TENANT)
+    .execute();
 }
 
 async function journalBalanced(db: Kysely<Database>, saleId: number): Promise<boolean> {
-  const rows = await (db as any).selectFrom('journal_entry_lines')
+  const rows = (await (db as any)
+    .selectFrom('journal_entry_lines')
     .innerJoin('journal_entries', 'journal_entries.id', 'journal_entry_lines.journal_entry_id')
     .select(['journal_entry_lines.debit', 'journal_entry_lines.credit'])
     .where('journal_entries.source_type', '=', 'sale')
     .where('journal_entries.source_id', '=', saleId)
     .where('journal_entries.tenant_id', '=', TENANT)
-    .execute() as unknown as Array<Record<string, unknown>>;
+    .execute()) as unknown as Array<Record<string, unknown>>;
   assert.ok(rows.length > 0, 'sale must have journal lines');
   const debit = rows.reduce((s, r) => s + Number(r.debit), 0);
   const credit = rows.reduce((s, r) => s + Number(r.credit), 0);
@@ -177,7 +270,9 @@ async function journalBalanced(db: Kysely<Database>, saleId: number): Promise<bo
 
 function basket(clientTxId?: string): any {
   return {
-    tripId: 1, customerId: 21, customerName: 'Shop 21',
+    tripId: 1,
+    customerId: 21,
+    customerName: 'Shop 21',
     paymentMethod: 'cash' as const,
     ...(clientTxId ? { clientTxId } : {}),
     items: [{ productId: 101, qty: 2, unitPrice: 50 }],
@@ -197,12 +292,18 @@ async function main(): Promise<void> {
       const first = await service.executeFieldSale(1, TENANT, ACCOUNT, basket());
       await ageSale(db, first.saleId);
       const second = await service.executeFieldSale(1, TENANT, ACCOUNT, basket());
-      assert.notEqual(second.saleId, first.saleId, 'a genuine repeat must create a distinct sale, not return the first id');
+      assert.notEqual(
+        second.saleId,
+        first.saleId,
+        'a genuine repeat must create a distinct sale, not return the first id',
+      );
       assert.equal(await salesCount(db), 2);
       assert.equal(await vanQty(db, 101), 6, 'van stock must fall twice (10 - 2 - 2)');
       assert.equal(await journalBalanced(db, first.saleId), true);
       assert.equal(await journalBalanced(db, second.saleId), true);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. True retry, same clientTxId: exactly one sale, second call
@@ -219,7 +320,9 @@ async function main(): Promise<void> {
       assert.equal(retry.saleId, first.saleId, 'a retry with the same clientTxId must return the first sale');
       assert.equal(await salesCount(db), 1);
       assert.equal(await vanQty(db, 101), 8, 'van stock must fall once');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. Distinct clientTxIds, first sale aged: both post as distinct sales.
@@ -236,7 +339,9 @@ async function main(): Promise<void> {
       assert.notEqual(second.saleId, first.saleId);
       assert.equal(await salesCount(db), 2);
       assert.equal(await vanQty(db, 101), 6);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 4. The 4-second database backstop is unchanged (real path):
@@ -253,7 +358,9 @@ async function main(): Promise<void> {
       assert.equal(dup.saleId, first.saleId, 'the backstop must still collapse an identical sale inside 4 seconds');
       assert.equal(await salesCount(db), 1);
       assert.equal(await vanQty(db, 101), 8, 'van stock must fall once');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 5. Backstop multiset rule, real path: different products with the
@@ -268,17 +375,25 @@ async function main(): Promise<void> {
       const service = buildService(db);
       const first = await service.executeFieldSale(1, TENANT, ACCOUNT, basket());
       const other = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 21, customerName: 'Shop 21', paymentMethod: 'cash' as const,
+        tripId: 1,
+        customerId: 21,
+        customerName: 'Shop 21',
+        paymentMethod: 'cash' as const,
         items: [{ productId: 102, qty: 2, unitPrice: 30 }],
       });
       assert.notEqual(other.saleId, first.saleId, 'different products must post despite the same line count');
       const more = await service.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 21, customerName: 'Shop 21', paymentMethod: 'cash' as const,
+        tripId: 1,
+        customerId: 21,
+        customerName: 'Shop 21',
+        paymentMethod: 'cash' as const,
         items: [{ productId: 101, qty: 5, unitPrice: 50 }],
       });
       assert.notEqual(more.saleId, first.saleId, 'different quantities must post');
       assert.equal(await salesCount(db), 3);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 6. Concurrent identical submissions with distinct clientTxIds
@@ -297,7 +412,9 @@ async function main(): Promise<void> {
       assert.equal(a.saleId, b.saleId, 'concurrent duplicates must share one execution');
       assert.equal(await salesCount(db), 1);
       assert.equal(await vanQty(db, 101), 8, 'van stock must fall once');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 7. Source pins + invariant pin.
@@ -307,13 +424,31 @@ async function main(): Promise<void> {
     assert.ok(!source.includes('recentSalesCache.set(fingerprintKey'), 'no fingerprint-keyed cache write may remain');
     assert.ok(source.includes('recentSalesCache.has(txKey)'), 'the clientTxId cache lookup must remain');
     assert.ok(source.includes('recentSalesCache.set(txKey'), 'the clientTxId cache write must remain');
-    assert.ok(source.includes('inFlightSalePromises.has(fingerprintKey)'), 'the in-flight fingerprint dedup must remain');
+    assert.ok(
+      source.includes('inFlightSalePromises.has(fingerprintKey)'),
+      'the in-flight fingerprint dedup must remain',
+    );
     assert.ok(source.includes('dbItemsSig === payloadItemsSig'), 'the multiset backstop comparison must remain');
-    assert.ok(source.includes('nowMs - entry.timestamp < 5000'), 'the field-collection cache window must remain untouched');
+    assert.ok(
+      source.includes('nowMs - entry.timestamp < 5000'),
+      'the field-collection cache window must remain untouched',
+    );
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-VAN-DEDUP-DISTINGUISHING-KEY').length - 1, 1, 'the invariant entry must exist exactly once');
-    assert.equal(invariants.split('INV-FLOATING-POOL-ALLOCATION-LEG').length - 1, 1, 'the P3 invariant entry must still exist exactly once');
-    assert.equal(invariants.split('INV-CONVERSION-PAYMENT-TERMS-CARRIED').length - 1, 1, 'the P6b invariant entry must still exist exactly once');
+    assert.equal(
+      invariants.split('INV-VAN-DEDUP-DISTINGUISHING-KEY').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
+    assert.equal(
+      invariants.split('INV-FLOATING-POOL-ALLOCATION-LEG').length - 1,
+      1,
+      'the P3 invariant entry must still exist exactly once',
+    );
+    assert.equal(
+      invariants.split('INV-CONVERSION-PAYMENT-TERMS-CARRIED').length - 1,
+      1,
+      'the P6b invariant entry must still exist exactly once',
+    );
     // Last-line ownership passes to newer entries:
     // INV-CONVERSION-LIFECYCLE-RACES appends after this entry, so
     // the last-line assertion that held at this package's own
@@ -325,4 +460,7 @@ async function main(): Promise<void> {
   console.log('Van sale dedup key tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

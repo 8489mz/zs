@@ -70,7 +70,14 @@ async function requestId(pg: PGlite, employeeId: number): Promise<number> {
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const hr = new HrService(db, new TransactionHelper(), { log: async () => {} } as never, {} as never, {} as never, undefined);
+  const hr = new HrService(
+    db,
+    new TransactionHelper(),
+    { log: async () => {} } as never,
+    {} as never,
+    {} as never,
+    undefined,
+  );
   const eos = new EndOfServiceService(db as never, {} as never, {} as never);
 
   try {
@@ -111,12 +118,56 @@ async function main(): Promise<void> {
     `);
 
     // 6. The shared rule, pinned directly.
-    assert.equal(shouldDeductLeaveFromBalance({ deductsFromBalance: false, leaveTypeId: 1, leaveTypeCode: 'annual', leaveTypeName: 'إجازة سنوية' }), true, 'annual type deducts even with the stored flag false');
-    assert.equal(shouldDeductLeaveFromBalance({ deductsFromBalance: false, leaveTypeId: 2, leaveTypeCode: 'sick', leaveTypeName: 'إجازة مرضية' }), false, 'sick type with the flag off does not deduct');
-    assert.equal(shouldDeductLeaveFromBalance({ deductsFromBalance: true, leaveTypeId: 3, leaveTypeCode: 'training', leaveTypeName: 'تدريب' }), true, 'explicit flag deducts for any type');
-    assert.equal(shouldDeductLeaveFromBalance({ deductsFromBalance: false, leaveTypeId: null, leaveTypeText: 'paid' }), true, 'legacy text-only paid request deducts');
-    assert.equal(shouldDeductLeaveFromBalance({ deductsFromBalance: false, leaveTypeId: null, leaveTypeText: 'sick' }), false, 'legacy text-only sick request does not deduct');
-    assert.equal(shouldDeductLeaveFromBalance({ deductsFromBalance: false, leaveTypeId: 9, leaveTypeCode: 'other', leaveTypeName: 'إجازة سنوية استثنائية' }), true, 'a name containing سنوية is annual');
+    assert.equal(
+      shouldDeductLeaveFromBalance({
+        deductsFromBalance: false,
+        leaveTypeId: 1,
+        leaveTypeCode: 'annual',
+        leaveTypeName: 'إجازة سنوية',
+      }),
+      true,
+      'annual type deducts even with the stored flag false',
+    );
+    assert.equal(
+      shouldDeductLeaveFromBalance({
+        deductsFromBalance: false,
+        leaveTypeId: 2,
+        leaveTypeCode: 'sick',
+        leaveTypeName: 'إجازة مرضية',
+      }),
+      false,
+      'sick type with the flag off does not deduct',
+    );
+    assert.equal(
+      shouldDeductLeaveFromBalance({
+        deductsFromBalance: true,
+        leaveTypeId: 3,
+        leaveTypeCode: 'training',
+        leaveTypeName: 'تدريب',
+      }),
+      true,
+      'explicit flag deducts for any type',
+    );
+    assert.equal(
+      shouldDeductLeaveFromBalance({ deductsFromBalance: false, leaveTypeId: null, leaveTypeText: 'paid' }),
+      true,
+      'legacy text-only paid request deducts',
+    );
+    assert.equal(
+      shouldDeductLeaveFromBalance({ deductsFromBalance: false, leaveTypeId: null, leaveTypeText: 'sick' }),
+      false,
+      'legacy text-only sick request does not deduct',
+    );
+    assert.equal(
+      shouldDeductLeaveFromBalance({
+        deductsFromBalance: false,
+        leaveTypeId: 9,
+        leaveTypeCode: 'other',
+        leaveTypeName: 'إجازة سنوية استثنائية',
+      }),
+      true,
+      'a name containing سنوية is annual',
+    );
 
     // 5. listLeaveTypes exposes the flag the form shows.
     const types = (await hr.listLeaveTypes({}, AUTH)) as { rows: { id: string; deductsFromBalance: boolean }[] };
@@ -124,35 +175,66 @@ async function main(): Promise<void> {
     assert.equal(types.rows.find((r) => r.id === '3')?.deductsFromBalance, true);
 
     // 1. The reported case: annual type, flag false as the old form stored it.
-    await hr.createLeaveRequest({ employeeId: 1, leaveTypeId: 1, startDate: '2026-11-08', endDate: '2026-11-09' } as never, AUTH);
+    await hr.createLeaveRequest(
+      { employeeId: 1, leaveTypeId: 1, startDate: '2026-11-08', endDate: '2026-11-09' } as never,
+      AUTH,
+    );
     assert.equal(await storedUsed(pg, 1), 0, 'creating the request must not move the balance');
     await hr.approveLeaveRequest(await requestId(pg, 1), {} as never, AUTH);
     assert.equal(await storedUsed(pg, 1), 2, 'approving the 2-day annual leave must move used 0 -> 2');
-    const profile = (await hr.getEmployeeProfile(1, AUTH)) as { employee: { annualLeaveBalance: number; usedAnnualLeaves: number } };
+    const profile = (await hr.getEmployeeProfile(1, AUTH)) as {
+      employee: { annualLeaveBalance: number; usedAnnualLeaves: number };
+    };
     assert.equal(profile.employee.annualLeaveBalance, 21);
     assert.equal(profile.employee.usedAnnualLeaves, 2);
-    assert.equal(profile.employee.annualLeaveBalance - profile.employee.usedAnnualLeaves, 19, 'profile remaining must be 19');
+    assert.equal(
+      profile.employee.annualLeaveBalance - profile.employee.usedAnnualLeaves,
+      19,
+      'profile remaining must be 19',
+    );
     const preview = (await eos.calculateSettlementPreview(
-      { employeeId: 1, terminationDate: '2026-11-10', terminationReason: 'resignation', lawType: 'saudi', pendingSalaryAmount: 0 },
+      {
+        employeeId: 1,
+        terminationDate: '2026-11-10',
+        terminationReason: 'resignation',
+        lawType: 'saudi',
+        pendingSalaryAmount: 0,
+      },
       AUTH,
     )) as { leaveEncashment: { remainingLeaveDays: number } };
-    assert.equal(preview.leaveEncashment.remainingLeaveDays, 19, 'end-of-service must read the same 19 remaining days as the profile');
+    assert.equal(
+      preview.leaveEncashment.remainingLeaveDays,
+      19,
+      'end-of-service must read the same 19 remaining days as the profile',
+    );
 
     // 2. Sick type, flag off: no deduction.
-    await hr.createLeaveRequest({ employeeId: 2, leaveTypeId: 2, startDate: '2026-11-08', endDate: '2026-11-10' } as never, AUTH);
+    await hr.createLeaveRequest(
+      { employeeId: 2, leaveTypeId: 2, startDate: '2026-11-08', endDate: '2026-11-10' } as never,
+      AUTH,
+    );
     await hr.approveLeaveRequest(await requestId(pg, 2), {} as never, AUTH);
     assert.equal(await storedUsed(pg, 2), 0, 'approving a sick leave must not move the balance');
 
     // 3. Training type, flag on: deducts.
-    await hr.createLeaveRequest({ employeeId: 3, leaveTypeId: 3, startDate: '2026-11-08', endDate: '2026-11-09' } as never, AUTH);
+    await hr.createLeaveRequest(
+      { employeeId: 3, leaveTypeId: 3, startDate: '2026-11-08', endDate: '2026-11-09' } as never,
+      AUTH,
+    );
     await hr.approveLeaveRequest(await requestId(pg, 3), {} as never, AUTH);
     assert.equal(await storedUsed(pg, 3), 2, 'approving a flag-on type must move used 0 -> 2');
 
     // 4. Cancelling the approved annual leave releases the days.
     await hr.cancelLeaveRequest(await requestId(pg, 1), {} as never, AUTH);
     assert.equal(await storedUsed(pg, 1), 0, 'cancelling must release the deducted days');
-    const profileAfterCancel = (await hr.getEmployeeProfile(1, AUTH)) as { employee: { annualLeaveBalance: number; usedAnnualLeaves: number } };
-    assert.equal(profileAfterCancel.employee.annualLeaveBalance - profileAfterCancel.employee.usedAnnualLeaves, 21, 'profile remaining must be 21 again after cancellation');
+    const profileAfterCancel = (await hr.getEmployeeProfile(1, AUTH)) as {
+      employee: { annualLeaveBalance: number; usedAnnualLeaves: number };
+    };
+    assert.equal(
+      profileAfterCancel.employee.annualLeaveBalance - profileAfterCancel.employee.usedAnnualLeaves,
+      21,
+      'profile remaining must be 21 again after cancellation',
+    );
 
     console.log('Leave balance deduction tests passed.');
   } finally {

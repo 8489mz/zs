@@ -130,8 +130,14 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: `"${code}"` } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): AccountingService {
@@ -143,18 +149,34 @@ function makeServices(db: Kysely<Database>): AccountingService {
   return new AccountingService(db as any, fakeFoundation, posting as any);
 }
 
-async function postedLines(db: Kysely<Database>, entryId: number): Promise<Array<{ accountId: number; debit: number; credit: number; costCenterId: number | null }>> {
-  const rows = await (db as any)
+async function postedLines(
+  db: Kysely<Database>,
+  entryId: number,
+): Promise<Array<{ accountId: number; debit: number; credit: number; costCenterId: number | null }>> {
+  const rows = (await (db as any)
     .selectFrom('journal_entry_lines')
     .select(['account_id', 'debit', 'credit', 'cost_center_id'])
     .where('journal_entry_id', '=', entryId)
     .orderBy('id')
-    .execute() as unknown as Array<{ account_id: number; debit: string; credit: string; cost_center_id: number | null }>;
-  return rows.map((row) => ({ accountId: Number(row.account_id), debit: Number(row.debit), credit: Number(row.credit), costCenterId: row.cost_center_id == null ? null : Number(row.cost_center_id) }));
+    .execute()) as unknown as Array<{
+    account_id: number;
+    debit: string;
+    credit: string;
+    cost_center_id: number | null;
+  }>;
+  return rows.map((row) => ({
+    accountId: Number(row.account_id),
+    debit: Number(row.debit),
+    credit: Number(row.credit),
+    costCenterId: row.cost_center_id == null ? null : Number(row.cost_center_id),
+  }));
 }
 
 async function entryCount(db: Kysely<Database>): Promise<number> {
-  const row = await (db as any).selectFrom('journal_entries').select((eb: any) => eb.fn.countAll().as('n')).executeTakeFirst() as unknown as { n: string };
+  const row = (await (db as any)
+    .selectFrom('journal_entries')
+    .select((eb: any) => eb.fn.countAll().as('n'))
+    .executeTakeFirst()) as unknown as { n: string };
   return Number(row.n);
 }
 
@@ -165,18 +187,31 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'KWD');
       const svc = makeServices(db);
-      const result = await svc.createManualJournalEntry({
-        entryDate: '2026-10-01', description: 'manual kwd', cashFlowCategory: 'operating',
-        lines: [
-          { accountId: 10, debit: 100.125, credit: 0 },
-          { accountId: 20, debit: 0, credit: 100.125 },
-        ],
-      } as any, auth) as unknown as { entry: { id: number; entryNo: string; totalDebit: number; totalCredit: number } };
+      const result = (await svc.createManualJournalEntry(
+        {
+          entryDate: '2026-10-01',
+          description: 'manual kwd',
+          cashFlowCategory: 'operating',
+          lines: [
+            { accountId: 10, debit: 100.125, credit: 0 },
+            { accountId: 20, debit: 0, credit: 100.125 },
+          ],
+        } as any,
+        auth,
+      )) as unknown as { entry: { id: number; entryNo: string; totalDebit: number; totalCredit: number } };
       assert.equal(result.entry.totalDebit, 100.125);
       assert.equal(result.entry.totalCredit, 100.125);
       assert.match(result.entry.entryNo, /^JE-\d{8}$/);
-      const entry = await (db as any).selectFrom('journal_entries').selectAll().where('id', '=', result.entry.id).executeTakeFirst() as unknown as {
-        source_type: string; source_id: number | null; status: string; entry_no: string; cash_flow_category: string | null;
+      const entry = (await (db as any)
+        .selectFrom('journal_entries')
+        .selectAll()
+        .where('id', '=', result.entry.id)
+        .executeTakeFirst()) as unknown as {
+        source_type: string;
+        source_id: number | null;
+        status: string;
+        entry_no: string;
+        cash_flow_category: string | null;
       };
       assert.equal(entry.source_type, 'manual');
       assert.equal(entry.source_id, 0);
@@ -199,16 +234,23 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       const svc = makeServices(db);
-      const result = await svc.createManualJournalEntry({
-        entryDate: '2026-10-01', description: 'manual egp',
-        lines: [
-          { accountId: 10, debit: 100.125, credit: 0 },
-          { accountId: 20, debit: 0, credit: 100.125 },
-        ],
-      } as any, auth) as unknown as { entry: { totalDebit: number; totalCredit: number } };
+      const result = (await svc.createManualJournalEntry(
+        {
+          entryDate: '2026-10-01',
+          description: 'manual egp',
+          lines: [
+            { accountId: 10, debit: 100.125, credit: 0 },
+            { accountId: 20, debit: 0, credit: 100.125 },
+          ],
+        } as any,
+        auth,
+      )) as unknown as { entry: { totalDebit: number; totalCredit: number } };
       assert.equal(result.entry.totalDebit, 100.13);
       assert.equal(result.entry.totalCredit, 100.13);
-      const lines = await postedLines(db, (await (db as any).selectFrom('journal_entries').select('id').executeTakeFirst() as any).id);
+      const lines = await postedLines(
+        db,
+        ((await (db as any).selectFrom('journal_entries').select('id').executeTakeFirst()) as any).id,
+      );
       assert.deepEqual(lines[0], { accountId: 10, debit: 100.13, credit: 0, costCenterId: null });
       assert.deepEqual(lines[1], { accountId: 20, debit: 0, credit: 100.13, costCenterId: null });
     } finally {
@@ -222,13 +264,17 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'KWD');
       const svc = makeServices(db);
-      const result = await svc.createManualJournalEntry({
-        entryDate: '2026-10-01', description: 'manual plug',
-        lines: [
-          { accountId: 10, debit: 100.001, credit: 0 },
-          { accountId: 20, debit: 0, credit: 100.0 },
-        ],
-      } as any, auth) as unknown as { entry: { id: number; totalDebit: number; totalCredit: number } };
+      const result = (await svc.createManualJournalEntry(
+        {
+          entryDate: '2026-10-01',
+          description: 'manual plug',
+          lines: [
+            { accountId: 10, debit: 100.001, credit: 0 },
+            { accountId: 20, debit: 0, credit: 100.0 },
+          ],
+        } as any,
+        auth,
+      )) as unknown as { entry: { id: number; totalDebit: number; totalCredit: number } };
       assert.equal(result.entry.totalDebit, 100.001);
       assert.equal(result.entry.totalCredit, 100.001);
       const lines = await postedLines(db, result.entry.id);
@@ -245,13 +291,20 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'KWD');
       const svc = makeServices(db);
-      await assert.rejects(svc.createManualJournalEntry({
-        entryDate: '2026-10-01', description: 'manual unbalanced',
-        lines: [
-          { accountId: 10, debit: 100.002, credit: 0 },
-          { accountId: 20, debit: 0, credit: 100.0 },
-        ],
-      } as any, auth), /غير متزن/);
+      await assert.rejects(
+        svc.createManualJournalEntry(
+          {
+            entryDate: '2026-10-01',
+            description: 'manual unbalanced',
+            lines: [
+              { accountId: 10, debit: 100.002, credit: 0 },
+              { accountId: 20, debit: 0, credit: 100.0 },
+            ],
+          } as any,
+          auth,
+        ),
+        /غير متزن/,
+      );
       assert.equal(await entryCount(db), 0);
     } finally {
       await db.destroy();
@@ -264,13 +317,20 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       const svc = makeServices(db);
-      await assert.rejects(svc.createManualJournalEntry({
-        entryDate: '2026-10-01', description: 'manual old band',
-        lines: [
-          { accountId: 10, debit: 100.03, credit: 0 },
-          { accountId: 20, debit: 0, credit: 100.0 },
-        ],
-      } as any, auth), /غير متزن/);
+      await assert.rejects(
+        svc.createManualJournalEntry(
+          {
+            entryDate: '2026-10-01',
+            description: 'manual old band',
+            lines: [
+              { accountId: 10, debit: 100.03, credit: 0 },
+              { accountId: 20, debit: 0, credit: 100.0 },
+            ],
+          } as any,
+          auth,
+        ),
+        /غير متزن/,
+      );
       assert.equal(await entryCount(db), 0);
     } finally {
       await db.destroy();
@@ -281,16 +341,29 @@ async function main(): Promise<void> {
   {
     const { pg, db } = await makeDb();
     try {
-      await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: '"KWD"' } as never).execute();
-      await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never).execute();
+      await db
+        .insertInto('settings' as never)
+        .values({ tenant_id: 't1', key: 'currency', value: '"KWD"' } as never)
+        .execute();
+      await db
+        .insertInto('currency_exchange_rates' as never)
+        .values({ tenant_id: 't1', currency_code: 'EGP', exchange_rate: 1, is_base: true } as never)
+        .execute();
       const svc = makeServices(db);
-      await assert.rejects(svc.createManualJournalEntry({
-        entryDate: '2026-10-01', description: 'manual mismatch',
-        lines: [
-          { accountId: 10, debit: 100, credit: 0 },
-          { accountId: 20, debit: 0, credit: 100 },
-        ],
-      } as any, auth), /عملة الأساس/);
+      await assert.rejects(
+        svc.createManualJournalEntry(
+          {
+            entryDate: '2026-10-01',
+            description: 'manual mismatch',
+            lines: [
+              { accountId: 10, debit: 100, credit: 0 },
+              { accountId: 20, debit: 0, credit: 100 },
+            ],
+          } as any,
+          auth,
+        ),
+        /عملة الأساس/,
+      );
       assert.equal(await entryCount(db), 0);
     } finally {
       await db.destroy();
@@ -302,16 +375,25 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await seedCurrency(db, 'EGP');
-      await (db as any).updateTable('accounting_settings').set({ lock_date_non_adviser: '2026-10-01' }).where('tenant_id', '=', 't1').where('id', '=', 1).execute();
+      await (db as any)
+        .updateTable('accounting_settings')
+        .set({ lock_date_non_adviser: '2026-10-01' })
+        .where('tenant_id', '=', 't1')
+        .where('id', '=', 1)
+        .execute();
       const svc = makeServices(db);
       await assert.rejects(
-        svc.createManualJournalEntry({
-          entryDate: '2026-10-01', description: 'manual locked',
-          lines: [
-            { accountId: 10, debit: 100, credit: 0 },
-            { accountId: 20, debit: 0, credit: 100 },
-          ],
-        } as any, auth),
+        svc.createManualJournalEntry(
+          {
+            entryDate: '2026-10-01',
+            description: 'manual locked',
+            lines: [
+              { accountId: 10, debit: 100, credit: 0 },
+              { accountId: 20, debit: 0, credit: 100 },
+            ],
+          } as any,
+          auth,
+        ),
         (error: unknown) => {
           const code = (error as { code?: string }).code;
           const message = error instanceof Error ? error.message : '';
@@ -330,23 +412,34 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'KWD');
       const svc = makeServices(db);
-      const result = await svc.createManualJournalEntry({
-        entryDate: '2026-10-01', description: 'manual cost center',
-        lines: [
-          { accountId: 10, debit: 50, credit: 0, costCenterId: 7 },
-          { accountId: 20, debit: 0, credit: 50, costCenterId: 7 },
-        ],
-      } as any, auth) as unknown as { entry: { id: number } };
+      const result = (await svc.createManualJournalEntry(
+        {
+          entryDate: '2026-10-01',
+          description: 'manual cost center',
+          lines: [
+            { accountId: 10, debit: 50, credit: 0, costCenterId: 7 },
+            { accountId: 20, debit: 0, credit: 50, costCenterId: 7 },
+          ],
+        } as any,
+        auth,
+      )) as unknown as { entry: { id: number } };
       const lines = await postedLines(db, result.entry.id);
       assert.equal(lines[0].costCenterId, 7);
       assert.equal(lines[1].costCenterId, 7);
-      await assert.rejects(svc.createManualJournalEntry({
-        entryDate: '2026-10-01', description: 'manual control',
-        lines: [
-          { accountId: 30, debit: 50, credit: 0 },
-          { accountId: 20, debit: 0, credit: 50 },
-        ],
-      } as any, auth), /الرقابي/);
+      await assert.rejects(
+        svc.createManualJournalEntry(
+          {
+            entryDate: '2026-10-01',
+            description: 'manual control',
+            lines: [
+              { accountId: 30, debit: 50, credit: 0 },
+              { accountId: 20, debit: 0, credit: 50 },
+            ],
+          } as any,
+          auth,
+        ),
+        /الرقابي/,
+      );
     } finally {
       await db.destroy();
     }
@@ -355,22 +448,34 @@ async function main(): Promise<void> {
   // Case 9: source pin — the manual-journal slice goes through the
   // boundary at book digits, with no direct inserts and no 2dp bands.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/accounting-journals-write.service.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/accounting/services/accounting-journals-write.service.ts'),
+      'utf8',
+    );
     const start = source.indexOf('async createManualJournalEntry(');
     const end = source.indexOf('async reverseJournalEntry(');
     assert.ok(start > 0 && end > start);
     const body = source.slice(start, end);
     assert.ok(body.includes('postDomainJournal('), 'manual-journal post must go through the posting boundary');
-    assert.ok(body.includes('tenantBaseCurrency(trx, scope.tenantId)'), 'digits must resolve on the transaction handle');
+    assert.ok(
+      body.includes('tenantBaseCurrency(trx, scope.tenantId)'),
+      'digits must resolve on the transaction handle',
+    );
     assert.ok(body.includes('toBookMoney('), 'manual-journal computation must round at book digits');
     assert.ok(!body.includes('this.toMoney('), 'manual-journal computation must not use the 2dp helper');
     assert.ok(!body.includes('.toFixed(2)'), 'manual-journal slice must not hardcode 2dp formatting');
     assert.ok(!body.includes('> 0.05'), 'manual-journal slice must not keep the 0.05 balance band');
     assert.ok(!body.includes('>= 0.001'), 'manual-journal slice must not keep the 0.001 plug trigger');
     assert.ok(!body.includes("insertInto('journal_entries')"), 'manual-journal slice must not insert headers directly');
-    assert.ok(!body.includes("insertInto('journal_entry_lines')"), 'manual-journal slice must not insert lines directly');
+    assert.ok(
+      !body.includes("insertInto('journal_entry_lines')"),
+      'manual-journal slice must not insert lines directly',
+    );
     assert.ok(!body.includes('JE-TMP-'), 'manual-journal slice must not mint temp entry numbers');
-    const boundary = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/journal-posting-core.service.ts'), 'utf8');
+    const boundary = readFileSync(
+      resolve(__dirname, '../../src/modules/accounting/services/journal-posting-core.service.ts'),
+      'utf8',
+    );
     assert.ok(boundary.includes('cashFlowCategory'), 'boundary must carry the cash-flow category');
     assert.ok(boundary.includes('cash_flow_category'), 'boundary must store the cash-flow category');
   }

@@ -55,10 +55,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { Kysely } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
-import {
-  isOfferActive,
-  normalizeDateOnly,
-} from '../../src/modules/sales/helpers/sales-write.helper';
+import { isOfferActive, normalizeDateOnly } from '../../src/modules/sales/helpers/sales-write.helper';
 import {
   isOfferActiveNow,
   normalizeDateOnly as storefrontNormalizeDateOnly,
@@ -180,7 +177,12 @@ console.log(out.join('\\n'));
   assert.equal(isOfferActive({ start_date: '2026-11-14', end_date: '2026-11-14' }, '2026-11-14', localNoon), true);
   assert.equal(isOfferActive({ start_date: '2026-11-15' }, '2026-11-14', localNoon), false);
   assert.equal(
-    isOfferActiveNow({ offer_type: 'percent', value: 20, start_date: '2026-11-14', end_date: '2026-11-14', is_active: true }, '2026-11-14', localNoon, 'Africa/Cairo'),
+    isOfferActiveNow(
+      { offer_type: 'percent', value: 20, start_date: '2026-11-14', end_date: '2026-11-14', is_active: true },
+      '2026-11-14',
+      localNoon,
+      'Africa/Cairo',
+    ),
     true,
   );
   console.log('✓ §B passed: DTO shape preserved in both generic normalizers; string bounds still work');
@@ -190,11 +192,10 @@ console.log(out.join('\\n'));
   // exists on this host; the mechanism is proven in §0 and the
   // posting method still runs -- see posting-book-precision.spec.ts
   // in the related run) ----
-  const cashPosting = readSrc('modules/accounting/services/inventory-manufacturing-cash-posting/installment-interest.slice.ts');
-  assert.ok(
-    cashPosting.includes('formatLocalCalendarDay(item.due_date)'),
-    'dueDay must key from local calendar parts',
+  const cashPosting = readSrc(
+    'modules/accounting/services/inventory-manufacturing-cash-posting/installment-interest.slice.ts',
   );
+  assert.ok(cashPosting.includes('formatLocalCalendarDay(item.due_date)'), 'dueDay must key from local calendar parts');
   assert.ok(!cashPosting.includes('new Date(item.due_date).toISOString()'), 'the UTC-sliced dueDay must be gone');
   console.log('✓ §C passed: installment-interest dueDay keys from the stored day');
 
@@ -230,7 +231,12 @@ console.log(out.join('\\n'));
        INSERT INTO hr_holidays VALUES (1, 't1', '2026-11-14', '2026-11-14');
        INSERT INTO hr_holidays VALUES (2, 't1', '2026-11-10', '2026-11-12');`,
     );
-    const holidays = await getMonthlyOfficialHolidayDates(db, 't1', new Date(2026, 10, 1), new Date(2026, 10, 30, 23, 59, 59));
+    const holidays = await getMonthlyOfficialHolidayDates(
+      db,
+      't1',
+      new Date(2026, 10, 1),
+      new Date(2026, 10, 30, 23, 59, 59),
+    );
     assert.ok(holidays.includes('2026-11-14'), `holiday ending today must be in the set (got ${holidays.join(',')})`);
     assert.ok(holidays.includes('2026-11-10') && holidays.includes('2026-11-11') && holidays.includes('2026-11-12'));
     assert.ok(!holidays.includes('2026-11-13'), 'no day is shifted a day early');
@@ -251,19 +257,37 @@ console.log(out.join('\\n'));
   const vanPreSales =
     readSrc('modules/delivery-reps/services/van-pre-sales/warehouse-catalog.ts') +
     readSrc('modules/delivery-reps/services/van-pre-sales/create-pre-sales-order.ts');
-  assert.ok(vanPreSales.includes('normalizePgDateOnly(off.start_date)'), 'van pre-sales must use the pg-aware normalizer');
-  assert.ok(!vanPreSales.includes('normalizeDateOnly(off.start_date)'), 'van pre-sales must not use the UTC slice on stored bounds');
+  assert.ok(
+    vanPreSales.includes('normalizePgDateOnly(off.start_date)'),
+    'van pre-sales must use the pg-aware normalizer',
+  );
+  assert.ok(
+    !vanPreSales.includes('normalizeDateOnly(off.start_date)'),
+    'van pre-sales must not use the UTC slice on stored bounds',
+  );
   // The catalog offers map lives in the P4 pos slice now (catalog-product
   // split 2026-11-16); the facade keeps only a delegate. normalizePgDateOnly
   // is imported into the slice, and the old private normalizeDateOnly is gone.
   const catalog = readSrc('modules/catalog/services/catalog-product-pos.service.ts');
-  assert.ok(catalog.includes('normalizePgDateOnly(offer.start_date)'), 'catalog offers map must use the pg-aware normalizer');
-  assert.ok(!catalog.includes('this.normalizeDateOnly(offer.start_date)'), 'the catalog UTC-slice normalizer must be gone');
+  assert.ok(
+    catalog.includes('normalizePgDateOnly(offer.start_date)'),
+    'catalog offers map must use the pg-aware normalizer',
+  );
+  assert.ok(
+    !catalog.includes('this.normalizeDateOnly(offer.start_date)'),
+    'the catalog UTC-slice normalizer must be gone',
+  );
   assert.ok(!catalog.includes('private normalizeDateOnly'), 'the catalog private UTC-slice normalizer must be deleted');
   const salesHelper = readSrc('modules/sales/helpers/sales-write.helper.ts');
-  assert.ok(salesHelper.includes('normalizePgDateOnly(offer.start_date)'), 'isOfferActive must use the pg-aware normalizer');
+  assert.ok(
+    salesHelper.includes('normalizePgDateOnly(offer.start_date)'),
+    'isOfferActive must use the pg-aware normalizer',
+  );
   const storefront = readSrc('modules/storefront/engines/storefront-offers.engine.ts');
-  assert.ok(storefront.includes('normalizePgDateOnly(offer.start_date)'), 'isOfferActiveNow must use the pg-aware normalizer');
+  assert.ok(
+    storefront.includes('normalizePgDateOnly(offer.start_date)'),
+    'isOfferActiveNow must use the pg-aware normalizer',
+  );
   console.log('✓ §F passed: van pre-sales + catalog + both selectors wired to normalizePgDateOnly');
 
   console.log('CLOCK-B5-P1 CHECKS PASSED');

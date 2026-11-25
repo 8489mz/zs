@@ -37,7 +37,10 @@ async function main(): Promise<void> {
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
   const calls: Array<{ sourceType: string; lines: Array<{ debit: number; credit: number }> }> = [];
   const postingStub = {
-    postDomainJournal: async (_trx: unknown, input: { sourceType: string; lines: Array<{ debit: number; credit: number }> }) => {
+    postDomainJournal: async (
+      _trx: unknown,
+      input: { sourceType: string; lines: Array<{ debit: number; credit: number }> },
+    ) => {
       calls.push({ sourceType: input.sourceType, lines: input.lines });
       return 900;
     },

@@ -104,7 +104,9 @@ async function main(): Promise<void> {
   const childDir = fs.mkdtempSync(path.join(__dirname, '.tmp-b4p3-'));
   const childTmp = path.join(childDir, 'cairo-check.ts');
   try {
-    fs.writeFileSync(childTmp, `import { formatLocalCalendarDay, todayTenantDate } from '../../../src/common/utils/tenant-timezone.util';
+    fs.writeFileSync(
+      childTmp,
+      `import { formatLocalCalendarDay, todayTenantDate } from '../../../src/common/utils/tenant-timezone.util';
 async function main(): Promise<void> {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (zone !== 'Africa/Cairo') { console.error('child zone is ' + zone + ', want Africa/Cairo'); process.exit(2); }
@@ -115,7 +117,8 @@ async function main(): Promise<void> {
   console.log('CAIRO-CHILD-OK');
 }
 main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
-`);
+`,
+    );
     const out = execFileSync('npx', ['ts-node', childTmp], {
       cwd: path.resolve(__dirname, '../..'),
       env: { ...process.env, TZ: 'Africa/Cairo' },
@@ -123,43 +126,79 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
       encoding: 'utf8',
     });
     assert.ok(out.includes('CAIRO-CHILD-OK'), `Cairo child must pass (got: ${out.trim()})`);
-    console.log('✓ §0 passed: the UTC slice yields the previous day under Cairo TZ; the tenant-day helpers yield the stored day');
+    console.log(
+      '✓ §0 passed: the UTC slice yields the previous day under Cairo TZ; the tenant-day helpers yield the stored day',
+    );
   } finally {
-    try { fs.unlinkSync(childTmp); } catch { /* already gone */ }
-    try { fs.rmSync(childDir, { recursive: true, force: true }); } catch { /* already gone */ }
+    try {
+      fs.unlinkSync(childTmp);
+    } catch {
+      /* already gone */
+    }
+    try {
+      fs.rmSync(childDir, { recursive: true, force: true });
+    } catch {
+      /* already gone */
+    }
   }
 
   // §A — maritime S1: cargo-insurance issue_date derives from the tenant day.
   // Maritime split: createCargoInsurance lives in the insurance-warehouse slice.
   const insuranceWarehouse = read('modules/maritime-freight/maritime-freight-insurance-warehouse.service.ts');
   const cargo = fnSlice(insuranceWarehouse, 'async createCargoInsurance(');
-  assert.ok(cargo.includes('resolveBusinessDateKey(trx, tenantId, new Date())'), 'cargo insurance issue_date default derives via resolveBusinessDateKey');
-  assert.ok(!cargo.includes("new Date().toISOString().split('T')[0]"), 'cargo insurance issue_date no longer uses the UTC slice');
+  assert.ok(
+    cargo.includes('resolveBusinessDateKey(trx, tenantId, new Date())'),
+    'cargo insurance issue_date default derives via resolveBusinessDateKey',
+  );
+  assert.ok(
+    !cargo.includes("new Date().toISOString().split('T')[0]"),
+    'cargo insurance issue_date no longer uses the UTC slice',
+  );
   console.log('✓ §A passed: cargo insurance defaults to the tenant day, not the UTC day');
 
   // §B — maritime S2: container return_deadline derives from the tenant day.
   // Maritime split: addJobMilestone lives in the jobs-milestones slice.
   const milestones = read('modules/maritime-freight/maritime-freight-jobs-milestones.service.ts');
   const milestone = fnSlice(milestones, 'async addJobMilestone(', 6000);
-  assert.ok(milestone.includes('resolveBusinessDateKey(this.db, tenantId, deadline)'), 'return_deadline derives via resolveBusinessDateKey');
-  assert.ok(!milestone.includes("deadline.toISOString().split('T')[0]"), 'return_deadline no longer uses the UTC slice');
+  assert.ok(
+    milestone.includes('resolveBusinessDateKey(this.db, tenantId, deadline)'),
+    'return_deadline derives via resolveBusinessDateKey',
+  );
+  assert.ok(
+    !milestone.includes("deadline.toISOString().split('T')[0]"),
+    'return_deadline no longer uses the UTC slice',
+  );
   console.log('✓ §B passed: container return_deadline keys on the tenant day of the same instant');
 
   // ---- shared PGlite fixture for §C-§F (one db, distinct tenants per tz) ----
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   const txHelper = new TransactionHelper();
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const financeService = new PurchasesFinanceService();
-  const idempotency = { reserveOperation: async () => null, commitOperation: async () => {}, recordFailure: async () => {} } as unknown as IdempotencyService;
+  const idempotency = {
+    reserveOperation: async () => null,
+    commitOperation: async () => {},
+    recordFailure: async () => {},
+  } as unknown as IdempotencyService;
   const schedService = new SupplierPaymentSchedulesService(db, txHelper, financeService, posting, idempotency);
   const writeService = new PurchasesWriteService(db, txHelper, {} as any, {} as any, {} as any, {} as any, {} as any);
   const contracting = new ContractingService(db, {} as any);
   const importSales = new ImportSalesService(db, undefined);
 
   const authFor = (tenantId: string): AuthContext =>
-    ({ tenantId, accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['purchases', 'accounting'] }) as unknown as AuthContext;
+    ({
+      tenantId,
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      username: 'admin',
+      permissions: ['purchases', 'accounting'],
+    }) as unknown as AuthContext;
 
   try {
     await pg.exec(`
@@ -243,7 +282,12 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     const auth = authFor('t-b4p3');
 
     // §C — S3 supplier firstDueDate bound [today-7, today+5y], service-driven.
-    const schedPayload = (firstDueDate: string): any => ({ mode: 'count', installmentCount: 1, scheduleAmount: 20, firstDueDate });
+    const schedPayload = (firstDueDate: string): any => ({
+      mode: 'count',
+      installmentCount: 1,
+      scheduleAmount: 20,
+      firstDueDate,
+    });
     await assert.rejects(
       schedService.createForSupplier(10, schedPayload(shiftDay(-8)), auth),
       codeIs('SUPPLIER_SCHEDULE_FIRST_DUE_DATE_OUT_OF_RANGE'),
@@ -262,17 +306,33 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     const createdToday = await schedService.createForSupplier(11, schedPayload(todayCairo), auth);
     assert.equal((createdToday as any).schedules.length, 1, 'today must be accepted for the supplier schedule');
     const dueToday = await pg.query('SELECT due_date FROM supplier_payment_schedules WHERE supplier_id = 11');
-    assert.equal((dueToday.rows[0] as any).due_date.toISOString().slice(0, 10), todayCairo, 'stored first due date is the tenant today');
+    assert.equal(
+      (dueToday.rows[0] as any).due_date.toISOString().slice(0, 10),
+      todayCairo,
+      'stored first due date is the tenant today',
+    );
     const createdPast = await schedService.createForSupplier(12, schedPayload(shiftDay(-7)), auth);
     assert.equal((createdPast as any).schedules.length, 1, 'today-7 (the past boundary) must be accepted');
     await assert.rejects(
-      schedService.createForPurchase(1, { mode: 'count', installmentCount: 1, scheduleAmount: 20, firstDueDate: shiftDay(-8), intervalDays: 30 }, auth),
+      schedService.createForPurchase(
+        1,
+        { mode: 'count', installmentCount: 1, scheduleAmount: 20, firstDueDate: shiftDay(-8), intervalDays: 30 },
+        auth,
+      ),
       codeIs('SUPPLIER_SCHEDULE_FIRST_DUE_DATE_OUT_OF_RANGE'),
       'createForPurchase enforces the same bound',
     );
-    await schedService.createForPurchase(2, { mode: 'count', installmentCount: 1, scheduleAmount: 20, firstDueDate: todayCairo, intervalDays: 30 }, auth);
+    await schedService.createForPurchase(
+      2,
+      { mode: 'count', installmentCount: 1, scheduleAmount: 20, firstDueDate: todayCairo, intervalDays: 30 },
+      auth,
+    );
     const duePurchase = await pg.query('SELECT due_date FROM supplier_payment_schedules WHERE purchase_id = 2');
-    assert.equal((duePurchase.rows[0] as any).due_date.toISOString().slice(0, 10), todayCairo, 'purchase schedule stores the tenant today');
+    assert.equal(
+      (duePurchase.rows[0] as any).due_date.toISOString().slice(0, 10),
+      todayCairo,
+      'purchase schedule stores the tenant today',
+    );
     console.log('✓ §C passed: supplier firstDueDate is bounded [today-7, today+5y] on both create paths');
 
     // §D — S4 purchase requiredDate bound [today, today+365], service-driven.
@@ -304,7 +364,9 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     );
     try {
       await writeService.createPurchase({ requiredDate: reqDate(todayCairo) } as any, authPur);
-      assert.fail('an accepted required date must proceed past the bound (and fail downstream without supplier tables)');
+      assert.fail(
+        'an accepted required date must proceed past the bound (and fail downstream without supplier tables)',
+      );
     } catch (e) {
       assert.ok(!/PURCHASE_REQUIRED_DATE_OUT_OF_RANGE/.test(codeOf(e)), `today must be accepted (got: ${codeOf(e)})`);
     }
@@ -312,7 +374,10 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
       await writeService.createPurchase({ requiredDate: shiftDay(365) } as any, authPur);
       assert.fail('today+365 must proceed past the bound');
     } catch (e) {
-      assert.ok(!/PURCHASE_REQUIRED_DATE_OUT_OF_RANGE/.test(codeOf(e)), `today+365 (the future boundary) must be accepted (got: ${codeOf(e)})`);
+      assert.ok(
+        !/PURCHASE_REQUIRED_DATE_OUT_OF_RANGE/.test(codeOf(e)),
+        `today+365 (the future boundary) must be accepted (got: ${codeOf(e)})`,
+      );
     }
     await assert.rejects(
       writeService.updatePurchase(1, { requiredDate: reqDate(shiftDay(400)) } as any, authPur),
@@ -323,7 +388,10 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
       await writeService.updatePurchase(1, { requiredDate: reqDate(todayCairo) } as any, authPur);
       assert.fail('an accepted required date on update must proceed past the bound');
     } catch (e) {
-      assert.ok(/PURCHASE_EDIT_REASON_REQUIRED/.test(codeOf(e)), `update with a valid date must reach the edit-reason check (got: ${codeOf(e)})`);
+      assert.ok(
+        /PURCHASE_EDIT_REASON_REQUIRED/.test(codeOf(e)),
+        `update with a valid date must reach the edit-reason check (got: ${codeOf(e)})`,
+      );
     }
     // Midway guard pin: a Date built from a UTC-midnight date-only string
     // carries the UTC day, not the tenant day. The normalization must not
@@ -334,23 +402,38 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
       await writeService.createPurchase({ requiredDate: new Date(`${utcToday}T00:00:00.000Z`) } as any, authMid);
       assert.fail('the Midway required date must proceed past the bound');
     } catch (e) {
-      assert.ok(!/PURCHASE_REQUIRED_DATE_OUT_OF_RANGE/.test(codeOf(e)), `UTC-today must be accepted for a Midway tenant (got: ${codeOf(e)})`);
+      assert.ok(
+        !/PURCHASE_REQUIRED_DATE_OUT_OF_RANGE/.test(codeOf(e)),
+        `UTC-today must be accepted for a Midway tenant (got: ${codeOf(e)})`,
+      );
     }
     console.log('✓ §D passed: purchase requiredDate is bounded [today, today+365] on create and update');
 
     // §E — S5 contracting createDocument issued_date, source pin + value check.
     const contractingSrc = read('modules/contracting/services/contracting-documents.service.ts');
     const createDoc = fnSlice(contractingSrc, 'async createDocument(', 3500);
-    assert.ok(createDoc.includes('issued_date: todayTenantDate(businessTz)'), 'createDocument supplies issued_date from the tenant day');
-    for (const [tenantId, tz] of [['t-b4p3-mid', 'Pacific/Midway'], ['t-b4p3-kir', 'Pacific/Kiritimati']] as const) {
-      const res = await contracting.createDocument(authFor(tenantId), 'proj-b4p3', { title: `B4-P3 doc ${tenantId}` } as any);
+    assert.ok(
+      createDoc.includes('issued_date: todayTenantDate(businessTz)'),
+      'createDocument supplies issued_date from the tenant day',
+    );
+    for (const [tenantId, tz] of [
+      ['t-b4p3-mid', 'Pacific/Midway'],
+      ['t-b4p3-kir', 'Pacific/Kiritimati'],
+    ] as const) {
+      const res = await contracting.createDocument(authFor(tenantId), 'proj-b4p3', {
+        title: `B4-P3 doc ${tenantId}`,
+      } as any);
       assert.ok(res?.document?.id, 'createDocument must return the created document');
       const want = todayTenantDate(tz);
       const yyMmDd = want.slice(2, 4) + want.slice(5, 7) + want.slice(8, 10);
       assert.ok(String(res.document.docNumber).includes(yyMmDd), `document number must embed the tenant day (${want})`);
       const row = await pg.query('SELECT issued_date FROM contracting_documents WHERE tenant_id = $1', [tenantId]);
       const stored = (row.rows[0] as any).issued_date.toISOString().slice(0, 10);
-      assert.equal(stored, want, `contracting issued_date for ${tenantId} must be the tenant day (${want}), got ${stored}`);
+      assert.equal(
+        stored,
+        want,
+        `contracting issued_date for ${tenantId} must be the tenant day (${want}), got ${stored}`,
+      );
     }
     console.log('✓ §E passed: contracting documents are issued on the tenant day (Midway + Kiritimati)');
 
@@ -361,14 +444,26 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     const importSrc = read('modules/import-sales/services/import-sourcing.service.ts');
     const seed = fnSlice(importSrc, 'async syncOfficialTariffs(', 3500);
     assert.ok(seed.includes('effective_date'), 'tariff seed supplies effective_date');
-    assert.ok(seed.includes('resolveBusinessDateKey(this.db, tenantId, new Date())'), 'tariff seed effective_date derives via resolveBusinessDateKey');
-    for (const [tenantId, tz] of [['t-b4p3-mid', 'Pacific/Midway'], ['t-b4p3-kir', 'Pacific/Kiritimati']] as const) {
+    assert.ok(
+      seed.includes('resolveBusinessDateKey(this.db, tenantId, new Date())'),
+      'tariff seed effective_date derives via resolveBusinessDateKey',
+    );
+    for (const [tenantId, tz] of [
+      ['t-b4p3-mid', 'Pacific/Midway'],
+      ['t-b4p3-kir', 'Pacific/Kiritimati'],
+    ] as const) {
       await importSales.syncOfficialTariffs(tenantId);
-      const row = await pg.query('SELECT effective_date FROM import_customs_tariffs WHERE tenant_id = $1 LIMIT 1', [tenantId]);
+      const row = await pg.query('SELECT effective_date FROM import_customs_tariffs WHERE tenant_id = $1 LIMIT 1', [
+        tenantId,
+      ]);
       assert.ok(row.rows.length > 0, `tariff seed must insert rows for ${tenantId}`);
       const stored = (row.rows[0] as any).effective_date.toISOString().slice(0, 10);
       const want = todayTenantDate(tz);
-      assert.equal(stored, want, `tariff effective_date for ${tenantId} must be the tenant day (${want}), got ${stored}`);
+      assert.equal(
+        stored,
+        want,
+        `tariff effective_date for ${tenantId} must be the tenant day (${want}), got ${stored}`,
+      );
     }
     console.log('✓ §F passed: seeded tariffs carry the tenant day as effective_date (Midway + Kiritimati)');
 

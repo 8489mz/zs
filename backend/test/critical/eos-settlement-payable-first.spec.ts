@@ -17,13 +17,22 @@ import { Kysely, sql } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', userId: 1, username: 'tester', role: 'admin', permissions: [] } as never;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  userId: 1,
+  username: 'tester',
+  role: 'admin',
+  permissions: [],
+} as never;
 const FOUNDATION_STUB = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as never;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_resolve, reject) => setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms)),
+    new Promise<T>((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms),
+    ),
   ]);
 }
 
@@ -93,7 +102,11 @@ async function main(): Promise<void> {
     );
     assert.equal(res.posted, true);
 
-    const lines = await db.selectFrom('journal_entry_lines').selectAll().execute() as unknown as Array<{ account_id: number; debit: string; credit: string }>;
+    const lines = (await db.selectFrom('journal_entry_lines').selectAll().execute()) as unknown as Array<{
+      account_id: number;
+      debit: string;
+      credit: string;
+    }>;
     const byAccount = new Map<number, { debit: number; credit: number }>();
     let totalDebit = 0;
     let totalCredit = 0;
@@ -118,5 +131,8 @@ async function main(): Promise<void> {
 
 main().then(
   () => process.exit(0),
-  (error) => { console.error(error); process.exit(1); },
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
 );

@@ -40,7 +40,10 @@ import { PGlite } from '@electric-sql/pglite';
 import { Kysely, sql } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
-import { up as twinScopeUp, down as twinScopeDown } from '../../src/database/migrations/2040000000268_field_collection_payment_scope';
+import {
+  up as twinScopeUp,
+  down as twinScopeDown,
+} from '../../src/database/migrations/2040000000268_field_collection_payment_scope';
 import { VanSalesService } from '../../src/modules/delivery-reps/van-sales.service';
 import {
   fieldCollectionPaymentScope,
@@ -181,10 +184,12 @@ async function main(): Promise<void> {
     fieldCollectionPaymentScope({ tripId: 11, repId: 7, paymentMethod: 'instapay', clientTxId: 'abc-1' }),
     { van_trip_id: 11, rep_id: 7, client_tx_id: 'abc-1', payment_channel: 'instapay' },
   );
-  assert.deepEqual(
-    fieldCollectionPaymentScope({ tripId: 11, repId: 7 }),
-    { van_trip_id: 11, rep_id: 7, client_tx_id: null, payment_channel: 'cash' },
-  );
+  assert.deepEqual(fieldCollectionPaymentScope({ tripId: 11, repId: 7 }), {
+    van_trip_id: 11,
+    rep_id: 7,
+    client_tx_id: null,
+    payment_channel: 'cash',
+  });
 
   // ---- Part 3: the service drive ----
   const basePayload = { tripId: 11, customerId: 21, amount: 100, paymentMethod: 'cash' as const };
@@ -236,7 +241,11 @@ async function main(): Promise<void> {
   // clientTxId column hit -> deduplicated, tag query never runs.
   {
     const { result, internalCalls, queries } = await drive(
-      { columnRow: { id: 9, amount: 100, note: PAYMENT_NOTE }, tagRow: { id: 9, amount: 100, note: PAYMENT_NOTE }, twinRow: null },
+      {
+        columnRow: { id: 9, amount: 100, note: PAYMENT_NOTE },
+        tagRow: { id: 9, amount: 100, note: PAYMENT_NOTE },
+        twinRow: null,
+      },
       { ...basePayload, clientTxId: 'abc-1' },
     );
     assert.equal(result.receiptNo, 'COL-1');

@@ -48,8 +48,17 @@ async function run(): Promise<void> {
 
   // O22: operations endpoints need a platform super admin; the probes stay public.
   const guardNames = (method: keyof HealthController) =>
-    ((Reflect.getMetadata(GUARDS_METADATA, HealthController.prototype[method] as object) || []) as Array<{ name: string }>).map((g) => g.name);
-  for (const method of ['getDatabaseStats', 'getSystemMetrics', 'testTelegramAlert', 'runDatabaseOptimization'] as const) {
+    (
+      (Reflect.getMetadata(GUARDS_METADATA, HealthController.prototype[method] as object) || []) as Array<{
+        name: string;
+      }>
+    ).map((g) => g.name);
+  for (const method of [
+    'getDatabaseStats',
+    'getSystemMetrics',
+    'testTelegramAlert',
+    'runDatabaseOptimization',
+  ] as const) {
     assert.deepEqual(guardNames(method), ['SessionAuthGuard', 'SuperAdminRoleGuard'], `${method} is super-admin only`);
   }
   for (const method of ['getHealth', 'getLiveness', 'getReadiness'] as const) {

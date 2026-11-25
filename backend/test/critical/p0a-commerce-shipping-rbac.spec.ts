@@ -1,13 +1,24 @@
 import { strict as assert } from 'node:assert';
 import { ForbiddenException } from '@nestjs/common';
-import { canManagePriceLists, canManageShippingConfig, canOperateShipping, canWriteQuotations } from '../../src/core/auth/utils/commerce-operation-guards';
+import {
+  canManagePriceLists,
+  canManageShippingConfig,
+  canOperateShipping,
+  canWriteQuotations,
+} from '../../src/core/auth/utils/commerce-operation-guards';
 import { BostaService } from '../../src/modules/bosta/bosta.service';
 import { GccShippingService } from '../../src/modules/gcc-shipping/gcc-shipping.service';
 import { PriceListsService } from '../../src/modules/sales/services/price-lists.service';
 import { QuotationsService } from '../../src/modules/sales/services/quotations.service';
 
 async function run() {
-  const base = { userId: 9, role: 'cashier', tenantId: 'merchant-a', accountId: 'merchant-a:main', permissions: [] } as any;
+  const base = {
+    userId: 9,
+    role: 'cashier',
+    tenantId: 'merchant-a',
+    accountId: 'merchant-a:main',
+    permissions: [],
+  } as any;
   for (const check of [canManagePriceLists, canManageShippingConfig, canOperateShipping, canWriteQuotations]) {
     assert.throws(() => check(base), ForbiddenException);
   }
@@ -29,4 +40,7 @@ async function run() {
   await assert.rejects(() => quotes.createQuotation({} as any, base), ForbiddenException);
   await assert.rejects(() => quotes.convertToSale(10, base), ForbiddenException);
 }
-run().catch((err) => { console.error(err); process.exitCode = 1; });
+run().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

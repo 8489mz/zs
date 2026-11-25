@@ -35,7 +35,10 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
 
@@ -101,13 +104,22 @@ async function main(): Promise<void> {
         VALUES (3,'t1','a1',9,1,1,5000,0,0,0,0,0,0,0,0,0,5000,5000,'reviewed','',NOW());
     `);
     for (const code of [1110, 1120, 1160, 2140, 2145, 2146, 6200, 6210, 7100]) {
-      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), '']);
+      await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [
+        code,
+        't1',
+        String(code),
+        '',
+      ]);
     }
     const entryDateKey = async (entryId: number): Promise<string> => {
-      const r = await pg.query<{ d: string }>('SELECT entry_date::date::text AS d FROM journal_entries WHERE id=$1', [entryId]);
+      const r = await pg.query<{ d: string }>('SELECT entry_date::date::text AS d FROM journal_entries WHERE id=$1', [
+        entryId,
+      ]);
       return r.rows[0].d;
     };
-    const journalLines = async (entryId: number): Promise<Array<{ account_id: number; debit: string; credit: string }>> => {
+    const journalLines = async (
+      entryId: number,
+    ): Promise<Array<{ account_id: number; debit: string; credit: string }>> => {
       const r = await pg.query<{ account_id: number; debit: string; credit: string }>(
         'SELECT account_id, debit::text, credit::text FROM journal_entry_lines WHERE journal_entry_id=$1 ORDER BY id',
         [entryId],
@@ -123,7 +135,10 @@ async function main(): Promise<void> {
     const accrualLines = await journalLines(accrual.journalEntryId);
     assert.deepEqual(
       accrualLines.map((l) => [l.account_id, Number(l.debit), Number(l.credit)]),
-      [[6200, 5000, 0], [2140, 0, 5000]],
+      [
+        [6200, 5000, 0],
+        [2140, 0, 5000],
+      ],
     );
 
     // 2. Payment: dated today, not at the period end.
@@ -140,14 +155,14 @@ async function main(): Promise<void> {
     const paymentLines = await journalLines(payment.journalEntryId);
     assert.deepEqual(
       paymentLines.map((l) => [l.account_id, Number(l.debit), Number(l.credit)]),
-      [[2140, 5000, 0], [1110, 0, 5000]],
+      [
+        [2140, 5000, 0],
+        [1110, 0, 5000],
+      ],
     );
 
     // 3. Missing period end: fail closed, nothing posted.
-    await assert.rejects(
-      posting.postPayrollAccrual(db, 9, auth),
-      /HR_PAYROLL_ACCRUAL_PERIOD_END_MISSING/,
-    );
+    await assert.rejects(posting.postPayrollAccrual(db, 9, auth), /HR_PAYROLL_ACCRUAL_PERIOD_END_MISSING/);
     const missing = await pg.query<{ c: string }>(
       "SELECT COUNT(*)::text AS c FROM journal_entries WHERE source_type='hr_payroll_accrual' AND source_id=9",
     );

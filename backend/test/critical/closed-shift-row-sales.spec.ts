@@ -44,13 +44,23 @@ const PASSWORD = 'cashier-pw-1';
 const SHIFT_AT = '2026-01-01T00:00:00.000Z';
 
 const cashierAuth: AuthContext = {
-  userId: 2, sessionId: 'spec', username: 'cashier-a', role: 'cashier',
-  permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: [],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const managerAuth: AuthContext = {
-  userId: 3, sessionId: 'spec', username: 'manager', role: 'manager',
-  permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 3,
+  sessionId: 'spec',
+  username: 'manager',
+  role: 'manager',
+  permissions: [],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -90,22 +100,70 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: '"KWD"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'KWD', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'manager', role: 'manager', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'KWD', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'manager', role: 'manager', is_active: true })
+    .execute();
   const record = await createPasswordRecord(PASSWORD);
-  await anyDb.updateTable('users').set({ password_hash: record.hash, password_salt: record.salt }).where('id', '=', 2).execute();
+  await anyDb
+    .updateTable('users')
+    .set({ password_hash: record.hash, password_salt: record.salt })
+    .where('id', '=', 2)
+    .execute();
   const accounts: Array<[number, string, string, string, boolean]> = [
-    [1110, '1110', 'asset', 'debit', true], [1120, '1120', 'asset', 'debit', true],
-    [1130, '1130', 'asset', 'debit', false], [1140, '1140', 'asset', 'debit', false],
-    [4100, '4100', 'income', 'credit', false], [5100, '5100', 'expense', 'debit', false],
-    [7100, '7100', 'income', 'credit', false], [7210, '7210', 'expense', 'debit', false],
+    [1110, '1110', 'asset', 'debit', true],
+    [1120, '1120', 'asset', 'debit', true],
+    [1130, '1130', 'asset', 'debit', false],
+    [1140, '1140', 'asset', 'debit', false],
+    [4100, '4100', 'income', 'credit', false],
+    [5100, '5100', 'expense', 'debit', false],
+    [7100, '7100', 'income', 'credit', false],
+    [7210, '7210', 'expense', 'debit', false],
   ];
   for (const [id, code, type, balance, cashBank] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, name_en: code, account_type: type, normal_balance: balance, is_cash_bank: cashBank, is_active: true, is_tax: false, account_group: 'g' }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({
+        id,
+        tenant_id: TENANT,
+        code,
+        name_ar: code,
+        name_en: code,
+        account_type: type,
+        normal_balance: balance,
+        is_cash_bank: cashBank,
+        is_active: true,
+        is_tax: false,
+        account_group: 'g',
+      })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, cash_account_id: 1110, bank_account_id: 1120, customer_receivable_account_id: 1130, inventory_account_id: 1140, sales_revenue_account_id: 4100, cogs_account_id: 5100 }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      cogs_account_id: 5100,
+    })
+    .execute();
 }
 
 /**
@@ -120,16 +178,17 @@ function rowDisplayedDifference(row: Record<string, number>): number {
   const cashSales = Number(row.cashSalesTotal || 0) + Number(row.serviceCashTotal || 0);
   const deliveryIn = Number(row.cashDrawerDeliveryCashInTotal || 0);
   const manualIn = Number(row.cashDrawerManualCashInTotal || 0);
-  const totalOut = Number(row.cashDrawerCashOutTotal || 0)
-    + Number(row.expensesTotal || 0)
-    + Number(row.supplierPaymentsTotal || 0)
-    + Number(row.saleReturnCashRefundTotal || 0);
+  const totalOut =
+    Number(row.cashDrawerCashOutTotal || 0) +
+    Number(row.expensesTotal || 0) +
+    Number(row.supplierPaymentsTotal || 0) +
+    Number(row.saleReturnCashRefundTotal || 0);
   const dynamicExpectedCash = openingCash + cashSales + manualIn + deliveryIn - totalOut;
   return Number(row.countedCash || 0) - dynamicExpectedCash;
 }
 
 async function listRow(drawer: CashDrawerService, shiftId: number): Promise<any> {
-  const listing = await drawer.listCashierShifts({}, managerAuth) as any;
+  const listing = (await drawer.listCashierShifts({}, managerAuth)) as any;
   const row = (listing.cashierShifts as any[]).find((r) => Number(r.id) === shiftId);
   assert.ok(row, `shift ${shiftId} must be listed`);
   return row;
@@ -137,7 +196,10 @@ async function listRow(drawer: CashDrawerService, shiftId: number): Promise<any>
 
 async function main(): Promise<void> {
   const { pg, db } = await makeDb();
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   try {
@@ -146,26 +208,77 @@ async function main(): Promise<void> {
 
     // Shift 1: opening cash 100; a cash sale 625.80 and a card sale
     // 200.00 inside the shift window, both posted by the opener.
-    await anyDb.insertInto('cashier_shifts').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-1', opened_by: 2, status: 'open', branch_id: null, location_id: null, opening_cash: 100, expected_cash: 100, created_at: SHIFT_AT }).execute();
-    await anyDb.insertInto('sales').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, status: 'posted', created_by: 2, created_at: '2026-01-01T10:00:00.000Z', total: 625.80, paid_amount: 625.80, payment_channel: 'cash' }).execute();
-    await anyDb.insertInto('sale_payments').values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 1, payment_channel: 'cash', amount: 625.80 }).execute();
-    await anyDb.insertInto('sales').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, status: 'posted', created_by: 2, created_at: '2026-01-01T11:00:00.000Z', total: 200, paid_amount: 200, payment_channel: 'card' }).execute();
-    await anyDb.insertInto('sale_payments').values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 2, payment_channel: 'card', amount: 200 }).execute();
+    await anyDb
+      .insertInto('cashier_shifts')
+      .values({
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'SHIFT-1',
+        opened_by: 2,
+        status: 'open',
+        branch_id: null,
+        location_id: null,
+        opening_cash: 100,
+        expected_cash: 100,
+        created_at: SHIFT_AT,
+      })
+      .execute();
+    await anyDb
+      .insertInto('sales')
+      .values({
+        id: 1,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        status: 'posted',
+        created_by: 2,
+        created_at: '2026-01-01T10:00:00.000Z',
+        total: 625.8,
+        paid_amount: 625.8,
+        payment_channel: 'cash',
+      })
+      .execute();
+    await anyDb
+      .insertInto('sale_payments')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 1, payment_channel: 'cash', amount: 625.8 })
+      .execute();
+    await anyDb
+      .insertInto('sales')
+      .values({
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        status: 'posted',
+        created_by: 2,
+        created_at: '2026-01-01T11:00:00.000Z',
+        total: 200,
+        paid_amount: 200,
+        payment_channel: 'card',
+      })
+      .execute();
+    await anyDb
+      .insertInto('sale_payments')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 2, payment_channel: 'card', amount: 200 })
+      .execute();
 
     // Case 1 — pending_review: the cashier closes with the exact
     // counted cash (100 opening + 625.80 cash sales). The row must
     // already show the real sales, not 0.00.
-    await drawer.closeCashierShift(1, {
-      countedCash: 725.80,
-      cardDeclaredTotal: 200,
-      cardOperationCount: 1,
-      cardDetails: [{ amount: 200, reference: 'AUTH-1' }],
-      walletDeclaredTotal: 0,
-      walletOperationCount: 0,
-      instapayDeclaredTotal: 0,
-      instapayOperationCount: 0,
-      managerPin: PASSWORD,
-    }, cashierAuth);
+    await drawer.closeCashierShift(
+      1,
+      {
+        countedCash: 725.8,
+        cardDeclaredTotal: 200,
+        cardOperationCount: 1,
+        cardDetails: [{ amount: 200, reference: 'AUTH-1' }],
+        walletDeclaredTotal: 0,
+        walletOperationCount: 0,
+        instapayDeclaredTotal: 0,
+        instapayOperationCount: 0,
+        managerPin: PASSWORD,
+      },
+      cashierAuth,
+    );
 
     const pendingRow = await listRow(drawer, 1);
     assert.equal(pendingRow.status, 'pending_review');
@@ -194,9 +307,40 @@ async function main(): Promise<void> {
 
     // Case 3 — open shift unchanged: a still-open shift keeps
     // showing its live sales exactly as before.
-    await anyDb.insertInto('cashier_shifts').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-2', opened_by: 2, status: 'open', branch_id: null, location_id: null, opening_cash: 0, expected_cash: 0, created_at: '2026-01-02T00:00:00.000Z' }).execute();
-    await anyDb.insertInto('sales').values({ id: 3, tenant_id: TENANT, account_id: ACCOUNT, status: 'posted', created_by: 2, created_at: '2026-01-02T10:00:00.000Z', total: 50, paid_amount: 50, payment_channel: 'cash' }).execute();
-    await anyDb.insertInto('sale_payments').values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 3, payment_channel: 'cash', amount: 50 }).execute();
+    await anyDb
+      .insertInto('cashier_shifts')
+      .values({
+        id: 2,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        doc_no: 'SHIFT-2',
+        opened_by: 2,
+        status: 'open',
+        branch_id: null,
+        location_id: null,
+        opening_cash: 0,
+        expected_cash: 0,
+        created_at: '2026-01-02T00:00:00.000Z',
+      })
+      .execute();
+    await anyDb
+      .insertInto('sales')
+      .values({
+        id: 3,
+        tenant_id: TENANT,
+        account_id: ACCOUNT,
+        status: 'posted',
+        created_by: 2,
+        created_at: '2026-01-02T10:00:00.000Z',
+        total: 50,
+        paid_amount: 50,
+        payment_channel: 'cash',
+      })
+      .execute();
+    await anyDb
+      .insertInto('sale_payments')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 3, payment_channel: 'cash', amount: 50 })
+      .execute();
     const openRow = await listRow(drawer, 2);
     assert.equal(openRow.status, 'open');
     assert.equal(openRow.shiftSalesTotal, 50);

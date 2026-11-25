@@ -95,10 +95,7 @@ function totals(overrides: Partial<SummaryTotals>): SummaryTotals {
 
 // No services at all: count and total are unchanged (plain regression).
 (function testNoServicesUnchanged() {
-  const summary = buildCommercialSummary(
-    counts({ salesCount: 3 }),
-    totals({ salesTotal: 400 }),
-  );
+  const summary = buildCommercialSummary(counts({ salesCount: 3 }), totals({ salesTotal: 400 }));
 
   assert.equal(summary.sales.count, 3);
   assert.equal(summary.sales.invoiceCount, 3);

@@ -48,10 +48,20 @@ import { Kysely } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
 import { QuotationsService } from '../../src/modules/sales/services/quotations.service';
-import { recomputeSalesOrderMoney, assertQuotationMoney } from '../../src/modules/sales/helpers/sales-order-money.helper';
+import {
+  recomputeSalesOrderMoney,
+  assertQuotationMoney,
+} from '../../src/modules/sales/helpers/sales-order-money.helper';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 type QuoteItem = { quantity: number; unitPrice: number; discount?: number; total?: number };
 
@@ -66,9 +76,26 @@ async function makeDb(): Promise<Kysely<Database>> {
     CREATE TABLE quotation_items (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, quotation_id bigint NOT NULL, product_id bigint NOT NULL, product_name text NOT NULL DEFAULT '', unit_name text, quantity numeric NOT NULL DEFAULT 0, unit_price numeric NOT NULL DEFAULT 0, discount numeric NOT NULL DEFAULT 0, total numeric NOT NULL DEFAULT 0, notes text, created_at timestamptz NOT NULL DEFAULT NOW());
     CREATE TABLE operation_executions (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, idempotency_key text NOT NULL, operation_type text NOT NULL, status text NOT NULL, request_hash text NOT NULL, document_id text, response_payload text, error_code text, created_at timestamptz NOT NULL DEFAULT NOW(), updated_at timestamptz NOT NULL DEFAULT NOW(), completed_at timestamptz);
   `);
-  await db.insertInto('branches').values({ id: 1, tenant_id: 't1', default_stock_location_id: 10 } as any).execute();
-  await db.insertInto('products').values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: 100, reserved_qty: 0 } as any).execute();
-  await db.insertInto('product_location_stock').values({ tenant_id: 't1', account_id: 'a1', product_id: 1, branch_id: 1, location_id: 10, qty: 100, reserved_qty: 0 } as any).execute();
+  await db
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: 't1', default_stock_location_id: 10 } as any)
+    .execute();
+  await db
+    .insertInto('products')
+    .values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: 100, reserved_qty: 0 } as any)
+    .execute();
+  await db
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: 't1',
+      account_id: 'a1',
+      product_id: 1,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+      reserved_qty: 0,
+    } as any)
+    .execute();
   return db;
 }
 
@@ -77,22 +104,45 @@ async function seedQuotation(
   id: number,
   opts: { status?: string; discount?: number; tax?: number; total: number; items: QuoteItem[] },
 ): Promise<void> {
-  await db.insertInto('quotations').values({
-    id, tenant_id: 't1', account_id: 'a1', quotation_number: `Q-${id}`, customer_name: 'Cust',
-    branch_id: 1, discount_amount: opts.discount ?? 0, tax_amount: opts.tax ?? 0,
-    total_amount: opts.total, status: opts.status ?? 'draft', updated_at: new Date(),
-  } as any).execute();
+  await db
+    .insertInto('quotations')
+    .values({
+      id,
+      tenant_id: 't1',
+      account_id: 'a1',
+      quotation_number: `Q-${id}`,
+      customer_name: 'Cust',
+      branch_id: 1,
+      discount_amount: opts.discount ?? 0,
+      tax_amount: opts.tax ?? 0,
+      total_amount: opts.total,
+      status: opts.status ?? 'draft',
+      updated_at: new Date(),
+    } as any)
+    .execute();
   for (const item of opts.items) {
-    await db.insertInto('quotation_items').values({
-      tenant_id: 't1', account_id: 'a1', quotation_id: id, product_id: 1,
-      quantity: item.quantity, unit_price: item.unitPrice, discount: item.discount ?? 0,
-      total: item.total ?? item.quantity * item.unitPrice - (item.discount ?? 0),
-    } as any).execute();
+    await db
+      .insertInto('quotation_items')
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        quotation_id: id,
+        product_id: 1,
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        discount: item.discount ?? 0,
+        total: item.total ?? item.quantity * item.unitPrice - (item.discount ?? 0),
+      } as any)
+      .execute();
   }
 }
 
 async function quoteRow(db: Kysely<Database>, id: number): Promise<{ status: string; saleId: number | null }> {
-  const row = await db.selectFrom('quotations').select(['status', 'sale_id']).where('id', '=', id).executeTakeFirstOrThrow();
+  const row = await db
+    .selectFrom('quotations')
+    .select(['status', 'sale_id'])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
   return { status: String(row.status), saleId: row.sale_id };
 }
 
@@ -187,7 +237,9 @@ async function main(): Promise<void> {
     // discount consistent -> still converts (per-line totals are
     // inert display data at conversion).
     await seedQuotation(db, 5, {
-      total: 136.8, discount: 10, tax: 16.8,
+      total: 136.8,
+      discount: 10,
+      tax: 16.8,
       items: [
         { quantity: 2, unitPrice: 50, discount: 5, total: 9999 },
         { quantity: 1, unitPrice: 30, discount: 5, total: 9999 },
@@ -200,13 +252,31 @@ async function main(): Promise<void> {
     // 6. Source pins: the quotation conversion recomputes and
     // asserts with the quotation-named code, and never uses the
     // sales-order error name for a quotation.
-    const quoteSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/quotations.service.ts'), 'utf8');
+    const quoteSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/services/quotations.service.ts'),
+      'utf8',
+    );
     const convertSlice = quoteSource.slice(quoteSource.indexOf('async convertToSale'));
-    assert.ok(convertSlice.includes('recomputeSalesOrderMoney'), 'quotation conversion must recompute its money from the lines');
-    assert.ok(convertSlice.includes('assertQuotationMoney'), 'quotation conversion must assert with the quotation-named assert');
-    assert.ok(convertSlice.includes('recomputedQuotationMoney.total'), 'the cash payment must come from the recomputed total');
-    assert.ok(!convertSlice.includes('SALES_ORDER_TOTAL_MISMATCH'), 'a quotation must never throw the sales-order error name');
-    const helperSource = readFileSync(resolve(__dirname, '../../src/modules/sales/helpers/sales-order-money.helper.ts'), 'utf8');
+    assert.ok(
+      convertSlice.includes('recomputeSalesOrderMoney'),
+      'quotation conversion must recompute its money from the lines',
+    );
+    assert.ok(
+      convertSlice.includes('assertQuotationMoney'),
+      'quotation conversion must assert with the quotation-named assert',
+    );
+    assert.ok(
+      convertSlice.includes('recomputedQuotationMoney.total'),
+      'the cash payment must come from the recomputed total',
+    );
+    assert.ok(
+      !convertSlice.includes('SALES_ORDER_TOTAL_MISMATCH'),
+      'a quotation must never throw the sales-order error name',
+    );
+    const helperSource = readFileSync(
+      resolve(__dirname, '../../src/modules/sales/helpers/sales-order-money.helper.ts'),
+      'utf8',
+    );
     assert.ok(helperSource.includes('QUOTATION_TOTAL_MISMATCH'), 'the helper must define the quotation-named error');
   } finally {
     await db.destroy();

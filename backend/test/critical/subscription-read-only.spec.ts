@@ -16,10 +16,11 @@ function queryBuilder(rows: any[]): any {
     get(_t, prop: string) {
       if (prop === 'execute') return async () => rows;
       if (prop === 'executeTakeFirst') return async () => rows[0];
-      if (prop === 'executeTakeFirstOrThrow') return async () => {
-        if (!rows[0]) throw new Error('no row');
-        return rows[0];
-      };
+      if (prop === 'executeTakeFirstOrThrow')
+        return async () => {
+          if (!rows[0]) throw new Error('no row');
+          return rows[0];
+        };
       if (prop === 'then') return undefined;
       return () => builder;
     },
@@ -54,10 +55,21 @@ function fakeDb(fixtures: Record<string, any[]>) {
   } as any;
 }
 
-const auth = { tenantId: 'acme', accountId: 'acme', userId: 1, username: 'owner', role: 'admin', permissions: [] } as unknown as AuthContext;
+const auth = {
+  tenantId: 'acme',
+  accountId: 'acme',
+  userId: 1,
+  username: 'owner',
+  role: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function testReadPathWritesNothing(): Promise<void> {
-  const service = new TenantSubscriptionService(fakeDb({}), { log: async () => undefined } as any, new PricingCatalogService());
+  const service = new TenantSubscriptionService(
+    fakeDb({}),
+    { log: async () => undefined } as any,
+    new PricingCatalogService(),
+  );
   const result: any = await service.getMySubscription(auth);
 
   assert.deepEqual(writes, [], `the subscription screen must not write: ${writes.join(', ')}`);
@@ -65,7 +77,10 @@ async function testReadPathWritesNothing(): Promise<void> {
   assert.equal(result.subscription, null, 'no subscription row means none is reported');
   // PRICE-2 / F40: كانت هنا قائمة باقات بأسعار مكتوبة في الكود تُعرض حين يكون الجدول
   // فارغاً، بمعرّفات وهمية 1..4 تُمرَّر إلى طلب الترقية. جدول فارغ = لا باقات.
-  assert.ok(Array.isArray(result.availablePlans) && result.availablePlans.length === 0, 'an empty catalogue lists no plans — it never invents them');
+  assert.ok(
+    Array.isArray(result.availablePlans) && result.availablePlans.length === 0,
+    'an empty catalogue lists no plans — it never invents them',
+  );
   assert.equal(result.tenant.id, 'acme');
 }
 
@@ -74,9 +89,50 @@ async function testExistingRowsAreReported(): Promise<void> {
   const ends = new Date(Date.now() + 30 * 24 * 3600 * 1000);
   const service = new TenantSubscriptionService(
     fakeDb({
-      tenants: [{ id: 'acme', slug: 'acme', business_name: 'Acme', owner_name: 'O', owner_phone: '1', status: 'active', trial_ends_at: null, created_at: new Date() }],
-      saas_plans: [{ id: 7, code: 'PRO', name: 'Pro', price: 7500, currency: 'EGP', billing_period_months: 12, max_users: 6, max_branches: 3, is_active: true }],
-      tenant_subscriptions: [{ id: 3, status: 'active', starts_at: new Date(), ends_at: ends, grace_ends_at: null, auto_renew: false, created_at: new Date(), plan_id: 7, plan_name: 'Pro', plan_code: 'PRO', plan_price: 7500, plan_currency: 'EGP', billing_period_months: 12, max_users: 6, max_branches: 3 }],
+      tenants: [
+        {
+          id: 'acme',
+          slug: 'acme',
+          business_name: 'Acme',
+          owner_name: 'O',
+          owner_phone: '1',
+          status: 'active',
+          trial_ends_at: null,
+          created_at: new Date(),
+        },
+      ],
+      saas_plans: [
+        {
+          id: 7,
+          code: 'PRO',
+          name: 'Pro',
+          price: 7500,
+          currency: 'EGP',
+          billing_period_months: 12,
+          max_users: 6,
+          max_branches: 3,
+          is_active: true,
+        },
+      ],
+      tenant_subscriptions: [
+        {
+          id: 3,
+          status: 'active',
+          starts_at: new Date(),
+          ends_at: ends,
+          grace_ends_at: null,
+          auto_renew: false,
+          created_at: new Date(),
+          plan_id: 7,
+          plan_name: 'Pro',
+          plan_code: 'PRO',
+          plan_price: 7500,
+          plan_currency: 'EGP',
+          billing_period_months: 12,
+          max_users: 6,
+          max_branches: 3,
+        },
+      ],
     }),
     { log: async () => undefined } as any,
     new PricingCatalogService(),
@@ -96,16 +152,18 @@ async function testPricingResolutionForMaritimeAndContracting(): Promise<void> {
         { key: 'maritimeFreightModuleEnabled', value: 'true' },
         { key: 'businessIndustry', value: '"general"' },
       ],
-      tenants: [
-        { id: 'acme', country_code: 'EG', activity_type: 'retail_general' },
-      ],
+      tenants: [{ id: 'acme', country_code: 'EG', activity_type: 'retail_general' }],
     }),
     { log: async () => undefined } as any,
     new PricingCatalogService(),
   );
 
   const maritimePricing: any = await maritimeService.getResolvedPricing(auth);
-  assert.equal(maritimePricing.product.id, 'maritime', 'must resolve to maritime product when maritimeFreightModuleEnabled is true');
+  assert.equal(
+    maritimePricing.product.id,
+    'maritime',
+    'must resolve to maritime product when maritimeFreightModuleEnabled is true',
+  );
   assert.equal(maritimePricing.product.name, 'نظام الشحن والتخليص والخدمات اللوجستية');
   assert.equal(maritimePricing.levels[0].name, 'مكتب');
   assert.equal(maritimePricing.levels[1].name, 'شركة');
@@ -114,19 +172,19 @@ async function testPricingResolutionForMaritimeAndContracting(): Promise<void> {
   // Scenario 2: Tenant has contractingModuleEnabled=true in settings
   const contractingService = new TenantSubscriptionService(
     fakeDb({
-      settings: [
-        { key: 'contractingModuleEnabled', value: 'true' },
-      ],
-      tenants: [
-        { id: 'acme', country_code: 'EG', activity_type: 'retail_general' },
-      ],
+      settings: [{ key: 'contractingModuleEnabled', value: 'true' }],
+      tenants: [{ id: 'acme', country_code: 'EG', activity_type: 'retail_general' }],
     }),
     { log: async () => undefined } as any,
     new PricingCatalogService(),
   );
 
   const contractingPricing: any = await contractingService.getResolvedPricing(auth);
-  assert.equal(contractingPricing.product.id, 'contracting', 'must resolve to contracting product when contractingModuleEnabled is true');
+  assert.equal(
+    contractingPricing.product.id,
+    'contracting',
+    'must resolve to contracting product when contractingModuleEnabled is true',
+  );
   assert.equal(contractingPricing.product.name, 'نظام المقاولات وإدارة المشاريع الإنشائية');
 }
 

@@ -95,7 +95,14 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
  * - Case 8, source pin + invariant pin + pure status computation pin.
  */
 
-const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'tester', permissions: [] } as unknown as AuthContext;
+const auth = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'tester',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -206,20 +213,36 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 2125, 4100, 5100, 5190, 7290]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)',
-      [code, 't1', String(code), code === 1150 || code === 2120]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,is_tax) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      String(code),
+      code === 1150 || code === 2120,
+    ]);
   }
   return { pg, db };
 }
 
 async function seedCurrency(db: Kysely<Database>, code: string): Promise<void> {
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'currency', value: code } as never).execute();
-  await db.insertInto('settings' as never).values({ tenant_id: 't1', key: 'timezone', value: 'Africa/Cairo' } as never).execute();
-  await db.insertInto('currency_exchange_rates' as never).values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never).execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'currency', value: code } as never)
+    .execute();
+  await db
+    .insertInto('settings' as never)
+    .values({ tenant_id: 't1', key: 'timezone', value: 'Africa/Cairo' } as never)
+    .execute();
+  await db
+    .insertInto('currency_exchange_rates' as never)
+    .values({ tenant_id: 't1', currency_code: code, exchange_rate: 1, is_base: true } as never)
+    .execute();
 }
 
 function makeServices(db: Kysely<Database>): { write: PurchasesWriteService; grn: GoodsReceiptService } {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auditStub = { log: async () => undefined };
   const idempotencyStub = {};
@@ -229,8 +252,13 @@ function makeServices(db: Kysely<Database>): { write: PurchasesWriteService; grn
   };
   const finance = new PurchasesFinanceService();
   const write = new PurchasesWriteService(
-    db as any, new TransactionHelper(), auditStub as any,
-    finance, queryStub as unknown as PurchasesQueryService, posting as any, idempotencyStub as any,
+    db as any,
+    new TransactionHelper(),
+    auditStub as any,
+    finance,
+    queryStub as unknown as PurchasesQueryService,
+    posting as any,
+    idempotencyStub as any,
   );
   const grn = new GoodsReceiptService(db as any, posting as any, finance as any);
   return { write, grn };
@@ -239,48 +267,116 @@ function makeServices(db: Kysely<Database>): { write: PurchasesWriteService; grn
 type PoItemSeed = { id: number; productId: number; quantity: number; received?: number };
 
 async function seedBase(db: Kysely<Database>): Promise<void> {
-  await db.insertInto('stock_locations' as never).values({ id: 1, tenant_id: 't1', branch_id: null, name: 'Main' } as never).execute();
-  await db.insertInto('suppliers' as never).values({ id: 9, tenant_id: 't1', name: 'Supplier', balance: 0 } as never).execute();
+  await db
+    .insertInto('stock_locations' as never)
+    .values({ id: 1, tenant_id: 't1', branch_id: null, name: 'Main' } as never)
+    .execute();
+  await db
+    .insertInto('suppliers' as never)
+    .values({ id: 9, tenant_id: 't1', name: 'Supplier', balance: 0 } as never)
+    .execute();
   for (const productId of [10, 11]) {
-    await db.insertInto('products' as never).values({
-      id: productId, tenant_id: 't1', account_id: 'a1', name: `Widget ${productId}`,
-      stock_qty: 0, reserved_qty: 0, cost_price: 10, track_serials: false,
-    } as never).execute();
+    await db
+      .insertInto('products' as never)
+      .values({
+        id: productId,
+        tenant_id: 't1',
+        account_id: 'a1',
+        name: `Widget ${productId}`,
+        stock_qty: 0,
+        reserved_qty: 0,
+        cost_price: 10,
+        track_serials: false,
+      } as never)
+      .execute();
   }
 }
 
 async function seedPo(db: Kysely<Database>, status: string, items: PoItemSeed[]): Promise<void> {
-  await db.insertInto('purchase_orders' as never).values({
-    id: 7, tenant_id: 't1', account_id: 'a1', order_number: 'PO-7', supplier_id: 9,
-    supplier_name: 'Supplier', warehouse_id: 1, subtotal: 140, tax_amount: 0, discount_amount: 0,
-    total_amount: 140, status, updated_at: new Date('2026-10-01'),
-  } as never).execute();
+  await db
+    .insertInto('purchase_orders' as never)
+    .values({
+      id: 7,
+      tenant_id: 't1',
+      account_id: 'a1',
+      order_number: 'PO-7',
+      supplier_id: 9,
+      supplier_name: 'Supplier',
+      warehouse_id: 1,
+      subtotal: 140,
+      tax_amount: 0,
+      discount_amount: 0,
+      total_amount: 140,
+      status,
+      updated_at: new Date('2026-10-01'),
+    } as never)
+    .execute();
   for (const item of items) {
-    await db.insertInto('purchase_order_items' as never).values({
-      id: item.id, tenant_id: 't1', account_id: 'a1', purchase_order_id: 7, product_id: item.productId,
-      product_name: `Widget ${item.productId}`, unit_name: 'piece', quantity: item.quantity,
-      received_quantity: item.received ?? 0, unit_cost: 10, tax_rate: 0, discount: 0, total: item.quantity * 10,
-    } as never).execute();
+    await db
+      .insertInto('purchase_order_items' as never)
+      .values({
+        id: item.id,
+        tenant_id: 't1',
+        account_id: 'a1',
+        purchase_order_id: 7,
+        product_id: item.productId,
+        product_name: `Widget ${item.productId}`,
+        unit_name: 'piece',
+        quantity: item.quantity,
+        received_quantity: item.received ?? 0,
+        unit_cost: 10,
+        tax_rate: 0,
+        discount: 0,
+        total: item.quantity * 10,
+      } as never)
+      .execute();
   }
 }
 
 async function seedGrn(
   db: Kysely<Database>,
   grnId: number,
-  lines: Array<{ id: number; poItemId: number | null; productId: number; ordered: number; accepted: number; rejected?: number }>,
+  lines: Array<{
+    id: number;
+    poItemId: number | null;
+    productId: number;
+    ordered: number;
+    accepted: number;
+    rejected?: number;
+  }>,
 ): Promise<void> {
-  await db.insertInto('goods_receipt_notes' as never).values({
-    id: grnId, tenant_id: 't1', account_id: 'a1', doc_no: `GRN-${grnId}`, purchase_order_id: 7,
-    supplier_id: 9, location_id: 1, received_at: new Date('2026-10-01T08:00:00.000Z'),
-    received_by: 1, status: 'draft',
-  } as never).execute();
+  await db
+    .insertInto('goods_receipt_notes' as never)
+    .values({
+      id: grnId,
+      tenant_id: 't1',
+      account_id: 'a1',
+      doc_no: `GRN-${grnId}`,
+      purchase_order_id: 7,
+      supplier_id: 9,
+      location_id: 1,
+      received_at: new Date('2026-10-01T08:00:00.000Z'),
+      received_by: 1,
+      status: 'draft',
+    } as never)
+    .execute();
   for (const line of lines) {
-    await db.insertInto('goods_receipt_lines' as never).values({
-      id: line.id, tenant_id: 't1', account_id: 'a1', grn_id: grnId,
-      purchase_order_item_id: line.poItemId, product_id: line.productId,
-      ordered_qty: line.ordered, received_qty: line.accepted + (line.rejected ?? 0),
-      accepted_qty: line.accepted, rejected_qty: line.rejected ?? 0, unit_cost: 10,
-    } as never).execute();
+    await db
+      .insertInto('goods_receipt_lines' as never)
+      .values({
+        id: line.id,
+        tenant_id: 't1',
+        account_id: 'a1',
+        grn_id: grnId,
+        purchase_order_item_id: line.poItemId,
+        product_id: line.productId,
+        ordered_qty: line.ordered,
+        received_qty: line.accepted + (line.rejected ?? 0),
+        accepted_qty: line.accepted,
+        rejected_qty: line.rejected ?? 0,
+        unit_cost: 10,
+      } as never)
+      .execute();
   }
 }
 
@@ -288,38 +384,94 @@ async function seedBill(
   db: Kysely<Database>,
   purchaseId: number,
   status: string,
-  lines: Array<{ id: number; poItemId: number | null; productId: number; qty: number; received: number; multiplier?: number }>,
+  lines: Array<{
+    id: number;
+    poItemId: number | null;
+    productId: number;
+    qty: number;
+    received: number;
+    multiplier?: number;
+  }>,
 ): Promise<void> {
   const total = lines.reduce((sum, line) => sum + line.qty * 10, 0);
-  await db.insertInto('purchases' as never).values({
-    id: purchaseId, tenant_id: 't1', account_id: 'a1', doc_no: `P${purchaseId}`, supplier_id: 9,
-    payment_type: 'credit', subtotal: total, discount: 0, tax_amount: 0, tax_rate: 0,
-    prices_include_tax: false, total, paid_amount: 0, branch_id: null, location_id: 1,
-    status, lifecycle_status: status === 'draft' ? 'purchase_order' : 'posted',
-    matched_status: 'pending', po_id: 7, created_by: 1,
-  } as never).execute();
+  await db
+    .insertInto('purchases' as never)
+    .values({
+      id: purchaseId,
+      tenant_id: 't1',
+      account_id: 'a1',
+      doc_no: `P${purchaseId}`,
+      supplier_id: 9,
+      payment_type: 'credit',
+      subtotal: total,
+      discount: 0,
+      tax_amount: 0,
+      tax_rate: 0,
+      prices_include_tax: false,
+      total,
+      paid_amount: 0,
+      branch_id: null,
+      location_id: 1,
+      status,
+      lifecycle_status: status === 'draft' ? 'purchase_order' : 'posted',
+      matched_status: 'pending',
+      po_id: 7,
+      created_by: 1,
+    } as never)
+    .execute();
   for (const line of lines) {
-    await db.insertInto('purchase_items' as never).values({
-      id: line.id, tenant_id: 't1', account_id: 'a1', purchase_id: purchaseId, product_id: line.productId,
-      product_name: `Widget ${line.productId}`, qty: line.qty, unit_cost: 10,
-      unit_multiplier: line.multiplier ?? 1, line_total: line.qty * 10, unit_name: 'piece',
-      location_id: 1, po_item_id: line.poItemId, received_qty: line.received,
-    } as never).execute();
+    await db
+      .insertInto('purchase_items' as never)
+      .values({
+        id: line.id,
+        tenant_id: 't1',
+        account_id: 'a1',
+        purchase_id: purchaseId,
+        product_id: line.productId,
+        product_name: `Widget ${line.productId}`,
+        qty: line.qty,
+        unit_cost: 10,
+        unit_multiplier: line.multiplier ?? 1,
+        line_total: line.qty * 10,
+        unit_name: 'piece',
+        location_id: 1,
+        po_item_id: line.poItemId,
+        received_qty: line.received,
+      } as never)
+      .execute();
   }
 }
 
-async function readPo(db: Kysely<Database>): Promise<{ status: string; items: Array<{ id: number; quantity: number; received: number }> }> {
-  const order = await (db as any).selectFrom('purchase_orders').select('status').where('id', '=', 7).executeTakeFirstOrThrow() as unknown as { status: string };
-  const rows = await (db as any).selectFrom('purchase_order_items').select(['id', 'quantity', 'received_quantity'])
-    .where('purchase_order_id', '=', 7).orderBy('id').execute() as unknown as Array<{ id: number; quantity: string; received_quantity: string }>;
+async function readPo(
+  db: Kysely<Database>,
+): Promise<{ status: string; items: Array<{ id: number; quantity: number; received: number }> }> {
+  const order = (await (db as any)
+    .selectFrom('purchase_orders')
+    .select('status')
+    .where('id', '=', 7)
+    .executeTakeFirstOrThrow()) as unknown as { status: string };
+  const rows = (await (db as any)
+    .selectFrom('purchase_order_items')
+    .select(['id', 'quantity', 'received_quantity'])
+    .where('purchase_order_id', '=', 7)
+    .orderBy('id')
+    .execute()) as unknown as Array<{ id: number; quantity: string; received_quantity: string }>;
   return {
     status: String(order.status),
-    items: rows.map((row) => ({ id: Number(row.id), quantity: Number(row.quantity), received: Number(row.received_quantity) })),
+    items: rows.map((row) => ({
+      id: Number(row.id),
+      quantity: Number(row.quantity),
+      received: Number(row.received_quantity),
+    })),
   };
 }
 
 async function readProductStock(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await (db as any).selectFrom('products').select('stock_qty').where('id', '=', productId).executeTakeFirstOrThrow() as unknown as { stock_qty: string };
+  const row = (await (db as any)
+    .selectFrom('products')
+    .select('stock_qty')
+    .where('id', '=', productId)
+    .executeTakeFirstOrThrow()) as unknown as { stock_qty: string };
   return Number(row.stock_qty);
 }
 
@@ -343,7 +495,10 @@ async function main(): Promise<void> {
       assert.equal(result.status, 'posted');
       const po = await readPo(db);
       assert.equal(po.status, 'partially_received');
-      assert.deepEqual(po.items.map((item) => item.received), [6, 4]);
+      assert.deepEqual(
+        po.items.map((item) => item.received),
+        [6, 4],
+      );
       assert.equal(await readProductStock(db, 10), 6);
       assert.equal(await readProductStock(db, 11), 4);
     } finally {
@@ -361,14 +516,15 @@ async function main(): Promise<void> {
         { id: 1, productId: 10, quantity: 10, received: 6 },
         { id: 2, productId: 11, quantity: 4, received: 4 },
       ]);
-      await seedGrn(db, 2, [
-        { id: 3, poItemId: 1, productId: 10, ordered: 10, accepted: 4 },
-      ]);
+      await seedGrn(db, 2, [{ id: 3, poItemId: 1, productId: 10, ordered: 10, accepted: 4 }]);
       const { grn } = makeServices(db);
       await grn.postGoodsReceipt(2, auth);
       const po = await readPo(db);
       assert.equal(po.status, 'received');
-      assert.deepEqual(po.items.map((item) => item.received), [10, 4]);
+      assert.deepEqual(
+        po.items.map((item) => item.received),
+        [10, 4],
+      );
     } finally {
       await db.destroy();
     }
@@ -382,19 +538,18 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       await seedBase(db);
-      await seedPo(db, 'confirmed', [
-        { id: 1, productId: 10, quantity: 5 },
-      ]);
-      await seedBill(db, 1, 'draft', [
-        { id: 1, poItemId: 1, productId: 10, qty: 5, received: 0, multiplier: 2 },
-      ]);
+      await seedPo(db, 'confirmed', [{ id: 1, productId: 10, quantity: 5 }]);
+      await seedBill(db, 1, 'draft', [{ id: 1, poItemId: 1, productId: 10, qty: 5, received: 0, multiplier: 2 }]);
       const { write } = makeServices(db);
       const result = await write.receivePurchaseGoods(1, [{ itemId: 1, receivedQty: 5 }], auth);
       assert.equal(result.lifecycleStatus, 'posted');
       assert.equal(result.matchedStatus, 'matched');
       const po = await readPo(db);
       assert.equal(po.status, 'received');
-      assert.deepEqual(po.items.map((item) => item.received), [5]);
+      assert.deepEqual(
+        po.items.map((item) => item.received),
+        [5],
+      );
       assert.equal(await readProductStock(db, 10), 10);
     } finally {
       await db.destroy();
@@ -422,7 +577,10 @@ async function main(): Promise<void> {
       assert.equal(result.lifecycleStatus, 'grn_received');
       const po = await readPo(db);
       assert.equal(po.status, 'partially_received');
-      assert.deepEqual(po.items.map((item) => item.received), [4, 0]);
+      assert.deepEqual(
+        po.items.map((item) => item.received),
+        [4, 0],
+      );
     } finally {
       await db.destroy();
     }
@@ -434,12 +592,8 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       await seedBase(db);
-      await seedPo(db, 'confirmed', [
-        { id: 1, productId: 10, quantity: 10 },
-      ]);
-      await seedBill(db, 3, 'draft', [
-        { id: 1, poItemId: 1, productId: 10, qty: 10, received: 0 },
-      ]);
+      await seedPo(db, 'confirmed', [{ id: 1, productId: 10, quantity: 10 }]);
+      await seedBill(db, 3, 'draft', [{ id: 1, poItemId: 1, productId: 10, qty: 10, received: 0 }]);
       const { write } = makeServices(db);
       await assert.rejects(
         () => write.receivePurchaseGoods(3, [{ itemId: 1, receivedQty: 11 }], auth),
@@ -447,7 +601,10 @@ async function main(): Promise<void> {
       );
       const po = await readPo(db);
       assert.equal(po.status, 'confirmed');
-      assert.deepEqual(po.items.map((item) => item.received), [0]);
+      assert.deepEqual(
+        po.items.map((item) => item.received),
+        [0],
+      );
       assert.equal(await readProductStock(db, 10), 0);
     } finally {
       await db.destroy();
@@ -460,18 +617,17 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       await seedBase(db);
-      await seedPo(db, 'confirmed', [
-        { id: 1, productId: 10, quantity: 10 },
-      ]);
-      await seedGrn(db, 4, [
-        { id: 4, poItemId: 1, productId: 10, ordered: 10, accepted: 6 },
-      ]);
+      await seedPo(db, 'confirmed', [{ id: 1, productId: 10, quantity: 10 }]);
+      await seedGrn(db, 4, [{ id: 4, poItemId: 1, productId: 10, ordered: 10, accepted: 6 }]);
       const { grn } = makeServices(db);
       await grn.postGoodsReceipt(4, auth);
       await assert.rejects(() => grn.postGoodsReceipt(4, auth));
       const po = await readPo(db);
       assert.equal(po.status, 'partially_received');
-      assert.deepEqual(po.items.map((item) => item.received), [6]);
+      assert.deepEqual(
+        po.items.map((item) => item.received),
+        [6],
+      );
       assert.equal(await readProductStock(db, 10), 6);
     } finally {
       await db.destroy();
@@ -485,17 +641,16 @@ async function main(): Promise<void> {
     try {
       await seedCurrency(db, 'EGP');
       await seedBase(db);
-      await seedPo(db, 'converted_to_bill', [
-        { id: 1, productId: 10, quantity: 10 },
-      ]);
-      await seedGrn(db, 5, [
-        { id: 5, poItemId: 1, productId: 10, ordered: 10, accepted: 10 },
-      ]);
+      await seedPo(db, 'converted_to_bill', [{ id: 1, productId: 10, quantity: 10 }]);
+      await seedGrn(db, 5, [{ id: 5, poItemId: 1, productId: 10, ordered: 10, accepted: 10 }]);
       const { grn } = makeServices(db);
       await grn.postGoodsReceipt(5, auth);
       const po = await readPo(db);
       assert.equal(po.status, 'converted_to_bill');
-      assert.deepEqual(po.items.map((item) => item.received), [10]);
+      assert.deepEqual(
+        po.items.map((item) => item.received),
+        [10],
+      );
     } finally {
       await db.destroy();
     }
@@ -506,35 +661,74 @@ async function main(): Promise<void> {
   // advance; the invariant entry exists exactly once; and the pure
   // status computation settles the partial/full boundary.
   {
-    assert.equal(computePoReceiptStatus([{ id: 1, quantity: 10, receivedQuantity: 6 }], 'confirmed'), 'partially_received');
+    assert.equal(
+      computePoReceiptStatus([{ id: 1, quantity: 10, receivedQuantity: 6 }], 'confirmed'),
+      'partially_received',
+    );
     assert.equal(computePoReceiptStatus([{ id: 1, quantity: 10, receivedQuantity: 10 }], 'confirmed'), 'received');
     assert.equal(computePoReceiptStatus([{ id: 1, quantity: 10, receivedQuantity: 10 }], 'converted_to_bill'), null);
     assert.equal(computePoReceiptStatus([{ id: 1, quantity: 10, receivedQuantity: 0 }], 'confirmed'), null);
-    const postSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/goods-receipt-post.service.ts'), 'utf8');
+    const postSource = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/goods-receipt-post.service.ts'),
+      'utf8',
+    );
     const postStart = postSource.indexOf('async postGoodsReceipt(');
     assert.ok(postStart > 0, 'postGoodsReceipt exists');
     const postBody = postSource.slice(postStart, postSource.indexOf('\n  /**', postStart + 1));
-    assert.ok(postBody.includes('await advancePurchaseOrderReceipt('), 'GRN posting must advance the PO in its transaction');
-    const billSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/goods-receipt-bill.service.ts'), 'utf8');
+    assert.ok(
+      postBody.includes('await advancePurchaseOrderReceipt('),
+      'GRN posting must advance the PO in its transaction',
+    );
+    const billSource = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/goods-receipt-bill.service.ts'),
+      'utf8',
+    );
     const billStart = billSource.indexOf('async createBillFromReceipts(');
     assert.ok(billStart > 0, 'createBillFromReceipts exists');
     const billBody = billSource.slice(billStart, billSource.indexOf('\n  async ', billStart + 1));
-    assert.ok(!billBody.includes('advancePurchaseOrderReceipt'), 'the GRN bill must never advance: its stock was already received');
-    const receiveSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-receive-goods.service.ts'), 'utf8');
+    assert.ok(
+      !billBody.includes('advancePurchaseOrderReceipt'),
+      'the GRN bill must never advance: its stock was already received',
+    );
+    const receiveSource = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/purchases-write-receive-goods.service.ts'),
+      'utf8',
+    );
     const receiveStart = receiveSource.indexOf('async receivePurchaseGoods(');
     assert.ok(receiveStart > 0, 'receivePurchaseGoods exists');
-    const receiveBody = receiveSource.slice(receiveStart, receiveSource.indexOf('\n  async ', receiveStart + 1) === -1 ? undefined : receiveSource.indexOf('\n  async ', receiveStart + 1));
-    assert.ok(receiveBody.includes('await advancePurchaseOrderReceipt('), 'the legacy receipt must advance the PO in its transaction');
-    const updateSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-update.service.ts'), 'utf8');
+    const receiveBody = receiveSource.slice(
+      receiveStart,
+      receiveSource.indexOf('\n  async ', receiveStart + 1) === -1
+        ? undefined
+        : receiveSource.indexOf('\n  async ', receiveStart + 1),
+    );
+    assert.ok(
+      receiveBody.includes('await advancePurchaseOrderReceipt('),
+      'the legacy receipt must advance the PO in its transaction',
+    );
+    const updateSource = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/purchases-write-update.service.ts'),
+      'utf8',
+    );
     const updateStart = updateSource.indexOf('async updatePurchase(');
     assert.ok(updateStart > 0, 'updatePurchase exists');
     const updateEnd = updateSource.indexOf('\n  async ', updateStart + 1);
     const updateBody = updateSource.slice(updateStart, updateEnd === -1 ? undefined : updateEnd);
     assert.ok(!updateBody.includes('advancePurchaseOrderReceipt'), 'the unreachable edit path must never advance');
-    const ordersSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchase-orders.service.ts'), 'utf8');
-    assert.ok(!ordersSource.includes('advancePurchaseOrderReceipt'), 'conversion must never advance: it posts no stock');
+    const ordersSource = readFileSync(
+      resolve(__dirname, '../../src/modules/purchases/services/purchase-orders.service.ts'),
+      'utf8',
+    );
+    assert.ok(
+      !ordersSource.includes('advancePurchaseOrderReceipt'),
+      'conversion must never advance: it posts no stock',
+    );
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-PO-RECEIVED-QUANTITY-ADVANCE').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(
+      invariants.split('INV-PO-RECEIVED-QUANTITY-ADVANCE').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
   }
 
   console.log('po-received-quantity-advance: all cases passed');

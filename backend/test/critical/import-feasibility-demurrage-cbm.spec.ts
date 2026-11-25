@@ -74,11 +74,19 @@ async function main(): Promise<void> {
 
   // Same study priced at FX 100: the reserve follows the rate.
   const fx100 = calculateImportFeasibility(trialInput(100));
-  assert.equal(fx100.scenarios.worst.demurrageReserveEgp, 30000, 'reserve doubles when the rate doubles (base: fixed 15000)');
+  assert.equal(
+    fx100.scenarios.worst.demurrageReserveEgp,
+    30000,
+    'reserve doubles when the rate doubles (base: fixed 15000)',
+  );
 
   // Same study at FX 48.5: 6 days x $50/day x 48.5 = 14,550.
   const fx485 = calculateImportFeasibility(trialInput(48.5));
-  assert.equal(fx485.scenarios.worst.demurrageReserveEgp, 14550, 'reserve follows the study rate, not a fixed lump sum');
+  assert.equal(
+    fx485.scenarios.worst.demurrageReserveEgp,
+    14550,
+    'reserve follows the study rate, not a fixed lump sum',
+  );
 
   // Two containers (1,000 x 30 kg = 30,000 kg) at FX 50: twice the reserve.
   const twoContainers = calculateImportFeasibility(trialInput(50, 1000, 30));

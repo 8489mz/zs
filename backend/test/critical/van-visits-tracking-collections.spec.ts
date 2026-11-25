@@ -101,36 +101,119 @@ async function seedFoundation(db: Kysely<Database>, tenant: string, currency: st
   // P7: the tenant zone is Africa/Cairo, seeded explicitly so the
   // visit-day filter is deterministic regardless of server env.
   await anyDb.insertInto('settings').values({ tenant_id: tenant, key: 'timezone', value: '"Africa/Cairo"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: tenant, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: tenant, currency_code: currency, exchange_rate: 1, is_base: true })
+    .execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: tenant, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
-    [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
-    [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],
+    [1110, '1110', 'asset'],
+    [1120, '1120', 'asset'],
+    [1130, '1130', 'asset'],
+    [1140, '1140', 'asset'],
+    [2120, '2120', 'liability'],
+    [4100, '4100', 'revenue'],
+    [4300, '4300', 'revenue'],
+    [5100, '5100', 'expense'],
   ];
   for (const [id, code, type] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: tenant, code, name_ar: code, account_type: type, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: tenant, code, name_ar: code, account_type: type, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: tenant, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: tenant, account_id: ACCOUNT, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 20, tenant_id: tenant, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true }).execute();
-  await anyDb.insertInto('delivery_representatives').values({ id: 1, tenant_id: tenant, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true }).execute();
-  await anyDb.insertInto('van_sales_trips').values({ id: 1, tenant_id: tenant, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: tenant,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: tenant,
+      account_id: ACCOUNT,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({ id: 20, tenant_id: tenant, account_id: ACCOUNT, name: 'Van', location_type: 'van', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('delivery_representatives')
+    .values({ id: 1, tenant_id: tenant, account_id: ACCOUNT, name: 'Rep 1', van_location_id: 20, is_van_rep: true })
+    .execute();
+  await anyDb
+    .insertInto('van_sales_trips')
+    .values({ id: 1, tenant_id: tenant, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' })
+    .execute();
 }
 
-async function seedProduct(db: Kysely<Database>, tenant: string, id: number, retail: number, cost: number, vanQty: number): Promise<void> {
+async function seedProduct(
+  db: Kysely<Database>,
+  tenant: string,
+  id: number,
+  retail: number,
+  cost: number,
+  vanQty: number,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('products').values({ id, tenant_id: tenant, account_id: ACCOUNT, name: `Product ${id}`, stock_qty: vanQty, cost_price: cost, retail_price: retail, wholesale_price: 0, credit_price: 0, is_active: true }).execute();
-  await anyDb.insertInto('product_location_stock').values({ tenant_id: tenant, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty }).execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id,
+      tenant_id: tenant,
+      account_id: ACCOUNT,
+      name: `Product ${id}`,
+      stock_qty: vanQty,
+      cost_price: cost,
+      retail_price: retail,
+      wholesale_price: 0,
+      credit_price: 0,
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({ tenant_id: tenant, account_id: ACCOUNT, product_id: id, location_id: 20, qty: vanQty })
+    .execute();
 }
 
-async function seedCustomer(db: Kysely<Database>, tenant: string, id: number, customerType: string, balance = 0): Promise<void> {
+async function seedCustomer(
+  db: Kysely<Database>,
+  tenant: string,
+  id: number,
+  customerType: string,
+  balance = 0,
+): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('customers').values({ id, tenant_id: tenant, account_id: ACCOUNT, name: `Customer ${id}`, balance, credit_limit: 5000, customer_type: customerType, metadata: '{}', is_active: true }).execute();
+  await anyDb
+    .insertInto('customers')
+    .values({
+      id,
+      tenant_id: tenant,
+      account_id: ACCOUNT,
+      name: `Customer ${id}`,
+      balance,
+      credit_limit: 5000,
+      customer_type: customerType,
+      metadata: '{}',
+      is_active: true,
+    })
+    .execute();
 }
 
 function buildSalesService(db: Kysely<Database>, tenant: string): VanSalesService {
@@ -139,11 +222,27 @@ function buildSalesService(db: Kysely<Database>, tenant: string): VanSalesServic
     ensureForScope: async () => {},
   } as never);
   const fraudStub = { recordSuspicionEvent: async () => {}, getSummary: async () => ({}), getEvents: async () => [] };
-  const service = new VanSalesService(db, {} as never, {} as never, posting as never,
-    undefined, undefined, undefined, undefined, undefined, undefined, fraudStub as never);
+  const service = new VanSalesService(
+    db,
+    {} as never,
+    {} as never,
+    posting as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    fraudStub as never,
+  );
   (service as any).resolveSystemAuthContext = async () => ({
-    userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
-    permissions: ['accounting'], tenantId: tenant, accountId: ACCOUNT,
+    userId: 1,
+    sessionId: 'spec',
+    username: 'spec',
+    role: 'admin',
+    permissions: ['accounting'],
+    tenantId: tenant,
+    accountId: ACCOUNT,
   });
   return service;
 }
@@ -170,22 +269,31 @@ async function main(): Promise<void> {
       const sales = buildSalesService(db, TENANT);
       const visits = buildVisitsService(db);
       const cash288 = await sales.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', customerId: 3060,
+        tripId: 1,
+        paymentMethod: 'cash',
+        customerId: 3060,
         items: [{ productId: 101, qty: 24, unitPrice: 12 }],
       });
       assert.equal(cash288.total, 288);
       const cash75 = await sales.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', customerId: 3060,
+        tripId: 1,
+        paymentMethod: 'cash',
+        customerId: 3060,
         items: [{ productId: 102, qty: 3, unitPrice: 25 }],
       });
       assert.equal(cash75.total, 75);
       const credit500 = await sales.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'credit', customerId: 3060,
+        tripId: 1,
+        paymentMethod: 'credit',
+        customerId: 3060,
         items: [{ productId: 103, qty: 10, unitPrice: 50 }],
       });
       assert.equal(credit500.total, 500);
       const col = await sales.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 3060, amount: 288, paymentMethod: 'cash',
+        tripId: 1,
+        customerId: 3060,
+        amount: 288,
+        paymentMethod: 'cash',
       });
       assert.equal(col.ok, true);
       assert.equal(col.amount, 288);
@@ -216,7 +324,9 @@ async function main(): Promise<void> {
       assert.equal(otherRes.metrics.totalCollectionsAmount, 0);
       assert.equal(otherRes.metrics.totalSalesAmount, 0);
       assert.equal(otherRes.metrics.totalVisits, 0);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 2. Cash sale only, no collection: "تحصيلات" is 0.
@@ -230,7 +340,9 @@ async function main(): Promise<void> {
       const sales = buildSalesService(db, TENANT);
       const visits = buildVisitsService(db);
       const res0 = await sales.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'cash', customerId: 3060,
+        tripId: 1,
+        paymentMethod: 'cash',
+        customerId: 3060,
         items: [{ productId: 101, qty: 24, unitPrice: 12 }],
       });
       assert.equal(res0.total, 288);
@@ -240,7 +352,9 @@ async function main(): Promise<void> {
       assert.equal(res.metrics.totalVisits, 1);
       assert.equal(res.visits[0].hasCollection, false);
       assert.equal(res.visits[0].collectionAmount, 0);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 3. Collection with no sale at all: the voucher alone drives
@@ -254,14 +368,19 @@ async function main(): Promise<void> {
       const sales = buildSalesService(db, TENANT);
       const visits = buildVisitsService(db);
       const col = await sales.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 3060, amount: 200, paymentMethod: 'cash',
+        tripId: 1,
+        customerId: 3060,
+        amount: 200,
+        paymentMethod: 'cash',
       });
       assert.equal(col.ok, true);
       const res = await visits.getVisitsHistory(TENANT, { tripId: 1 });
       assert.equal(res.metrics.totalCollectionsAmount, 200);
       assert.equal(res.metrics.totalSalesAmount, 0);
       assert.equal(res.metrics.totalVisits, 0);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 4. Trip scoping: collections on trip 1 (288) and trip 2 (100)
@@ -273,20 +392,31 @@ async function main(): Promise<void> {
       await seedFoundation(db, TENANT, 'EGP');
       await seedProduct(db, TENANT, 103, 50, 10, 100);
       await seedCustomer(db, TENANT, 3060, 'cash');
-      await (db as any).insertInto('van_sales_trips').values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' }).execute();
+      await (db as any)
+        .insertInto('van_sales_trips')
+        .values({ id: 2, tenant_id: TENANT, account_id: ACCOUNT, rep_id: 1, van_location_id: 20, status: 'open' })
+        .execute();
       const sales = buildSalesService(db, TENANT);
       const visits = buildVisitsService(db);
       const credit500 = await sales.executeFieldSale(1, TENANT, ACCOUNT, {
-        tripId: 1, paymentMethod: 'credit', customerId: 3060,
+        tripId: 1,
+        paymentMethod: 'credit',
+        customerId: 3060,
         items: [{ productId: 103, qty: 10, unitPrice: 50 }],
       });
       assert.equal(credit500.total, 500);
       const col1 = await sales.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 1, customerId: 3060, amount: 288, paymentMethod: 'cash',
+        tripId: 1,
+        customerId: 3060,
+        amount: 288,
+        paymentMethod: 'cash',
       });
       assert.equal(col1.ok, true);
       const col2 = await sales.recordFieldCollection(1, TENANT, ACCOUNT, {
-        tripId: 2, customerId: 3060, amount: 100, paymentMethod: 'cash',
+        tripId: 2,
+        customerId: 3060,
+        amount: 100,
+        paymentMethod: 'cash',
       });
       assert.equal(col2.ok, true);
 
@@ -300,7 +430,9 @@ async function main(): Promise<void> {
       const all = await visits.getVisitsHistory(TENANT, {});
       assert.equal(all.metrics.totalCollectionsAmount, 388);
       assert.equal(all.metrics.totalSalesAmount, 500);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // 5. Source pin: the synthetic branch no longer counts a cash sale
@@ -309,7 +441,13 @@ async function main(): Promise<void> {
   {
     // getVisitsHistory moved to the history slice in the #74 split; the slice holds
     // only that one method, so the body runs to the end of the file.
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-execution/van-field-execution-history.slice.ts'), 'utf8');
+    const source = readFileSync(
+      resolve(
+        __dirname,
+        '../../src/modules/delivery-reps/services/van-field-execution/van-field-execution-history.slice.ts',
+      ),
+      'utf8',
+    );
     const start = source.indexOf('async getVisitsHistory(');
     assert.ok(start > 0);
     const body = source.slice(start);

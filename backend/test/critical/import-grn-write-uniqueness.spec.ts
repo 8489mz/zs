@@ -51,7 +51,10 @@ import { PGliteDialect } from 'kysely-pglite-dialect';
 import type { Database } from '../../src/database/database.types';
 import { ImportSalesService } from '../../src/modules/import-sales/import-sales.service';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
-import { up as migrate0306Up, down as migrate0306Down } from '../../src/database/migrations/2040000000306_import_write_uniqueness';
+import {
+  up as migrate0306Up,
+  down as migrate0306Down,
+} from '../../src/database/migrations/2040000000306_import_write_uniqueness';
 
 // Pre-migration shape: the tables exactly as migrations <= 0304
 // leave them (no GRN unique index, no idempotency columns).
@@ -86,7 +89,10 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function countRows(db: Kysely<Database>, table: string): Promise<number> {
-  const row: any = await (db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as('c')).executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .selectFrom(table)
+    .select((eb: any) => eb.fn.countAll().as('c'))
+    .executeTakeFirstOrThrow();
   return Number(row.c);
 }
 
@@ -120,11 +126,23 @@ async function main(): Promise<void> {
   {
     const db = await makeDb({ migrate: false });
     try {
-      assert.equal(await receivingIndexExists(db), false, 'Bare fixture carries no GRN unique index (pre-migration shape)');
+      assert.equal(
+        await receivingIndexExists(db),
+        false,
+        'Bare fixture carries no GRN unique index (pre-migration shape)',
+      );
       await migrate0306Up(db as never);
-      assert.equal(await receivingIndexExists(db), true, 'Migration up() creates the receiving-per-shipment unique index');
+      assert.equal(
+        await receivingIndexExists(db),
+        true,
+        'Migration up() creates the receiving-per-shipment unique index',
+      );
       await migrate0306Up(db as never);
-      assert.equal(await receivingIndexExists(db), true, 'Migration up() is idempotent: a second run keeps exactly one index');
+      assert.equal(
+        await receivingIndexExists(db),
+        true,
+        'Migration up() is idempotent: a second run keeps exactly one index',
+      );
     } finally {
       await db.destroy();
     }
@@ -199,7 +217,11 @@ async function main(): Promise<void> {
         /IMPORT_GRN_ALREADY_RECORDED/,
         'A second GRN approval for the same shipment must fail closed',
       );
-      assert.equal(await countRows(db, 'import_qc_inspections'), 1, 'The refused second approval must not insert a row');
+      assert.equal(
+        await countRows(db, 'import_qc_inspections'),
+        1,
+        'The refused second approval must not insert a row',
+      );
     } finally {
       await db.destroy();
     }
@@ -314,4 +336,7 @@ async function main(): Promise<void> {
   console.log('Import GRN write-uniqueness tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

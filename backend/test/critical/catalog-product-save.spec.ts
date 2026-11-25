@@ -121,21 +121,54 @@ function makeServices(db: Kysely<Database>): CatalogProductService {
 }
 
 async function seedProduct(db: Kysely<Database>): Promise<void> {
-  await (db as any).insertInto('products').values({
-    id: 1, tenant_id: 't1', account_id: 'a1',
-    name: 'منتج اختبار', name_en: 'Test Product', barcode: 'T10K-1', sku: '',
-    item_type: 'product', item_kind: 'standard', style_code: '', color: '', size: '',
-    cost_price: 50, retail_price: 70, wholesale_price: 60,
-    credit_price: null, consumer_price: null, min_selling_price: null,
-    stock_qty: 7, min_stock_qty: 0, default_location_id: null,
-    notes: '', metadata: '{}', is_active: true,
-    calories: null, allergens: '[]', is_spicy: false, is_vegetarian: false, is_gluten_free: false,
-  }).execute();
-  await (db as any).insertInto('product_units').values({
-    product_id: 1, tenant_id: 't1', account_id: 'a1',
-    name: 'قطعة', multiplier: 1, barcode: 'T10K-1',
-    is_base_unit: true, is_sale_unit_default: true, is_purchase_unit_default: true,
-  }).execute();
+  await (db as any)
+    .insertInto('products')
+    .values({
+      id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'منتج اختبار',
+      name_en: 'Test Product',
+      barcode: 'T10K-1',
+      sku: '',
+      item_type: 'product',
+      item_kind: 'standard',
+      style_code: '',
+      color: '',
+      size: '',
+      cost_price: 50,
+      retail_price: 70,
+      wholesale_price: 60,
+      credit_price: null,
+      consumer_price: null,
+      min_selling_price: null,
+      stock_qty: 7,
+      min_stock_qty: 0,
+      default_location_id: null,
+      notes: '',
+      metadata: '{}',
+      is_active: true,
+      calories: null,
+      allergens: '[]',
+      is_spicy: false,
+      is_vegetarian: false,
+      is_gluten_free: false,
+    })
+    .execute();
+  await (db as any)
+    .insertInto('product_units')
+    .values({
+      product_id: 1,
+      tenant_id: 't1',
+      account_id: 'a1',
+      name: 'قطعة',
+      multiplier: 1,
+      barcode: 'T10K-1',
+      is_base_unit: true,
+      is_sale_unit_default: true,
+      is_purchase_unit_default: true,
+    })
+    .execute();
 }
 
 function updatePayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -147,7 +180,9 @@ function updatePayload(overrides: Record<string, unknown> = {}): Record<string, 
     costPrice: 50,
     retailPrice: 70,
     wholesalePrice: 60,
-    units: [{ name: 'قطعة', multiplier: 1, barcode: 'T10K-1', isBaseUnit: true, isSaleUnit: true, isPurchaseUnit: true }],
+    units: [
+      { name: 'قطعة', multiplier: 1, barcode: 'T10K-1', isBaseUnit: true, isSaleUnit: true, isPurchaseUnit: true },
+    ],
     offers: [],
     customerPrices: [],
     fashionVariants: [],
@@ -163,14 +198,18 @@ async function main(): Promise<void> {
     try {
       await seedProduct(db);
       const catalog = makeServices(db);
-      const result = await catalog.updateProduct(1, updatePayload() as never, auth) as Record<string, unknown>;
+      const result = (await catalog.updateProduct(1, updatePayload() as never, auth)) as Record<string, unknown>;
       assert.equal(result.ok, true);
       assert.ok(!('products' in result), 'update must not return the full catalog list');
       const product = result.product as Record<string, unknown>;
       assert.equal(product.id, '1');
       assert.equal(product.name, 'منتج اختبار');
       assert.equal(product.nameEn, 'Test Product');
-      const row = await (db as any).selectFrom('products').select('name_en').where('id', '=', 1).executeTakeFirst() as { name_en: string };
+      const row = (await (db as any)
+        .selectFrom('products')
+        .select('name_en')
+        .where('id', '=', 1)
+        .executeTakeFirst()) as { name_en: string };
       assert.equal(row.name_en, 'Test Product');
     } finally {
       await db.destroy();
@@ -183,10 +222,18 @@ async function main(): Promise<void> {
     try {
       await seedProduct(db);
       const catalog = makeServices(db);
-      const result = await catalog.updateProduct(1, updatePayload({ nameEn: 'Edited Manual Product' }) as never, auth) as Record<string, unknown>;
+      const result = (await catalog.updateProduct(
+        1,
+        updatePayload({ nameEn: 'Edited Manual Product' }) as never,
+        auth,
+      )) as Record<string, unknown>;
       const product = result.product as Record<string, unknown>;
       assert.equal(product.nameEn, 'Edited Manual Product');
-      const row = await (db as any).selectFrom('products').select('name_en').where('id', '=', 1).executeTakeFirst() as { name_en: string };
+      const row = (await (db as any)
+        .selectFrom('products')
+        .select('name_en')
+        .where('id', '=', 1)
+        .executeTakeFirst()) as { name_en: string };
       assert.equal(row.name_en, 'Edited Manual Product');
     } finally {
       await db.destroy();
@@ -200,10 +247,17 @@ async function main(): Promise<void> {
     try {
       await seedProduct(db);
       const catalog = makeServices(db);
-      const result = await catalog.updateProduct(1, updatePayload({ nameEn: '' }) as never, auth) as Record<string, unknown>;
+      const result = (await catalog.updateProduct(1, updatePayload({ nameEn: '' }) as never, auth)) as Record<
+        string,
+        unknown
+      >;
       const product = result.product as Record<string, unknown>;
       assert.equal(product.nameEn, '');
-      const row = await (db as any).selectFrom('products').select('name_en').where('id', '=', 1).executeTakeFirst() as { name_en: string | null };
+      const row = (await (db as any)
+        .selectFrom('products')
+        .select('name_en')
+        .where('id', '=', 1)
+        .executeTakeFirst()) as { name_en: string | null };
       assert.equal(row.name_en, null);
     } finally {
       await db.destroy();
@@ -218,7 +272,7 @@ async function main(): Promise<void> {
       await seedProduct(db);
       await (db as any).updateTable('products').set({ stock_qty: 0 }).where('id', '=', 1).execute();
       const catalog = makeServices(db);
-      const result = await catalog.deleteProduct(1, auth) as Record<string, unknown>;
+      const result = (await catalog.deleteProduct(1, auth)) as Record<string, unknown>;
       assert.deepEqual(result, { ok: true });
       assert.ok(!('products' in result), 'delete must not return the full catalog list');
       const row = await (db as any).selectFrom('products').select('id').where('id', '=', 1).executeTakeFirst();
@@ -234,7 +288,7 @@ async function main(): Promise<void> {
     try {
       await seedProduct(db);
       const catalog = makeServices(db);
-      const product = await catalog.getProduct(1, auth) as Record<string, unknown>;
+      const product = (await catalog.getProduct(1, auth)) as Record<string, unknown>;
       assert.equal(product.id, '1');
       assert.equal(product.name, 'منتج اختبار');
       assert.equal(product.nameEn, 'Test Product');
@@ -252,10 +306,16 @@ async function main(): Promise<void> {
     // through getProduct (a P7 archive dep bound into the write slice).
     const servicePath = resolve(__dirname, '../../src/modules/catalog/services/catalog-product-write.service.ts');
     const source = readFileSync(servicePath, 'utf8');
-    assert.ok(!source.includes('products: (await this.listProducts({}, actor)).products'),
-      'no save return may run listProducts anymore');
+    assert.ok(
+      !source.includes('products: (await this.listProducts({}, actor)).products'),
+      'no save return may run listProducts anymore',
+    );
     const getProductReturns = source.match(/product: await this\.getProduct\(/g) ?? [];
-    assert.equal(getProductReturns.length, 2, `expected create+update to return via getProduct, found ${getProductReturns.length}`);
+    assert.equal(
+      getProductReturns.length,
+      2,
+      `expected create+update to return via getProduct, found ${getProductReturns.length}`,
+    );
   }
 
   console.log('catalog-product-save: all cases passed');

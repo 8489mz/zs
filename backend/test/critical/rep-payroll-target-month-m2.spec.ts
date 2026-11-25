@@ -84,8 +84,13 @@ const dateKey = (v: unknown): string => {
 };
 
 const adminAuth: any = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['deliveryReps', 'accounting'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 };
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -135,56 +140,152 @@ function buildHrService(db: Kysely<Database>): any {
 }
 
 async function seedEmployee(db: Kysely<Database>, id: number, displayName: string): Promise<void> {
-  await (db as any).insertInto('hr_employees').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, display_name: displayName, national_id: null,
-    status: 'active', compensation_type: 'monthly', hourly_rate: 0, expected_daily_hours: 8,
-    hire_date: '2026-01-01', end_of_service_date: null, has_social_insurance: false,
-    insurance_salary: 0, has_income_tax: false, pay_frequency: 'monthly', user_id: null,
-    commission_type: null, commission_value: 0, commission_target: null, delay_policy: null,
-    approved_leave_days: 0,
-  }).execute();
-  await (db as any).insertInto('hr_employment_contracts').values({
-    id, tenant_id: TENANT, employee_id: id, base_salary: 5000, currency: 'EGP',
-    status: 'active', start_date: '2026-01-01', end_date: null,
-  }).execute();
+  await (db as any)
+    .insertInto('hr_employees')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      display_name: displayName,
+      national_id: null,
+      status: 'active',
+      compensation_type: 'monthly',
+      hourly_rate: 0,
+      expected_daily_hours: 8,
+      hire_date: '2026-01-01',
+      end_of_service_date: null,
+      has_social_insurance: false,
+      insurance_salary: 0,
+      has_income_tax: false,
+      pay_frequency: 'monthly',
+      user_id: null,
+      commission_type: null,
+      commission_value: 0,
+      commission_target: null,
+      delay_policy: null,
+      approved_leave_days: 0,
+    })
+    .execute();
+  await (db as any)
+    .insertInto('hr_employment_contracts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      employee_id: id,
+      base_salary: 5000,
+      currency: 'EGP',
+      status: 'active',
+      start_date: '2026-01-01',
+      end_date: null,
+    })
+    .execute();
 }
 
 async function seedRep(db: Kysely<Database>, repId: number, extra: Record<string, unknown> = {}): Promise<void> {
-  await (db as any).insertInto('delivery_representatives').values({
-    id: repId, tenant_id: TENANT, account_id: ACCOUNT, name: `Rep ${repId}`,
-    phone: null, vehicle_plate: null, van_location_id: 10, employee_id: null, national_id: null,
-    ...extra,
-  }).execute();
+  await (db as any)
+    .insertInto('delivery_representatives')
+    .values({
+      id: repId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: `Rep ${repId}`,
+      phone: null,
+      vehicle_plate: null,
+      van_location_id: 10,
+      employee_id: null,
+      national_id: null,
+      ...extra,
+    })
+    .execute();
 }
 
-async function seedSettlement(db: Kysely<Database>, id: number, repId: number, entryType: string, amount: number, status: string, notes = 'shortage'): Promise<void> {
-  await (db as any).insertInto('van_rep_financial_settlements').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: repId, trip_id: 11,
-    entry_type: entryType, amount, status, notes,
-  }).execute();
+async function seedSettlement(
+  db: Kysely<Database>,
+  id: number,
+  repId: number,
+  entryType: string,
+  amount: number,
+  status: string,
+  notes = 'shortage',
+): Promise<void> {
+  await (db as any)
+    .insertInto('van_rep_financial_settlements')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      rep_id: repId,
+      trip_id: 11,
+      entry_type: entryType,
+      amount,
+      status,
+      notes,
+    })
+    .execute();
 }
 
-async function seedRun(db: Kysely<Database>, runId: number, monthOffset: number, itemId: number, employeeId: number): Promise<void> {
-  await (db as any).insertInto('hr_payroll_runs').values({
-    id: runId, tenant_id: TENANT, account_id: ACCOUNT, period_month: monthOf(monthOffset),
-    start_date: monthStart(monthOffset), end_date: monthEnd(monthOffset), pay_frequency: 'monthly', status: 'draft',
-  }).execute();
-  await (db as any).insertInto('hr_payroll_run_items').values({
-    id: itemId, tenant_id: TENANT, account_id: ACCOUNT, run_id: runId, employee_id: employeeId, contract_id: employeeId,
-    base_salary: 0, allowance_amount: 0, deduction_amount: 0, loan_deduction_amount: 0,
-    asset_recovery_deduction_amount: 0, employee_social_insurance: 0, employer_social_insurance: 0,
-    income_tax: 0, penalty_deduction: 0, carried_forward_deduction: 0, gross_pay: 0, net_pay: 0,
-    status: 'draft', notes: '', paid_at: null, paid_by: null, payment_channel: null,
-    journal_entry_id: null,
-  }).execute();
+async function seedRun(
+  db: Kysely<Database>,
+  runId: number,
+  monthOffset: number,
+  itemId: number,
+  employeeId: number,
+): Promise<void> {
+  await (db as any)
+    .insertInto('hr_payroll_runs')
+    .values({
+      id: runId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      period_month: monthOf(monthOffset),
+      start_date: monthStart(monthOffset),
+      end_date: monthEnd(monthOffset),
+      pay_frequency: 'monthly',
+      status: 'draft',
+    })
+    .execute();
+  await (db as any)
+    .insertInto('hr_payroll_run_items')
+    .values({
+      id: itemId,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      run_id: runId,
+      employee_id: employeeId,
+      contract_id: employeeId,
+      base_salary: 0,
+      allowance_amount: 0,
+      deduction_amount: 0,
+      loan_deduction_amount: 0,
+      asset_recovery_deduction_amount: 0,
+      employee_social_insurance: 0,
+      employer_social_insurance: 0,
+      income_tax: 0,
+      penalty_deduction: 0,
+      carried_forward_deduction: 0,
+      gross_pay: 0,
+      net_pay: 0,
+      status: 'draft',
+      notes: '',
+      paid_at: null,
+      paid_by: null,
+      payment_channel: null,
+      journal_entry_id: null,
+    })
+    .execute();
 }
 
 async function rebuild(db: Kysely<Database>, hrService: any, runId: number): Promise<void> {
   // HR split: rebuildPayrollRunItems moved to the payroll-rebuild slice; the
   // facade wires it as payrollRebuildService (public-in-slice, no facade
   // delegate — the method was private before the split).
-  await (hrService as unknown as { payrollRebuildService: { rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void> } })
-    .payrollRebuildService.rebuildPayrollRunItems(db, runId, 'draft', TENANT);
+  await (
+    hrService as unknown as {
+      payrollRebuildService: {
+        rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void>;
+      };
+    }
+  ).payrollRebuildService.rebuildPayrollRunItems(db, runId, 'draft', TENANT);
 }
 
 async function adjustments(db: Kysely<Database>): Promise<any[]> {
@@ -196,7 +297,11 @@ async function settlementRow(db: Kysely<Database>, id: number): Promise<any> {
 }
 
 async function runItemNet(db: Kysely<Database>, itemId: number): Promise<number> {
-  const row = await (db as any).selectFrom('hr_payroll_run_items').select('net_pay').where('id', '=', itemId).executeTakeFirst();
+  const row = await (db as any)
+    .selectFrom('hr_payroll_run_items')
+    .select('net_pay')
+    .where('id', '=', itemId)
+    .executeTakeFirst();
   return Number(row?.net_pay || 0);
 }
 
@@ -212,14 +317,23 @@ async function main(): Promise<void> {
       await seedRun(db, 7, 0, 1, 9);
       await seedRun(db, 8, 1, 2, 9);
       const service = buildVanService(db);
-      const pushed = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [401], targetMonth: NEXT }, adminAuth);
+      const pushed = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [401], targetMonth: NEXT },
+        adminAuth,
+      );
       assert.equal(pushed.results[0].success, true, 'the push succeeds');
       assert.equal(pushed.effectiveMonth, NEXT, 'the effective month is the target month');
       assert.equal(pushed.effectiveRunId, 8, 'the effective run is the target month run');
       assert.equal(pushed.rolledForward, false, 'nothing rolled forward');
       const adjs = await adjustments(db);
       assert.equal(adjs.length, 1, 'exactly one payroll adjustment');
-      assert.equal(dateKey(adjs[0].date), monthStart(1), 'the adjustment is dated inside the target run period, not today');
+      assert.equal(
+        dateKey(adjs[0].date),
+        monthStart(1),
+        'the adjustment is dated inside the target run period, not today',
+      );
       assert.equal(String(adjs[0].status), 'pending', 'the adjustment waits for the run');
       const row = await settlementRow(db, 401);
       assert.equal(String(row.status), 'pushed_to_payroll', 'the item is pushed');
@@ -229,14 +343,22 @@ async function main(): Promise<void> {
       const hrService = buildHrService(db);
       await rebuild(db, hrService, 7);
       assert.equal(await runItemNet(db, 1), 5000, 'the current month net is untouched by the target-month deduction');
-      assert.equal(String((await adjustments(db))[0].status), 'pending', 'the adjustment is still pending after the current run rebuild');
+      assert.equal(
+        String((await adjustments(db))[0].status),
+        'pending',
+        'the adjustment is still pending after the current run rebuild',
+      );
       // The target month's rebuild applies it.
       await rebuild(db, hrService, 8);
       assert.equal(await runItemNet(db, 2), 4900, 'net pay is base 5000 minus the 100 shortage in the target month');
       const applied = await adjustments(db);
       assert.equal(String(applied[0].status), 'applied', 'the adjustment is applied by the target run');
       assert.equal(Number(applied[0].applied_in_run_id), 8, 'the adjustment links to the target run');
-      assert.equal(Number((await settlementRow(db, 401)).payroll_run_id), 8, 'the settlement row still links to the target run after the rebuild');
+      assert.equal(
+        Number((await settlementRow(db, 401)).payroll_run_id),
+        8,
+        'the settlement row still links to the target run after the rebuild',
+      );
     } finally {
       await db.destroy();
     }
@@ -255,7 +377,12 @@ async function main(): Promise<void> {
       await seedRun(db, 8, 0, 2, 9);
       await seedRun(db, 9, 1, 3, 9);
       const service = buildVanService(db);
-      const pushed = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [402], targetMonth: PAST }, adminAuth);
+      const pushed = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [402], targetMonth: PAST },
+        adminAuth,
+      );
       assert.equal(pushed.results[0].success, true, 'the push succeeds');
       assert.equal(pushed.effectiveMonth, CUR, 'the deduction rolls to the nearest following run, the current month');
       assert.equal(pushed.effectiveRunId, 8, 'the effective run is the nearest following run, not a later one');
@@ -271,14 +398,26 @@ async function main(): Promise<void> {
       const hrService = buildHrService(db);
       await rebuild(db, hrService, 7);
       assert.equal(await runItemNet(db, 1), 5000, 'the passed run net is untouched');
-      assert.equal(String((await adjustments(db))[0].status), 'pending', 'the adjustment is still pending after the passed run rebuild');
+      assert.equal(
+        String((await adjustments(db))[0].status),
+        'pending',
+        'the adjustment is still pending after the passed run rebuild',
+      );
       // The following run applies it, and the later run does not.
       await rebuild(db, hrService, 8);
       assert.equal(await runItemNet(db, 2), 4900, 'net pay is base 5000 minus the 100 shortage in the following run');
-      assert.equal(Number((await adjustments(db))[0].applied_in_run_id), 8, 'the adjustment links to the following run');
+      assert.equal(
+        Number((await adjustments(db))[0].applied_in_run_id),
+        8,
+        'the adjustment links to the following run',
+      );
       await rebuild(db, hrService, 9);
       assert.equal(await runItemNet(db, 3), 5000, 'the later run net is untouched — no double deduction');
-      assert.equal(Number((await settlementRow(db, 402)).payroll_run_id), 8, 'the settlement row still links to the following run');
+      assert.equal(
+        Number((await settlementRow(db, 402)).payroll_run_id),
+        8,
+        'the settlement row still links to the following run',
+      );
     } finally {
       await db.destroy();
     }
@@ -296,7 +435,12 @@ async function main(): Promise<void> {
       assert.equal((await settlementRow(db, 403)).payroll_run_id, null, 'no run link before the push');
       await seedRun(db, 8, 1, 2, 9);
       const service = buildVanService(db);
-      const pushed = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [403], targetMonth: NEXT }, adminAuth);
+      const pushed = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [403], targetMonth: NEXT },
+        adminAuth,
+      );
       assert.equal(pushed.results[0].success, true, 'the push succeeds');
       const afterPush = await settlementRow(db, 403);
       assert.equal(Number(afterPush.payroll_run_id), 8, 'the settlement row links to the targeted run at push time');
@@ -307,7 +451,11 @@ async function main(): Promise<void> {
       assert.equal(String(applied[0].status), 'applied', 'the deduction is applied by the run');
       assert.equal(Number(applied[0].applied_in_run_id), 8, 'the adjustment links to the applying run');
       const afterApply = await settlementRow(db, 403);
-      assert.equal(Number(afterApply.payroll_run_id), 8, 'the settlement row reads back the applying run id after the deduction is applied');
+      assert.equal(
+        Number(afterApply.payroll_run_id),
+        8,
+        'the settlement row reads back the applying run id after the deduction is applied',
+      );
     } finally {
       await db.destroy();
     }
@@ -328,14 +476,30 @@ async function main(): Promise<void> {
       const hrService = buildHrService(db);
       await rebuild(db, hrService, 8);
       assert.equal(await runItemNet(db, 2), 4950, 'net pay is base 5000 minus the 50 shortage after the first rebuild');
-      assert.equal(Number((await adjustments(db))[0].applied_in_run_id), 8, 'the adjustment links to the run after the first rebuild');
-      assert.equal(Number((await settlementRow(db, 404)).payroll_run_id), 8, 'the settlement row links to the run after the first rebuild');
+      assert.equal(
+        Number((await adjustments(db))[0].applied_in_run_id),
+        8,
+        'the adjustment links to the run after the first rebuild',
+      );
+      assert.equal(
+        Number((await settlementRow(db, 404)).payroll_run_id),
+        8,
+        'the settlement row links to the run after the first rebuild',
+      );
       await rebuild(db, hrService, 8);
-      assert.equal(await runItemNet(db, 2), 4950, 'net pay is unchanged after re-rebuilding the same run — no double deduction');
+      assert.equal(
+        await runItemNet(db, 2),
+        4950,
+        'net pay is unchanged after re-rebuilding the same run — no double deduction',
+      );
       assert.equal((await adjustments(db)).length, 1, 'still exactly one payroll adjustment');
       assert.equal(String((await adjustments(db))[0].status), 'applied', 'the adjustment stays applied');
       assert.equal(Number((await adjustments(db))[0].applied_in_run_id), 8, 'the adjustment still links to the run');
-      assert.equal(Number((await settlementRow(db, 404)).payroll_run_id), 8, 'the settlement row link holds after the re-rebuild');
+      assert.equal(
+        Number((await settlementRow(db, 404)).payroll_run_id),
+        8,
+        'the settlement row link holds after the re-rebuild',
+      );
     } finally {
       await db.destroy();
     }
@@ -352,21 +516,38 @@ async function main(): Promise<void> {
       await seedRep(db, 4, { employee_id: 9 });
       await seedSettlement(db, 405, 4, 'cash_shortage', 100, 'pending');
       const service = buildVanService(db);
-      const pushed = await service.pushRepShortagesToPayroll(TENANT, ACCOUNT, { settlementIds: [405], targetMonth: NEXT }, adminAuth);
+      const pushed = await service.pushRepShortagesToPayroll(
+        TENANT,
+        ACCOUNT,
+        { settlementIds: [405], targetMonth: NEXT },
+        adminAuth,
+      );
       assert.equal(pushed.results[0].success, true, 'the push succeeds with no run for the month');
       assert.equal(pushed.effectiveMonth, NEXT, 'the effective month stays the target month');
       assert.equal(pushed.effectiveRunId, null, 'no run to link yet');
       assert.equal(pushed.rolledForward, false, 'nothing rolled forward');
       const adjs = await adjustments(db);
       assert.equal(adjs.length, 1, 'exactly one payroll adjustment');
-      assert.equal(dateKey(adjs[0].date), monthStart(1), 'the adjustment is dated on the first day of the target month');
+      assert.equal(
+        dateKey(adjs[0].date),
+        monthStart(1),
+        'the adjustment is dated on the first day of the target month',
+      );
       assert.equal((await settlementRow(db, 405)).payroll_run_id, null, 'no run link yet — there is no run to link to');
       await seedRun(db, 8, 1, 2, 9);
       const hrService = buildHrService(db);
       await rebuild(db, hrService, 8);
       assert.equal(await runItemNet(db, 2), 4900, 'the later-built target run deducts the shortage');
-      assert.equal(Number((await adjustments(db))[0].applied_in_run_id), 8, 'the adjustment links to the later-built run');
-      assert.equal(Number((await settlementRow(db, 405)).payroll_run_id), 8, 'the rebuild writes the link the push could not');
+      assert.equal(
+        Number((await adjustments(db))[0].applied_in_run_id),
+        8,
+        'the adjustment links to the later-built run',
+      );
+      assert.equal(
+        Number((await settlementRow(db, 405)).payroll_run_id),
+        8,
+        'the rebuild writes the link the push could not',
+      );
     } finally {
       await db.destroy();
     }
@@ -380,12 +561,27 @@ async function main(): Promise<void> {
   {
     // File #59 split: pushRepShortagesToPayroll moved to the S5 slice; the
     // facade keeps only a thin delegate.
-    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-rep-financial-ledger/push-rep-shortages-to-payroll.slice.ts'), 'utf8');
+    const vanSource = readFileSync(
+      resolve(
+        __dirname,
+        '../../src/modules/delivery-reps/services/van-rep-financial-ledger/push-rep-shortages-to-payroll.slice.ts',
+      ),
+      'utf8',
+    );
     assert.ok(vanSource.includes('INV-REP-PAYROLL-TARGET-MONTH'), 'van-sales names the invariant');
-    assert.ok(vanSource.includes('date: effectiveDate'), 'the push dates the adjustment inside the effective run period');
-    assert.ok(vanSource.includes('payroll_run_id: effectiveRunId'), 'the push writes the run link on the settlement row');
+    assert.ok(
+      vanSource.includes('date: effectiveDate'),
+      'the push dates the adjustment inside the effective run period',
+    );
+    assert.ok(
+      vanSource.includes('payroll_run_id: effectiveRunId'),
+      'the push writes the run link on the settlement row',
+    );
     assert.ok(vanSource.includes('rolledForward'), 'the push records the roll-forward');
-    const hrSource = readFileSync(resolve(__dirname, '../../src/modules/hr/services/hr-payroll-rebuild.service.ts'), 'utf8');
+    const hrSource = readFileSync(
+      resolve(__dirname, '../../src/modules/hr/services/hr-payroll-rebuild.service.ts'),
+      'utf8',
+    );
     assert.ok(hrSource.includes('INV-REP-PAYROLL-TARGET-MONTH'), 'hr names the invariant');
     assert.ok(hrSource.includes('vanSettlementIds'), 'the rebuild tracks van-settlement deductions');
     assert.ok(hrSource.includes('SET payroll_run_id = '), 'the rebuild writes the run link on the settlement row');

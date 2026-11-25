@@ -12,7 +12,7 @@ import { AuthContext } from '../../../src/core/auth/interfaces/auth-context.inte
 
 /**
  * Z-SYSTEMS ERP — COMPREHENSIVE FINANCIAL REPORTS & LEDGER AUDIT SIMULATION
- * 
+ *
  * Verifies:
  * 1. Foundation: Multi-currency Chart of Accounts & Opening Balance injection.
  * 2. Operational Transactions: Cash Sale, Credit Sale, OpEx, and Input VAT.
@@ -89,13 +89,27 @@ async function runFinancialReportsDeepSimulation() {
     const locationId = Number(locRes.rows[0].id);
 
     // Resolve standard GL account IDs
-    const cashAccount = await sql<{ id: number }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '1110' LIMIT 1`.execute(db);
-    const arAccount = await sql<{ id: number }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '1130' LIMIT 1`.execute(db);
-    const vatOutAccount = await sql<{ id: number }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '2130' LIMIT 1`.execute(db);
-    const vatInAccount = await sql<{ id: number }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '1150' LIMIT 1`.execute(db);
-    const equityAccount = await sql<{ id: number }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '3100' LIMIT 1`.execute(db);
-    const revenueAccount = await sql<{ id: number }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '4100' LIMIT 1`.execute(db);
-    const expenseAccount = await sql<{ id: number }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '5100' LIMIT 1`.execute(db);
+    const cashAccount = await sql<{
+      id: number;
+    }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '1110' LIMIT 1`.execute(db);
+    const arAccount = await sql<{
+      id: number;
+    }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '1130' LIMIT 1`.execute(db);
+    const vatOutAccount = await sql<{
+      id: number;
+    }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '2130' LIMIT 1`.execute(db);
+    const vatInAccount = await sql<{
+      id: number;
+    }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '1150' LIMIT 1`.execute(db);
+    const equityAccount = await sql<{
+      id: number;
+    }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '3100' LIMIT 1`.execute(db);
+    const revenueAccount = await sql<{
+      id: number;
+    }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '4100' LIMIT 1`.execute(db);
+    const expenseAccount = await sql<{
+      id: number;
+    }>`SELECT id FROM accounting_accounts WHERE tenant_id = ${tenantId} AND code = '5100' LIMIT 1`.execute(db);
 
     const cashAccountId = Number(cashAccount.rows[0].id);
     const arAccountId = Number(arAccount.rows[0].id);
@@ -153,7 +167,7 @@ async function runFinancialReportsDeepSimulation() {
 
     // 3. Post Commercial Transactions
     console.log('\n--- 3. تسجيل العمليات التشغيلية (مبيعات نقدية وآجلة ومصروفات) ---');
-    
+
     // A. Cash Sales: Net Revenue 20,000 + Output VAT 3,000 = Cash 23,000
     await accountingPosting.postDomainJournal(db, {
       sourceType: 'manual_journal',
@@ -165,9 +179,36 @@ async function runFinancialReportsDeepSimulation() {
       branchId,
       createdBy: auth.userId,
       lines: [
-        { accountId: cashAccountId, debit: 23000, credit: 0, description: 'تحصيل نقدي', partnerType: 'none', partnerId: null, branchId, locationId },
-        { accountId: revenueAccountId, debit: 0, credit: 20000, description: 'إيراد مبيعات', partnerType: 'none', partnerId: null, branchId, locationId },
-        { accountId: vatOutAccountId, debit: 0, credit: 3000, description: 'ضريبة مخرجات مستحقة 15%', partnerType: 'none', partnerId: null, branchId, locationId },
+        {
+          accountId: cashAccountId,
+          debit: 23000,
+          credit: 0,
+          description: 'تحصيل نقدي',
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        {
+          accountId: revenueAccountId,
+          debit: 0,
+          credit: 20000,
+          description: 'إيراد مبيعات',
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        {
+          accountId: vatOutAccountId,
+          debit: 0,
+          credit: 3000,
+          description: 'ضريبة مخرجات مستحقة 15%',
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
       ],
     });
 
@@ -182,9 +223,36 @@ async function runFinancialReportsDeepSimulation() {
       branchId,
       createdBy: auth.userId,
       lines: [
-        { accountId: arAccountId, debit: 11500, credit: 0, description: 'مدينون عملاء', partnerType: 'customer', partnerId: customerId, branchId, locationId },
-        { accountId: revenueAccountId, debit: 0, credit: 10000, description: 'إيراد مبيعات آجلة', partnerType: 'customer', partnerId: customerId, branchId, locationId },
-        { accountId: vatOutAccountId, debit: 0, credit: 1500, description: 'ضريبة مخرجات مستحقة 15%', partnerType: 'customer', partnerId: customerId, branchId, locationId },
+        {
+          accountId: arAccountId,
+          debit: 11500,
+          credit: 0,
+          description: 'مدينون عملاء',
+          partnerType: 'customer',
+          partnerId: customerId,
+          branchId,
+          locationId,
+        },
+        {
+          accountId: revenueAccountId,
+          debit: 0,
+          credit: 10000,
+          description: 'إيراد مبيعات آجلة',
+          partnerType: 'customer',
+          partnerId: customerId,
+          branchId,
+          locationId,
+        },
+        {
+          accountId: vatOutAccountId,
+          debit: 0,
+          credit: 1500,
+          description: 'ضريبة مخرجات مستحقة 15%',
+          partnerType: 'customer',
+          partnerId: customerId,
+          branchId,
+          locationId,
+        },
       ],
     });
 
@@ -210,9 +278,36 @@ async function runFinancialReportsDeepSimulation() {
       branchId,
       createdBy: auth.userId,
       lines: [
-        { accountId: expenseAccount.rows[0].id, debit: 6000, credit: 0, description: 'مصروفات عمومية', partnerType: 'none', partnerId: null, branchId, locationId },
-        { accountId: vatInAccountId, debit: 900, credit: 0, description: 'ضريبة مدخلات قابلة للخصم 15%', partnerType: 'none', partnerId: null, branchId, locationId },
-        { accountId: cashAccountId, debit: 0, credit: 6900, description: 'سداد نقدي من الصندوق', partnerType: 'none', partnerId: null, branchId, locationId },
+        {
+          accountId: expenseAccount.rows[0].id,
+          debit: 6000,
+          credit: 0,
+          description: 'مصروفات عمومية',
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        {
+          accountId: vatInAccountId,
+          debit: 900,
+          credit: 0,
+          description: 'ضريبة مدخلات قابلة للخصم 15%',
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
+        {
+          accountId: cashAccountId,
+          debit: 0,
+          credit: 6900,
+          description: 'سداد نقدي من الصندوق',
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        },
       ],
     });
     console.log('[OK] تم تسجيل كافة الحركات المالية بنجاح.');
@@ -230,7 +325,9 @@ async function runFinancialReportsDeepSimulation() {
 
     const totalDebits = Number(trialBalanceRes.rows[0].sum_debit);
     const totalCredits = Number(trialBalanceRes.rows[0].sum_credit);
-    console.log(`[TRIAL-BALANCE] إجمالي المدين: ${totalDebits} ر.س | إجمالي الدائن: ${totalCredits} ر.س (${trialBalanceRes.rows[0].count_lines} بند).`);
+    console.log(
+      `[TRIAL-BALANCE] إجمالي المدين: ${totalDebits} ر.س | إجمالي الدائن: ${totalCredits} ر.س (${trialBalanceRes.rows[0].count_lines} بند).`,
+    );
 
     if (Math.abs(totalDebits - totalCredits) > 0.001) {
       throw new Error(`Trial balance discrepancy: Debits (${totalDebits}) != Credits (${totalCredits})`);
@@ -240,7 +337,7 @@ async function runFinancialReportsDeepSimulation() {
     // 5. Income Statement (قائمة الدخل P&L)
     console.log('\n--- 5. التحقق من قائمة الدخل (Income Statement / P&L) ---');
     const expectedRevenue = 20000 + 10000; // 30,000
-    const expectedExpense = 6000;          // 6,000
+    const expectedExpense = 6000; // 6,000
     const expectedNetProfit = expectedRevenue - expectedExpense; // 24,000
 
     const financialSummary = await accountingService.getFinancialSummary({}, auth);
@@ -265,8 +362,14 @@ async function runFinancialReportsDeepSimulation() {
     const actualExpense = -Number(expenseRow?.net_amount || 0);
     const actualNetProfit = actualRevenue - actualExpense;
 
-    console.log(`[P&L] الإيرادات: ${actualRevenue} ر.س | المصروفات: ${actualExpense} ر.س | صافي الربح: ${actualNetProfit} ر.س`);
-    if (actualRevenue !== expectedRevenue || actualExpense !== expectedExpense || actualNetProfit !== expectedNetProfit) {
+    console.log(
+      `[P&L] الإيرادات: ${actualRevenue} ر.س | المصروفات: ${actualExpense} ر.س | صافي الربح: ${actualNetProfit} ر.س`,
+    );
+    if (
+      actualRevenue !== expectedRevenue ||
+      actualExpense !== expectedExpense ||
+      actualNetProfit !== expectedNetProfit
+    ) {
       throw new Error(`P&L mismatch: expected net profit ${expectedNetProfit}, got ${actualNetProfit}`);
     }
     console.log('[OK] قائمة الدخل وصافي الربح المحقق دقيقة ومطابقة للمعادلة المحاسبية.');
@@ -274,19 +377,27 @@ async function runFinancialReportsDeepSimulation() {
     // 6. Balance Sheet (الميزانية العمومية)
     console.log('\n--- 6. التحقق من الميزانية العمومية ومعادلة الأصول والخصوم ---');
     const balanceSheet = await balanceSheetService.getBalanceSheet(auth, { asOfDate: '2026-09-30' });
-    console.log(`[BALANCE-SHEET] إجمالي الأصول: ${balanceSheet.assets.totalAssets} ر.س | إجمالي الالتزامات وحقوق الملكية: ${balanceSheet.totalLiabilitiesAndEquity} ر.س`);
-    console.log(`[BALANCE-SHEET] حالة التوازن (isBalanced): ${balanceSheet.isBalanced} | الفارق: ${balanceSheet.difference} ر.س`);
+    console.log(
+      `[BALANCE-SHEET] إجمالي الأصول: ${balanceSheet.assets.totalAssets} ر.س | إجمالي الالتزامات وحقوق الملكية: ${balanceSheet.totalLiabilitiesAndEquity} ر.س`,
+    );
+    console.log(
+      `[BALANCE-SHEET] حالة التوازن (isBalanced): ${balanceSheet.isBalanced} | الفارق: ${balanceSheet.difference} ر.س`,
+    );
 
     if (!balanceSheet.isBalanced || Math.abs(balanceSheet.difference) > 0.001) {
       throw new Error(`Balance sheet is not balanced: difference = ${balanceSheet.difference}`);
     }
-    console.log('[OK] الميزانية العمومية متوازنة تماماً وفق المعايير الدولية (الأصول = الخصوم + حقوق الملكية + صافي ربح الفترة).');
+    console.log(
+      '[OK] الميزانية العمومية متوازنة تماماً وفق المعايير الدولية (الأصول = الخصوم + حقوق الملكية + صافي ربح الفترة).',
+    );
 
     // 7. AR Aging Engine (أعمار ديون العملاء)
     console.log('\n--- 7. فحص محرك أعمار الديون (AR Aging Report) ---');
     const todayStr = new Date().toISOString().split('T')[0];
     const arAging = await agedDebtsService.getAgedReceivables(auth, { asOfDate: todayStr });
-    console.log(`[AR-AGING] إجمالي رصيد الديون المستحقة: ${arAging.totalBalance} ر.س (عدد العملاء: ${arAging.totalPartnersCount})`);
+    console.log(
+      `[AR-AGING] إجمالي رصيد الديون المستحقة: ${arAging.totalBalance} ر.س (عدد العملاء: ${arAging.totalPartnersCount})`,
+    );
 
     if (arAging.totalBalance !== 11500) {
       throw new Error(`AR Aging balance mismatch: expected 11500, got ${arAging.totalBalance}`);
@@ -297,16 +408,19 @@ async function runFinancialReportsDeepSimulation() {
     console.log('\n--- 8. فحص محرك الإقرار الضريبي (VAT Declaration) ---');
     const vatDeclaration = await vatDeclarationService.getDeclaration({ country: 'SA' }, auth);
     const expectedOutputVat = 3000 + 1500; // 4,500
-    const expectedInputVat = 900;          // 900
+    const expectedInputVat = 900; // 900
     const expectedNetVatPayable = expectedOutputVat - expectedInputVat; // 3,600
 
-    console.log(`[VAT] ضريبة المخرجات المسجلة: ${vatDeclaration.output_tax.total_output_vat} ر.س | ضريبة المدخلات: ${vatDeclaration.input_tax.total_input_vat} ر.س`);
-    console.log(`[OK] ضريبة المخرجات المتوقعة: ${expectedOutputVat} ر.س | ضريبة المدخلات: ${expectedInputVat} ر.س | صافي الضريبة المستحقة: ${expectedNetVatPayable} ر.س.`);
+    console.log(
+      `[VAT] ضريبة المخرجات المسجلة: ${vatDeclaration.output_tax.total_output_vat} ر.س | ضريبة المدخلات: ${vatDeclaration.input_tax.total_input_vat} ر.س`,
+    );
+    console.log(
+      `[OK] ضريبة المخرجات المتوقعة: ${expectedOutputVat} ر.س | ضريبة المدخلات: ${expectedInputVat} ر.س | صافي الضريبة المستحقة: ${expectedNetVatPayable} ر.س.`,
+    );
 
     console.log('\n================================================================');
     console.log('[SUCCESS] اكتملت محاكاة التقارير والقوائم المالية العميقة بنجاح 100%!');
     console.log('================================================================\n');
-
   } catch (err: any) {
     console.error('[ERROR] SIMULATION FAILED:', err.message || err);
     console.error(err.stack);

@@ -93,25 +93,58 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seedFoundation(db: Kysely<Database>, deliveryFee?: string): Promise<void> {
   const anyDb = db as any;
-  await anyDb.insertInto('tenants').values({
-    id: TENANT, slug: SLUG, activity_type: 'restaurant', plan_id: 'plan_basic',
-    extra_features: '["storefront"]', owner_phone: null,
-  }).execute();
+  await anyDb
+    .insertInto('tenants')
+    .values({
+      id: TENANT,
+      slug: SLUG,
+      activity_type: 'restaurant',
+      plan_id: 'plan_basic',
+      extra_features: '["storefront"]',
+      owner_phone: null,
+    })
+    .execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' }).execute();
   if (deliveryFee !== undefined) {
-    await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'storefront_delivery_fee', value: deliveryFee }).execute();
+    await anyDb
+      .insertInto('settings')
+      .values({ tenant_id: TENANT, key: 'storefront_delivery_fee', value: deliveryFee })
+      .execute();
   }
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
-  for (const [id, price] of [[101, 0.10], [102, 0.20], [103, 0.30]] as Array<[number, number]>) {
-    await anyDb.insertInto('products').values({
-      id, tenant_id: TENANT, account_id: `${TENANT}:main`, name: `Product ${id}`,
-      stock_qty: 100, cost_price: 0.05, retail_price: price,
-      wholesale_price: price, min_selling_price: 0, is_active: true, item_type: 'product',
-    }).execute();
-    await anyDb.insertInto('product_location_stock').values({
-      tenant_id: TENANT, account_id: `${TENANT}:main`, product_id: id, branch_id: 1, location_id: 10, qty: 100,
-    }).execute();
+  for (const [id, price] of [
+    [101, 0.1],
+    [102, 0.2],
+    [103, 0.3],
+  ] as Array<[number, number]>) {
+    await anyDb
+      .insertInto('products')
+      .values({
+        id,
+        tenant_id: TENANT,
+        account_id: `${TENANT}:main`,
+        name: `Product ${id}`,
+        stock_qty: 100,
+        cost_price: 0.05,
+        retail_price: price,
+        wholesale_price: price,
+        min_selling_price: 0,
+        is_active: true,
+        item_type: 'product',
+      })
+      .execute();
+    await anyDb
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: TENANT,
+        account_id: `${TENANT}:main`,
+        product_id: id,
+        branch_id: 1,
+        location_id: 10,
+        qty: 100,
+      })
+      .execute();
   }
 }
 
@@ -121,8 +154,7 @@ function buildService(db: Kysely<Database>): StorefrontService {
 }
 
 async function readOrder(db: Kysely<Database>, orderId: number): Promise<any> {
-  return (db as any).selectFrom('online_orders').selectAll()
-    .where('id', '=', orderId).executeTakeFirstOrThrow();
+  return (db as any).selectFrom('online_orders').selectAll().where('id', '=', orderId).executeTakeFirstOrThrow();
 }
 
 function storedLineTotal(order: any): number {
@@ -144,7 +176,10 @@ async function main(): Promise<void> {
         customerAddress: 'شارع التحرير 12، القاهرة',
         orderType: 'delivery',
         fulfillmentType: 'delivery',
-        items: [{ productId: 101, quantity: 1 }, { productId: 102, quantity: 1 }],
+        items: [
+          { productId: 101, quantity: 1 },
+          { productId: 102, quantity: 1 },
+        ],
         paymentMethod: 'cod',
       } as any);
       assert.equal(result.ok, true, 'the order must be created');
@@ -154,8 +189,11 @@ async function main(): Promise<void> {
       assert.equal(Number(order.total_amount), 0.3, 'the stored total is exactly 0.30');
       assert.equal(Number(order.delivery_fee), 0, 'the stored delivery fee is 0');
       assert.equal(Number(order.discount_amount), 0, 'the stored discount is 0');
-      assert.equal(roundMoney(storedLineTotal(order), 2), Number(order.subtotal),
-        'the stored subtotal equals the rounded sum of the stored lines');
+      assert.equal(
+        roundMoney(storedLineTotal(order), 2),
+        Number(order.subtotal),
+        'the stored subtotal equals the rounded sum of the stored lines',
+      );
     } finally {
       await db.destroy();
     }
@@ -175,7 +213,10 @@ async function main(): Promise<void> {
         customerAddress: 'شارع التحرير 12، القاهرة',
         orderType: 'delivery',
         fulfillmentType: 'delivery',
-        items: [{ productId: 101, quantity: 1 }, { productId: 102, quantity: 1 }],
+        items: [
+          { productId: 101, quantity: 1 },
+          { productId: 102, quantity: 1 },
+        ],
         paymentMethod: 'cod',
       } as any);
       assert.equal(result.ok, true, 'the order must be created');
@@ -183,7 +224,11 @@ async function main(): Promise<void> {
       const expectedTotal = roundMoney(0.3 + expectedFee, 2);
       const order = await readOrder(db, Number(result.orderId));
       assert.equal(Number(order.delivery_fee), expectedFee, 'the stored fee is the rounded fee');
-      assert.equal(Number(order.total_amount), expectedTotal, 'the stored total is the rounded sum of the rounded parts');
+      assert.equal(
+        Number(order.total_amount),
+        expectedTotal,
+        'the stored total is the rounded sum of the rounded parts',
+      );
       assert.equal(
         roundMoney(Number(order.subtotal) + Number(order.delivery_fee) - Number(order.discount_amount), 2),
         Number(order.total_amount),
@@ -208,7 +253,10 @@ async function main(): Promise<void> {
         customerAddress: 'شارع التحرير 12، القاهرة',
         orderType: 'delivery',
         fulfillmentType: 'delivery',
-        items: [{ productId: 101, quantity: 1 }, { productId: 102, quantity: 1 }],
+        items: [
+          { productId: 101, quantity: 1 },
+          { productId: 102, quantity: 1 },
+        ],
         paymentMethod: 'cod',
       } as any);
       assert.equal(created.ok, true, 'the order must be created first');
@@ -220,7 +268,11 @@ async function main(): Promise<void> {
         customerAddress: 'شارع التحرير 12، القاهرة',
         orderType: 'delivery',
         fulfillmentType: 'delivery',
-        items: [{ productId: 101, quantity: 1 }, { productId: 102, quantity: 1 }, { productId: 103, quantity: 1 }],
+        items: [
+          { productId: 101, quantity: 1 },
+          { productId: 102, quantity: 1 },
+          { productId: 103, quantity: 1 },
+        ],
         paymentMethod: 'cod',
       } as any);
       assert.equal(updated.ok, true, 'the update must succeed');
@@ -228,8 +280,11 @@ async function main(): Promise<void> {
       const order = await readOrder(db, Number(created.orderId));
       assert.equal(Number(order.subtotal), 0.6, 'the stored subtotal is exactly 0.60, not 0.6000000000000001');
       assert.equal(Number(order.total_amount), 0.6, 'the stored total is exactly 0.60');
-      assert.equal(roundMoney(storedLineTotal(order), 2), Number(order.subtotal),
-        'the stored subtotal equals the rounded sum of the stored lines');
+      assert.equal(
+        roundMoney(storedLineTotal(order), 2),
+        Number(order.subtotal),
+        'the stored subtotal equals the rounded sum of the stored lines',
+      );
     } finally {
       await db.destroy();
     }

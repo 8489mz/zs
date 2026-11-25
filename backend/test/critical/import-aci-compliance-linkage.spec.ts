@@ -85,7 +85,12 @@ async function aciCount(db: Kysely<Database>): Promise<number> {
   return rows.length;
 }
 
-async function seedShipment(db: Kysely<Database>, tenantId: string, shipId: string, projectId: string | null): Promise<void> {
+async function seedShipment(
+  db: Kysely<Database>,
+  tenantId: string,
+  shipId: string,
+  projectId: string | null,
+): Promise<void> {
   if (projectId) {
     await (db as any).insertInto('import_projects').values({ id: projectId, tenant_id: tenantId }).execute();
   }

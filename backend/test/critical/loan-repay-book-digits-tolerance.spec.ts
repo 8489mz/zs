@@ -26,13 +26,22 @@ import { PGliteDialect } from 'kysely-pglite-dialect';
 import { HrService } from '../../src/modules/hr/hr.service';
 import { TransactionHelper } from '../../src/database/helpers/transaction.helper';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', userId: 1, username: 'tester', role: 'admin', permissions: [] } as never;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  userId: 1,
+  username: 'tester',
+  role: 'admin',
+  permissions: [],
+} as never;
 const AUDIT_STUB = { log: async () => ({}) } as never;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_resolve, reject) => setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms)),
+    new Promise<T>((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`HARNESS_TIMEOUT: ${label} did not return within ${ms}ms`)), ms),
+    ),
   ]);
 }
 
@@ -80,22 +89,46 @@ interface CaseResult {
   ledgerRows: number;
 }
 
-async function runCase(currency: string, loanAmount: number, installmentAmount: number, repayAmount: number): Promise<CaseResult> {
+async function runCase(
+  currency: string,
+  loanAmount: number,
+  installmentAmount: number,
+  repayAmount: number,
+): Promise<CaseResult> {
   const db = await newDb();
   try {
     await seed(db, currency, loanAmount, installmentAmount);
     const treasuryCalls: Array<Record<string, unknown>> = [];
     const postingStub = { postEmployeeLoanManualRepayment: async () => ({}) } as never;
-    const treasuryStub = { recordLoanRepayment: async (_trx: unknown, payload: Record<string, unknown>) => { treasuryCalls.push(payload); } } as never;
+    const treasuryStub = {
+      recordLoanRepayment: async (_trx: unknown, payload: Record<string, unknown>) => {
+        treasuryCalls.push(payload);
+      },
+    } as never;
     const service = new HrService(db, new TransactionHelper(), AUDIT_STUB, treasuryStub, postingStub, undefined);
     let error: unknown = null;
     try {
-      await withTimeout(service.repayLoan(1, { amount: repayAmount, repaymentMethod: 'manual_cash', note: 'spec' } as never, AUTH), 25000, 'repayLoan');
-    } catch (caught) { error = caught; }
-    const loan = await db.selectFrom('hr_employee_loans').selectAll().executeTakeFirstOrThrow() as CaseResult['loan'];
-    const installment = await db.selectFrom('hr_employee_loan_installments').selectAll().executeTakeFirstOrThrow() as CaseResult['installment'];
+      await withTimeout(
+        service.repayLoan(1, { amount: repayAmount, repaymentMethod: 'manual_cash', note: 'spec' } as never, AUTH),
+        25000,
+        'repayLoan',
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    const loan = (await db.selectFrom('hr_employee_loans').selectAll().executeTakeFirstOrThrow()) as CaseResult['loan'];
+    const installment = (await db
+      .selectFrom('hr_employee_loan_installments')
+      .selectAll()
+      .executeTakeFirstOrThrow()) as CaseResult['installment'];
     const ledger = await sql<{ n: string }>`SELECT COUNT(*)::text AS n FROM hr_employee_ledger`.execute(db);
-    return { error, loan, installment, treasuryCalls: treasuryCalls.length, ledgerRows: Number(ledger.rows[0]?.n || 0) };
+    return {
+      error,
+      loan,
+      installment,
+      treasuryCalls: treasuryCalls.length,
+      ledgerRows: Number(ledger.rows[0]?.n || 0),
+    };
   } finally {
     await db.destroy();
   }
@@ -104,7 +137,11 @@ async function runCase(currency: string, loanAmount: number, installmentAmount: 
 async function main(): Promise<void> {
   // KWD (3dp) bar: 0.001 undistributed must fail closed.
   const kwdThrow = await runCase('KWD', 100, 99.999, 100);
-  assert.equal((kwdThrow.error as any)?.code, 'HR_LOAN_REPAYMENT_INSTALLMENT_MISMATCH', 'KWD 0.001 remainder throws mismatch');
+  assert.equal(
+    (kwdThrow.error as any)?.code,
+    'HR_LOAN_REPAYMENT_INSTALLMENT_MISMATCH',
+    'KWD 0.001 remainder throws mismatch',
+  );
   assert.equal((kwdThrow.error as any)?.statusCode, 409, 'KWD mismatch is 409');
   assert.equal(Number(kwdThrow.loan.remaining_amount), 100, 'KWD loan unchanged after throw');
   assert.equal(kwdThrow.loan.status, 'partially_repaid', 'KWD loan stays partially_repaid');
@@ -124,7 +161,11 @@ async function main(): Promise<void> {
 
   // EGP (2dp) control: 0.01 remainder still throws (behaviour unchanged).
   const egpThrow = await runCase('EGP', 100, 99.99, 100);
-  assert.equal((egpThrow.error as any)?.code, 'HR_LOAN_REPAYMENT_INSTALLMENT_MISMATCH', 'EGP 0.01 remainder throws mismatch');
+  assert.equal(
+    (egpThrow.error as any)?.code,
+    'HR_LOAN_REPAYMENT_INSTALLMENT_MISMATCH',
+    'EGP 0.01 remainder throws mismatch',
+  );
   assert.equal(Number(egpThrow.loan.remaining_amount), 100, 'EGP loan unchanged after throw');
 
   // EGP control: exact settlement succeeds.

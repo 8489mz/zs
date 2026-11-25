@@ -68,18 +68,33 @@ const MANAGER_PIN = '1234';
 const SHIFT_OPENED_AT = '2026-01-01T00:00:00.000Z';
 
 const adminAuth: AuthContext = {
-  userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
-  permissions: ['sales', 'canEditPrice'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: ['sales', 'canEditPrice'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierAAuth: AuthContext = {
-  userId: 2, sessionId: 'spec-a', username: 'cashier-a', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 2,
+  sessionId: 'spec-a',
+  username: 'cashier-a',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 const cashierBAuth: AuthContext = {
-  userId: 3, sessionId: 'spec-b', username: 'cashier-b', role: 'cashier',
-  permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+  userId: 3,
+  sessionId: 'spec-b',
+  username: 'cashier-b',
+  role: 'cashier',
+  permissions: ['sales'],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
 } as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -149,45 +164,122 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: '"1234"' }).execute();
-  await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
-  await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
+  await anyDb
+    .insertInto('currency_exchange_rates')
+    .values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 2, tenant_id: TENANT, username: 'cashier-a', role: 'cashier', is_active: true })
+    .execute();
+  await anyDb
+    .insertInto('users')
+    .values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true })
+    .execute();
   const accounts: Array<[number, string]> = [
-    [1110, '1110'], [1120, '1120'], [1130, '1130'], [1140, '1140'],
-    [2120, '2120'], [4100, '4100'], [4300, '4300'], [5100, '5100'],
+    [1110, '1110'],
+    [1120, '1120'],
+    [1130, '1130'],
+    [1140, '1140'],
+    [2120, '2120'],
+    [4100, '4100'],
+    [4300, '4300'],
+    [5100, '5100'],
   ];
   for (const [id, code] of accounts) {
-    await anyDb.insertInto('accounting_accounts').values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false }).execute();
+    await anyDb
+      .insertInto('accounting_accounts')
+      .values({ id, tenant_id: TENANT, code, name_ar: code, is_active: true, is_tax: false })
+      .execute();
   }
-  await anyDb.insertInto('accounting_settings').values({
-    id: 1, tenant_id: TENANT, cash_account_id: 1110, bank_account_id: 1120,
-    customer_receivable_account_id: 1130, inventory_account_id: 1140,
-    sales_revenue_account_id: 4100, sales_discount_account_id: 4300,
-    cogs_account_id: 5100, sales_tax_account_id: 2120,
-  }).execute();
-  await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 }).execute();
-  await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Main warehouse', location_type: 'internal_warehouse', is_active: true }).execute();
-  await anyDb.insertInto('products').values({
-    id: 101, tenant_id: TENANT, account_id: ACCOUNT, name: 'Widget 101',
-    stock_qty: 100, cost_price: 10, retail_price: 100,
-    wholesale_price: 100, min_selling_price: 1,
-    is_active: true, item_type: 'product',
-  }).execute();
-  await anyDb.insertInto('product_location_stock').values({
-    tenant_id: TENANT, account_id: ACCOUNT, product_id: 101, branch_id: 1, location_id: 10, qty: 100,
-  }).execute();
+  await anyDb
+    .insertInto('accounting_settings')
+    .values({
+      id: 1,
+      tenant_id: TENANT,
+      cash_account_id: 1110,
+      bank_account_id: 1120,
+      customer_receivable_account_id: 1130,
+      inventory_account_id: 1140,
+      sales_revenue_account_id: 4100,
+      sales_discount_account_id: 4300,
+      cogs_account_id: 5100,
+      sales_tax_account_id: 2120,
+    })
+    .execute();
+  await anyDb
+    .insertInto('branches')
+    .values({ id: 1, tenant_id: TENANT, name: 'Main', default_stock_location_id: 10 })
+    .execute();
+  await anyDb
+    .insertInto('stock_locations')
+    .values({
+      id: 10,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      branch_id: 1,
+      name: 'Main warehouse',
+      location_type: 'internal_warehouse',
+      is_active: true,
+    })
+    .execute();
+  await anyDb
+    .insertInto('products')
+    .values({
+      id: 101,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      name: 'Widget 101',
+      stock_qty: 100,
+      cost_price: 10,
+      retail_price: 100,
+      wholesale_price: 100,
+      min_selling_price: 1,
+      is_active: true,
+      item_type: 'product',
+    })
+    .execute();
+  await anyDb
+    .insertInto('product_location_stock')
+    .values({
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      product_id: 101,
+      branch_id: 1,
+      location_id: 10,
+      qty: 100,
+    })
+    .execute();
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
-  await (db as any).insertInto('cashier_shifts').values({
-    id, tenant_id: TENANT, account_id: ACCOUNT, doc_no: `SHIFT-${id}`,
-    opened_by: openedBy, status: 'open', branch_id: 1, location_id: 10,
-    opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
-  }).execute();
+  await (db as any)
+    .insertInto('cashier_shifts')
+    .values({
+      id,
+      tenant_id: TENANT,
+      account_id: ACCOUNT,
+      doc_no: `SHIFT-${id}`,
+      opened_by: openedBy,
+      status: 'open',
+      branch_id: 1,
+      location_id: 10,
+      opening_cash: 0,
+      expected_cash: 0,
+      created_at: SHIFT_OPENED_AT,
+    })
+    .execute();
 }
 
-function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer: CashDrawerService; posting: AccountingPostingService } {
+function buildServices(db: Kysely<Database>): {
+  sales: SalesWriteService;
+  drawer: CashDrawerService;
+  posting: AccountingPostingService;
+} {
   const foundation = {
     ensureForAuth: async () => {},
     ensureForScope: async () => {},
@@ -203,9 +295,19 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const returnsStub = {};
   const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const sales = new SalesWriteService(
-    db, tx, audit, authz, finance, query, posting, idempotency,
-    planFeatures as never, returnsStub as never,
-    undefined, undefined, drawer,
+    db,
+    tx,
+    audit,
+    authz,
+    finance,
+    query,
+    posting,
+    idempotency,
+    planFeatures as never,
+    returnsStub as never,
+    undefined,
+    undefined,
+    drawer,
   );
   return { sales, drawer, posting };
 }
@@ -213,24 +315,36 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
 function salePayload(total: number): any {
   return {
     items: [{ productId: 101, qty: 1, price: total, priceType: 'retail', unitMultiplier: 1 }],
-    discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+    discount: 0,
+    taxRate: 0,
+    paymentType: 'cash',
+    paymentChannel: 'cash',
     payments: [{ paymentChannel: 'cash', amount: total }],
-    tenderedAmount: total, branchId: 1, locationId: 10, source: 'dashboard',
+    tenderedAmount: total,
+    branchId: 1,
+    locationId: 10,
+    source: 'dashboard',
   };
 }
 
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
   const created: any = await service.createSale(payload, auth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
-  assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);
+  assert.ok(
+    Number.isInteger(id) && id > 0,
+    `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`,
+  );
   return id;
 }
 
 async function refundRow(db: Kysely<Database>, saleId: number): Promise<any> {
-  return (db as any).selectFrom('treasury_transactions').selectAll()
+  return (db as any)
+    .selectFrom('treasury_transactions')
+    .selectAll()
     .where('txn_type', '=', 'sale_cancel_restore')
     .where('note', 'like', `%S-${saleId}%`)
-    .where('tenant_id', '=', TENANT).executeTakeFirstOrThrow();
+    .where('tenant_id', '=', TENANT)
+    .executeTakeFirstOrThrow();
 }
 
 async function main(): Promise<void> {
@@ -249,7 +363,11 @@ async function main(): Promise<void> {
       assert.equal(row.reference_type, 'cashier_shift', 'refund is shift-linked');
       assert.equal(Number(row.reference_id), 1, 'refund links to the original (A) shift');
       assert.equal(Number(row.amount), -100, 'refund is the full cash amount');
-      assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 0, 'A nets the restored receipt against the refund');
+      assert.equal(
+        await drawer.computeShiftExpectedCash(1, adminAuth),
+        0,
+        'A nets the restored receipt against the refund',
+      );
       assert.equal(await drawer.computeShiftExpectedCash(2, adminAuth), 0, 'B is untouched by the cancel');
     } finally {
       await db.destroy();
@@ -289,18 +407,35 @@ async function main(): Promise<void> {
       const { sales, drawer } = buildServices(db);
       const saleId = await createAndGetId(sales, salePayload(100), cashierAAuth);
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 100, 'A expects the sale cash while open');
-      await (db as any).updateTable('cashier_shifts')
+      await (db as any)
+        .updateTable('cashier_shifts')
         .set({ status: 'closed', closed_at: new Date(), expected_cash: 100 })
-        .where('id', '=', 1).execute();
+        .where('id', '=', 1)
+        .execute();
       await sales.cancelSale(saleId, 'إلغاء بعد إغلاق الوردية الأصلية', MANAGER_PIN, cashierBAuth);
       const row = await refundRow(db, saleId);
       assert.equal(row.reference_type, 'cashier_shift', 'refund is shift-linked');
-      assert.equal(Number(row.reference_id), 2, 'refund falls back to the cancelling shift when the original is closed');
-      const closed = await (db as any).selectFrom('cashier_shifts').select(['status', 'expected_cash'])
-        .where('id', '=', 1).executeTakeFirstOrThrow();
+      assert.equal(
+        Number(row.reference_id),
+        2,
+        'refund falls back to the cancelling shift when the original is closed',
+      );
+      const closed = await (db as any)
+        .selectFrom('cashier_shifts')
+        .select(['status', 'expected_cash'])
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(closed.status, 'closed', 'the original shift stays closed');
-      assert.equal(Number(closed.expected_cash), 100, 'the closed shift refreshes to the same figure: cancel nets to zero, row unchanged');
-      assert.equal(await drawer.computeShiftExpectedCash(2, adminAuth), -100, 'the current drawer bears the fallback refund');
+      assert.equal(
+        Number(closed.expected_cash),
+        100,
+        'the closed shift refreshes to the same figure: cancel nets to zero, row unchanged',
+      );
+      assert.equal(
+        await drawer.computeShiftExpectedCash(2, adminAuth),
+        -100,
+        'the current drawer bears the fallback refund',
+      );
     } finally {
       await db.destroy();
     }
@@ -350,12 +485,23 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/sales/services/sales-edit-and-cancel/cancel-sale.service.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      resolve(here, '../../src/modules/sales/services/sales-edit-and-cancel/cancel-sale.service.ts'),
+      'utf8',
+    );
     assert.ok(serviceSource.includes('INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION'), 'cancelSale names the invariant');
     assert.ok(serviceSource.includes('originalCashShift'), 'the original-shift lookup exists in cancelSale');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
-    assert.equal(invariants.split('INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION').length - 1, 1, 'the invariant entry must exist exactly once');
-    assert.equal(invariants.split('INV-SALE-EDIT-PREPARED-WASTE').length - 1, 1, 'the P3 waste invariant must still exist exactly once');
+    assert.equal(
+      invariants.split('INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION').length - 1,
+      1,
+      'the invariant entry must exist exactly once',
+    );
+    assert.equal(
+      invariants.split('INV-SALE-EDIT-PREPARED-WASTE').length - 1,
+      1,
+      'the P3 waste invariant must still exist exactly once',
+    );
     console.log('  source + invariant pins passed');
   }
 

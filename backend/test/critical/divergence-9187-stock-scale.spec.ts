@@ -84,8 +84,16 @@ function checkCorrectedComputation(): void {
   // Diagnosed case, EGP (2dp): 16 units at WAC 15.3125, sell 10.
   const saleGroups: CogsResidualGroup[] = [{ qtySold: 10, unitCost: 15.3125, qtyRemaining: 6 }];
   const saleResidual = cogsResidualAmount(saleGroups, 2);
-  assert.equal(saleResidual, 153.12, 'sale COGS must be the remainder-absorbed residual 153.12, not the once-rounded 153.13');
-  assert.equal(roundMoney(10 * 15.3125, 2), 153.13, 'the old plain total rounding is 153.13 — that 0.01 IS the divergence');
+  assert.equal(
+    saleResidual,
+    153.12,
+    'sale COGS must be the remainder-absorbed residual 153.12, not the once-rounded 153.13',
+  );
+  assert.equal(
+    roundMoney(10 * 15.3125, 2),
+    153.13,
+    'the old plain total rounding is 153.13 — that 0.01 IS the divergence',
+  );
 
   // Remaining GL equals physical stock after the sale.
   const remainingGl = roundMoney(245 - saleResidual, 2);
@@ -113,7 +121,11 @@ function checkCorrectedComputation(): void {
   );
   assert.equal(legacy, 91.875, 'legacy plain return product is the unrounded 91.875');
   assert.equal(roundMoney(legacy, 2), 91.88, 'legacy plain return reverses 91.88 at book digits');
-  assert.equal(roundMoney(245 - saleResidual + roundMoney(legacy, 2), 2), 183.76, 'legacy reversal strands GL at 183.76, 0.01 above physical 183.75');
+  assert.equal(
+    roundMoney(245 - saleResidual + roundMoney(legacy, 2), 2),
+    183.76,
+    'legacy reversal strands GL at 183.76, 0.01 above physical 183.75',
+  );
 
   // Same numbers at 3dp (KWD): everything reconciles exactly, even
   // under the plain product — the divergence is a 2dp phenomenon.
@@ -165,7 +177,9 @@ function replayScales(): { steps: ScaleStep[]; final: Record<string, number> } {
       for (const m of body.matchAll(/ALTER COLUMN\s+(unit_cost|total_cost)\s+TYPE\s+NUMERIC\(\d+\s*,\s*(\d+)\)/g)) {
         record(file, m[1], Number(m[2]), false);
       }
-      for (const m of body.matchAll(/ADD COLUMN IF NOT EXISTS\s+(unit_cost|total_cost)\s+(?:DECIMAL|NUMERIC)\(\d+\s*,\s*(\d+)\)/g)) {
+      for (const m of body.matchAll(
+        /ADD COLUMN IF NOT EXISTS\s+(unit_cost|total_cost)\s+(?:DECIMAL|NUMERIC)\(\d+\s*,\s*(\d+)\)/g,
+      )) {
         record(file, m[1], Number(m[2]), false);
       }
     }
@@ -195,10 +209,7 @@ function checkScales(): void {
   );
   assert.deepEqual(
     totalSteps.map((s) => `${s.file}:${s.to}`),
-    [
-      '2029000000001_accounting_round1.ts:3',
-      '2040000000177_expand_stock_movement_cost_precision.ts:3',
-    ],
+    ['2029000000001_accounting_round1.ts:3', '2040000000177_expand_stock_movement_cost_precision.ts:3'],
     'total_cost scale chain must be 3 -> 3',
   );
   for (const step of steps) {
@@ -207,15 +218,26 @@ function checkScales(): void {
       `migration ${step.file} must never narrow ${step.column} scale (${step.from} -> ${step.to})`,
     );
   }
-  assert.equal(final.unit_cost, 6, 'stock_movements.unit_cost final scale must be 6 (NUMERIC(20,6)) — the 3dp expectation passes');
+  assert.equal(
+    final.unit_cost,
+    6,
+    'stock_movements.unit_cost final scale must be 6 (NUMERIC(20,6)) — the 3dp expectation passes',
+  );
   assert.ok(final.unit_cost >= 3, 'stock_movements.unit_cost must hold at least 3dp');
-  assert.equal(final.total_cost, 3, 'stock_movements.total_cost final scale must be 3 (NUMERIC(18,3)) — exactly book digits');
+  assert.equal(
+    final.total_cost,
+    3,
+    'stock_movements.total_cost final scale must be 3 (NUMERIC(18,3)) — exactly book digits',
+  );
   // Self-check: the replay itself must catch a narrowed chain.
   const narrowed: ScaleStep[] = [
     { file: 'a.ts', column: 'unit_cost', from: null, to: 6, widenOnly: false },
     { file: 'b.ts', column: 'unit_cost', from: 6, to: 2, widenOnly: false },
   ];
-  assert.ok(narrowed.some((s) => s.from !== null && s.to < s.from), 'replay self-check: a 6 -> 2 step must read as a narrowing');
+  assert.ok(
+    narrowed.some((s) => s.from !== null && s.to < s.from),
+    'replay self-check: a 6 -> 2 step must read as a narrowing',
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -227,7 +249,12 @@ function walkTsFiles(dir: string, out: string[] = []): string[] {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (entry.name !== 'node_modules') walkTsFiles(full, out);
-    } else if (entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.spec.ts') && !entry.name.endsWith('.test.ts')) {
+    } else if (
+      entry.isFile() &&
+      entry.name.endsWith('.ts') &&
+      !entry.name.endsWith('.spec.ts') &&
+      !entry.name.endsWith('.test.ts')
+    ) {
       out.push(full);
     }
   }
@@ -241,7 +268,8 @@ function checkWriters(): void {
   const saleMovementFilesWithUnitCost: string[] = [];
   for (const file of walkTsFiles(BACKEND_SRC)) {
     const rel = path.relative(REPO_ROOT, file).split(path.sep).join('/');
-    if (rel.startsWith('backend/src/database/migrations/') || rel.startsWith('backend/src/database/legacy-migration/')) continue;
+    if (rel.startsWith('backend/src/database/migrations/') || rel.startsWith('backend/src/database/legacy-migration/'))
+      continue;
     const lines = fs.readFileSync(file, 'utf8').split('\n');
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -268,7 +296,10 @@ function checkWriters(): void {
         saleMovementFilesWithUnitCost.push(`${rel}:${i + 1}`);
       }
       assert.ok(!/toFixed\(2\)/.test(code), `${rel}:${i + 1} must not write unit_cost through toFixed(2)`);
-      assert.ok(!/roundMoney\([^)]*,\s*2\s*\)/.test(code), `${rel}:${i + 1} must not write unit_cost through roundMoney(..., 2)`);
+      assert.ok(
+        !/roundMoney\([^)]*,\s*2\s*\)/.test(code),
+        `${rel}:${i + 1} must not write unit_cost through roundMoney(..., 2)`,
+      );
     }
   }
   assert.ok(insertSites > 0, 'writer audit must find stock_movements inserts');
@@ -295,7 +326,9 @@ function checkWriters(): void {
     2,
     `insert-sale-and-stock.ts must have exactly 2 sale movements with unit_cost (found: ${createSaleWithCost.join(', ') || 'none'})`,
   );
-  console.log(`writer audit: ${insertSites} stock_movements inserts scanned, ${unitCostSites} set unit_cost, 0 use 2dp rounding`);
+  console.log(
+    `writer audit: ${insertSites} stock_movements inserts scanned, ${unitCostSites} set unit_cost, 0 use 2dp rounding`,
+  );
 }
 
 async function main(): Promise<void> {

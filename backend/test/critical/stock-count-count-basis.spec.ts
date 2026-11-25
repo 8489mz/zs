@@ -71,35 +71,84 @@ import { AccountingTenantFoundationService } from '../../src/modules/accounting/
 import { InventoryCountService } from '../../src/modules/inventory/services/inventory-count.service';
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: ['canAdjustInventory'],
+} as unknown as AuthContext;
 const APPROVER_PASSWORD = 'approver-pass';
 
-async function seedProduct(db: Kysely<Database>, id: number, globalQty: number, reserved: number, cost: number): Promise<void> {
-  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, ${reserved}, ${cost}, true, false)`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${globalQty}, ${reserved})`.execute(db);
+async function seedProduct(
+  db: Kysely<Database>,
+  id: number,
+  globalQty: number,
+  reserved: number,
+  cost: number,
+): Promise<void> {
+  await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, ${reserved}, ${cost}, true, false)`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty) VALUES ('t1', 'a1', ${id}, 1, 1, ${globalQty}, ${reserved})`.execute(
+    db,
+  );
 }
 
 async function createSession(service: InventoryCountService, productId: number, countedQty: number): Promise<number> {
-  const created = await service.createStockCountSession(
+  const created = (await service.createStockCountSession(
     { locationId: 1, branchId: 1, items: [{ productId, countedQty, reason: 'count' }] } as never,
     AUTH,
-  ) as Record<string, unknown>;
+  )) as Record<string, unknown>;
   return Number(created.sessionId);
 }
 
-async function seedSession(db: Kysely<Database>, sessionId: number, productId: number, expected: number, counted: number): Promise<number> {
-  await sql`INSERT INTO stock_count_sessions (id, tenant_id, account_id, doc_no, branch_id, location_id, status, note, counted_by, created_at, updated_at) VALUES (${sessionId}, 't1', 'a1', ${`ZSC-${sessionId}`}, 1, 1, 'draft', '', 1, NOW(), NOW())`.execute(db);
-  const item = await sql<{ id: number }>`INSERT INTO stock_count_items (tenant_id, account_id, session_id, product_id, product_name, expected_qty, counted_qty, variance_qty, reason, note, counted_serials, batch_counts) VALUES ('t1', 'a1', ${sessionId}, ${productId}, ${`Product ${productId}`}, ${expected}, ${counted}, ${Number((counted - expected).toFixed(3))}, 'count', '', null, null) RETURNING id`.execute(db);
+async function seedSession(
+  db: Kysely<Database>,
+  sessionId: number,
+  productId: number,
+  expected: number,
+  counted: number,
+): Promise<number> {
+  await sql`INSERT INTO stock_count_sessions (id, tenant_id, account_id, doc_no, branch_id, location_id, status, note, counted_by, created_at, updated_at) VALUES (${sessionId}, 't1', 'a1', ${`ZSC-${sessionId}`}, 1, 1, 'draft', '', 1, NOW(), NOW())`.execute(
+    db,
+  );
+  const item = await sql<{
+    id: number;
+  }>`INSERT INTO stock_count_items (tenant_id, account_id, session_id, product_id, product_name, expected_qty, counted_qty, variance_qty, reason, note, counted_serials, batch_counts) VALUES ('t1', 'a1', ${sessionId}, ${productId}, ${`Product ${productId}`}, ${expected}, ${counted}, ${Number((counted - expected).toFixed(3))}, 'count', '', null, null) RETURNING id`.execute(
+    db,
+  );
   return Number(item.rows[0].id);
 }
 
-async function itemRow(db: Kysely<Database>, sessionId: number): Promise<{ id: number; expected_qty: string; counted_qty: string; variance_qty: string; posted_at: string | null }> {
-  const row = await sql<{ id: number; expected_qty: string; counted_qty: string; variance_qty: string; posted_at: string | null }>`SELECT id, expected_qty, counted_qty, variance_qty, posted_at FROM stock_count_items WHERE session_id = ${sessionId}`.execute(db);
+async function itemRow(
+  db: Kysely<Database>,
+  sessionId: number,
+): Promise<{ id: number; expected_qty: string; counted_qty: string; variance_qty: string; posted_at: string | null }> {
+  const row = await sql<{
+    id: number;
+    expected_qty: string;
+    counted_qty: string;
+    variance_qty: string;
+    posted_at: string | null;
+  }>`SELECT id, expected_qty, counted_qty, variance_qty, posted_at FROM stock_count_items WHERE session_id = ${sessionId}`.execute(
+    db,
+  );
   return row.rows[0];
 }
 
-async function journalLines(db: Kysely<Database>, sourceId: number): Promise<Array<{ code: string; debit: number; credit: number }>> {
-  const rows = await sql<{ code: string; debit: string; credit: string }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'stock_count_chunk' AND e.source_id = ${sourceId} AND e.tenant_id = 't1' ORDER BY a.code`.execute(db);
+async function journalLines(
+  db: Kysely<Database>,
+  sourceId: number,
+): Promise<Array<{ code: string; debit: number; credit: number }>> {
+  const rows = await sql<{
+    code: string;
+    debit: string;
+    credit: string;
+  }>`SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN journal_entries e ON e.id = l.journal_entry_id JOIN accounting_accounts a ON a.id = l.account_id WHERE e.source_type = 'stock_count_chunk' AND e.source_id = ${sourceId} AND e.tenant_id = 't1' ORDER BY a.code`.execute(
+    db,
+  );
   return rows.rows.map((r) => ({ code: r.code, debit: Number(r.debit), credit: Number(r.credit) }));
 }
 
@@ -114,14 +163,19 @@ async function sessionStatus(db: Kysely<Database>, id: number): Promise<string> 
 }
 
 async function locationQty(db: Kysely<Database>, productId: number): Promise<number> {
-  const row = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = 1`.execute(db);
+  const row = await sql<{
+    qty: string;
+  }>`SELECT qty FROM product_location_stock WHERE product_id = ${productId} AND location_id = 1`.execute(db);
   return Number(row.rows[0].qty);
 }
 
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const service = new InventoryCountService(
     db as never,
@@ -173,7 +227,9 @@ async function main(): Promise<void> {
     // different admin than the counter (user 1) and the poster (AUTH,
     // user 1) — a second admin user with its own password.
     const approverRecord = await createPasswordRecord(APPROVER_PASSWORD);
-    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(db);
+    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(
+      db,
+    );
 
     // Case 1: the reported bug -- 12 on hand, 1 reserved, counted 12.
     // Old code froze book 11, variance +1, phantom effect +58.82, and
@@ -186,7 +242,9 @@ async function main(): Promise<void> {
     await service.postStockCountSession(session1, AUTH, APPROVER_PASSWORD);
     assert.equal(await journalCount(db), 0);
     assert.equal(await locationQty(db, 1), 12);
-    const mov1 = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM stock_movements WHERE reference_id = ${session1}`.execute(db);
+    const mov1 = await sql<{
+      n: string;
+    }>`SELECT COUNT(*) AS n FROM stock_movements WHERE reference_id = ${session1}`.execute(db);
     assert.equal(Number(mov1.rows[0].n), 0);
     assert.equal(await sessionStatus(db, session1), 'posted');
 
@@ -197,7 +255,11 @@ async function main(): Promise<void> {
     assert.equal(Number(row2.expected_qty), 12);
     assert.equal(Number(row2.variance_qty), 1);
     await service.postStockCountSession(session2, AUTH, APPROVER_PASSWORD);
-    const mov2 = await sql<{ qty: string; before_qty: string; after_qty: string }>`SELECT qty, before_qty, after_qty FROM stock_movements WHERE reference_id = ${session2}`.execute(db);
+    const mov2 = await sql<{
+      qty: string;
+      before_qty: string;
+      after_qty: string;
+    }>`SELECT qty, before_qty, after_qty FROM stock_movements WHERE reference_id = ${session2}`.execute(db);
     assert.equal(Number(mov2.rows[0].qty), 1);
     assert.equal(Number(mov2.rows[0].before_qty), 12);
     assert.equal(Number(mov2.rows[0].after_qty), 13);
@@ -215,7 +277,11 @@ async function main(): Promise<void> {
     assert.equal(Number(row3.expected_qty), 12);
     assert.equal(Number(row3.variance_qty), -1);
     await service.postStockCountSession(session3, AUTH, APPROVER_PASSWORD);
-    const mov3 = await sql<{ qty: string; before_qty: string; after_qty: string }>`SELECT qty, before_qty, after_qty FROM stock_movements WHERE reference_id = ${session3}`.execute(db);
+    const mov3 = await sql<{
+      qty: string;
+      before_qty: string;
+      after_qty: string;
+    }>`SELECT qty, before_qty, after_qty FROM stock_movements WHERE reference_id = ${session3}`.execute(db);
     assert.equal(Number(mov3.rows[0].qty), -1);
     assert.equal(Number(mov3.rows[0].before_qty), 12);
     assert.equal(Number(mov3.rows[0].after_qty), 11);
@@ -232,11 +298,19 @@ async function main(): Promise<void> {
     assert.equal(Number(row4.expected_qty), 12);
     await sql`UPDATE product_location_stock SET qty = 13 WHERE product_id = 4 AND location_id = 1`.execute(db);
     await sql`UPDATE products SET stock_qty = 13 WHERE id = 4`.execute(db);
-    const deferred = await service.postStockCountSession(session4, AUTH, APPROVER_PASSWORD) as Record<string, unknown>;
+    const deferred = (await service.postStockCountSession(session4, AUTH, APPROVER_PASSWORD)) as Record<
+      string,
+      unknown
+    >;
     assert.deepEqual(deferred.skippedStockCountItemIds, [row4.id]);
     assert.equal((await itemRow(db, session4)).posted_at, null);
     assert.equal(await sessionStatus(db, session4), 'draft');
-    await service.recountPendingStockCountItem(session4, row4.id, { reason: 'recounted after stock moved', countedQty: 13 } as never, AUTH);
+    await service.recountPendingStockCountItem(
+      session4,
+      row4.id,
+      { reason: 'recounted after stock moved', countedQty: 13 } as never,
+      AUTH,
+    );
     const row4b = await itemRow(db, session4);
     assert.equal(Number(row4b.expected_qty), 13);
     assert.equal(Number(row4b.variance_qty), 0);
@@ -254,7 +328,7 @@ async function main(): Promise<void> {
     assert.equal(Number(row5.variance_qty), 0);
     await sql`UPDATE product_location_stock SET reserved_qty = 2 WHERE product_id = 5 AND location_id = 1`.execute(db);
     await sql`UPDATE products SET reserved_qty = 2 WHERE id = 5`.execute(db);
-    const posted5 = await service.postStockCountSession(session5, AUTH, APPROVER_PASSWORD) as Record<string, unknown>;
+    const posted5 = (await service.postStockCountSession(session5, AUTH, APPROVER_PASSWORD)) as Record<string, unknown>;
     assert.deepEqual(posted5.skippedStockCountItemIds, []);
     assert.notEqual((await itemRow(db, session5)).posted_at, null);
     assert.equal(await sessionStatus(db, session5), 'posted');
@@ -293,11 +367,23 @@ async function main(): Promise<void> {
     {
       const { readFileSync } = await import('node:fs');
       const { resolve } = await import('node:path');
-      const serviceSrc = readFileSync(resolve(__dirname, '../../src/modules/inventory/services/inventory-count.service.ts'), 'utf8');
-      assert.ok(serviceSrc.includes('previewAssignedLocationOnHandQty'), 'count service must use the on-hand count basis');
-      assert.ok(serviceSrc.includes('carries no basis marker'), 'staleness checks must accept either basis for pre-fix rows');
+      const serviceSrc = readFileSync(
+        resolve(__dirname, '../../src/modules/inventory/services/inventory-count.service.ts'),
+        'utf8',
+      );
+      assert.ok(
+        serviceSrc.includes('previewAssignedLocationOnHandQty'),
+        'count service must use the on-hand count basis',
+      );
+      assert.ok(
+        serviceSrc.includes('carries no basis marker'),
+        'staleness checks must accept either basis for pre-fix rows',
+      );
       const ledgerSrc = readFileSync(resolve(__dirname, '../../src/common/utils/location-stock-ledger.ts'), 'utf8');
-      assert.ok(ledgerSrc.includes('export async function previewAssignedLocationOnHandQty'), 'ledger must define the on-hand count basis');
+      assert.ok(
+        ledgerSrc.includes('export async function previewAssignedLocationOnHandQty'),
+        'ledger must define the on-hand count basis',
+      );
     }
 
     console.log('stock count count basis checks passed');

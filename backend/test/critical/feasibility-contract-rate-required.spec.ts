@@ -54,7 +54,9 @@ function feasibility(rate: unknown): Record<string, unknown> {
 }
 
 async function seedProject(db: Kysely<Database>, id: string, budgetCurrency: string, rate: unknown): Promise<void> {
-  await sql`INSERT INTO import_projects (id, tenant_id, project_no, feasibility_data, budget_currency, country_destination, status) VALUES (${id}, 't1', ${`PRJ-${id}`}, ${JSON.stringify(feasibility(rate))}::jsonb, ${budgetCurrency}, 'Alexandria', 'draft')`.execute(db);
+  await sql`INSERT INTO import_projects (id, tenant_id, project_no, feasibility_data, budget_currency, country_destination, status) VALUES (${id}, 't1', ${`PRJ-${id}`}, ${JSON.stringify(feasibility(rate))}::jsonb, ${budgetCurrency}, 'Alexandria', 'draft')`.execute(
+    db,
+  );
 }
 
 async function main(): Promise<void> {
@@ -79,25 +81,40 @@ async function main(): Promise<void> {
       );
       const proformas = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM import_proforma_invoices`.execute(db);
       assert.equal(Number(proformas.rows[0].n), 0);
-      const project = await sql<{ status: string; feasibility_converted_at: string | null }>`SELECT status, feasibility_converted_at FROM import_projects WHERE id = ${id}`.execute(db);
+      const project = await sql<{
+        status: string;
+        feasibility_converted_at: string | null;
+      }>`SELECT status, feasibility_converted_at FROM import_projects WHERE id = ${id}`.execute(db);
       assert.equal(project.rows[0].status, 'draft');
       assert.equal(project.rows[0].feasibility_converted_at, null);
     }
 
     await seedProject(db, 'good', 'USD', 48.5);
-    const converted = await service.convertFeasibilityToProject('t1', 'good', { projectId: 'good', supplierId: '7' } as never);
+    const converted = await service.convertFeasibilityToProject('t1', 'good', {
+      projectId: 'good',
+      supplierId: '7',
+    } as never);
     assert.equal(converted.cashFlowSchedule[0].amountEgp, 14550);
-    const pi = await sql<{ exchange_rate_contract: string }>`SELECT exchange_rate_contract FROM import_proforma_invoices WHERE project_id = 'good'`.execute(db);
+    const pi = await sql<{
+      exchange_rate_contract: string;
+    }>`SELECT exchange_rate_contract FROM import_proforma_invoices WHERE project_id = 'good'`.execute(db);
     assert.equal(Number(pi.rows[0].exchange_rate_contract), 48.5);
 
     await seedProject(db, 'egp', 'EGP', null);
-    const egpConverted = await service.convertFeasibilityToProject('t1', 'egp', { projectId: 'egp', supplierId: '7' } as never);
+    const egpConverted = await service.convertFeasibilityToProject('t1', 'egp', {
+      projectId: 'egp',
+      supplierId: '7',
+    } as never);
     assert.equal(egpConverted.cashFlowSchedule[0].amountEgp, 300);
-    const egpPi = await sql<{ exchange_rate_contract: string }>`SELECT exchange_rate_contract FROM import_proforma_invoices WHERE project_id = 'egp'`.execute(db);
+    const egpPi = await sql<{
+      exchange_rate_contract: string;
+    }>`SELECT exchange_rate_contract FROM import_proforma_invoices WHERE project_id = 'egp'`.execute(db);
     assert.equal(Number(egpPi.rows[0].exchange_rate_contract), 1);
 
     await seedProject(db, 'nosupplier', 'USD', 48.5);
-    const noSupplier = await service.convertFeasibilityToProject('t1', 'nosupplier', { projectId: 'nosupplier' } as never);
+    const noSupplier = await service.convertFeasibilityToProject('t1', 'nosupplier', {
+      projectId: 'nosupplier',
+    } as never);
     assert.equal(noSupplier.proformaId, null);
     assert.equal(noSupplier.cashFlowSchedule[0].amountEgp, 14550);
 

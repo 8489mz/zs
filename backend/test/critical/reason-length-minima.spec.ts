@@ -35,20 +35,30 @@ console.log('=== reason-length minima (spirit-of-law Q8) ===\n');
 
 // Three-way-match override: one word approves, empty does not.
 const poItems = [{ id: 1, productId: 100, qty: 100, unitCost: 10 }];
-const grnLines = [{ id: 1, grnId: 1, poItemId: 1, productId: 100, receivedQty: 100, acceptedQty: 100, rejectedQty: 0, unitCost: 10 }];
+const grnLines = [
+  { id: 1, grnId: 1, poItemId: 1, productId: 100, receivedQty: 100, acceptedQty: 100, rejectedQty: 0, unitCost: 10 },
+];
 const qtyBlocked = {
   poItems,
   grnLines,
   invoiceItems: [{ productId: 100, poItemId: 1, qty: 150, unitCost: 10 }],
 };
 const shortOverride = computeThreeWayMatch({
-  minorUnits: 2, vatRate: 0.14, ...qtyBlocked,
-  allowOverride: true, overrideReason: 'موافقة', overrideScope: 'full',
+  minorUnits: 2,
+  vatRate: 0.14,
+  ...qtyBlocked,
+  allowOverride: true,
+  overrideReason: 'موافقة',
+  overrideScope: 'full',
 });
 assert.equal(shortOverride.isValidForPosting, true, 'a one-word override reason must approve the override');
 const emptyOverride = computeThreeWayMatch({
-  minorUnits: 2, vatRate: 0.14, ...qtyBlocked,
-  allowOverride: true, overrideReason: '   ', overrideScope: 'full',
+  minorUnits: 2,
+  vatRate: 0.14,
+  ...qtyBlocked,
+  allowOverride: true,
+  overrideReason: '   ',
+  overrideScope: 'full',
 });
 assert.equal(emptyOverride.isValidForPosting, false, 'an empty override reason must not approve the override');
 console.log('✓ three-way-match override reason: one word ok, empty rejected');
@@ -56,22 +66,37 @@ console.log('✓ three-way-match override reason: one word ok, empty rejected');
 // Freight maker-checker override: role gate unchanged, reason non-empty.
 assert.equal(
   validateMakerCheckerOverride({ userId: 2, role: 'finance_manager', invoiceCreatedBy: 1, reason: 'موافقة' }).valid,
-  true, 'a one-word rationale must be valid for a finance manager',
+  true,
+  'a one-word rationale must be valid for a finance manager',
 );
 assert.equal(
   validateMakerCheckerOverride({ userId: 2, role: 'finance_manager', invoiceCreatedBy: 1, reason: '  ' }).valid,
-  false, 'an empty rationale must stay invalid',
+  false,
+  'an empty rationale must stay invalid',
 );
 assert.equal(
   validateMakerCheckerOverride({ userId: 2, role: 'cashier', invoiceCreatedBy: 1, reason: 'موافقة مفصلة جدا' }).valid,
-  false, 'the role gate stays: a cashier cannot approve even with a long reason',
+  false,
+  'the role gate stays: a cashier cannot approve even with a long reason',
 );
 console.log('✓ freight override rationale: one word ok, role gate unchanged');
 
 // Trip expense governance: one-word note allows a routine petty expense.
-const routine = evaluateTripExpenseGovernance({ moneyDigits: 2, expenseType: 'fuel', amount: 100, notes: 'وقود', existingTripExpenses: 0 });
+const routine = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
+  expenseType: 'fuel',
+  amount: 100,
+  notes: 'وقود',
+  existingTripExpenses: 0,
+});
 assert.equal(routine.allowed, true, 'a one-word expense note must allow a routine petty expense');
-const noNotes = evaluateTripExpenseGovernance({ moneyDigits: 2, expenseType: 'fuel', amount: 100, notes: '   ', existingTripExpenses: 0 });
+const noNotes = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
+  expenseType: 'fuel',
+  amount: 100,
+  notes: '   ',
+  existingTripExpenses: 0,
+});
 assert.equal(noNotes.allowed, false, 'empty expense notes must stay rejected');
 assert.equal(noNotes.reasonCode, 'EXPENSE_NOTES_REQUIRED');
 console.log('✓ trip expense notes: one word ok, empty rejected');
@@ -83,19 +108,19 @@ console.log('✓ damage note: one word ok, blank rejected');
 
 // Refund-tender override: one word allows, empty fails.
 const refundBase = {
-  requested: 'cash' as const, amount: 100,
-  originalCashPaid: 0, originalNonCashPaid: 100, originalDebt: 0,
-  previousCashRefunded: 0, previousNonCashRefunded: 0, previousDebtReversed: 0,
-  hasCustomer: false, override: true,
+  requested: 'cash' as const,
+  amount: 100,
+  originalCashPaid: 0,
+  originalNonCashPaid: 100,
+  originalDebt: 0,
+  previousCashRefunded: 0,
+  previousNonCashRefunded: 0,
+  previousDebtReversed: 0,
+  hasCustomer: false,
+  override: true,
 };
-assert.deepEqual(
-  allocateRefundTenders({ ...refundBase, overrideReason: 'موافقة' }),
-  [{ tender: 'cash', amount: 100 }],
-);
-assert.throws(
-  () => allocateRefundTenders({ ...refundBase, overrideReason: '' }),
-  /REFUND_OVERRIDE_REASON_REQUIRED/,
-);
+assert.deepEqual(allocateRefundTenders({ ...refundBase, overrideReason: 'موافقة' }), [{ tender: 'cash', amount: 100 }]);
+assert.throws(() => allocateRefundTenders({ ...refundBase, overrideReason: '' }), /REFUND_OVERRIDE_REASON_REQUIRED/);
 console.log('✓ refund override reason: one word ok, empty rejected');
 
 console.log('\nreason-length minima checks passed');

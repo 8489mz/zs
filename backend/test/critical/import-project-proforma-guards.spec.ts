@@ -86,26 +86,49 @@ function makeService(db: Kysely<Database>): any {
 }
 
 async function seedProject(db: Kysely<Database>, status = 'active'): Promise<string> {
-  const row: any = await (db as any).insertInto('import_projects').values({
-    tenant_id: 't1', title: 'Ningbo Container', status,
-    feasibility_data: JSON.stringify({ items: [{ name: 'Mixer', qty: 100 }] }),
-  }).returning('id').executeTakeFirstOrThrow();
+  const row: any = await (db as any)
+    .insertInto('import_projects')
+    .values({
+      tenant_id: 't1',
+      title: 'Ningbo Container',
+      status,
+      feasibility_data: JSON.stringify({ items: [{ name: 'Mixer', qty: 100 }] }),
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
   return row.id as string;
 }
 
-async function seedProforma(
-  db: Kysely<Database>,
-  overrides: Record<string, unknown> = {},
-): Promise<string> {
-  const row: any = await (db as any).insertInto('import_proforma_invoices').values({
-    tenant_id: 't1', project_id: null, supplier_id: 11, pi_number: 'PI-100',
-    pi_date: '2026-11-02', currency: 'USD', total_amount_foreign: 10000,
-    incoterm: 'FOB', delivery_port: null, payment_terms: null, exchange_rate_contract: null,
-    advance_percentage: 30, balance_percentage: 70, status: 'draft', payment_status: 'unpaid',
-    paid_amount_foreign: 0, items: JSON.stringify([{ name: 'Mixer', qty: 100, factoryPriceUsd: 25 }]),
-    notes: null, po_status: null, po_number: null, approved_by: null, approved_at: null,
-    ...overrides,
-  }).returning('id').executeTakeFirstOrThrow();
+async function seedProforma(db: Kysely<Database>, overrides: Record<string, unknown> = {}): Promise<string> {
+  const row: any = await (db as any)
+    .insertInto('import_proforma_invoices')
+    .values({
+      tenant_id: 't1',
+      project_id: null,
+      supplier_id: 11,
+      pi_number: 'PI-100',
+      pi_date: '2026-11-02',
+      currency: 'USD',
+      total_amount_foreign: 10000,
+      incoterm: 'FOB',
+      delivery_port: null,
+      payment_terms: null,
+      exchange_rate_contract: null,
+      advance_percentage: 30,
+      balance_percentage: 70,
+      status: 'draft',
+      payment_status: 'unpaid',
+      paid_amount_foreign: 0,
+      items: JSON.stringify([{ name: 'Mixer', qty: 100, factoryPriceUsd: 25 }]),
+      notes: null,
+      po_status: null,
+      po_number: null,
+      approved_by: null,
+      approved_at: null,
+      ...overrides,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
   return row.id as string;
 }
 
@@ -124,9 +147,15 @@ async function main(): Promise<void> {
         async () => service.updateProject('t1', id, { status: 'closed' }),
         /IMPORT_PROJECT_STATUS_VIA_CLOSE_ONLY/,
       );
-      const row: any = await (db as any).selectFrom('import_projects').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+      const row: any = await (db as any)
+        .selectFrom('import_projects')
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
       assert.equal(row.status, 'active');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 2: feasibility freeze on a closed project; title edits still allowed.
@@ -141,9 +170,15 @@ async function main(): Promise<void> {
       );
       const updated: any = await service.updateProject('t1', id, { title: 'Renamed' });
       assert.equal(updated.title, 'Renamed');
-      const row: any = await (db as any).selectFrom('import_projects').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+      const row: any = await (db as any)
+        .selectFrom('import_projects')
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
       assert.equal(JSON.parse(row.feasibility_data).items.length, 1, 'Feasibility data must be untouched');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 3: feasibility edits on an active project work.
@@ -152,9 +187,13 @@ async function main(): Promise<void> {
     try {
       const id = await seedProject(db);
       const service = makeService(db);
-      const updated: any = await service.updateProject('t1', id, { feasibilityData: { items: [{ name: 'Fryer', qty: 50 }] } });
+      const updated: any = await service.updateProject('t1', id, {
+        feasibilityData: { items: [{ name: 'Fryer', qty: 50 }] },
+      });
       assert.equal(JSON.parse(updated.feasibility_data).items[0].name, 'Fryer');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 4: update after payment is refused.
@@ -168,7 +207,9 @@ async function main(): Promise<void> {
         /IMPORT_PROFORMA_FROZEN/,
       );
       assert.equal(Number((await readProforma(db, id)).total_amount_foreign), 10000);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 4b: items-only update after payment is allowed (linking workflow); money fields are frozen.
@@ -182,7 +223,9 @@ async function main(): Promise<void> {
       } as any);
       assert.equal(JSON.parse(updated.items)[0].productId, 5);
       assert.equal(Number(updated.total_amount_foreign), 10000, 'The header total must survive an items-only update');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 5: update after PO issue is refused.
@@ -196,7 +239,9 @@ async function main(): Promise<void> {
         /IMPORT_PROFORMA_FROZEN/,
       );
       assert.equal(Number((await readProforma(db, id)).total_amount_foreign), 10000);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 6: approved + unpaid + PO-less proforma CAN be updated (approve -> link -> PO workflow).
@@ -209,7 +254,9 @@ async function main(): Promise<void> {
         items: [{ productId: 5, qty: 100, factoryPriceUsd: 25 }],
       } as any);
       assert.equal(JSON.parse(updated.items)[0].productId, 5);
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 7: approve requires draft + validated items; second approval rejected.
@@ -220,21 +267,17 @@ async function main(): Promise<void> {
       const draft = await seedProforma(db);
       const approved: any = await service.approveProformaInvoice('t1', 1, draft);
       assert.equal(approved.status, 'approved');
-      await assert.rejects(
-        async () => service.approveProformaInvoice('t1', 1, draft),
-        /IMPORT_PROFORMA_NOT_DRAFT/,
-      );
+      await assert.rejects(async () => service.approveProformaInvoice('t1', 1, draft), /IMPORT_PROFORMA_NOT_DRAFT/);
       const empty = await seedProforma(db, { pi_number: 'PI-101', items: '[]' });
       await assert.rejects(
         async () => service.approveProformaInvoice('t1', 1, empty),
         /IMPORT_PROFORMA_NO_VALID_ITEMS/,
       );
       const junk = await seedProforma(db, { pi_number: 'PI-102', items: JSON.stringify([{ qty: 0 }]) });
-      await assert.rejects(
-        async () => service.approveProformaInvoice('t1', 1, junk),
-        /IMPORT_PROFORMA_NO_VALID_ITEMS/,
-      );
-    } finally { await db.destroy(); }
+      await assert.rejects(async () => service.approveProformaInvoice('t1', 1, junk), /IMPORT_PROFORMA_NO_VALID_ITEMS/);
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 8: create requires a supplier that exists in this tenant.
@@ -243,13 +286,13 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const base: any = {
-        supplierId: '99999', piNumber: 'PI-200', piDate: '2026-11-02',
-        totalAmountForeign: 5000, items: [{ name: 'Mixer', qty: 10 }],
+        supplierId: '99999',
+        piNumber: 'PI-200',
+        piDate: '2026-11-02',
+        totalAmountForeign: 5000,
+        items: [{ name: 'Mixer', qty: 10 }],
       };
-      await assert.rejects(
-        async () => service.createProformaInvoice('t1', base),
-        /IMPORT_PROFORMA_SUPPLIER_REQUIRED/,
-      );
+      await assert.rejects(async () => service.createProformaInvoice('t1', base), /IMPORT_PROFORMA_SUPPLIER_REQUIRED/);
       await assert.rejects(
         async () => service.createProformaInvoice('t1', { ...base, supplierId: '12' }),
         /IMPORT_PROFORMA_SUPPLIER_REQUIRED/,
@@ -258,7 +301,9 @@ async function main(): Promise<void> {
       const created: any = await service.createProformaInvoice('t1', { ...base, supplierId: '11' });
       assert.equal(created.status, 'draft');
       assert.equal(created.pi_number, 'PI-200');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   // Case 9: duplicate pi_number per tenant rejected on create and on update; other tenant unaffected.
@@ -268,15 +313,22 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await seedProforma(db, { pi_number: 'PI-300' });
       await assert.rejects(
-        async () => service.createProformaInvoice('t1', {
-          supplierId: '11', piNumber: 'PI-300', piDate: '2026-11-02',
-          totalAmountForeign: 100, items: [{ name: 'X', qty: 1 }],
-        }),
+        async () =>
+          service.createProformaInvoice('t1', {
+            supplierId: '11',
+            piNumber: 'PI-300',
+            piDate: '2026-11-02',
+            totalAmountForeign: 100,
+            items: [{ name: 'X', qty: 1 }],
+          }),
         /IMPORT_PROFORMA_DUPLICATE_NUMBER/,
       );
       const other: any = await service.createProformaInvoice('t2', {
-        supplierId: '12', piNumber: 'PI-300', piDate: '2026-11-02',
-        totalAmountForeign: 100, items: [{ name: 'X', qty: 1 }],
+        supplierId: '12',
+        piNumber: 'PI-300',
+        piDate: '2026-11-02',
+        totalAmountForeign: 100,
+        items: [{ name: 'X', qty: 1 }],
       } as any);
       assert.equal(other.pi_number, 'PI-300');
       const second = await seedProforma(db, { pi_number: 'PI-301' });
@@ -286,10 +338,15 @@ async function main(): Promise<void> {
       );
       const renamed: any = await service.updateProformaInvoice('t1', second, { piNumber: 'PI-302' });
       assert.equal(renamed.pi_number, 'PI-302');
-    } finally { await db.destroy(); }
+    } finally {
+      await db.destroy();
+    }
   }
 
   console.log('Import project/proforma guard tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

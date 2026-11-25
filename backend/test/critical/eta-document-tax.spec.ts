@@ -49,9 +49,7 @@ async function main(): Promise<void> {
         if (table === 'sale_items') return chainable(items);
         if (table === 'tenant_tax_settings')
           return chainable(
-            settings == null
-              ? []
-              : [{ provider: 'ETA_EGYPT', tax_id: (settings as any).tax_id, is_active: true }],
+            settings == null ? [] : [{ provider: 'ETA_EGYPT', tax_id: (settings as any).tax_id, is_active: true }],
           );
         return chainable(null);
       },
@@ -133,11 +131,9 @@ async function main(): Promise<void> {
 
   // Fail-closed on a corrupt stored rate; missing settings still throw.
   await assert.rejects(
-    drive(
-      { ...baseSale, tax_rate: -5, prices_include_tax: false },
-      [{ ...baseItem, line_total: 100 }],
-      { tax_id: '123456789' },
-    ),
+    drive({ ...baseSale, tax_rate: -5, prices_include_tax: false }, [{ ...baseItem, line_total: 100 }], {
+      tax_id: '123456789',
+    }),
     /DOCUMENT_TAX_RATE_INVALID/,
   );
   await assert.rejects(

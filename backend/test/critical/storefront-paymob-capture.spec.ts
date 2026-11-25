@@ -27,13 +27,76 @@ import { StorefrontPaymentService } from '../../src/modules/storefront/storefron
 import { classifyPaymobTransaction } from '../../src/modules/storefront/engines/paymob-notification.engine';
 
 function testClassification(): void {
-  assert.equal(classifyPaymobTransaction({ is_capture: true, is_auth: false, is_standalone_payment: false, is_voided: false, is_refunded: false }), 'capture');
-  assert.equal(classifyPaymobTransaction({ is_capture: false, is_auth: false, is_standalone_payment: true, is_voided: false, is_refunded: false }), 'capture');
-  assert.equal(classifyPaymobTransaction({ is_capture: false, is_auth: true, is_standalone_payment: false, is_voided: false, is_refunded: false }), 'authorization_only');
-  assert.equal(classifyPaymobTransaction({ is_capture: false, is_auth: false, is_standalone_payment: false, is_voided: true, is_refunded: false }), 'void_or_refund');
-  assert.equal(classifyPaymobTransaction({ is_capture: false, is_auth: false, is_standalone_payment: false, is_voided: false, is_refunded: true }), 'void_or_refund');
-  assert.equal(classifyPaymobTransaction({ is_capture: true, is_auth: false, is_standalone_payment: false, is_voided: true, is_refunded: false }), 'void_or_refund');
-  assert.equal(classifyPaymobTransaction({ is_capture: false, is_auth: false, is_standalone_payment: false, is_voided: false, is_refunded: false }), 'unclassified');
+  assert.equal(
+    classifyPaymobTransaction({
+      is_capture: true,
+      is_auth: false,
+      is_standalone_payment: false,
+      is_voided: false,
+      is_refunded: false,
+    }),
+    'capture',
+  );
+  assert.equal(
+    classifyPaymobTransaction({
+      is_capture: false,
+      is_auth: false,
+      is_standalone_payment: true,
+      is_voided: false,
+      is_refunded: false,
+    }),
+    'capture',
+  );
+  assert.equal(
+    classifyPaymobTransaction({
+      is_capture: false,
+      is_auth: true,
+      is_standalone_payment: false,
+      is_voided: false,
+      is_refunded: false,
+    }),
+    'authorization_only',
+  );
+  assert.equal(
+    classifyPaymobTransaction({
+      is_capture: false,
+      is_auth: false,
+      is_standalone_payment: false,
+      is_voided: true,
+      is_refunded: false,
+    }),
+    'void_or_refund',
+  );
+  assert.equal(
+    classifyPaymobTransaction({
+      is_capture: false,
+      is_auth: false,
+      is_standalone_payment: false,
+      is_voided: false,
+      is_refunded: true,
+    }),
+    'void_or_refund',
+  );
+  assert.equal(
+    classifyPaymobTransaction({
+      is_capture: true,
+      is_auth: false,
+      is_standalone_payment: false,
+      is_voided: true,
+      is_refunded: false,
+    }),
+    'void_or_refund',
+  );
+  assert.equal(
+    classifyPaymobTransaction({
+      is_capture: false,
+      is_auth: false,
+      is_standalone_payment: false,
+      is_voided: false,
+      is_refunded: false,
+    }),
+    'unclassified',
+  );
   assert.equal(classifyPaymobTransaction({}), 'unclassified');
   console.log('Paymob transaction classification tests passed');
 }
@@ -81,7 +144,10 @@ function createMockDb(orders: MockOrder[], settingsMap: Record<string, string>) 
           const builder: any = {
             where: (col: any, op: any, val: any) => {
               if (col === 'id') selectedId = val;
-              else { filterCol = col; filterVal = val; }
+              else {
+                filterCol = col;
+                filterVal = val;
+              }
               return builder;
             },
             forUpdate: () => builder,
@@ -89,7 +155,8 @@ function createMockDb(orders: MockOrder[], settingsMap: Record<string, string>) 
             executeTakeFirst: async () => {
               if (selectedId != null) return orders.find((o) => o.id === selectedId) || orders[0];
               if (filterCol === 'order_number') return orders.find((o) => o.order_number === filterVal) || orders[0];
-              if (filterCol === 'gateway_order_id') return orders.find((o) => o.gateway_order_id === filterVal) || orders[0];
+              if (filterCol === 'gateway_order_id')
+                return orders.find((o) => o.gateway_order_id === filterVal) || orders[0];
               return orders[0];
             },
             execute: async () => {
@@ -153,11 +220,26 @@ function signedObj(overrides: Record<string, any>): any {
     ...overrides,
   };
   const concatenated = [
-    obj.amount_cents, obj.created_at, obj.currency, obj.error_occured,
-    obj.has_parent_transaction, obj.id, obj.integration_id, obj.is_3d_secure,
-    obj.is_auth, obj.is_capture, obj.is_refunded, obj.is_standalone_payment,
-    obj.is_voided, obj.order?.id, obj.owner, obj.pending,
-    obj.source_data?.pan, obj.source_data?.sub_type, obj.source_data?.type, obj.success,
+    obj.amount_cents,
+    obj.created_at,
+    obj.currency,
+    obj.error_occured,
+    obj.has_parent_transaction,
+    obj.id,
+    obj.integration_id,
+    obj.is_3d_secure,
+    obj.is_auth,
+    obj.is_capture,
+    obj.is_refunded,
+    obj.is_standalone_payment,
+    obj.is_voided,
+    obj.order?.id,
+    obj.owner,
+    obj.pending,
+    obj.source_data?.pan,
+    obj.source_data?.sub_type,
+    obj.source_data?.type,
+    obj.success,
   ].join('');
   const hmac = crypto.createHmac('sha512', SECRET).update(concatenated).digest('hex');
   return { obj, hmac };
@@ -239,7 +321,13 @@ async function testWebhookWiring(): Promise<void> {
   {
     const order = pendingOrder();
     const service = new StorefrontPaymentService(createMockDb([order], { storefront_paymob_hmac_secret: SECRET }));
-    const { obj, hmac } = signedObj({ is_auth: false, is_capture: false, is_standalone_payment: false, is_voided: false, is_refunded: false });
+    const { obj, hmac } = signedObj({
+      is_auth: false,
+      is_capture: false,
+      is_standalone_payment: false,
+      is_voided: false,
+      is_refunded: false,
+    });
     const result = await service.processPaymobWebhook({ hmac }, { obj });
     assert.equal(result.ok, true);
     assert.equal(result.status, 'review_required');
@@ -250,7 +338,12 @@ async function testWebhookWiring(): Promise<void> {
 
   // 7. Authorization-only callback arriving after the order is paid: acknowledged, no review noise.
   {
-    const order: MockOrder = { ...pendingOrder(), payment_status: 'paid', status: 'confirmed', gateway_transaction_id: '12345' };
+    const order: MockOrder = {
+      ...pendingOrder(),
+      payment_status: 'paid',
+      status: 'confirmed',
+      gateway_transaction_id: '12345',
+    };
     const service = new StorefrontPaymentService(createMockDb([order], { storefront_paymob_hmac_secret: SECRET }));
     const { obj, hmac } = signedObj({ is_auth: true, is_standalone_payment: false, id: 77777 });
     const result = await service.processPaymobWebhook({ hmac }, { obj });
@@ -260,7 +353,9 @@ async function testWebhookWiring(): Promise<void> {
     assert.equal(order.status, 'confirmed');
   }
 
-  console.log('  -> Paymob: auth-only acknowledged without state change, void/refund fail, captures pay, flag-less reviewed.');
+  console.log(
+    '  -> Paymob: auth-only acknowledged without state change, void/refund fail, captures pay, flag-less reviewed.',
+  );
 }
 
 async function main() {
@@ -269,4 +364,7 @@ async function main() {
   console.log('Paymob capture-only tests passed');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

@@ -8,10 +8,7 @@ import {
   type FmcgPromotion,
   type CartItemInput,
 } from '../../src/modules/delivery-reps/fmcg-promotions.engine';
-import {
-  optimizeRouteTsp,
-  type RouteStopInput,
-} from '../../src/modules/delivery-reps/route-optimization.engine';
+import { optimizeRouteTsp, type RouteStopInput } from '../../src/modules/delivery-reps/route-optimization.engine';
 import {
   reconcileTripFinancials,
   reconcileVanStockAudit,
@@ -31,7 +28,7 @@ console.log('>>> [START] FMCG MASTER COMMERCIAL WORKFLOW & SALES EXECUTION TEST'
 // ============================================================================
 console.log('--- Stage 1: TSP Dynamic Route Optimization ---');
 
-const startLocation = { startLat: 30.0400, startLng: 31.2300 }; // Warehouse / Depot
+const startLocation = { startLat: 30.04, startLng: 31.23 }; // Warehouse / Depot
 
 const stops: RouteStopInput[] = [
   {
@@ -54,8 +51,8 @@ const stops: RouteStopInput[] = [
     id: 103,
     name: 'كشك البركة',
     address: 'شارع قصر العيني',
-    lat: 30.0420,
-    lng: 31.2320,
+    lat: 30.042,
+    lng: 31.232,
     originalSequence: 3,
   },
 ];
@@ -76,7 +73,9 @@ assert.equal(lastStop.isUnmappedGps, true);
 assert.equal(optimizationResult.orderedStops[0].id, 103); // Closer to 30.0400, 31.2300
 assert.equal(optimizationResult.orderedStops[1].id, 101);
 assert.ok(optimizationResult.stats.savedDistanceKm >= 0);
-console.log(`[PASS] Route optimized: Total distance ${optimizationResult.stats.optimizedDistanceKm} km, Saved ${optimizationResult.stats.savedDistanceKm} km`);
+console.log(
+  `[PASS] Route optimized: Total distance ${optimizationResult.stats.optimizedDistanceKm} km, Saved ${optimizationResult.stats.savedDistanceKm} km`,
+);
 
 // ============================================================================
 // STAGE 2: CUSTOMER 1 VISIT (POSITIVE SALE, PROMOTIONS, TRADE SURVEY, DWELL)
@@ -86,13 +85,7 @@ console.log('--- Stage 2: Store Visit 1 - Positive Sale & Merchandising ---');
 // 2.1 GPS Geofencing Check-in
 const cust1 = stops[0]; // Supermarket Al-Nour (30.0444, 31.2357)
 // Rep arrives at (30.0445, 31.2358) which is ~15 meters away
-const checkInGeofence = FmcgVisitExecutionEngine.evaluateGeofence(
-  cust1.lat,
-  cust1.lng,
-  30.0445,
-  31.2358,
-  300
-);
+const checkInGeofence = FmcgVisitExecutionEngine.evaluateGeofence(cust1.lat, cust1.lng, 30.0445, 31.2358, 300);
 assert.equal(checkInGeofence.isValid, true);
 assert.ok(checkInGeofence.distanceMeters < 50);
 
@@ -169,7 +162,9 @@ assert.equal(promoEvaluation.bonusItemsToAdd.length, 1);
 assert.equal(promoEvaluation.bonusItemsToAdd[0].productId, 3);
 assert.equal(promoEvaluation.bonusItemsToAdd[0].qty, 1);
 assert.equal(promoEvaluation.bonusItemsToAdd[0].isBonus, true);
-console.log(`[PASS] Promotions applied: Discount ${promoEvaluation.totalPromotionalDiscount} EGP, Bonus item: ${promoEvaluation.bonusItemsToAdd[0].productName}`);
+console.log(
+  `[PASS] Promotions applied: Discount ${promoEvaluation.totalPromotionalDiscount} EGP, Bonus item: ${promoEvaluation.bonusItemsToAdd[0].productName}`,
+);
 
 // 2.4 Credit Limit Governance
 const creditCheck = evaluateCreditLimitCheck({
@@ -213,9 +208,9 @@ const cust2 = stops[2]; // Kiosk Al-Baraka (30.0420, 31.2320)
 const rogueCheckIn = FmcgVisitExecutionEngine.evaluateGeofence(
   cust2.lat,
   cust2.lng,
-  30.0480, // Far coordinate
-  31.2380,
-  300
+  30.048, // Far coordinate
+  31.238,
+  300,
 );
 assert.equal(rogueCheckIn.isValid, false);
 assert.ok(rogueCheckIn.distanceMeters > 300);
@@ -227,9 +222,14 @@ assert.ok(matchedReason);
 assert.equal(matchedReason.nameAr, 'المحل مغلق');
 
 const checkOut2 = new Date('2026-10-14T09:25:00.000Z');
-const dwellSeconds2 = FmcgVisitExecutionEngine.calculateDwellTimeSeconds(new Date('2026-10-14T09:23:00.000Z'), checkOut2);
+const dwellSeconds2 = FmcgVisitExecutionEngine.calculateDwellTimeSeconds(
+  new Date('2026-10-14T09:23:00.000Z'),
+  checkOut2,
+);
 assert.equal(dwellSeconds2, 120);
-console.log(`[PASS] Store 2 closed: Geofence breach flagged (${rogueCheckIn.distanceMeters}m), No-sale reason recorded: ${matchedReason.nameAr}`);
+console.log(
+  `[PASS] Store 2 closed: Geofence breach flagged (${rogueCheckIn.distanceMeters}m), No-sale reason recorded: ${matchedReason.nameAr}`,
+);
 
 // ============================================================================
 // STAGE 4: FIELD DEBT COLLECTION & ISOLATED REP BALANCES
@@ -296,7 +296,9 @@ const strikeMetrics = FmcgVisitExecutionEngine.calculateStrikeRateMetrics(visits
 assert.equal(strikeMetrics.totalVisits, 2);
 assert.equal(strikeMetrics.productiveVisits, 1);
 assert.equal(strikeMetrics.strikeRatePercentage, 50.0);
-console.log(`[PASS] Strike-Rate Metric: ${strikeMetrics.strikeRatePercentage}% (${strikeMetrics.productiveVisits}/${strikeMetrics.totalVisits})`);
+console.log(
+  `[PASS] Strike-Rate Metric: ${strikeMetrics.strikeRatePercentage}% (${strikeMetrics.productiveVisits}/${strikeMetrics.totalVisits})`,
+);
 
 // 5.2 Trip Financials Reconciliation
 const tripFin = reconcileTripFinancials({
@@ -319,24 +321,27 @@ assert.equal(tripFin.cashVariance, 0);
 assert.equal(tripFin.cashVarianceStatus, 'balanced');
 
 // 5.3 Physical Van Stock Audit
-const stockAudit = reconcileVanStockAudit([
-  {
-    productId: 1,
-    productName: 'شيبسي عائلي جبنة',
-    systemQty: 40,
-    countedQty: 40,
-    costPrice: 80,
-    retailPrice: 120,
-  },
-  {
-    productId: 3,
-    productName: 'بسكويت شوكولاتة (بونص)',
-    systemQty: 9,
-    countedQty: 9,
-    costPrice: 15,
-    retailPrice: 20,
-  },
-], 2);
+const stockAudit = reconcileVanStockAudit(
+  [
+    {
+      productId: 1,
+      productName: 'شيبسي عائلي جبنة',
+      systemQty: 40,
+      countedQty: 40,
+      costPrice: 80,
+      retailPrice: 120,
+    },
+    {
+      productId: 3,
+      productName: 'بسكويت شوكولاتة (بونص)',
+      systemQty: 9,
+      countedQty: 9,
+      costPrice: 15,
+      retailPrice: 20,
+    },
+  ],
+  2,
+);
 
 assert.equal(stockAudit.hasStockDiscrepancy, false);
 assert.equal(stockAudit.totalStockShortageCost, 0);

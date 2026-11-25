@@ -56,7 +56,14 @@ reuses):
   no cash is handed for goods never paid for; treasury moves 0.
 */
 
-const ADMIN = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const ADMIN = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
@@ -177,29 +184,48 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       (1,'t1','a1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
   `);
   for (const code of [1110, 1120, 1130, 1140, 1150, 2110, 2120, 4100, 4200, 4300, 4400, 5100, 2150]) {
-    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,account_id,code) VALUES ($1,$2,$3,$4)',
-      [code, 't1', 'a1', String(code)]);
+    await pg.query('INSERT INTO accounting_accounts(id,tenant_id,account_id,code) VALUES ($1,$2,$3,$4)', [
+      code,
+      't1',
+      'a1',
+      String(code),
+    ]);
   }
   return { pg, db };
 }
 
 function makeServices(db: Kysely<Database>): ReturnsService {
-  const foundation = { ensureForAuth: async () => undefined, ensureForScope: async () => undefined } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => undefined,
+    ensureForScope: async () => undefined,
+  } as unknown as AccountingTenantFoundationService;
   const posting = new AccountingPostingService(foundation);
   const auditStub = { log: async () => undefined, logWithExecutor: async () => undefined };
   const idempotencyStub = { check: async () => null, commitOperation: async () => undefined };
-  return new ReturnsService(db as any, new TransactionHelper(), auditStub as any, posting as any, idempotencyStub as any);
+  return new ReturnsService(
+    db as any,
+    new TransactionHelper(),
+    auditStub as any,
+    posting as any,
+    idempotencyStub as any,
+  );
 }
 
 async function seedBase(db: Kysely<Database>): Promise<void> {
   await sql`INSERT INTO settings VALUES ('t1', 'currency', 'EGP')`.execute(db);
   await sql`INSERT INTO settings VALUES ('t1', 'managerPin', '"2468"')`.execute(db);
   const adminRecord = await createPasswordRecord('admin-pass');
-  await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${adminRecord.hash}, ${adminRecord.salt}, true)`.execute(db);
+  await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', ${adminRecord.hash}, ${adminRecord.salt}, true)`.execute(
+    db,
+  );
   await sql`INSERT INTO users VALUES (2, 't1', 'cashier', 1, 'cashier', '', '', true)`.execute(db);
   await sql`INSERT INTO cashier_shifts VALUES (1, 't1', 'a1', 'SHIFT-1', 1, 'open', 1, 1, 0, NOW())`.execute(db);
-  await sql`INSERT INTO products VALUES (10, 't1', 'a1', 'Widget', '', '', '', 100, 0, 10, true, false, NOW())`.execute(db);
-  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty, updated_at) VALUES ('t1', 'a1', 10, 1, 1, 100, 0, NOW())`.execute(db);
+  await sql`INSERT INTO products VALUES (10, 't1', 'a1', 'Widget', '', '', '', 100, 0, 10, true, false, NOW())`.execute(
+    db,
+  );
+  await sql`INSERT INTO product_location_stock (tenant_id, account_id, product_id, branch_id, location_id, qty, reserved_qty, updated_at) VALUES ('t1', 'a1', 10, 1, 1, 100, 0, NOW())`.execute(
+    db,
+  );
   await sql`INSERT INTO customers VALUES (25, 't1', 'Cash customer', 0, 0, 0, 0, false, NOW())`.execute(db);
 }
 
@@ -207,11 +233,17 @@ async function seedBase(db: Kysely<Database>): Promise<void> {
    no tip / fee / service, so the full return refunds exactly 70. */
 async function seedSplitSale(db: Kysely<Database>): Promise<number> {
   await sql`INSERT INTO sales (id, tenant_id, account_id, doc_no, customer_id, status, total, paid_amount, store_credit_used, discount, tax_amount, subtotal, prices_include_tax, payment_type, payment_channel, branch_id, location_id, tip_amount, delivery_fee, delivery_fee_mode, service_charge)
-    VALUES (1, 't1', 'a1', 'S-1', 25, 'posted', 70, 70, 0, 0, 0, 70, false, 'cash', 'cash', 1, 1, 0, 0, NULL, 0)`.execute(db);
+    VALUES (1, 't1', 'a1', 'S-1', 25, 'posted', 70, 70, 0, 0, 0, 70, false, 'cash', 'cash', 1, 1, 0, 0, NULL, 0)`.execute(
+    db,
+  );
   await sql`INSERT INTO sale_items (id, tenant_id, account_id, sale_id, product_id, product_name, qty, unit_price, line_total, net_unit_price, net_line_total, allocated_discount, allocated_tax, cost_price, unit_multiplier)
     VALUES (10, 't1', 'a1', 1, 10, 'Widget', 1, 70, 70, 70, 70, 0, 0, 0, 1)`.execute(db);
-  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', 1, 'cash', 35)`.execute(db);
-  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', 1, 'card', 35)`.execute(db);
+  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', 1, 'cash', 35)`.execute(
+    db,
+  );
+  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', 1, 'card', 35)`.execute(
+    db,
+  );
   return 1;
 }
 
@@ -219,10 +251,14 @@ async function seedSplitSale(db: Kysely<Database>): Promise<number> {
    paid wholly by card — its return must still be cash in full. */
 async function seedCardSale(db: Kysely<Database>): Promise<number> {
   await sql`INSERT INTO sales (id, tenant_id, account_id, doc_no, customer_id, status, total, paid_amount, store_credit_used, discount, tax_amount, subtotal, prices_include_tax, payment_type, payment_channel, branch_id, location_id, tip_amount, delivery_fee, delivery_fee_mode, service_charge)
-    VALUES (1, 't1', 'a1', 'S-1', 25, 'posted', 299.70, 299.70, 0, 0, 0, 299.70, false, 'cash', 'card', 1, 1, 0, 0, NULL, 0)`.execute(db);
+    VALUES (1, 't1', 'a1', 'S-1', 25, 'posted', 299.70, 299.70, 0, 0, 0, 299.70, false, 'cash', 'card', 1, 1, 0, 0, NULL, 0)`.execute(
+    db,
+  );
   await sql`INSERT INTO sale_items (id, tenant_id, account_id, sale_id, product_id, product_name, qty, unit_price, line_total, net_unit_price, net_line_total, allocated_discount, allocated_tax, cost_price, unit_multiplier)
     VALUES (10, 't1', 'a1', 1, 10, 'Widget', 1, 299.70, 299.70, 299.70, 299.70, 0, 0, 0, 1)`.execute(db);
-  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', 1, 'card', 299.70)`.execute(db);
+  await sql`INSERT INTO sale_payments (tenant_id, account_id, sale_id, payment_channel, amount) VALUES ('t1', 'a1', 1, 'card', 299.70)`.execute(
+    db,
+  );
   return 1;
 }
 
@@ -230,7 +266,9 @@ async function seedCardSale(db: Kysely<Database>): Promise<number> {
    100 still owed — its return reverses the receivable, no cash. */
 async function seedCreditSale(db: Kysely<Database>): Promise<number> {
   await sql`INSERT INTO sales (id, tenant_id, account_id, doc_no, customer_id, status, total, paid_amount, store_credit_used, discount, tax_amount, subtotal, prices_include_tax, payment_type, payment_channel, branch_id, location_id, tip_amount, delivery_fee, delivery_fee_mode, service_charge)
-    VALUES (1, 't1', 'a1', 'S-1', 25, 'posted', 100, 0, 0, 0, 0, 100, false, 'credit', 'credit', 1, 1, 0, 0, NULL, 0)`.execute(db);
+    VALUES (1, 't1', 'a1', 'S-1', 25, 'posted', 100, 0, 0, 0, 0, 100, false, 'credit', 'credit', 1, 1, 0, 0, NULL, 0)`.execute(
+    db,
+  );
   await sql`INSERT INTO sale_items (id, tenant_id, account_id, sale_id, product_id, product_name, qty, unit_price, line_total, net_unit_price, net_line_total, allocated_discount, allocated_tax, cost_price, unit_multiplier)
     VALUES (10, 't1', 'a1', 1, 10, 'Widget', 1, 100, 100, 100, 100, 0, 0, 0, 1)`.execute(db);
   return 1;
@@ -245,28 +283,51 @@ function parseAllocations(value: unknown): unknown {
 }
 
 async function treasurySum(db: Kysely<Database>, txnType: string): Promise<number> {
-  const row = await sql<{ s: string }>`SELECT COALESCE(SUM(amount), 0) AS s FROM treasury_transactions WHERE txn_type = ${txnType}`.execute(db);
+  const row = await sql<{
+    s: string;
+  }>`SELECT COALESCE(SUM(amount), 0) AS s FROM treasury_transactions WHERE txn_type = ${txnType}`.execute(db);
   return Number(row.rows[0].s);
 }
 
-async function journalBySource(pg: PGlite, db: Kysely<Database>, sourceType: string, sourceId: number): Promise<Map<string, { debit: number; credit: number }>> {
-  const entries = await (db as any).selectFrom('journal_entries').select('id')
-    .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute() as Array<{ id: number }>;
+async function journalBySource(
+  pg: PGlite,
+  db: Kysely<Database>,
+  sourceType: string,
+  sourceId: number,
+): Promise<Map<string, { debit: number; credit: number }>> {
+  const entries = (await (db as any)
+    .selectFrom('journal_entries')
+    .select('id')
+    .where('source_type', '=', sourceType)
+    .where('source_id', '=', sourceId)
+    .execute()) as Array<{ id: number }>;
   assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
   const rows = await pg.query<{ code: string; debit: string; credit: string }>(
     `SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE l.journal_entry_id = $1`,
-    [Number(entries[0].id)]);
+    [Number(entries[0].id)],
+  );
   const byCode = new Map<string, { debit: number; credit: number }>();
   for (const row of rows.rows) byCode.set(row.code, { debit: Number(row.debit), credit: Number(row.credit) });
   return byCode;
 }
 
-async function createFullReturn(returns: ReturnsService, saleId: number, unitPrice: number, refundMethod: 'cash' | 'card'): Promise<Record<string, unknown>> {
-  const result = await returns.createReturn({
-    type: 'sale', invoiceId: saleId, note: 'spec return',
-    items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 10 }],
-    settlementMode: 'refund', refundMethod,
-  } as never, ADMIN) as unknown as Record<string, unknown>;
+async function createFullReturn(
+  returns: ReturnsService,
+  saleId: number,
+  unitPrice: number,
+  refundMethod: 'cash' | 'card',
+): Promise<Record<string, unknown>> {
+  const result = (await returns.createReturn(
+    {
+      type: 'sale',
+      invoiceId: saleId,
+      note: 'spec return',
+      items: [{ productId: 10, productName: 'Widget', qty: 1, saleItemId: 10 }],
+      settlementMode: 'refund',
+      refundMethod,
+    } as never,
+    ADMIN,
+  )) as unknown as Record<string, unknown>;
   assert.equal(result.ok, true);
   assert.equal(result.refundTotal, unitPrice);
   return result;
@@ -307,23 +368,27 @@ async function main(): Promise<void> {
       await seedBase(db);
       await seedCardSale(db);
       const returns = makeServices(db);
-      const result = await createFullReturn(returns, 1, 299.70, 'cash');
+      const result = await createFullReturn(returns, 1, 299.7, 'cash');
       assert.equal(result.refundMethod, 'cash');
-      assert.deepEqual(parseAllocations(result.refundAllocations), [{ tender: 'cash', amount: 299.70 }]);
-      assert.equal(await treasurySum(db, 'sale_return_refund'), -299.70);
+      assert.deepEqual(parseAllocations(result.refundAllocations), [{ tender: 'cash', amount: 299.7 }]);
+      assert.equal(await treasurySum(db, 'sale_return_refund'), -299.7);
       const journal = await journalBySource(pg, db, 'sales_return', Number(result.id));
-      assert.equal(journal.get('4400')?.debit, 299.70);
-      assert.equal(journal.get('1110')?.credit, 299.70);
+      assert.equal(journal.get('4400')?.debit, 299.7);
+      assert.equal(journal.get('1110')?.credit, 299.7);
       assert.equal(journal.get('1120'), undefined, 'no bank leg on a card-only return either');
-      const listed = await returns.listReturns({}, ADMIN) as unknown as { returns: Array<Record<string, unknown>> };
+      const listed = (await returns.listReturns({}, ADMIN)) as unknown as { returns: Array<Record<string, unknown>> };
       const row = listed.returns.find((entry) => String(entry.id) === String(result.id));
       assert.ok(row, 'created return must appear in listReturns');
       assert.equal(row.refundMethod, 'cash');
-      assert.deepEqual(parseAllocations((row as Record<string, unknown>).refundAllocations), [{ tender: 'cash', amount: 299.70 }]);
-      const detail = await returns.getReturnById(Number(result.id), ADMIN) as unknown as { returnDocument: Record<string, unknown> };
+      assert.deepEqual(parseAllocations((row as Record<string, unknown>).refundAllocations), [
+        { tender: 'cash', amount: 299.7 },
+      ]);
+      const detail = (await returns.getReturnById(Number(result.id), ADMIN)) as unknown as {
+        returnDocument: Record<string, unknown>;
+      };
       assert.equal(detail.returnDocument.refundMethod, 'cash');
-      assert.deepEqual(parseAllocations(detail.returnDocument.refundAllocations), [{ tender: 'cash', amount: 299.70 }]);
-      assert.equal(detail.returnDocument.refundTotal, 299.70);
+      assert.deepEqual(parseAllocations(detail.returnDocument.refundAllocations), [{ tender: 'cash', amount: 299.7 }]);
+      assert.equal(detail.returnDocument.refundTotal, 299.7);
     } finally {
       await db.destroy();
     }

@@ -308,8 +308,16 @@ async function main(): Promise<void> {
       /* ---------------------------------------------------------- */
       const usersCache = (usersService as unknown as { authCache: AuthCacheService }).authCache;
       const sessionCache = (sessionService as unknown as { authCache: AuthCacheService }).authCache;
-      assert.equal(usersCache, cache, 'UsersService must hold the shared AuthCacheService singleton from AuthFoundationModule');
-      assert.equal(sessionCache, cache, 'SessionService must hold the shared AuthCacheService singleton from AuthFoundationModule');
+      assert.equal(
+        usersCache,
+        cache,
+        'UsersService must hold the shared AuthCacheService singleton from AuthFoundationModule',
+      );
+      assert.equal(
+        sessionCache,
+        cache,
+        'SessionService must hold the shared AuthCacheService singleton from AuthFoundationModule',
+      );
       assert.equal(usersCache, sessionCache, 'both services must hold the SAME instance — never a private copy each');
 
       const actor: AuthContext = {
@@ -331,20 +339,36 @@ async function main(): Promise<void> {
       const first = await sessionService.resolveAuthContext('sess-1');
       assert.ok(first, 'resolveAuthContext must resolve the seeded session');
       assert.equal(first.username, 'oldname', 'first resolve must carry the pre-rename username');
-      assert.equal(cache.getSession('sess-1')?.username, 'oldname', 'the first resolve must have cached the old username');
+      assert.equal(
+        cache.getSession('sess-1')?.username,
+        'oldname',
+        'the first resolve must have cached the old username',
+      );
       const other = await sessionService.resolveAuthContext('sess-2');
       assert.ok(other, 'the second user session must resolve');
       assert.equal(other.username, 'other', 'second resolve must carry the other username');
 
       await usersService.updateProfile({ username: 'newname', name: 'New Name' }, actor);
 
-      assert.equal(cache.getSession('sess-1'), null, 'updateProfile must invalidate the renamed user sessions immediately (no 60s wait)');
+      assert.equal(
+        cache.getSession('sess-1'),
+        null,
+        'updateProfile must invalidate the renamed user sessions immediately (no 60s wait)',
+      );
       assert.ok(cache.getSession('sess-2'), 'invalidation is per-user: the other user session must survive');
       const after = await sessionService.resolveAuthContext('sess-1');
       assert.ok(after, 'resolve after updateProfile must still resolve the session from the DB');
-      assert.equal(after.username, 'newname', 'the next request after updateProfile must see the NEW username, not the cached old one');
+      assert.equal(
+        after.username,
+        'newname',
+        'the next request after updateProfile must see the NEW username, not the cached old one',
+      );
 
-      const renamed = await db.selectFrom('users').select(['username', 'display_name']).where('id', '=', 1).executeTakeFirstOrThrow();
+      const renamed = await db
+        .selectFrom('users')
+        .select(['username', 'display_name'])
+        .where('id', '=', 1)
+        .executeTakeFirstOrThrow();
       assert.equal(renamed.username, 'newname', 'the users row itself must carry the new username');
       assert.equal(renamed.display_name, 'New Name', 'the users row itself must carry the new display name');
 
@@ -361,15 +385,41 @@ async function main(): Promise<void> {
       assert.equal(cache.getSession('sess-2')?.username, 'other', 're-resolve must re-cache the other user');
       await usersService.updateUser(
         2,
-        { username: 'other', phone: '01000000001', role: 'cashier', permissions: ['pos', 'sales'], name: 'Other', isActive: true },
+        {
+          username: 'other',
+          phone: '01000000001',
+          role: 'cashier',
+          permissions: ['pos', 'sales'],
+          name: 'Other',
+          isActive: true,
+        },
         { ...actor, username: 'newname', permissions: ['pos', 'sales'] },
       );
-      assert.equal(cache.getSession('sess-2'), null, 'updateUser must still invalidate the changed user sessions on commit (CORE-005)');
-      assert.ok(cache.getSession('sess-1'), 'invalidation is per-user: the admin session must survive the cashier update');
-      const changed = await db.selectFrom('users').select(['permissions_json']).where('id', '=', 2).executeTakeFirstOrThrow();
-      assert.equal(changed.permissions_json, JSON.stringify(['pos', 'sales']), 'the cashier row itself must carry the newly granted permissions');
+      assert.equal(
+        cache.getSession('sess-2'),
+        null,
+        'updateUser must still invalidate the changed user sessions on commit (CORE-005)',
+      );
+      assert.ok(
+        cache.getSession('sess-1'),
+        'invalidation is per-user: the admin session must survive the cashier update',
+      );
+      const changed = await db
+        .selectFrom('users')
+        .select(['permissions_json'])
+        .where('id', '=', 2)
+        .executeTakeFirstOrThrow();
+      assert.equal(
+        changed.permissions_json,
+        JSON.stringify(['pos', 'sales']),
+        'the cashier row itself must carry the newly granted permissions',
+      );
       const afterUpdateUser = await sessionService.resolveAuthContext('sess-2');
-      assert.equal(afterUpdateUser, null, 'updateUser also revokes the DB session rows, so the session must no longer resolve');
+      assert.equal(
+        afterUpdateUser,
+        null,
+        'updateUser also revokes the DB session rows, so the session must no longer resolve',
+      );
 
       /* ---------------------------------------------------------- */
       /* 4. Static ratchet: the TTL stays 60s (invalidation, not   */
@@ -377,14 +427,16 @@ async function main(): Promise<void> {
       /*    keep exactly their audited shape. Any new update path   */
       /*    in one of them fails here until it is audited.         */
       /* ---------------------------------------------------------- */
-      const cacheSource = fs.readFileSync(path.join(BACKEND_SRC, 'core', 'auth', 'services', 'auth-cache.service.ts'), 'utf8');
+      const cacheSource = fs.readFileSync(
+        path.join(BACKEND_SRC, 'core', 'auth', 'services', 'auth-cache.service.ts'),
+        'utf8',
+      );
       assert.ok(
         cacheSource.includes('private readonly defaultSessionTtl = 60'),
         'the session TTL must stay 60s — invalidation is the mechanism, never a shorter TTL',
       );
 
-      const readService = (relative: string): string =>
-        fs.readFileSync(path.join(BACKEND_SRC, relative), 'utf8');
+      const readService = (relative: string): string => fs.readFileSync(path.join(BACKEND_SRC, relative), 'utf8');
       const writerInventory: Array<{ file: string; inserts: number; updates: number }> = [
         { file: 'modules/activation/activation.service.ts', inserts: 1, updates: 0 },
         { file: 'modules/saas-admin/trial-tenant-provisioning.service.ts', inserts: 1, updates: 0 },
@@ -405,8 +457,16 @@ async function main(): Promise<void> {
       }
 
       const bootstrapSource = readService('core/auth/services/bootstrap-admin.service.ts');
-      assert.equal(countOccurrences(bootstrapSource, "insertInto('users')"), 2, 'bootstrap-admin must keep exactly 2 users inserts (seed + zs provision)');
-      assert.equal(countOccurrences(bootstrapSource, "updateTable('users')"), 2, 'bootstrap-admin must keep exactly 2 users updates (both inside the bootstrap-only integrity repair)');
+      assert.equal(
+        countOccurrences(bootstrapSource, "insertInto('users')"),
+        2,
+        'bootstrap-admin must keep exactly 2 users inserts (seed + zs provision)',
+      );
+      assert.equal(
+        countOccurrences(bootstrapSource, "updateTable('users')"),
+        2,
+        'bootstrap-admin must keep exactly 2 users updates (both inside the bootstrap-only integrity repair)',
+      );
       assert.equal(
         countOccurrences(bootstrapSource, 'ensurePlatformSuperAdminIntegrity()'),
         2,
@@ -418,7 +478,12 @@ async function main(): Promise<void> {
         'the single ensurePlatformSuperAdminIntegrity call must live inside onApplicationBootstrap (fresh process, empty cache)',
       );
 
-      const migrationPath = path.join(BACKEND_SRC, 'database', 'migrations', '2040000000309_kitchen_permission_backfill.ts');
+      const migrationPath = path.join(
+        BACKEND_SRC,
+        'database',
+        'migrations',
+        '2040000000309_kitchen_permission_backfill.ts',
+      );
       assert.ok(fs.existsSync(migrationPath), 'the kitchen backfill migration must still exist at its pinned number');
       const referencingFiles: string[] = [];
       const walk = (dir: string): void => {
@@ -431,7 +496,11 @@ async function main(): Promise<void> {
         }
       };
       walk(BACKEND_SRC);
-      assert.deepEqual(referencingFiles, [], 'no backend source file may import the one-time kitchen backfill migration');
+      assert.deepEqual(
+        referencingFiles,
+        [],
+        'no backend source file may import the one-time kitchen backfill migration',
+      );
 
       const usersSource = readService('modules/users/users.service.ts');
       assert.ok(

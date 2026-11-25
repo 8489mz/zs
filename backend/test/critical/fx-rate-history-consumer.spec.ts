@@ -55,7 +55,10 @@ async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
-  const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;
+  const foundation = {
+    ensureForAuth: async () => {},
+    ensureForScope: async () => {},
+  } as unknown as AccountingTenantFoundationService;
   const accounting = new AccountingService(db, foundation, undefined);
 
   try {
@@ -74,14 +77,20 @@ async function main(): Promise<void> {
     // 1. Historical rate, not the live rate: 100 USD at the
     // 2026-03-01 rate of 45 converts to 4500 KWD (live 48.5
     // would give 4850).
-    const historical = await accounting.convertCurrency({ amount: 100, fromCurrency: 'USD', toCurrency: 'KWD', asOf: '2026-03-01' }, auth);
+    const historical = await accounting.convertCurrency(
+      { amount: 100, fromCurrency: 'USD', toCurrency: 'KWD', asOf: '2026-03-01' },
+      auth,
+    );
     assert.equal(historical.convertedAmount, 4500);
     assert.equal(historical.effectiveRate, 45);
     assert.equal(historical.rateAsOf, '2026-03-01T00:00:00.000Z');
 
     // 2. Latest as-of row wins: after the 2026-06-01 change the
     // historical rate is 48.5.
-    const latestAsOf = await accounting.convertCurrency({ amount: 100, fromCurrency: 'USD', toCurrency: 'KWD', asOf: '2026-07-01' }, auth);
+    const latestAsOf = await accounting.convertCurrency(
+      { amount: 100, fromCurrency: 'USD', toCurrency: 'KWD', asOf: '2026-07-01' },
+      auth,
+    );
     assert.equal(latestAsOf.convertedAmount, 4850);
     assert.equal(latestAsOf.effectiveRate, 48.5);
 
@@ -104,7 +113,10 @@ async function main(): Promise<void> {
     );
 
     // 6. Base leg needs no history row: 100 KWD at 1/45 is 2.22 USD.
-    const baseLeg = await accounting.convertCurrency({ amount: 100, fromCurrency: 'KWD', toCurrency: 'USD', asOf: '2026-03-01' }, auth);
+    const baseLeg = await accounting.convertCurrency(
+      { amount: 100, fromCurrency: 'KWD', toCurrency: 'USD', asOf: '2026-03-01' },
+      auth,
+    );
     assert.equal(baseLeg.convertedAmount, 2.22);
     assert.equal(baseLeg.effectiveRate, 0.022222);
 

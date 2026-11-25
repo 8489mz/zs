@@ -168,11 +168,9 @@ console.log(out.join('\\n'));
   // runs) ----
   const tzMod: any = await import('../../src/common/utils/tenant-timezone.util');
   const couponBoundInstant = tzMod.couponBoundInstant as
-    | ((v: unknown, tz: string, isEnd: boolean) => Date | null)
-    | undefined;
+    ((v: unknown, tz: string, isEnd: boolean) => Date | null) | undefined;
   const couponDayState = tzMod.couponDayState as
-    | ((s: unknown, e: unknown, todayKey: string, tz: string) => string)
-    | undefined;
+    ((s: unknown, e: unknown, todayKey: string, tz: string) => string) | undefined;
   const tenantDayStartInstant = tzMod.tenantDayStartInstant as ((d: string, tz: string) => Date) | undefined;
   const tenantDayEndInstant = tzMod.tenantDayEndInstant as ((d: string, tz: string) => Date) | undefined;
   assert.ok(typeof couponBoundInstant === 'function', 'couponBoundInstant must exist (clock B6-P1)');
@@ -226,7 +224,13 @@ console.log(out.join('\\n'));
     const storefront = new StorefrontService(db as any, {} as any, {} as any, {} as any);
     const actor: any = { userId: 1, username: 'tester', tenantId: 't1', accountId: 'a1' };
     const created: any = await storefront.createCoupon(
-      { code: 'SAVE10', discountType: 'percentage', discountValue: 10, startDate: '2026-11-14', endDate: '2026-11-14' } as any,
+      {
+        code: 'SAVE10',
+        discountType: 'percentage',
+        discountValue: 10,
+        startDate: '2026-11-14',
+        endDate: '2026-11-14',
+      } as any,
       actor,
     );
     assert.equal(created.ok, true);
@@ -254,9 +258,18 @@ console.log(out.join('\\n'));
     assert.equal(couponDayState(null, new Date(`${cairoToday}T00:00:00.000Z`), cairoToday, 'Africa/Cairo'), 'active');
     // The new end-of-day bound is active on its day too.
     assert.equal(couponDayState(null, new Date(`${cairoToday}T21:59:59.999Z`), cairoToday, 'Africa/Cairo'), 'active');
-    assert.equal(couponDayState(new Date(`${cairoYesterday}T00:00:00.000Z`), null, cairoToday, 'Africa/Cairo'), 'active');
-    assert.equal(couponDayState(null, new Date(`${cairoYesterday}T00:00:00.000Z`), cairoToday, 'Africa/Cairo'), 'expired');
-    assert.equal(couponDayState(new Date(`${cairoTomorrow}T00:00:00.000Z`), null, cairoToday, 'Africa/Cairo'), 'not-started');
+    assert.equal(
+      couponDayState(new Date(`${cairoYesterday}T00:00:00.000Z`), null, cairoToday, 'Africa/Cairo'),
+      'active',
+    );
+    assert.equal(
+      couponDayState(null, new Date(`${cairoYesterday}T00:00:00.000Z`), cairoToday, 'Africa/Cairo'),
+      'expired',
+    );
+    assert.equal(
+      couponDayState(new Date(`${cairoTomorrow}T00:00:00.000Z`), null, cairoToday, 'Africa/Cairo'),
+      'not-started',
+    );
     assert.equal(couponDayState(null, null, cairoToday, 'Africa/Cairo'), 'active');
     assert.equal(couponDayState(new Date('invalid'), null, cairoToday, 'Africa/Cairo'), 'active');
     console.log('✓ §C passed: couponDayState keys the stored bounds on the tenant day');
@@ -275,7 +288,11 @@ console.log(out.join('\\n'));
          ('t1', 'a1', 'OLD', 'fixed', 5, 0, NULL, NULL, 0, true, NULL, '${cairoYesterday}T00:00:00.000Z', now(), now());`,
     );
     const legacy: any = await storefront.validateCoupon('shop', 'LEGACY', 100);
-    assert.equal(legacy.ok, true, `legacy UTC-midnight coupon must validate on its tenant day (got ${JSON.stringify(legacy)})`);
+    assert.equal(
+      legacy.ok,
+      true,
+      `legacy UTC-midnight coupon must validate on its tenant day (got ${JSON.stringify(legacy)})`,
+    );
     const old: any = await storefront.validateCoupon('shop', 'OLD', 100);
     assert.equal(old.ok, false);
     assert.match(String(old.message), /انتهت/);
@@ -334,8 +351,14 @@ console.log(out.join('\\n'));
     assert.ok(offered, 'the offered product must be in the preview');
     assert.equal(offered.hasActiveOffer, true, 'the offer ending today must count as active');
     assert.equal(offered.skipped, true);
-    assert.ok(offered.skipReasons.includes('offer'), `skip reasons must include 'offer' (got ${offered.skipReasons.join(',')})`);
-    assert.ok(plain && plain.hasActiveOffer === false && plain.skipped === false, 'the plain product must not be skipped');
+    assert.ok(
+      offered.skipReasons.includes('offer'),
+      `skip reasons must include 'offer' (got ${offered.skipReasons.join(',')})`,
+    );
+    assert.ok(
+      plain && plain.hasActiveOffer === false && plain.skipped === false,
+      'the plain product must not be skipped',
+    );
     assert.equal(preview.summary.skippedOfferCount, 1);
     console.log('✓ §E passed: real preview skips the product whose offer ends today');
   } finally {
@@ -344,19 +367,42 @@ console.log(out.join('\\n'));
 
   // ---- §F: wiring source pins ----
   const pricing = readSrc('modules/pricing/pricing.service.ts');
-  assert.ok(pricing.includes('getTenantTimezone(this.db, this.tenantScope(actor).tenantId)'), 'fetchPreviewFlags must resolve the tenant zone');
+  assert.ok(
+    pricing.includes('getTenantTimezone(this.db, this.tenantScope(actor).tenantId)'),
+    'fetchPreviewFlags must resolve the tenant zone',
+  );
   assert.ok(pricing.includes('todayTenantDate(tenantTimezone)'), 'fetchPreviewFlags must key today in the tenant zone');
   assert.ok(pricing.includes('this.isOfferActive(offer, todayKey)'), 'fetchPreviewFlags must pass the tenant day key');
-  assert.ok(pricing.includes('normalizePgDateOnly(offer.start_date)'), 'isOfferActive must key the start bound from the stored day');
-  assert.ok(pricing.includes('normalizePgDateOnly(offer.end_date)'), 'isOfferActive must key the end bound from the stored day');
+  assert.ok(
+    pricing.includes('normalizePgDateOnly(offer.start_date)'),
+    'isOfferActive must key the start bound from the stored day',
+  );
+  assert.ok(
+    pricing.includes('normalizePgDateOnly(offer.end_date)'),
+    'isOfferActive must key the end bound from the stored day',
+  );
   const isOfferActiveBody = pricing.slice(pricing.indexOf('private isOfferActive'));
   assert.ok(!isOfferActiveBody.includes('Date.now()'), 'isOfferActive must not compare instants');
   assert.ok(!isOfferActiveBody.includes('getTime()'), 'isOfferActive must not derive instants from the bounds');
   const storefront = readStorefrontSrc();
-  assert.ok(storefront.includes('couponDayState(coupon.start_date, coupon.end_date, couponTodayKey, couponTimezone)'), 'checkout must read the coupon by tenant day');
-  assert.ok(storefront.includes('couponState = couponDayState(coupon.start_date, coupon.end_date, couponTodayKey, couponTimezone)'), 'validate must read the coupon by tenant day');
-  assert.ok(storefront.includes('couponBoundInstant(dto.startDate, businessTimezone, false)'), 'create/update must store the start bound by tenant day');
-  assert.ok(storefront.includes('couponBoundInstant(dto.endDate, businessTimezone, true)'), 'create/update must store the end bound by tenant day');
+  assert.ok(
+    storefront.includes('couponDayState(coupon.start_date, coupon.end_date, couponTodayKey, couponTimezone)'),
+    'checkout must read the coupon by tenant day',
+  );
+  assert.ok(
+    storefront.includes(
+      'couponState = couponDayState(coupon.start_date, coupon.end_date, couponTodayKey, couponTimezone)',
+    ),
+    'validate must read the coupon by tenant day',
+  );
+  assert.ok(
+    storefront.includes('couponBoundInstant(dto.startDate, businessTimezone, false)'),
+    'create/update must store the start bound by tenant day',
+  );
+  assert.ok(
+    storefront.includes('couponBoundInstant(dto.endDate, businessTimezone, true)'),
+    'create/update must store the end bound by tenant day',
+  );
   assert.ok(!storefront.includes('new Date(dto.startDate)'), 'the UTC-midnight coupon write must be gone');
   assert.ok(!storefront.includes('new Date(dto.endDate)'), 'the UTC-midnight coupon write must be gone');
   assert.ok(!storefront.includes('new Date(coupon.start_date)'), 'the instant coupon-start read must be gone');

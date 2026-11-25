@@ -21,12 +21,7 @@ describe('Van Sales Concurrency, Deduplication & Idempotency Shield', () => {
       selectFrom: () => createQueryMock(),
     };
 
-    const service = new VanSalesService(
-      mockDb,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
+    const service = new VanSalesService(mockDb, {} as any, {} as any, {} as any);
 
     // Mock executeFieldSaleInternal to simulate a 50ms async DB operation
     (service as any).executeFieldSaleInternal = async (
@@ -101,12 +96,7 @@ describe('Van Sales Concurrency, Deduplication & Idempotency Shield', () => {
       selectFrom: () => createQueryMock(),
     };
 
-    const service = new VanSalesService(
-      mockDb,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
+    const service = new VanSalesService(mockDb, {} as any, {} as any, {} as any);
 
     (service as any).recordFieldCollectionInternal = async (
       repId: number,
@@ -166,12 +156,7 @@ describe('Van Sales Concurrency, Deduplication & Idempotency Shield', () => {
       selectFrom: () => createQueryMock(),
     };
 
-    const service = new VanSalesService(
-      mockDb,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
+    const service = new VanSalesService(mockDb, {} as any, {} as any, {} as any);
 
     (service as any).executeFieldSaleInternal = async () => {
       fingerprintExecutionCount++;

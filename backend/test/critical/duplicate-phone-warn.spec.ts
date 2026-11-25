@@ -56,7 +56,13 @@ async function main(): Promise<void> {
       postSupplierOpeningBalance: async () => {},
     };
     const svc: any = new PartnersService(db as any, { log: async () => {} } as any, fakePosting);
-    const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+    const auth = {
+      tenantId: 't1',
+      accountId: 'a1',
+      role: 'admin',
+      userId: 1,
+      permissions: [],
+    } as unknown as AuthContext;
 
     const phone = '01012345678';
 
@@ -68,7 +74,11 @@ async function main(): Promise<void> {
     assert.equal(createdA.ok, true);
     assert.equal(createdA.phoneWarning, undefined);
     const idA = String(createdA.id);
-    const rowA: any = await db.selectFrom('customers' as any).selectAll().where('id', '=', Number(idA)).executeTakeFirst();
+    const rowA: any = await db
+      .selectFrom('customers' as any)
+      .selectAll()
+      .where('id', '=', Number(idA))
+      .executeTakeFirst();
     assert.equal(rowA.phone, phone);
 
     // (2) Second customer, different name, same phone: saved anyway, warned naming A.
@@ -82,14 +92,26 @@ async function main(): Promise<void> {
     assert.equal(createdB.phoneWarning.existingCustomer.id, idA);
     assert.equal(createdB.phoneWarning.existingCustomer.name, 'عميل أول');
     assert.equal(createdB.phoneWarning.existingCustomer.phone, phone);
-    const rowB: any = await db.selectFrom('customers' as any).selectAll().where('id', '=', Number(createdB.id)).executeTakeFirst();
+    const rowB: any = await db
+      .selectFrom('customers' as any)
+      .selectAll()
+      .where('id', '=', Number(createdB.id))
+      .executeTakeFirst();
     assert.equal(rowB.phone, phone);
     const idB = String(createdB.id);
 
     // (3a) Move B to a fresh phone: allowed, no warning.
     const movedAway: any = await svc.updateCustomer(
       Number(idB),
-      { name: 'عميل ثان', phone: '01111111111', address: '', balance: 0, type: 'cash', creditLimit: 0, storeCreditBalance: 0 },
+      {
+        name: 'عميل ثان',
+        phone: '01111111111',
+        address: '',
+        balance: 0,
+        type: 'cash',
+        creditLimit: 0,
+        storeCreditBalance: 0,
+      },
       auth,
     );
     assert.equal(movedAway.ok, true);
@@ -107,7 +129,15 @@ async function main(): Promise<void> {
 
     // (4) A fresh phone: saved, no warning.
     const createdC: any = await svc.createCustomer(
-      { name: 'عميل ثالث', phone: '01599999999', address: '', balance: 0, type: 'cash', creditLimit: 0, storeCreditBalance: 0 },
+      {
+        name: 'عميل ثالث',
+        phone: '01599999999',
+        address: '',
+        balance: 0,
+        type: 'cash',
+        creditLimit: 0,
+        storeCreditBalance: 0,
+      },
       auth,
     );
     assert.equal(createdC.ok, true);
@@ -115,7 +145,15 @@ async function main(): Promise<void> {
 
     // (5) A digit-variant of P (+2010... for stored 010...): warning still fires.
     const createdD: any = await svc.createCustomer(
-      { name: 'عميل رابع', phone: '+201012345678', address: '', balance: 0, type: 'cash', creditLimit: 0, storeCreditBalance: 0 },
+      {
+        name: 'عميل رابع',
+        phone: '+201012345678',
+        address: '',
+        balance: 0,
+        type: 'cash',
+        creditLimit: 0,
+        storeCreditBalance: 0,
+      },
       auth,
     );
     assert.equal(createdD.ok, true);

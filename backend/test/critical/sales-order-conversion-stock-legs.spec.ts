@@ -58,16 +58,36 @@ import { SalesOrdersService } from '../../src/modules/sales/services/sales-order
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { releaseLocationStock, reserveLocationStock } from '../../src/common/utils/location-stock-ledger';
 
-const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
+const AUTH = {
+  tenantId: 't1',
+  accountId: 'a1',
+  role: 'admin',
+  userId: 1,
+  username: 'admin',
+  permissions: [],
+} as unknown as AuthContext;
 
 async function reservedQty(db: Kysely<Database>): Promise<{ global: number; location: number }> {
-  const product = await db.selectFrom('products').select(['stock_qty', sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty')]).where('id', '=', 1).executeTakeFirstOrThrow();
-  const balance = await db.selectFrom('product_location_stock').select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty')).where('product_id', '=', 1).where('location_id', '=', 10).executeTakeFirstOrThrow();
+  const product = await db
+    .selectFrom('products')
+    .select(['stock_qty', sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty')])
+    .where('id', '=', 1)
+    .executeTakeFirstOrThrow();
+  const balance = await db
+    .selectFrom('product_location_stock')
+    .select(sql<number>`COALESCE(reserved_qty, 0)`.as('reserved_qty'))
+    .where('product_id', '=', 1)
+    .where('location_id', '=', 10)
+    .executeTakeFirstOrThrow();
   return { global: Number(product.reserved_qty), location: Number(balance.reserved_qty) };
 }
 
 async function orderStatus(db: Kysely<Database>, id: number): Promise<{ status: string; saleId: number | null }> {
-  const row = await db.selectFrom('sales_orders').select(['status', 'sale_id']).where('id', '=', id).executeTakeFirstOrThrow();
+  const row = await db
+    .selectFrom('sales_orders')
+    .select(['status', 'sale_id'])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
   return { status: String(row.status), saleId: row.sale_id };
 }
 
@@ -84,14 +104,54 @@ async function main() {
       CREATE TABLE operation_executions (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, idempotency_key text NOT NULL, operation_type text NOT NULL, status text NOT NULL, request_hash text NOT NULL, document_id text, response_payload text, error_code text, created_at timestamptz NOT NULL DEFAULT NOW(), updated_at timestamptz NOT NULL DEFAULT NOW(), completed_at timestamptz);
     `);
 
-    await db.insertInto('branches').values({ id: 1, tenant_id: 't1', default_stock_location_id: 10 } as any).execute();
-    await db.insertInto('products').values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: 10, reserved_qty: 4 } as any).execute();
-    await db.insertInto('product_location_stock').values({ tenant_id: 't1', account_id: 'a1', product_id: 1, branch_id: 1, location_id: 10, qty: 10, reserved_qty: 4 } as any).execute();
+    await db
+      .insertInto('branches')
+      .values({ id: 1, tenant_id: 't1', default_stock_location_id: 10 } as any)
+      .execute();
+    await db
+      .insertInto('products')
+      .values({ id: 1, tenant_id: 't1', account_id: 'a1', name: 'Widget', stock_qty: 10, reserved_qty: 4 } as any)
+      .execute();
+    await db
+      .insertInto('product_location_stock')
+      .values({
+        tenant_id: 't1',
+        account_id: 'a1',
+        product_id: 1,
+        branch_id: 1,
+        location_id: 10,
+        qty: 10,
+        reserved_qty: 4,
+      } as any)
+      .execute();
 
     async function seedOrder(id: number, reserved: number): Promise<void> {
-      await db.insertInto('sales_orders').values({ id, tenant_id: 't1', account_id: 'a1', order_number: `SO-${id}`, customer_name: 'Cust', branch_id: 1, total_amount: 100, status: 'confirmed' } as any).execute();
+      await db
+        .insertInto('sales_orders')
+        .values({
+          id,
+          tenant_id: 't1',
+          account_id: 'a1',
+          order_number: `SO-${id}`,
+          customer_name: 'Cust',
+          branch_id: 1,
+          total_amount: 100,
+          status: 'confirmed',
+        } as any)
+        .execute();
       if (reserved >= 0) {
-        await db.insertInto('sales_order_items').values({ tenant_id: 't1', account_id: 'a1', sales_order_id: id, product_id: 1, quantity: 4, reserved_quantity: reserved, unit_price: 25 } as any).execute();
+        await db
+          .insertInto('sales_order_items')
+          .values({
+            tenant_id: 't1',
+            account_id: 'a1',
+            sales_order_id: id,
+            product_id: 1,
+            quantity: 4,
+            reserved_quantity: reserved,
+            unit_price: 25,
+          } as any)
+          .execute();
       }
     }
 
@@ -113,11 +173,20 @@ async function main() {
     const ok = await service.convertToSale(1, AUTH);
     assert.equal(Number((ok as any).saleId), 99);
     assert.deepEqual(await orderStatus(db, 1), { status: 'converted', saleId: 99 });
-    const items1 = await db.selectFrom('sales_order_items').select(['delivered_quantity', 'reserved_quantity']).where('sales_order_id', '=', 1).executeTakeFirstOrThrow();
+    const items1 = await db
+      .selectFrom('sales_order_items')
+      .select(['delivered_quantity', 'reserved_quantity'])
+      .where('sales_order_id', '=', 1)
+      .executeTakeFirstOrThrow();
     assert.equal(Number(items1.delivered_quantity), 4);
     assert.equal(Number(items1.reserved_quantity), 0);
     assert.deepEqual(await reservedQty(db), { global: 4, location: 4 });
-    assert.deepEqual(lastConversionRelease, { salesOrderId: 1, branchId: 1, locationId: 10, items: [{ productId: 1, qty: 4 }] });
+    assert.deepEqual(lastConversionRelease, {
+      salesOrderId: 1,
+      branchId: 1,
+      locationId: 10,
+      items: [{ productId: 1, qty: 4 }],
+    });
 
     // 2. Failure: status restored, reservation exactly intact, error propagates.
     await seedOrder(2, 4);
@@ -136,7 +205,11 @@ async function main() {
 
     // 4. Already converted: early return, createSale not called again.
     await seedOrder(4, 0);
-    await db.updateTable('sales_orders').set({ status: 'converted', sale_id: 77 } as any).where('id', '=', 4).execute();
+    await db
+      .updateTable('sales_orders')
+      .set({ status: 'converted', sale_id: 77 } as any)
+      .where('id', '=', 4)
+      .execute();
     const callsBefore = calls;
     const already = await service.convertToSale(4, AUTH);
     assert.equal(Number((already as any).saleId), 77);
@@ -151,7 +224,13 @@ async function main() {
     // 6. Rollback primitive on the real ledger functions.
     try {
       await db.transaction().execute(async (trx) => {
-        await releaseLocationStock(trx as any, { branchId: 1, locationId: 10, tenantId: 't1', accountId: 'a1', items: [{ productId: 1, qty: 4 }] });
+        await releaseLocationStock(trx as any, {
+          branchId: 1,
+          locationId: 10,
+          tenantId: 't1',
+          accountId: 'a1',
+          items: [{ productId: 1, qty: 4 }],
+        });
         throw new Error('ROLLBACK_PROBE');
       });
       assert.fail('transaction should have rolled back');
@@ -160,11 +239,23 @@ async function main() {
     }
     assert.deepEqual(await reservedQty(db), { global: 4, location: 4 });
     await db.transaction().execute(async (trx) => {
-      await releaseLocationStock(trx as any, { branchId: 1, locationId: 10, tenantId: 't1', accountId: 'a1', items: [{ productId: 1, qty: 4 }] });
+      await releaseLocationStock(trx as any, {
+        branchId: 1,
+        locationId: 10,
+        tenantId: 't1',
+        accountId: 'a1',
+        items: [{ productId: 1, qty: 4 }],
+      });
     });
     assert.deepEqual(await reservedQty(db), { global: 0, location: 0 });
     await db.transaction().execute(async (trx) => {
-      await reserveLocationStock(trx as any, { branchId: 1, locationId: 10, tenantId: 't1', accountId: 'a1', items: [{ productId: 1, qty: 4 }] });
+      await reserveLocationStock(trx as any, {
+        branchId: 1,
+        locationId: 10,
+        tenantId: 't1',
+        accountId: 'a1',
+        items: [{ productId: 1, qty: 4 }],
+      });
     });
     assert.deepEqual(await reservedQty(db), { global: 4, location: 4 });
 
