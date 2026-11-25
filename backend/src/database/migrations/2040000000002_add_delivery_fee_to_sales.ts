@@ -14,14 +14,8 @@ export const migration = {
   },
 
   down: async (db: Kysely<any>): Promise<void> => {
-    await db.schema
-      .alterTable('sales')
-      .dropColumn('delivery_fee')
-      .execute();
+    await db.schema.alterTable('sales').dropColumn('delivery_fee').execute();
 
-    await db.schema
-      .alterTable('held_sales')
-      .dropColumn('delivery_fee')
-      .execute();
-  }
+    await db.schema.alterTable('held_sales').dropColumn('delivery_fee').execute();
+  },
 };

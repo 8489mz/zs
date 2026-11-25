@@ -9,7 +9,8 @@ import { type Kysely, sql } from 'kysely';
  */
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
-    await db.schema.createTable('accounting_fiscal_periods')
+    await db.schema
+      .createTable('accounting_fiscal_periods')
       .addColumn('id', 'serial', (col) => col.primaryKey())
       .addColumn('tenant_id', 'varchar(255)', (col) => col.notNull())
       .addColumn('fiscal_year_id', 'integer', (col) =>
@@ -28,17 +29,20 @@ export const migration = {
       .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull())
       .execute();
 
-    await db.schema.createIndex('idx_fiscal_periods_tenant_year')
+    await db.schema
+      .createIndex('idx_fiscal_periods_tenant_year')
       .on('accounting_fiscal_periods')
       .columns(['tenant_id', 'fiscal_year_id'])
       .execute();
 
-    await db.schema.createIndex('idx_fiscal_periods_dates')
+    await db.schema
+      .createIndex('idx_fiscal_periods_dates')
       .on('accounting_fiscal_periods')
       .columns(['tenant_id', 'start_date', 'end_date'])
       .execute();
 
-    await db.schema.createIndex('idx_fiscal_periods_status')
+    await db.schema
+      .createIndex('idx_fiscal_periods_status')
       .on('accounting_fiscal_periods')
       .columns(['tenant_id', 'status'])
       .execute();

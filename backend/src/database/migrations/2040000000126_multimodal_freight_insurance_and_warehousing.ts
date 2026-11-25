@@ -54,12 +54,7 @@ export const migration = {
     `.execute(db);
 
     // 3. Alter operational tables with transport_mode and air cargo fields
-    const tablesToAlter = [
-      'maritime_inquiries',
-      'maritime_rfqs',
-      'maritime_quotations',
-      'maritime_jobs',
-    ];
+    const tablesToAlter = ['maritime_inquiries', 'maritime_rfqs', 'maritime_quotations', 'maritime_jobs'];
 
     for (const table of tablesToAlter) {
       await sql`
@@ -165,12 +160,7 @@ export const migration = {
       DROP COLUMN IF EXISTS min_charge;
     `.execute(db);
 
-    const tablesToRevert = [
-      'maritime_jobs',
-      'maritime_quotations',
-      'maritime_rfqs',
-      'maritime_inquiries',
-    ];
+    const tablesToRevert = ['maritime_jobs', 'maritime_quotations', 'maritime_rfqs', 'maritime_inquiries'];
 
     for (const table of tablesToRevert) {
       await sql`

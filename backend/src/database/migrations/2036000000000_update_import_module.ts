@@ -25,9 +25,6 @@ export const migration = {
       .dropColumn('shipping_date')
       .execute();
 
-    await db.schema
-      .alterTable('import_partners')
-      .dropColumn('withdrawn_profit')
-      .execute();
+    await db.schema.alterTable('import_partners').dropColumn('withdrawn_profit').execute();
   },
 };

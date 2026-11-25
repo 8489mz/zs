@@ -89,7 +89,9 @@ export const migration = {
         for (const g of meta.gallery) gallery.push(await convert(db, row.tenant_id, g));
         meta.gallery = gallery.filter(Boolean);
       }
-      await sql`UPDATE products SET metadata = ${JSON.stringify(meta)} WHERE id = ${row.id} AND tenant_id = ${row.tenant_id}`.execute(db);
+      await sql`UPDATE products SET metadata = ${JSON.stringify(meta)} WHERE id = ${row.id} AND tenant_id = ${row.tenant_id}`.execute(
+        db,
+      );
     }
 
     // --- Backfill: settings (category image map, banners) ---
@@ -117,7 +119,9 @@ export const migration = {
         const single = parseJson(row.value) ?? row.value;
         next = JSON.stringify(await convert(db, row.tenant_id, single));
       }
-      await sql`UPDATE settings SET value = ${next} WHERE tenant_id = ${row.tenant_id} AND key = ${row.key}`.execute(db);
+      await sql`UPDATE settings SET value = ${next} WHERE tenant_id = ${row.tenant_id} AND key = ${row.key}`.execute(
+        db,
+      );
     }
   },
 

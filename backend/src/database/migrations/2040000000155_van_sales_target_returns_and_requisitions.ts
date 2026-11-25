@@ -2,7 +2,7 @@ import { sql, type Kysely } from 'kysely';
 
 /**
  * Migration 2040000000155: Van Sales Enterprise Capabilities
- * 
+ *
  * 1. van_field_returns: Structured field returns workflow requiring admin approval,
  *    categorized return reasons, original invoice matching, and ledger/stock posting.
  * 2. delivery_rep_targets: Monthly sales targets per delivery/van representative.

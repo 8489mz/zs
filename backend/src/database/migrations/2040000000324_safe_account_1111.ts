@@ -48,15 +48,31 @@ import { type Migration, sql } from 'kysely';
  * existing rows, or posted journals.
  */
 export async function up(db: any): Promise<void> {
-  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS account_group TEXT NOT NULL DEFAULT ''`.execute(db);
-  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS allow_manual_entries BOOLEAN NOT NULL DEFAULT TRUE`.execute(db);
-  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_control_account BOOLEAN NOT NULL DEFAULT FALSE`.execute(db);
-  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_cash_bank BOOLEAN NOT NULL DEFAULT FALSE`.execute(db);
-  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_receivable BOOLEAN NOT NULL DEFAULT FALSE`.execute(db);
-  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_payable BOOLEAN NOT NULL DEFAULT FALSE`.execute(db);
-  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_inventory BOOLEAN NOT NULL DEFAULT FALSE`.execute(db);
+  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS account_group TEXT NOT NULL DEFAULT ''`.execute(
+    db,
+  );
+  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS allow_manual_entries BOOLEAN NOT NULL DEFAULT TRUE`.execute(
+    db,
+  );
+  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_control_account BOOLEAN NOT NULL DEFAULT FALSE`.execute(
+    db,
+  );
+  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_cash_bank BOOLEAN NOT NULL DEFAULT FALSE`.execute(
+    db,
+  );
+  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_receivable BOOLEAN NOT NULL DEFAULT FALSE`.execute(
+    db,
+  );
+  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_payable BOOLEAN NOT NULL DEFAULT FALSE`.execute(
+    db,
+  );
+  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_inventory BOOLEAN NOT NULL DEFAULT FALSE`.execute(
+    db,
+  );
   await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS is_tax BOOLEAN NOT NULL DEFAULT FALSE`.execute(db);
-  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS description_ar TEXT NOT NULL DEFAULT ''`.execute(db);
+  await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS description_ar TEXT NOT NULL DEFAULT ''`.execute(
+    db,
+  );
 
   await sql`
     INSERT INTO accounting_accounts (

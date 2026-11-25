@@ -35,9 +35,13 @@ export const migration = {
       .execute();
 
     // 4. Add plan_id and extra_features to tenants
-    await sql`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS plan_id TEXT REFERENCES plans(id) ON DELETE SET NULL`.execute(db);
-    await sql`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS extra_features JSONB NOT NULL DEFAULT '[]'::jsonb`.execute(db);
-    
+    await sql`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS plan_id TEXT REFERENCES plans(id) ON DELETE SET NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS extra_features JSONB NOT NULL DEFAULT '[]'::jsonb`.execute(
+      db,
+    );
+
     // Seed default plans
     await sql`
       INSERT INTO plans (id, code, name, description, price) VALUES 

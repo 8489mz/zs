@@ -3,8 +3,12 @@ import { Kysely, sql } from 'kysely';
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
     // 1. Add van stock location & van rep flag to delivery_representatives
-    await sql`ALTER TABLE delivery_representatives ADD COLUMN IF NOT EXISTS van_location_id INTEGER REFERENCES stock_locations(id) ON DELETE SET NULL`.execute(db);
-    await sql`ALTER TABLE delivery_representatives ADD COLUMN IF NOT EXISTS is_van_rep BOOLEAN DEFAULT false`.execute(db);
+    await sql`ALTER TABLE delivery_representatives ADD COLUMN IF NOT EXISTS van_location_id INTEGER REFERENCES stock_locations(id) ON DELETE SET NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE delivery_representatives ADD COLUMN IF NOT EXISTS is_van_rep BOOLEAN DEFAULT false`.execute(
+      db,
+    );
 
     // 2. Create van_sales_trips table for daily trips & route settlements
     await sql`
@@ -30,7 +34,9 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_van_trips_tenant_rep ON van_sales_trips(tenant_id, rep_id, status)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_van_trips_tenant_rep ON van_sales_trips(tenant_id, rep_id, status)`.execute(
+      db,
+    );
 
     // 3. Add van_trip_id & sale_origin to sales
     await sql`ALTER TABLE sales ADD COLUMN IF NOT EXISTS van_trip_id INTEGER`.execute(db);

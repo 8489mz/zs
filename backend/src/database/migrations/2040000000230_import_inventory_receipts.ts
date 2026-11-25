@@ -60,6 +60,8 @@ export const migration = {
       WHERE import_receipt_id IS NOT NULL`.execute(db);
   },
   down: async (): Promise<void> => {
-    throw new Error('Import receipt references are permanent. Use a reviewed forward migration; do not drop receipt evidence.');
+    throw new Error(
+      'Import receipt references are permanent. Use a reviewed forward migration; do not drop receipt evidence.',
+    );
   },
 };

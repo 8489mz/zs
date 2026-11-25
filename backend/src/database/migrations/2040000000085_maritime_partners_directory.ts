@@ -73,5 +73,5 @@ export const migration = {
       DROP COLUMN IF EXISTS services_offered,
       DROP COLUMN IF EXISTS supported_ports;
     `.execute(db);
-  }
+  },
 };

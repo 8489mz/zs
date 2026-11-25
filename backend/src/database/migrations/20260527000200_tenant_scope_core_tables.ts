@@ -32,8 +32,12 @@ export const migration = {
     const accountId = demoAccountId();
 
     for (const table of TABLES) {
-      await sql`ALTER TABLE ${sql.table(table)} ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`.execute(db);
-      await sql`ALTER TABLE ${sql.table(table)} ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT ''`.execute(db);
+      await sql`ALTER TABLE ${sql.table(table)} ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`.execute(
+        db,
+      );
+      await sql`ALTER TABLE ${sql.table(table)} ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT ''`.execute(
+        db,
+      );
       await sql`UPDATE ${sql.table(table)} SET tenant_id = ${tenantId} WHERE tenant_id = ''`.execute(db);
       await sql`UPDATE ${sql.table(table)} SET account_id = ${accountId} WHERE account_id = ''`.execute(db);
     }

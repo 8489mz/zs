@@ -127,8 +127,12 @@ export const migration = {
     `.execute(db);
 
     await sql`CREATE INDEX IF NOT EXISTS idx_journal_entries_tenant_id ON journal_entries (tenant_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entries_tenant_source ON journal_entries (tenant_id, source_type, source_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_tenant_entry ON journal_entry_lines (tenant_id, journal_entry_id)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entries_tenant_source ON journal_entries (tenant_id, source_type, source_id)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_tenant_entry ON journal_entry_lines (tenant_id, journal_entry_id)`.execute(
+      db,
+    );
     await sql`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_journal_entries_opening_balance_once_per_tenant
       ON journal_entries (tenant_id)

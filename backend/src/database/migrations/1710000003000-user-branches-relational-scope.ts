@@ -34,7 +34,9 @@ export const migration = {
     await sql`ALTER TABLE users DROP COLUMN IF EXISTS branch_ids_json`.execute(db);
   },
   down: async (db: Kysely<Database>): Promise<void> => {
-    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS branch_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb`.execute(db);
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS branch_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb`.execute(
+      db,
+    );
     await sql`
       UPDATE users u
       SET branch_ids_json = COALESCE(src.branch_ids_json, '[]'::jsonb)

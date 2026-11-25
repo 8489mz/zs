@@ -85,7 +85,9 @@ export const migration = {
   async down(db: Kysely<unknown>): Promise<void> {
     for (const child of CHILDREN) {
       if (!(await tableExists(db, child.table))) continue;
-      await sql`ALTER TABLE ${sql.table(child.table)} DROP CONSTRAINT IF EXISTS ${sql.ref(child.constraint)}`.execute(db);
+      await sql`ALTER TABLE ${sql.table(child.table)} DROP CONSTRAINT IF EXISTS ${sql.ref(child.constraint)}`.execute(
+        db,
+      );
       await sql`
         ALTER TABLE ${sql.table(child.table)}
         ADD CONSTRAINT ${sql.ref(`${child.constraint}_legacy`)}

@@ -40,7 +40,7 @@ const upStatements = [
   `CREATE INDEX IF NOT EXISTS idx_hr_employees_tenant_status ON hr_employees(tenant_id, status, id DESC)`,
 
   // Audit
-  `CREATE INDEX IF NOT EXISTS idx_audit_tenant_created ON audit_logs(tenant_id, created_at DESC)`
+  `CREATE INDEX IF NOT EXISTS idx_audit_tenant_created ON audit_logs(tenant_id, created_at DESC)`,
 ];
 
 const downStatements = [
@@ -82,7 +82,7 @@ const downStatements = [
   `DROP INDEX IF EXISTS idx_hr_employees_tenant_status`,
 
   // Audit
-  `DROP INDEX IF EXISTS idx_audit_tenant_created`
+  `DROP INDEX IF EXISTS idx_audit_tenant_created`,
 ];
 
 export const migration = {
@@ -95,5 +95,5 @@ export const migration = {
     for (const statement of downStatements) {
       await sql.raw(statement).execute(db);
     }
-  }
+  },
 };

@@ -35,9 +35,15 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS return_document_id BIGINT NULL REFERENCES return_documents(id) ON DELETE SET NULL`.execute(db);
-    await sql`ALTER TABLE customer_ledger ADD COLUMN IF NOT EXISTS return_document_id BIGINT NULL REFERENCES return_documents(id) ON DELETE SET NULL`.execute(db);
-    await sql`ALTER TABLE supplier_ledger ADD COLUMN IF NOT EXISTS return_document_id BIGINT NULL REFERENCES return_documents(id) ON DELETE SET NULL`.execute(db);
+    await sql`ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS return_document_id BIGINT NULL REFERENCES return_documents(id) ON DELETE SET NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE customer_ledger ADD COLUMN IF NOT EXISTS return_document_id BIGINT NULL REFERENCES return_documents(id) ON DELETE SET NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE supplier_ledger ADD COLUMN IF NOT EXISTS return_document_id BIGINT NULL REFERENCES return_documents(id) ON DELETE SET NULL`.execute(
+      db,
+    );
 
     await sql`
       INSERT INTO return_documents
@@ -83,7 +89,9 @@ export const migration = {
 
     await sql`CREATE INDEX IF NOT EXISTS idx_return_documents_created_at ON return_documents(created_at)`.execute(db);
     await sql`CREATE INDEX IF NOT EXISTS idx_return_documents_invoice_id ON return_documents(invoice_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_return_items_return_document_id ON return_items(return_document_id)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_return_items_return_document_id ON return_items(return_document_id)`.execute(
+      db,
+    );
     await sql`CREATE INDEX IF NOT EXISTS idx_return_items_product_id ON return_items(product_id)`.execute(db);
   },
   down: async (db: Kysely<Database>): Promise<void> => {

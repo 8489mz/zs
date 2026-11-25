@@ -59,8 +59,8 @@ export async function up(db: Kysely<any>): Promise<void> {
   if (rows.length) {
     throw new Error(
       `Race-window uniqueness migration refused: ${rows.length} active duplicate source(s) still posted, ` +
-      `repair or reverse them first (DUPLICATE_SOURCE_POSTINGS): ` +
-      rows.map((r) => `${r.tenant_id}/${r.source_type}#${r.source_id} x${r.journal_count}`).join(', '),
+        `repair or reverse them first (DUPLICATE_SOURCE_POSTINGS): ` +
+        rows.map((r) => `${r.tenant_id}/${r.source_type}#${r.source_id} x${r.journal_count}`).join(', '),
     );
   }
   // Index predicates cannot take bound parameters: inline the type list

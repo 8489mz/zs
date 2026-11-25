@@ -55,6 +55,8 @@ export const migration = {
 
   async down(db: Kysely<unknown>): Promise<void> {
     await sql`ALTER TABLE accounting_fiscal_years DROP CONSTRAINT IF EXISTS chk_fiscal_year_date_order;`.execute(db);
-    await sql`ALTER TABLE accounting_fiscal_years DROP CONSTRAINT IF EXISTS accounting_fiscal_years_no_overlap;`.execute(db);
+    await sql`ALTER TABLE accounting_fiscal_years DROP CONSTRAINT IF EXISTS accounting_fiscal_years_no_overlap;`.execute(
+      db,
+    );
   },
 };

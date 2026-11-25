@@ -26,8 +26,12 @@ export const migration = {
     const accountId = demoAccountId();
 
     if (await tableExists(db, 'supplier_payment_schedules')) {
-      await sql`ALTER TABLE supplier_payment_schedules ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`.execute(db);
-      await sql`ALTER TABLE supplier_payment_schedules ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT ''`.execute(db);
+      await sql`ALTER TABLE supplier_payment_schedules ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`.execute(
+        db,
+      );
+      await sql`ALTER TABLE supplier_payment_schedules ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT ''`.execute(
+        db,
+      );
 
       await sql`
         UPDATE supplier_payment_schedules s
@@ -36,7 +40,9 @@ export const migration = {
         WHERE sp.id = s.supplier_id
           AND COALESCE(s.tenant_id, '') = ''
       `.execute(db);
-      await sql`UPDATE supplier_payment_schedules SET tenant_id = ${tenantId} WHERE COALESCE(tenant_id, '') = ''`.execute(db);
+      await sql`UPDATE supplier_payment_schedules SET tenant_id = ${tenantId} WHERE COALESCE(tenant_id, '') = ''`.execute(
+        db,
+      );
 
       await sql`
         UPDATE supplier_payment_schedules s
@@ -45,15 +51,25 @@ export const migration = {
         WHERE sp.id = s.supplier_id
           AND COALESCE(s.account_id, '') = ''
       `.execute(db);
-      await sql`UPDATE supplier_payment_schedules SET account_id = ${accountId} WHERE COALESCE(account_id, '') = ''`.execute(db);
+      await sql`UPDATE supplier_payment_schedules SET account_id = ${accountId} WHERE COALESCE(account_id, '') = ''`.execute(
+        db,
+      );
 
-      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedules_tenant_idx ON supplier_payment_schedules (tenant_id)`.execute(db);
-      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedules_tenant_supplier_idx ON supplier_payment_schedules (tenant_id, supplier_id)`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedules_tenant_idx ON supplier_payment_schedules (tenant_id)`.execute(
+        db,
+      );
+      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedules_tenant_supplier_idx ON supplier_payment_schedules (tenant_id, supplier_id)`.execute(
+        db,
+      );
     }
 
     if (await tableExists(db, 'supplier_payment_schedule_logs')) {
-      await sql`ALTER TABLE supplier_payment_schedule_logs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`.execute(db);
-      await sql`ALTER TABLE supplier_payment_schedule_logs ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT ''`.execute(db);
+      await sql`ALTER TABLE supplier_payment_schedule_logs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`.execute(
+        db,
+      );
+      await sql`ALTER TABLE supplier_payment_schedule_logs ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT ''`.execute(
+        db,
+      );
 
       await sql`
         UPDATE supplier_payment_schedule_logs l
@@ -64,7 +80,9 @@ export const migration = {
         )
         WHERE COALESCE(l.tenant_id, '') = ''
       `.execute(db);
-      await sql`UPDATE supplier_payment_schedule_logs SET tenant_id = ${tenantId} WHERE COALESCE(tenant_id, '') = ''`.execute(db);
+      await sql`UPDATE supplier_payment_schedule_logs SET tenant_id = ${tenantId} WHERE COALESCE(tenant_id, '') = ''`.execute(
+        db,
+      );
 
       await sql`
         UPDATE supplier_payment_schedule_logs l
@@ -75,10 +93,16 @@ export const migration = {
         )
         WHERE COALESCE(l.account_id, '') = ''
       `.execute(db);
-      await sql`UPDATE supplier_payment_schedule_logs SET account_id = ${accountId} WHERE COALESCE(account_id, '') = ''`.execute(db);
+      await sql`UPDATE supplier_payment_schedule_logs SET account_id = ${accountId} WHERE COALESCE(account_id, '') = ''`.execute(
+        db,
+      );
 
-      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedule_logs_tenant_idx ON supplier_payment_schedule_logs (tenant_id)`.execute(db);
-      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedule_logs_tenant_schedule_idx ON supplier_payment_schedule_logs (tenant_id, schedule_id)`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedule_logs_tenant_idx ON supplier_payment_schedule_logs (tenant_id)`.execute(
+        db,
+      );
+      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedule_logs_tenant_schedule_idx ON supplier_payment_schedule_logs (tenant_id, schedule_id)`.execute(
+        db,
+      );
     }
   },
 

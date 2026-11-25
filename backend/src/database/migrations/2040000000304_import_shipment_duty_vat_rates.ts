@@ -38,9 +38,15 @@ import { type Migration, sql } from 'kysely';
  * down drops the columns.
  */
 export async function up(db: any): Promise<void> {
-  await sql`ALTER TABLE "import_shipments" ADD COLUMN IF NOT EXISTS "customs_duty_rate_percent" NUMERIC(6, 2) NOT NULL DEFAULT 0`.execute(db);
-  await sql`ALTER TABLE "import_shipments" ADD COLUMN IF NOT EXISTS "vat_rate_percent" NUMERIC(6, 2) NOT NULL DEFAULT 0`.execute(db);
-  await sql`ALTER TABLE "import_shipments" ADD COLUMN IF NOT EXISTS "insurance_cost_usd" NUMERIC(12, 2) NOT NULL DEFAULT 0`.execute(db);
+  await sql`ALTER TABLE "import_shipments" ADD COLUMN IF NOT EXISTS "customs_duty_rate_percent" NUMERIC(6, 2) NOT NULL DEFAULT 0`.execute(
+    db,
+  );
+  await sql`ALTER TABLE "import_shipments" ADD COLUMN IF NOT EXISTS "vat_rate_percent" NUMERIC(6, 2) NOT NULL DEFAULT 0`.execute(
+    db,
+  );
+  await sql`ALTER TABLE "import_shipments" ADD COLUMN IF NOT EXISTS "insurance_cost_usd" NUMERIC(12, 2) NOT NULL DEFAULT 0`.execute(
+    db,
+  );
 }
 
 export async function down(db: any): Promise<void> {

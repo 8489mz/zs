@@ -9,7 +9,9 @@ import { Kysely, sql } from 'kysely';
  * when rows contain escape sequences, XML strings (e.g. zatca_ubl_xml), or backslashes.
  */
 export async function up(db: Kysely<any>): Promise<void> {
-  await sql.raw(`
+  await sql
+    .raw(
+      `
     CREATE OR REPLACE FUNCTION fn_tamper_evident_audit_trigger()
     RETURNS TRIGGER AS $$
     DECLARE
@@ -136,7 +138,9 @@ export async function up(db: Kysely<any>): Promise<void> {
       RETURN NEW;
     END;
     $$ LANGUAGE plpgsql;
-  `).execute(db);
+  `,
+    )
+    .execute(db);
 }
 
 export async function down(_db: Kysely<any>): Promise<void> {

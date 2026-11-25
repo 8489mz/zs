@@ -56,7 +56,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     }
     if (Number(info.numeric_scale) >= scale) continue;
     const capacity = Number(info.numeric_precision) - Number(info.numeric_scale);
-    await sql.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE numeric(${capacity + scale}, ${scale})`).execute(db);
+    await sql
+      .raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE numeric(${capacity + scale}, ${scale})`)
+      .execute(db);
   }
   for (const [table, column, scale] of optionalColumns) {
     const { rows } = await sql<{ data_type: string; numeric_precision: number | null; numeric_scale: number | null }>`
@@ -70,7 +72,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     if (info.data_type !== 'numeric' || info.numeric_precision == null || info.numeric_scale == null) continue;
     if (Number(info.numeric_scale) >= scale) continue;
     const capacity = Number(info.numeric_precision) - Number(info.numeric_scale);
-    await sql.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE numeric(${capacity + scale}, ${scale})`).execute(db);
+    await sql
+      .raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE numeric(${capacity + scale}, ${scale})`)
+      .execute(db);
   }
 }
 

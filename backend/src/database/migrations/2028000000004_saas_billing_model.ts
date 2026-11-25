@@ -50,7 +50,8 @@ export const migration = {
       .execute();
 
     // Insert default basic plan
-    const planResult = await db.insertInto('saas_plans')
+    const planResult = await db
+      .insertInto('saas_plans')
       .values({
         code: 'basic',
         name: 'Basic',
@@ -64,9 +65,10 @@ export const migration = {
 
     if (planResult && planResult.id) {
       const planId = planResult.id;
-      
+
       // Fetch all active tenants
-      const activeTenants = await db.selectFrom('tenants')
+      const activeTenants = await db
+        .selectFrom('tenants')
         .select(['id', 'status'])
         .where('status', '=', 'active')
         .execute();
@@ -79,7 +81,7 @@ export const migration = {
         const graceEndsAt = new Date(tenYearsFromNow);
         graceEndsAt.setDate(graceEndsAt.getDate() + 7);
 
-        const subscriptionValues = activeTenants.map(tenant => ({
+        const subscriptionValues = activeTenants.map((tenant) => ({
           tenant_id: tenant.id,
           plan_id: planId,
           status: 'active',
@@ -89,14 +91,12 @@ export const migration = {
           auto_renew: false,
         }));
 
-        await db.insertInto('tenant_subscriptions')
-          .values(subscriptionValues)
-          .execute();
+        await db.insertInto('tenant_subscriptions').values(subscriptionValues).execute();
       }
     }
   },
 
   async down(db: Kysely<any>): Promise<void> {
     // Do nothing. Non-destructive.
-  }
+  },
 };

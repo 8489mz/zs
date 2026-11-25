@@ -87,7 +87,9 @@ export async function up(db: Kysely<any>): Promise<void> {
   }
 
   for (const { table, column, name } of INDEXES) {
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS ${sql.ref(name)} ON ${sql.table(table)} (tenant_id, ${sql.ref(column)})`.execute(db);
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS ${sql.ref(name)} ON ${sql.table(table)} (tenant_id, ${sql.ref(column)})`.execute(
+      db,
+    );
   }
 
   // Post-check: all three indexes must exist after creation.

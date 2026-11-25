@@ -35,5 +35,5 @@ export const migration = {
 
   down: async (db: Kysely<any>): Promise<void> => {
     await db.schema.dropTable('hr_employee_adjustments').execute();
-  }
+  },
 };

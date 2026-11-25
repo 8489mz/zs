@@ -33,7 +33,9 @@ export const migration = {
     await sql`UPDATE sessions SET account_id = ${accountId} WHERE account_id = ''`.execute(db);
 
     await sql`CREATE INDEX IF NOT EXISTS idx_sessions_tenant_user_id ON sessions (tenant_id, user_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_sessions_tenant_expires_at ON sessions (tenant_id, expires_at)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_sessions_tenant_expires_at ON sessions (tenant_id, expires_at)`.execute(
+      db,
+    );
   },
 
   async down(db: Kysely<unknown>): Promise<void> {

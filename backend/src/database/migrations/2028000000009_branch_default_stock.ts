@@ -6,7 +6,9 @@ export const migration = {
   async up(db: Kysely<any>) {
     await db.schema
       .alterTable('branches')
-      .addColumn('default_stock_location_id', 'integer', (col) => col.references('stock_locations.id').onDelete('set null'))
+      .addColumn('default_stock_location_id', 'integer', (col) =>
+        col.references('stock_locations.id').onDelete('set null'),
+      )
       .execute();
 
     // Read all existing currentLocationId settings (one per tenant+account scope)
@@ -50,10 +52,7 @@ export const migration = {
       }
     }
 
-    const branches = await db
-      .selectFrom('branches')
-      .select(['id', 'name', 'tenant_id', 'account_id'])
-      .execute();
+    const branches = await db.selectFrom('branches').select(['id', 'name', 'tenant_id', 'account_id']).execute();
 
     for (const branch of branches) {
       const scopeKey = `${branch.tenant_id}|${branch.account_id}`;
@@ -65,9 +64,7 @@ export const migration = {
         .where('is_active', '=', true)
         .execute();
 
-      const operationalLocations = activeLocations.filter(
-        (loc) => !NON_OPERATIONAL_TYPES.has(loc.location_type),
-      );
+      const operationalLocations = activeLocations.filter((loc) => !NON_OPERATIONAL_TYPES.has(loc.location_type));
       const branchStocks = activeLocations.filter((loc) => loc.location_type === 'branch_stock');
 
       // Priority 1: currentLocationId from settings — if it belongs to this branch, is active, and is operational
@@ -109,9 +106,7 @@ export const migration = {
       // Priority 4: no active locations at all → create empty branch_stock, set as default
       if (activeLocations.length === 0) {
         let locationName = branch.name.trim();
-        locationName = locationName.startsWith('فرع')
-          ? `مخزون ${locationName}`
-          : `مخزون فرع ${locationName}`;
+        locationName = locationName.startsWith('فرع') ? `مخزون ${locationName}` : `مخزون فرع ${locationName}`;
 
         const inserted = await db
           .insertInto('stock_locations')

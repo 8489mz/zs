@@ -26,8 +26,12 @@ import { sql, type Kysely } from 'kysely';
  */
 export const migration = {
   async up(db: Kysely<unknown>): Promise<void> {
-    await sql`ALTER TABLE goods_receipt_notes ADD COLUMN IF NOT EXISTS freight_amount NUMERIC(15, 4) NOT NULL DEFAULT 0`.execute(db);
-    await sql`ALTER TABLE goods_receipt_lines ADD COLUMN IF NOT EXISTS allocated_landed_cost NUMERIC(15, 4) NOT NULL DEFAULT 0`.execute(db);
+    await sql`ALTER TABLE goods_receipt_notes ADD COLUMN IF NOT EXISTS freight_amount NUMERIC(15, 4) NOT NULL DEFAULT 0`.execute(
+      db,
+    );
+    await sql`ALTER TABLE goods_receipt_lines ADD COLUMN IF NOT EXISTS allocated_landed_cost NUMERIC(15, 4) NOT NULL DEFAULT 0`.execute(
+      db,
+    );
     await sql`ALTER TABLE goods_receipt_lines ADD COLUMN IF NOT EXISTS landed_unit_cost NUMERIC(15, 6)`.execute(db);
   },
 

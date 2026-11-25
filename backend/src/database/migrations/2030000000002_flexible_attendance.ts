@@ -13,7 +13,7 @@ const upStatements = [
   `ALTER TABLE hr_employees
     ADD CONSTRAINT hr_employees_attendance_policy_valid
     CHECK (attendance_policy IN ('strict','flexible'))`,
-    
+
   `ALTER TABLE hr_attendance_exceptions
     ADD CONSTRAINT hr_attendance_exceptions_type_valid
     CHECK (exception_type IN (
@@ -26,7 +26,7 @@ const upStatements = [
       'short_hours',
       'extra_hours',
       'unscheduled_time'
-    ))`
+    ))`,
 ];
 
 const downStatements = [
@@ -42,7 +42,7 @@ const downStatements = [
       'late_check_out',
       'missing_check_in',
       'missing_check_out'
-    ))`
+    ))`,
 ];
 
 export const migration = {

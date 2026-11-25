@@ -25,11 +25,17 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_tenant_status ON fleet_vehicles(tenant_id, status)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_tenant_plate ON fleet_vehicles(tenant_id, plate_number)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_tenant_status ON fleet_vehicles(tenant_id, status)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_tenant_plate ON fleet_vehicles(tenant_id, plate_number)`.execute(
+      db,
+    );
 
     // 2. Link van_sales_trips with fleet_vehicles and shift metadata
-    await sql`ALTER TABLE van_sales_trips ADD COLUMN IF NOT EXISTS vehicle_id INTEGER REFERENCES fleet_vehicles(id) ON DELETE SET NULL`.execute(db);
+    await sql`ALTER TABLE van_sales_trips ADD COLUMN IF NOT EXISTS vehicle_id INTEGER REFERENCES fleet_vehicles(id) ON DELETE SET NULL`.execute(
+      db,
+    );
     await sql`ALTER TABLE van_sales_trips ADD COLUMN IF NOT EXISTS shift_name VARCHAR(50) DEFAULT 'صباحي'`.execute(db);
     await sql`ALTER TABLE van_sales_trips ADD COLUMN IF NOT EXISTS start_odometer NUMERIC(12, 2)`.execute(db);
     await sql`ALTER TABLE van_sales_trips ADD COLUMN IF NOT EXISTS end_odometer NUMERIC(12, 2)`.execute(db);

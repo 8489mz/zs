@@ -30,11 +30,21 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_pricing_rules_supplier_id ON pricing_rules(supplier_id)`.execute(db).catch(() => undefined);
-    await sql`CREATE INDEX IF NOT EXISTS idx_pricing_rules_category_id ON pricing_rules(category_id)`.execute(db).catch(() => undefined);
-    await sql`CREATE INDEX IF NOT EXISTS idx_pricing_rules_item_kind ON pricing_rules(item_kind)`.execute(db).catch(() => undefined);
-    await sql`CREATE INDEX IF NOT EXISTS idx_pricing_rules_style_code ON pricing_rules(style_code)`.execute(db).catch(() => undefined);
-    await sql`CREATE INDEX IF NOT EXISTS idx_pricing_rules_is_active ON pricing_rules(is_active)`.execute(db).catch(() => undefined);
+    await sql`CREATE INDEX IF NOT EXISTS idx_pricing_rules_supplier_id ON pricing_rules(supplier_id)`
+      .execute(db)
+      .catch(() => undefined);
+    await sql`CREATE INDEX IF NOT EXISTS idx_pricing_rules_category_id ON pricing_rules(category_id)`
+      .execute(db)
+      .catch(() => undefined);
+    await sql`CREATE INDEX IF NOT EXISTS idx_pricing_rules_item_kind ON pricing_rules(item_kind)`
+      .execute(db)
+      .catch(() => undefined);
+    await sql`CREATE INDEX IF NOT EXISTS idx_pricing_rules_style_code ON pricing_rules(style_code)`
+      .execute(db)
+      .catch(() => undefined);
+    await sql`CREATE INDEX IF NOT EXISTS idx_pricing_rules_is_active ON pricing_rules(is_active)`
+      .execute(db)
+      .catch(() => undefined);
   },
   down: async (db: Kysely<Database>): Promise<void> => {
     await sql`DROP INDEX IF EXISTS idx_pricing_rules_is_active`.execute(db).catch(() => undefined);

@@ -73,5 +73,5 @@ export const migration = {
     await db.schema.alterTable('sale_items').dropColumn('serials').execute();
     await db.schema.alterTable('purchase_items').dropColumn('serials').execute();
     await db.schema.alterTable('held_sale_items').dropColumn('serials').execute();
-  }
+  },
 };

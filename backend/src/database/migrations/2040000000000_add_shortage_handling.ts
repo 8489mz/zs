@@ -7,11 +7,8 @@ export const migration = {
       .addColumn('shortage_handling_method', 'varchar(50)', (col) => col.defaultTo('capitalize'))
       .execute();
   },
-  
+
   down: async (db: Kysely<any>): Promise<void> => {
-    await db.schema
-      .alterTable('import_shipment_items')
-      .dropColumn('shortage_handling_method')
-      .execute();
-  }
+    await db.schema.alterTable('import_shipment_items').dropColumn('shortage_handling_method').execute();
+  },
 };

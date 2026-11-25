@@ -17,8 +17,12 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_product_pricing_profiles_group_key ON product_pricing_profiles(pricing_group_key)`.execute(db).catch(() => undefined);
-    await sql`CREATE INDEX IF NOT EXISTS idx_product_pricing_profiles_mode ON product_pricing_profiles(pricing_mode)`.execute(db).catch(() => undefined);
+    await sql`CREATE INDEX IF NOT EXISTS idx_product_pricing_profiles_group_key ON product_pricing_profiles(pricing_group_key)`
+      .execute(db)
+      .catch(() => undefined);
+    await sql`CREATE INDEX IF NOT EXISTS idx_product_pricing_profiles_mode ON product_pricing_profiles(pricing_mode)`
+      .execute(db)
+      .catch(() => undefined);
   },
   down: async (db: Kysely<Database>): Promise<void> => {
     await sql`DROP INDEX IF EXISTS idx_product_pricing_profiles_mode`.execute(db).catch(() => undefined);

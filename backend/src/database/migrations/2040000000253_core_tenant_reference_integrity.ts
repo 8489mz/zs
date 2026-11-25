@@ -19,12 +19,20 @@ const references = [
   ['journal_entry_lines', 'branch_id', 'branches'],
   ['journal_entry_lines', 'location_id', 'stock_locations'],
   ...[
-    'cash_account_id', 'bank_account_id', 'customer_receivable_account_id',
-    'supplier_payable_account_id', 'inventory_account_id', 'sales_revenue_account_id',
-    'sales_discount_account_id', 'cogs_account_id', 'purchase_account_id',
-    'expenses_account_id', 'sales_tax_account_id', 'purchase_tax_account_id',
+    'cash_account_id',
+    'bank_account_id',
+    'customer_receivable_account_id',
+    'supplier_payable_account_id',
+    'inventory_account_id',
+    'sales_revenue_account_id',
+    'sales_discount_account_id',
+    'cogs_account_id',
+    'purchase_account_id',
+    'expenses_account_id',
+    'sales_tax_account_id',
+    'purchase_tax_account_id',
     'manufacturing_overhead_account_id',
-  ].map(column => ['accounting_settings', column, 'accounting_accounts']),
+  ].map((column) => ['accounting_settings', column, 'accounting_accounts']),
 ];
 
 const referenceName = (table: string, column: string) => `fk_core253_${table}_${column}`.slice(0, 63);
@@ -32,17 +40,23 @@ const referenceName = (table: string, column: string) => `fk_core253_${table}_${
 export async function up(db: Kysely<Database>): Promise<void> {
   // These keys support existing tenant-scoped branch/location/user references.
   for (const table of ['branches', 'stock_locations', 'users']) {
-    await sql.raw(`CREATE UNIQUE INDEX IF NOT EXISTS uq_core253_${table}_tenant_id ON ${table} (tenant_id, id)`).execute(db);
+    await sql
+      .raw(`CREATE UNIQUE INDEX IF NOT EXISTS uq_core253_${table}_tenant_id ON ${table} (tenant_id, id)`)
+      .execute(db);
   }
   for (const [table, column, target] of references) {
     const name = referenceName(table, column);
     // Enforce new writes now; preserve legacy violations for explicit review.
-    await sql.raw(`DO $$ BEGIN
+    await sql
+      .raw(
+        `DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '${name}' AND conrelid = '${table}'::regclass) THEN
         ALTER TABLE ${table} ADD CONSTRAINT ${name}
           FOREIGN KEY (tenant_id, ${column}) REFERENCES ${target} (tenant_id, id) NOT VALID;
       END IF;
-    END $$`).execute(db);
+    END $$`,
+      )
+      .execute(db);
   }
   await sql`DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_core253_journal_finite' AND conrelid = 'journal_entry_lines'::regclass) THEN

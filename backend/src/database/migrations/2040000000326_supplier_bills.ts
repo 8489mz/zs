@@ -53,9 +53,15 @@ export async function up(db: any): Promise<void> {
       sort_order int NOT NULL DEFAULT 0
     )
   `.execute(db);
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS supplier_bills_tenant_doc_no_uidx ON supplier_bills (tenant_id, doc_no)`.execute(db);
-  await sql`CREATE INDEX IF NOT EXISTS supplier_bills_tenant_supplier_idx ON supplier_bills (tenant_id, supplier_id)`.execute(db);
-  await sql`CREATE INDEX IF NOT EXISTS supplier_bill_lines_tenant_bill_idx ON supplier_bill_lines (tenant_id, bill_id)`.execute(db);
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS supplier_bills_tenant_doc_no_uidx ON supplier_bills (tenant_id, doc_no)`.execute(
+    db,
+  );
+  await sql`CREATE INDEX IF NOT EXISTS supplier_bills_tenant_supplier_idx ON supplier_bills (tenant_id, supplier_id)`.execute(
+    db,
+  );
+  await sql`CREATE INDEX IF NOT EXISTS supplier_bill_lines_tenant_bill_idx ON supplier_bill_lines (tenant_id, bill_id)`.execute(
+    db,
+  );
 }
 
 export async function down(db: any): Promise<void> {

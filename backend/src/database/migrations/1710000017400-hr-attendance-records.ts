@@ -24,9 +24,7 @@ const upStatements = [
   'CREATE INDEX IF NOT EXISTS idx_hr_attendance_records_status ON hr_attendance_records(status)',
 ];
 
-const downStatements = [
-  'DROP TABLE IF EXISTS hr_attendance_records',
-];
+const downStatements = ['DROP TABLE IF EXISTS hr_attendance_records'];
 
 export const migration = {
   up: async (db: Kysely<Database>): Promise<void> => {

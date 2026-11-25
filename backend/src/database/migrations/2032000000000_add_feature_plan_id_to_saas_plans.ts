@@ -9,9 +9,6 @@ export const migration = {
   },
 
   async down(db: Kysely<unknown>): Promise<void> {
-    await db.schema
-      .alterTable('saas_plans')
-      .dropColumn('feature_plan_id')
-      .execute();
-  }
+    await db.schema.alterTable('saas_plans').dropColumn('feature_plan_id').execute();
+  },
 };

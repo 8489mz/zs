@@ -57,10 +57,7 @@ const upStatements = [
    WHERE NOT EXISTS (SELECT 1 FROM hr_leave_types WHERE LOWER(COALESCE(code, '')) = 'emergency')`,
 ];
 
-const downStatements = [
-  'DROP TABLE IF EXISTS hr_leave_requests',
-  'DROP TABLE IF EXISTS hr_leave_types',
-];
+const downStatements = ['DROP TABLE IF EXISTS hr_leave_requests', 'DROP TABLE IF EXISTS hr_leave_types'];
 
 export const migration = {
   up: async (db: Kysely<Database>): Promise<void> => {

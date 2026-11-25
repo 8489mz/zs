@@ -17,7 +17,9 @@ import { type Migration, sql } from 'kysely';
  */
 export async function up(db: any): Promise<void> {
   await sql`ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS idempotency_key TEXT`.execute(db);
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_logs_tenant_idempotency_key_uidx ON audit_logs (tenant_id, idempotency_key)`.execute(db);
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_logs_tenant_idempotency_key_uidx ON audit_logs (tenant_id, idempotency_key)`.execute(
+    db,
+  );
 }
 
 export async function down(db: any): Promise<void> {

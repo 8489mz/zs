@@ -15,9 +15,7 @@ const ddlStatements = [
   `CREATE INDEX IF NOT EXISTS offline_releases_active_idx ON offline_releases (is_active) WHERE is_active = TRUE`,
 ];
 
-const dropStatements = [
-  `DROP TABLE IF EXISTS offline_releases`,
-];
+const dropStatements = [`DROP TABLE IF EXISTS offline_releases`];
 
 export const migration = {
   up: async (db: Kysely<unknown>): Promise<void> => {

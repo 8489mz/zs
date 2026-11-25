@@ -55,7 +55,11 @@ export const migration = {
     await dropNonNegativeColumnCheckConstraints(db, 'product_location_stock', 'qty');
   },
   down: async (db: Kysely<Database>): Promise<void> => {
-    await sql`ALTER TABLE products ADD CONSTRAINT chk_products_stock_qty_non_negative CHECK (stock_qty >= 0)`.execute(db);
-    await sql`ALTER TABLE product_location_stock ADD CONSTRAINT chk_product_location_stock_qty_non_negative CHECK (qty >= 0)`.execute(db);
+    await sql`ALTER TABLE products ADD CONSTRAINT chk_products_stock_qty_non_negative CHECK (stock_qty >= 0)`.execute(
+      db,
+    );
+    await sql`ALTER TABLE product_location_stock ADD CONSTRAINT chk_product_location_stock_qty_non_negative CHECK (qty >= 0)`.execute(
+      db,
+    );
   },
 };

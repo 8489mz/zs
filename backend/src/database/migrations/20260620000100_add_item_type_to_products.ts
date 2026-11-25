@@ -10,19 +10,12 @@ export const migration = {
       .execute();
 
     // Create an index for faster lookup since we will filter by item_type often
-    await db.schema
-      .createIndex('idx_products_item_type')
-      .on('products')
-      .column('item_type')
-      .execute();
+    await db.schema.createIndex('idx_products_item_type').on('products').column('item_type').execute();
   },
 
   down: async (db: Kysely<unknown>): Promise<void> => {
     await db.schema.dropIndex('idx_products_item_type').execute();
-    
-    await db.schema
-      .alterTable('products')
-      .dropColumn('item_type')
-      .execute();
-  }
+
+    await db.schema.alterTable('products').dropColumn('item_type').execute();
+  },
 };

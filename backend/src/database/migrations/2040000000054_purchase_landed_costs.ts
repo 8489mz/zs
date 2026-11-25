@@ -3,7 +3,8 @@ import { type Kysely, sql } from 'kysely';
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
     try {
-      await db.schema.createTable('purchase_landed_costs')
+      await db.schema
+        .createTable('purchase_landed_costs')
         .addColumn('id', 'serial', (col) => col.primaryKey())
         .addColumn('tenant_id', 'varchar(255)')
         .addColumn('purchase_id', 'integer', (col) => col.notNull())
@@ -19,39 +20,33 @@ export const migration = {
     }
 
     try {
-      await db.schema.alterTable('purchases')
+      await db.schema
+        .alterTable('purchases')
         .addColumn('landed_cost_total', 'numeric(15, 2)', (col) => col.defaultTo(0))
         .execute();
     } catch (e) {}
 
     try {
-      await db.schema.alterTable('purchases')
-        .addColumn('landed_cost_allocation_method', 'varchar(20)')
-        .execute();
+      await db.schema.alterTable('purchases').addColumn('landed_cost_allocation_method', 'varchar(20)').execute();
     } catch (e) {}
 
     try {
-      await db.schema.alterTable('purchases')
-        .addColumn('landed_cost_notes', 'text')
-        .execute();
+      await db.schema.alterTable('purchases').addColumn('landed_cost_notes', 'text').execute();
     } catch (e) {}
 
     try {
-      await db.schema.alterTable('purchases')
-        .addColumn('landed_cost_applied_at', 'timestamptz')
-        .execute();
+      await db.schema.alterTable('purchases').addColumn('landed_cost_applied_at', 'timestamptz').execute();
     } catch (e) {}
 
     try {
-      await db.schema.alterTable('purchase_items')
+      await db.schema
+        .alterTable('purchase_items')
         .addColumn('allocated_landed_cost', 'numeric(15, 2)', (col) => col.defaultTo(0))
         .execute();
     } catch (e) {}
 
     try {
-      await db.schema.alterTable('purchase_items')
-        .addColumn('landed_unit_cost', 'numeric(15, 2)')
-        .execute();
+      await db.schema.alterTable('purchase_items').addColumn('landed_unit_cost', 'numeric(15, 2)').execute();
     } catch (e) {}
   },
 

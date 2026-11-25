@@ -212,19 +212,35 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_hr_departments_code_unique ON hr_departments(code) WHERE code <> ''`.execute(db);
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_hr_job_titles_code_unique ON hr_job_titles(code) WHERE code <> ''`.execute(db);
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_hr_departments_code_unique ON hr_departments(code) WHERE code <> ''`.execute(
+      db,
+    );
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_hr_job_titles_code_unique ON hr_job_titles(code) WHERE code <> ''`.execute(
+      db,
+    );
     await sql`CREATE INDEX IF NOT EXISTS idx_hr_positions_department ON hr_positions(department_id)`.execute(db);
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_hr_employees_employee_no_unique ON hr_employees(employee_no) WHERE employee_no <> ''`.execute(db);
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_hr_employees_employee_no_unique ON hr_employees(employee_no) WHERE employee_no <> ''`.execute(
+      db,
+    );
     await sql`CREATE INDEX IF NOT EXISTS idx_hr_employees_user_id ON hr_employees(user_id)`.execute(db);
     await sql`CREATE INDEX IF NOT EXISTS idx_hr_contacts_employee ON hr_employee_contacts(employee_id)`.execute(db);
     await sql`CREATE INDEX IF NOT EXISTS idx_hr_documents_employee ON hr_employee_documents(employee_id)`.execute(db);
     await sql`CREATE INDEX IF NOT EXISTS idx_hr_contracts_employee ON hr_employment_contracts(employee_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_hr_compensation_employee_contract ON hr_compensation_packages(employee_id, contract_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_hr_loans_employee_status ON hr_employee_loans(employee_id, status)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_hr_loan_installments_loan ON hr_employee_loan_installments(loan_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_hr_ledger_employee ON hr_employee_ledger(employee_id, created_at DESC)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_treasury_hr_reference ON treasury_transactions(reference_type, reference_id)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_hr_compensation_employee_contract ON hr_compensation_packages(employee_id, contract_id)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_hr_loans_employee_status ON hr_employee_loans(employee_id, status)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_hr_loan_installments_loan ON hr_employee_loan_installments(loan_id)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_hr_ledger_employee ON hr_employee_ledger(employee_id, created_at DESC)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_treasury_hr_reference ON treasury_transactions(reference_type, reference_id)`.execute(
+      db,
+    );
   },
   down: async (db: Kysely<Database>): Promise<void> => {
     await sql`DROP INDEX IF EXISTS idx_treasury_hr_reference`.execute(db);

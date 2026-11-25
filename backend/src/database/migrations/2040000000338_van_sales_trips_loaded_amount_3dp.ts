@@ -29,9 +29,7 @@ import { sql, type Kysely } from 'kysely';
  * capacity-preserving widening, down a no-op that never truncates
  * posted history.
  */
-const columns: Array<[string, string, number]> = [
-  ['van_sales_trips', 'loaded_amount', 3],
-];
+const columns: Array<[string, string, number]> = [['van_sales_trips', 'loaded_amount', 3]];
 
 export async function up(db: Kysely<any>): Promise<void> {
   for (const [table, column, requiredScale] of columns) {
@@ -48,7 +46,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     if (Number(info.numeric_scale) >= requiredScale) continue;
     const widenedPrecision = Number(info.numeric_precision) - Number(info.numeric_scale) + requiredScale;
     // Names are a fixed internal allowlist; no tenant-controlled SQL identifiers.
-    await sql.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE numeric(${widenedPrecision}, ${requiredScale})`).execute(db);
+    await sql
+      .raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE numeric(${widenedPrecision}, ${requiredScale})`)
+      .execute(db);
   }
 }
 

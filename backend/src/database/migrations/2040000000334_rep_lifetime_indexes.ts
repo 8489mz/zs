@@ -21,9 +21,15 @@ import { type Migration, sql } from 'kysely';
  * all sales on the trip regardless of status).
  */
 export async function up(db: any): Promise<void> {
-  await sql`CREATE INDEX IF NOT EXISTS idx_sales_tenant_delivery_rep_created_at ON sales(tenant_id, delivery_rep_id, created_at DESC)`.execute(db);
-  await sql`CREATE INDEX IF NOT EXISTS idx_customer_payments_tenant_rep_created_at ON customer_payments(tenant_id, rep_id, created_at DESC)`.execute(db);
-  await sql`CREATE INDEX IF NOT EXISTS idx_van_field_returns_tenant_rep_created_at ON van_field_returns(tenant_id, rep_id, created_at DESC)`.execute(db);
+  await sql`CREATE INDEX IF NOT EXISTS idx_sales_tenant_delivery_rep_created_at ON sales(tenant_id, delivery_rep_id, created_at DESC)`.execute(
+    db,
+  );
+  await sql`CREATE INDEX IF NOT EXISTS idx_customer_payments_tenant_rep_created_at ON customer_payments(tenant_id, rep_id, created_at DESC)`.execute(
+    db,
+  );
+  await sql`CREATE INDEX IF NOT EXISTS idx_van_field_returns_tenant_rep_created_at ON van_field_returns(tenant_id, rep_id, created_at DESC)`.execute(
+    db,
+  );
 }
 
 export async function down(db: any): Promise<void> {

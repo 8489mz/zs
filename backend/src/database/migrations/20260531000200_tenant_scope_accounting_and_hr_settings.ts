@@ -38,8 +38,12 @@ async function scopeTable(db: Kysely<unknown>, table: string): Promise<void> {
   const accountId = defaultAccountId();
   await sql`ALTER TABLE ${sql.table(table)} ADD COLUMN IF NOT EXISTS tenant_id TEXT`.execute(db);
   await sql`ALTER TABLE ${sql.table(table)} ADD COLUMN IF NOT EXISTS account_id TEXT`.execute(db);
-  await sql`UPDATE ${sql.table(table)} SET tenant_id = ${tenantId} WHERE tenant_id IS NULL OR btrim(tenant_id) = ''`.execute(db);
-  await sql`UPDATE ${sql.table(table)} SET account_id = ${accountId} WHERE account_id IS NULL OR btrim(account_id) = ''`.execute(db);
+  await sql`UPDATE ${sql.table(table)} SET tenant_id = ${tenantId} WHERE tenant_id IS NULL OR btrim(tenant_id) = ''`.execute(
+    db,
+  );
+  await sql`UPDATE ${sql.table(table)} SET account_id = ${accountId} WHERE account_id IS NULL OR btrim(account_id) = ''`.execute(
+    db,
+  );
   await sql`ALTER TABLE ${sql.table(table)} ALTER COLUMN tenant_id SET NOT NULL`.execute(db);
   await sql`ALTER TABLE ${sql.table(table)} ALTER COLUMN account_id SET NOT NULL`.execute(db);
 }
@@ -51,10 +55,18 @@ export const migration = {
       await sql`ALTER TABLE accounting_accounts DROP CONSTRAINT IF EXISTS accounting_accounts_code_key`.execute(db);
       await sql`DROP INDEX IF EXISTS idx_accounting_accounts_code`.execute(db);
       await sql`DROP INDEX IF EXISTS accounting_accounts_code_key`.execute(db);
-      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_accounting_accounts_tenant_code_uidx ON accounting_accounts (tenant_id, code)`.execute(db);
-      await sql`CREATE INDEX IF NOT EXISTS idx_accounting_accounts_tenant_id ON accounting_accounts (tenant_id)`.execute(db);
-      await sql`CREATE INDEX IF NOT EXISTS idx_accounting_accounts_account_id ON accounting_accounts (account_id)`.execute(db);
-      await sql`CREATE INDEX IF NOT EXISTS idx_accounting_accounts_tenant_parent_id ON accounting_accounts (tenant_id, parent_id)`.execute(db);
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_accounting_accounts_tenant_code_uidx ON accounting_accounts (tenant_id, code)`.execute(
+        db,
+      );
+      await sql`CREATE INDEX IF NOT EXISTS idx_accounting_accounts_tenant_id ON accounting_accounts (tenant_id)`.execute(
+        db,
+      );
+      await sql`CREATE INDEX IF NOT EXISTS idx_accounting_accounts_account_id ON accounting_accounts (account_id)`.execute(
+        db,
+      );
+      await sql`CREATE INDEX IF NOT EXISTS idx_accounting_accounts_tenant_parent_id ON accounting_accounts (tenant_id, parent_id)`.execute(
+        db,
+      );
     }
 
     if (await tableExists(db, 'accounting_settings')) {
@@ -67,9 +79,15 @@ export const migration = {
           and s.ctid < newer.ctid
       `.execute(db);
       await sql`ALTER TABLE accounting_settings DROP CONSTRAINT IF EXISTS accounting_settings_pkey`.execute(db);
-      await sql`ALTER TABLE accounting_settings ADD CONSTRAINT accounting_settings_pkey PRIMARY KEY (tenant_id, id)`.execute(db);
-      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_accounting_settings_tenant_singleton_uidx ON accounting_settings (tenant_id, id)`.execute(db);
-      await sql`CREATE INDEX IF NOT EXISTS idx_accounting_settings_account_id ON accounting_settings (account_id)`.execute(db);
+      await sql`ALTER TABLE accounting_settings ADD CONSTRAINT accounting_settings_pkey PRIMARY KEY (tenant_id, id)`.execute(
+        db,
+      );
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_accounting_settings_tenant_singleton_uidx ON accounting_settings (tenant_id, id)`.execute(
+        db,
+      );
+      await sql`CREATE INDEX IF NOT EXISTS idx_accounting_settings_account_id ON accounting_settings (account_id)`.execute(
+        db,
+      );
     }
 
     if (await tableExists(db, 'hr_hr_settings')) {
@@ -77,11 +95,15 @@ export const migration = {
       await sql`ALTER TABLE hr_hr_settings DROP CONSTRAINT IF EXISTS hr_hr_settings_pkey`.execute(db);
       await sql`ALTER TABLE hr_hr_settings ADD CONSTRAINT hr_hr_settings_pkey PRIMARY KEY (tenant_id, key)`.execute(db);
       await sql`CREATE INDEX IF NOT EXISTS idx_hr_hr_settings_account_id ON hr_hr_settings (account_id)`.execute(db);
-      await sql`CREATE INDEX IF NOT EXISTS idx_hr_hr_settings_tenant_key ON hr_hr_settings (tenant_id, key)`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS idx_hr_hr_settings_tenant_key ON hr_hr_settings (tenant_id, key)`.execute(
+        db,
+      );
     }
 
-    if (await tableExists(db, 'accounting_settings') && await columnExists(db, 'accounting_settings', 'id')) {
-      await sql`CREATE INDEX IF NOT EXISTS idx_accounting_settings_tenant_lookup ON accounting_settings (tenant_id, account_id)`.execute(db);
+    if ((await tableExists(db, 'accounting_settings')) && (await columnExists(db, 'accounting_settings', 'id'))) {
+      await sql`CREATE INDEX IF NOT EXISTS idx_accounting_settings_tenant_lookup ON accounting_settings (tenant_id, account_id)`.execute(
+        db,
+      );
     }
   },
 

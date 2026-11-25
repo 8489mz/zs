@@ -14,7 +14,9 @@ import { type Migration, sql } from 'kysely';
  * column touched.
  */
 export async function up(db: any): Promise<void> {
-  await sql`ALTER TABLE hr_attendance_records ADD COLUMN IF NOT EXISTS prior_sessions_minutes INTEGER NOT NULL DEFAULT 0`.execute(db);
+  await sql`ALTER TABLE hr_attendance_records ADD COLUMN IF NOT EXISTS prior_sessions_minutes INTEGER NOT NULL DEFAULT 0`.execute(
+    db,
+  );
 }
 
 export async function down(db: any): Promise<void> {

@@ -1,12 +1,8 @@
 import { Kysely, sql } from 'kysely';
 
-const ddlStatements = [
-  `ALTER TABLE products ADD COLUMN IF NOT EXISTS bin_location VARCHAR(255)`,
-];
+const ddlStatements = [`ALTER TABLE products ADD COLUMN IF NOT EXISTS bin_location VARCHAR(255)`];
 
-const dropStatements = [
-  `ALTER TABLE products DROP COLUMN IF EXISTS bin_location`,
-];
+const dropStatements = [`ALTER TABLE products DROP COLUMN IF EXISTS bin_location`];
 
 export const migration = {
   up: async (db: Kysely<unknown>): Promise<void> => {

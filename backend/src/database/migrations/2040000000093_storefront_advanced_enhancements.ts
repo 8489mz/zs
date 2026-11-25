@@ -3,7 +3,9 @@
 export const migration = {
   up: async (db: Kysely<any>): Promise<void> => {
     // 1. Add fulfillment and country columns to online_orders
-    await sql`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS fulfillment_type VARCHAR(32) DEFAULT 'delivery'`.execute(db);
+    await sql`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS fulfillment_type VARCHAR(32) DEFAULT 'delivery'`.execute(
+      db,
+    );
     await sql`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS country_code VARCHAR(8) DEFAULT 'EG'`.execute(db);
     await sql`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS pickup_branch_id INTEGER`.execute(db);
 

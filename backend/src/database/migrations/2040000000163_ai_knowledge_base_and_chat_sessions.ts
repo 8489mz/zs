@@ -3,7 +3,9 @@ import { Kysely, sql } from 'kysely';
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
     // 0. Attempt to enable pgvector extension if supported by the PostgreSQL server environment
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       DO $$
       BEGIN
         CREATE EXTENSION IF NOT EXISTS vector;
@@ -11,7 +13,9 @@ export const migration = {
         NULL;
       END;
       $$;
-    `).execute(db);
+    `,
+      )
+      .execute(db);
 
     // 1. Create ai_knowledge_sources (Chatbase-style sources: documents, catalogs, policies, manuals)
     await sql`
@@ -34,8 +38,12 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_ai_knowledge_sources_tenant ON ai_knowledge_sources(tenant_id, status)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_ai_knowledge_sources_type ON ai_knowledge_sources(tenant_id, source_type)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_ai_knowledge_sources_tenant ON ai_knowledge_sources(tenant_id, status)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_ai_knowledge_sources_type ON ai_knowledge_sources(tenant_id, source_type)`.execute(
+      db,
+    );
 
     // 2. Create ai_knowledge_chunks (Semantic chunks with vector embeddings & full-text search)
     await sql`
@@ -52,8 +60,12 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_ai_knowledge_chunks_tenant_source ON ai_knowledge_chunks(tenant_id, source_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_ai_knowledge_chunks_gin_search ON ai_knowledge_chunks USING gin(to_tsvector('simple', content))`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_ai_knowledge_chunks_tenant_source ON ai_knowledge_chunks(tenant_id, source_id)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_ai_knowledge_chunks_gin_search ON ai_knowledge_chunks USING gin(to_tsvector('simple', content))`.execute(
+      db,
+    );
 
     // 3. Create ai_chat_sessions (Multi-turn conversational memory)
     await sql`
@@ -68,7 +80,9 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_tenant_user ON ai_chat_sessions(tenant_id, user_id, updated_at DESC)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_tenant_user ON ai_chat_sessions(tenant_id, user_id, updated_at DESC)`.execute(
+      db,
+    );
 
     // 4. Create ai_chat_messages (Session messages with reasoning steps & tool calls)
     await sql`
@@ -85,7 +99,9 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_session ON ai_chat_messages(session_id, id ASC)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_session ON ai_chat_messages(session_id, id ASC)`.execute(
+      db,
+    );
     await sql`CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_tenant ON ai_chat_messages(tenant_id)`.execute(db);
   },
 

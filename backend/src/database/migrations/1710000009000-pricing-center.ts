@@ -34,9 +34,15 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_price_change_runs_created_at ON price_change_runs(created_at DESC)`.execute(db).catch(() => undefined);
-    await sql`CREATE INDEX IF NOT EXISTS idx_price_change_items_run_id ON price_change_items(run_id)`.execute(db).catch(() => undefined);
-    await sql`CREATE INDEX IF NOT EXISTS idx_price_change_items_product_id ON price_change_items(product_id)`.execute(db).catch(() => undefined);
+    await sql`CREATE INDEX IF NOT EXISTS idx_price_change_runs_created_at ON price_change_runs(created_at DESC)`
+      .execute(db)
+      .catch(() => undefined);
+    await sql`CREATE INDEX IF NOT EXISTS idx_price_change_items_run_id ON price_change_items(run_id)`
+      .execute(db)
+      .catch(() => undefined);
+    await sql`CREATE INDEX IF NOT EXISTS idx_price_change_items_product_id ON price_change_items(product_id)`
+      .execute(db)
+      .catch(() => undefined);
   },
   down: async (db: Kysely<Database>): Promise<void> => {
     await sql`DROP INDEX IF EXISTS idx_price_change_items_product_id`.execute(db).catch(() => undefined);

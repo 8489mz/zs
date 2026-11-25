@@ -3,7 +3,9 @@ import { Kysely, sql } from 'kysely';
 export const migration = {
   up: async (db: Kysely<any>): Promise<void> => {
     // 1. Add payment tracking columns to online_orders
-    await sql`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(32) DEFAULT 'pending'`.execute(db);
+    await sql`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(32) DEFAULT 'pending'`.execute(
+      db,
+    );
     await sql`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS gateway_provider VARCHAR(64)`.execute(db);
     await sql`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS gateway_transaction_id VARCHAR(128)`.execute(db);
     await sql`ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS gateway_order_id VARCHAR(128)`.execute(db);

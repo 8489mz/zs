@@ -46,9 +46,7 @@ export const migration = {
     `.execute(db);
 
     if (duplicates.rows.length > 0) {
-      const summary = duplicates.rows
-        .map((row) => `${row.tenant_id}/${row.reference} x${row.hits}`)
-        .join(', ');
+      const summary = duplicates.rows.map((row) => `${row.tenant_id}/${row.reference} x${row.hits}`).join(', ');
       // Loud on purpose: these are subscription periods that were granted more than once.
       console.warn(
         `[migration 129] tenant_subscription_payments holds duplicate gateway references that predate the idempotency gate and need manual reconciliation: ${summary}`,

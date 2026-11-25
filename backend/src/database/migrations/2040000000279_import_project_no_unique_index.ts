@@ -18,7 +18,9 @@ import { sql, type Kysely } from 'kysely';
  * check in the delivery report) — never silently renumber rows.
  */
 export async function up(db: Kysely<any>): Promise<void> {
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_import_projects_tenant_project_no ON import_projects (tenant_id, project_no)`.execute(db);
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_import_projects_tenant_project_no ON import_projects (tenant_id, project_no)`.execute(
+    db,
+  );
 }
 
 export async function down(db: Kysely<any>): Promise<void> {

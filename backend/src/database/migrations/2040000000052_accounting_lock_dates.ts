@@ -3,25 +3,19 @@ import { type Kysely } from 'kysely';
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
     try {
-      await db.schema.alterTable('accounting_settings')
-        .addColumn('lock_date_all', 'date')
-        .execute();
+      await db.schema.alterTable('accounting_settings').addColumn('lock_date_all', 'date').execute();
     } catch (e) {
       // Ignore if column already exists
     }
 
     try {
-      await db.schema.alterTable('accounting_settings')
-        .addColumn('lock_date_non_adviser', 'date')
-        .execute();
+      await db.schema.alterTable('accounting_settings').addColumn('lock_date_non_adviser', 'date').execute();
     } catch (e) {
       // Ignore if column already exists
     }
 
     try {
-      await db.schema.alterTable('accounting_settings')
-        .addColumn('lock_date_tax', 'date')
-        .execute();
+      await db.schema.alterTable('accounting_settings').addColumn('lock_date_tax', 'date').execute();
     } catch (e) {
       // Ignore if column already exists
     }

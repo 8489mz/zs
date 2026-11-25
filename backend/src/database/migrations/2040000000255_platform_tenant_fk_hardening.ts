@@ -15,8 +15,12 @@ export const tenantScopedReferences = [
 ] as const;
 
 const indexes = ['users', 'maritime_rfqs', 'maritime_jobs'] as const;
-function indexName(table: string): string { return `uq_core255_${table}_tenant_id`; }
-function fkName(table: string, column: string): string { return `fk_core255_${table}_tenant_${column}`; }
+function indexName(table: string): string {
+  return `uq_core255_${table}_tenant_id`;
+}
+function fkName(table: string, column: string): string {
+  return `fk_core255_${table}_tenant_${column}`;
+}
 
 export async function up(db: Kysely<Database>): Promise<void> {
   for (const table of indexes) {
@@ -25,7 +29,9 @@ export async function up(db: Kysely<Database>): Promise<void> {
 
   for (const ref of tenantScopedReferences) {
     const name = fkName(ref.child, ref.column);
-    await sql.raw(`DO $$ BEGIN
+    await sql
+      .raw(
+        `DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_constraint
         WHERE conname = '${name}' AND conrelid = '${ref.child}'::regclass) THEN
         ALTER TABLE ${ref.child} ADD CONSTRAINT ${name}
@@ -33,7 +39,9 @@ export async function up(db: Kysely<Database>): Promise<void> {
         REFERENCES ${ref.parent} (tenant_id, id)
         ON DELETE ${ref.onDelete} NOT VALID;
       END IF;
-    END $$`).execute(db);
+    END $$`,
+      )
+      .execute(db);
   }
 }
 

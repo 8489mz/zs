@@ -12,5 +12,5 @@ export const migration = {
   },
   down: async (db: Kysely<any>): Promise<void> => {
     await db.schema.dropTable('style_code_counters').execute();
-  }
+  },
 };

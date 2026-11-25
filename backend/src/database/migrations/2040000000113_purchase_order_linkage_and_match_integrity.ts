@@ -72,7 +72,9 @@ export const migration = {
   },
 
   async down(db: Kysely<unknown>): Promise<void> {
-    await sql`ALTER TABLE purchase_three_way_matches DROP CONSTRAINT IF EXISTS chk_three_way_override_scope;`.execute(db);
+    await sql`ALTER TABLE purchase_three_way_matches DROP CONSTRAINT IF EXISTS chk_three_way_override_scope;`.execute(
+      db,
+    );
     await sql`
       ALTER TABLE purchase_three_way_matches
         DROP COLUMN IF EXISTS blocking_codes,

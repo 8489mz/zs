@@ -3,7 +3,9 @@ import { type Kysely, sql } from 'kysely';
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
     // 1. Create zatca_egs_units table for ZATCA Phase 2 compliance and cryptographic hardware units
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       CREATE TABLE IF NOT EXISTS zatca_egs_units (
         id BIGSERIAL PRIMARY KEY,
         tenant_id VARCHAR(255) NOT NULL,
@@ -25,15 +27,23 @@ export const migration = {
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    `).execute(db);
+    `,
+      )
+      .execute(db);
 
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       CREATE INDEX IF NOT EXISTS idx_zatca_egs_tenant_branch ON zatca_egs_units(tenant_id, branch_id);
       CREATE INDEX IF NOT EXISTS idx_zatca_egs_status ON zatca_egs_units(status);
-    `).execute(db);
+    `,
+      )
+      .execute(db);
 
     // 2. Add ZATCA Phase 2 and ETA CAdES-BES audit columns to sales table
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       ALTER TABLE sales 
       ADD COLUMN IF NOT EXISTS zatca_uuid VARCHAR(100),
       ADD COLUMN IF NOT EXISTS zatca_hash VARCHAR(64),
@@ -44,12 +54,18 @@ export const migration = {
       ADD COLUMN IF NOT EXISTS zatca_ubl_xml TEXT,
       ADD COLUMN IF NOT EXISTS eta_cades_signature TEXT,
       ADD COLUMN IF NOT EXISTS eta_canonical_hash VARCHAR(64);
-    `).execute(db);
+    `,
+      )
+      .execute(db);
 
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       CREATE INDEX IF NOT EXISTS idx_sales_zatca_icv ON sales(tenant_id, zatca_icv);
       CREATE INDEX IF NOT EXISTS idx_sales_zatca_status ON sales(tenant_id, zatca_status);
-    `).execute(db);
+    `,
+      )
+      .execute(db);
   },
 
   async down(_db: Kysely<any>): Promise<void> {

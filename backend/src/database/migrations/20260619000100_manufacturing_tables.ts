@@ -56,7 +56,7 @@ const ddlStatements = [
   `CREATE INDEX IF NOT EXISTS idx_mfg_bom_lines_bom_id ON manufacturing_bom_lines(bom_id)`,
   `CREATE INDEX IF NOT EXISTS idx_mfg_work_orders_bom_id ON manufacturing_work_orders(bom_id)`,
   `CREATE INDEX IF NOT EXISTS idx_mfg_work_orders_status ON manufacturing_work_orders(status)`,
-  `CREATE INDEX IF NOT EXISTS idx_mfg_wo_consumptions_wo_id ON manufacturing_wo_consumptions(work_order_id)`
+  `CREATE INDEX IF NOT EXISTS idx_mfg_wo_consumptions_wo_id ON manufacturing_wo_consumptions(work_order_id)`,
 ];
 
 const dropStatements = [

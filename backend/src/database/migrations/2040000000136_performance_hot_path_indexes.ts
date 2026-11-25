@@ -32,11 +32,31 @@ const CREATED_INDEXES: Array<{ name: string; ddl: string }> = [
 
 // [duplicate dropped, surviving twin, definition used by `down` to restore it]
 const DUPLICATE_INDEXES: Array<{ drop: string; keep: string; ddl: string }> = [
-  { drop: 'idx_journal_tenant_source', keep: 'idx_journal_entries_tenant_source', ddl: 'journal_entries (tenant_id, source_type, source_id)' },
-  { drop: 'idx_journal_lines_tenant_entry', keep: 'idx_journal_entry_lines_tenant_entry', ddl: 'journal_entry_lines (tenant_id, journal_entry_id)' },
-  { drop: 'idx_treasury_hr_reference', keep: 'idx_treasury_service_reference', ddl: 'treasury_transactions (reference_type, reference_id)' },
-  { drop: 'idx_mfg_wo_cons_wo', keep: 'idx_mfg_wo_consumptions_wo_id', ddl: 'manufacturing_wo_consumptions (work_order_id)' },
-  { drop: 'idx_contracting_tasks_proj_dates', keep: 'idx_contracting_schedule_tasks_dates', ddl: 'contracting_schedule_tasks (tenant_id, project_id, start_date, end_date)' },
+  {
+    drop: 'idx_journal_tenant_source',
+    keep: 'idx_journal_entries_tenant_source',
+    ddl: 'journal_entries (tenant_id, source_type, source_id)',
+  },
+  {
+    drop: 'idx_journal_lines_tenant_entry',
+    keep: 'idx_journal_entry_lines_tenant_entry',
+    ddl: 'journal_entry_lines (tenant_id, journal_entry_id)',
+  },
+  {
+    drop: 'idx_treasury_hr_reference',
+    keep: 'idx_treasury_service_reference',
+    ddl: 'treasury_transactions (reference_type, reference_id)',
+  },
+  {
+    drop: 'idx_mfg_wo_cons_wo',
+    keep: 'idx_mfg_wo_consumptions_wo_id',
+    ddl: 'manufacturing_wo_consumptions (work_order_id)',
+  },
+  {
+    drop: 'idx_contracting_tasks_proj_dates',
+    keep: 'idx_contracting_schedule_tasks_dates',
+    ddl: 'contracting_schedule_tasks (tenant_id, project_id, start_date, end_date)',
+  },
 ];
 
 async function indexExists(db: Kysely<unknown>, name: string): Promise<boolean> {

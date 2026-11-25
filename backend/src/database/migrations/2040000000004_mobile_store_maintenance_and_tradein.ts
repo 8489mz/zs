@@ -116,5 +116,5 @@ export const migration = {
     await db.schema.dropTable('trade_in_transactions').ifExists().execute();
     await db.schema.dropTable('maintenance_ticket_parts').ifExists().execute();
     await db.schema.dropTable('maintenance_tickets').ifExists().execute();
-  }
+  },
 };

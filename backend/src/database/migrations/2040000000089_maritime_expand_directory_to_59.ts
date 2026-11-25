@@ -46,5 +46,5 @@ export const migration = {
 
   async down(_db: Kysely<unknown>): Promise<void> {
     // Non-destructive down migration
-  }
+  },
 };

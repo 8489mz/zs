@@ -25,4 +25,3 @@ export const migration = {
     await db.schema.dropTable('auth_rate_limits').ifExists().execute();
   },
 };
-

@@ -6,7 +6,9 @@ export const migration = {
       .createTable('supplier_payment_schedule_logs')
       .ifNotExists()
       .addColumn('id', 'serial', (col) => col.primaryKey())
-      .addColumn('schedule_id', 'integer', (col) => col.notNull().references('supplier_payment_schedules.id').onDelete('cascade'))
+      .addColumn('schedule_id', 'integer', (col) =>
+        col.notNull().references('supplier_payment_schedules.id').onDelete('cascade'),
+      )
       .addColumn('supplier_id', 'integer', (col) => col.notNull().references('suppliers.id'))
       .addColumn('amount', 'numeric', (col) => col.notNull())
       .addColumn('note', 'text', (col) => col.notNull().defaultTo(''))

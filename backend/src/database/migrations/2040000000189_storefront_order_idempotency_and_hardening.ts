@@ -2,7 +2,7 @@ import { Kysely, sql } from 'kysely';
 
 /**
  * Migration 189: Storefront Order Hardening & Idempotency.
- * 
+ *
  * 1. Add `idempotency_key` column to `online_orders` to safely deduplicate client checkout submissions.
  * 2. Partial unique index on `(tenant_id, idempotency_key)` where idempotency_key IS NOT NULL.
  * 3. Partial unique index on `(tenant_id, sale_id)` where sale_id IS NOT NULL to physically prevent

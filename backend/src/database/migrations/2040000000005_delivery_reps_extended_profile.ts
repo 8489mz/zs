@@ -16,5 +16,5 @@ export const migration = {
       .dropColumn('address')
       .dropColumn('vehicle_plate')
       .execute();
-  }
+  },
 };

@@ -38,7 +38,9 @@ import { type Migration, sql } from 'kysely';
  * column.
  */
 export async function up(db: any): Promise<void> {
-  await sql`ALTER TABLE "import_shipments" ADD COLUMN IF NOT EXISTS "funding_type" TEXT NOT NULL DEFAULT 'bank_transfer'`.execute(db);
+  await sql`ALTER TABLE "import_shipments" ADD COLUMN IF NOT EXISTS "funding_type" TEXT NOT NULL DEFAULT 'bank_transfer'`.execute(
+    db,
+  );
 }
 
 export async function down(db: any): Promise<void> {

@@ -22,7 +22,9 @@ export const migration = {
   async up(db: Kysely<unknown>): Promise<void> {
     await sql`ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS instapay_address VARCHAR(100)`.execute(db);
     await sql`ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS instapay_address VARCHAR(100)`.execute(db);
-    await sql`ALTER TABLE supplier_payment_schedule_logs ADD COLUMN IF NOT EXISTS instapay_address VARCHAR(100)`.execute(db);
+    await sql`ALTER TABLE supplier_payment_schedule_logs ADD COLUMN IF NOT EXISTS instapay_address VARCHAR(100)`.execute(
+      db,
+    );
   },
 
   async down(db: Kysely<unknown>): Promise<void> {

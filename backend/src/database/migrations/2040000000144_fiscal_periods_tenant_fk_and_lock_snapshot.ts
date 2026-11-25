@@ -72,7 +72,9 @@ export const migration = {
 
   async down(db: Kysely<unknown>): Promise<void> {
     await sql`ALTER TABLE accounting_fiscal_periods DROP COLUMN IF EXISTS previous_lock_date_all`.execute(db);
-    await sql`ALTER TABLE accounting_fiscal_periods DROP CONSTRAINT IF EXISTS fk_fiscal_periods_tenant_year`.execute(db);
+    await sql`ALTER TABLE accounting_fiscal_periods DROP CONSTRAINT IF EXISTS fk_fiscal_periods_tenant_year`.execute(
+      db,
+    );
     await sql`
       DO $$
       BEGIN
@@ -86,6 +88,8 @@ export const migration = {
         END IF;
       END $$;
     `.execute(db);
-    await sql`ALTER TABLE accounting_fiscal_years DROP CONSTRAINT IF EXISTS uq_accounting_fiscal_years_tenant_id`.execute(db);
+    await sql`ALTER TABLE accounting_fiscal_years DROP CONSTRAINT IF EXISTS uq_accounting_fiscal_years_tenant_id`.execute(
+      db,
+    );
   },
 };

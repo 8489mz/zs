@@ -27,7 +27,9 @@ export const migration = {
 
   async down(db: Kysely<unknown>): Promise<void> {
     await sql`DROP INDEX IF EXISTS idx_contracting_schedule_tasks_dates;`.execute(db);
-    await sql`ALTER TABLE contracting_schedule_tasks DROP CONSTRAINT IF EXISTS chk_contracting_schedule_tasks_resource_counts;`.execute(db);
+    await sql`ALTER TABLE contracting_schedule_tasks DROP CONSTRAINT IF EXISTS chk_contracting_schedule_tasks_resource_counts;`.execute(
+      db,
+    );
     await sql`
       ALTER TABLE contracting_schedule_tasks
       DROP COLUMN IF EXISTS planned_manpower_count,

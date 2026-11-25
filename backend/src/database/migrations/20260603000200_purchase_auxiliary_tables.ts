@@ -55,10 +55,18 @@ export const migration = {
     await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS required_date TIMESTAMPTZ NULL`.execute(db);
     await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'EGP'`.execute(db);
     await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS company_name TEXT NOT NULL DEFAULT ''`.execute(db);
-    await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS contact_id BIGINT NULL REFERENCES partner_contacts(id) ON DELETE SET NULL`.execute(db);
-    await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS shipping_address_id BIGINT NULL REFERENCES partner_addresses(id) ON DELETE SET NULL`.execute(db);
-    await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS cost_center_id BIGINT NULL REFERENCES cost_centers(id) ON DELETE SET NULL`.execute(db);
-    await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS project_id BIGINT NULL REFERENCES projects(id) ON DELETE SET NULL`.execute(db);
+    await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS contact_id BIGINT NULL REFERENCES partner_contacts(id) ON DELETE SET NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS shipping_address_id BIGINT NULL REFERENCES partner_addresses(id) ON DELETE SET NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS cost_center_id BIGINT NULL REFERENCES cost_centers(id) ON DELETE SET NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS project_id BIGINT NULL REFERENCES projects(id) ON DELETE SET NULL`.execute(
+      db,
+    );
     await sql`ALTER TABLE purchases ADD COLUMN IF NOT EXISTS terms_template TEXT NOT NULL DEFAULT ''`.execute(db);
   },
 
@@ -71,10 +79,10 @@ export const migration = {
     await sql`ALTER TABLE purchases DROP COLUMN IF EXISTS cost_center_id`.execute(db);
     await sql`ALTER TABLE purchases DROP COLUMN IF EXISTS project_id`.execute(db);
     await sql`ALTER TABLE purchases DROP COLUMN IF EXISTS terms_template`.execute(db);
-    
+
     await sql`DROP TABLE IF EXISTS projects`.execute(db);
     await sql`DROP TABLE IF EXISTS cost_centers`.execute(db);
     await sql`DROP TABLE IF EXISTS partner_addresses`.execute(db);
     await sql`DROP TABLE IF EXISTS partner_contacts`.execute(db);
-  }
+  },
 };

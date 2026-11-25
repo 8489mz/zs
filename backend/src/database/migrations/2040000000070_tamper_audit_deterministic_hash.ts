@@ -2,7 +2,9 @@ import { type Kysely, sql } from 'kysely';
 
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       CREATE OR REPLACE FUNCTION fn_tamper_evident_audit_trigger()
       RETURNS TRIGGER AS $$
       DECLARE
@@ -118,10 +120,12 @@ export const migration = {
         RETURN NEW;
       END;
       $$ LANGUAGE plpgsql SECURITY DEFINER;
-    `).execute(db);
+    `,
+      )
+      .execute(db);
   },
 
   async down(_db: Kysely<any>): Promise<void> {
     // No-op rollback
-  }
+  },
 };

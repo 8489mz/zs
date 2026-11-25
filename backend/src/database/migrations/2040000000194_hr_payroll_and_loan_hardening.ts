@@ -81,4 +81,3 @@ export const migration = {
 };
 
 export default migration;
-

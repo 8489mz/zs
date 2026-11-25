@@ -2,7 +2,7 @@ import { Kysely, sql } from 'kysely';
 
 const ddlStatements = [
   `ALTER TABLE products ADD COLUMN IF NOT EXISTS default_location_id INTEGER`,
-  `ALTER TABLE products ADD CONSTRAINT products_default_location_id_fk FOREIGN KEY (default_location_id) REFERENCES stock_locations(id) ON DELETE SET NULL`
+  `ALTER TABLE products ADD CONSTRAINT products_default_location_id_fk FOREIGN KEY (default_location_id) REFERENCES stock_locations(id) ON DELETE SET NULL`,
 ];
 
 const dropStatements = [

@@ -21,7 +21,9 @@ import { sql, type Kysely } from 'kysely';
 //   updated_at, catalog_updated_at
 export const migration = {
   async up(db: Kysely<unknown>): Promise<void> {
-    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS catalog_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`.execute(db);
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS catalog_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`.execute(
+      db,
+    );
     await sql`UPDATE products SET catalog_updated_at = COALESCE(updated_at, created_at, NOW())`.execute(db);
 
     await sql`
@@ -45,7 +47,9 @@ export const migration = {
     `.execute(db);
 
     // The version query is MAX(catalog_updated_at) per tenant over active products.
-    await sql`CREATE INDEX IF NOT EXISTS idx_products_tenant_catalog_updated ON products (tenant_id, catalog_updated_at DESC)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_products_tenant_catalog_updated ON products (tenant_id, catalog_updated_at DESC)`.execute(
+      db,
+    );
   },
 
   async down(db: Kysely<unknown>): Promise<void> {

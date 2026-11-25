@@ -78,9 +78,15 @@ export const migration = {
         `.execute(db);
       }
 
-      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedules_tenant_idx ON supplier_payment_schedules (tenant_id)`.execute(db);
-      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedules_tenant_supplier_idx ON supplier_payment_schedules (tenant_id, supplier_id)`.execute(db);
-      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedules_tenant_purchase_idx ON supplier_payment_schedules (tenant_id, purchase_id)`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedules_tenant_idx ON supplier_payment_schedules (tenant_id)`.execute(
+        db,
+      );
+      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedules_tenant_supplier_idx ON supplier_payment_schedules (tenant_id, supplier_id)`.execute(
+        db,
+      );
+      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedules_tenant_purchase_idx ON supplier_payment_schedules (tenant_id, purchase_id)`.execute(
+        db,
+      );
     }
 
     if (await tableExists(db, 'supplier_payment_schedule_logs')) {
@@ -133,8 +139,12 @@ export const migration = {
         `.execute(db);
       }
 
-      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedule_logs_tenant_idx ON supplier_payment_schedule_logs (tenant_id)`.execute(db);
-      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedule_logs_tenant_schedule_idx ON supplier_payment_schedule_logs (tenant_id, schedule_id)`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedule_logs_tenant_idx ON supplier_payment_schedule_logs (tenant_id)`.execute(
+        db,
+      );
+      await sql`CREATE INDEX IF NOT EXISTS supplier_payment_schedule_logs_tenant_schedule_idx ON supplier_payment_schedule_logs (tenant_id, schedule_id)`.execute(
+        db,
+      );
     }
 
     // NOTE:
@@ -160,4 +170,3 @@ export const migration = {
     }
   },
 };
-

@@ -13,9 +13,13 @@ import { type Migration, sql } from 'kysely';
  * rewrite, no existing column touched.
  */
 export async function up(db: any): Promise<void> {
-  await sql`ALTER TABLE goods_receipt_notes ADD COLUMN IF NOT EXISTS pending_review BOOLEAN NOT NULL DEFAULT FALSE`.execute(db);
+  await sql`ALTER TABLE goods_receipt_notes ADD COLUMN IF NOT EXISTS pending_review BOOLEAN NOT NULL DEFAULT FALSE`.execute(
+    db,
+  );
   await sql`ALTER TABLE goods_receipt_notes ADD COLUMN IF NOT EXISTS pending_review_reason TEXT`.execute(db);
-  await sql`ALTER TABLE goods_receipt_lines ADD COLUMN IF NOT EXISTS over_received_qty NUMERIC(15, 4) NOT NULL DEFAULT 0`.execute(db);
+  await sql`ALTER TABLE goods_receipt_lines ADD COLUMN IF NOT EXISTS over_received_qty NUMERIC(15, 4) NOT NULL DEFAULT 0`.execute(
+    db,
+  );
 }
 
 export async function down(db: any): Promise<void> {

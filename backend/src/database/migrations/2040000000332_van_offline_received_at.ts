@@ -20,18 +20,9 @@ import type { Migration } from 'kysely';
  */
 export const migration: Migration = {
   async up(db) {
-    await db.schema
-      .alterTable('customer_payments')
-      .addColumn('received_at', 'timestamptz')
-      .execute();
-    await db.schema
-      .alterTable('van_field_returns')
-      .addColumn('received_at', 'timestamptz')
-      .execute();
-    await db.schema
-      .alterTable('sales')
-      .addColumn('gps_missing_reason', 'text')
-      .execute();
+    await db.schema.alterTable('customer_payments').addColumn('received_at', 'timestamptz').execute();
+    await db.schema.alterTable('van_field_returns').addColumn('received_at', 'timestamptz').execute();
+    await db.schema.alterTable('sales').addColumn('gps_missing_reason', 'text').execute();
   },
   async down(db) {
     await db.schema.alterTable('sales').dropColumn('gps_missing_reason').execute();

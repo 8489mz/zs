@@ -34,7 +34,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     if (Number(info.numeric_scale) >= requiredScale) continue;
     const widenedPrecision = Number(info.numeric_precision) - Number(info.numeric_scale) + requiredScale;
     // Names are a fixed internal allowlist; no tenant-controlled SQL identifiers.
-    await sql.raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE numeric(${widenedPrecision}, ${requiredScale})`).execute(db);
+    await sql
+      .raw(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE numeric(${widenedPrecision}, ${requiredScale})`)
+      .execute(db);
   }
 }
 

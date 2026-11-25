@@ -3,7 +3,8 @@ import { type Kysely, sql } from 'kysely';
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
     try {
-      await db.schema.createTable('accounting_cheques')
+      await db.schema
+        .createTable('accounting_cheques')
         .addColumn('id', 'serial', (col) => col.primaryKey())
         .addColumn('tenant_id', 'varchar(255)', (col) => col.notNull())
         .addColumn('account_id', 'integer')
@@ -35,22 +36,26 @@ export const migration = {
         .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull())
         .execute();
 
-      await db.schema.createIndex('idx_accounting_cheques_tenant')
+      await db.schema
+        .createIndex('idx_accounting_cheques_tenant')
         .on('accounting_cheques')
         .column('tenant_id')
         .execute();
 
-      await db.schema.createIndex('idx_accounting_cheques_type_status')
+      await db.schema
+        .createIndex('idx_accounting_cheques_type_status')
         .on('accounting_cheques')
         .columns(['tenant_id', 'type', 'status'])
         .execute();
 
-      await db.schema.createIndex('idx_accounting_cheques_due_date')
+      await db.schema
+        .createIndex('idx_accounting_cheques_due_date')
         .on('accounting_cheques')
         .columns(['tenant_id', 'due_date'])
         .execute();
 
-      await db.schema.createIndex('idx_accounting_cheques_number')
+      await db.schema
+        .createIndex('idx_accounting_cheques_number')
         .on('accounting_cheques')
         .columns(['tenant_id', 'cheque_number'])
         .execute();

@@ -21,7 +21,9 @@ import { sql, type Kysely } from 'kysely';
  */
 export async function up(db: Kysely<any>): Promise<void> {
   await sql`ALTER TABLE import_partner_ledger ADD COLUMN IF NOT EXISTS idempotency_key TEXT`.execute(db);
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_partner_ledger_tenant_partner_key ON import_partner_ledger (tenant_id, partner_id, idempotency_key) WHERE idempotency_key IS NOT NULL`.execute(db);
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_partner_ledger_tenant_partner_key ON import_partner_ledger (tenant_id, partner_id, idempotency_key) WHERE idempotency_key IS NOT NULL`.execute(
+    db,
+  );
 }
 
 export async function down(db: Kysely<any>): Promise<void> {

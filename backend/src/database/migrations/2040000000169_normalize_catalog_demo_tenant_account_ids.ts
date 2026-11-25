@@ -48,7 +48,9 @@ export const migration = {
         WHERE t.account_id = t.tenant_id
           AND t.tenant_id IS NOT NULL
           AND t.tenant_id NOT IN ('zs', 'default', 'dev-tenant');
-      `.execute(db).catch(() => undefined);
+      `
+        .execute(db)
+        .catch(() => undefined);
     }
   },
 

@@ -35,12 +35,8 @@ export const migration = {
       .dropColumn('settled_by')
       .execute();
 
-    await db.schema
-      .alterTable('held_sales')
-      .dropColumn('delivery_rep_id')
-      .dropColumn('collection_status')
-      .execute();
+    await db.schema.alterTable('held_sales').dropColumn('delivery_rep_id').dropColumn('collection_status').execute();
 
     await db.schema.dropTable('delivery_representatives').execute();
-  }
+  },
 };

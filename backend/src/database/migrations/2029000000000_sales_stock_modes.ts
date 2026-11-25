@@ -44,5 +44,5 @@ export const migration = {
       .dropColumn('allow_external_sales_stock')
       .dropColumn('sales_stock_mode')
       .execute();
-  }
+  },
 };

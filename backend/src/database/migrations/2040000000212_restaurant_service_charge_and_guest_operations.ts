@@ -36,5 +36,5 @@ export const migration = {
       DROP COLUMN IF EXISTS guest_count,
       DROP COLUMN IF EXISTS guest_check_printed_at;
     `.execute(db);
-  }
+  },
 };

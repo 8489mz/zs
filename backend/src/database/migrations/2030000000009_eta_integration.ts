@@ -54,12 +54,8 @@ export const migration = {
       .dropColumn('eta_uuid')
       .execute();
 
-    await db.schema
-      .alterTable('products')
-      .dropColumn('tax_code')
-      .dropColumn('tax_code_type')
-      .execute();
+    await db.schema.alterTable('products').dropColumn('tax_code').dropColumn('tax_code_type').execute();
 
     await db.schema.dropTable('tenant_tax_settings').execute();
-  }
+  },
 };

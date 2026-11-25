@@ -37,7 +37,9 @@ async function countRows(db: Kysely<unknown>): Promise<number> {
 
 export const migration = {
   async up(db: Kysely<unknown>): Promise<void> {
-    await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS account_group TEXT NOT NULL DEFAULT ''`.execute(db);
+    await sql`ALTER TABLE accounting_accounts ADD COLUMN IF NOT EXISTS account_group TEXT NOT NULL DEFAULT ''`.execute(
+      db,
+    );
 
     const rowsBefore = await countRows(db);
     const wrongBefore = await countWrongGroups(db);

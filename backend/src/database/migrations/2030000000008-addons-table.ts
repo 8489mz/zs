@@ -12,12 +12,10 @@ const ddlStatements = [
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_addons_tenant_id ON addons(tenant_id)`
+  `CREATE INDEX IF NOT EXISTS idx_addons_tenant_id ON addons(tenant_id)`,
 ];
 
-const dropStatements = [
-  'DROP TABLE IF EXISTS addons'
-];
+const dropStatements = ['DROP TABLE IF EXISTS addons'];
 
 export const migration = {
   up: async (db: Kysely<Database>): Promise<void> => {

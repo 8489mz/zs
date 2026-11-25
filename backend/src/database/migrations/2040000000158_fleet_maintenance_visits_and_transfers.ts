@@ -2,7 +2,7 @@ import { sql, type Kysely } from 'kysely';
 
 /**
  * Migration 2040000000158: FMCG Wholesale & Van Distribution Enterprise Capabilities
- * 
+ *
  * 1. fleet_fuel_logs: Fueling logs with price/liter, odometer, consumed km, and consumption rate (km/liter).
  * 2. fleet_oil_changes: Oil change records with customizable alert threshold (alert_km_before), filter flag, and next due odometer.
  * 3. fleet_vehicle_drivers: Multiple drivers and shifts assigned to a single vehicle.
@@ -33,8 +33,12 @@ export const migration = {
       );
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_vehicle ON fleet_fuel_logs(tenant_id, vehicle_id);`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_created ON fleet_fuel_logs(tenant_id, created_at DESC);`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_vehicle ON fleet_fuel_logs(tenant_id, vehicle_id);`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_fuel_logs_created ON fleet_fuel_logs(tenant_id, created_at DESC);`.execute(
+      db,
+    );
 
     // 2. Fleet Oil Changes & Maintenance
     await sql`
@@ -58,8 +62,12 @@ export const migration = {
       );
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_oil_changes_vehicle ON fleet_oil_changes(tenant_id, vehicle_id);`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_oil_changes_status ON fleet_oil_changes(tenant_id, status);`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_oil_changes_vehicle ON fleet_oil_changes(tenant_id, vehicle_id);`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_oil_changes_status ON fleet_oil_changes(tenant_id, status);`.execute(
+      db,
+    );
 
     // 3. Multi-Driver Shift Vehicle Assignments
     await sql`
@@ -78,8 +86,12 @@ export const migration = {
       );
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_vehicle_drivers_vehicle ON fleet_vehicle_drivers(tenant_id, vehicle_id);`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_vehicle_drivers_rep ON fleet_vehicle_drivers(tenant_id, rep_id);`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_vehicle_drivers_vehicle ON fleet_vehicle_drivers(tenant_id, vehicle_id);`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_fleet_vehicle_drivers_rep ON fleet_vehicle_drivers(tenant_id, rep_id);`.execute(
+      db,
+    );
 
     // 4. Van Field Visits & Itinerary
     await sql`
@@ -102,8 +114,12 @@ export const migration = {
       );
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_van_field_visits_trip ON van_field_visits(tenant_id, trip_id);`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_van_field_visits_customer ON van_field_visits(tenant_id, customer_id);`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_van_field_visits_trip ON van_field_visits(tenant_id, trip_id);`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_van_field_visits_customer ON van_field_visits(tenant_id, customer_id);`.execute(
+      db,
+    );
     await sql`CREATE INDEX IF NOT EXISTS idx_van_field_visits_rep ON van_field_visits(tenant_id, rep_id);`.execute(db);
 
     // 5. Inter-Van Transfers
@@ -130,9 +146,15 @@ export const migration = {
       );
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_van_stock_transfers_tenant_status ON van_stock_transfers(tenant_id, status);`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_van_stock_transfers_to_rep ON van_stock_transfers(tenant_id, to_rep_id, status);`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_van_stock_transfers_from_rep ON van_stock_transfers(tenant_id, from_rep_id);`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_van_stock_transfers_tenant_status ON van_stock_transfers(tenant_id, status);`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_van_stock_transfers_to_rep ON van_stock_transfers(tenant_id, to_rep_id, status);`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_van_stock_transfers_from_rep ON van_stock_transfers(tenant_id, from_rep_id);`.execute(
+      db,
+    );
 
     await sql`
       CREATE TABLE IF NOT EXISTS van_stock_transfer_items (
@@ -146,7 +168,9 @@ export const migration = {
       );
     `.execute(db);
 
-    await sql`CREATE INDEX IF NOT EXISTS idx_van_stock_transfer_items_transfer ON van_stock_transfer_items(transfer_id);`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_van_stock_transfer_items_transfer ON van_stock_transfer_items(transfer_id);`.execute(
+      db,
+    );
 
     // 6. Sales Table Extensions (Delivery Proof & Packaging Breakdown)
     await sql`ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_proof_photo TEXT;`.execute(db);

@@ -84,18 +84,10 @@ export const migration = {
     }
 
     // Connect zs central tenant to BAND5_L3 (Enterprise Institution)
-    const band5L3 = await db
-      .selectFrom('saas_plans')
-      .select('id')
-      .where('code', '=', 'BAND5_L3')
-      .executeTakeFirst();
+    const band5L3 = await db.selectFrom('saas_plans').select('id').where('code', '=', 'BAND5_L3').executeTakeFirst();
 
     if (band5L3?.id) {
-      await db
-        .updateTable('tenant_subscriptions')
-        .set({ plan_id: band5L3.id })
-        .where('tenant_id', '=', 'zs')
-        .execute();
+      await db.updateTable('tenant_subscriptions').set({ plan_id: band5L3.id }).where('tenant_id', '=', 'zs').execute();
     }
   },
 

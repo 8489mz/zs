@@ -9,22 +9,42 @@ export const migration = {
     // 2. Add consumer_price, pricing_tier_type, and unit_offer_savings to sale_items
     await sql`ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS consumer_price NUMERIC(14,2) DEFAULT NULL`.execute(db);
     await sql`ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS pricing_tier_type VARCHAR(32) DEFAULT NULL`.execute(db);
-    await sql`ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS unit_offer_savings NUMERIC(14,2) DEFAULT NULL`.execute(db);
+    await sql`ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS unit_offer_savings NUMERIC(14,2) DEFAULT NULL`.execute(
+      db,
+    );
 
     // 3. Enhance sales_orders for Pre-Sales Booking by reps
-    await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS rep_id INT REFERENCES delivery_representatives(id) ON DELETE SET NULL`.execute(db);
-    await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS warehouse_location_id INT REFERENCES stock_locations(id) ON DELETE SET NULL`.execute(db);
-    await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS order_source VARCHAR(32) DEFAULT 'standard'`.execute(db);
+    await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS rep_id INT REFERENCES delivery_representatives(id) ON DELETE SET NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS warehouse_location_id INT REFERENCES stock_locations(id) ON DELETE SET NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS order_source VARCHAR(32) DEFAULT 'standard'`.execute(
+      db,
+    );
     await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_terms VARCHAR(32) DEFAULT 'cash'`.execute(db);
-    await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS supervisor_approved_at TIMESTAMPTZ DEFAULT NULL`.execute(db);
+    await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS supervisor_approved_at TIMESTAMPTZ DEFAULT NULL`.execute(
+      db,
+    );
     await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS supervisor_approved_by INT DEFAULT NULL`.execute(db);
-    await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS supervisor_rejection_reason TEXT DEFAULT NULL`.execute(db);
+    await sql`ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS supervisor_rejection_reason TEXT DEFAULT NULL`.execute(
+      db,
+    );
 
     // 4. Enhance sales_order_items
-    await sql`ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS consumer_price NUMERIC(14,2) DEFAULT NULL`.execute(db);
-    await sql`ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS pricing_tier_type VARCHAR(32) DEFAULT NULL`.execute(db);
-    await sql`ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS unit_multiplier NUMERIC(10,3) DEFAULT 1`.execute(db);
-    await sql`ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS unit_offer_savings NUMERIC(14,2) DEFAULT NULL`.execute(db);
+    await sql`ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS consumer_price NUMERIC(14,2) DEFAULT NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS pricing_tier_type VARCHAR(32) DEFAULT NULL`.execute(
+      db,
+    );
+    await sql`ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS unit_multiplier NUMERIC(10,3) DEFAULT 1`.execute(
+      db,
+    );
+    await sql`ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS unit_offer_savings NUMERIC(14,2) DEFAULT NULL`.execute(
+      db,
+    );
 
     // Indexes for efficient querying of rep pre-sales orders
     await sql`CREATE INDEX IF NOT EXISTS idx_sales_orders_tenant_rep_status

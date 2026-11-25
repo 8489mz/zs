@@ -1,7 +1,9 @@
 import { Kysely, sql } from 'kysely';
 
 async function dropConstraintIfExists(db: Kysely<unknown>, table: string, constraint: string): Promise<void> {
-  await sql`ALTER TABLE ${sql.table(table)} DROP CONSTRAINT IF EXISTS ${sql.ref(constraint)}`.execute(db).catch(() => undefined);
+  await sql`ALTER TABLE ${sql.table(table)} DROP CONSTRAINT IF EXISTS ${sql.ref(constraint)}`
+    .execute(db)
+    .catch(() => undefined);
 }
 
 async function tableExists(db: Kysely<unknown>, table: string): Promise<boolean> {
@@ -51,32 +53,54 @@ async function dropSingleColumnUniqueConstraints(db: Kysely<unknown>, table: str
 export const migration = {
   async up(db: Kysely<unknown>): Promise<void> {
     if (await tableExists(db, 'settings')) {
-      if (!(await columnExists(db, 'settings', 'tenant_id'))) await sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default'`.execute(db).catch(() => undefined);
-      if (!(await columnExists(db, 'settings', 'account_id'))) await sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT 'default'`.execute(db).catch(() => undefined);
+      if (!(await columnExists(db, 'settings', 'tenant_id')))
+        await sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default'`
+          .execute(db)
+          .catch(() => undefined);
+      if (!(await columnExists(db, 'settings', 'account_id')))
+        await sql`ALTER TABLE settings ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT 'default'`
+          .execute(db)
+          .catch(() => undefined);
       await dropSingleColumnUniqueConstraints(db, 'settings', 'key');
-      await sql`CREATE UNIQUE INDEX IF NOT EXISTS settings_tenant_key_uidx ON settings (tenant_id, key)`.execute(db).catch(() => undefined);
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS settings_tenant_key_uidx ON settings (tenant_id, key)`
+        .execute(db)
+        .catch(() => undefined);
     }
 
     if (await tableExists(db, 'branches')) {
       await dropSingleColumnUniqueConstraints(db, 'branches', 'name');
-      await sql`CREATE UNIQUE INDEX IF NOT EXISTS branches_tenant_name_uidx ON branches (tenant_id, lower(name)) WHERE is_active = true`.execute(db).catch(() => undefined);
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS branches_tenant_name_uidx ON branches (tenant_id, lower(name)) WHERE is_active = true`
+        .execute(db)
+        .catch(() => undefined);
     }
 
     if (await tableExists(db, 'product_categories')) {
       await dropSingleColumnUniqueConstraints(db, 'product_categories', 'name');
-      await sql`CREATE UNIQUE INDEX IF NOT EXISTS product_categories_tenant_name_uidx ON product_categories (tenant_id, lower(name)) WHERE is_active = true`.execute(db).catch(() => undefined);
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS product_categories_tenant_name_uidx ON product_categories (tenant_id, lower(name)) WHERE is_active = true`
+        .execute(db)
+        .catch(() => undefined);
     }
 
     if (await tableExists(db, 'products')) {
       await dropSingleColumnUniqueConstraints(db, 'products', 'barcode');
-      await sql`CREATE UNIQUE INDEX IF NOT EXISTS products_tenant_barcode_uidx ON products (tenant_id, lower(barcode)) WHERE barcode IS NOT NULL AND barcode <> '' AND is_active = true`.execute(db).catch(() => undefined);
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS products_tenant_barcode_uidx ON products (tenant_id, lower(barcode)) WHERE barcode IS NOT NULL AND barcode <> '' AND is_active = true`
+        .execute(db)
+        .catch(() => undefined);
     }
 
     if (await tableExists(db, 'product_units')) {
-      if (!(await columnExists(db, 'product_units', 'tenant_id'))) await sql`ALTER TABLE product_units ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default'`.execute(db).catch(() => undefined);
-      if (!(await columnExists(db, 'product_units', 'account_id'))) await sql`ALTER TABLE product_units ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT 'default'`.execute(db).catch(() => undefined);
+      if (!(await columnExists(db, 'product_units', 'tenant_id')))
+        await sql`ALTER TABLE product_units ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default'`
+          .execute(db)
+          .catch(() => undefined);
+      if (!(await columnExists(db, 'product_units', 'account_id')))
+        await sql`ALTER TABLE product_units ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT 'default'`
+          .execute(db)
+          .catch(() => undefined);
       await dropSingleColumnUniqueConstraints(db, 'product_units', 'barcode');
-      await sql`CREATE UNIQUE INDEX IF NOT EXISTS product_units_tenant_barcode_uidx ON product_units (tenant_id, lower(barcode)) WHERE barcode IS NOT NULL AND barcode <> ''`.execute(db).catch(() => undefined);
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS product_units_tenant_barcode_uidx ON product_units (tenant_id, lower(barcode)) WHERE barcode IS NOT NULL AND barcode <> ''`
+        .execute(db)
+        .catch(() => undefined);
     }
   },
 

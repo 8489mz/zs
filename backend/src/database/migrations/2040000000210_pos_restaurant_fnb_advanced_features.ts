@@ -152,10 +152,11 @@ export const migration = {
     await db.schema.dropTable('restaurant_food_waste_logs').ifExists().execute();
     await db.schema.dropTable('pos_aggregator_orders').ifExists().execute();
     await db.schema.dropTable('pos_delivery_aggregators').ifExists().execute();
-    await db.schema.alterTable('pos_modifier_options')
+    await db.schema
+      .alterTable('pos_modifier_options')
       .dropColumn('component_product_id')
       .dropColumn('consumption_qty')
       .dropColumn('unit_name')
       .execute();
-  }
+  },
 };

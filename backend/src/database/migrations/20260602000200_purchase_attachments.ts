@@ -6,9 +6,7 @@ export const migration = {
       .createTable('purchase_attachments')
       .ifNotExists()
       .addColumn('id', 'serial', (col) => col.primaryKey())
-      .addColumn('purchase_id', 'integer', (col) => 
-        col.notNull().references('purchases.id').onDelete('cascade')
-      )
+      .addColumn('purchase_id', 'integer', (col) => col.notNull().references('purchases.id').onDelete('cascade'))
       .addColumn('file_name', 'text', (col) => col.notNull())
       .addColumn('file_url', 'text', (col) => col.notNull())
       .addColumn('file_size', 'integer', (col) => col.notNull())

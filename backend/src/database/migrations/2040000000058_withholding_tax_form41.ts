@@ -3,7 +3,8 @@ import { type Kysely, sql } from 'kysely';
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
     try {
-      await db.schema.createTable('withholding_tax_transactions')
+      await db.schema
+        .createTable('withholding_tax_transactions')
         .addColumn('id', 'serial', (col) => col.primaryKey())
         .addColumn('tenant_id', 'varchar(255)', (col) => col.notNull())
         .addColumn('direction', 'varchar(20)', (col) => col.defaultTo('payable').notNull()) // 'payable' (خصم من مورد) | 'receivable' (خصم من عميل)
@@ -19,7 +20,7 @@ export const migration = {
         .addColumn('tax_office_code', 'varchar(100)') // المأمورية الضريبية
         .addColumn('partner_address', 'text') // عنوان المورد / العميل
         .addColumn('wht_type', 'varchar(50)', (col) => col.defaultTo('goods').notNull()) // 'goods' (1%) | 'services' (3%) | 'professional' (5%) | 'custom'
-        .addColumn('wht_rate', 'numeric(5, 2)', (col) => col.defaultTo(1.00).notNull())
+        .addColumn('wht_rate', 'numeric(5, 2)', (col) => col.defaultTo(1.0).notNull())
         .addColumn('base_amount', 'numeric(15, 2)', (col) => col.notNull()) // وعاء المعاملة الخاضع
         .addColumn('tax_amount', 'numeric(15, 2)', (col) => col.notNull()) // قيمة الضريبة المخصومة
         .addColumn('quarter', 'varchar(10)', (col) => col.notNull()) // 'Q1' | 'Q2' | 'Q3' | 'Q4'
@@ -32,12 +33,14 @@ export const migration = {
         .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull())
         .execute();
 
-      await db.schema.createIndex('idx_wht_tenant_period')
+      await db.schema
+        .createIndex('idx_wht_tenant_period')
         .on('withholding_tax_transactions')
         .columns(['tenant_id', 'tax_year', 'quarter', 'direction'])
         .execute();
 
-      await db.schema.createIndex('idx_wht_tenant_partner')
+      await db.schema
+        .createIndex('idx_wht_tenant_partner')
         .on('withholding_tax_transactions')
         .columns(['tenant_id', 'partner_name'])
         .execute();

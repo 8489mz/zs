@@ -11,24 +11,168 @@ type SeedAccount = {
 };
 
 const SEED_ACCOUNTS: SeedAccount[] = [
-  { code: '1000', nameAr: 'الأصول', nameEn: 'Assets', accountType: 'asset', normalBalance: 'debit', sortOrder: 1000, parentCode: null },
-  { code: '1100', nameAr: 'الخزينة', nameEn: 'Cash', accountType: 'asset', normalBalance: 'debit', sortOrder: 1100, parentCode: '1000' },
-  { code: '1200', nameAr: 'البنك', nameEn: 'Bank', accountType: 'asset', normalBalance: 'debit', sortOrder: 1200, parentCode: '1000' },
-  { code: '1300', nameAr: 'العملاء', nameEn: 'Accounts Receivable', accountType: 'asset', normalBalance: 'debit', sortOrder: 1300, parentCode: '1000' },
-  { code: '1400', nameAr: 'المخزون', nameEn: 'Inventory', accountType: 'asset', normalBalance: 'debit', sortOrder: 1400, parentCode: '1000' },
-  { code: '2000', nameAr: 'الخصوم', nameEn: 'Liabilities', accountType: 'liability', normalBalance: 'credit', sortOrder: 2000, parentCode: null },
-  { code: '2100', nameAr: 'الموردون', nameEn: 'Accounts Payable', accountType: 'liability', normalBalance: 'credit', sortOrder: 2100, parentCode: '2000' },
-  { code: '2200', nameAr: 'ضريبة مبيعات مستحقة', nameEn: 'Sales Tax Payable', accountType: 'liability', normalBalance: 'credit', sortOrder: 2200, parentCode: '2000' },
-  { code: '3000', nameAr: 'حقوق الملكية', nameEn: 'Equity', accountType: 'equity', normalBalance: 'credit', sortOrder: 3000, parentCode: null },
-  { code: '3100', nameAr: 'رأس المال', nameEn: 'Capital', accountType: 'equity', normalBalance: 'credit', sortOrder: 3100, parentCode: '3000' },
-  { code: '4000', nameAr: 'الإيرادات', nameEn: 'Revenue', accountType: 'revenue', normalBalance: 'credit', sortOrder: 4000, parentCode: null },
-  { code: '4100', nameAr: 'المبيعات', nameEn: 'Sales Revenue', accountType: 'revenue', normalBalance: 'credit', sortOrder: 4100, parentCode: '4000' },
-  { code: '4200', nameAr: 'خصومات المبيعات', nameEn: 'Sales Discounts', accountType: 'contra_revenue', normalBalance: 'debit', sortOrder: 4200, parentCode: '4000' },
-  { code: '5000', nameAr: 'تكلفة ومصروفات', nameEn: 'Costs and Expenses', accountType: 'expense', normalBalance: 'debit', sortOrder: 5000, parentCode: null },
-  { code: '5100', nameAr: 'تكلفة البضاعة المباعة', nameEn: 'Cost of Goods Sold', accountType: 'expense', normalBalance: 'debit', sortOrder: 5100, parentCode: '5000' },
-  { code: '5200', nameAr: 'المشتريات', nameEn: 'Purchases', accountType: 'expense', normalBalance: 'debit', sortOrder: 5200, parentCode: '5000' },
-  { code: '5300', nameAr: 'المصروفات العامة', nameEn: 'General Expenses', accountType: 'expense', normalBalance: 'debit', sortOrder: 5300, parentCode: '5000' },
-  { code: '5400', nameAr: 'ضريبة مشتريات', nameEn: 'Purchase Tax', accountType: 'asset', normalBalance: 'debit', sortOrder: 5400, parentCode: '5000' },
+  {
+    code: '1000',
+    nameAr: 'الأصول',
+    nameEn: 'Assets',
+    accountType: 'asset',
+    normalBalance: 'debit',
+    sortOrder: 1000,
+    parentCode: null,
+  },
+  {
+    code: '1100',
+    nameAr: 'الخزينة',
+    nameEn: 'Cash',
+    accountType: 'asset',
+    normalBalance: 'debit',
+    sortOrder: 1100,
+    parentCode: '1000',
+  },
+  {
+    code: '1200',
+    nameAr: 'البنك',
+    nameEn: 'Bank',
+    accountType: 'asset',
+    normalBalance: 'debit',
+    sortOrder: 1200,
+    parentCode: '1000',
+  },
+  {
+    code: '1300',
+    nameAr: 'العملاء',
+    nameEn: 'Accounts Receivable',
+    accountType: 'asset',
+    normalBalance: 'debit',
+    sortOrder: 1300,
+    parentCode: '1000',
+  },
+  {
+    code: '1400',
+    nameAr: 'المخزون',
+    nameEn: 'Inventory',
+    accountType: 'asset',
+    normalBalance: 'debit',
+    sortOrder: 1400,
+    parentCode: '1000',
+  },
+  {
+    code: '2000',
+    nameAr: 'الخصوم',
+    nameEn: 'Liabilities',
+    accountType: 'liability',
+    normalBalance: 'credit',
+    sortOrder: 2000,
+    parentCode: null,
+  },
+  {
+    code: '2100',
+    nameAr: 'الموردون',
+    nameEn: 'Accounts Payable',
+    accountType: 'liability',
+    normalBalance: 'credit',
+    sortOrder: 2100,
+    parentCode: '2000',
+  },
+  {
+    code: '2200',
+    nameAr: 'ضريبة مبيعات مستحقة',
+    nameEn: 'Sales Tax Payable',
+    accountType: 'liability',
+    normalBalance: 'credit',
+    sortOrder: 2200,
+    parentCode: '2000',
+  },
+  {
+    code: '3000',
+    nameAr: 'حقوق الملكية',
+    nameEn: 'Equity',
+    accountType: 'equity',
+    normalBalance: 'credit',
+    sortOrder: 3000,
+    parentCode: null,
+  },
+  {
+    code: '3100',
+    nameAr: 'رأس المال',
+    nameEn: 'Capital',
+    accountType: 'equity',
+    normalBalance: 'credit',
+    sortOrder: 3100,
+    parentCode: '3000',
+  },
+  {
+    code: '4000',
+    nameAr: 'الإيرادات',
+    nameEn: 'Revenue',
+    accountType: 'revenue',
+    normalBalance: 'credit',
+    sortOrder: 4000,
+    parentCode: null,
+  },
+  {
+    code: '4100',
+    nameAr: 'المبيعات',
+    nameEn: 'Sales Revenue',
+    accountType: 'revenue',
+    normalBalance: 'credit',
+    sortOrder: 4100,
+    parentCode: '4000',
+  },
+  {
+    code: '4200',
+    nameAr: 'خصومات المبيعات',
+    nameEn: 'Sales Discounts',
+    accountType: 'contra_revenue',
+    normalBalance: 'debit',
+    sortOrder: 4200,
+    parentCode: '4000',
+  },
+  {
+    code: '5000',
+    nameAr: 'تكلفة ومصروفات',
+    nameEn: 'Costs and Expenses',
+    accountType: 'expense',
+    normalBalance: 'debit',
+    sortOrder: 5000,
+    parentCode: null,
+  },
+  {
+    code: '5100',
+    nameAr: 'تكلفة البضاعة المباعة',
+    nameEn: 'Cost of Goods Sold',
+    accountType: 'expense',
+    normalBalance: 'debit',
+    sortOrder: 5100,
+    parentCode: '5000',
+  },
+  {
+    code: '5200',
+    nameAr: 'المشتريات',
+    nameEn: 'Purchases',
+    accountType: 'expense',
+    normalBalance: 'debit',
+    sortOrder: 5200,
+    parentCode: '5000',
+  },
+  {
+    code: '5300',
+    nameAr: 'المصروفات العامة',
+    nameEn: 'General Expenses',
+    accountType: 'expense',
+    normalBalance: 'debit',
+    sortOrder: 5300,
+    parentCode: '5000',
+  },
+  {
+    code: '5400',
+    nameAr: 'ضريبة مشتريات',
+    nameEn: 'Purchase Tax',
+    accountType: 'asset',
+    normalBalance: 'debit',
+    sortOrder: 5400,
+    parentCode: '5000',
+  },
 ];
 
 export const migration = {
@@ -117,13 +261,23 @@ export const migration = {
     `.execute(db);
 
     await sql`CREATE INDEX IF NOT EXISTS idx_accounting_accounts_code ON accounting_accounts(code)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_accounting_accounts_parent_id ON accounting_accounts(parent_id)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_accounting_accounts_parent_id ON accounting_accounts(parent_id)`.execute(
+      db,
+    );
     await sql`CREATE INDEX IF NOT EXISTS idx_journal_entries_entry_date ON journal_entries(entry_date)`.execute(db);
     await sql`CREATE INDEX IF NOT EXISTS idx_journal_entries_status ON journal_entries(status)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entries_source ON journal_entries(source_type, source_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_journal_entry_id ON journal_entry_lines(journal_entry_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_account_id ON journal_entry_lines(account_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_partner ON journal_entry_lines(partner_type, partner_id)`.execute(db);
+    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entries_source ON journal_entries(source_type, source_id)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_journal_entry_id ON journal_entry_lines(journal_entry_id)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_account_id ON journal_entry_lines(account_id)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_partner ON journal_entry_lines(partner_type, partner_id)`.execute(
+      db,
+    );
 
     for (const account of SEED_ACCOUNTS) {
       await sql`

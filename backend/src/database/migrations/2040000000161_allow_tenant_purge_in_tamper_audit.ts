@@ -3,7 +3,9 @@ import { type Kysely, sql } from 'kysely';
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
     // 1. Allow tenant data purge during SuperAdmin tenant deletion when app.allow_tenant_purge = 'on'
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       CREATE OR REPLACE FUNCTION fn_tamper_audit_prevent_tamper()
       RETURNS TRIGGER AS $$
       BEGIN
@@ -14,10 +16,14 @@ export const migration = {
         RETURN NULL;
       END;
       $$ LANGUAGE plpgsql SECURITY DEFINER;
-    `).execute(db);
+    `,
+      )
+      .execute(db);
 
     // 2. Bypass audit logging when app.allow_tenant_purge = 'on' to prevent inserting new audit rows during tenant purge
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       CREATE OR REPLACE FUNCTION fn_tamper_evident_audit_trigger()
       RETURNS TRIGGER AS $$
       DECLARE
@@ -146,10 +152,12 @@ export const migration = {
         RETURN NEW;
       END;
       $$ LANGUAGE plpgsql SECURITY DEFINER;
-    `).execute(db);
+    `,
+      )
+      .execute(db);
   },
 
   async down(_db: Kysely<any>): Promise<void> {
     // No-op rollback
-  }
+  },
 };

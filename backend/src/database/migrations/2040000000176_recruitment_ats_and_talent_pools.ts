@@ -41,9 +41,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .ifNotExists()
     .addColumn('id', 'varchar(128)', (col) => col.primaryKey())
     .addColumn('tenant_id', 'varchar(64)', (col) => col.notNull())
-    .addColumn('job_id', 'varchar(128)', (col) =>
-      col.references('recruitment_job_openings.id').onDelete('set null'),
-    )
+    .addColumn('job_id', 'varchar(128)', (col) => col.references('recruitment_job_openings.id').onDelete('set null'))
     .addColumn('applicant_number', 'varchar(64)', (col) => col.notNull())
     .addColumn('full_name', 'varchar(255)', (col) => col.notNull())
     .addColumn('email', 'varchar(255)')

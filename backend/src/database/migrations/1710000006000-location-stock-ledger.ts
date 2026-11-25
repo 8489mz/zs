@@ -16,10 +16,18 @@ export const migration = {
       )
     `.execute(db);
 
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_product_location_stock_product_location ON product_location_stock(product_id, location_id) WHERE location_id IS NOT NULL`.execute(db);
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_product_location_stock_product_unassigned ON product_location_stock(product_id) WHERE location_id IS NULL`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_product_location_stock_location ON product_location_stock(location_id, product_id)`.execute(db);
-    await sql`CREATE INDEX IF NOT EXISTS idx_product_location_stock_branch ON product_location_stock(branch_id, product_id)`.execute(db);
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_product_location_stock_product_location ON product_location_stock(product_id, location_id) WHERE location_id IS NOT NULL`.execute(
+      db,
+    );
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_product_location_stock_product_unassigned ON product_location_stock(product_id) WHERE location_id IS NULL`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_product_location_stock_location ON product_location_stock(location_id, product_id)`.execute(
+      db,
+    );
+    await sql`CREATE INDEX IF NOT EXISTS idx_product_location_stock_branch ON product_location_stock(branch_id, product_id)`.execute(
+      db,
+    );
 
     await sql`
       INSERT INTO product_location_stock (product_id, branch_id, location_id, qty)

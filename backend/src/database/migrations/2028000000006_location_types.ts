@@ -24,5 +24,5 @@ export const migration = {
       ALTER TABLE stock_locations 
       DROP COLUMN IF EXISTS location_type;
     `.execute(db);
-  }
+  },
 };

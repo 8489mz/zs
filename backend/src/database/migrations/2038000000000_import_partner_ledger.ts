@@ -14,7 +14,7 @@ export const migration = {
       .addColumn('created_by', 'integer')
       .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
       .execute();
-      
+
     await db.schema
       .createIndex('import_partner_ledger_tenant_partner_idx')
       .on('import_partner_ledger')

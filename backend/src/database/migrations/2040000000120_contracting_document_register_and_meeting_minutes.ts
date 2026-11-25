@@ -149,7 +149,9 @@ export const migration = {
     await sql`DROP TABLE IF EXISTS contracting_meeting_action_items;`.execute(db);
     await sql`DROP TABLE IF EXISTS contracting_meeting_minutes;`.execute(db);
     await sql`DROP TABLE IF EXISTS contracting_document_distributions;`.execute(db);
-    await sql`ALTER TABLE contracting_documents DROP CONSTRAINT IF EXISTS fk_contracting_documents_current_revision;`.execute(db);
+    await sql`ALTER TABLE contracting_documents DROP CONSTRAINT IF EXISTS fk_contracting_documents_current_revision;`.execute(
+      db,
+    );
     await sql`DROP TABLE IF EXISTS contracting_document_revisions;`.execute(db);
     await sql`DROP TABLE IF EXISTS contracting_documents;`.execute(db);
   },

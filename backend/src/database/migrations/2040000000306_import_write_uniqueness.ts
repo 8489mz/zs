@@ -67,9 +67,15 @@ export async function up(db: any): Promise<void> {
   `.execute(db);
 
   await sql`ALTER TABLE "import_container_deposits" ADD COLUMN IF NOT EXISTS "serial_id" BIGSERIAL`.execute(db);
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_import_container_deposits_serial_id ON "import_container_deposits" (serial_id)`.execute(db);
-  await sql`ALTER TABLE "import_container_deposits" ADD COLUMN IF NOT EXISTS "idempotency_key" VARCHAR(128)`.execute(db);
-  await sql`UPDATE "import_container_deposits" SET "idempotency_key" = 'legacy:' || COALESCE(serial_id::text, id::text) WHERE "idempotency_key" IS NULL`.execute(db);
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_import_container_deposits_serial_id ON "import_container_deposits" (serial_id)`.execute(
+    db,
+  );
+  await sql`ALTER TABLE "import_container_deposits" ADD COLUMN IF NOT EXISTS "idempotency_key" VARCHAR(128)`.execute(
+    db,
+  );
+  await sql`UPDATE "import_container_deposits" SET "idempotency_key" = 'legacy:' || COALESCE(serial_id::text, id::text) WHERE "idempotency_key" IS NULL`.execute(
+    db,
+  );
   await sql`ALTER TABLE "import_container_deposits" ALTER COLUMN "idempotency_key" SET NOT NULL`.execute(db);
   await sql`
     CREATE UNIQUE INDEX IF NOT EXISTS uq_import_container_deposits_tenant_idempotency
@@ -77,9 +83,15 @@ export async function up(db: any): Promise<void> {
   `.execute(db);
 
   await sql`ALTER TABLE "import_container_preorders" ADD COLUMN IF NOT EXISTS "serial_id" BIGSERIAL`.execute(db);
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_import_container_preorders_serial_id ON "import_container_preorders" (serial_id)`.execute(db);
-  await sql`ALTER TABLE "import_container_preorders" ADD COLUMN IF NOT EXISTS "idempotency_key" VARCHAR(128)`.execute(db);
-  await sql`UPDATE "import_container_preorders" SET "idempotency_key" = 'legacy:' || COALESCE(serial_id::text, id::text) WHERE "idempotency_key" IS NULL`.execute(db);
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_import_container_preorders_serial_id ON "import_container_preorders" (serial_id)`.execute(
+    db,
+  );
+  await sql`ALTER TABLE "import_container_preorders" ADD COLUMN IF NOT EXISTS "idempotency_key" VARCHAR(128)`.execute(
+    db,
+  );
+  await sql`UPDATE "import_container_preorders" SET "idempotency_key" = 'legacy:' || COALESCE(serial_id::text, id::text) WHERE "idempotency_key" IS NULL`.execute(
+    db,
+  );
   await sql`ALTER TABLE "import_container_preorders" ALTER COLUMN "idempotency_key" SET NOT NULL`.execute(db);
   await sql`
     CREATE UNIQUE INDEX IF NOT EXISTS uq_import_container_preorders_tenant_idempotency

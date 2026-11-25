@@ -17,7 +17,9 @@ import { sql, type Kysely } from 'kysely';
  */
 export async function up(db: Kysely<any>): Promise<void> {
   await sql`ALTER TABLE import_late_expense_events ADD COLUMN IF NOT EXISTS idempotency_key TEXT`.execute(db);
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_late_expense_events_tenant_shipment_key ON import_late_expense_events (tenant_id, shipment_id, idempotency_key) WHERE idempotency_key IS NOT NULL`.execute(db);
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_late_expense_events_tenant_shipment_key ON import_late_expense_events (tenant_id, shipment_id, idempotency_key) WHERE idempotency_key IS NOT NULL`.execute(
+    db,
+  );
 }
 
 export async function down(db: Kysely<any>): Promise<void> {

@@ -24,10 +24,7 @@ export const migration = {
   async down(db: Kysely<any>): Promise<void> {
     await sql`DROP INDEX IF EXISTS idx_hr_employee_adjustments_asset_recovery_uniq`.execute(db);
 
-    await db.schema
-      .alterTable('hr_payroll_run_items')
-      .dropColumn('asset_recovery_deduction_amount')
-      .execute();
+    await db.schema.alterTable('hr_payroll_run_items').dropColumn('asset_recovery_deduction_amount').execute();
 
     await db.schema
       .alterTable('hr_employee_adjustments')
@@ -35,5 +32,5 @@ export const migration = {
       .dropColumn('source_id')
       .dropColumn('accounting_category')
       .execute();
-  }
+  },
 };

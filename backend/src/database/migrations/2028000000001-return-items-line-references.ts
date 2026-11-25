@@ -8,11 +8,7 @@ export const migration = {
       .addColumn('purchase_item_id', 'integer', (col) => col.references('purchase_items.id').onDelete('set null'))
       .execute();
 
-    await db.schema
-      .createIndex('idx_return_items_sale_item_id')
-      .on('return_items')
-      .column('sale_item_id')
-      .execute();
+    await db.schema.createIndex('idx_return_items_sale_item_id').on('return_items').column('sale_item_id').execute();
 
     await db.schema
       .createIndex('idx_return_items_purchase_item_id')
@@ -24,10 +20,6 @@ export const migration = {
     await db.schema.dropIndex('idx_return_items_sale_item_id').execute();
     await db.schema.dropIndex('idx_return_items_purchase_item_id').execute();
 
-    await db.schema
-      .alterTable('return_items')
-      .dropColumn('sale_item_id')
-      .dropColumn('purchase_item_id')
-      .execute();
-  }
+    await db.schema.alterTable('return_items').dropColumn('sale_item_id').dropColumn('purchase_item_id').execute();
+  },
 };

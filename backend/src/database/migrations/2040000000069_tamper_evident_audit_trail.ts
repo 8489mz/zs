@@ -3,7 +3,9 @@ import { type Kysely, sql } from 'kysely';
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
     // 1. Create tamper_audit_logs table
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       CREATE TABLE IF NOT EXISTS tamper_audit_logs (
         id BIGSERIAL PRIMARY KEY,
         tenant_id VARCHAR(255) NOT NULL,
@@ -21,17 +23,25 @@ export const migration = {
         row_hash VARCHAR(64) NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    `).execute(db);
+    `,
+      )
+      .execute(db);
 
     // 2. Indexes for fast lookup and chronological chain verification
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       CREATE INDEX IF NOT EXISTS idx_tamper_audit_tenant_table_rec ON tamper_audit_logs(tenant_id, table_name, record_id);
       CREATE INDEX IF NOT EXISTS idx_tamper_audit_tenant_created ON tamper_audit_logs(tenant_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_tamper_audit_row_hash ON tamper_audit_logs(row_hash);
-    `).execute(db);
+    `,
+      )
+      .execute(db);
 
     // 3. Append-only immutability guard trigger on tamper_audit_logs itself
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       CREATE OR REPLACE FUNCTION fn_tamper_audit_prevent_tamper()
       RETURNS TRIGGER AS $$
       BEGIN
@@ -44,10 +54,14 @@ export const migration = {
       CREATE TRIGGER trg_tamper_audit_immutable
       BEFORE UPDATE OR DELETE ON tamper_audit_logs
       FOR EACH ROW EXECUTE FUNCTION fn_tamper_audit_prevent_tamper();
-    `).execute(db);
+    `,
+      )
+      .execute(db);
 
     // 4. Core audit trigger function with cryptographic SHA-256 chaining
-    await sql.raw(`
+    await sql
+      .raw(
+        `
       CREATE OR REPLACE FUNCTION fn_tamper_evident_audit_trigger()
       RETURNS TRIGGER AS $$
       DECLARE
@@ -161,7 +175,9 @@ export const migration = {
         RETURN NEW;
       END;
       $$ LANGUAGE plpgsql SECURITY DEFINER;
-    `).execute(db);
+    `,
+      )
+      .execute(db);
 
     // 5. Attach trigger to critical financial and operational tables
     const auditedTables = [
@@ -180,12 +196,16 @@ export const migration = {
 
     for (const table of auditedTables) {
       try {
-        await sql.raw(`
+        await sql
+          .raw(
+            `
           DROP TRIGGER IF EXISTS trg_audit_${table} ON ${table};
           CREATE TRIGGER trg_audit_${table}
           AFTER INSERT OR UPDATE OR DELETE ON ${table}
           FOR EACH ROW EXECUTE FUNCTION fn_tamper_evident_audit_trigger();
-        `).execute(db);
+        `,
+          )
+          .execute(db);
       } catch (err) {
         // Table might not exist in some environments, continue
       }

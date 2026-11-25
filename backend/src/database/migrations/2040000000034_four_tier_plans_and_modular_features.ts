@@ -50,8 +50,12 @@ export const migration = {
   down: async (db: Kysely<any>): Promise<void> => {
     await sql`DELETE FROM saas_plans WHERE code = 'OMNICHANNEL'`.execute(db);
     await sql`DELETE FROM plan_features WHERE plan_id = 'plan_omnichannel'`.execute(db);
-    await sql`DELETE FROM plan_features WHERE plan_id = 'plan_ultimate' AND feature_code IN ('installments', 'fixed_assets', 'vat_declaration', 'loyalty')`.execute(db);
-    await sql`DELETE FROM features WHERE code IN ('installments', 'fixed_assets', 'vat_declaration', 'loyalty')`.execute(db);
+    await sql`DELETE FROM plan_features WHERE plan_id = 'plan_ultimate' AND feature_code IN ('installments', 'fixed_assets', 'vat_declaration', 'loyalty')`.execute(
+      db,
+    );
+    await sql`DELETE FROM features WHERE code IN ('installments', 'fixed_assets', 'vat_declaration', 'loyalty')`.execute(
+      db,
+    );
     await sql`DELETE FROM plans WHERE id = 'plan_omnichannel'`.execute(db);
   },
 };

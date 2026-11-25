@@ -20,7 +20,9 @@ export async function up(db: Kysely<any>): Promise<void> {
   if (!rows.length) return; // Table absent on legacy optional schemas.
   const info = rows[0];
   if (info.data_type !== 'numeric' || info.numeric_scale === null || info.numeric_precision === null) {
-    throw new Error('Currency precision migration requires a constrained numeric column: van_rep_financial_settlements.amount');
+    throw new Error(
+      'Currency precision migration requires a constrained numeric column: van_rep_financial_settlements.amount',
+    );
   }
   if (Number(info.numeric_scale) >= 3) return;
   await sql`ALTER TABLE "van_rep_financial_settlements" ALTER COLUMN "amount" TYPE numeric(14, 3)`.execute(db);

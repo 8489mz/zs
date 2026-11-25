@@ -36,8 +36,18 @@ export const migration = {
 
     await db.schema.createIndex('tenants_slug_idx').ifNotExists().on('tenants').column('slug').execute();
     await db.schema.createIndex('tenants_status_idx').ifNotExists().on('tenants').column('status').execute();
-    await db.schema.createIndex('tenants_trial_ends_at_idx').ifNotExists().on('tenants').column('trial_ends_at').execute();
-    await db.schema.createIndex('trial_signups_tenant_id_idx').ifNotExists().on('trial_signups').column('tenant_id').execute();
+    await db.schema
+      .createIndex('tenants_trial_ends_at_idx')
+      .ifNotExists()
+      .on('tenants')
+      .column('trial_ends_at')
+      .execute();
+    await db.schema
+      .createIndex('trial_signups_tenant_id_idx')
+      .ifNotExists()
+      .on('trial_signups')
+      .column('tenant_id')
+      .execute();
 
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT ''`.execute(db);
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_id TEXT NOT NULL DEFAULT ''`.execute(db);

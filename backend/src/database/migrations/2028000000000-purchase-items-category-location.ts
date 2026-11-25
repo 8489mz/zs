@@ -20,5 +20,5 @@ export const migration = {
       ALTER TABLE purchase_items DROP COLUMN location_id;
       ALTER TABLE purchase_items DROP COLUMN category_id;
     `.execute(db);
-  }
+  },
 };

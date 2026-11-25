@@ -3,7 +3,8 @@ import { type Kysely, sql } from 'kysely';
 export const migration = {
   async up(db: Kysely<any>): Promise<void> {
     try {
-      await db.schema.createTable('bank_statements')
+      await db.schema
+        .createTable('bank_statements')
         .addColumn('id', 'serial', (col) => col.primaryKey())
         .addColumn('tenant_id', 'varchar(255)')
         .addColumn('account_id', 'integer', (col) => col.notNull())
@@ -21,7 +22,8 @@ export const migration = {
     }
 
     try {
-      await db.schema.createTable('bank_statement_lines')
+      await db.schema
+        .createTable('bank_statement_lines')
         .addColumn('id', 'serial', (col) => col.primaryKey())
         .addColumn('tenant_id', 'varchar(255)')
         .addColumn('statement_id', 'integer', (col) => col.notNull())
@@ -39,7 +41,8 @@ export const migration = {
     }
 
     try {
-      await db.schema.alterTable('journal_entry_lines')
+      await db.schema
+        .alterTable('journal_entry_lines')
         .addColumn('is_reconciled', 'boolean', (col) => col.defaultTo(false).notNull())
         .execute();
     } catch (e) {
@@ -47,9 +50,7 @@ export const migration = {
     }
 
     try {
-      await db.schema.alterTable('journal_entry_lines')
-        .addColumn('reconciled_at', 'timestamptz')
-        .execute();
+      await db.schema.alterTable('journal_entry_lines').addColumn('reconciled_at', 'timestamptz').execute();
     } catch (e) {
       // Column might already exist
     }
