@@ -26,7 +26,7 @@
     "test:electron": "node scripts/check-toolchain-alignment.cjs && npm run qa:electron && npm --prefix frontend run test:electron && npm --prefix backend run typecheck && npm --prefix backend run test:electron",
     "qa:backend": "npm --prefix backend run check:commercial-ready",
     "qa:frontend": "npm --prefix frontend run qa",
-    "lint": "npm --prefix frontend run lint",
+    "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",
     "typecheck": "npm --prefix backend run typecheck",
     "test:critical": "npm --prefix backend run test:critical",
     "test:load": "node ./load-tests/runner.cjs",

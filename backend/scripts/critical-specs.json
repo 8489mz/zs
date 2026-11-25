@@ -325,6 +325,7 @@
     "test/critical/solo-admin-rep-waiver-override.spec.ts",
     "test/critical/solo-admin-import-approval-override.spec.ts",
     "test/critical/solo-admin-broker-expense-override.spec.ts",
-    "test/critical/solo-admin-carrier-invoice-override.spec.ts"
+    "test/critical/solo-admin-carrier-invoice-override.spec.ts",
+    "test/critical/backend-lint-prettier-tooling.spec.ts"
   ]
 }
