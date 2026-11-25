@@ -22,7 +22,7 @@ import { KitchenPrintersService } from '../services/kitchen-printers.service';
 import { CreateKitchenPrinterDto, UpdateKitchenPrinterDto } from '../dto/kitchen-printer.dto';
 import { PrintKitchenTicketDto } from '../dto/kitchen-printer-print.dto';
 
-@Controller('api/sales/kitchen-printers')
+@Controller(['api/sales/kitchen-printers', 'api/v1/sales/kitchen-printers'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 // R4-E I18: printer administration is restaurant-only, like the KDS itself.
 @RequireFeature('restaurant')

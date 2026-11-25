@@ -2,7 +2,7 @@ import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Query } from
 import { DeliveryRepsService } from './delivery-reps.service';
 import { DriverChangePinDto, DriverLoginDto, DriverSettleOrderDto } from './dto/driver-portal.dto';
 
-@Controller('api/driver-portal')
+@Controller(['api/driver-portal', 'api/v1/driver-portal'])
 export class DriverPortalController {
   constructor(private readonly service: DeliveryRepsService) {}
 

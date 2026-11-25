@@ -8,7 +8,7 @@ import { SettingsService } from './settings.service';
 export class BranchesController {
   constructor(private readonly settingsService: SettingsService) {}
 
-  @Get('branches')
+  @Get(['branches', 'v1/branches'])
   @Header('Cache-Control', 'private, no-cache, must-revalidate')
   listBranches(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.settingsService.listBranches(req.authContext!);

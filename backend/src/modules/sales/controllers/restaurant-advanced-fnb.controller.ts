@@ -20,7 +20,7 @@ import {
   SaveTableLayoutsDto,
 } from '../dto/restaurant-fnb.dto';
 
-@Controller('api/sales/restaurant')
+@Controller(['api/sales/restaurant', 'api/v1/sales/restaurant'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @AllowAuthenticated()
 export class RestaurantAdvancedFnbController {

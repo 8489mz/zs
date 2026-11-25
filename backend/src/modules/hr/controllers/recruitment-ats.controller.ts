@@ -12,7 +12,7 @@ import {
   HireApplicantDto,
 } from '../dto/recruitment-ats.dto';
 
-@Controller('api/hr/recruitment')
+@Controller(['api/hr/recruitment', 'api/v1/hr/recruitment'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('hr')
 @RequirePermissions('hrEmployees')

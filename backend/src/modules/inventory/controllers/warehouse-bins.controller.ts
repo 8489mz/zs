@@ -11,7 +11,7 @@ import {
   QuickAuditUpdateDto,
 } from '../services/warehouse-bins.service';
 
-@Controller('api/inventory/bins')
+@Controller(['api/inventory/bins', 'api/v1/inventory/bins'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class WarehouseBinsController {
   constructor(private readonly binsService: WarehouseBinsService) {}

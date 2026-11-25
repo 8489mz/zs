@@ -16,7 +16,7 @@ type HealthPayload = {
   version: string;
 };
 
-@Controller(['health', 'api/health'])
+@Controller(['health', 'api/health', 'api/v1/health'])
 export class HealthController {
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,

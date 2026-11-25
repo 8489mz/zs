@@ -7,7 +7,7 @@ import { TableServiceCallsService } from '../services/table-service-calls.servic
 import { TableCallRateLimitGuard } from '../guards/table-call-rate-limit.guard';
 import { CreateTableServiceCallDto } from '../dto/table-service-call.dto';
 
-@Controller('api/sales/table-calls')
+@Controller(['api/sales/table-calls', 'api/v1/sales/table-calls'])
 export class TableServiceCallsController {
   constructor(private readonly service: TableServiceCallsService) {}
 

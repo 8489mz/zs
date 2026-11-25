@@ -51,7 +51,7 @@ import { UpdatePayrollPoliciesDto } from './dto/payroll-policies-write.dto';
 import { HrService } from './hr.service';
 import { RequireFeature } from '../../core/auth/decorators/feature.decorator';
 
-@Controller('api/hr')
+@Controller(['api/hr', 'api/v1/hr'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('hr')
 export class HrController {

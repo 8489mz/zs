@@ -32,7 +32,7 @@ import {
   parseHikvisionWebhookPayload,
 } from '../services/http-biometric-lan.client';
 
-@Controller('api/hr/biometric')
+@Controller(['api/hr/biometric', 'api/v1/hr/biometric'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('hr')
 export class BiometricAttendanceController {
@@ -135,7 +135,7 @@ export class BiometricAttendanceController {
  * - POST /api/hr/biometric/iclock/cdata?SN=6422150300031&table=ATTLOG
  * - GET  /api/hr/biometric/iclock/getrequest?SN=6422150300031
  */
-@Controller(['api/hr/biometric/iclock', 'iclock'])
+@Controller(['api/hr/biometric/iclock', 'iclock', 'api/v1/hr/biometric/iclock'])
 export class BiometricAdmsWebhookController {
   constructor(private readonly biometricService: BiometricAttendanceService) {}
 
@@ -188,7 +188,7 @@ export class BiometricAdmsWebhookController {
  * Multi-Brand Hardware Cloud Push Receiver (Hikvision HTTP Listening + Universal JSON Push for Dahua / Anviz / Suprema / Bridges).
  * Authenticates hardware strictly by active registered `serial_number` for tenant isolation.
  */
-@Controller('api/hr/biometric-push')
+@Controller(['api/hr/biometric-push', 'api/v1/hr/biometric-push'])
 export class BiometricMultiBrandWebhookController {
   constructor(private readonly biometricService: BiometricAttendanceService) {}
 

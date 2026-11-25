@@ -4,7 +4,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { PriceListsService, UpsertPriceListDto, UpdatePriceListDto } from '../services/price-lists.service';
 import { CalculatePriceDto } from '../dto/price-calculate.dto';
 
-@Controller('api/sales/price-lists')
+@Controller(['api/sales/price-lists', 'api/v1/sales/price-lists'])
 @UseGuards(SessionAuthGuard)
 export class PriceListsController {
   constructor(private readonly priceListsService: PriceListsService) {}

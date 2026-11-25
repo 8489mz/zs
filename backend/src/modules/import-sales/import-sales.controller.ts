@@ -68,7 +68,7 @@ import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 
-@Controller('api/import-sales')
+@Controller(['api/import-sales', 'api/v1/import-sales'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireAnyPermission('purchases', 'inventory', 'accounting')
 @UseInterceptors(IdempotencyInterceptor)

@@ -24,7 +24,7 @@ import {
   TestAiKeyDto,
 } from './dto/ai-copilot-write.dto';
 
-@Controller('api/ai-copilot')
+@Controller(['api/ai-copilot', 'api/v1/ai-copilot'])
 @UseGuards(SessionAuthGuard)
 export class AiCopilotController {
   constructor(

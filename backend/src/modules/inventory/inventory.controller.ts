@@ -40,7 +40,7 @@ export class InventoryController {
     private readonly replenishmentService: InventoryReplenishmentService,
   ) {}
 
-  @Get('locations')
+  @Get(['locations', 'v1/locations'])
   @AllowAuthenticated()
   listLocations(
     @Req() req: RequestWithAuth,
@@ -51,7 +51,7 @@ export class InventoryController {
 
   // INV-VAN-GENERIC-FEFO: read-only list of the generic batch ledger
   // (inventory_batches) for the batches page's second tab.
-  @Get('inventory/batches')
+  @Get(['inventory/batches', 'v1/inventory/batches'])
   @RequirePermissions('inventory')
   listInventoryBatches(
     @Req() req: RequestWithAuth,
@@ -68,7 +68,7 @@ export class InventoryController {
     });
   }
 
-  @Get('location-stocks')
+  @Get(['location-stocks', 'v1/location-stocks'])
   @AllowAuthenticated()
   getAllLocationStocks(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.inventoryService.getAllLocationStocks(req.authContext!);
@@ -78,7 +78,7 @@ export class InventoryController {
   // -- the location's available qty on the same basis the adjustment
   // targets. Read-only; declared before any ':id' route so the
   // literal segment is never captured as a parameter.
-  @Get('inventory/product-availability')
+  @Get(['inventory/product-availability', 'v1/inventory/product-availability'])
   @RequirePermissions('inventory')
   getProductLocationAvailability(
     @Query('productId', ParseIntPipe) productId: number,
@@ -92,13 +92,13 @@ export class InventoryController {
     return this.inventoryService.getProductLocationAvailability(productId, parsed, req.authContext!);
   }
 
-  @Get('inventory/advanced-overview')
+  @Get(['inventory/advanced-overview', 'v1/inventory/advanced-overview'])
   @RequirePermissions('inventory')
   getAdvancedOverview(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.inventoryService.getAdvancedOverview(req.authContext!);
   }
 
-  @Get('locations/:id/categories')
+  @Get(['locations/:id/categories', 'v1/locations/:id/categories'])
   @RequirePermissions('inventory')
   getLocationCategories(
     @Param('id', ParseIntPipe) id: number,
@@ -107,7 +107,7 @@ export class InventoryController {
     return this.inventoryService.getLocationCategories(id, req.authContext!);
   }
 
-  @Get('locations/:id/categories/:categoryId/products')
+  @Get(['locations/:id/categories/:categoryId/products', 'v1/locations/:id/categories/:categoryId/products'])
   @RequirePermissions('inventory')
   getLocationCategoryProducts(
     @Param('id', ParseIntPipe) id: number,
@@ -118,7 +118,7 @@ export class InventoryController {
     return this.inventoryService.getLocationCategoryProducts(id, parsedCategoryId, req.authContext!);
   }
 
-  @Post('locations/:id/assign-products')
+  @Post(['locations/:id/assign-products', 'v1/locations/:id/assign-products'])
   @RequirePermissions('canAdjustInventory')
   assignProductsToLocation(
     @Param('id', ParseIntPipe) id: number,
@@ -128,7 +128,7 @@ export class InventoryController {
     return this.inventoryService.assignProductsToLocation(id, body.productIds || [], req.authContext!);
   }
 
-  @Delete('locations/:id/products/:productId')
+  @Delete(['locations/:id/products/:productId', 'v1/locations/:id/products/:productId'])
   @RequirePermissions('canAdjustInventory')
   removeProductFromLocation(
     @Param('id', ParseIntPipe) id: number,
@@ -138,7 +138,7 @@ export class InventoryController {
     return this.inventoryService.removeProductFromLocation(id, productId, req.authContext!);
   }
 
-  @Get('stock-transfers')
+  @Get(['stock-transfers', 'v1/stock-transfers'])
   @RequirePermissions('inventory')
   listTransfers(
     @Query() query: Record<string, unknown>,
@@ -147,7 +147,7 @@ export class InventoryController {
     return this.inventoryService.listStockTransfers(query, req.authContext!);
   }
 
-  @Get('stock-movements')
+  @Get(['stock-movements', 'v1/stock-movements'])
   @RequirePermissions('inventory')
   listMovements(
     @Query() query: Record<string, unknown>,
@@ -156,7 +156,7 @@ export class InventoryController {
     return this.inventoryService.listStockMovements(query, req.authContext!);
   }
 
-  @Post('stock-transfers')
+  @Post(['stock-transfers', 'v1/stock-transfers'])
   @RequirePermissions('canAdjustInventory')
   createTransfer(
     @Body() payload: CreateStockTransferDto,
@@ -165,7 +165,7 @@ export class InventoryController {
     return this.inventoryService.createStockTransfer(payload, req.authContext!);
   }
 
-  @Post('transfer-category')
+  @Post(['transfer-category', 'v1/transfer-category'])
   @RequirePermissions('canAdjustInventory')
   transferCategory(
     @Body() payload: import('./dto/create-category-transfer.dto').CreateCategoryTransferDto,
@@ -174,7 +174,7 @@ export class InventoryController {
     return this.inventoryService.transferCategory(payload, req.authContext!);
   }
 
-  @Post('internal-transfer')
+  @Post(['internal-transfer', 'v1/internal-transfer'])
   @RequirePermissions('canAdjustInventory')
   internalTransfer(
     @Body() payload: CreateStockTransferDto,
@@ -183,7 +183,7 @@ export class InventoryController {
     return this.inventoryService.internalTransferProducts(payload as any, req.authContext!);
   }
 
-  @Post('internal-transfer-category')
+  @Post(['internal-transfer-category', 'v1/internal-transfer-category'])
   @RequirePermissions('canAdjustInventory')
   internalTransferCategory(
     @Body() payload: import('./dto/create-category-transfer.dto').CreateCategoryTransferDto,
@@ -192,7 +192,7 @@ export class InventoryController {
     return this.inventoryService.internalTransferCategory(payload as any, req.authContext!);
   }
 
-  @Post('stock-transfers/:id/receive')
+  @Post(['stock-transfers/:id/receive', 'v1/stock-transfers/:id/receive'])
   @RequirePermissions('canAdjustInventory')
   receiveTransfer(
     @Param('id', ParseIntPipe) id: number,
@@ -209,7 +209,7 @@ export class InventoryController {
     return this.inventoryService.receiveStockTransfer(id, req.authContext!, body);
   }
 
-  @Post('stock-transfers/:id/cancel')
+  @Post(['stock-transfers/:id/cancel', 'v1/stock-transfers/:id/cancel'])
   @RequirePermissions('canAdjustInventory')
   cancelTransfer(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.inventoryService.cancelStockTransfer(id, req.authContext!);
@@ -218,7 +218,7 @@ export class InventoryController {
   // F19: reverse a received final issue prospectively (stock back to the
   // source at the frozen cost + a correcting journal that flips the
   // original expense journal; the original rows are never touched).
-  @Post('stock-transfers/:id/reverse-final-issue')
+  @Post(['stock-transfers/:id/reverse-final-issue', 'v1/stock-transfers/:id/reverse-final-issue'])
   @RequirePermissions('canAdjustInventory')
   reverseFinalIssue(
     @Param('id', ParseIntPipe) id: number,
@@ -227,7 +227,7 @@ export class InventoryController {
     return this.inventoryService.reverseFinalIssue(id, req.authContext!);
   }
 
-  @Get('stock-count-sessions')
+  @Get(['stock-count-sessions', 'v1/stock-count-sessions'])
   @RequirePermissions('inventory')
   listStockCountSessions(
     @Query() query: Record<string, unknown>,
@@ -236,7 +236,7 @@ export class InventoryController {
     return this.inventoryService.listStockCountSessions(query, req.authContext!);
   }
 
-  @Post('stock-count-sessions')
+  @Post(['stock-count-sessions', 'v1/stock-count-sessions'])
   @RequirePermissions('canAdjustInventory')
   createStockCountSession(
     @Body() payload: CreateStockCountSessionDto,
@@ -245,7 +245,7 @@ export class InventoryController {
     return this.inventoryService.createStockCountSession(payload, req.authContext!);
   }
 
-  @Post('stock-count-sessions/:id/post')
+  @Post(['stock-count-sessions/:id/post', 'v1/stock-count-sessions/:id/post'])
   @RequirePermissions('canAdjustInventory')
   postStockCountSession(
     @Param('id', ParseIntPipe) id: number,
@@ -256,7 +256,7 @@ export class InventoryController {
     return this.inventoryService.postStockCountSession(id, req.authContext!, adminPassword);
   }
 
-  @Delete('stock-count-sessions/:id')
+  @Delete(['stock-count-sessions/:id', 'v1/stock-count-sessions/:id'])
   @RequirePermissions('canAdjustInventory')
   deleteStockCountSession(
     @Param('id', ParseIntPipe) id: number,
@@ -265,7 +265,7 @@ export class InventoryController {
     return this.inventoryService.deleteStockCountSession(id, req.authContext!);
   }
 
-  @Post('stock-count-sessions/:id/items/:itemId/recount')
+  @Post(['stock-count-sessions/:id/items/:itemId/recount', 'v1/stock-count-sessions/:id/items/:itemId/recount'])
   @RequirePermissions('canAdjustInventory')
   recountStockCountItem(
     @Param('id', ParseIntPipe) id: number,
@@ -276,19 +276,19 @@ export class InventoryController {
     return this.inventoryService.recountPendingStockCountItem(id, itemId, payload, req.authContext!);
   }
 
-  @Get('damaged-stock')
+  @Get(['damaged-stock', 'v1/damaged-stock'])
   @RequirePermissions('inventory')
   listDamaged(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.inventoryService.listDamagedStock(query, req.authContext!);
   }
 
-  @Post('damaged-stock')
+  @Post(['damaged-stock', 'v1/damaged-stock'])
   @RequirePermissions('canAdjustInventory')
   createDamaged(@Body() payload: CreateDamagedStockDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.inventoryService.createDamagedStock(payload, req.authContext!);
   }
 
-  @Post('inventory-adjustments')
+  @Post(['inventory-adjustments', 'v1/inventory-adjustments'])
   @RequirePermissions('canAdjustInventory')
   createAdjustment(
     @Body() payload: InventoryAdjustmentDto,
@@ -297,7 +297,7 @@ export class InventoryController {
     return this.inventoryService.createInventoryAdjustment(payload, req.authContext!);
   }
 
-  @Get('inventory/smart-replenishment/suggestions')
+  @Get(['inventory/smart-replenishment/suggestions', 'v1/inventory/smart-replenishment/suggestions'])
   @RequirePermissions('inventory')
   getSmartReplenishmentSuggestions(
     @Query('fromLocationId', ParseIntPipe) fromLocationId: number,
@@ -315,7 +315,7 @@ export class InventoryController {
     );
   }
 
-  @Post('inventory/smart-replenishment/execute')
+  @Post(['inventory/smart-replenishment/execute', 'v1/inventory/smart-replenishment/execute'])
   @RequirePermissions('canAdjustInventory')
   executeSmartReplenishment(
     @Body()

@@ -13,7 +13,7 @@ import {
 } from '../dto/settings-write.dto';
 import { SeedDemoDataDto } from '../dto/seed-demo-data.dto';
 
-@Controller('api/admin')
+@Controller(['api/admin', 'api/v1/admin'])
 @UseGuards(SessionAuthGuard, AdminRoleGuard)
 export class SettingsAdminController {
   constructor(

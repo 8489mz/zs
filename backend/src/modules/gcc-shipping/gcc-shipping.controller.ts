@@ -7,7 +7,7 @@ import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { escapeHtml } from '../../common/utils/escape-html';
 
-@Controller(['gcc-shipping', 'api/gcc-shipping'])
+@Controller(['gcc-shipping', 'api/gcc-shipping', 'api/v1/gcc-shipping'])
 @UseGuards(SessionAuthGuard)
 export class GccShippingController {
   constructor(private readonly gccShippingService: GccShippingService) {}

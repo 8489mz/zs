@@ -26,19 +26,19 @@ import { ServicesService } from './services.service';
 export class ServicesController {
   constructor(private readonly servicesService: ServicesService) {}
 
-  @Get('services')
+  @Get(['services', 'v1/services'])
   @RequireAnyPermission('services', 'sales')
   listServices(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.servicesService.listServices(query, req.authContext!);
   }
 
-  @Post('services')
+  @Post(['services', 'v1/services'])
   @RequirePermissions('services')
   createService(@Body() payload: UpsertServiceDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.servicesService.createService(payload, req.authContext!);
   }
 
-  @Put('services/:id')
+  @Put(['services/:id', 'v1/services/:id'])
   @RequirePermissions('services')
   updateService(
     @Param('id', ParseIntPipe) id: number,
@@ -48,7 +48,7 @@ export class ServicesController {
     return this.servicesService.updateService(id, payload, req.authContext!);
   }
 
-  @Delete('services/:id')
+  @Delete(['services/:id', 'v1/services/:id'])
   @RequirePermissions('services')
   deleteService(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.servicesService.deleteService(id, req.authContext!);

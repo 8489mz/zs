@@ -13,7 +13,7 @@ import {
 import { ZatcaSubmissionService } from '../../services/zatca/zatca-submission.service';
 import { SubmitZatcaInvoicesBulkDto, ValidateZatcaComplianceDto } from '../../dto/tax-write.dto';
 
-@Controller('api/tax-integration/zatca')
+@Controller(['api/tax-integration/zatca', 'api/v1/tax-integration/zatca'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class ZatcaController {
   constructor(

@@ -7,7 +7,7 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { TableReservationsService } from '../services/table-reservations.service';
 import { CreateTableReservationDto, UpdateTableReservationStatusDto } from '../dto/table-reservation.dto';
 
-@Controller('api/sales/table-reservations')
+@Controller(['api/sales/table-reservations', 'api/v1/sales/table-reservations'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @AllowAuthenticated()
 export class TableReservationsController {

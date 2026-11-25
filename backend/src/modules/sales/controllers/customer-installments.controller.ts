@@ -6,7 +6,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { CustomerInstallmentsService } from '../services/customer-installments.service';
 import { CreateInstallmentPlanDto, PayInstallmentDto, ListInstallmentsQueryDto } from '../dto/customer-installment.dto';
 
-@Controller('api/installments')
+@Controller(['api/installments', 'api/v1/installments'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireAnyPermission('sales', 'customers')
 export class CustomerInstallmentsController {

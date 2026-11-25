@@ -13,19 +13,19 @@ import { TreasuryService } from './treasury.service';
 export class TreasuryController {
   constructor(private readonly treasuryService: TreasuryService) {}
 
-  @Get('expenses')
+  @Get(['expenses', 'v1/expenses'])
   @RequirePermissions('treasury')
   listExpenses(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.treasuryService.listExpenses(query, req.authContext!);
   }
 
-  @Post('expenses')
+  @Post(['expenses', 'v1/expenses'])
   @RequirePermissions('treasury')
   createExpense(@Body() payload: CreateExpenseDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.treasuryService.createExpense(payload, req.authContext!);
   }
 
-  @Post('expenses/:id/cancel')
+  @Post(['expenses/:id/cancel', 'v1/expenses/:id/cancel'])
   @RequirePermissions('treasury')
   cancelExpense(
     @Param('id') id: string,
@@ -35,7 +35,7 @@ export class TreasuryController {
     return this.treasuryService.cancelExpense(Number(id), payload || {}, req.authContext!);
   }
 
-  @Post('treasury/transfers')
+  @Post(['treasury/transfers', 'v1/treasury/transfers'])
   @RequirePermissions('treasury')
   createTransfer(
     @Body() payload: CreateTreasuryTransferDto,

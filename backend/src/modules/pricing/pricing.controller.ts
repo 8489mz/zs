@@ -12,7 +12,7 @@ import {
 } from './dto/pricing-preview.dto';
 import { PricingService } from './pricing.service';
 
-@Controller('api/pricing')
+@Controller(['api/pricing', 'api/v1/pricing'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class PricingController {
   constructor(private readonly pricingService: PricingService) {}

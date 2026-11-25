@@ -4,7 +4,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { SettingsImportService } from '../services/settings-import.service';
 import { ImportRowsDto } from '../dto/settings-write.dto';
 
-@Controller('api/import')
+@Controller(['api/import', 'api/v1/import'])
 @UseGuards(SessionAuthGuard)
 export class SettingsImportController {
   constructor(private readonly importService: SettingsImportService) {}

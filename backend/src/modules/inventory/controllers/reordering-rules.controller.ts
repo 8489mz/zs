@@ -8,7 +8,7 @@ import {
   RunReorderingEvaluationDto,
 } from '../dto/reordering-rule.dto';
 
-@Controller('api/inventory/reordering-rules')
+@Controller(['api/inventory/reordering-rules', 'api/v1/inventory/reordering-rules'])
 @UseGuards(SessionAuthGuard)
 export class ReorderingRulesController {
   constructor(private readonly reorderingService: ReorderingRulesService) {}

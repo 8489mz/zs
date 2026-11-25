@@ -12,7 +12,7 @@ import { UpsertPrescriptionDto } from './dto/upsert-prescription.dto';
 import { UpsertShortageDto } from './dto/upsert-shortage.dto';
 import { UpsertClinicalServiceDto } from './dto/upsert-clinical-service.dto';
 
-@Controller('api/pharmacy')
+@Controller(['api/pharmacy', 'api/v1/pharmacy'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('pharmacy')
 export class PharmacyController {

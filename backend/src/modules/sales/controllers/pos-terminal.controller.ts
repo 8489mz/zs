@@ -6,7 +6,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { PosTerminalService, TerminalPaymentRequestDto } from '../services/pos-terminal.service';
 import { BridgeCallbackDto, BridgePollDto, TestTerminalConnectionDto } from '../dto/pos-terminal.dto';
 
-@Controller('api/sales/pos/terminals')
+@Controller(['api/sales/pos/terminals', 'api/v1/sales/pos/terminals'])
 export class PosTerminalController {
   constructor(private readonly terminalService: PosTerminalService) {}
 

@@ -77,7 +77,7 @@ import {
 import { ForexRevaluationService, ExecuteForexRevaluationDto } from './services/forex-revaluation.service';
 import { SaleEditRemediationService } from './services/sale-edit-remediation.service';
 
-@Controller('api/accounting')
+@Controller(['api/accounting', 'api/v1/accounting'])
 // `AccountingAccessGuard` هو البوابة الحقيقية: `accounts` وحدها كانت تكفي، وهي في قالب كل
 // كاشير، فقرأ حسابُ كاشير الميزانية العمومية والتدفقات النقدية على الإنتاج (25 سبتمبر 2026)
 // لأن خدمتيهما لا تفحصان شيئاً. الحارس يطبّق نفس قاعدة `assertAccountingAccess` على المسارات

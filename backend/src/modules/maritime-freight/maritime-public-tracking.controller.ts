@@ -7,6 +7,8 @@ import { SubmitPublicCarrierBidDto } from './dto/public-carrier-bid.dto';
   'api/public/freight-tracking',
   'api/public/carrier-quote',
   'public/carrier-quote',
+  'api/v1/public/freight-tracking',
+  'api/v1/public/carrier-quote',
 ])
 export class MaritimePublicTrackingController {
   constructor(private readonly freightService: MaritimeFreightService) {}

@@ -6,7 +6,7 @@ import { RequestWithAuth } from '../auth/interfaces/request-with-auth.interface'
 import { TamperAuditService } from './tamper-audit.service';
 import { TamperAuditQueryDto } from './dto/tamper-audit.dto';
 
-@Controller('api/audit/tamper-trail')
+@Controller(['api/audit/tamper-trail', 'api/v1/audit/tamper-trail'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireAnyPermission('audit', 'admin', 'reports')
 export class TamperAuditController {

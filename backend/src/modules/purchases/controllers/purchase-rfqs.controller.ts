@@ -3,7 +3,7 @@ import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { PurchaseRfqsService, CreateRfqDto, SubmitSupplierBidDto } from '../services/purchase-rfqs.service';
 
-@Controller('api/purchases/rfqs')
+@Controller(['api/purchases/rfqs', 'api/v1/purchases/rfqs'])
 @UseGuards(SessionAuthGuard)
 export class PurchaseRfqsController {
   constructor(private readonly rfqsService: PurchaseRfqsService) {}

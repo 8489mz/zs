@@ -7,7 +7,7 @@ import { UpsertAddonDto } from './dto/upsert-addon.dto';
 import { AddonsService } from './addons.service';
 import { ModifierGroupDto } from './dto/modifier-group-write.dto';
 
-@Controller('api/addons')
+@Controller(['api/addons', 'api/v1/addons'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class AddonsController {
   constructor(private readonly addonsService: AddonsService) {}

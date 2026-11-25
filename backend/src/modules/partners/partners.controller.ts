@@ -20,7 +20,7 @@ import { AdjustCustomerLoyaltyPointsDto, CustomerAddressDto } from './dto/partne
 export class PartnersController {
   constructor(private readonly partnersService: PartnersService) {}
 
-  @Get('customers')
+  @Get(['customers', 'v1/customers'])
   @RequirePermissions('customers')
   listCustomers(
     @Query() query: Record<string, unknown>,
@@ -29,13 +29,13 @@ export class PartnersController {
     return this.partnersService.listCustomers(query, req.authContext!);
   }
 
-  @Post('customers')
+  @Post(['customers', 'v1/customers'])
   @RequireAnyPermission('customers', 'deliveryReps', 'delivery_reps', 'sales', 'pos')
   createCustomer(@Body() payload: UpsertCustomerDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.partnersService.createCustomer(payload, req.authContext!);
   }
 
-  @Get('customers/delivery-lookup')
+  @Get(['customers/delivery-lookup', 'v1/customers/delivery-lookup'])
   @AllowAuthenticated()
   lookupCustomerDeliveryProfile(
     @Query('phone') phone: string,
@@ -44,7 +44,7 @@ export class PartnersController {
     return this.partnersService.lookupCustomerDeliveryProfile(phone, req.authContext!);
   }
 
-  @Get('customers/marketing/inactive')
+  @Get(['customers/marketing/inactive', 'v1/customers/marketing/inactive'])
   @RequirePermissions('customers')
   getInactiveCustomersMarketing(
     @Query('days') days: string,
@@ -54,7 +54,7 @@ export class PartnersController {
     return this.partnersService.getInactiveCustomersMarketing(daysInactive, req.authContext!);
   }
 
-  @Get('customers/:id/loyalty/history')
+  @Get(['customers/:id/loyalty/history', 'v1/customers/:id/loyalty/history'])
   @RequirePermissions('customers')
   getCustomerLoyaltyHistory(
     @Param('id', ParseIntPipe) id: number,
@@ -63,7 +63,7 @@ export class PartnersController {
     return this.partnersService.getCustomerLoyaltyHistory(id, req.authContext!);
   }
 
-  @Post('customers/:id/loyalty/adjust')
+  @Post(['customers/:id/loyalty/adjust', 'v1/customers/:id/loyalty/adjust'])
   @RequirePermissions('customers')
   adjustCustomerLoyaltyPoints(
     @Param('id', ParseIntPipe) id: number,
@@ -83,7 +83,7 @@ export class PartnersController {
     );
   }
 
-  @Get('customers/:id/pos-summary')
+  @Get(['customers/:id/pos-summary', 'v1/customers/:id/pos-summary'])
   @RequirePermissions('customers')
   getCustomerPosSummary(
     @Param('id', ParseIntPipe) id: number,
@@ -92,13 +92,13 @@ export class PartnersController {
     return this.partnersService.getCustomerPosSummary(id, req.authContext!);
   }
 
-  @Get('customers/:id/addresses')
+  @Get(['customers/:id/addresses', 'v1/customers/:id/addresses'])
   @AllowAuthenticated()
   getCustomerAddresses(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<string[]> {
     return this.partnersService.getCustomerAddresses(id, req.authContext!);
   }
 
-  @Post('customers/:id/addresses')
+  @Post(['customers/:id/addresses', 'v1/customers/:id/addresses'])
   @AllowAuthenticated()
   addCustomerAddress(
     @Param('id', ParseIntPipe) id: number,
@@ -108,7 +108,7 @@ export class PartnersController {
     return this.partnersService.addCustomerAddress(id, payload.address, req.authContext!);
   }
 
-  @Delete('customers/:id/addresses')
+  @Delete(['customers/:id/addresses', 'v1/customers/:id/addresses'])
   @AllowAuthenticated()
   deleteCustomerAddress(
     @Param('id', ParseIntPipe) id: number,
@@ -118,7 +118,7 @@ export class PartnersController {
     return this.partnersService.deleteCustomerAddress(id, payload.address, req.authContext!);
   }
 
-  @Get('customers/:id/delivery-profile')
+  @Get(['customers/:id/delivery-profile', 'v1/customers/:id/delivery-profile'])
   @AllowAuthenticated()
   getCustomerDeliveryProfile(
     @Param('id', ParseIntPipe) id: number,
@@ -127,7 +127,7 @@ export class PartnersController {
     return this.partnersService.getCustomerDeliveryProfile(id, req.authContext!);
   }
 
-  @Put('customers/:id')
+  @Put(['customers/:id', 'v1/customers/:id'])
   @RequirePermissions('customers')
   updateCustomer(
     @Param('id', ParseIntPipe) id: number,
@@ -137,13 +137,13 @@ export class PartnersController {
     return this.partnersService.updateCustomer(id, payload, req.authContext!);
   }
 
-  @Delete('customers/:id')
+  @Delete(['customers/:id', 'v1/customers/:id'])
   @RequirePermissions('canDelete')
   deleteCustomer(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.partnersService.deleteCustomer(id, req.authContext!);
   }
 
-  @Get('suppliers')
+  @Get(['suppliers', 'v1/suppliers'])
   @RequireAnyPermission('suppliers', 'purchases')
   listSuppliers(
     @Query() query: Record<string, unknown>,
@@ -152,13 +152,13 @@ export class PartnersController {
     return this.partnersService.listSuppliers(query, req.authContext!);
   }
 
-  @Post('suppliers')
+  @Post(['suppliers', 'v1/suppliers'])
   @RequirePermissions('suppliers')
   createSupplier(@Body() payload: UpsertSupplierDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.partnersService.createSupplier(payload, req.authContext!);
   }
 
-  @Put('suppliers/:id')
+  @Put(['suppliers/:id', 'v1/suppliers/:id'])
   @RequirePermissions('suppliers')
   updateSupplier(
     @Param('id', ParseIntPipe) id: number,
@@ -168,13 +168,18 @@ export class PartnersController {
     return this.partnersService.updateSupplier(id, payload, req.authContext!);
   }
 
-  @Delete('suppliers/:id')
+  @Delete(['suppliers/:id', 'v1/suppliers/:id'])
   @RequirePermissions('canDelete')
   deleteSupplier(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.partnersService.deleteSupplier(id, req.authContext!);
   }
 
-  @Get([':partnerType/:partnerId/contacts', 'partners/:partnerType/:partnerId/contacts'])
+  @Get([
+    ':partnerType/:partnerId/contacts',
+    'partners/:partnerType/:partnerId/contacts',
+    'v1/:partnerType/:partnerId/contacts',
+    'v1/partners/:partnerType/:partnerId/contacts',
+  ])
   @RequireAnyPermission('customers', 'suppliers', 'sales', 'purchases')
   listContacts(
     @Param('partnerType') partnerType: string,
@@ -184,7 +189,12 @@ export class PartnersController {
     return this.partnersService.listContacts(partnerType, partnerId, req.authContext!);
   }
 
-  @Post([':partnerType/:partnerId/contacts', 'partners/:partnerType/:partnerId/contacts'])
+  @Post([
+    ':partnerType/:partnerId/contacts',
+    'partners/:partnerType/:partnerId/contacts',
+    'v1/:partnerType/:partnerId/contacts',
+    'v1/partners/:partnerType/:partnerId/contacts',
+  ])
   @RequireAnyPermission('customers', 'suppliers')
   createContact(
     @Param('partnerType') partnerType: string,
@@ -195,7 +205,12 @@ export class PartnersController {
     return this.partnersService.createContact(partnerType, partnerId, payload, req.authContext!);
   }
 
-  @Get([':partnerType/:partnerId/addresses', 'partners/:partnerType/:partnerId/addresses'])
+  @Get([
+    ':partnerType/:partnerId/addresses',
+    'partners/:partnerType/:partnerId/addresses',
+    'v1/:partnerType/:partnerId/addresses',
+    'v1/partners/:partnerType/:partnerId/addresses',
+  ])
   @RequireAnyPermission('customers', 'suppliers', 'sales', 'purchases')
   listAddresses(
     @Param('partnerType') partnerType: string,
@@ -205,7 +220,12 @@ export class PartnersController {
     return this.partnersService.listAddresses(partnerType, partnerId, req.authContext!);
   }
 
-  @Post([':partnerType/:partnerId/addresses', 'partners/:partnerType/:partnerId/addresses'])
+  @Post([
+    ':partnerType/:partnerId/addresses',
+    'partners/:partnerType/:partnerId/addresses',
+    'v1/:partnerType/:partnerId/addresses',
+    'v1/partners/:partnerType/:partnerId/addresses',
+  ])
   @RequireAnyPermission('customers', 'suppliers')
   createAddress(
     @Param('partnerType') partnerType: string,

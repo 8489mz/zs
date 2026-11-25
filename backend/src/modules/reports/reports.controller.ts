@@ -18,7 +18,7 @@ export class ReportsController {
     private readonly rollupService: DailyCommercialRollupService,
   ) {}
 
-  @Get('dashboard/overview')
+  @Get(['dashboard/overview', 'v1/dashboard/overview'])
   @RequirePermissions('dashboard')
   dashboardOverview(
     @Query() query: ReportRangeQueryDto,
@@ -27,7 +27,7 @@ export class ReportsController {
     return this.reportsService.dashboardOverview(query, req.authContext!);
   }
 
-  @Get('reports/summary')
+  @Get(['reports/summary', 'v1/reports/summary'])
   @RequirePermissions('reports')
   reportSummary(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.reportSummary(query, req.authContext!);
@@ -35,7 +35,7 @@ export class ReportsController {
 
   // INV-VAN-PROFIT-REP-REPORTING: standalone net-profit view (same
   // range query as the summary, including the deliveryRepId scope).
-  @Get('reports/net-profit')
+  @Get(['reports/net-profit', 'v1/reports/net-profit'])
   @RequirePermissions('reports')
   netProfitReport(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.netProfitReport(query, req.authContext!);
@@ -43,7 +43,7 @@ export class ReportsController {
 
   // INV-VAN-SALES-LIST-DATE-FILTER: combined sales-per-rep /
   // purchases-per-supplier report, one response, one tenant-day range.
-  @Get('reports/rep-supplier-summary')
+  @Get(['reports/rep-supplier-summary', 'v1/reports/rep-supplier-summary'])
   @RequirePermissions('reports')
   repSupplierSummary(
     @Query() query: ReportRangeQueryDto,
@@ -52,19 +52,19 @@ export class ReportsController {
     return this.reportsService.repSupplierSummary(query, req.authContext!);
   }
 
-  @Get('reports/inventory')
+  @Get(['reports/inventory', 'v1/reports/inventory'])
   @RequirePermissions('reports')
   reportInventory(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.inventoryReport(query, req.authContext!);
   }
 
-  @Get('reports/inventory/dead-stock')
+  @Get(['reports/inventory/dead-stock', 'v1/reports/inventory/dead-stock'])
   @RequirePermissions('reports')
   deadStockReport(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.deadStockReport(query, req.authContext!);
   }
 
-  @Get('reports/customers/rfm')
+  @Get(['reports/customers/rfm', 'v1/reports/customers/rfm'])
   @RequirePermissions('reports')
   customerRfmReport(
     @Query() query: ReportRangeQueryDto,
@@ -73,7 +73,7 @@ export class ReportsController {
     return this.reportsService.customerRfmReport(query, req.authContext!);
   }
 
-  @Get('reports/restaurant/food-cost-variance')
+  @Get(['reports/restaurant/food-cost-variance', 'v1/reports/restaurant/food-cost-variance'])
   @RequirePermissions('reports')
   foodCostVarianceReport(
     @Query() query: ReportRangeQueryDto,
@@ -82,7 +82,7 @@ export class ReportsController {
     return this.reportsService.foodCostVarianceReport(query, req.authContext!);
   }
 
-  @Get('reports/restaurant/menu-engineering')
+  @Get(['reports/restaurant/menu-engineering', 'v1/reports/restaurant/menu-engineering'])
   @RequirePermissions('reports')
   menuEngineeringReport(
     @Query() query: ReportRangeQueryDto,
@@ -91,19 +91,19 @@ export class ReportsController {
     return this.reportsService.menuEngineeringReport(query, req.authContext!);
   }
 
-  @Get('reports/customer-balances')
+  @Get(['reports/customer-balances', 'v1/reports/customer-balances'])
   @RequireAnyPermission('reports', 'accounts')
   customerBalances(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.customerBalances(query, req.authContext!);
   }
 
-  @Get('reports/supplier-balances')
+  @Get(['reports/supplier-balances', 'v1/reports/supplier-balances'])
   @RequireAnyPermission('reports', 'accounts')
   supplierBalances(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.supplierBalances(query, req.authContext!);
   }
 
-  @Get('reports/customers/:id/ledger')
+  @Get(['reports/customers/:id/ledger', 'v1/reports/customers/:id/ledger'])
   @RequireAnyPermission('reports', 'accounts')
   customerLedger(
     @Param('id', ParseIntPipe) id: number,
@@ -113,7 +113,7 @@ export class ReportsController {
     return this.reportsService.customerLedger(id, query, req.authContext!);
   }
 
-  @Get('reports/suppliers/:id/ledger')
+  @Get(['reports/suppliers/:id/ledger', 'v1/reports/suppliers/:id/ledger'])
   @RequireAnyPermission('reports', 'accounts', 'suppliers')
   supplierLedger(
     @Param('id', ParseIntPipe) id: number,
@@ -123,19 +123,19 @@ export class ReportsController {
     return this.reportsService.supplierLedger(id, query, req.authContext!);
   }
 
-  @Get('treasury-transactions')
+  @Get(['treasury-transactions', 'v1/treasury-transactions'])
   @RequirePermissions('treasury')
   treasury(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.treasuryTransactions(query, req.authContext!);
   }
 
-  @Get('reports/employees')
+  @Get(['reports/employees', 'v1/reports/employees'])
   @RequirePermissions('reports')
   employeeSummary(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.employeeSummary(query, req.authContext!);
   }
 
-  @Get('reports/employees/:id/details')
+  @Get(['reports/employees/:id/details', 'v1/reports/employees/:id/details'])
   @RequirePermissions('reports')
   employeeDetails(
     @Param('id', ParseIntPipe) id: number,
@@ -145,49 +145,49 @@ export class ReportsController {
     return this.reportsService.employeeDetails(id, query, req.authContext!);
   }
 
-  @Get('audit-logs')
+  @Get(['audit-logs', 'v1/audit-logs'])
   @RequirePermissions('audit')
   auditLogs(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.auditLogs(query, req.authContext!);
   }
 
-  @Get('reports/debt-aging')
+  @Get(['reports/debt-aging', 'v1/reports/debt-aging'])
   @RequireAnyPermission('reports', 'accounts')
   debtAging(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.debtAgingReport(req.authContext!);
   }
 
-  @Get('reports/demand-forecasting')
+  @Get(['reports/demand-forecasting', 'v1/reports/demand-forecasting'])
   @RequireAnyPermission('reports', 'inventory')
   demandForecasting(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.demandForecastingReport(req.authContext!);
   }
 
-  @Post('reports/pivot/execute')
+  @Post(['reports/pivot/execute', 'v1/reports/pivot/execute'])
   @RequireAnyPermission('reports', 'dashboard', 'sales', 'accounting')
   executePivot(@Body() dto: ExecuteDynamicPivotDto, @Req() req: RequestWithAuth) {
     return this.pivotService.executePivot(req.authContext!, dto);
   }
 
-  @Get('reports/pivot/templates')
+  @Get(['reports/pivot/templates', 'v1/reports/pivot/templates'])
   @RequireAnyPermission('reports', 'dashboard', 'sales', 'accounting')
   getSavedTemplates(@Query('dataset') dataset: string, @Req() req: RequestWithAuth) {
     return this.pivotService.getSavedTemplates(req.authContext!, dataset);
   }
 
-  @Post('reports/pivot/templates')
+  @Post(['reports/pivot/templates', 'v1/reports/pivot/templates'])
   @RequireAnyPermission('reports', 'dashboard', 'sales', 'accounting')
   savePivotTemplate(@Body() dto: SavePivotTemplateDto, @Req() req: RequestWithAuth) {
     return this.pivotService.saveTemplate(req.authContext!, dto);
   }
 
-  @Delete('reports/pivot/templates/:id')
+  @Delete(['reports/pivot/templates/:id', 'v1/reports/pivot/templates/:id'])
   @RequireAnyPermission('reports', 'dashboard', 'sales', 'accounting')
   deletePivotTemplate(@Param('id') id: string, @Req() req: RequestWithAuth) {
     return this.pivotService.deleteTemplate(req.authContext!, id);
   }
 
-  @Get('reports/rollups/multi-year-comparison')
+  @Get(['reports/rollups/multi-year-comparison', 'v1/reports/rollups/multi-year-comparison'])
   @RequireAnyPermission('reports', 'dashboard')
   multiYearRollupComparison(
     @Query('years') yearsParam: string,
@@ -203,7 +203,7 @@ export class ReportsController {
     return this.rollupService.getHistoricalMultiYearComparison(req.authContext!.tenantId!, targetYears, branch);
   }
 
-  @Post('reports/rollups/compute-day')
+  @Post(['reports/rollups/compute-day', 'v1/reports/rollups/compute-day'])
   @RequirePermissions('reports')
   computeDayRollup(@Body('date') date: string, @Body('branchId') branchId: number, @Req() req: RequestWithAuth) {
     // No date supplied: the rollup service owns the default (it holds
@@ -217,7 +217,7 @@ export class ReportsController {
   // INV-VAN-PROFIT-REP-REPORTING: one-off backfill after the returns
   // fix — recomputes stored rollup rows for a date range (derived
   // aggregates, never journals). Run once after deploy, repeatable.
-  @Post('reports/rollups/recompute-range')
+  @Post(['reports/rollups/recompute-range', 'v1/reports/rollups/recompute-range'])
   @RequirePermissions('reports')
   recomputeRangeRollups(
     @Body('dateFrom') dateFrom: string,

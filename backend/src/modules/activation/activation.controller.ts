@@ -3,7 +3,7 @@ import { ActivationService } from './activation.service';
 import { ActivateAppDto } from './dto/activate-app.dto';
 import { InitializeAppDto } from './dto/initialize-app.dto';
 
-@Controller('api/activation')
+@Controller(['api/activation', 'api/v1/activation'])
 export class ActivationController {
   constructor(private readonly activationService: ActivationService) {}
 

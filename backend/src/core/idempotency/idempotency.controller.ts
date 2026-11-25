@@ -8,7 +8,7 @@ import { Database } from '../../database/database.types';
 import { KYSELY_DB } from '../../database/database.constants';
 import { IdempotencyService, IDEMPOTENCY_STUCK_PROCESSING_MS } from './idempotency.service';
 
-@Controller('api/operations')
+@Controller(['api/operations', 'api/v1/operations'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class IdempotencyController {
   constructor(

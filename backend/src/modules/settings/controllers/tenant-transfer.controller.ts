@@ -19,7 +19,7 @@ import { AdminRoleGuard } from '../../../core/auth/guards/admin-role.guard';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { TenantTransferService } from '../services/tenant-transfer.service';
 
-@Controller('api/tenant-transfer')
+@Controller(['api/tenant-transfer', 'api/v1/tenant-transfer'])
 @UseGuards(SessionAuthGuard, AdminRoleGuard)
 export class TenantTransferController {
   constructor(private readonly transfer: TenantTransferService) {}

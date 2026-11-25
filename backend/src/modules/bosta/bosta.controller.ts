@@ -7,7 +7,7 @@ import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { escapeHtml } from '../../common/utils/escape-html';
 
-@Controller(['bosta', 'api/bosta'])
+@Controller(['bosta', 'api/bosta', 'api/v1/bosta'])
 @UseGuards(SessionAuthGuard)
 export class BostaController {
   constructor(private readonly bostaService: BostaService) {}

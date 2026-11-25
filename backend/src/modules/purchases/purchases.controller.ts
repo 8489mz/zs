@@ -61,7 +61,7 @@ export class PurchasesController {
     @Optional() private readonly marginProtectionService?: MarginProtectionService,
   ) {}
 
-  @Get('purchases')
+  @Get(['purchases', 'v1/purchases'])
   @RequirePermissions('purchases')
   listPurchases(
     @Query() query: Record<string, unknown>,
@@ -70,7 +70,7 @@ export class PurchasesController {
     return this.purchasesService.listPurchases(query, req.authContext!);
   }
 
-  @Get('purchases/reorder/suggestions')
+  @Get(['purchases/reorder/suggestions', 'v1/purchases/reorder/suggestions'])
   @RequirePermissions('purchases')
   getReorderSuggestions(
     @Query() query: Record<string, unknown>,
@@ -79,7 +79,7 @@ export class PurchasesController {
     return this.purchasesService.getReorderSuggestions(query, req.authContext!);
   }
 
-  @Post('purchases/reorder/generate-drafts')
+  @Post(['purchases/reorder/generate-drafts', 'v1/purchases/reorder/generate-drafts'])
   @RequirePermissions('purchases')
   @UseInterceptors(IdempotencyInterceptor)
   generateDraftPurchaseOrders(
@@ -89,7 +89,7 @@ export class PurchasesController {
     return this.purchasesService.generateDraftPurchaseOrders(payload, req.authContext!);
   }
 
-  @Get('purchases/check-duplicate')
+  @Get(['purchases/check-duplicate', 'v1/purchases/check-duplicate'])
   @RequirePermissions('purchases')
   checkDuplicateBill(
     @Query() query: Record<string, unknown>,
@@ -107,13 +107,13 @@ export class PurchasesController {
     );
   }
 
-  @Get('purchases/:id')
+  @Get(['purchases/:id', 'v1/purchases/:id'])
   @RequirePermissions('purchases')
   getPurchase(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.purchasesService.getPurchaseById(id, req.authContext!);
   }
 
-  @Post('purchases')
+  @Post(['purchases', 'v1/purchases'])
   @RequirePermissions('purchases')
   createPurchase(
     @Body() payload: UpsertPurchaseDto,
@@ -123,7 +123,7 @@ export class PurchasesController {
     return this.purchasesService.createPurchase(payload, req.authContext!, idempotencyKey);
   }
 
-  @Put('purchases/:id')
+  @Put(['purchases/:id', 'v1/purchases/:id'])
   @RequirePermissions('canEditInvoices')
   @UseInterceptors(IdempotencyInterceptor)
   updatePurchase(
@@ -134,7 +134,7 @@ export class PurchasesController {
     return this.purchasesService.updatePurchase(id, payload, req.authContext!);
   }
 
-  @Post('purchases/:id/cancel')
+  @Post(['purchases/:id/cancel', 'v1/purchases/:id/cancel'])
   @RequirePermissions('canEditInvoices')
   @UseInterceptors(IdempotencyInterceptor)
   cancelPurchase(
@@ -150,7 +150,7 @@ export class PurchasesController {
     );
   }
 
-  @Post('purchases/:id/receive-goods')
+  @Post(['purchases/:id/receive-goods', 'v1/purchases/:id/receive-goods'])
   @RequirePermissions('purchases')
   @UseInterceptors(IdempotencyInterceptor)
   receivePurchaseGoods(
@@ -161,7 +161,7 @@ export class PurchasesController {
     return this.purchasesService.receivePurchaseGoods(id, body?.receivedItems || [], req.authContext!);
   }
 
-  @Get('purchases/:id/payment-schedule')
+  @Get(['purchases/:id/payment-schedule', 'v1/purchases/:id/payment-schedule'])
   @RequirePermissions('purchases')
   listPurchasePaymentSchedule(
     @Param('id', ParseIntPipe) id: number,
@@ -170,7 +170,7 @@ export class PurchasesController {
     return this.scheduleService.listForPurchase(id, req.authContext!);
   }
 
-  @Post('purchases/:id/payment-schedule')
+  @Post(['purchases/:id/payment-schedule', 'v1/purchases/:id/payment-schedule'])
   @RequirePermissions('accounts')
   @UseInterceptors(IdempotencyInterceptor)
   createPurchasePaymentSchedule(
@@ -181,7 +181,7 @@ export class PurchasesController {
     return this.scheduleService.createForPurchase(id, payload, req.authContext!);
   }
 
-  @Get('suppliers/:id/payment-schedule')
+  @Get(['suppliers/:id/payment-schedule', 'v1/suppliers/:id/payment-schedule'])
   @RequirePermissions('accounts')
   listSupplierPaymentSchedule(
     @Param('id', ParseIntPipe) id: number,
@@ -190,7 +190,7 @@ export class PurchasesController {
     return this.scheduleService.listForSupplier(id, req.authContext!);
   }
 
-  @Post('suppliers/:id/payment-schedule')
+  @Post(['suppliers/:id/payment-schedule', 'v1/suppliers/:id/payment-schedule'])
   @RequirePermissions('accounts')
   @UseInterceptors(IdempotencyInterceptor)
   createSupplierPaymentSchedule(
@@ -201,7 +201,7 @@ export class PurchasesController {
     return this.scheduleService.createForSupplier(id, payload, req.authContext!);
   }
 
-  @Post('supplier-payment-schedules/:id/settle')
+  @Post(['supplier-payment-schedules/:id/settle', 'v1/supplier-payment-schedules/:id/settle'])
   @RequirePermissions('accounts')
   settleSupplierSchedule(
     @Param('id', ParseIntPipe) id: number,
@@ -212,7 +212,7 @@ export class PurchasesController {
     return this.scheduleService.payInstallment(id, payload, req.authContext!, idempotencyKey);
   }
 
-  @Get('purchases/:id/margin-analysis')
+  @Get(['purchases/:id/margin-analysis', 'v1/purchases/:id/margin-analysis'])
   @RequirePermissions('purchases')
   analyzePurchaseMargins(
     @Param('id', ParseIntPipe) id: number,
@@ -226,7 +226,7 @@ export class PurchasesController {
     return this.marginProtectionService.analyzePurchaseMargins(id, margin, req.authContext!);
   }
 
-  @Post('purchases/:id/apply-repricing')
+  @Post(['purchases/:id/apply-repricing', 'v1/purchases/:id/apply-repricing'])
   @RequirePermissions('purchases')
   @UseInterceptors(IdempotencyInterceptor)
   applyPurchaseRepricing(
@@ -240,7 +240,7 @@ export class PurchasesController {
     return this.marginProtectionService.applyRepricing(id, payload, req.authContext!);
   }
 
-  @Get('supplier-payments')
+  @Get(['supplier-payments', 'v1/supplier-payments'])
   @RequirePermissions('accounts')
   listSupplierPayments(
     @Query() query: Record<string, unknown>,
@@ -249,7 +249,7 @@ export class PurchasesController {
     return this.purchasesService.listSupplierPayments(req.authContext!, query);
   }
 
-  @Get('supplier-payments/:id')
+  @Get(['supplier-payments/:id', 'v1/supplier-payments/:id'])
   @RequirePermissions('accounts')
   getSupplierPayment(
     @Param('id', ParseIntPipe) id: number,
@@ -258,7 +258,7 @@ export class PurchasesController {
     return this.purchasesService.getSupplierPaymentById(id, req.authContext!);
   }
 
-  @Post('supplier-payments')
+  @Post(['supplier-payments', 'v1/supplier-payments'])
   @RequirePermissions('accounts')
   createSupplierPayment(
     @Body() payload: CreateSupplierPaymentDto,
@@ -274,7 +274,7 @@ export class PurchasesController {
    * moves at apply time. No UI calls this yet (open item); the
    * endpoint is the posting-side apply the supplier payment form
    * will call once it gains an advance toggle + apply action. */
-  @Post('supplier-payments/:id/apply-advance')
+  @Post(['supplier-payments/:id/apply-advance', 'v1/supplier-payments/:id/apply-advance'])
   @RequirePermissions('accounts')
   applySupplierAdvance(
     @Param('id', ParseIntPipe) id: number,
@@ -287,7 +287,7 @@ export class PurchasesController {
   /* INV-SUPPLIER-NONSTOCK-BILL: a bill for things that never touch stock
    * (program, paper, cables, service) — creates the payable the payment
    * and scheduling flows settle. No stock movement of any kind. */
-  @Get('supplier-bills')
+  @Get(['supplier-bills', 'v1/supplier-bills'])
   @RequirePermissions('purchases')
   listSupplierBills(
     @Query() query: Record<string, unknown>,
@@ -299,7 +299,7 @@ export class PurchasesController {
     return this.supplierBillsService.listSupplierBills(Number(query.supplierId || 0), req.authContext!);
   }
 
-  @Post('supplier-bills')
+  @Post(['supplier-bills', 'v1/supplier-bills'])
   @RequirePermissions('purchases')
   createSupplierBill(
     @Body() payload: CreateSupplierBillDto,
@@ -312,7 +312,7 @@ export class PurchasesController {
     return this.supplierBillsService.createSupplierBill(payload, req.authContext!, idempotencyKey);
   }
 
-  @Post('customer-payments')
+  @Post(['customer-payments', 'v1/customer-payments'])
   @RequirePermissions('accounts')
   createCustomerPayment(
     @Body() payload: CreateCustomerPaymentDto,
@@ -322,7 +322,7 @@ export class PurchasesController {
     return this.purchasesService.createCustomerPayment(payload, req.authContext!, idempotencyKey);
   }
 
-  @Post('purchases/attachments/upload')
+  @Post(['purchases/attachments/upload', 'v1/purchases/attachments/upload'])
   @RequirePermissions('purchases')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -369,7 +369,10 @@ export class PurchasesController {
     };
   }
 
-  @Get('purchases/:purchaseId/attachments/:attachmentId/download')
+  @Get([
+    'purchases/:purchaseId/attachments/:attachmentId/download',
+    'v1/purchases/:purchaseId/attachments/:attachmentId/download',
+  ])
   @RequirePermissions('purchases')
   async downloadPurchaseAttachment(
     @Param('purchaseId', ParseIntPipe) purchaseId: number,
@@ -393,7 +396,7 @@ export class PurchasesController {
     res.sendFile(filePath);
   }
 
-  @Get('purchases/:id/landed-costs')
+  @Get(['purchases/:id/landed-costs', 'v1/purchases/:id/landed-costs'])
   @RequirePermissions('purchases')
   getPurchaseLandedCosts(
     @Param('id', ParseIntPipe) id: number,
@@ -403,7 +406,7 @@ export class PurchasesController {
     return this.landedCostsService.getPurchaseLandedCosts(id, req.authContext!);
   }
 
-  @Post('purchases/:id/landed-costs')
+  @Post(['purchases/:id/landed-costs', 'v1/purchases/:id/landed-costs'])
   @RequirePermissions('canEditInvoices')
   @UseInterceptors(IdempotencyInterceptor)
   applyPurchaseLandedCosts(

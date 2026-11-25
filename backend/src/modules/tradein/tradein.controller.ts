@@ -7,7 +7,7 @@ import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.in
 import { UpsertTradeInDto } from './dto/upsert-tradein.dto';
 import { TradeInService } from './tradein.service';
 
-@Controller('api/tradein/transactions')
+@Controller(['api/tradein/transactions', 'api/v1/tradein/transactions'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('maintenance')
 export class TradeInController {

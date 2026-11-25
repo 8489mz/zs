@@ -4,7 +4,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { CommercialSubscriptionService } from '../services/commercial-subscription.service';
 import { CreateCommercialSubscriptionDto, UpdateSubscriptionStatusDto } from '../dto/commercial-subscription.dto';
 
-@Controller('api/sales/subscriptions')
+@Controller(['api/sales/subscriptions', 'api/v1/sales/subscriptions'])
 @UseGuards(SessionAuthGuard)
 export class CommercialSubscriptionController {
   constructor(private readonly subscriptionService: CommercialSubscriptionService) {}

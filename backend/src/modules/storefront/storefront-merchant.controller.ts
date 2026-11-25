@@ -32,7 +32,7 @@ import { CreateDeliveryZoneDto, UpdateDeliveryZoneDto } from './dto/delivery-zon
 // 'sales' because cashiers do it from the POS; store configuration needs 'storefront' or 'settings'.
 const CONFIG_PERMISSIONS = ['storefront', 'settings'] as const;
 
-@Controller('api/storefront/admin')
+@Controller(['api/storefront/admin', 'api/v1/storefront/admin'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireAnyPermission('storefront', 'sales')
 export class StorefrontMerchantController {

@@ -24,13 +24,13 @@ import type { ConditionalDiscountForfeitBreakdown } from './engines/conditional-
 export class ReturnsController {
   constructor(private readonly returnsService: ReturnsService) {}
 
-  @Get('returns')
+  @Get(['returns', 'v1/returns'])
   @RequirePermissions('returns')
   listReturns(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.returnsService.listReturns(query, req.authContext!);
   }
 
-  @Get('returns/invoices/:type/:invoiceId/quantities')
+  @Get(['returns/invoices/:type/:invoiceId/quantities', 'v1/returns/invoices/:type/:invoiceId/quantities'])
   @RequirePermissions('returns')
   getInvoiceReturnedQuantities(
     @Param('type') type: string,
@@ -44,7 +44,7 @@ export class ReturnsController {
    * statement details button. Registered after the specific
    * 'returns/invoices/...' route so that path never reaches this handler
    * (ParseIntPipe would also reject the 'invoices' segment). */
-  @Get('returns/:id')
+  @Get(['returns/:id', 'v1/returns/:id'])
   @RequirePermissions('returns')
   getReturnById(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.returnsService.getReturnById(id, req.authContext!);
@@ -55,7 +55,7 @@ export class ReturnsController {
    * computeSalesReturnRelief createSaleReturn uses — never a local
    * copy of the ratio. Registered before the POST /api/returns
    * create route; it takes the same body shape as a create. */
-  @Post('returns/preview')
+  @Post(['returns/preview', 'v1/returns/preview'])
   @RequirePermissions('returns')
   previewReturnRelief(
     @Body() payload: CreateReturnDto,
@@ -72,7 +72,7 @@ export class ReturnsController {
     return this.returnsService.previewReturnRelief(payload, req.authContext!);
   }
 
-  @Post('returns')
+  @Post(['returns', 'v1/returns'])
   @RequirePermissions('returns')
   @UseInterceptors(IdempotencyInterceptor)
   createReturn(@Body() payload: CreateReturnDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {

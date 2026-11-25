@@ -59,7 +59,7 @@ import {
   UpdateVehicleDto,
 } from './dto/van-trips.dto';
 
-@Controller('api/van-sales/admin')
+@Controller(['api/van-sales/admin', 'api/v1/van-sales/admin'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('deliveryReps')
 export class VanSalesAdminController {

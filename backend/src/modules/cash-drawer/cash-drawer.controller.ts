@@ -25,7 +25,7 @@ export class CashDrawerController {
     private readonly counterpartService: CashDrawerCounterpartService,
   ) {}
 
-  @Get('cashier-shifts')
+  @Get(['cashier-shifts', 'v1/cashier-shifts'])
   @RequireAnyPermission('cashDrawer', 'hrPayroll', 'hrPayrollManage', 'hr', 'accounting')
   list(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.cashDrawerService.listCashierShifts(query, req.authContext!);
@@ -35,19 +35,19 @@ export class CashDrawerController {
   // list for the drawer movement form. Cashiers hold `cashDrawer`
   // by default; the full chart endpoint stays behind
   // AccountingAccessGuard (super_admin / admin / `accounting` only).
-  @Get('cashier-shifts/counterpart-accounts')
+  @Get(['cashier-shifts/counterpart-accounts', 'v1/cashier-shifts/counterpart-accounts'])
   @RequirePermissions('cashDrawer')
   counterpartAccounts(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.counterpartService.listCounterpartAccounts(req.authContext!);
   }
 
-  @Post('cashier-shifts/open')
+  @Post(['cashier-shifts/open', 'v1/cashier-shifts/open'])
   @RequirePermissions('cashDrawer')
   open(@Body() payload: OpenCashierShiftDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.cashDrawerService.openCashierShift(payload, req.authContext!);
   }
 
-  @Post('cashier-shifts/:id/cash-movement')
+  @Post(['cashier-shifts/:id/cash-movement', 'v1/cashier-shifts/:id/cash-movement'])
   @RequirePermissions('cashDrawer')
   movement(
     @Param('id', ParseIntPipe) id: number,
@@ -57,7 +57,7 @@ export class CashDrawerController {
     return this.cashDrawerService.recordCashMovement(id, payload, req.authContext!);
   }
 
-  @Post('cashier-shifts/:id/close')
+  @Post(['cashier-shifts/:id/close', 'v1/cashier-shifts/:id/close'])
   @RequirePermissions('cashDrawer')
   close(
     @Param('id', ParseIntPipe) id: number,
@@ -67,7 +67,7 @@ export class CashDrawerController {
     return this.cashDrawerService.closeCashierShift(id, payload, req.authContext!);
   }
 
-  @Post('cashier-shifts/:id/review-close')
+  @Post(['cashier-shifts/:id/review-close', 'v1/cashier-shifts/:id/review-close'])
   @RequirePermissions('cashDrawer')
   reviewClose(
     @Param('id', ParseIntPipe) id: number,

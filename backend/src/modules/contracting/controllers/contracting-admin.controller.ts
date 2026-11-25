@@ -17,7 +17,7 @@ import type {
   CreateMeetingActionItemDto,
 } from '../dto/contracting.dto';
 
-@Controller(['contracting', 'api/contracting'])
+@Controller(['contracting', 'api/contracting', 'api/v1/contracting'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('contracting')
 @AllowAuthenticated()

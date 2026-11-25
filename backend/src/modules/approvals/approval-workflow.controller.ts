@@ -4,7 +4,7 @@ import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.in
 import { ApprovalWorkflowService, CreateApprovalRuleDto, ApprovalRequestFilter } from './approval-workflow.service';
 import { ApproveApprovalRequestDto, RejectApprovalRequestDto, UpdateApprovalRuleDto } from './dto/approval-write.dto';
 
-@Controller('api/approvals')
+@Controller(['api/approvals', 'api/v1/approvals'])
 @UseGuards(SessionAuthGuard)
 export class ApprovalWorkflowController {
   constructor(private readonly approvalService: ApprovalWorkflowService) {}

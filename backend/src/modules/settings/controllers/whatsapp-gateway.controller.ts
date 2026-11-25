@@ -8,7 +8,7 @@ import { WhatsAppGatewayService, WhatsAppConfig } from '../services/whatsapp-gat
 import { WhatsAppConfigDto } from '../dto/settings-write.dto';
 import { WhatsAppWebhookDto } from '../dto/whatsapp-webhook.dto';
 
-@Controller('api/settings/whatsapp')
+@Controller(['api/settings/whatsapp', 'api/v1/settings/whatsapp'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class WhatsAppGatewayController {
   constructor(private readonly whatsappService: WhatsAppGatewayService) {}
@@ -51,7 +51,7 @@ export class WhatsAppGatewayController {
   }
 }
 
-@Controller('api/whatsapp')
+@Controller(['api/whatsapp', 'api/v1/whatsapp'])
 export class WhatsAppPublicWebhookController {
   constructor(private readonly whatsappService: WhatsAppGatewayService) {}
 

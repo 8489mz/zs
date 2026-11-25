@@ -7,7 +7,7 @@ import {
   FraudRadarEventItem,
 } from '../services/cashier-fraud-radar.service';
 
-@Controller('api/sales/fraud-radar')
+@Controller(['api/sales/fraud-radar', 'api/v1/sales/fraud-radar'])
 @UseGuards(SessionAuthGuard)
 export class CashierFraudRadarController {
   constructor(private readonly fraudRadarService: CashierFraudRadarService) {}

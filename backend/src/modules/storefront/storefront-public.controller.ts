@@ -27,7 +27,7 @@ import { MockPayDto, PayTableBillDto, QuoteCartDto, ValidateCouponDto } from './
 import { ORDER_ACCESS_TOKEN_HEADER } from './engines/online-order-access.engine';
 import { MARKETPLACE_WEBHOOK_SIGNATURE_HEADER } from './engines/marketplace-webhook-event.engine';
 
-@Controller('api/storefront')
+@Controller(['api/storefront', 'api/v1/storefront'])
 export class StorefrontPublicController {
   constructor(
     private readonly service: StorefrontService,

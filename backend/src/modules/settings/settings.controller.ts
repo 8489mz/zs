@@ -40,14 +40,14 @@ export class SettingsController {
     }
   }
 
-  @Get('settings')
+  @Get(['settings', 'v1/settings'])
   @Header('Cache-Control', 'private, no-cache, must-revalidate')
   async getSettings(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     await this.backupService.runAutoBackupIfDue(req.authContext).catch(() => undefined);
     return this.settingsService.getSettings(req.authContext!);
   }
 
-  @Put('settings')
+  @Put(['settings', 'v1/settings'])
   updateSettings(
     @Body() rawPayload: Record<string, unknown>,
     @Req() req: RequestWithAuth,
@@ -64,19 +64,19 @@ export class SettingsController {
     return this.settingsService.saveSettings(settings, req.authContext!);
   }
 
-  @Get('branches')
+  @Get(['branches', 'v1/branches'])
   @Header('Cache-Control', 'private, no-cache, must-revalidate')
   listBranches(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.settingsService.listBranches(req.authContext!);
   }
 
-  @Post('branches')
+  @Post(['branches', 'v1/branches'])
   createBranch(@Body() payload: BranchPayloadDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     this.assertSettingsPermission(req);
     return this.settingsService.createBranch(payload, req.authContext!);
   }
 
-  @Put('branches/:id')
+  @Put(['branches/:id', 'v1/branches/:id'])
   updateBranch(
     @Param('id', ParseIntPipe) id: number,
     @Body() payload: BranchPayloadDto,
@@ -86,25 +86,25 @@ export class SettingsController {
     return this.settingsService.updateBranch(id, payload, req.authContext!);
   }
 
-  @Delete('branches/:id')
+  @Delete(['branches/:id', 'v1/branches/:id'])
   deleteBranch(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     this.assertSettingsPermission(req);
     return this.settingsService.deleteBranch(id, req.authContext!);
   }
 
-  @Get('settings/locations')
+  @Get(['settings/locations', 'v1/settings/locations'])
   @Header('Cache-Control', 'private, no-cache, must-revalidate')
   listLocations(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.settingsService.listLocations(req.authContext!);
   }
 
-  @Post('settings/locations')
+  @Post(['settings/locations', 'v1/settings/locations'])
   createLocation(@Body() payload: LocationPayloadDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     this.assertSettingsPermission(req);
     return this.settingsService.createLocation(payload, req.authContext!);
   }
 
-  @Put('settings/locations/:id')
+  @Put(['settings/locations/:id', 'v1/settings/locations/:id'])
   updateLocation(
     @Param('id', ParseIntPipe) id: number,
     @Body() payload: LocationPayloadDto,
@@ -114,18 +114,18 @@ export class SettingsController {
     return this.settingsService.updateLocation(id, payload, req.authContext!);
   }
 
-  @Delete('settings/locations/:id')
+  @Delete(['settings/locations/:id', 'v1/settings/locations/:id'])
   deleteLocation(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     this.assertSettingsPermission(req);
     return this.settingsService.deleteLocation(id, req.authContext!);
   }
 
-  @Get('settings/industry-profiles')
+  @Get(['settings/industry-profiles', 'v1/settings/industry-profiles'])
   getIndustryProfiles(): Record<string, unknown> {
     return { profiles: this.settingsService.getIndustryProfiles() };
   }
 
-  @Put('settings/activity-profile')
+  @Put(['settings/activity-profile', 'v1/settings/activity-profile'])
   setActivityProfile(
     @Body() payload: UpdateActivityProfileDto,
     @Req() req: RequestWithAuth,

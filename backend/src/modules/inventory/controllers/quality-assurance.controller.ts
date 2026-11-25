@@ -9,7 +9,7 @@ import {
   UpdateNCRStatusDto,
 } from '../dto/quality-assurance.dto';
 
-@Controller('api/inventory/quality')
+@Controller(['api/inventory/quality', 'api/v1/inventory/quality'])
 @UseGuards(SessionAuthGuard)
 export class QualityAssuranceController {
   constructor(private readonly qualityService: QualityAssuranceService) {}

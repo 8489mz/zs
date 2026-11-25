@@ -6,7 +6,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { GoodsReceiptService } from '../services/goods-receipt.service';
 import { CreateGoodsReceiptDto, CreateGrnBillDto, VerifyThreeWayMatchDto } from '../dto/goods-receipt.dto';
 
-@Controller('api/goods-receipts')
+@Controller(['api/goods-receipts', 'api/v1/goods-receipts'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequirePermissions('purchases')
 export class GoodsReceiptController {

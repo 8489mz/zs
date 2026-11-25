@@ -6,7 +6,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { PurchaseOrdersService } from '../services/purchase-orders.service';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
 
-@Controller('api/purchase-orders')
+@Controller(['api/purchase-orders', 'api/v1/purchase-orders'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequirePermissions('purchases')
 export class PurchaseOrdersController {

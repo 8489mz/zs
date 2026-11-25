@@ -14,7 +14,7 @@ import {
   UpdateDunningLevelDto,
 } from './dto/ar-collections.dto';
 
-@Controller('api/accounting/collections')
+@Controller(['api/accounting/collections', 'api/v1/accounting/collections'])
 @UseGuards(SessionAuthGuard, PermissionsGuard, AccountingAccessGuard)
 @RequireFeature('accounting')
 @RequireAnyPermission('accounting', 'accounts')

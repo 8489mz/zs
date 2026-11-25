@@ -28,7 +28,7 @@ import {
 } from '../dto/settings-write.dto';
 
 // ─── Public endpoint (no auth) — called by offline clients to check for updates ───
-@Controller('api/updates')
+@Controller(['api/updates', 'api/v1/updates'])
 export class OfflineUpdatesPublicController {
   constructor(private readonly releasesService: OfflineReleasesService) {}
 
@@ -94,7 +94,7 @@ export class OfflineUpdatesPublicController {
 }
 
 // ─── Protected endpoints — apply updates locally ───
-@Controller('api/local-updates')
+@Controller(['api/local-updates', 'api/v1/local-updates'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class OfflineUpdatesProtectedController {
   constructor(private readonly releasesService: OfflineReleasesService) {}
@@ -122,7 +122,7 @@ export class OfflineUpdatesProtectedController {
 }
 
 // ─── Admin endpoints — manage releases ───
-@Controller('api/admin/offline-releases')
+@Controller(['api/admin/offline-releases', 'api/v1/admin/offline-releases'])
 @UseGuards(SessionAuthGuard, SuperAdminRoleGuard)
 export class OfflineReleasesAdminController {
   constructor(private readonly releasesService: OfflineReleasesService) {}

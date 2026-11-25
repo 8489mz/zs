@@ -16,7 +16,7 @@ import {
  * دام رمز الدخول هو الرمز الافتراضي (assertPinChanged). مسار تغيير الرمز هو
  * المخرج الوحيد ولا يمر على الحارس.
  */
-@Controller('api/hr/portal')
+@Controller(['api/hr/portal', 'api/v1/hr/portal'])
 export class EmployeePortalController {
   constructor(private readonly service: EmployeePortalService) {}
 

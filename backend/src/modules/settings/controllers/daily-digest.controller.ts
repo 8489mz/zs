@@ -7,7 +7,7 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { DailyDigestService, DailyDigestConfig } from '../services/daily-digest.service';
 import { DailyDigestConfigDto } from '../dto/settings-write.dto';
 
-@Controller('api/settings/daily-digest')
+@Controller(['api/settings/daily-digest', 'api/v1/settings/daily-digest'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class DailyDigestController {
   constructor(private readonly dailyDigestService: DailyDigestService) {}

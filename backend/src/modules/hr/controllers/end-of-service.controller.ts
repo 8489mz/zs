@@ -11,7 +11,7 @@ import {
 } from '../services/end-of-service.service';
 import { PostSettlementAccountingDto } from '../dto/hr-eos-write.dto';
 
-@Controller('api/hr/settlements')
+@Controller(['api/hr/settlements', 'api/v1/hr/settlements'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('hr')
 export class EndOfServiceController {

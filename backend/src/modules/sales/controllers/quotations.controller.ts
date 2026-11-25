@@ -4,7 +4,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { QuotationsService } from '../services/quotations.service';
 import { CreateQuotationDto, UpdateQuotationDto } from '../dto/quotation.dto';
 
-@Controller('api/quotations')
+@Controller(['api/quotations', 'api/v1/quotations'])
 @UseGuards(SessionAuthGuard)
 export class QuotationsController {
   constructor(private readonly quotationsService: QuotationsService) {}

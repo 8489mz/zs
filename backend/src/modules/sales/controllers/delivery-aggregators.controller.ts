@@ -6,7 +6,13 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { DeliveryAggregatorsService, IngestOrderDto } from '../services/delivery-aggregators.service';
 import { UpdateAggregatorChannelDto } from '../dto/delivery-aggregators.dto';
 
-@Controller(['sales/aggregators', 'api/sales/delivery-aggregators', 'api/sales/aggregators'])
+@Controller([
+  'sales/aggregators',
+  'api/sales/delivery-aggregators',
+  'api/sales/aggregators',
+  'api/v1/sales/delivery-aggregators',
+  'api/v1/sales/aggregators',
+])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @AllowAuthenticated()
 export class DeliveryAggregatorsController {

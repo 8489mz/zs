@@ -21,7 +21,7 @@ import { UpsertMaintenanceTicketDto } from './dto/upsert-maintenance-ticket.dto'
 import { UpdateTicketStatusDto, AddTicketPartDto } from './dto/update-ticket-status.dto';
 import { MaintenanceService } from './maintenance.service';
 
-@Controller('api/maintenance/tickets')
+@Controller(['api/maintenance/tickets', 'api/v1/maintenance/tickets'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('maintenance')
 export class MaintenanceController {

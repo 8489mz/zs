@@ -37,7 +37,7 @@ import { createCsrfToken } from '../../core/auth/utils/csrf-token';
 import { isLocalAuthCookieHost, clearKnownAuthCookies } from '../../core/auth/utils/auth-cookie-cleanup';
 import { ActivationService } from '../activation/activation.service';
 
-@Controller('api/auth')
+@Controller(['api/auth', 'api/v1/auth'])
 export class SessionsController {
   constructor(
     private readonly sessionService: SessionService,

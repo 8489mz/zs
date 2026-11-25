@@ -6,7 +6,7 @@ import { RequirePermissions } from '../../../core/auth/decorators/permissions.de
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { KdsService, KdsStation, KdsTicketStatus, KdsItemStatus } from '../services/kds.service';
 
-@Controller('api/sales/kds')
+@Controller(['api/sales/kds', 'api/v1/sales/kds'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('restaurant')
 @RequirePermissions('sales')

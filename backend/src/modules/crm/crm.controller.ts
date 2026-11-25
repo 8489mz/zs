@@ -19,7 +19,7 @@ import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.in
 import { CrmService } from './crm.service';
 import { CreateActivityDto, CreateDealDto, ListDealsQueryDto, UpdateDealDto } from './dto/crm.dto';
 
-@Controller('api/crm')
+@Controller(['api/crm', 'api/v1/crm'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireAnyPermission('sales', 'customers', 'crm')
 export class CrmController {

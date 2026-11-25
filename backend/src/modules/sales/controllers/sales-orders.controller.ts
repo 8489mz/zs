@@ -18,7 +18,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { SalesOrdersService } from '../services/sales-orders.service';
 import { CreateSalesOrderDto } from '../dto/sales-order.dto';
 
-@Controller('api/sales-orders')
+@Controller(['api/sales-orders', 'api/v1/sales-orders'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequirePermissions('sales')
 export class SalesOrdersController {

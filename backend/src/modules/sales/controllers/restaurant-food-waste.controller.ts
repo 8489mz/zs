@@ -5,7 +5,7 @@ import { RequirePermissions } from '../../../core/auth/decorators/permissions.de
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { RestaurantFoodWasteService, CreateFoodWasteLogDto } from '../services/restaurant-food-waste.service';
 
-@Controller(['sales/food-waste', 'api/sales/food-waste'])
+@Controller(['sales/food-waste', 'api/sales/food-waste', 'api/v1/sales/food-waste'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequirePermissions('sales')
 export class RestaurantFoodWasteController {

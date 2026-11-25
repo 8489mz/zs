@@ -37,7 +37,7 @@ function safeCompare(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-@Controller('api/developer')
+@Controller(['api/developer', 'api/v1/developer'])
 export class DeveloperController {
   constructor(
     private readonly saasAdminService: SaasAdminService,

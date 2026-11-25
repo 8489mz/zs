@@ -7,7 +7,13 @@ import {
   RejectQuotationDto,
 } from './dto/customer-portal.dto';
 
-@Controller(['freight-portal', 'api/freight-portal', 'api/maritime-freight/portal'])
+@Controller([
+  'freight-portal',
+  'api/freight-portal',
+  'api/maritime-freight/portal',
+  'api/v1/freight-portal',
+  'api/v1/maritime-freight/portal',
+])
 export class MaritimeCustomerPortalController {
   constructor(private readonly portalService: MaritimeCustomerPortalService) {}
 

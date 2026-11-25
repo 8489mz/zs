@@ -4,7 +4,7 @@ import { PublicTrialSignupDto } from './dto/public-trial-signup.dto';
 import { PublicTrialSignupService } from './public-trial-signup.service';
 import { PricingCatalogService } from '../tenant-subscription/pricing/pricing-catalog.service';
 
-@Controller('api/public')
+@Controller(['api/public', 'api/v1/public'])
 export class PublicController {
   private readonly logger = new Logger(PublicController.name);
 

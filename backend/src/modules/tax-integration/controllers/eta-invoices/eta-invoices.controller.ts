@@ -10,7 +10,7 @@ import {
 } from '../../services/eta-submission/eta-signature-bridge.service';
 import { RequestWithAuth } from '../../../../core/auth/interfaces/request-with-auth.interface';
 
-@Controller('api/tax-integration/eta/invoices')
+@Controller(['api/tax-integration/eta/invoices', 'api/v1/tax-integration/eta/invoices'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class EtaInvoicesController {
   constructor(

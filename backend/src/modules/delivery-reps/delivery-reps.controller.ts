@@ -12,7 +12,7 @@ import {
   SettleDeliveryOrderDto,
 } from './dto/delivery-reps-settlement.dto';
 
-@Controller('api/delivery-reps')
+@Controller(['api/delivery-reps', 'api/v1/delivery-reps'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('deliveryReps')
 export class DeliveryRepsController {

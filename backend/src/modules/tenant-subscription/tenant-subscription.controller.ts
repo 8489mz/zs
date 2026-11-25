@@ -21,7 +21,7 @@ import { InitiateOnlinePaymentDto, RequestRenewalDto } from './dto/tenant-subscr
 import { escapeHtml, sanitizeRedirectPath } from './sandbox-checkout-render.util';
 import { assertSubscriptionSandboxAllowed } from './gateways/subscription-sandbox-policy';
 
-@Controller('api/tenant-subscription')
+@Controller(['api/tenant-subscription', 'api/v1/tenant-subscription'])
 export class TenantSubscriptionController {
   constructor(
     private readonly service: TenantSubscriptionService,

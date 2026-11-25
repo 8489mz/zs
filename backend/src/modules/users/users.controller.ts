@@ -11,7 +11,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { DeleteUserDto } from './dto/delete-user.dto';
 
-@Controller('api/users')
+@Controller(['api/users', 'api/v1/users'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

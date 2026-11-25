@@ -4,7 +4,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { WarehousePackagesService } from '../services/warehouse-packages.service';
 import { CreateWarehousePackageDto, UnpackPackageDto, UpdatePackageStatusDto } from '../dto/warehouse-package.dto';
 
-@Controller('api/inventory/packages')
+@Controller(['api/inventory/packages', 'api/v1/inventory/packages'])
 @UseGuards(SessionAuthGuard)
 export class WarehousePackagesController {
   constructor(private readonly packagesService: WarehousePackagesService) {}

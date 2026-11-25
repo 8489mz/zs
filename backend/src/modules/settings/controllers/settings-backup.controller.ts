@@ -33,7 +33,7 @@ export class SettingsBackupController {
     private readonly cloudBackupService: CloudBackupService,
   ) {}
 
-  @Get('backup')
+  @Get(['backup', 'v1/backup'])
   async getBackup(@Req() req: RequestWithAuth, @Res({ passthrough: true }) res: any): Promise<StreamableFile> {
     const { zipBuffer } = await this.backupService.exportBackup(req.authContext!);
     const now = new Date();
@@ -46,17 +46,17 @@ export class SettingsBackupController {
     return new StreamableFile(zipBuffer);
   }
 
-  @Get('backup-snapshots')
+  @Get(['backup-snapshots', 'v1/backup-snapshots'])
   listSnapshots(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.backupService.listSnapshots(req.authContext!);
   }
 
-  @Get('backup/config')
+  @Get(['backup/config', 'v1/backup/config'])
   getBackupConfig(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.backupService.getBackupConfig(req.authContext!);
   }
 
-  @Post('backup/config')
+  @Post(['backup/config', 'v1/backup/config'])
   saveBackupConfig(
     @Body() payload: Record<string, unknown>,
     @Req() req: RequestWithAuth,
@@ -64,7 +64,7 @@ export class SettingsBackupController {
     return this.backupService.saveBackupConfig(payload, req.authContext!);
   }
 
-  @Post('backup/folder/test')
+  @Post(['backup/folder/test', 'v1/backup/folder/test'])
   testBackupFolder(
     @Body() payload: Record<string, unknown>,
     @Req() req: RequestWithAuth,
@@ -72,32 +72,32 @@ export class SettingsBackupController {
     return this.backupService.testBackupFolder(payload, req.authContext!);
   }
 
-  @Post('backup/save-file')
+  @Post(['backup/save-file', 'v1/backup/save-file'])
   saveBackupToConfiguredFolder(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.backupService.saveBackupToConfiguredFolder(req.authContext!);
   }
 
-  @Get('backup/cloud/config')
+  @Get(['backup/cloud/config', 'v1/backup/cloud/config'])
   getCloudConfig(@Req() req: RequestWithAuth): Promise<CloudBackupConfig> {
     return this.cloudBackupService.getCloudConfig(req.authContext!);
   }
 
-  @Post('backup/cloud/config')
+  @Post(['backup/cloud/config', 'v1/backup/cloud/config'])
   saveCloudConfig(@Body() payload: CloudBackupConfigDto, @Req() req: RequestWithAuth): Promise<CloudBackupConfig> {
     return this.cloudBackupService.saveCloudConfig(payload, req.authContext!);
   }
 
-  @Post('backup/cloud/test')
+  @Post(['backup/cloud/test', 'v1/backup/cloud/test'])
   testCloudConnection(@Req() req: RequestWithAuth): Promise<{ success: boolean; message: string }> {
     return this.cloudBackupService.testConnection(req.authContext!);
   }
 
-  @Post('backup/cloud/trigger')
+  @Post(['backup/cloud/trigger', 'v1/backup/cloud/trigger'])
   triggerCloudBackupNow(@Req() req: RequestWithAuth) {
     return this.cloudBackupService.triggerCloudBackupNow(req.authContext!);
   }
 
-  @Post('backup/verify')
+  @Post(['backup/verify', 'v1/backup/verify'])
   @UseInterceptors(FileInterceptor('file'))
   async verifyBackup(
     @UploadedFile(
@@ -123,7 +123,7 @@ export class SettingsBackupController {
     return this.backupService.verifyBackup(payload);
   }
 
-  @Post('backup/restore')
+  @Post(['backup/restore', 'v1/backup/restore'])
   @UseInterceptors(FileInterceptor('file'))
   async restoreBackup(
     @UploadedFile(

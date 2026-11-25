@@ -20,7 +20,7 @@ export class ManagerActionsController {
   // whole tenant. 'reports' is the established manager-view key:
   // the cashier default deliberately excludes it, the admin template
   // holds it.
-  @Get('manager-actions')
+  @Get(['manager-actions', 'v1/manager-actions'])
   @RequirePermissions('reports')
   list(@Query('limit') limit: string | undefined, @Req() req: RequestWithAuth) {
     return this.managerActionsService.list(Number(limit || 8), req.authContext!);
@@ -29,7 +29,7 @@ export class ManagerActionsController {
   // F12 (trial problem 15): the decision-center overview fed the
   // dashboard's decision grid to any 'dashboard' holder — every
   // cashier holds 'dashboard'. Same 'reports' gate as manager-actions.
-  @Get('dashboard/manager-overview')
+  @Get(['dashboard/manager-overview', 'v1/dashboard/manager-overview'])
   @RequirePermissions('reports')
   managerOverview(@Req() req: RequestWithAuth) {
     return this.managerDashboardService.overview(req.authContext!);

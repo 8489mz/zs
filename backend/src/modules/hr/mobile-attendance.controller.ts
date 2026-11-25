@@ -12,7 +12,7 @@ import {
   UpdateBranchGeofenceDto,
 } from './dto/mobile-attendance-write.dto';
 
-@Controller('api/hr/mobile-punch')
+@Controller(['api/hr/mobile-punch', 'api/v1/hr/mobile-punch'])
 export class MobileAttendanceController {
   constructor(private readonly service: MobileAttendanceService) {}
 

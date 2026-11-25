@@ -39,7 +39,7 @@ import { VanSalesDriverSalesSlice } from './van-sales-driver/van-sales-driver-sa
 import { VanSalesDriverRequisitionsSlice } from './van-sales-driver/van-sales-driver-requisitions';
 import { VanSalesDriverFieldSlice } from './van-sales-driver/van-sales-driver-field';
 
-@Controller('api/driver-portal/van-sales')
+@Controller(['api/driver-portal/van-sales', 'api/v1/driver-portal/van-sales'])
 export class VanSalesController {
   private readonly preSalesSlice: VanSalesDriverPreSalesSlice;
   private readonly tripsSettleSlice: VanSalesDriverTripsSettleSlice;

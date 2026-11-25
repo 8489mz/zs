@@ -20,7 +20,7 @@ import {
   UpdateCompetitorPriceDto,
 } from '../dto/marketplace-sync-write.dto';
 
-@Controller('api/storefront/marketplaces')
+@Controller(['api/storefront/marketplaces', 'api/v1/storefront/marketplaces'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireAnyPermission('storefront', 'settings')
 export class MarketplaceSyncController {

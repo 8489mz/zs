@@ -3,7 +3,7 @@ import { SessionAuthGuard } from '../../../../core/auth/guards/session-auth.guar
 import { RequestWithAuth } from '../../../../core/auth/interfaces/request-with-auth.interface';
 import { VatDeclarationService, VatDeclarationQueryDto } from '../../services/vat-declaration/vat-declaration.service';
 
-@Controller('api/tax-integration/vat-declaration')
+@Controller(['api/tax-integration/vat-declaration', 'api/v1/tax-integration/vat-declaration'])
 @UseGuards(SessionAuthGuard)
 export class VatDeclarationController {
   constructor(private readonly vatDeclarationService: VatDeclarationService) {}

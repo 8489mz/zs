@@ -9,7 +9,7 @@ import { SettingsSupportService } from '../services/settings-support.service';
 export class SettingsSupportController {
   constructor(private readonly supportService: SettingsSupportService) {}
 
-  @Get('support-bundle/download')
+  @Get(['support-bundle/download', 'v1/support-bundle/download'])
   async downloadSupportBundle(
     @Req() req: RequestWithAuth,
     @Res({ passthrough: true }) res: any,
@@ -27,7 +27,7 @@ export class SettingsSupportController {
     return new StreamableFile(zipBuffer);
   }
 
-  @Post('support-bundle/send-to-server')
+  @Post(['support-bundle/send-to-server', 'v1/support-bundle/send-to-server'])
   async sendSupportBundleToServer(@Req() req: RequestWithAuth) {
     return this.supportService.uploadSupportBundleToServer(req.authContext!);
   }

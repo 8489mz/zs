@@ -25,7 +25,7 @@ import {
   WipeTenantDataDto,
 } from './dto/saas-admin-lifecycle-write.dto';
 
-@Controller('api/saas-admin')
+@Controller(['api/saas-admin', 'api/v1/saas-admin'])
 @UseGuards(SessionAuthGuard, SuperAdminRoleGuard)
 export class SaasAdminController {
   constructor(private readonly service: SaasAdminService) {}

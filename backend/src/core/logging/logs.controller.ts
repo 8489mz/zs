@@ -4,7 +4,7 @@ import { InMemoryRateLimitService } from '../../common/security/in-memory-rate-l
 
 const MAX_FRONTEND_ERROR_BYTES = 10 * 1024;
 
-@Controller('api/logs')
+@Controller(['api/logs', 'api/v1/logs'])
 export class LogsController {
   constructor(
     private readonly logger: LoggerService,

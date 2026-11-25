@@ -55,7 +55,7 @@ import {
 import { SaveMailSettingsDto, SavePipelineSettingsDto, TestMailConnectionDto } from './dto/freight-settings.dto';
 import { DcsaMilestoneKey, ShipmentMilestoneKey } from './maritime-freight.types';
 
-@Controller(['maritime-freight', 'api/maritime-freight'])
+@Controller(['maritime-freight', 'api/maritime-freight', 'api/v1/maritime-freight'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('maritime_freight')
 @AllowAuthenticated()

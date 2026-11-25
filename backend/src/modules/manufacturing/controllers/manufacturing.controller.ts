@@ -14,7 +14,7 @@ import { RequireFeature } from '../../../core/auth/decorators/feature.decorator'
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 
-@Controller('api/manufacturing')
+@Controller(['api/manufacturing', 'api/v1/manufacturing'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireFeature('manufacturing')
 export class ManufacturingController {

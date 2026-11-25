@@ -6,7 +6,7 @@ import { RequirePermissions } from '../../../../core/auth/decorators/permissions
 import { RequestWithAuth } from '../../../../core/auth/interfaces/request-with-auth.interface';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';
 
-@Controller('api/tax-settings')
+@Controller(['api/tax-settings', 'api/v1/tax-settings'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class TaxSettingsController {
   constructor(private readonly taxSettingsService: TaxSettingsService) {}
