@@ -43,6 +43,18 @@ import { BalanceSheetService } from './services/balance-sheet.service';
 import { TrialBalanceService } from './services/trial-balance.service';
 import { CashFlowService } from './services/cash-flow.service';
 import { AgedDebtsService } from './services/aged-debts.service';
+import {
+  AutoAllocateFifoDto,
+  CalculateCostCenterSplitDto,
+  ConvertCurrencyDto,
+  CreateCostCenterDto,
+  CreateFixedAssetDto,
+  DepreciateFixedAssetDto,
+  ToggleAutoDepreciationDto,
+  UpdateCostCenterDto,
+  UpdateWhtStatusDto,
+  UpsertCurrencyDto,
+} from './dto/accounting-write.dto';
 import { PdcChequesService, CreatePdcChequeDto, UpdateChequeStatusDto } from './services/pdc-cheques.service';
 import {
   WithholdingTaxService,
@@ -58,7 +70,10 @@ import {
 } from './services/fiscal-year.service';
 import { CloseFiscalPeriodDto, ReopenFiscalPeriodDto } from './dto/fiscal-period.dto';
 import { FixedAssetsSchedulerService } from './services/fixed-assets-scheduler.service';
-import { CostCenterAllocationsService } from './services/cost-center-allocations.service';
+import {
+  CostCenterAllocationsService,
+  CreateCostCenterAllocationDto,
+} from './services/cost-center-allocations.service';
 import { ForexRevaluationService, ExecuteForexRevaluationDto } from './services/forex-revaluation.service';
 import { SaleEditRemediationService } from './services/sale-edit-remediation.service';
 
@@ -309,38 +324,17 @@ export class AccountingController {
   }
 
   @Post('cost-centers')
-  createCostCenter(
-    @Body()
-    body: {
-      code: string;
-      name: string;
-      dimension?: string;
-      budgetAmount?: number;
-      parentId?: number | null;
-      description?: string;
-      isActive?: boolean;
-    },
-    @Req() req: RequestWithAuth,
-  ): Promise<Record<string, unknown>> {
-    return this.accountingService.createCostCenter(body, req.authContext!);
+  createCostCenter(@Body() dto: CreateCostCenterDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.accountingService.createCostCenter(dto, req.authContext!);
   }
 
   @Put('cost-centers/:id')
   updateCostCenter(
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body: {
-      code?: string;
-      name?: string;
-      dimension?: string;
-      budgetAmount?: number;
-      parentId?: number | null;
-      description?: string;
-      isActive?: boolean;
-    },
+    @Body() dto: UpdateCostCenterDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    return this.accountingService.updateCostCenter(id, body, req.authContext!);
+    return this.accountingService.updateCostCenter(id, dto, req.authContext!);
   }
 
   @Delete('cost-centers/:id')
@@ -368,13 +362,17 @@ export class AccountingController {
   }
 
   @Post('cost-centers/allocations')
-  createCostCenterAllocation(@Body() body: any, @Req() req: RequestWithAuth): Promise<any> {
-    return this.costCenterAllocations.createAllocation(body, req.authContext!);
+  createCostCenterAllocation(@Body() dto: CreateCostCenterAllocationDto, @Req() req: RequestWithAuth): Promise<any> {
+    return this.costCenterAllocations.createAllocation(dto, req.authContext!);
   }
 
   @Put('cost-centers/allocations/:id')
-  updateCostCenterAllocation(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithAuth): Promise<any> {
-    return this.costCenterAllocations.updateAllocation(id, body, req.authContext!);
+  updateCostCenterAllocation(
+    @Param('id') id: string,
+    @Body() dto: CreateCostCenterAllocationDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<any> {
+    return this.costCenterAllocations.updateAllocation(id, dto, req.authContext!);
   }
 
   @Delete('cost-centers/allocations/:id')
@@ -385,10 +383,10 @@ export class AccountingController {
   @Post('cost-centers/allocations/:id/calculate')
   calculateCostCenterSplit(
     @Param('id') id: string,
-    @Body() body: { amount: number },
+    @Body() dto: CalculateCostCenterSplitDto,
     @Req() req: RequestWithAuth,
   ): Promise<any> {
-    return this.costCenterAllocations.calculateSplitAmounts(id, Number(body.amount || 0), req.authContext!);
+    return this.costCenterAllocations.calculateSplitAmounts(id, Number(dto.amount || 0), req.authContext!);
   }
 
   @Get('projects')
@@ -403,8 +401,8 @@ export class AccountingController {
   }
 
   @Post('fixed-assets')
-  createFixedAsset(@Body() body: any, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
-    return this.accountingService.createFixedAsset(body, req.authContext!);
+  createFixedAsset(@Body() dto: CreateFixedAssetDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.accountingService.createFixedAsset(dto, req.authContext!);
   }
 
   @Delete('fixed-assets/:id')
@@ -417,19 +415,19 @@ export class AccountingController {
 
   @Post('fixed-assets/depreciate-all')
   depreciateAllFixedAssets(
-    @Body() body: { months?: number; note?: string },
+    @Body() dto: DepreciateFixedAssetDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    return this.accountingService.depreciateAllFixedAssets(body, req.authContext!);
+    return this.accountingService.depreciateAllFixedAssets(dto, req.authContext!);
   }
 
   @Post('fixed-assets/:id/depreciate')
   depreciateFixedAsset(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { months?: number; note?: string },
+    @Body() dto: DepreciateFixedAssetDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    return this.accountingService.depreciateFixedAsset(id, body, req.authContext!);
+    return this.accountingService.depreciateFixedAsset(id, dto, req.authContext!);
   }
 
   @Get('fixed-assets/logs')
@@ -452,12 +450,12 @@ export class AccountingController {
 
   @Post('fixed-assets/auto-depreciate/toggle')
   toggleAutoDepreciation(
-    @Body() body: { enabled: boolean },
+    @Body() dto: ToggleAutoDepreciationDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.fixedAssetsScheduler.setAutoDepreciationEnabled(
       requireTenantScope(req.authContext).tenantId,
-      Boolean(body.enabled),
+      Boolean(dto.enabled),
     );
   }
 
@@ -476,20 +474,13 @@ export class AccountingController {
   }
 
   @Post('currencies')
-  upsertCurrency(
-    @Body()
-    body: { currencyCode: string; currencyName: string; exchangeRate: number; isBase?: boolean; symbol?: string },
-    @Req() req: RequestWithAuth,
-  ): Promise<Record<string, unknown>> {
-    return this.accountingService.upsertCurrency(body, req.authContext!);
+  upsertCurrency(@Body() dto: UpsertCurrencyDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.accountingService.upsertCurrency(dto, req.authContext!);
   }
 
   @Post('currencies/convert')
-  convertCurrency(
-    @Body() body: { amount: number; fromCurrency: string; toCurrency: string; asOf?: string },
-    @Req() req: RequestWithAuth,
-  ): Promise<Record<string, unknown>> {
-    return this.accountingService.convertCurrency(body, req.authContext!);
+  convertCurrency(@Body() dto: ConvertCurrencyDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.accountingService.convertCurrency(dto, req.authContext!);
   }
 
   // --- Forex Revaluation Engine (إعادة تقييم فروق أسعار الصرف - IAS 21) ---
@@ -504,16 +495,13 @@ export class AccountingController {
   }
 
   @Post('currencies/revaluations/preview')
-  previewForexRevaluation(
-    @Body() body: { periodDate: string; currencyCode: string; closingRate: number },
-    @Req() req: RequestWithAuth,
-  ): Promise<any> {
-    return this.forexRevaluation.previewRevaluation(body, req.authContext!);
+  previewForexRevaluation(@Body() dto: ExecuteForexRevaluationDto, @Req() req: RequestWithAuth): Promise<any> {
+    return this.forexRevaluation.previewRevaluation(dto, req.authContext!);
   }
 
   @Post('currencies/revaluations/execute')
-  executeForexRevaluation(@Body() body: ExecuteForexRevaluationDto, @Req() req: RequestWithAuth): Promise<any> {
-    return this.forexRevaluation.executeRevaluation(body, req.authContext!);
+  executeForexRevaluation(@Body() dto: ExecuteForexRevaluationDto, @Req() req: RequestWithAuth): Promise<any> {
+    return this.forexRevaluation.executeRevaluation(dto, req.authContext!);
   }
 
   // --- Bank Reconciliation Engine (التسويات البنكية ومطابقة كشوف الحساب) ---
@@ -634,7 +622,7 @@ export class AccountingController {
   @Patch('withholding-tax/:id/status')
   updateWhtStatus(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: { status: 'draft' | 'declared' | 'paid'; payment_reference?: string },
+    @Body() dto: UpdateWhtStatusDto,
     @Req() req: RequestWithAuth,
   ): Promise<any> {
     return this.withholdingTaxService.updateStatus(req.authContext!, id, dto);
@@ -670,14 +658,11 @@ export class AccountingController {
   }
 
   @Post('payment-allocations/auto-fifo')
-  autoAllocateFIFO(
-    @Body() body: { partnerType: 'customer' | 'supplier'; partnerId: number; paymentId: number },
-    @Req() req: RequestWithAuth,
-  ) {
+  autoAllocateFIFO(@Body() dto: AutoAllocateFifoDto, @Req() req: RequestWithAuth) {
     return this.paymentAllocationService.autoAllocateFIFO(
-      body.partnerType,
-      body.partnerId,
-      body.paymentId,
+      dto.partnerType,
+      dto.partnerId,
+      dto.paymentId,
       req.authContext!,
     );
   }

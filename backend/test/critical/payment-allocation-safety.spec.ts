@@ -21,10 +21,18 @@ assert.deepEqual(validatePaymentAllocationRequest(request(), 2), {
   allocations: [{ invoiceId: 99, amount: 10 }],
 });
 mustReject((dto) => {
-  dto.paymentId = undefined;
+  // D6: the DTO class makes paymentId required, so the pipe rejects a
+  // missing paymentId before the service ever sees it — but the service
+  // validator keeps its own rejection as the backstop for internal
+  // callers (autoAllocateFIFO calls allocatePayment directly), so this
+  // service-level case stays, with a cast past the DTO type.
+  dto.paymentId = undefined as unknown as number;
 }, 'must not accept unfunded allocation');
 mustReject((dto) => {
-  dto.paymentType = 'direct';
+  // D6: the DTO enum excludes 'direct' (the service whitelist is
+  // customer_payment / supplier_payment only), so the pipe rejects it —
+  // the service validator keeps its own rejection as the backstop.
+  dto.paymentType = 'direct' as AllocatePaymentDto['paymentType'];
 }, 'must reject direct paid_amount modification');
 mustReject((dto) => {
   dto.partnerType = 'supplier';

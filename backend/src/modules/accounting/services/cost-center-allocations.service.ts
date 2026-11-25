@@ -4,18 +4,60 @@ import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
+import { Type } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
-export interface CostCenterSplitInput {
-  costCenterId: number;
-  percentage: number;
+// D6 (INV-DTO-ACCOUNTING-25): converted from interfaces to decorated
+// classes in place (DTO contract Rule 5). The service enforces >= 2
+// splits, costCenterId a safe int > 0 and unique, percentage in (0, 100]
+// and the splits totalling EXACTLY 100 — the DTO enforces the per-item
+// bounds and the minimum count; the total==100 and uniqueness checks
+// stay service-side.
+export class CostCenterAllocationSplitDto {
+  @IsInt()
+  @Min(1)
+  costCenterId!: number;
+
+  @IsNumber()
+  @IsPositive()
+  @Max(100)
+  percentage!: number;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 
-export interface CreateCostCenterAllocationDto {
-  code: string;
-  name: string;
+export class CreateCostCenterAllocationDto {
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
-  splits: CostCenterSplitInput[];
+
+  @IsArray()
+  @ArrayMinSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => CostCenterAllocationSplitDto)
+  splits!: CostCenterAllocationSplitDto[];
 }
 
 @Injectable()
@@ -23,7 +65,7 @@ export class CostCenterAllocationsService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   private normalizeSplits(
-    splits: CostCenterSplitInput[] | undefined,
+    splits: CostCenterAllocationSplitDto[] | undefined,
   ): Array<{ costCenterId: number; percentage: number; notes: string | null }> {
     if (!Array.isArray(splits) || splits.length < 2) {
       throw new BadRequestException('يجب إضافة مركزين تكلفة على الأقل في مصفوفة التوزيع.');

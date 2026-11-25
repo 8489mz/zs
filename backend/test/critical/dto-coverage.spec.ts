@@ -1,7 +1,7 @@
 /*
  * D1 DTO coverage guard: the whole-body @Body() sites whose type is not a
- * *Dto class are pinned at exactly 136 at D5 (127 convertible + the 9
- * pinned exclusions below; 264 at D1, 249 at D2, 191 at D3, 163 at D4).
+ * *Dto class are pinned at exactly 111 at D6 (102 convertible + the 9
+ * pinned exclusions below; 264 at D1, 249 at D2, 191 at D3, 163 at D4, 136 at D5).
  * Package C keeps the pin at 136 (136 + 0 CRLF + 1 reveal - 1 convert). The count is produced by
  * backend/scripts/dto-coverage-check.mjs, a port of the item-(5)
  * (~/workspace/audit/dto-census.py, re-counted at d1989b74e: 681 @Body(
@@ -44,6 +44,14 @@
  * below). Whole-body total stays 624; the buckets end where D5 left
  * them (dto-class 488, dto-interface 25, inline-object 68, any 25,
  * inline-other 7, named-interface 3, unknown 4, record 4).
+ *
+ * D6 (INV-DTO-ACCOUNTING-25): accounting converts 25 sites (11
+ * dto-interface + 11 inline-object + 3 any) and the pin moves
+ * 136 -> 111 (102 convertible + the 9 pinned exclusions below).
+ * The live census re-derived the list (the grounding's 25 held
+ * exactly). Whole-body total stays 624; the buckets move dto-class
+ * 488 -> 513, inline-object 68 -> 57, any 25 -> 22, dto-interface
+ * 25 -> 14.
  *
  * WHY THE NUMBER IS 264 AND NOT 211: the verification files counted 211
  * sites without a *Dto-named type, but 47 of the 407 "with DTO" sites use
@@ -96,11 +104,11 @@ import * as path from 'path';
 const BACKEND = path.resolve(__dirname, '../..');
 const SCRIPT = 'scripts/dto-coverage-check.mjs';
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D5 (136 after sales converts 27); Package C keeps it at 136. */
-const PINNED_COUNT = 136;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D6 (111 after accounting converts 25). */
+const PINNED_COUNT = 111;
 
-/** Convertible sites inside the pinned count (136 - 9 exclusions). */
-const CONVERTIBLE_COUNT = 127;
+/** Convertible sites inside the pinned count (111 - 9 exclusions). */
+const CONVERTIBLE_COUNT = 102;
 
 /** The 9 pinned exclusions (paths relative to backend/, line = @Body() line). */
 const PINNED_EXCLUSIONS: Array<{ file: string; line: number }> = [

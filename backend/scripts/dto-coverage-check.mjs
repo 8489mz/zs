@@ -78,6 +78,13 @@
  * record 4). NOTE for D6: its expected pin (111) was derived from
  * the pre-Package-C census — D6 must re-derive from the live census.
  *
+ * D6 (INV-DTO-ACCOUNTING-25): accounting converts 25 sites (11
+ * dto-interface + 11 inline-object + 3 any); the count is now 111 =
+ * 102 convertible + 9 pinned exclusions. The live census re-derived
+ * the list (the grounding's 25 held exactly). Whole-body total stays
+ * 624 and the buckets move dto-class 488 -> 513, inline-object
+ * 68 -> 57, any 25 -> 22, dto-interface 25 -> 14.
+ *
  * Usage: node scripts/dto-coverage-check.mjs [--json]
  *   (run from the backend/ directory; paths are relative to backend/).
  */
@@ -89,8 +96,8 @@ import { fileURLToPath } from 'node:url';
 const BACKEND = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(BACKEND, 'src');
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D5 (136 after sales converts 27); Package C keeps it at 136 (136 + 0 CRLF + 1 reveal - 1 convert). */
-const PINNED_COUNT = 136;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D6 (111 after accounting converts 25). */
+const PINNED_COUNT = 111;
 
 /**
  * The 9 pinned exclusions. A DTO on any of these breaks a real flow — see

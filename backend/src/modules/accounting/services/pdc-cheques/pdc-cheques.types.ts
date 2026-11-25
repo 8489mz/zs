@@ -77,33 +77,129 @@ export interface PdcChequesStats {
   };
 }
 
-export interface CreatePdcChequeDto {
-  type: 'receivable' | 'payable';
-  chequeNumber: string;
-  bankName: string;
+import {
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+} from 'class-validator';
+
+// D6 (INV-DTO-ACCOUNTING-25): converted from interfaces to decorated
+// classes in place (DTO contract Rule 5). CreatePdcChequeDto.status is
+// optional and, when sent, must equal the type default ('in_safe' for
+// receivable, 'issued' for payable) — the create slice throws otherwise.
+// The caller never sends status. UpdateChequeStatusDto.action is exactly
+// the 8 actions the update slice's switch handles.
+export class CreatePdcChequeDto {
+  @IsIn(['receivable', 'payable'])
+  type!: 'receivable' | 'payable';
+
+  @IsString()
+  @IsNotEmpty()
+  chequeNumber!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  bankName!: string;
+
+  @IsOptional()
+  @IsString()
   branchName?: string;
+
+  @IsOptional()
+  @IsString()
   drawerName?: string;
+
+  @IsOptional()
+  @IsString()
   partnerType?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   partnerId?: number;
-  partnerName: string;
-  amount: number;
+
+  @IsString()
+  @IsNotEmpty()
+  partnerName!: string;
+
+  @IsNumber()
+  @IsPositive()
+  amount!: number;
+
+  @IsOptional()
+  @IsString()
   currency?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
   exchangeRate?: number;
-  issueDate: string;
-  dueDate: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  issueDate!: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  dueDate!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   depositBankId?: number;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsIn(['in_safe', 'issued'])
   status?: string;
 }
 
-export interface UpdateChequeStatusDto {
-  action: 'deposit' | 'collect' | 'clear' | 'bounce' | 'endorse' | 'return' | 'cancel' | 'restore_to_safe';
+export class UpdateChequeStatusDto {
+  @IsIn(['deposit', 'collect', 'clear', 'bounce', 'endorse', 'return', 'cancel', 'restore_to_safe'])
+  action!: 'deposit' | 'collect' | 'clear' | 'bounce' | 'endorse' | 'return' | 'cancel' | 'restore_to_safe';
+
+  @IsOptional()
+  @IsDateString()
   actionDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
   settlementExchangeRate?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   depositBankId?: number;
+
+  @IsOptional()
+  @IsString()
   bouncedReason?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   bouncedFee?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   endorsedToSupplierId?: number;
+
+  @IsOptional()
+  @IsString()
   endorsedToSupplierName?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }

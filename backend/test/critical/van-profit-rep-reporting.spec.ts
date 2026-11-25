@@ -1240,7 +1240,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // 7. Tax spec wired into both critical lists (342 specs, identical
+  // 7. Tax spec wired into both critical lists (343 specs, identical
   // order) and green (proven by its standalone run, /tmp/p6-tax3.log).
   {
     const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
@@ -1248,8 +1248,8 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 342);
-    assert.equal(chain.length, 342);
+    assert.equal(specs.length, 343);
+    assert.equal(chain.length, 343);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-field-sale-tax-optional.spec.ts'));
     assert.equal(

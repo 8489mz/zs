@@ -12,6 +12,19 @@ import { lockAccountingPeriod } from '../accounting-period-lock';
 import { nextAccountingDay } from '../engines/accounting-date.engine';
 import { calculateForexDifference, forexOffsetCode } from '../engines/forex-difference.engine';
 import { currencyMoneyDigits, roundMoney } from '../engines/money-minor-units.engine';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsDateString,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 /** A string DTO body is not runtime validation; PostgreSQL numeric accepts 'NaN'. */
 export function validateForexClosingRate(raw: unknown): number {
@@ -21,12 +34,44 @@ export function validateForexClosingRate(raw: unknown): number {
   return raw;
 }
 
-export interface ExecuteForexRevaluationDto {
-  periodDate: string;
-  currencyCode: string;
-  closingRate: number;
+// D6 (INV-DTO-ACCOUNTING-25): converted from an interface to a decorated
+// class in place (DTO contract Rule 5). The preview endpoint takes this
+// same class: its caller sends `items` too and the preview service reads
+// dto.items (line 157) — a preview DTO without items would 400 every
+// real preview call. items entries: the service requires a safe-int
+// accountId and a finite foreignBalance (either sign); duplicates and
+// the missing-balance-per-account checks stay service-side.
+export class ForexRevaluationItemDto {
+  @IsInt()
+  @Min(1)
+  accountId!: number;
+
+  @IsNumber()
+  foreignBalance!: number;
+}
+
+export class ExecuteForexRevaluationDto {
+  @IsDateString()
+  @IsNotEmpty()
+  periodDate!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  currencyCode!: string;
+
+  @IsNumber()
+  @IsPositive()
+  closingRate!: number;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
-  items?: Array<{ accountId: number; foreignBalance: number }>;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ForexRevaluationItemDto)
+  items?: ForexRevaluationItemDto[];
 }
 
 @Injectable()

@@ -54,31 +54,120 @@ export interface Form41SummaryResponse {
   transactions: WithholdingTaxRecord[];
 }
 
-export interface CreateWhtTransactionDto {
+import {
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
+
+// D6 (INV-DTO-ACCOUNTING-25): converted from interfaces to decorated
+// classes in place (DTO contract Rule 5). CreateWhtTransactionDto mirrors
+// the caller payload field-for-field; the service defaults (rate by type,
+// direction 'payable', quarter/tax_year from invoice_date) stay in the
+// service for absent optionals. ExtractFromPurchasesDto.defaultWhtType
+// excludes 'custom' by design (the interface never allowed it); its
+// default rate must be (0, 100] per the service.
+export class CreateWhtTransactionDto {
+  @IsOptional()
+  @IsIn(['payable', 'receivable'])
   direction?: 'payable' | 'receivable';
+
+  @IsOptional()
+  @IsString()
   source_type?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   source_id?: number;
-  invoice_number: string;
-  invoice_date: string;
+
+  @IsString()
+  @IsNotEmpty()
+  invoice_number!: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  invoice_date!: string;
+
+  @IsOptional()
+  @IsString()
   partner_type?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   partner_id?: number;
-  partner_name: string;
+
+  @IsString()
+  @IsNotEmpty()
+  partner_name!: string;
+
+  @IsOptional()
+  @IsString()
   tax_id_number?: string;
+
+  @IsOptional()
+  @IsString()
   file_number?: string;
+
+  @IsOptional()
+  @IsString()
   tax_office_code?: string;
+
+  @IsOptional()
+  @IsString()
   partner_address?: string;
-  wht_type: 'goods' | 'services' | 'professional' | 'custom';
+
+  @IsIn(['goods', 'services', 'professional', 'custom'])
+  wht_type!: 'goods' | 'services' | 'professional' | 'custom';
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
   wht_rate?: number;
-  base_amount: number;
+
+  @IsNumber()
+  @IsPositive()
+  base_amount!: number;
+
+  @IsOptional()
+  @IsString()
   quarter?: string;
+
+  @IsOptional()
+  @IsInt()
   tax_year?: number;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 
-export interface ExtractFromPurchasesDto {
-  fromDate: string;
-  toDate: string;
+export class ExtractFromPurchasesDto {
+  @IsDateString()
+  @IsNotEmpty()
+  fromDate!: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  toDate!: string;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  @Max(100)
   defaultWhtRate?: number;
+
+  @IsOptional()
+  @IsIn(['goods', 'services', 'professional'])
   defaultWhtType?: 'goods' | 'services' | 'professional';
 }
 

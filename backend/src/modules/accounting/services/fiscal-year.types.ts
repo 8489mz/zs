@@ -1,19 +1,43 @@
 import { BadRequestException } from '@nestjs/common';
+import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 
-export interface CreateFiscalYearDto {
-  name: string;
+// D6 (INV-DTO-ACCOUNTING-25): converted from interfaces to decorated
+// classes in place (DTO contract Rule 5). Reopen reason is required:
+// both reopen services throw when the trimmed reason is empty (audit
+// trail). The startDate < endDate check stays service-side.
+export class CreateFiscalYearDto {
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
   code?: string;
-  startDate: string;
-  endDate: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  startDate!: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  endDate!: string;
 }
 
-export interface CloseFiscalYearDto {
+export class CloseFiscalYearDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   retainedEarningsAccountId?: number;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 
-export interface ReopenFiscalYearDto {
-  reason: string;
+export class ReopenFiscalYearDto {
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
 }
 
 export interface FiscalYearAccountBalance {

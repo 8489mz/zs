@@ -28,17 +28,63 @@ export interface UnallocatedPaymentItem {
   note: string;
 }
 
-export interface AllocateItemInput {
-  invoiceId: number;
-  amount: number;
+import { Type } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+
+// D6 (INV-DTO-ACCOUNTING-25): converted from interfaces to decorated
+// classes in place (DTO contract Rule 5). Two service-whitelist facts
+// from validatePaymentAllocationRequest: paymentId is REQUIRED here even
+// though the interface declared it optional (the validator rejects a
+// missing/non-number paymentId — the D5 pay-installment trap), and
+// paymentType 'direct' is NOT in the DTO enum (the validator requires
+// customer_payment / supplier_payment per partnerType, so 'direct' is
+// always rejected by the service — the pipe now rejects it with the
+// same 400 outcome). Allocation amounts must be finite, > 0 and
+// minor-unit exact; the minor-unit exactness stays service-side.
+export class AllocatePaymentItemDto {
+  @IsInt()
+  @Min(1)
+  invoiceId!: number;
+
+  @IsNumber()
+  @IsPositive()
+  amount!: number;
 }
 
-export interface AllocatePaymentDto {
-  partnerType: 'customer' | 'supplier';
-  partnerId: number;
-  paymentType: 'customer_payment' | 'supplier_payment' | 'direct';
-  paymentId?: number | null;
-  allocations: AllocateItemInput[];
+export class AllocatePaymentDto {
+  @IsIn(['customer', 'supplier'])
+  partnerType!: 'customer' | 'supplier';
+
+  @IsInt()
+  @Min(1)
+  partnerId!: number;
+
+  @IsIn(['customer_payment', 'supplier_payment'])
+  paymentType!: 'customer_payment' | 'supplier_payment';
+
+  @IsInt()
+  @Min(1)
+  paymentId!: number;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => AllocatePaymentItemDto)
+  allocations!: AllocatePaymentItemDto[];
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 
@@ -46,7 +92,7 @@ export interface AllocatePaymentDto {
 export function validatePaymentAllocationRequest(
   dto: AllocatePaymentDto,
   digits: MoneyDigits,
-): { totalAllocating: number; allocations: AllocateItemInput[] } {
+): { totalAllocating: number; allocations: AllocatePaymentItemDto[] } {
   if (
     !dto ||
     !['customer', 'supplier'].includes(dto.partnerType) ||
@@ -612,7 +658,7 @@ export class PaymentAllocationService {
     const scope = requireTenantScope(auth);
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
 
-    const allocations: AllocateItemInput[] = [];
+    const allocations: AllocatePaymentItemDto[] = [];
 
     for (const inv of openInvoices) {
       // Any positive remainder is real money at book precision: the old

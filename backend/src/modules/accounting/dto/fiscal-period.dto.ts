@@ -1,9 +1,19 @@
-export interface CloseFiscalPeriodDto {
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+
+// D6 (INV-DTO-ACCOUNTING-25): converted from interfaces to decorated
+// classes in place (DTO contract Rule 5). CloseFiscalPeriodDto is
+// all-optional: the caller sends `payload || {}`. ReopenFiscalPeriodDto
+// requires the reason (the service throws on an empty reason).
+export class CloseFiscalPeriodDto {
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 
-export interface ReopenFiscalPeriodDto {
-  reason: string;
+export class ReopenFiscalPeriodDto {
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
 }
 
 export interface FiscalPeriodResponse {
