@@ -1,0 +1,33 @@
+# Deliberately unformatted backend files — pinned by
+# backend/test/critical/backend-format-clean.spec.ts (L8 global guard).
+# `prettier --write` grows each of these past the file-size cap (or, for
+# database.types.ts, is generated churn) purely by breaking very long
+# lines, so they stay unformatted and `npm run format:check` skips them.
+# Do NOT add a file here without updating the global spec's EXCLUDED list
+# in the same package: the spec asserts this file lists EXACTLY the 21
+# files below, and that exactly those 21 fail `prettier --check` when the
+# ignore is bypassed — so the exception set cannot silently grow.
+# L4's 9 (modules A, over the 1110 split cutoff):
+src/modules/accounting/accounting-posting.service.ts
+src/modules/accounting/accounting-tenant-foundation.service.ts
+src/modules/accounting/services/journal-posting-core.service.ts
+src/modules/accounting/services/pdc-posting.service.ts
+src/modules/catalog/services/catalog-product-write.service.ts
+src/modules/inventory/services/inventory-count.service.ts
+src/modules/inventory/services/inventory-transfer.service.ts
+src/modules/returns/returns-sale-return.service.ts
+src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts
+# L5's 10 (modules B, over the 1110 split cutoff):
+src/modules/cash-drawer/cash-drawer-write.service.ts
+src/modules/contracting/services/contracting-pricing.service.ts
+src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts
+src/modules/import-sales/services/import-receipt-posting.service.ts
+src/modules/import-sales/services/import-shipments.service.ts
+src/modules/pricing/pricing.service.ts
+src/modules/reports/reports.service.ts
+src/modules/settings/services/demo-data/settings-demo-data-seed.ts
+src/modules/settings/services/settings-backup.service.ts
+src/modules/users/users.service.ts
+# L6's 2 (core/database):
+src/core/auth/services/session.service.ts
+src/database/database.types.ts
