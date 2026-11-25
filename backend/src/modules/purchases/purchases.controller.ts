@@ -43,7 +43,10 @@ import { SupplierBillsService } from './services/supplier-bills.service';
 import { UpsertPurchaseDto } from './dto/upsert-purchase.dto';
 import { PurchasesService } from './purchases.service';
 import { SupplierPaymentSchedulesService } from './services/supplier-payment-schedules.service';
-import { MarginProtectionService, ApplyRepricingPayload } from './services/margin-protection.service';
+import { MarginProtectionService, ApplyRepricingPayloadDto } from './services/margin-protection.service';
+import { GenerateDraftOrdersDto } from './services/purchases-reorder.service';
+import { CancelPurchaseDto } from './dto/cancel-purchase.dto';
+import { ReceivePurchaseGoodsDto } from './dto/receive-purchase-goods.dto';
 import { PurchaseLandedCostsService } from './services/purchase-landed-costs.service';
 import { ApplyPurchaseLandedCostsDto } from './dto/purchase-landed-cost.dto';
 
@@ -79,7 +82,10 @@ export class PurchasesController {
   @Post('purchases/reorder/generate-drafts')
   @RequirePermissions('purchases')
   @UseInterceptors(IdempotencyInterceptor)
-  generateDraftPurchaseOrders(@Body() payload: any, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  generateDraftPurchaseOrders(
+    @Body() payload: GenerateDraftOrdersDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
     return this.purchasesService.generateDraftPurchaseOrders(payload, req.authContext!);
   }
 
@@ -133,7 +139,7 @@ export class PurchasesController {
   @UseInterceptors(IdempotencyInterceptor)
   cancelPurchase(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { reason?: string; managerPin?: string },
+    @Body() body: CancelPurchaseDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.purchasesService.cancelPurchase(
@@ -149,7 +155,7 @@ export class PurchasesController {
   @UseInterceptors(IdempotencyInterceptor)
   receivePurchaseGoods(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { receivedItems: { itemId: number; receivedQty: number; serials?: any[] }[] },
+    @Body() body: ReceivePurchaseGoodsDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.purchasesService.receivePurchaseGoods(id, body?.receivedItems || [], req.authContext!);
@@ -225,7 +231,7 @@ export class PurchasesController {
   @UseInterceptors(IdempotencyInterceptor)
   applyPurchaseRepricing(
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: ApplyRepricingPayload,
+    @Body() payload: ApplyRepricingPayloadDto,
     @Req() req: RequestWithAuth,
   ) {
     if (!this.marginProtectionService) {

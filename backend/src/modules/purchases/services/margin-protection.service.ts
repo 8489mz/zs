@@ -1,4 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsInt, IsNumber, IsOptional, Min, ValidateNested } from 'class-validator';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
@@ -38,12 +40,39 @@ export interface MarginProtectionAnalysisResponse {
   items: MarginProtectionItem[];
 }
 
-export interface ApplyRepricingPayload {
-  items: Array<{
-    productId: number;
-    newRetailPrice: number;
-    newWholesalePrice?: number;
-  }>;
+// INV-DTO-PILOT-PURCHASES-INVENTORY (D2 pilot): the apply-repricing
+// payload was an interface — the global validation pipe does nothing for
+// an interface, so a caller could send any extra field and it reached
+// the service untouched. This is a MONEY endpoint (it rewrites selling
+// prices), so the DTO is strict: items is required (the service returns
+// ok with updatedCount 0 on an empty list — no @ArrayMinSize), and each
+// item's productId and newRetailPrice are required (the service skips
+// invalid items, so a wrong type here must be caught at the pipe).
+export class ApplyRepricingItemDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  productId!: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  newRetailPrice!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  newWholesalePrice?: number;
+}
+
+export class ApplyRepricingPayloadDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ApplyRepricingItemDto)
+  items!: ApplyRepricingItemDto[];
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
   notifyOwner?: boolean;
 }
 
@@ -182,7 +211,7 @@ export class MarginProtectionService {
 
   async applyRepricing(
     purchaseId: number,
-    payload: ApplyRepricingPayload,
+    payload: ApplyRepricingPayloadDto,
     auth: AuthContext,
   ): Promise<{ ok: boolean; updatedCount: number; message: string }> {
     const scope = requireTenantScope(auth);

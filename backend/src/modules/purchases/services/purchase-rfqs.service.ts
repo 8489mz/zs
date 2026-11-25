@@ -1,4 +1,16 @@
 import { Inject, Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsDateString,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Kysely, sql } from 'kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -7,32 +19,106 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
-export interface CreateRfqDto {
-  title: string;
-  deadline_date?: string;
-  expected_delivery_date?: string;
-  notes?: string;
-  items: Array<{
-    product_id: number;
-    product_name: string;
-    unit_name?: string;
-    target_quantity: number;
-    specifications?: string;
-  }>;
+// INV-DTO-PILOT-PURCHASES-INVENTORY (D2 pilot): the two RFQ DTOs were
+// interfaces — the global validation pipe does nothing for an interface,
+// so a caller could send any extra field and it reached the service
+// untouched. They are now classes, every field decorated. The rules
+// mirror the service throws exactly: items is required and non-empty
+// (createRfq throws on an empty list), item_bids carries no @ArrayMinSize
+// (submitSupplierBid tolerates an empty bid list), and target_quantity
+// carries no @Min (the service throws on target_quantity <= 0 — the DTO
+// does not duplicate that check).
+export class CreateRfqItemDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  product_id!: number;
+
+  @IsString()
+  product_name!: string;
+
+  @IsOptional()
+  @IsString()
+  unit_name?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  target_quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  specifications?: string;
 }
 
-export interface SubmitSupplierBidDto {
-  supplier_id: number;
-  supplier_name: string;
-  supplier_phone?: string;
-  payment_terms?: string;
-  delivery_lead_days?: number;
+export class CreateRfqDto {
+  @IsString()
+  title!: string;
+
+  @IsOptional()
+  @IsDateString()
+  deadline_date?: string;
+
+  @IsOptional()
+  @IsDateString()
+  expected_delivery_date?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
-  item_bids: Array<{
-    rfq_item_id: number;
-    quoted_unit_cost: number;
-    tax_rate?: number;
-  }>;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => CreateRfqItemDto)
+  items!: CreateRfqItemDto[];
+}
+
+export class SupplierBidItemDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  rfq_item_id!: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  quoted_unit_cost!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  tax_rate?: number;
+}
+
+export class SubmitSupplierBidDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  supplier_id!: number;
+
+  @IsString()
+  supplier_name!: string;
+
+  @IsOptional()
+  @IsString()
+  supplier_phone?: string;
+
+  @IsOptional()
+  @IsString()
+  payment_terms?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  delivery_lead_days?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SupplierBidItemDto)
+  item_bids!: SupplierBidItemDto[];
 }
 
 import { getDailyDocumentPrefix } from '../../../common/utils/document-number.util';

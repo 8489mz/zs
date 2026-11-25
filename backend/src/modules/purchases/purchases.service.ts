@@ -8,7 +8,7 @@ import {
 import { UpsertPurchaseDto } from './dto/upsert-purchase.dto';
 import { PurchasesQueryService } from './services/purchases-query.service';
 import { PurchasesWriteService } from './services/purchases-write.service';
-import { PurchasesReorderService, GenerateDraftOrdersPayload } from './services/purchases-reorder.service';
+import { PurchasesReorderService, GenerateDraftOrdersDto } from './services/purchases-reorder.service';
 
 @Injectable()
 export class PurchasesService {
@@ -96,10 +96,7 @@ export class PurchasesService {
     return this.reorderService.getReorderSuggestions(auth, query) as unknown as Promise<Record<string, unknown>>;
   }
 
-  generateDraftPurchaseOrders(
-    payload: GenerateDraftOrdersPayload,
-    auth: AuthContext,
-  ): Promise<Record<string, unknown>> {
+  generateDraftPurchaseOrders(payload: GenerateDraftOrdersDto, auth: AuthContext): Promise<Record<string, unknown>> {
     return this.reorderService.generateDraftPurchaseOrders(auth, payload);
   }
 }

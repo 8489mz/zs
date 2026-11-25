@@ -24,6 +24,9 @@ import {
   RecountStockCountItemDto,
 } from './dto/create-stock-count-session.dto';
 import { CreateStockTransferDto } from './dto/create-stock-transfer.dto';
+import { AssignProductsDto } from './dto/assign-products.dto';
+import { ReceiveStockTransferDto } from './dto/receive-stock-transfer.dto';
+import { ExecuteReplenishmentDto } from './dto/execute-replenishment.dto';
 import { InventoryAdjustmentDto } from './dto/inventory-adjustment.dto';
 import { InventoryService } from './inventory.service';
 import { InventoryReplenishmentService } from './services/inventory-replenishment.service';
@@ -119,7 +122,7 @@ export class InventoryController {
   @RequirePermissions('canAdjustInventory')
   assignProductsToLocation(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { productIds: number[] },
+    @Body() body: AssignProductsDto,
     @Req() req: RequestWithAuth,
   ): Promise<{ success: boolean }> {
     return this.inventoryService.assignProductsToLocation(id, body.productIds || [], req.authContext!);
@@ -200,16 +203,7 @@ export class InventoryController {
     // (approvalSecret: the approving admin's password). The shared
     // manager PIN does not identify an approver and cannot satisfy it.
     @Body()
-    body: {
-      items?: Array<{
-        itemId: number;
-        receivedQty: number;
-        receivedSerials?: string[];
-        batchReceipts?: Array<{ transitBatchId: number; receivedQty: number }>;
-      }>;
-      varianceReason?: string;
-      approvalSecret?: string;
-    },
+    body: ReceiveStockTransferDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.inventoryService.receiveStockTransfer(id, req.authContext!, body);
@@ -325,12 +319,7 @@ export class InventoryController {
   @RequirePermissions('canAdjustInventory')
   executeSmartReplenishment(
     @Body()
-    payload: {
-      fromLocationId: number;
-      toLocationId: number;
-      items: { productId: number; qty: number }[];
-      note?: string;
-    },
+    payload: ExecuteReplenishmentDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.replenishmentService.executeReplenishment(payload, req.authContext!);

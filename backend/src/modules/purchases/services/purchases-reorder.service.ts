@@ -1,4 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import { ArrayMinSize, IsArray, IsInt, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { Kysely, sql } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -16,22 +18,86 @@ import { PurchasesWriteService } from './purchases-write.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
-export interface GenerateDraftOrdersItemDto {
-  productId: number;
-  qty: number;
+// INV-DTO-PILOT-PURCHASES-INVENTORY (D2 pilot): the generate-drafts DTOs
+// were interfaces (and the route took `any`) — the global validation pipe
+// never ran on them. They are now classes, every field decorated. The
+// DTO accepts exactly what the real caller (SmartReorderPage) sends: per
+// item qty AND quantity, name AND productName, cost AND costPrice (same
+// values), and per group note AND notes — the service reads only
+// qty/name/cost/notes, so the duplicate fields are accepted and ignored.
+// PRE-EXISTING MISMATCH, NOT fixed here: the caller sends the group
+// batch note as `note` (singular) while the service reads `notes`, so
+// the note is lost today. The DTO accepts both spellings so the caller
+// does not 400; fixing the mapping is a separate behaviour change.
+export class GenerateDraftOrdersItemDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  productId!: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  qty!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  quantity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   cost?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  costPrice?: number;
+
+  @IsOptional()
+  @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  productName?: string;
 }
 
-export interface GenerateDraftOrdersGroupDto {
-  supplierId: number;
+export class GenerateDraftOrdersGroupDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  supplierId!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   locationId?: number;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
-  items: GenerateDraftOrdersItemDto[];
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GenerateDraftOrdersItemDto)
+  items!: GenerateDraftOrdersItemDto[];
 }
 
-export interface GenerateDraftOrdersPayload {
-  orders: GenerateDraftOrdersGroupDto[];
+export class GenerateDraftOrdersDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => GenerateDraftOrdersGroupDto)
+  orders!: GenerateDraftOrdersGroupDto[];
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 
@@ -220,7 +286,7 @@ export class PurchasesReorderService {
 
   async generateDraftPurchaseOrders(
     auth: AuthContext,
-    payload: GenerateDraftOrdersPayload,
+    payload: GenerateDraftOrdersDto,
   ): Promise<{ ok: boolean; count: number; createdOrders: Array<Record<string, unknown>> }> {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;

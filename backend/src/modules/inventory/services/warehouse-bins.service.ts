@@ -1,4 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Kysely, Transaction, sql } from '../../../database/kysely';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -12,41 +14,130 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 
-export interface CreateBinDto {
-  locationId: number;
-  code: string;
+// INV-DTO-PILOT-PURCHASES-INVENTORY (D2 pilot): the four bin DTOs were
+// interfaces — the global validation pipe does nothing for an interface,
+// so a caller could send any extra field (or a wrong-typed field) and it
+// reached the service untouched. They are now classes, every field
+// decorated, so the pipe validates and whitelists them.
+export class CreateBinDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  locationId!: number;
+
+  @IsString()
+  code!: string;
+
+  @IsOptional()
+  @IsString()
   barcode?: string;
+
+  @IsOptional()
+  @IsString()
   aisle?: string;
+
+  @IsOptional()
+  @IsString()
   rack?: string;
+
+  @IsOptional()
+  @IsString()
   shelf?: string;
+
+  @IsOptional()
+  @IsString()
   bin?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   capacity?: number;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 
-export interface UpdateBinDto {
+export class UpdateBinDto {
+  @IsOptional()
+  @IsString()
   code?: string;
+
+  @IsOptional()
+  @IsString()
   barcode?: string;
+
+  @IsOptional()
+  @IsString()
   aisle?: string;
+
+  @IsOptional()
+  @IsString()
   rack?: string;
+
+  @IsOptional()
+  @IsString()
   shelf?: string;
+
+  @IsOptional()
+  @IsString()
   bin?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   capacity?: number;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 
-export interface QuickReassignDto {
-  binId: number;
-  productId: number;
-  quantity: number;
+export class QuickReassignDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  binId!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  productId!: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  quantity!: number;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
   isPrimary?: boolean;
 }
 
-export interface QuickAuditUpdateDto {
-  binId: number;
-  productId: number;
-  countedQty: number;
+export class QuickAuditUpdateDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  binId!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  productId!: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  countedQty!: number;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 
