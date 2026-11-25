@@ -58,7 +58,7 @@ type StockScopeParams = TenantStockScope & {
   locationId?: number | null;
 };
 
-type StockDeltaParams = StockScopeParams & {
+export type StockDeltaParams = StockScopeParams & {
   delta: number;
   errorCode?: string;
   errorMessage?: string;
@@ -100,7 +100,7 @@ type RequiredTenantStockScope = {
   accountId: string;
 };
 
-type StockDeltaResult = {
+export type StockDeltaResult = {
   globalBefore: number;
   globalAfter: number;
   scopeBefore: number;

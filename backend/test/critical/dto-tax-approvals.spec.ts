@@ -348,13 +348,13 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 351);
-    assert.equal(chain.length, 351);
+    assert.equal(specs.length, 352);
+    assert.equal(chain.length, 352);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/dto-hr.spec.ts'));
     assert.ok(specs.includes('test/critical/dto-tax-approvals.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/api-docs.spec.ts');
-    console.log('  evidence spec wired into both critical lists (351 = 351, identical order), passed');
+    assert.equal(specs[specs.length - 1], 'test/critical/stock-movement-writer.spec.ts');
+    console.log('  evidence spec wired into both critical lists (352 = 352, identical order), passed');
   }
 
   console.log('DTO tax-approvals tests passed');

@@ -3,16 +3,18 @@
 - Grounded at HEAD `edca43058`, re-scanned after the archive-residual fix (INV-STOCK-MOVEMENTS-ARCHIVE-ROW): the scan still finds every write below, plus the one new row at `catalog-product-archive.service.ts:364`.
 - Re-scanned at HEAD `16dd42877` (van-trial fix chain): +2 writes from F19 paired final-issue movement (INV-FINAL-ISSUE-PAIRED-MOVEMENT) — the paired `transfer_receive` IN at `inventory-transfer.service.ts:336` and the final-issue reversal at `:726` — and line shifts in `inventory-transfer.service.ts` (F19 insertions) and `insert-sale-and-stock.ts` (F1a/F7/F8 create-sale changes); every other row re-verified against the scan. Method: line-based scan of `backend/src` (spec/test files and `database/migrations` + `database/legacy-migration` excluded) — a line is a business write iff it calls `insertInto('stock_movements')`, `deleteFrom('stock_movements')`, or `.from('stock_movements').update(...)`. Comments, type declarations, backup table-name lists and reads (`selectFrom` / `.from().select`) are not writes.
 - Re-scanned at HEAD `3e7035854` (item (5) FIX, ci-full #264 repair): 64 of 70 rows re-lined — Prettier `--write` sweeps, DTO packages D1–D5 and the #116 settings-import split shifted lines; no write added or removed, total still 70. The 2 settings-import rows moved from the split facade (`settings-import.service.ts:615/:1067`) to their slice files (`settings-import-products.ts:282`, `settings-import-suppliers-stock.ts:225`) and their `paired` flips to `no` (the slices never call `applyStockDelta`).
-- Total business writes: **70**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
+- Re-scanned at HEAD `9a2eee6a` (Phase 1 A0, INV-PHASE1-A0-ROW-WRITER): +1 write — the unified row-writer itself (`backend/src/common/utils/stock-movement-writer.ts:65`, `recordStockMovement`); total 70 → 71. The writer is the one insert all future callers converge on (A6–A9); it runs the delta through `applyStockDelta` and writes exactly one row from the returned before/after. No caller migrated yet, so all 70 prior rows stand unchanged.
+- Total business writes: **71**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
 - The ledger (`applyStockDelta` in `backend/src/common/utils/location-stock-ledger.ts`) updates balances; each caller still writes its own `stock_movements` row. That split is the risk this inventory exists to close in Phase 1 (single writer).
 - `paired` below is file-level (YES if the same file calls `applyStockDelta` anywhere) — deterministic and reproducible. It does NOT prove the ledger call and the row happen in the same branch: see the notes, especially the archive residual.
 - FIXED ASYMMETRY (catalog archive, INV-STOCK-MOVEMENTS-ARCHIVE-ROW): `toggleProductArchive` used to call `applyStockDelta` for the residual global stock (`-remainingGlobal`) with NO `stock_movements` row for it. It now writes the row at line 364, mirroring the sibling deduct rows (same type, reason, reference, cost, posting call) — before_qty remainingGlobal, after_qty 0, qty -remainingGlobal. A zero residual writes no row.
 - Resolves the map's UNVERIFIED maintenance path: `maintenance/maintenance/ticket-parts.slice.ts:154,305` and `maintenance/maintenance/delete-ticket.slice.ts:121` are all real inserts (maintenance_consumption / maintenance_return), listed below.
-- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 70 and every `file:line` below must be listed.
+- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 71 and every `file:line` below must be listed.
 
 ## Per-module totals
 
 - `catalog`: 9
+- `common` (ledger writer): 1
 - `delivery-reps`: 1
 - `import-sales`: 3
 - `inventory`: 21
@@ -24,7 +26,7 @@
 - `settings`: 6
 - `tradein`: 1
 
-## All 70 writes
+## All 71 writes
 
 | file:line | kind | movement_type | paired (file calls applyStockDelta) | notes |
 |---|---|---|---|---|
@@ -98,6 +100,7 @@
 | backend/src/modules/settings/services/settings-import/settings-import-suppliers-stock.ts:225 | insert | opening_stock | no | Opening stock on import: see above. Moved here from settings-import.service.ts:1067 in the #116 split. |
 | backend/src/modules/settings/settings/settings-locations-admin.ts:173 | delete | (delete) | no | Location delete cleanup (deleteFrom), not a ledger movement. |
 | backend/src/modules/tradein/tradein.service.ts:401 | insert | tradein_in | yes |  |
+| backend/src/common/utils/stock-movement-writer.ts:65 | insert | expr: params.movementType | yes | Phase 1 A0 unified writer (INV-PHASE1-A0-ROW-WRITER): runs applyStockDelta, then writes exactly one row from the returned scopeBefore/scopeAfter with total_cost = roundMoney(|delta| * unitCost, moneyDigits). The one insert all callers converge on (A6–A9); no caller migrated yet. |
 
 ## Reverse asymmetry (screening only, not proven violations)
 
