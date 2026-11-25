@@ -11,6 +11,7 @@ import type {
   SaveTableZoneDto,
   GeneratePrepSheetDto,
 } from './restaurant-fnb/restaurant-fnb-types';
+import type { TableLayoutItemDto } from '../dto/restaurant-fnb.dto';
 export type {
   TenantScope,
   Toggle86ItemDto,
@@ -225,18 +226,13 @@ export class RestaurantAdvancedFnbService {
 
   async saveTableLayouts(
     scope: TenantScope,
-    layouts: Array<{
-      id?: number;
-      table_number: string;
-      zone_code?: string;
-      shape?: 'square' | 'round' | 'rectangle' | 'booth';
-      x_pos: number;
-      y_pos: number;
-      width?: number;
-      height?: number;
-      seats?: number;
-      rotation?: number;
-    }>,
+    // D5: the parameter type is the DTO item type, not the old
+    // inline shape that declared table_number / x_pos / y_pos
+    // required. The body tolerates their absence (a missing
+    // table_number skips the item; missing coordinates default
+    // to 10), so the type now says what the body does. Type-only
+    // change — behaviour unchanged.
+    layouts: TableLayoutItemDto[],
     branchId?: number | null,
   ) {
     return this.upsellLayouts.saveTableLayouts(scope, layouts, branchId);

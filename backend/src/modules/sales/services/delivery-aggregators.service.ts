@@ -1,4 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
@@ -20,27 +22,116 @@ export interface AggregatorChannelDto {
   webhook_secret?: string;
 }
 
-export interface IngestOrderDto {
-  aggregatorCode: string;
-  externalOrderId: string;
+/*
+ * D5 sales — IngestOrderDto converted from an interface to a
+ * class (Rule 5, in place). NO caller (manual / mock ingest
+ * only, per the controller comment) — the positive case is the
+ * interface shape itself. The service NEVER reads dto.items
+ * (it stores the whole body opaquely as order_payload), so
+ * items stay optional even though the interface declared them
+ * required, and every item / modifier field is optional.
+ */
+export class IngestOrderItemModifierDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsNumber()
+  price?: number;
+
+  @IsOptional()
+  @IsNumber()
+  qty?: number;
+}
+
+export class IngestOrderItemDto {
+  @IsOptional()
+  @IsNumber()
+  productId?: number;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsNumber()
+  qty?: number;
+
+  @IsOptional()
+  @IsNumber()
+  unitPrice?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => IngestOrderItemModifierDto)
+  modifiers?: IngestOrderItemModifierDto[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class IngestOrderDto {
+  @IsString()
+  @IsNotEmpty()
+  aggregatorCode!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  externalOrderId!: string;
+
+  @IsOptional()
+  @IsString()
   displayNumber?: string;
+
+  @IsOptional()
+  @IsNumber()
   branchId?: number;
+
+  @IsOptional()
+  @IsString()
   customerName?: string;
+
+  @IsOptional()
+  @IsString()
   customerPhone?: string;
+
+  @IsOptional()
+  @IsString()
   deliveryAddress?: string;
+
+  @IsOptional()
+  @IsString()
   riderName?: string;
+
+  @IsOptional()
+  @IsString()
   riderPhone?: string;
-  subtotal: number;
+
+  @IsNumber()
+  @Min(0)
+  subtotal!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   deliveryFee?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   commissionRate?: number;
-  items: Array<{
-    productId?: number;
-    name: string;
-    qty: number;
-    unitPrice: number;
-    modifiers?: Array<{ name: string; price?: number; qty?: number }>;
-    notes?: string;
-  }>;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => IngestOrderItemDto)
+  items?: IngestOrderItemDto[];
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 

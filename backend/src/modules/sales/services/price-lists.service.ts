@@ -1,4 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Kysely, sql } from 'kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -9,23 +11,123 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { resolveListEffectivePrice, resolvePriceListContext } from '../engines/price-list-resolution.engine';
 
-export interface UpsertPriceListDto {
-  name: string;
-  code: string;
+/*
+ * D5 sales — UpsertPriceListDto converted from an interface to
+ * a class (Rule 5, in place), plus the nested item class and a
+ * separate all-optional UpdatePriceListDto (the D3 promotion
+ * precedent — the update service falls back to the stored row
+ * for every field it does not receive).
+ *
+ * code is OPTIONAL in the DTO even though the interface declared
+ * it required: the service falls back to the list name on
+ * create (dto.code || dto.name) and to the stored code on
+ * update (dto.code || existing.code). The caller sends it, but
+ * a missing code is a legitimate service capability.
+ */
+export class PriceListItemDto {
+  @IsOptional()
+  @IsNumber()
+  product_id?: number | null;
+
+  @IsOptional()
+  @IsString()
+  product_name?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  category_id?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  min_quantity?: number;
+
+  @IsOptional()
+  @IsNumber()
+  fixed_price?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  discount_percent?: number | null;
+}
+
+export class UpsertPriceListDto {
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
   currency?: string;
+
+  @IsOptional()
+  @IsIn(['percentage', 'fixed_override', 'markup_cost'])
   type?: 'percentage' | 'fixed_override' | 'markup_cost';
+
+  @IsOptional()
+  @IsNumber()
   default_discount_percent?: number;
+
+  @IsOptional()
+  @IsBoolean()
   is_default?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   is_active?: boolean;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
-  items?: Array<{
-    product_id?: number | null;
-    product_name?: string | null;
-    category_id?: number | null;
-    min_quantity: number;
-    fixed_price?: number | null;
-    discount_percent?: number | null;
-  }>;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PriceListItemDto)
+  items?: PriceListItemDto[];
+}
+
+export class UpdatePriceListDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @IsOptional()
+  @IsIn(['percentage', 'fixed_override', 'markup_cost'])
+  type?: 'percentage' | 'fixed_override' | 'markup_cost';
+
+  @IsOptional()
+  @IsNumber()
+  default_discount_percent?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  is_default?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  is_active?: boolean;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PriceListItemDto)
+  items?: PriceListItemDto[];
 }
 
 @Injectable()
@@ -174,7 +276,7 @@ export class PriceListsService {
     });
   }
 
-  async updatePriceList(auth: AuthContext, id: number, dto: UpsertPriceListDto) {
+  async updatePriceList(auth: AuthContext, id: number, dto: UpdatePriceListDto) {
     canManagePriceLists(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;

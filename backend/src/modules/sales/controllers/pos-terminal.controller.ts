@@ -3,7 +3,8 @@ import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { RequirePermissions, RequireAnyPermission } from '../../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
-import { PosTerminalService, TerminalPaymentRequest } from '../services/pos-terminal.service';
+import { PosTerminalService, TerminalPaymentRequestDto } from '../services/pos-terminal.service';
+import { BridgeCallbackDto, BridgePollDto, TestTerminalConnectionDto } from '../dto/pos-terminal.dto';
 
 @Controller('api/sales/pos/terminals')
 export class PosTerminalController {
@@ -12,7 +13,7 @@ export class PosTerminalController {
   @Post('test-connection')
   @UseGuards(SessionAuthGuard, PermissionsGuard)
   @RequireAnyPermission('sales', 'canManageSettings')
-  async testConnection(@Req() req: RequestWithAuth, @Body() body: { ip?: string; port?: number; provider?: string }) {
+  async testConnection(@Req() req: RequestWithAuth, @Body() body: TestTerminalConnectionDto) {
     const result = await this.terminalService.testConnection(String(req.authContext!.tenantId), body);
     return {
       success: true,
@@ -34,7 +35,7 @@ export class PosTerminalController {
   @Post('charge')
   @UseGuards(SessionAuthGuard, PermissionsGuard)
   @RequirePermissions('sales')
-  async initiateCharge(@Req() req: RequestWithAuth, @Body() body: TerminalPaymentRequest) {
+  async initiateCharge(@Req() req: RequestWithAuth, @Body() body: TerminalPaymentRequestDto) {
     const session = await this.terminalService.initiatePayment(String(req.authContext!.tenantId), body);
     return {
       success: true,
@@ -67,10 +68,7 @@ export class PosTerminalController {
   // --- Hardware Bridge Outbound Relay Endpoints ---
 
   @Post('bridge/poll')
-  async pollBridge(
-    @Body() body: { tenantId: string; machineName?: string; bridgeVersion?: string },
-    @Headers('x-zs-bridge-key') bridgeKey?: string,
-  ) {
+  async pollBridge(@Body() body: BridgePollDto, @Headers('x-zs-bridge-key') bridgeKey?: string) {
     if (!body?.tenantId) throw new BadRequestException('tenantId is required');
     this.terminalService.assertBridgeAuthenticated(String(body.tenantId).trim(), bridgeKey);
     const result = await this.terminalService.pollBridge(String(body.tenantId).trim());
@@ -83,16 +81,7 @@ export class PosTerminalController {
   @Post('bridge/callback')
   async bridgeCallback(
     @Body()
-    body: {
-      tenantId: string;
-      jobId: string;
-      status: string;
-      authCode?: string;
-      rrn?: string;
-      cardScheme?: string;
-      cardLastFour?: string;
-      message?: string;
-    },
+    body: BridgeCallbackDto,
     @Headers('x-zs-bridge-key') bridgeKey?: string,
   ) {
     if (!body?.jobId || !body?.tenantId) throw new BadRequestException('jobId and tenantId are required');

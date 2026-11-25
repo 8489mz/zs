@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
+import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export const execAsync = promisify(exec);
 
@@ -120,12 +121,44 @@ export function translateBankResponseCode(rawCode?: string, fallbackMessage?: st
   return codeMap[clean] || fallbackMessage || `تم رفض العملية من البنك (رمز الاستجابة: ${clean})`;
 }
 
-export interface TerminalPaymentRequest {
+/*
+ * D5 sales — TerminalPaymentRequest renamed to
+ * TerminalPaymentRequestDto and converted from an interface to
+ * a class (Rule 5, in place). The rename is REQUIRED: the
+ * census counts a site dto-class only when the name ends in
+ * Dto AND is declared as a class. The caller (pos.api.ts
+ * initiateCharge) sends { terminalId?, amount, currency?,
+ * invoiceReference? } — cashierShiftId is never sent and never
+ * read anywhere in the terminal code (only its declaration
+ * line), so it stays optional. It is a plain string, NOT
+ * string | number: implicit conversion cannot coerce a
+ * union-typed field (with the union declared, the pipe rejects
+ * a numeric value with "must be a string" — proven by the D5
+ * spec run), while the plain-string declaration coerces it
+ * normally. The service never reads the field, so narrowing
+ * the declared type changes no runtime behaviour. amount must
+ * be positive (the service throws on a non-positive amount).
+ */
+export class TerminalPaymentRequestDto {
+  @IsOptional()
+  @IsString()
   terminalId?: string;
-  amount: number;
+
+  @IsNumber()
+  @Min(0)
+  amount!: number;
+
+  @IsOptional()
+  @IsString()
   currency?: string;
+
+  @IsOptional()
+  @IsString()
   invoiceReference?: string;
-  cashierShiftId?: string | number;
+
+  @IsOptional()
+  @IsString()
+  cashierShiftId?: string;
 }
 
 export interface TerminalPaymentSession {

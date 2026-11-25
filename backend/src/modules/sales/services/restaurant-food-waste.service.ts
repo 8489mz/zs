@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Min } from 'class-validator';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
@@ -9,12 +10,37 @@ import { AccountingPostingService } from '../../accounting/accounting-posting.se
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
-export interface CreateFoodWasteLogDto {
-  branchId: number;
-  productId: number;
-  quantity: number;
-  reason: 'spoilage' | 'prep_error' | 'expired' | 'customer_complaint' | 'other';
+/*
+ * D5 sales — CreateFoodWasteLogDto converted from an interface
+ * to a class (Rule 5, in place). The caller
+ * (restaurant-food-waste.api.ts logWaste) sends { branchId,
+ * productId, quantity, reason, notes? } — reason is one of the
+ * five enum values (the modal defaults 'spoilage'); quantity
+ * must be positive (the service throws on a non-positive
+ * quantity).
+ */
+export class CreateFoodWasteLogDto {
+  @IsInt()
+  @Min(1)
+  branchId!: number;
+
+  @IsInt()
+  @Min(1)
+  productId!: number;
+
+  @IsNumber()
+  @IsPositive()
+  quantity!: number;
+
+  @IsIn(['spoilage', 'prep_error', 'expired', 'customer_complaint', 'other'])
+  reason!: 'spoilage' | 'prep_error' | 'expired' | 'customer_complaint' | 'other';
+
+  @IsOptional()
+  @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
   allowPending?: boolean;
 }
 

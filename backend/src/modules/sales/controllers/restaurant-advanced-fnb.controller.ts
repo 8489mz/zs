@@ -11,6 +11,14 @@ import {
   SaveTableZoneDto,
   GeneratePrepSheetDto,
 } from '../services/restaurant-advanced-fnb.service';
+import {
+  CreateDriveThruOrderDto,
+  CreateUpsellRuleDto,
+  RecordManagerCompDto,
+  RecordTableRatingDto,
+  RenameHeldDraftTableDto,
+  SaveTableLayoutsDto,
+} from '../dto/restaurant-fnb.dto';
 
 @Controller('api/sales/restaurant')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -161,16 +169,7 @@ export class RestaurantAdvancedFnbController {
   async recordManagerComp(
     @Req() req: RequestWithAuth,
     @Body()
-    dto: {
-      saleId?: number;
-      tableNumber?: string;
-      compType: 'vip_guest' | 'customer_complaint' | 'staff_meal' | 'promotional_tasting';
-      managerName: string;
-      managerPin?: string;
-      amount: number;
-      itemsSummary?: string;
-      notes?: string;
-    },
+    dto: RecordManagerCompDto,
   ) {
     const scope = requireTenantScope(req.authContext!);
     const userId = Number(req.authContext?.userId || 0);
@@ -191,13 +190,7 @@ export class RestaurantAdvancedFnbController {
   async recordTableRating(
     @Req() req: RequestWithAuth,
     @Body()
-    dto: {
-      tableNumber: string;
-      saleId?: number;
-      rating: number;
-      feedbackCategory?: string;
-      notes?: string;
-    },
+    dto: RecordTableRatingDto,
   ) {
     const scope = requireTenantScope(req.authContext!);
     return this.service.recordTableRating(scope, dto);
@@ -230,12 +223,7 @@ export class RestaurantAdvancedFnbController {
   async createDriveThruOrder(
     @Req() req: RequestWithAuth,
     @Body()
-    dto: {
-      vehiclePlate: string;
-      vehicleDesc?: string;
-      totalAmount?: number;
-      notes?: string;
-    },
+    dto: CreateDriveThruOrderDto,
   ) {
     const scope = requireTenantScope(req.authContext!);
     return this.service.createDriveThruOrder(scope, dto);
@@ -270,14 +258,7 @@ export class RestaurantAdvancedFnbController {
   async createUpsellRule(
     @Req() req: RequestWithAuth,
     @Body()
-    dto: {
-      triggerProductId?: number;
-      triggerCategoryName?: string;
-      suggestedProductId: number;
-      suggestedProductName: string;
-      title: string;
-      discountAmount?: number;
-    },
+    dto: CreateUpsellRuleDto,
   ) {
     const scope = requireTenantScope(req.authContext!);
     return this.service.createUpsellRule(scope, dto);
@@ -295,21 +276,7 @@ export class RestaurantAdvancedFnbController {
   async saveTableLayouts(
     @Req() req: RequestWithAuth,
     @Body()
-    dto: {
-      layouts: Array<{
-        id?: number;
-        table_number: string;
-        zone_code?: string;
-        shape?: 'square' | 'round' | 'rectangle' | 'booth';
-        x_pos: number;
-        y_pos: number;
-        width?: number;
-        height?: number;
-        seats?: number;
-        rotation?: number;
-      }>;
-      branchId?: number;
-    },
+    dto: SaveTableLayoutsDto,
   ) {
     const scope = requireTenantScope(req.authContext!);
     // INV-REST-FLOOR-SAVE-MANAGER-FORWARD: the save gate lives in the
@@ -319,7 +286,7 @@ export class RestaurantAdvancedFnbController {
     // caller's identity like the comp/tip endpoints do.
     return this.service.saveTableLayouts(
       { ...scope, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
-      dto.layouts,
+      dto.layouts ?? [],
       dto.branchId,
     );
   }
@@ -344,7 +311,7 @@ export class RestaurantAdvancedFnbController {
   async renameHeldDraftTable(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: { tableNumber?: string },
+    @Body() dto: RenameHeldDraftTableDto,
   ) {
     const scope = requireTenantScope(req.authContext!);
     return this.service.renameHeldDraftTable(scope, id, String(dto?.tableNumber || ''));

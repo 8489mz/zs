@@ -21,6 +21,7 @@ import { HeldSaleDto } from './dto/held-sale.dto';
 import { PosAuditEventDto } from './dto/pos-audit-event.dto';
 import { UpsertSaleDto } from './dto/upsert-sale.dto';
 import { AdjustSalePaymentsDto } from './dto/adjust-sale-payments.dto';
+import { AuthorizeDiscountOverrideDto, CancelSaleDto } from './dto/sales-misc.dto';
 import { SalesService } from './sales.service';
 
 @Controller('api')
@@ -50,7 +51,7 @@ export class SalesController {
   @Post('sales/discount-authorization')
   @RequirePermissions('sales')
   authorizeDiscountOverride(
-    @Body() body: { secret?: string },
+    @Body() body: AuthorizeDiscountOverrideDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.salesService.authorizeDiscountOverride(String(body?.secret || ''), req.authContext!);
@@ -65,11 +66,7 @@ export class SalesController {
   @Post('sales/:id/cancel')
   @RequirePermissions('canEditInvoices')
   @UseInterceptors(IdempotencyInterceptor)
-  cancelSale(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: { reason?: string; managerPin?: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  cancelSale(@Param('id', ParseIntPipe) id: number, @Body() body: CancelSaleDto, @Req() req: RequestWithAuth) {
     return this.salesService.cancelSale(
       id,
       String(body?.reason || ''),

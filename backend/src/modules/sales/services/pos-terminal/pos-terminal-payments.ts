@@ -2,7 +2,7 @@ import { BadRequestException, type Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
   parseTerminalHostAndPort,
-  type TerminalPaymentRequest,
+  type TerminalPaymentRequestDto,
   type TerminalPaymentSession,
   type BridgeJob,
   type PosTerminalInfo,
@@ -24,7 +24,7 @@ export class PosTerminalPayments {
         port: number,
         provider: string,
         terminal: PosTerminalInfo,
-        request: TerminalPaymentRequest,
+        request: TerminalPaymentRequestDto,
       ) => Promise<void>;
       dispatchTerminalCancel: (ip: string, port: number, provider: string, transactionId: string) => Promise<void>;
     },
@@ -33,7 +33,7 @@ export class PosTerminalPayments {
   /**
    * Initiate payment request to the EDC card terminal
    */
-  async initiatePayment(tenantId: string, request: TerminalPaymentRequest): Promise<TerminalPaymentSession> {
+  async initiatePayment(tenantId: string, request: TerminalPaymentRequestDto): Promise<TerminalPaymentSession> {
     if (!Number.isFinite(request.amount) || request.amount <= 0) {
       throw new BadRequestException('المبلغ المطلوب للجهاز يجب أن يكون أكبر من صفر');
     }
@@ -281,7 +281,7 @@ export class PosTerminalPayments {
     port: number,
     provider: string,
     terminal: PosTerminalInfo,
-    request: TerminalPaymentRequest,
+    request: TerminalPaymentRequestDto,
   ): Promise<void> {
     return this.bound.executeTerminalCharge(session, ip, port, provider, terminal, request);
   }

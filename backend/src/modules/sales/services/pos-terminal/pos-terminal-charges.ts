@@ -5,7 +5,7 @@ import {
   isPrivateSubnetIp,
   type TerminalPaymentSession,
   type PosTerminalInfo,
-  type TerminalPaymentRequest,
+  type TerminalPaymentRequestDto,
 } from './pos-terminal-shared';
 
 export class PosTerminalCharges {
@@ -20,7 +20,7 @@ export class PosTerminalCharges {
     port: number,
     provider: string,
     terminal: PosTerminalInfo,
-    request: TerminalPaymentRequest,
+    request: TerminalPaymentRequestDto,
   ): Promise<void> {
     if (provider.includes('geidea')) {
       await this.executeGeideaCharge(session, ip, port, terminal, request);
@@ -42,7 +42,7 @@ export class PosTerminalCharges {
     ip: string,
     port: number,
     terminal: PosTerminalInfo,
-    request: TerminalPaymentRequest,
+    request: TerminalPaymentRequestDto,
   ): Promise<void> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 95000);
@@ -274,7 +274,7 @@ export class PosTerminalCharges {
     ip: string,
     port: number,
     terminal: PosTerminalInfo,
-    request: TerminalPaymentRequest,
+    request: TerminalPaymentRequestDto,
   ): Promise<void> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 95000);
@@ -436,7 +436,7 @@ export class PosTerminalCharges {
     ip: string,
     port: number,
     terminal: PosTerminalInfo,
-    request: TerminalPaymentRequest,
+    request: TerminalPaymentRequestDto,
   ): Promise<void> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 95000);

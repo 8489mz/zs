@@ -338,6 +338,8 @@
     "test/critical/dto-delivery-reps-admin.spec.ts",
     "test/critical/dto-delivery-reps-driver.spec.ts",
     "test/critical/dto-maritime-freight-portal.spec.ts",
-    "test/critical/dto-maritime-freight.spec.ts"
+    "test/critical/dto-maritime-freight.spec.ts",
+    "test/critical/dto-sales-core.spec.ts",
+    "test/critical/dto-sales-orders.spec.ts"
   ]
 }

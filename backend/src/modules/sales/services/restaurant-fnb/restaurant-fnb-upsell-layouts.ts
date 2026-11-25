@@ -2,6 +2,7 @@ import { Database } from '../../../../database/database.types';
 import { Kysely } from 'kysely';
 import { AppError } from '../../../../common/errors/app-error';
 import { TenantScope } from './restaurant-fnb-types';
+import type { TableLayoutItemDto } from '../../dto/restaurant-fnb.dto';
 
 export class RestaurantFnbUpsellLayoutsSlice {
   constructor(
@@ -89,18 +90,11 @@ export class RestaurantFnbUpsellLayoutsSlice {
 
   async saveTableLayouts(
     scope: TenantScope,
-    layouts: Array<{
-      id?: number;
-      table_number: string;
-      zone_code?: string;
-      shape?: 'square' | 'round' | 'rectangle' | 'booth';
-      x_pos: number;
-      y_pos: number;
-      width?: number;
-      height?: number;
-      seats?: number;
-      rotation?: number;
-    }>,
+    // D5: same widening as the facade (see there) — the body
+    // tolerates a missing table_number (skips the item) and
+    // missing coordinates (default 10), so the type now says
+    // what the body does. Type-only change.
+    layouts: TableLayoutItemDto[],
     branchId?: number | null,
   ) {
     // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I37): design mode is

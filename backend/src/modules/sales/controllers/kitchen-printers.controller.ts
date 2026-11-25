@@ -20,6 +20,7 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { KitchenPrintersService } from '../services/kitchen-printers.service';
 import { CreateKitchenPrinterDto, UpdateKitchenPrinterDto } from '../dto/kitchen-printer.dto';
+import { PrintKitchenTicketDto } from '../dto/kitchen-printer-print.dto';
 
 @Controller('api/sales/kitchen-printers')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -47,7 +48,7 @@ export class KitchenPrintersController {
   // printer serves this sale and the caller falls back to Electron print.
   @Post('print')
   @RequirePermissions('sales')
-  async printTicket(@Req() req: RequestWithAuth, @Body() body: { saleId: number }) {
+  async printTicket(@Req() req: RequestWithAuth, @Body() body: PrintKitchenTicketDto) {
     const { tenantId } = requireTenantScope(req.authContext);
     const saleId = Number(body?.saleId);
     if (!Number.isSafeInteger(saleId) || saleId <= 0) {

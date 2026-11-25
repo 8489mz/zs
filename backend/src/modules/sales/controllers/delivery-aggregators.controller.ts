@@ -3,11 +3,8 @@ import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { AllowAuthenticated } from '../../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
-import {
-  DeliveryAggregatorsService,
-  AggregatorChannelDto,
-  IngestOrderDto,
-} from '../services/delivery-aggregators.service';
+import { DeliveryAggregatorsService, IngestOrderDto } from '../services/delivery-aggregators.service';
+import { UpdateAggregatorChannelDto } from '../dto/delivery-aggregators.dto';
 
 @Controller(['sales/aggregators', 'api/sales/delivery-aggregators', 'api/sales/aggregators'])
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -24,7 +21,7 @@ export class DeliveryAggregatorsController {
   async updateAggregator(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: Partial<AggregatorChannelDto>,
+    @Body() payload: UpdateAggregatorChannelDto,
   ) {
     return this.service.updateAggregator(req.authContext!, id, payload);
   }

@@ -50,6 +50,12 @@
  * inline-object 94 -> 81, any 37 -> 25, dto-interface 39 -> 38,
  * inline-other 9 -> 7.
  *
+ * D5 (INV-DTO-SALES-27): sales converts 27 sites (13 dto-interface +
+ * 13 inline-object + 1 named-interface); the count is now 136 = 127
+ * convertible + 9 pinned exclusions. Whole-body total stays 624 and
+ * the buckets move dto-class 461 -> 488, inline-object 81 -> 68,
+ * dto-interface 38 -> 25, named-interface 4 -> 3.
+ *
  * Usage: node scripts/dto-coverage-check.mjs [--json]
  *   (run from the backend/ directory; paths are relative to backend/).
  */
@@ -61,8 +67,8 @@ import { fileURLToPath } from 'node:url';
 const BACKEND = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(BACKEND, 'src');
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D4 (163 after maritime-freight converts 28). */
-const PINNED_COUNT = 163;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D5 (136 after sales converts 27). */
+const PINNED_COUNT = 136;
 
 /**
  * The 9 pinned exclusions. A DTO on any of these breaks a real flow — see

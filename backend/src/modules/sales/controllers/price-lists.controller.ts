@@ -1,7 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, ParseIntPipe, Req } from '@nestjs/common';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
-import { PriceListsService, UpsertPriceListDto } from '../services/price-lists.service';
+import { PriceListsService, UpsertPriceListDto, UpdatePriceListDto } from '../services/price-lists.service';
+import { CalculatePriceDto } from '../dto/price-calculate.dto';
 
 @Controller('api/sales/price-lists')
 @UseGuards(SessionAuthGuard)
@@ -27,7 +28,7 @@ export class PriceListsController {
   }
 
   @Put(':id')
-  async update(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number, @Body() dto: UpsertPriceListDto) {
+  async update(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePriceListDto) {
     const data = await this.priceListsService.updatePriceList(req.authContext!, id, dto);
     return { data, message: 'تم تحديث قائمة الأسعار بنجاح' };
   }
@@ -42,16 +43,7 @@ export class PriceListsController {
   async calculatePrice(
     @Req() req: RequestWithAuth,
     @Body()
-    body: {
-      customerId?: number | null;
-      productId: number;
-      quantity: number;
-      basePrice: number;
-      // INV-VAN-PRICE-LIST-WIRING: the credit branch of the engine
-      // runs only when paymentTerms is 'credit'; without it the
-      // preview could never reach the credit price.
-      paymentTerms?: 'cash' | 'credit';
-    },
+    body: CalculatePriceDto,
   ) {
     const data = await this.priceListsService.calculateEffectivePrice(
       req.authContext!,

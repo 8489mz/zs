@@ -11,12 +11,12 @@ import type {
   BridgeJob,
   BridgePoller,
   PosTerminalInfo,
-  TerminalPaymentRequest,
+  TerminalPaymentRequestDto,
   TerminalPaymentSession,
   TerminalConnectionTestResult,
 } from './pos-terminal/pos-terminal-shared';
 export { derivePosBridgeKey } from './pos-terminal/pos-terminal-shared';
-export type { TerminalPaymentRequest } from './pos-terminal/pos-terminal-shared';
+export { TerminalPaymentRequestDto } from './pos-terminal/pos-terminal-shared';
 
 @Injectable()
 export class PosTerminalService {
@@ -98,7 +98,7 @@ export class PosTerminalService {
   async getTerminals(tenantId: string): Promise<PosTerminalInfo[]> {
     return this.s2.getTerminals(tenantId);
   }
-  async initiatePayment(tenantId: string, request: TerminalPaymentRequest): Promise<TerminalPaymentSession> {
+  async initiatePayment(tenantId: string, request: TerminalPaymentRequestDto): Promise<TerminalPaymentSession> {
     return this.s3.initiatePayment(tenantId, request);
   }
 
