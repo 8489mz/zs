@@ -44,9 +44,10 @@ function readSessionId(request: RequestWithAuth, allowHeaderAuth: boolean, cooki
   // `Referer` لأي طرف ثالث تحمّله الصفحة. لذلك يُقبل على الطرق الآمنة فقط
   // (GET/HEAD) حتى لا يصبح رابطاً مسرَّباً قادراً على تنفيذ عملية تغيّر البيانات.
   if (!isUnsafeHttpMethod(request.method) && request.query && typeof request.query === 'object') {
-    const queryCandidate = (request.query as Record<string, unknown>)['sessionId']
-      || (request.query as Record<string, unknown>)['session_id']
-      || (request.query as Record<string, unknown>)['token'];
+    const queryCandidate =
+      (request.query as Record<string, unknown>)['sessionId'] ||
+      (request.query as Record<string, unknown>)['session_id'] ||
+      (request.query as Record<string, unknown>)['token'];
     if (typeof queryCandidate === 'string' && queryCandidate.trim()) {
       return queryCandidate.trim();
     }
@@ -65,7 +66,10 @@ function isUnsafeHttpMethod(method: string | undefined): boolean {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(method || '').toUpperCase());
 }
 
-function assertTenantScopeHeadersMatchAuth(request: RequestWithAuth, auth: { tenantId?: string; accountId?: string }): void {
+function assertTenantScopeHeadersMatchAuth(
+  request: RequestWithAuth,
+  auth: { tenantId?: string; accountId?: string },
+): void {
   const headerTenantId = readHeaderValue(request.headers['x-tenant-id']);
   const headerAccountId = readHeaderValue(request.headers['x-account-id']);
 
@@ -88,10 +92,11 @@ export class SessionAuthGuard implements CanActivate {
   private allowSessionIdHeaderFallback(): boolean {
     // A single unsafe development flag must never re-enable CSRF-free header
     // sessions on Cloud, including a Cloud deployment running NODE_ENV=development.
-    const appMode = this.configService.get<string>('app.mode')
-      || this.configService.get<string>('APP_MODE')
-      || process.env.APP_MODE
-      || 'CLOUD_SAAS';
+    const appMode =
+      this.configService.get<string>('app.mode') ||
+      this.configService.get<string>('APP_MODE') ||
+      process.env.APP_MODE ||
+      'CLOUD_SAAS';
     if (!isDesktopRuntimeMode(appMode)) return false;
     const configured = this.configService.get('ALLOW_SESSION_ID_HEADER');
     if (String(configured).toLowerCase() === 'false') return false;
@@ -109,7 +114,7 @@ export class SessionAuthGuard implements CanActivate {
       csrfCookieName: this.configService.get<string>('SESSION_CSRF_COOKIE_NAME')?.trim() || 'csrf_token',
       sameSite: this.configService.get<'lax' | 'strict' | 'none'>('SESSION_COOKIE_SAME_SITE') ?? 'lax',
       secure: isLoopback ? false : this.configService.get<boolean>('SESSION_COOKIE_SECURE') === true,
-      domain: isLoopback ? undefined : (this.configService.get<string>('SESSION_COOKIE_DOMAIN')?.trim() || undefined),
+      domain: isLoopback ? undefined : this.configService.get<string>('SESSION_COOKIE_DOMAIN')?.trim() || undefined,
     });
   }
 
@@ -138,10 +143,14 @@ export class SessionAuthGuard implements CanActivate {
       const csrfSecret = this.configService.get<string>('SESSION_CSRF_SECRET') || '';
       const csrfCookie = parseCookie(request, csrfCookieName);
       const csrfHeader = readHeaderValue(request.headers[CSRF_HEADER_NAME]);
-      const usingHeaderFallback = (allowHeaderAuth && readHeaderValue(request.headers['x-session-id']) === sessionId)
-        || readHeaderValue(request.headers['authorization']).toLowerCase().startsWith('bearer ');
+      const usingHeaderFallback =
+        (allowHeaderAuth && readHeaderValue(request.headers['x-session-id']) === sessionId) ||
+        readHeaderValue(request.headers['authorization']).toLowerCase().startsWith('bearer ');
 
-      if (!usingHeaderFallback && (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader || !verifyCsrfToken(sessionId, csrfSecret, csrfHeader))) {
+      if (
+        !usingHeaderFallback &&
+        (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader || !verifyCsrfToken(sessionId, csrfSecret, csrfHeader))
+      ) {
         this.clearAuthCookies(response, request);
         throw new ForbiddenException('CSRF validation failed');
       }

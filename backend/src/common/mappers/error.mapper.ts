@@ -8,7 +8,8 @@ function normalizeHttpExceptionBody(response: string | object, status: number): 
     return new HttpException(
       {
         message: translateErrorMessageFromCode(undefined, response, status),
-        code: status === 401 ? 'UNAUTHORIZED' : status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : 'HTTP_ERROR',
+        code:
+          status === 401 ? 'UNAUTHORIZED' : status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : 'HTTP_ERROR',
         details: null,
       },
       status,
@@ -31,7 +32,9 @@ function normalizeHttpExceptionBody(response: string | object, status: number): 
     {
       ...payload,
       message,
-      code: code ?? (status === 401 ? 'UNAUTHORIZED' : status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : 'HTTP_ERROR'),
+      code:
+        code ??
+        (status === 401 ? 'UNAUTHORIZED' : status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : 'HTTP_ERROR'),
     },
     status,
   );
@@ -67,7 +70,11 @@ export function mapToHttpException(error: unknown): HttpException {
 
   return new HttpException(
     {
-      message: translateErrorMessageFromCode('INTERNAL_ERROR', 'Internal server error', HttpStatus.INTERNAL_SERVER_ERROR),
+      message: translateErrorMessageFromCode(
+        'INTERNAL_ERROR',
+        'Internal server error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ),
       code: 'INTERNAL_ERROR',
     },
     HttpStatus.INTERNAL_SERVER_ERROR,

@@ -113,7 +113,8 @@ function defaultPermissions() {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const acknowledged = String(args['support-only'] || process.env.SUPPORT_RESET_ACKNOWLEDGED || '').toLowerCase() === 'true';
+  const acknowledged =
+    String(args['support-only'] || process.env.SUPPORT_RESET_ACKNOWLEDGED || '').toLowerCase() === 'true';
   if (!acknowledged) {
     throw new Error('This support-only script requires --support-only=true.');
   }

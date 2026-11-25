@@ -51,12 +51,12 @@ async function bootstrap(): Promise<void> {
           const headers = event.request.headers;
           const sensitiveHeaders = ['authorization', 'cookie', 'session-id', 'csrf-token'];
           for (const key of Object.keys(headers)) {
-            if (sensitiveHeaders.some(h => key.toLowerCase().includes(h))) {
+            if (sensitiveHeaders.some((h) => key.toLowerCase().includes(h))) {
               headers[key] = '[REDACTED]';
             }
           }
         }
-        
+
         if (event.request?.cookies) {
           event.request.cookies = { redacted: '[REDACTED]' };
         }
@@ -66,13 +66,13 @@ async function bootstrap(): Promise<void> {
             const data = typeof event.request.data === 'string' ? JSON.parse(event.request.data) : event.request.data;
             if (data && typeof data === 'object') {
               const sensitiveKeys = ['password', 'token', 'secret', 'connection', 'smtp', 'db'];
-              
+
               const deepRedact = (obj: any, sensitiveKeys: string[]): any => {
                 if (!obj || typeof obj !== 'object') return obj;
-                if (Array.isArray(obj)) return obj.map(item => deepRedact(item, sensitiveKeys));
+                if (Array.isArray(obj)) return obj.map((item) => deepRedact(item, sensitiveKeys));
                 const result = { ...obj };
                 for (const key of Object.keys(result)) {
-                  if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
+                  if (sensitiveKeys.some((sk) => key.toLowerCase().includes(sk))) {
                     result[key] = '[REDACTED]';
                   } else if (typeof result[key] === 'object') {
                     result[key] = deepRedact(result[key], sensitiveKeys);
@@ -80,7 +80,7 @@ async function bootstrap(): Promise<void> {
                 }
                 return result;
               };
-              
+
               const redactedData = deepRedact(data, sensitiveKeys);
               event.request.data = typeof event.request.data === 'string' ? JSON.stringify(redactedData) : redactedData;
             }
@@ -89,14 +89,13 @@ async function bootstrap(): Promise<void> {
           }
         }
         return event;
-      }
+      },
     });
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
   });
-
 
   const logger = app.get(LoggerService);
   app.useLogger(logger);
@@ -107,8 +106,12 @@ async function bootstrap(): Promise<void> {
   // Authenticated master data must never enter a shared proxy cache.
   app.set('etag', 'weak');
   const revalidatedMasters = new Set([
-    '/api/categories', '/api/units', '/api/payment-methods',
-    '/api/settings', '/api/settings/locations', '/api/branches',
+    '/api/categories',
+    '/api/units',
+    '/api/payment-methods',
+    '/api/settings',
+    '/api/settings/locations',
+    '/api/branches',
   ]);
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === 'GET' && revalidatedMasters.has(req.path)) {
@@ -120,12 +123,14 @@ async function bootstrap(): Promise<void> {
     next();
   });
 
-  app.use(json({
-    limit: JSON_BODY_LIMIT,
-    verify: (req: any, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }));
+  app.use(
+    json({
+      limit: JSON_BODY_LIMIT,
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
   app.use(urlencoded({ extended: true, limit: '256kb' }));
   // compression@1.8.1 negotiates Brotli/gzip/deflate on Node 22; its default
   // Brotli quality is 4. Fail startup if the dependency is unavailable rather than
@@ -138,10 +143,7 @@ async function bootstrap(): Promise<void> {
   // here is a plain Kysely row/object (no @Exclude/@Expose on any response class), so it only deep-
   // copied each payload through class-transformer — measured ~100ms of blocked event loop per
   // 5,000-row response, on top of JSON.stringify. Hide fields by not selecting them instead.
-  app.useGlobalInterceptors(
-    new RequestContextInterceptor(),
-    new ResponseMetadataInterceptor(),
-  );
+  app.useGlobalInterceptors(new RequestContextInterceptor(), new ResponseMetadataInterceptor());
 
   app.enableShutdownHooks();
 
@@ -170,7 +172,7 @@ async function bootstrap(): Promise<void> {
         const { runMigrationCommand } = await import('./database/migration-runner');
         await runMigrationCommand('up');
         logger.log('Database migrations completed successfully.');
-        
+
         try {
           const { PlanFeatureService } = await import('./core/auth/services/plan-feature.service');
           const planFeatureService = app.get(PlanFeatureService);
@@ -203,5 +205,4 @@ bootstrap().catch((error: unknown) => {
   const logger = new LoggerService();
   logger.error(details);
   process.exit(1);
-}); 
- 
+});

@@ -17,9 +17,7 @@ export interface TelegramAlertSettings {
 export class TelegramAlertsService {
   private readonly logger = new Logger(TelegramAlertsService.name);
 
-  constructor(
-    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
-  ) {}
+  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   /**
    * استرجاع إعدادات تنبيهات تيليجرام
@@ -91,7 +89,11 @@ export class TelegramAlertsService {
   /**
    * إرسال رسالة مباشرة إلى تيليجرام
    */
-  async sendMessage(text: string, customToken?: string, customChatId?: string): Promise<{ ok: boolean; message?: string }> {
+  async sendMessage(
+    text: string,
+    customToken?: string,
+    customChatId?: string,
+  ): Promise<{ ok: boolean; message?: string }> {
     const token = customToken || process.env.TELEGRAM_BOT_TOKEN;
     const chatId = customChatId || process.env.TELEGRAM_CHAT_ID;
 

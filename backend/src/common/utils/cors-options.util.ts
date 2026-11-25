@@ -23,14 +23,9 @@
  * (curl, the Electron main process, the update checker) send no Origin
  * and do not need CORS at all.
  */
-import {
-  isPublicApiPath,
-  resolvePublicApiCorsOrigin,
-} from './public-cors-origin.util';
+import { isPublicApiPath, resolvePublicApiCorsOrigin } from './public-cors-origin.util';
 
-export function buildCorsOriginCallback(
-  corsOrigins: readonly string[],
-): (req: any, callback: any) => void {
+export function buildCorsOriginCallback(corsOrigins: readonly string[]): (req: any, callback: any) => void {
   return (req: any, callback: any) => {
     const originHeader = req.headers?.origin;
     // Public marketing endpoints (pricing catalog, trial signup) must be
@@ -49,9 +44,7 @@ export function buildCorsOriginCallback(
     // No /api/updates/ special case: those routes fall through to the
     // default allowlist below, like every other endpoint.
     const allowedOrigins: (string | RegExp)[] = [...corsOrigins];
-    const isLanServer =
-      process.env.APP_MODE === 'SELF_CONTAINED' &&
-      process.env.ELECTRON_RUNTIME_MODE === 'lan_server';
+    const isLanServer = process.env.APP_MODE === 'SELF_CONTAINED' && process.env.ELECTRON_RUNTIME_MODE === 'lan_server';
     if (isLanServer) {
       allowedOrigins.push('null');
     }

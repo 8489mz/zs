@@ -16,7 +16,8 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
    * FromCode prefers an Arabic fallback that differs from this
    * static text, so the message naming the blocking permission
    * survives the translator and reaches the screen. */
-  GRANT_EXCEEDS_ACTOR_PERMISSIONS: 'لا يمكنك منح صلاحية لا يملكها حسابك — أزل علامة الصح عن الصلاحية التي لا تملكها ثم أعد الحفظ.',
+  GRANT_EXCEEDS_ACTOR_PERMISSIONS:
+    'لا يمكنك منح صلاحية لا يملكها حسابك — أزل علامة الصح عن الصلاحية التي لا تملكها ثم أعد الحفظ.',
   GRANT_STAR_FORBIDDEN: 'لا يمكن منح صلاحية "الكل" إلا من حساب منصة المنشأة الرئيسية.',
   GRANT_ROLE_ABOVE_ACTOR: 'لا يمكنك منح دور أعلى من دور حسابك الحالي.',
   UNAUTHORIZED: 'غير مصرح لك بالوصول.',
@@ -68,7 +69,8 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   SHIFT_FORBIDDEN: 'غير مسموح لك بتنفيذ هذه العملية على هذه الوردية.',
   SHIFT_OPEN_FAILED: 'تعذر فتح الوردية.',
   MANAGER_PIN_INVALID: 'رمز اعتماد المدير غير صحيح.',
-  DRAWER_COUNTERPART_SAME_AS_CASH: 'لا يمكن تحويل النقدية إلى حساب الدرج نفسه؛ اختر حساب الخزنة الآمنة (1111) أو البنك.',
+  DRAWER_COUNTERPART_SAME_AS_CASH:
+    'لا يمكن تحويل النقدية إلى حساب الدرج نفسه؛ اختر حساب الخزنة الآمنة (1111) أو البنك.',
   DRAWER_COUNTERPART_REQUIRED: 'اختر الحساب المقابل للتحويل (الخزينة الآمنة أو البنك).',
   MANAGER_PASSWORD_INVALID: 'كلمة مرور المدير غير صحيحة.',
   MANAGER_PASSWORD_REQUIRED: 'كلمة مرور المدير مطلوبة.',
@@ -84,9 +86,11 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   SESSION_NOT_FOUND: 'الجلسة غير موجودة.',
   USER_NOT_FOUND: 'المستخدم غير موجود.',
   USER_EXISTS: 'يوجد مستخدم بنفس الاسم بالفعل.',
-  USER_HAS_TRANSACTIONS: 'لا يمكن حذف هذا المستخدم لوجود فواتير أو حركات مخزنية مسجلة باسمه. يمكنك تعطيل حسابه بدلاً من الحذف للحفاظ على السجلات المالية.',
+  USER_HAS_TRANSACTIONS:
+    'لا يمكن حذف هذا المستخدم لوجود فواتير أو حركات مخزنية مسجلة باسمه. يمكنك تعطيل حسابه بدلاً من الحذف للحفاظ على السجلات المالية.',
   INVALID_BACKUP_PATH: 'مسار المجلد غير صالح أو يحتوي على رموز غير مسموحة.',
-  BACKUP_FOLDER_NOT_WRITABLE: 'تعذر الوصول أو الكتابة في مجلد النسخ الاحتياطي المحدد. تأكد من صحة المسار وصلاحيات الكتابة.',
+  BACKUP_FOLDER_NOT_WRITABLE:
+    'تعذر الوصول أو الكتابة في مجلد النسخ الاحتياطي المحدد. تأكد من صحة المسار وصلاحيات الكتابة.',
   USERNAME_REQUIRED: 'اسم المستخدم مطلوب.',
   PASSWORD_REQUIRED: 'كلمة المرور مطلوبة.',
   PASSWORD_TOO_WEAK: 'كلمة المرور الجديدة قصيرة جداً؛ يجب ألا تقل عن الحد الأدنى المطلوب لدورك.',
@@ -155,7 +159,7 @@ function translateKnownEnglishMessage(message: string): string | null {
   const directMap: Record<string, string> = {
     'Internal server error': 'حدث خطأ داخلي في الخادم.',
     'Validation failed': 'البيانات المرسلة غير صحيحة.',
-    'Unauthorized': 'غير مصرح لك بالوصول.',
+    Unauthorized: 'غير مصرح لك بالوصول.',
     'Forbidden resource': 'غير مسموح لك بالوصول إلى هذا المورد.',
     'Missing required permissions': 'لا تملك الصلاحيات المطلوبة لتنفيذ هذه العملية.',
     'Invalid username or password': 'اسم المستخدم أو كلمة المرور غير صحيحين.',
@@ -179,19 +183,22 @@ function translateKnownEnglishMessage(message: string): string | null {
     'Category name is required': 'اسم القسم مطلوب.',
     'Product not found': 'الصنف غير موجود.',
     'Product already exists': 'يوجد صنف بنفس الاسم أو الباركود بالفعل.',
-    'Stock cannot be edited from product master data. Use inventory adjustment.': 'لا يمكن تعديل المخزون من شاشة بيانات الصنف. استخدم شاشة المخزون أو التسوية.',
+    'Stock cannot be edited from product master data. Use inventory adjustment.':
+      'لا يمكن تعديل المخزون من شاشة بيانات الصنف. استخدم شاشة المخزون أو التسوية.',
     'Price changes require canEditPrice permission': 'تعديل الأسعار يتطلب صلاحية تعديل الأسعار.',
     'Discount changes require canDiscount permission': 'تعديل الخصم يتطلب صلاحية تعديل الخصم.',
     'Could not open cashier shift': 'تعذر فتح الوردية.',
-    'MANAGER_AUTH_REQUIRED': 'رمز اعتماد المدير مطلوب لتنفيذ هذه العملية.',
+    MANAGER_AUTH_REQUIRED: 'رمز اعتماد المدير مطلوب لتنفيذ هذه العملية.',
     'Destination location or branch is required': 'يرجى تحديد مخزن أو فرع الاستلام.',
     'Source and destination locations must be different': 'مخزن المصدر ومخزن الوجهة يجب أن يكونا مختلفين.',
     'Destination branch not found': 'فرع الوجهة المحدد غير موجود.',
     'Only sent transfers can be received': 'يمكن استلام أذونات التحويل التي في حالة (تم الإرسال) فقط.',
     'Only sent transfers can be cancelled': 'يمكن إلغاء أذونات التحويل التي في حالة (تم الإرسال) فقط.',
     'No branch stock location found for destination branch': 'لا يوجد رصيد مخزون مرتبط بفرع الوجهة.',
-    'Transfer items require valid product IDs and positive quantities with at most three decimal places': 'أصناف التحويل تتطلب معرفات صالحة وكميات موجبة بحد أقصى 3 منازل عشرية.',
-    'Quantity must be strictly positive for add and deduct operations': 'الكمية يجب أن تكون أكبر من الصفر لعمليات الإضافة والخصم.',
+    'Transfer items require valid product IDs and positive quantities with at most three decimal places':
+      'أصناف التحويل تتطلب معرفات صالحة وكميات موجبة بحد أقصى 3 منازل عشرية.',
+    'Quantity must be strictly positive for add and deduct operations':
+      'الكمية يجب أن تكون أكبر من الصفر لعمليات الإضافة والخصم.',
     'Stock count session cannot be recounted': 'جلسة الجرد لا يمكن إعادة جردها في حالتها الحالية.',
     'Stock count session cannot be posted': 'لا يمكن ترحيل جلسة الجرد في حالتها الحالية.',
     'Stock count session has no items': 'جلسة الجرد لا تحتوي على أي بنود.',
@@ -203,7 +210,10 @@ function translateKnownEnglishMessage(message: string): string | null {
   }
 
   if (normalized.startsWith('property ') && normalized.endsWith(' should not exist')) {
-    const field = normalized.replace(/^property\s+/i, '').replace(/\s+should not exist$/i, '').trim();
+    const field = normalized
+      .replace(/^property\s+/i, '')
+      .replace(/\s+should not exist$/i, '')
+      .trim();
     return `الحقل ${field} غير مسموح إرساله.`;
   }
 
@@ -234,7 +244,11 @@ function firstString(value: unknown): string | null {
   return null;
 }
 
-export function translateErrorMessageFromCode(code?: string | null, fallbackMessage?: unknown, statusCode?: number): string {
+export function translateErrorMessageFromCode(
+  code?: string | null,
+  fallbackMessage?: unknown,
+  statusCode?: number,
+): string {
   const fallback = firstString(fallbackMessage);
 
   if (code === 'VALIDATION_ERROR') {

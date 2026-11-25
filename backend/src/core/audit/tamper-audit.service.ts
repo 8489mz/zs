@@ -33,9 +33,7 @@ export class TamperAuditService {
     const pageSize = Math.min(200, Math.max(1, Number(query.pageSize) || 50));
     const offset = (page - 1) * pageSize;
 
-    let baseQuery = this.db
-      .selectFrom('tamper_audit_logs')
-      .where('tenant_id', '=', scope.tenantId);
+    let baseQuery = this.db.selectFrom('tamper_audit_logs').where('tenant_id', '=', scope.tenantId);
 
     if (query.tableName) {
       baseQuery = baseQuery.where('table_name', '=', query.tableName);
@@ -70,18 +68,11 @@ export class TamperAuditService {
     }
 
     // Count query
-    const totalRow = await baseQuery
-      .select((eb) => eb.fn.count<string>('id').as('count'))
-      .executeTakeFirst();
+    const totalRow = await baseQuery.select((eb) => eb.fn.count<string>('id').as('count')).executeTakeFirst();
     const total = Number(totalRow?.count ?? 0);
 
     // Data query
-    const items = await baseQuery
-      .selectAll()
-      .orderBy('id', 'desc')
-      .limit(pageSize)
-      .offset(offset)
-      .execute();
+    const items = await baseQuery.selectAll().orderBy('id', 'desc').limit(pageSize).offset(offset).execute();
 
     return {
       items,
@@ -197,7 +188,8 @@ export class TamperAuditService {
         }
 
         // 3. Cryptographic row hash verification (supporting UTF8 and bytea - ZS-020)
-        const matchesHash = current.row_hash === current.computed_hash_utf8 || current.row_hash === current.computed_hash_bytea;
+        const matchesHash =
+          current.row_hash === current.computed_hash_utf8 || current.row_hash === current.computed_hash_bytea;
         if (!matchesHash) {
           return {
             isValid: false,

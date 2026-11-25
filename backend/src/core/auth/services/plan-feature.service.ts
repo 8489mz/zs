@@ -20,14 +20,14 @@ export class PlanFeatureService implements OnModuleInit {
     try {
       const rows = await this.db.selectFrom('plan_features').select(['plan_id', 'feature_code']).execute();
       const newCache = new Map<string, Set<string>>();
-      
+
       for (const row of rows) {
         if (!newCache.has(row.plan_id)) {
           newCache.set(row.plan_id, new Set());
         }
         newCache.get(row.plan_id)!.add(row.feature_code);
       }
-      
+
       this.planFeatures = newCache;
     } catch (error: any) {
       // Table might not exist yet if migrations haven't run
@@ -75,7 +75,9 @@ export class PlanFeatureService implements OnModuleInit {
       if (profile.defaultFeatures.includes(requiredFeature)) {
         return true;
       }
-      if (['pharmacy', 'restaurant', 'contracting', 'manufacturing', 'storefront', 'pos', 'kds'].includes(requiredFeature)) {
+      if (
+        ['pharmacy', 'restaurant', 'contracting', 'manufacturing', 'storefront', 'pos', 'kds'].includes(requiredFeature)
+      ) {
         return false;
       }
     }
@@ -101,13 +103,24 @@ export class PlanFeatureService implements OnModuleInit {
 
     if (!isDedicatedPillar) {
       const profile = getIndustryProfile(activityType);
-      if (profile.subVertical === 'warehousing' && ['pos', 'cashDrawer', 'storefront', 'kds', 'displays', 'signage', 'deliveryReps'].includes(requiredFeature)) {
+      if (
+        profile.subVertical === 'warehousing' &&
+        ['pos', 'cashDrawer', 'storefront', 'kds', 'displays', 'signage', 'deliveryReps'].includes(requiredFeature)
+      ) {
         return false;
       }
-      if (profile.subVertical === 'services' && ['pos', 'cashDrawer', 'inventory', 'storefront', 'kds', 'displays', 'signage', 'deliveryReps'].includes(requiredFeature)) {
+      if (
+        profile.subVertical === 'services' &&
+        ['pos', 'cashDrawer', 'inventory', 'storefront', 'kds', 'displays', 'signage', 'deliveryReps'].includes(
+          requiredFeature,
+        )
+      ) {
         return false;
       }
-      if (profile.subVertical === 'wholesale_van' && ['pos', 'cashDrawer', 'kds', 'displays', 'signage'].includes(requiredFeature)) {
+      if (
+        profile.subVertical === 'wholesale_van' &&
+        ['pos', 'cashDrawer', 'kds', 'displays', 'signage'].includes(requiredFeature)
+      ) {
         return false;
       }
       if (profile.defaultFeatures.includes(requiredFeature)) {
@@ -121,7 +134,7 @@ export class PlanFeatureService implements OnModuleInit {
     if (!planId) {
       return true; // If no plan is assigned, assume backward compatibility
     }
-    
+
     // Explicit tier checks for commerce pillar
     if (isOmnichannelPlanId(planId)) return true;
     if (planId === 'plan_ultimate' && requiredFeature === 'storefront') return false;

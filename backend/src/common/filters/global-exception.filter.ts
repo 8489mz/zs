@@ -64,7 +64,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         },
         `Unhandled server error ${status}`,
       );
-      
+
       if (process.env.ERROR_TRACKING_ENABLED === 'true') {
         Sentry.withScope((scope) => {
           scope.setExtra('requestId', requestId);
@@ -93,16 +93,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         }
       }
     } else {
-      this.logger.warn(
-        exception instanceof Error ? exception.message : 'Client error',
-        {
-          method: request.method,
-          path: safePath,
-          status,
-          requestId,
-          error: sanitizedError,
-        },
-      );
+      this.logger.warn(exception instanceof Error ? exception.message : 'Client error', {
+        method: request.method,
+        path: safePath,
+        status,
+        requestId,
+        error: sanitizedError,
+      });
     }
 
     response.status(status).json({

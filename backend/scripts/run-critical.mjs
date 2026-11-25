@@ -130,8 +130,7 @@ function verifyAgainstSerialChain(specs, listPath) {
     throw new Error('package.json has no test:critical:serial chain to verify the spec list against');
   }
   const chainSpecs = [...serial.matchAll(/ts-node\s+(\S+\.spec\.ts)/g)].map((m) => m[1]);
-  const mismatch =
-    chainSpecs.length !== specs.length || chainSpecs.some((s, i) => s !== specs[i]);
+  const mismatch = chainSpecs.length !== specs.length || chainSpecs.some((s, i) => s !== specs[i]);
   if (mismatch) {
     const onlyList = specs.filter((s) => !chainSpecs.includes(s));
     const onlyChain = chainSpecs.filter((s) => !specs.includes(s));
@@ -163,9 +162,7 @@ function runOne(spec, logDir) {
   }
   const useBin = fs.existsSync(TS_NODE_BIN);
   const cmd = useBin ? process.execPath : 'npx';
-  const cmdArgs = useBin
-    ? [TS_NODE_BIN, '--transpile-only', specAbs]
-    : ['ts-node', '--transpile-only', specAbs];
+  const cmdArgs = useBin ? [TS_NODE_BIN, '--transpile-only', specAbs] : ['ts-node', '--transpile-only', specAbs];
   return new Promise((resolve) => {
     const child = spawn(cmd, cmdArgs, { cwd: BACKEND_ROOT, env: process.env });
     let out = '';
@@ -195,7 +192,14 @@ function runOne(spec, logDir) {
       const header = `$ ${cmd} ${cmdArgs.join(' ')}\nexit: ${code ?? signal} (${seconds.toFixed(2)}s)\n---\n`;
       fs.writeFileSync(logFile, header + out);
       if (timedOut) {
-        resolve({ spec, status: 'timeout', exit: null, seconds, logFile, reason: `killed after ${SPEC_TIMEOUT_MS / 60000} min watchdog` });
+        resolve({
+          spec,
+          status: 'timeout',
+          exit: null,
+          seconds,
+          logFile,
+          reason: `killed after ${SPEC_TIMEOUT_MS / 60000} min watchdog`,
+        });
       } else if (code === 0) {
         resolve({ spec, status: 'pass', exit: 0, seconds, logFile, reason: '' });
       } else {
@@ -229,7 +233,10 @@ async function main() {
   }
   fs.mkdirSync(args.logDir, { recursive: true });
   const { workers, want, cap, cpus, totalGb } = sizing;
-  const clampNote = workers < want ? ` (requested ${want}, clamped to ${workers} by memory: ${cap} max on ${totalGb.toFixed(1)} GB RAM)` : '';
+  const clampNote =
+    workers < want
+      ? ` (requested ${want}, clamped to ${workers} by memory: ${cap} max on ${totalGb.toFixed(1)} GB RAM)`
+      : '';
   console.log(
     `run-critical: ${specs.length} specs, ${workers} workers${clampNote} [cpus ${cpus}, RAM ${totalGb.toFixed(1)} GB], ` +
       `list ${path.relative(BACKEND_ROOT, args.list)}, logs ${path.relative(BACKEND_ROOT, args.logDir)}`,
@@ -275,7 +282,9 @@ async function main() {
     console.log('\n--- failures (tail of each log) ---');
     for (const r of failed) {
       const text = fs.readFileSync(r.logFile, 'utf8');
-      console.log(`\n## ${r.spec} [${r.status}${r.reason ? `: ${r.reason}` : ''}] log: ${path.relative(BACKEND_ROOT, r.logFile)}`);
+      console.log(
+        `\n## ${r.spec} [${r.status}${r.reason ? `: ${r.reason}` : ''}] log: ${path.relative(BACKEND_ROOT, r.logFile)}`,
+      );
       console.log(tailLines(text, TAIL_LINES));
     }
   }

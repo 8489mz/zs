@@ -157,7 +157,9 @@ export function resolveTenantPackage(
   const pick = (options.pick || '').trim();
   const matches = bundle.manifest.tenants.filter((t) => !pick || t.slug === pick || t.tenantId === pick);
   if (matches.length !== 1) {
-    const err = new Error(pick ? `No single tenant "${pick}" in this bundle` : 'The bundle holds several tenants: choose one');
+    const err = new Error(
+      pick ? `No single tenant "${pick}" in this bundle` : 'The bundle holds several tenants: choose one',
+    );
     (err as any).bundleTenants = bundle.manifest.tenants;
     throw err;
   }

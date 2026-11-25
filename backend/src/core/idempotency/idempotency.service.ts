@@ -45,9 +45,10 @@ export class IdempotencyService {
    */
   generateRequestHash(payload: any, pathParams?: any): string {
     const cleanPayload = this.stripVolatileFields(payload || {});
-    const cleanParams = pathParams && typeof pathParams === 'object' && Object.keys(pathParams).length > 0
-      ? this.sortKeysRecursively(pathParams)
-      : undefined;
+    const cleanParams =
+      pathParams && typeof pathParams === 'object' && Object.keys(pathParams).length > 0
+        ? this.sortKeysRecursively(pathParams)
+        : undefined;
 
     const dataToHash = cleanParams ? { body: cleanPayload, params: cleanParams } : cleanPayload;
     // Sort keys recursively for deterministic serialization regardless of insertion order
@@ -67,7 +68,7 @@ export class IdempotencyService {
 
   private stripVolatileFields(payload: any): any {
     if (!payload || typeof payload !== 'object') return payload;
-    if (Array.isArray(payload)) return payload.map(item => this.stripVolatileFields(item));
+    if (Array.isArray(payload)) return payload.map((item) => this.stripVolatileFields(item));
 
     const clone = { ...payload };
     const volatileKeys = ['timestamp', 'clientTime', 'requestId']; // add more as needed
@@ -101,7 +102,7 @@ export class IdempotencyService {
         throw new AppError(
           'Idempotency key reused for a different business operation',
           'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_OPERATION',
-          400
+          400,
         );
       }
 
@@ -109,7 +110,7 @@ export class IdempotencyService {
         throw new AppError(
           'Idempotency key reused with different payload',
           'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD',
-          400
+          400,
         );
       }
 
@@ -161,7 +162,7 @@ export class IdempotencyService {
           throw new AppError(
             'Idempotency key reused for a different business operation',
             'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_OPERATION',
-            400
+            400,
           );
         }
 
@@ -169,7 +170,7 @@ export class IdempotencyService {
           throw new AppError(
             'Idempotency key reused with different payload',
             'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD',
-            400
+            400,
           );
         }
 
@@ -195,7 +196,11 @@ export class IdempotencyService {
   /**
    * Records a confirmed failure outside the main transaction (or in a separate short transaction).
    */
-  async recordFailure(params: Pick<IdempotencyReservation, 'tenantId' | 'accountId' | 'idempotencyKey' | 'operationType'>, errorCode: string, responsePayload?: any): Promise<void> {
+  async recordFailure(
+    params: Pick<IdempotencyReservation, 'tenantId' | 'accountId' | 'idempotencyKey' | 'operationType'>,
+    errorCode: string,
+    responsePayload?: any,
+  ): Promise<void> {
     // Prevent overwriting a committed operation (Point #3)
     // Only update if it's currently processing and no document is linked
     await this.db
@@ -223,7 +228,7 @@ export class IdempotencyService {
     trx: Kysely<Database>,
     params: Pick<IdempotencyReservation, 'tenantId' | 'accountId' | 'idempotencyKey' | 'operationType'>,
     responsePayload: any,
-    documentId?: string
+    documentId?: string,
   ): Promise<void> {
     await trx
       .updateTable('operation_executions')
@@ -248,7 +253,7 @@ export class IdempotencyService {
    */
   async finalizeIfStillProcessing(
     params: Pick<IdempotencyReservation, 'tenantId' | 'accountId' | 'idempotencyKey' | 'operationType'>,
-    responsePayload: any
+    responsePayload: any,
   ): Promise<void> {
     await this.db
       .updateTable('operation_executions')
@@ -310,7 +315,10 @@ export class IdempotencyService {
     scope: { tenantId: string; accountId: string },
     retentionDays: number = IDEMPOTENCY_PRUNE_RETENTION_DAYS,
   ): Promise<{ deleted: number }> {
-    const retention = Math.max(IDEMPOTENCY_PRUNE_RETENTION_DAYS, Math.floor(retentionDays) || IDEMPOTENCY_PRUNE_RETENTION_DAYS);
+    const retention = Math.max(
+      IDEMPOTENCY_PRUNE_RETENTION_DAYS,
+      Math.floor(retentionDays) || IDEMPOTENCY_PRUNE_RETENTION_DAYS,
+    );
     const cutoff = new Date(Date.now() - retention * 24 * 60 * 60 * 1000);
     const result = await this.db
       .deleteFrom('operation_executions')
@@ -365,7 +373,7 @@ export class IdempotencyService {
   async check(
     idempotencyKey: string,
     scope: { tenantId: string; accountId: string },
-    operationType?: string
+    operationType?: string,
   ): Promise<{ response: any } | null> {
     let query = this.db
       .selectFrom('operation_executions')

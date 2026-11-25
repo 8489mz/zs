@@ -20,7 +20,7 @@ export class LoggerService implements NestLoggerService {
       baseDir = path.join(baseDir, '..');
     }
     const logFilePath = path.join(baseDir, 'logs', 'system-errors.log');
-    
+
     // Clear log file if it exceeds 10MB to prevent startup slowdowns
     try {
       if (fs.existsSync(logFilePath)) {
@@ -56,7 +56,8 @@ export class LoggerService implements NestLoggerService {
   }
 
   error(message: unknown, ...optionalParams: unknown[]): void {
-    const errorParam = optionalParams.find((p) => p instanceof Error) || (message instanceof Error ? message : undefined);
+    const errorParam =
+      optionalParams.find((p) => p instanceof Error) || (message instanceof Error ? message : undefined);
     const stackTrace = !errorParam ? optionalParams.find((p) => typeof p === 'string' && p.includes('\n')) : undefined;
 
     let logMsg = typeof message === 'string' ? message : 'error';

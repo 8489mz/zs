@@ -9,9 +9,11 @@ export class AppError extends Error {
   ) {
     super(message);
     Object.setPrototypeOf(this, new.target.prototype);
-    const captureStackTrace = (Error as ErrorConstructor & {
-      captureStackTrace?: (targetObject: object, constructorOpt?: unknown) => void;
-    }).captureStackTrace;
+    const captureStackTrace = (
+      Error as ErrorConstructor & {
+        captureStackTrace?: (targetObject: object, constructorOpt?: unknown) => void;
+      }
+    ).captureStackTrace;
     captureStackTrace?.(this, AppError);
   }
 

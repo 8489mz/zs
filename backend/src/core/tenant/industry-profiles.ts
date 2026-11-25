@@ -18,11 +18,7 @@ export type CommerceSubVertical =
   | 'spices'
   | 'perfumes';
 
-export type IndustryProfileKey =
-  | 'contracting'
-  | 'maritime_freight'
-  | 'manufacturing'
-  | CommerceSubVertical;
+export type IndustryProfileKey = 'contracting' | 'maritime_freight' | 'manufacturing' | CommerceSubVertical;
 
 export interface IndustryProfile {
   key: IndustryProfileKey;
@@ -154,7 +150,8 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     subVertical: 'manufacturing',
     labelAr: 'قطاع التصنيع والإنتاج الصناعي',
     labelEn: 'Manufacturing & Industrial Production',
-    descriptionAr: 'منظومة المصانع والمعامل: تخطيط الإنتاج، شجرة المنتج (BOM)، أوامر التشغيل، مستودعات الخامات والمنتج التام، ومحاسبة التكاليف الصناعية.',
+    descriptionAr:
+      'منظومة المصانع والمعامل: تخطيط الإنتاج، شجرة المنتج (BOM)، أوامر التشغيل، مستودعات الخامات والمنتج التام، ومحاسبة التكاليف الصناعية.',
     defaultRoute: '/manufacturing/work-orders',
     // Not an isolated pillar: POS stays OFF for manufacturing by design
     // (INV-POS-RETAIL-FEATURE-GATE) — the sidebar hides 'pos' for the
@@ -229,7 +226,8 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     subVertical: 'wholesale_van',
     labelAr: 'تجارة وتوزيع الجملة وأسطول الفان',
     labelEn: 'Wholesale & Van Distribution',
-    descriptionAr: 'منظومة شركات التوزيع وتجارة الجملة: أسطول سيارات الفان، المخازن المتنقلة، خطوط السير، وكود ومواقع المحلات بدون نقاط بيع وكاشير.',
+    descriptionAr:
+      'منظومة شركات التوزيع وتجارة الجملة: أسطول سيارات الفان، المخازن المتنقلة، خطوط السير، وكود ومواقع المحلات بدون نقاط بيع وكاشير.',
     defaultRoute: '/inventory/van-sales',
     defaultFeatures: [
       'catalog',
@@ -255,7 +253,8 @@ export const INDUSTRY_PROFILES: Record<IndustryProfileKey, IndustryProfile> = {
     subVertical: 'warehousing',
     labelAr: 'إدارة المخازن والمستودعات والتحويلات',
     labelEn: 'Warehouse & Inventory Management',
-    descriptionAr: 'منظومة المستودعات المركزية والفرعية: التحويلات بين الفروع وتتبع البضاعة بالطريق، أذونات الصرف والإضافة، الجرد ونواقص المخزون بدون نقاط بيع أو كاشير.',
+    descriptionAr:
+      'منظومة المستودعات المركزية والفرعية: التحويلات بين الفروع وتتبع البضاعة بالطريق، أذونات الصرف والإضافة، الجرد ونواقص المخزون بدون نقاط بيع أو كاشير.',
     defaultRoute: '/inventory',
     defaultFeatures: [
       'catalog',

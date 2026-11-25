@@ -25,8 +25,7 @@ export const CLIENT_BUSINESS_DATE_FUTURE_DAYS = 365;
 export const CLIENT_INSTALLMENT_SCHEDULE_YEARS = 5;
 
 export type ClientDateCheckResult =
-  | { ok: true; date: Date; dayKey: string }
-  | { ok: false; reason: 'INVALID' | 'TOO_OLD' | 'TOO_FAR_FUTURE' };
+  { ok: true; date: Date; dayKey: string } | { ok: false; reason: 'INVALID' | 'TOO_OLD' | 'TOO_FAR_FUTURE' };
 
 export type ClientDateWindow = {
   /** Day key the window is anchored on; defaults to the tenant's today. */

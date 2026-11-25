@@ -47,11 +47,14 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
     }, 5000); // 5s after app is fully up and responsive
 
     // Run periodic cleanup every 10 minutes in background
-    const intervalTimer = setInterval(() => {
-      this.runFastCleanup().catch((err) => {
-        this.logger.error('Periodic database cleanup failed', err);
-      });
-    }, 10 * 60 * 1000);
+    const intervalTimer = setInterval(
+      () => {
+        this.runFastCleanup().catch((err) => {
+          this.logger.error('Periodic database cleanup failed', err);
+        });
+      },
+      10 * 60 * 1000,
+    );
     if (typeof (intervalTimer as any)?.unref === 'function') {
       (intervalTimer as any).unref();
     }
@@ -67,10 +70,7 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
 
     // 1. Cleanup expired sessions
     try {
-      const res = await this.db
-        .deleteFrom('sessions')
-        .where('expires_at', '<', new Date())
-        .executeTakeFirst();
+      const res = await this.db.deleteFrom('sessions').where('expires_at', '<', new Date()).executeTakeFirst();
       const count = Number(res.numDeletedRows || 0);
       results.expiredSessionsCleaned = count;
       if (count > 0) this.logger.log(`Cleaned ${count} expired sessions.`);
@@ -192,15 +192,19 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
             if (Number(locked?.numUpdatedRows || 0) === 0) return;
 
             let items: any[] = [];
-            try { items = typeof ord.items_json === 'string' ? JSON.parse(ord.items_json) : ord.items_json; } catch {}
+            try {
+              items = typeof ord.items_json === 'string' ? JSON.parse(ord.items_json) : ord.items_json;
+            } catch {}
             // INV-SF-REAPER-UNRESERVED-EXPIRY: release stock ONLY when the
             // order actually reserved it — an unreserved order holds
             // nothing to release.
             if (ord.stock_reserved && Array.isArray(items) && items.length > 0) {
-              const releaseItems = items.map((it) => ({
-                productId: Number(it.productId ?? it.id),
-                qty: Number(it.quantity ?? it.qty ?? 1),
-              })).filter((it) => it.productId > 0 && it.qty > 0);
+              const releaseItems = items
+                .map((it) => ({
+                  productId: Number(it.productId ?? it.id),
+                  qty: Number(it.quantity ?? it.qty ?? 1),
+                }))
+                .filter((it) => it.productId > 0 && it.qty > 0);
 
               if (releaseItems.length > 0) {
                 const { releaseLocationStock } = await import('../../common/utils/location-stock-ledger');

@@ -17,7 +17,9 @@ function inspect(file) {
   const usesGuard = txt.includes('PermissionsGuard');
   const hasProtectedRoute = txt.includes('@RequirePermissions(');
   if (hasProtectedRoute && !usesGuard) {
-    issues.push(`${path.relative(path.join(__dirname, '..'), file)}: has @RequirePermissions without PermissionsGuard import/use`);
+    issues.push(
+      `${path.relative(path.join(__dirname, '..'), file)}: has @RequirePermissions without PermissionsGuard import/use`,
+    );
   }
 }
 

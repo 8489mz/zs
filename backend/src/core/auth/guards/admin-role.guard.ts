@@ -11,9 +11,10 @@ export class AdminRoleGuard implements CanActivate {
       throw new ForbiddenException('Authentication required');
     }
 
-    const canManage = auth.role === 'super_admin'
-      || auth.permissions.includes('settings')
-      || auth.permissions.includes('canManageSettings');
+    const canManage =
+      auth.role === 'super_admin' ||
+      auth.permissions.includes('settings') ||
+      auth.permissions.includes('canManageSettings');
 
     if (!canManage) {
       throw new ForbiddenException('Missing required permissions');

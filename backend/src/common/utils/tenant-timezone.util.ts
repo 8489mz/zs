@@ -22,10 +22,7 @@ export function isValidTimezone(tz: unknown): boolean {
  * Retrieves the configured timezone for a tenant from the settings table.
  * Falls back to process.env.BUSINESS_TIMEZONE or 'Africa/Cairo'.
  */
-export async function getTenantTimezone(
-  db: Kysely<Database>,
-  tenantId?: string | null,
-): Promise<string> {
+export async function getTenantTimezone(db: Kysely<Database>, tenantId?: string | null): Promise<string> {
   const fallback = process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
   if (!tenantId) return fallback;
 
@@ -84,7 +81,7 @@ export function invalidateTenantTimezoneCache(tenantId?: string): void {
  * Returns today's date formatted as YYYY-MM-DD according to the specified timezone
  */
 export function todayTenantDate(timezone: string, date: Date = new Date()): string {
-  const safeTz = isValidTimezone(timezone) ? timezone : (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
+  const safeTz = isValidTimezone(timezone) ? timezone : process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
   return new Intl.DateTimeFormat('en-CA', { timeZone: safeTz }).format(date);
 }
 
@@ -97,7 +94,7 @@ export function todayTenantDate(timezone: string, date: Date = new Date()): stri
  * false) so midnight formats as 00:00:00, never 24:00:00.
  */
 export function formatTenantTime24(timezone: string, date: Date = new Date()): string {
-  const safeTz = isValidTimezone(timezone) ? timezone : (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
+  const safeTz = isValidTimezone(timezone) ? timezone : process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
   return new Intl.DateTimeFormat('en-GB', {
     timeZone: safeTz,
     hourCycle: 'h23',
@@ -166,7 +163,7 @@ export function formatTimeInTimezone(
   const d = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
   if (Number.isNaN(d.getTime())) return '—';
 
-  const safeTz = isValidTimezone(timezone) ? timezone : (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
+  const safeTz = isValidTimezone(timezone) ? timezone : process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
   return d.toLocaleTimeString(locale, {
     timeZone: safeTz,
     hour: '2-digit',
@@ -207,7 +204,7 @@ function timezoneOffsetMs(timezone: string, instant: Date): number {
  * UTC-midnight instant is the NEXT local day.
  */
 export function tenantDayStartInstant(dayKey: string, timezone: string): Date {
-  const safeTz = isValidTimezone(timezone) ? timezone : (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
+  const safeTz = isValidTimezone(timezone) ? timezone : process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
   const [y, m, d] = dayKey.split('-').map(Number);
   const guess = Date.UTC(y, m - 1, d, 0, 0, 0, 0);
   const first = new Date(guess - timezoneOffsetMs(safeTz, new Date(guess)));
@@ -215,7 +212,7 @@ export function tenantDayStartInstant(dayKey: string, timezone: string): Date {
 }
 
 export function tenantDayEndInstant(dayKey: string, timezone: string): Date {
-  const safeTz = isValidTimezone(timezone) ? timezone : (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
+  const safeTz = isValidTimezone(timezone) ? timezone : process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
   const [y, m, d] = dayKey.split('-').map(Number);
   const guess = Date.UTC(y, m - 1, d, 23, 59, 59, 999);
   const first = new Date(guess - timezoneOffsetMs(safeTz, new Date(guess)));

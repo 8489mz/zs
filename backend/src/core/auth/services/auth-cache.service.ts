@@ -125,7 +125,11 @@ export class AuthCacheService implements OnModuleDestroy {
     return this.get<Record<string, unknown>>(`tenant:payload:${tenantId}`);
   }
 
-  setTenantPayload(tenantId: string, payload: Record<string, unknown>, ttlSeconds = this.defaultTenantPayloadTtl): void {
+  setTenantPayload(
+    tenantId: string,
+    payload: Record<string, unknown>,
+    ttlSeconds = this.defaultTenantPayloadTtl,
+  ): void {
     if (!tenantId || !payload) return;
     this.set(`tenant:payload:${tenantId}`, payload, ttlSeconds);
   }

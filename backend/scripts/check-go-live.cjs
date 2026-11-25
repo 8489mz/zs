@@ -45,7 +45,12 @@ function assertFile(base, rel) {
 }
 
 for (const file of requiredBackendFiles) assertFile(backendRoot, file);
-for (const file of ['PERMISSIONS_AUDIT.md', 'RELEASE_GATE_FINAL.md', 'GO_LIVE_GATE.md', 'PHASE15_FINAL_COMMERCIAL_POLISH.md']) {
+for (const file of [
+  'PERMISSIONS_AUDIT.md',
+  'RELEASE_GATE_FINAL.md',
+  'GO_LIVE_GATE.md',
+  'PHASE15_FINAL_COMMERCIAL_POLISH.md',
+]) {
   assertFile(path.join(repoRoot, 'docs', 'archive'), file);
 }
 assertFile(path.join(repoRoot, 'docs'), 'LIVE_SAAS_OPERATIONS_CHECKLIST.md');
@@ -77,7 +82,15 @@ for (const script of requiredBackendScripts) {
 }
 
 const repoPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
-for (const script of ['qa', 'qa:backend', 'qa:frontend', 'compose:e2e', 'qa:release', 'package:clean', 'qa:sale-ready']) {
+for (const script of [
+  'qa',
+  'qa:backend',
+  'qa:frontend',
+  'compose:e2e',
+  'qa:release',
+  'package:clean',
+  'qa:sale-ready',
+]) {
   if (!repoPkg.scripts || !repoPkg.scripts[script]) {
     throw new Error(`Missing repo package.json script: ${script}`);
   }

@@ -39,7 +39,9 @@ export function generatePasswordResetToken(): string {
 
 /** التجزئة المخزَّنة في `password_reset_tokens.token_hash`. */
 export function hashPasswordResetToken(token: string): string {
-  return createHash('sha256').update(String(token || ''), 'utf8').digest('hex');
+  return createHash('sha256')
+    .update(String(token || ''), 'utf8')
+    .digest('hex');
 }
 
 export type PasswordResetTokenRow = {
@@ -56,7 +58,10 @@ export type PasswordResetTokenState = 'usable' | 'used' | 'invalidated' | 'expir
  * حالة الرمز وقت التحقق. مفصولة عن الخدمة عمداً لأنها القاعدة التي يحرسها الجناح:
  * رمز مستهلك أو ملغى أو منتهٍ لا يفتح الباب مهما كان مسار الاستدعاء.
  */
-export function classifyPasswordResetToken(row: PasswordResetTokenRow | undefined | null, now: Date = new Date()): PasswordResetTokenState | 'unknown' {
+export function classifyPasswordResetToken(
+  row: PasswordResetTokenRow | undefined | null,
+  now: Date = new Date(),
+): PasswordResetTokenState | 'unknown' {
   if (!row) return 'unknown';
   if (row.used_at) return 'used';
   if (row.invalidated_at) return 'invalidated';

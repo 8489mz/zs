@@ -77,9 +77,7 @@ export function resolveBranchSellableLocations(
   branchId: number | null,
   allLocations: SellableLocationRow[],
 ): SellableLocation[] {
-  const defaultLocationId = branch?.default_stock_location_id != null
-    ? Number(branch.default_stock_location_id)
-    : null;
+  const defaultLocationId = branch?.default_stock_location_id != null ? Number(branch.default_stock_location_id) : null;
 
   if (!branch || branch.sales_stock_mode !== ALL_OPERATIONAL_LOCATIONS) {
     return defaultLocationId ? [{ id: defaultLocationId, branchId }] : [];
@@ -133,7 +131,10 @@ export function pickLocationCoveringOrder(
   for (const location of locations) {
     let covers = true;
     for (const [productId, required] of requiredByProduct) {
-      if (availableAt(location.id, productId) < required) { covers = false; break; }
+      if (availableAt(location.id, productId) < required) {
+        covers = false;
+        break;
+      }
     }
     if (covers) return location;
   }

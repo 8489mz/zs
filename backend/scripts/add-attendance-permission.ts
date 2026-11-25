@@ -16,7 +16,7 @@ async function main() {
   try {
     const { rows } = await pool.query('SELECT id, permissions_json FROM users');
     let updatedCount = 0;
-    
+
     for (const row of rows) {
       let perms = [];
       try {
@@ -24,9 +24,9 @@ async function main() {
       } catch (e) {
         continue;
       }
-      
+
       if (!Array.isArray(perms)) continue;
-      
+
       let changed = false;
       if (perms.includes('hrEmployees') && !perms.includes('hrAttendance')) {
         perms.push('hrAttendance');
@@ -37,47 +37,47 @@ async function main() {
         changed = true;
       }
       if (row.role === 'cashier') {
-         // for existing cashiers
-         if (perms.includes('products')) {
-            perms = perms.filter(p => p !== 'products');
-            changed = true;
-         }
-         if (!perms.includes('hrAttendance')) {
-            perms.push('hrAttendance');
-            changed = true;
-         }
-         if (!perms.includes('hr')) {
-            perms.push('hr');
-            changed = true;
-         }
-         if (!perms.includes('deliveryReps')) {
-            perms.push('deliveryReps');
-            changed = true;
-         }
-         if (!perms.includes('accounts')) {
-            perms.push('accounts');
-            changed = true;
-         }
-         if (!perms.includes('purchases')) {
-            perms.push('purchases');
-            changed = true;
-         }
-         if (!perms.includes('suppliers')) {
-            perms.push('suppliers');
-            changed = true;
-         }
-         if (!perms.includes('products')) {
-            perms.push('products');
-            changed = true;
-         }
+        // for existing cashiers
+        if (perms.includes('products')) {
+          perms = perms.filter((p) => p !== 'products');
+          changed = true;
+        }
+        if (!perms.includes('hrAttendance')) {
+          perms.push('hrAttendance');
+          changed = true;
+        }
+        if (!perms.includes('hr')) {
+          perms.push('hr');
+          changed = true;
+        }
+        if (!perms.includes('deliveryReps')) {
+          perms.push('deliveryReps');
+          changed = true;
+        }
+        if (!perms.includes('accounts')) {
+          perms.push('accounts');
+          changed = true;
+        }
+        if (!perms.includes('purchases')) {
+          perms.push('purchases');
+          changed = true;
+        }
+        if (!perms.includes('suppliers')) {
+          perms.push('suppliers');
+          changed = true;
+        }
+        if (!perms.includes('products')) {
+          perms.push('products');
+          changed = true;
+        }
       }
-      
+
       if (changed) {
         await pool.query('UPDATE users SET permissions_json = $1 WHERE id = $2', [JSON.stringify(perms), row.id]);
         updatedCount++;
       }
     }
-    
+
     console.log(`Updated ${updatedCount} users to include hrAttendance/hr and fixed existing cashiers.`);
   } catch (err) {
     console.error('Error:', err);

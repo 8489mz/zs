@@ -7,11 +7,19 @@ import { isDesktopRuntimeMode } from '../../../config/app-mode';
  */
 export function isLocalAuthCookieHost(appMode: unknown, hostHeader: unknown): boolean {
   if (!isDesktopRuntimeMode(appMode)) return false;
-  const host = String(hostHeader || '').split(',')[0].trim().toLowerCase().split(':')[0];
-  return ['localhost', '127.0.0.1', '0.0.0.0'].includes(host)
-    || String(hostHeader || '').trim().toLowerCase().startsWith('[::1]');
+  const host = String(hostHeader || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase()
+    .split(':')[0];
+  return (
+    ['localhost', '127.0.0.1', '0.0.0.0'].includes(host) ||
+    String(hostHeader || '')
+      .trim()
+      .toLowerCase()
+      .startsWith('[::1]')
+  );
 }
-
 
 type CookieSameSite = 'lax' | 'strict' | 'none';
 

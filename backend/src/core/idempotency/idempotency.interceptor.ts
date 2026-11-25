@@ -1,4 +1,13 @@
-import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor, ConflictException, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  CallHandler,
+  ExecutionContext,
+  Injectable,
+  Logger,
+  NestInterceptor,
+  ConflictException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { Observable, from, of, throwError } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { IdempotencyService } from './idempotency.service';
@@ -20,12 +29,15 @@ export class IdempotencyInterceptor implements NestInterceptor {
    * only from 'processing') and the failure is logged loudly, so a
    * retry gets a clear 422 instead of spinning on 'processing'.
    */
-  private async flagFinalizeFailure(reservation: {
-    tenantId: string;
-    accountId: string;
-    idempotencyKey: string;
-    operationType: string;
-  }, finalizeErr: unknown): Promise<void> {
+  private async flagFinalizeFailure(
+    reservation: {
+      tenantId: string;
+      accountId: string;
+      idempotencyKey: string;
+      operationType: string;
+    },
+    finalizeErr: unknown,
+  ): Promise<void> {
     this.logger.error(
       `Idempotency finalize failed for key=${reservation.idempotencyKey} operation=${reservation.operationType}: ${(finalizeErr as any)?.message || finalizeErr}`,
     );
@@ -73,28 +85,33 @@ export class IdempotencyInterceptor implements NestInterceptor {
             return of(existingResult.responsePayload);
           } else if (existingResult.status === 'failed') {
             // Return stored failure
-            return throwError(() => new HttpException(
-              existingResult.responsePayload || existingResult.errorCode || 'Operation previously failed',
-              HttpStatus.BAD_REQUEST
-            ));
+            return throwError(
+              () =>
+                new HttpException(
+                  existingResult.responsePayload || existingResult.errorCode || 'Operation previously failed',
+                  HttpStatus.BAD_REQUEST,
+                ),
+            );
           } else if (existingResult.status === 'processing') {
             return throwError(() => new ConflictException('Operation is currently processing'));
           } else if (existingResult.status === 'recovery_required') {
-            return throwError(() => new HttpException('Operation requires manual recovery', HttpStatus.UNPROCESSABLE_ENTITY));
+            return throwError(
+              () => new HttpException('Operation requires manual recovery', HttpStatus.UNPROCESSABLE_ENTITY),
+            );
           }
         }
 
         // Proceed to handler if reserved, wrapping in AsyncLocalStorage context
         return new Observable<any>((subscriber) => {
-          idempotencyStorage.run(
-            { idempotencyKey, operationType, accountId: reservation.accountId },
-            () => {
-              // INV-IDEMPOTENCY-FINALIZE-AWAITED: the finalize is
-              // awaited BEFORE the response is emitted. The old
-              // fire-and-forget tap() let the response (and a fast
-              // retry) outrun the commit, and swallowed finalize
-              // failures left the row stuck on 'processing'.
-              next.handle().pipe(
+          idempotencyStorage.run({ idempotencyKey, operationType, accountId: reservation.accountId }, () => {
+            // INV-IDEMPOTENCY-FINALIZE-AWAITED: the finalize is
+            // awaited BEFORE the response is emitted. The old
+            // fire-and-forget tap() let the response (and a fast
+            // retry) outrun the commit, and swallowed finalize
+            // failures left the row stuck on 'processing'.
+            next
+              .handle()
+              .pipe(
                 switchMap((res) =>
                   from(this.idempotencyService.finalizeIfStillProcessing(reservation, res)).pipe(
                     map(() => res),
@@ -104,27 +121,22 @@ export class IdempotencyInterceptor implements NestInterceptor {
                   ),
                 ),
                 catchError((err) => {
-                  const errorCode = (err && (err.code || err.name)) ? String(err.code || err.name) : 'UNKNOWN_ERROR';
-                  const errorPayload = typeof err?.getResponse === 'function'
-                    ? err.getResponse()
-                    : { message: err?.message || 'Operation failed' };
+                  const errorCode = err && (err.code || err.name) ? String(err.code || err.name) : 'UNKNOWN_ERROR';
+                  const errorPayload =
+                    typeof err?.getResponse === 'function'
+                      ? err.getResponse()
+                      : { message: err?.message || 'Operation failed' };
 
-                  return from(
-                    this.idempotencyService.recordFailure(
-                      reservation,
-                      errorCode,
-                      errorPayload
-                    )
-                  ).pipe(
+                  return from(this.idempotencyService.recordFailure(reservation, errorCode, errorPayload)).pipe(
                     switchMap(() => throwError(() => err)),
-                    catchError(() => throwError(() => err))
+                    catchError(() => throwError(() => err)),
                   );
-                })
-              ).subscribe(subscriber);
-            }
-          );
+                }),
+              )
+              .subscribe(subscriber);
+          });
         });
-      })
+      }),
     );
   }
 }

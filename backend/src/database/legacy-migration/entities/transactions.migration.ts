@@ -1,11 +1,5 @@
 import { EntityCounters, MigrationContext } from '../types';
-import {
-  asNumber,
-  asString,
-  normalizePaymentChannel,
-  normalizePaymentType,
-  readAll,
-} from '../utils';
+import { asNumber, asString, normalizePaymentChannel, normalizePaymentType, readAll } from '../utils';
 import { syncIdSequence } from '../db';
 
 interface OldSale {

@@ -16,18 +16,51 @@ export interface StorefrontRateRule {
 }
 
 const RULES: Array<{ method: string; pattern: RegExp; rule: StorefrontRateRule }> = [
-  { method: 'POST', pattern: /^\/api\/storefront\/([^/]+)\/orders$/, rule: { bucket: 'order-create', limit: 30, windowSeconds: 600 } }, // restaurant guests often share one Wi-Fi IP
-  { method: 'POST', pattern: /^\/api\/storefront\/([^/]+)\/coupons\/validate$/, rule: { bucket: 'coupon-validate', limit: 20, windowSeconds: 600 } },
-  { method: 'POST', pattern: /^\/api\/storefront\/([^/]+)\/products\/[^/]+\/reviews$/, rule: { bucket: 'review', limit: 5, windowSeconds: 3600 } },
-  { method: 'POST', pattern: /^\/api\/storefront\/([^/]+)\/abandoned-cart$/, rule: { bucket: 'abandoned-cart', limit: 30, windowSeconds: 600 } },
-  { method: 'POST', pattern: /^\/api\/storefront\/([^/]+)\/orders\/lookup$/, rule: { bucket: 'order-access', limit: 120, windowSeconds: 600 } },
-  { method: 'POST', pattern: /^\/api\/storefront\/([^/]+)\/orders\/[^/]+\/(cancel|payment-session|mock-pay)$/, rule: { bucket: 'order-access', limit: 120, windowSeconds: 600 } },
-  { method: 'PUT', pattern: /^\/api\/storefront\/([^/]+)\/orders\/[^/]+$/, rule: { bucket: 'order-access', limit: 120, windowSeconds: 600 } },
+  {
+    method: 'POST',
+    pattern: /^\/api\/storefront\/([^/]+)\/orders$/,
+    rule: { bucket: 'order-create', limit: 30, windowSeconds: 600 },
+  }, // restaurant guests often share one Wi-Fi IP
+  {
+    method: 'POST',
+    pattern: /^\/api\/storefront\/([^/]+)\/coupons\/validate$/,
+    rule: { bucket: 'coupon-validate', limit: 20, windowSeconds: 600 },
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/storefront\/([^/]+)\/products\/[^/]+\/reviews$/,
+    rule: { bucket: 'review', limit: 5, windowSeconds: 3600 },
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/storefront\/([^/]+)\/abandoned-cart$/,
+    rule: { bucket: 'abandoned-cart', limit: 30, windowSeconds: 600 },
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/storefront\/([^/]+)\/orders\/lookup$/,
+    rule: { bucket: 'order-access', limit: 120, windowSeconds: 600 },
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/storefront\/([^/]+)\/orders\/[^/]+\/(cancel|payment-session|mock-pay)$/,
+    rule: { bucket: 'order-access', limit: 120, windowSeconds: 600 },
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/storefront\/([^/]+)\/orders\/[^/]+$/,
+    rule: { bucket: 'order-access', limit: 120, windowSeconds: 600 },
+  },
 ];
 
 /** Which limit (if any) applies to a public storefront request. Webhooks and admin routes never match. */
-export function classifyStorefrontPublicRequest(method: string, path: string): { slug: string; rule: StorefrontRateRule } | null {
-  const cleanPath = String(path || '').split('?')[0].replace(/\/+$/, '');
+export function classifyStorefrontPublicRequest(
+  method: string,
+  path: string,
+): { slug: string; rule: StorefrontRateRule } | null {
+  const cleanPath = String(path || '')
+    .split('?')[0]
+    .replace(/\/+$/, '');
   const upper = String(method || '').toUpperCase();
   if (/^\/api\/storefront\/(admin|webhooks|marketplaces)(\/|$)/.test(cleanPath)) return null;
   for (const entry of RULES) {
@@ -77,11 +110,18 @@ export class StorefrontPublicRateLimitMiddleware implements NestMiddleware {
 
     const ip = resolveClientIp(req.ip || req.socket?.remoteAddress, req.headers['x-real-ip']);
     const { rule, slug } = match;
-    const result = await this.rateLimitService.hit(`storefront:${rule.bucket}:${slug}:${ip}`, rule.limit, rule.windowSeconds);
+    const result = await this.rateLimitService.hit(
+      `storefront:${rule.bucket}:${slug}:${ip}`,
+      rule.limit,
+      rule.windowSeconds,
+    );
 
     if (!result.allowed) {
       res.setHeader('Retry-After', String(result.retryAfterSeconds));
-      throw new HttpException('عدد كبير من المحاولات خلال وقت قصير، يرجى المحاولة بعد قليل.', HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        'عدد كبير من المحاولات خلال وقت قصير، يرجى المحاولة بعد قليل.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     next();

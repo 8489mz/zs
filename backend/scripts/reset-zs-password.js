@@ -88,7 +88,7 @@ async function main() {
     'canManageSettings',
     'canManageUsers',
     'canEditUsers',
-    'canManageBackups'
+    'canManageBackups',
   ]);
 
   const pool = new Pool({
@@ -104,10 +104,7 @@ async function main() {
   try {
     await client.query('BEGIN');
 
-    const existing = await client.query(
-      'SELECT id FROM users WHERE username = $1 LIMIT 1',
-      [username]
-    );
+    const existing = await client.query('SELECT id FROM users WHERE username = $1 LIMIT 1', [username]);
 
     if (existing.rows.length) {
       const userId = Number(existing.rows[0].id);
@@ -124,7 +121,7 @@ async function main() {
              locked_until = NULL,
              must_change_password = true
          WHERE username = $5`,
-        [passwordRecord.hash, passwordRecord.salt, permissions, displayName, username]
+        [passwordRecord.hash, passwordRecord.salt, permissions, displayName, username],
       );
       await client.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
       await client.query('DELETE FROM user_branches WHERE user_id = $1', [userId]);
@@ -135,7 +132,7 @@ async function main() {
          (username, password_hash, password_salt, role, is_active, permissions_json, default_branch_id, display_name, failed_login_count, locked_until, last_login_at, must_change_password)
          VALUES
          ($1, $2, $3, 'super_admin', true, $4, NULL, $5, 0, NULL, NULL, true)`,
-        [username, passwordRecord.hash, passwordRecord.salt, permissions, displayName]
+        [username, passwordRecord.hash, passwordRecord.salt, permissions, displayName],
       );
       console.log(`[OK] created support user '${username}'`);
     }

@@ -45,7 +45,10 @@ export function encodeBase32(buffer: Buffer): string {
 }
 
 export function decodeBase32(secret: string): Buffer {
-  const clean = String(secret || '').toUpperCase().replace(/[\s-]/g, '').replace(/=+$/, '');
+  const clean = String(secret || '')
+    .toUpperCase()
+    .replace(/[\s-]/g, '')
+    .replace(/=+$/, '');
   let bits = 0;
   let value = 0;
   const bytes: number[] = [];
@@ -155,5 +158,7 @@ export function buildOtpauthUri(params: { issuer: string; account: string; secre
 
 /** السر معروضاً في مجموعات من أربعة محارف — الشكل الذي يُدخله الناس يدوياً بلا أخطاء. */
 export function formatSecretForDisplay(secret: string): string {
-  return String(secret || '').replace(/(.{4})/g, '$1 ').trim();
+  return String(secret || '')
+    .replace(/(.{4})/g, '$1 ')
+    .trim();
 }

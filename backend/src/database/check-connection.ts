@@ -12,7 +12,7 @@ type PgLikeError = {
 function collectNestedErrors(error: unknown): PgLikeError[] {
   const root = error as PgLikeError;
   const nested = Array.isArray(root?.errors) ? root.errors : [];
-  return [root, ...nested.filter(Boolean) as PgLikeError[]];
+  return [root, ...(nested.filter(Boolean) as PgLikeError[])];
 }
 
 function classifyRootCause(error: unknown): 'network reachability' | 'auth/credentials' | 'SSL/TLS wiring' | 'unknown' {
@@ -24,16 +24,20 @@ function classifyRootCause(error: unknown): 'network reachability' | 'auth/crede
     return 'network reachability';
   }
 
-  if (codes.has('28P01') || messages.includes('password authentication failed') || messages.includes('no pg_hba.conf entry')) {
+  if (
+    codes.has('28P01') ||
+    messages.includes('password authentication failed') ||
+    messages.includes('no pg_hba.conf entry')
+  ) {
     return 'auth/credentials';
   }
 
   if (
-    codes.has('SELF_SIGNED_CERT_IN_CHAIN')
-    || codes.has('UNABLE_TO_VERIFY_LEAF_SIGNATURE')
-    || messages.includes('certificate')
-    || messages.includes('tls')
-    || messages.includes('ssl')
+    codes.has('SELF_SIGNED_CERT_IN_CHAIN') ||
+    codes.has('UNABLE_TO_VERIFY_LEAF_SIGNATURE') ||
+    messages.includes('certificate') ||
+    messages.includes('tls') ||
+    messages.includes('ssl')
   ) {
     return 'SSL/TLS wiring';
   }
@@ -43,7 +47,9 @@ function classifyRootCause(error: unknown): 'network reachability' | 'auth/crede
 
 async function main(): Promise<void> {
   const base64Cert = process.env.DATABASE_SSL_CA_CERT_B64?.trim();
-  const caCert = base64Cert ? Buffer.from(base64Cert, 'base64').toString('utf8') : (process.env.DATABASE_SSL_CA_CERT ?? '');
+  const caCert = base64Cert
+    ? Buffer.from(base64Cert, 'base64').toString('utf8')
+    : (process.env.DATABASE_SSL_CA_CERT ?? '');
 
   const ssl = resolvePgSslConfig({
     enabled: toBoolean(process.env.DATABASE_SSL, true),
@@ -77,7 +83,10 @@ async function main(): Promise<void> {
 main().catch(async (error: unknown) => {
   const rootCause = classifyRootCause(error);
   const nested = collectNestedErrors(error)
-    .map((item, idx) => `#${idx + 1} name=${item.name || 'Error'} code=${item.code || 'n/a'} message=${item.message || String(item)}`)
+    .map(
+      (item, idx) =>
+        `#${idx + 1} name=${item.name || 'Error'} code=${item.code || 'n/a'} message=${item.message || String(item)}`,
+    )
     .join(' || ');
 
   process.stderr.write(`[db-check] ROOT_CAUSE: ${rootCause}\n`);

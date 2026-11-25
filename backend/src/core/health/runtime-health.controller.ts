@@ -9,7 +9,7 @@ export class RuntimeHealthController {
       ok: true,
       runtimeMode: process.env.ELECTRON_RUNTIME_MODE || 'standalone',
       serverName: os.hostname(),
-      version: process.env.APP_VERSION || process.env.npm_package_version || 'dev'
+      version: process.env.APP_VERSION || process.env.npm_package_version || 'dev',
     };
   }
 }

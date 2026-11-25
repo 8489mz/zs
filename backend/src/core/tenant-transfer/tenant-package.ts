@@ -33,13 +33,19 @@ export const PLATFORM_TENANT_TABLES = new Set([
 ]);
 
 export class TenantPackageError extends Error {
-  constructor(public readonly code: string, message: string) {
+  constructor(
+    public readonly code: string,
+    message: string,
+  ) {
     super(message);
     this.name = 'TenantPackageError';
   }
 }
 
-export interface ColumnSpec { name: string; identityAlways: boolean }
+export interface ColumnSpec {
+  name: string;
+  identityAlways: boolean;
+}
 export interface TableSpec {
   name: string;
   kind: 'tenant' | 'child';
@@ -53,7 +59,11 @@ export interface TableSpec {
   accountIdIsForeignKey: boolean;
 }
 
-export interface OfflineIdBlock { index: number; start: number; end: number }
+export interface OfflineIdBlock {
+  index: number;
+  start: number;
+  end: number;
+}
 
 export interface PackageManifest {
   format: string;
@@ -91,7 +101,12 @@ export interface ImportReport {
   warnings: string[];
 }
 
-interface ForeignKeyRow { table_name: string; foreign_table: string; cols: string[]; fcols: string[] }
+interface ForeignKeyRow {
+  table_name: string;
+  foreign_table: string;
+  cols: string[];
+  fcols: string[];
+}
 
 export function offlineBlockRange(index: number): OfflineIdBlock {
   const start = RESERVED_OFFLINE_ID_BASE + index * OFFLINE_ID_BLOCK_SIZE;
@@ -139,7 +154,9 @@ export async function listTenantTables(db: Kysely<any>): Promise<Map<string, Tab
     columns: cols,
     hasId: cols.some((c) => c.name === 'id'),
     idSequence: null as string | null,
-    accountIdIsForeignKey: fks.some((fk) => fk.table_name === name && fk.cols.length === 1 && fk.cols[0] === 'account_id'),
+    accountIdIsForeignKey: fks.some(
+      (fk) => fk.table_name === name && fk.cols.length === 1 && fk.cols[0] === 'account_id',
+    ),
   });
 
   for (const [name, cols] of byTable) {
@@ -148,9 +165,17 @@ export async function listTenantTables(db: Kysely<any>): Promise<Map<string, Tab
   }
   for (const [name, cols] of byTable) {
     if (specs.has(name) || name === 'tenants' || cols.some((c) => c.name === 'tenant_id')) continue;
-    const link = fks.find((fk) => fk.table_name === name && fk.cols.length === 1 && specs.get(fk.foreign_table)?.kind === 'tenant');
+    const link = fks.find(
+      (fk) => fk.table_name === name && fk.cols.length === 1 && specs.get(fk.foreign_table)?.kind === 'tenant',
+    );
     if (!link) continue;
-    specs.set(name, { ...base(name, cols), kind: 'child', parent: link.foreign_table, fkColumn: link.cols[0], parentColumn: link.fcols[0] });
+    specs.set(name, {
+      ...base(name, cols),
+      kind: 'child',
+      parent: link.foreign_table,
+      fkColumn: link.cols[0],
+      parentColumn: link.fcols[0],
+    });
   }
 
   for (const spec of specs.values()) {
@@ -202,15 +227,23 @@ export async function allocateOfflineIdBlock(db: Kysely<any>, tenantId: string):
   const index = row.rows[0]?.block_index;
   if (index == null) return null;
   if (index >= MAX_OFFLINE_ID_BLOCKS) {
-    throw new TenantPackageError('OFFLINE_BLOCKS_EXHAUSTED', `No offline id block left for tenant ${tenantId} (index ${index})`);
+    throw new TenantPackageError(
+      'OFFLINE_BLOCKS_EXHAUSTED',
+      `No offline id block left for tenant ${tenantId} (index ${index})`,
+    );
   }
   return offlineBlockRange(index);
 }
 
-async function readOrigin(db: Kysely<any>, tenantId: string): Promise<{ tenantId: string; slug: string; offlineIdBlock: OfflineIdBlock | null } | null> {
+async function readOrigin(
+  db: Kysely<any>,
+  tenantId: string,
+): Promise<{ tenantId: string; slug: string; offlineIdBlock: OfflineIdBlock | null } | null> {
   const result = await sql<{ value: string }>`
     select value from settings where tenant_id = ${tenantId} and key = ${ORIGIN_SETTING_KEY}
-  `.execute(db).catch(() => ({ rows: [] as { value: string }[] }));
+  `
+    .execute(db)
+    .catch(() => ({ rows: [] as { value: string }[] }));
   if (!result.rows[0]) return null;
   try {
     const parsed = JSON.parse(result.rows[0].value);
@@ -227,41 +260,46 @@ export async function exportTenantPackage(
 ): Promise<{ buffer: Buffer; manifest: PackageManifest }> {
   const offlineIdBlockFromCloud = options.allocateOfflineBlock ? await allocateOfflineIdBlock(db, tenantId) : null;
 
-  return db.transaction().setIsolationLevel('repeatable read').execute(async (trx) => {
-    await sql`set transaction read only`.execute(trx);
-    const specs = await listTenantTables(trx);
-    const tenantRow = await sql<any>`
+  return db
+    .transaction()
+    .setIsolationLevel('repeatable read')
+    .execute(async (trx) => {
+      await sql`set transaction read only`.execute(trx);
+      const specs = await listTenantTables(trx);
+      const tenantRow = await sql<any>`
       select id, slug, business_name, owner_name, owner_phone, owner_email, activity_type from tenants where id = ${tenantId}
     `.execute(trx);
-    const t = tenantRow.rows[0] ?? {};
-    const origin = await readOrigin(trx, tenantId);
+      const t = tenantRow.rows[0] ?? {};
+      const origin = await readOrigin(trx, tenantId);
 
-    const manifest: PackageManifest = {
-      format: PACKAGE_FORMAT,
-      createdAt: new Date().toISOString(),
-      source: options.source,
-      tenant: {
-        id: tenantId,
-        slug: String(t.slug ?? tenantId),
-        businessName: String(t.business_name ?? ''),
-        ownerName: String(t.owner_name ?? ''),
-        ownerPhone: String(t.owner_phone ?? ''),
-        ownerEmail: String(t.owner_email ?? ''),
-        activityType: t.activity_type ?? null,
-      },
-      origin: origin ? { tenantId: origin.tenantId, slug: origin.slug } : null,
-      migration: await latestMigration(trx),
-      offlineIdBlock: offlineIdBlockFromCloud ?? origin?.offlineIdBlock ?? null,
-      tables: {},
-    };
+      const manifest: PackageManifest = {
+        format: PACKAGE_FORMAT,
+        createdAt: new Date().toISOString(),
+        source: options.source,
+        tenant: {
+          id: tenantId,
+          slug: String(t.slug ?? tenantId),
+          businessName: String(t.business_name ?? ''),
+          ownerName: String(t.owner_name ?? ''),
+          ownerPhone: String(t.owner_phone ?? ''),
+          ownerEmail: String(t.owner_email ?? ''),
+          activityType: t.activity_type ?? null,
+        },
+        origin: origin ? { tenantId: origin.tenantId, slug: origin.slug } : null,
+        migration: await latestMigration(trx),
+        offlineIdBlock: offlineIdBlockFromCloud ?? origin?.offlineIdBlock ?? null,
+        tables: {},
+      };
 
-    const lines: string[] = [];
-    for (const spec of [...specs.values()].sort((a, b) => a.name.localeCompare(b.name))) {
-      const order = spec.hasId ? sql`order by ${sql.table(spec.name)}.id` : sql`order by ${sql.table(spec.name)}.ctid`;
-      let offset = 0;
-      let total = 0;
-      for (;;) {
-        const chunk = await sql<{ j: string; n: number }>`
+      const lines: string[] = [];
+      for (const spec of [...specs.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+        const order = spec.hasId
+          ? sql`order by ${sql.table(spec.name)}.id`
+          : sql`order by ${sql.table(spec.name)}.ctid`;
+        let offset = 0;
+        let total = 0;
+        for (;;) {
+          const chunk = await sql<{ j: string; n: number }>`
           select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb)::text as j, count(*)::int as n
           from (
             select ${sql.table(spec.name)}.* from ${sql.table(spec.name)}
@@ -270,18 +308,18 @@ export async function exportTenantPackage(
             limit ${EXPORT_CHUNK_ROWS} offset ${offset}
           ) x
         `.execute(trx);
-        const { j, n } = chunk.rows[0];
-        if (n > 0) lines.push(`${spec.name}\t${j}`);
-        total += n;
-        offset += n;
-        if (n < EXPORT_CHUNK_ROWS) break;
+          const { j, n } = chunk.rows[0];
+          if (n > 0) lines.push(`${spec.name}\t${j}`);
+          total += n;
+          offset += n;
+          if (n < EXPORT_CHUNK_ROWS) break;
+        }
+        manifest.tables[spec.name] = { rows: total, columns: spec.columns.map((c) => c.name) };
       }
-      manifest.tables[spec.name] = { rows: total, columns: spec.columns.map((c) => c.name) };
-    }
 
-    const body = [`${PACKAGE_FORMAT}\t${JSON.stringify(manifest)}`, ...lines].join('\n');
-    return { buffer: zlib.gzipSync(Buffer.from(body, 'utf8')), manifest };
-  });
+      const body = [`${PACKAGE_FORMAT}\t${JSON.stringify(manifest)}`, ...lines].join('\n');
+      return { buffer: zlib.gzipSync(Buffer.from(body, 'utf8')), manifest };
+    });
 }
 
 export function readPackage(buffer: Buffer): { manifest: PackageManifest; chunks: { table: string; json: string }[] } {
@@ -297,19 +335,34 @@ export function readPackage(buffer: Buffer): { manifest: PackageManifest; chunks
     throw new TenantPackageError('PACKAGE_INVALID', 'Not a tenant package (bad header)');
   }
   const manifest = JSON.parse(manifestJson) as PackageManifest;
-  if (!manifest || manifest.format !== PACKAGE_FORMAT || !manifest.tables || typeof manifest.tables !== 'object' || Array.isArray(manifest.tables)) {
+  if (
+    !manifest ||
+    manifest.format !== PACKAGE_FORMAT ||
+    !manifest.tables ||
+    typeof manifest.tables !== 'object' ||
+    Array.isArray(manifest.tables)
+  ) {
     throw new TenantPackageError('PACKAGE_INVALID', 'Package manifest has no valid table inventory');
   }
   for (const [table, info] of Object.entries(manifest.tables)) {
-    if (!/^[a-z][a-z0-9_]*$/.test(table) || !info || !Number.isSafeInteger(info.rows) || info.rows < 0 || !Array.isArray(info.columns)) {
+    if (
+      !/^[a-z][a-z0-9_]*$/.test(table) ||
+      !info ||
+      !Number.isSafeInteger(info.rows) ||
+      info.rows < 0 ||
+      !Array.isArray(info.columns)
+    ) {
       throw new TenantPackageError('PACKAGE_INVALID', 'Invalid table inventory: ' + table);
     }
   }
-  const chunks = lines.slice(1).filter(Boolean).map((line) => {
-    const [table, json] = splitOnce(line);
-    if (!table || !json) throw new TenantPackageError('PACKAGE_INVALID', 'Corrupt tenant package line');
-    return { table, json };
-  });
+  const chunks = lines
+    .slice(1)
+    .filter(Boolean)
+    .map((line) => {
+      const [table, json] = splitOnce(line);
+      if (!table || !json) throw new TenantPackageError('PACKAGE_INVALID', 'Corrupt tenant package line');
+      return { table, json };
+    });
   for (const chunk of chunks) {
     if (!Object.prototype.hasOwnProperty.call(manifest.tables, chunk.table)) {
       throw new TenantPackageError('PACKAGE_INVALID', 'Undeclared package table: ' + chunk.table);
@@ -317,7 +370,8 @@ export function readPackage(buffer: Buffer): { manifest: PackageManifest; chunks
   }
   for (const [table, info] of Object.entries(manifest.tables)) {
     const found = chunks.filter((c) => c.table === table).length;
-    if (info.rows > 0 && found === 0) throw new TenantPackageError('PACKAGE_INVALID', `Package is missing the rows of ${table}`);
+    if (info.rows > 0 && found === 0)
+      throw new TenantPackageError('PACKAGE_INVALID', `Package is missing the rows of ${table}`);
   }
   return { manifest, chunks };
 }
@@ -340,8 +394,14 @@ export async function findOrphanedReferences(
     const extra = !spec && extraChildTables.includes(fk.table_name);
     if (!spec && !extra) continue;
     const scope = spec ? ownedRows(spec, tenantId) : sql`${sql.table(fk.table_name)}.tenant_id = ${tenantId}`;
-    const notNull = sql.join(fk.cols.map((col) => sql`${sql.table(fk.table_name)}.${sql.ref(col)} is not null`), sql` and `);
-    const matches = sql.join(fk.cols.map((col, i) => sql`parent.${sql.ref(fk.fcols[i])} = ${sql.table(fk.table_name)}.${sql.ref(col)}`), sql` and `);
+    const notNull = sql.join(
+      fk.cols.map((col) => sql`${sql.table(fk.table_name)}.${sql.ref(col)} is not null`),
+      sql` and `,
+    );
+    const matches = sql.join(
+      fk.cols.map((col, i) => sql`parent.${sql.ref(fk.fcols[i])} = ${sql.table(fk.table_name)}.${sql.ref(col)}`),
+      sql` and `,
+    );
     // A row may also point at an existing row of ANOTHER tenant (found in production: 3 journal
     // lines on another tenant's account). The FK is satisfied, so only this check catches it — and
     // it also stops a crafted package from linking a tenant's rows to someone else's data.
@@ -358,19 +418,23 @@ export async function findOrphanedReferences(
     const orphans = result.rows[0]?.orphans ?? 0;
     const foreignTenant = result.rows[0]?.foreign_tenant ?? 0;
     if (orphans > 0) problems.push(`${fk.table_name}.${fk.cols.join('+')} -> ${fk.foreign_table}: ${orphans} missing`);
-    if (foreignTenant > 0) problems.push(`${fk.table_name}.${fk.cols.join('+')} -> ${fk.foreign_table}: ${foreignTenant} of another tenant`);
+    if (foreignTenant > 0)
+      problems.push(`${fk.table_name}.${fk.cols.join('+')} -> ${fk.foreign_table}: ${foreignTenant} of another tenant`);
   }
   return problems;
 }
 
-export async function importTenantPackage(db: Kysely<any>, buffer: Buffer, target: ImportTarget): Promise<ImportReport> {
+export async function importTenantPackage(
+  db: Kysely<any>,
+  buffer: Buffer,
+  target: ImportTarget,
+): Promise<ImportReport> {
   const { manifest, chunks } = readPackage(buffer);
   const warnings: string[] = [];
 
   if (isProtectedTenantDataTarget(target.tenantId)) {
     throw new TenantPackageError('TENANT_MISMATCH', 'Cannot import tenant package into platform root tenant');
   }
-
 
   return db.transaction().execute(async (trx) => {
     // 1. The package must not come from a newer schema than this install.
@@ -385,13 +449,18 @@ export async function importTenantPackage(db: Kysely<any>, buffer: Buffer, targe
     }
     const here = await latestMigration(trx);
     if (here.latest !== manifest.migration.latest) {
-      warnings.push(`Package schema ${manifest.migration.latest} is older than ${here.latest}; new columns get their defaults.`);
+      warnings.push(
+        `Package schema ${manifest.migration.latest} is older than ${here.latest}; new columns get their defaults.`,
+      );
     }
 
     // 2. Cloud imports only replace the tenant the package belongs to.
     if (target.mode === 'cloud') {
-      const exists = await sql<{ ok: boolean }>`select exists (select 1 from tenants where id = ${target.tenantId}) as ok`.execute(trx);
-      if (!exists.rows[0]?.ok) throw new TenantPackageError('TARGET_TENANT_MISSING', `Tenant ${target.tenantId} does not exist`);
+      const exists = await sql<{
+        ok: boolean;
+      }>`select exists (select 1 from tenants where id = ${target.tenantId}) as ok`.execute(trx);
+      if (!exists.rows[0]?.ok)
+        throw new TenantPackageError('TARGET_TENANT_MISSING', `Tenant ${target.tenantId} does not exist`);
       const belongs = manifest.tenant.id === target.tenantId || manifest.origin?.tenantId === target.tenantId;
       if (!belongs && !target.allowTenantMismatch) {
         throw new TenantPackageError(
@@ -443,7 +512,8 @@ export async function importTenantPackage(db: Kysely<any>, buffer: Buffer, targe
       const cols = spec.columns.filter((c) => packageColumns.has(c.name));
       const exprs = cols.map((c) => {
         if (c.name === 'tenant_id' && spec.kind === 'tenant') return sql`${target.tenantId}`;
-        if (c.name === 'account_id' && spec.kind === 'tenant' && !spec.accountIdIsForeignKey) return sql`${target.accountId}`;
+        if (c.name === 'account_id' && spec.kind === 'tenant' && !spec.accountIdIsForeignKey)
+          return sql`${target.accountId}`;
         return sql`p.${sql.ref(c.name)}`;
       });
       const overriding = cols.some((c) => c.identityAlways) ? sql`overriding system value` : sql``;
@@ -528,7 +598,12 @@ export async function importTenantPackage(db: Kysely<any>, buffer: Buffer, targe
     }
 
     // 7. FK checks were off: verify every reference before commit (RESTORE-3).
-    const problems = await findOrphanedReferences(trx, specs, target.tenantId, [...PLATFORM_TENANT_TABLES].filter((t) => t !== 'sessions'));
+    const problems = await findOrphanedReferences(
+      trx,
+      specs,
+      target.tenantId,
+      [...PLATFORM_TENANT_TABLES].filter((t) => t !== 'sessions'),
+    );
     if (problems.length) {
       throw new TenantPackageError('ORPHANED_REFERENCES', `Import cancelled, nothing changed: ${problems.join(' | ')}`);
     }

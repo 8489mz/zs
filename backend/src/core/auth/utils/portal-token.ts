@@ -30,11 +30,7 @@ function isDesktopMode(): boolean {
  * يعيد سر توقيع رموز البوابات، أو يرمي استثناءً في وضع السحابة إن لم يُضبط.
  */
 export function resolvePortalTokenSecret(): string {
-  const configured = String(
-    process.env.SESSION_SECRET ||
-    process.env.SESSION_CSRF_SECRET ||
-    '',
-  ).trim();
+  const configured = String(process.env.SESSION_SECRET || process.env.SESSION_CSRF_SECRET || '').trim();
   if (configured.length >= MIN_SECRET_LENGTH) {
     return configured;
   }

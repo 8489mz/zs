@@ -110,7 +110,11 @@ export async function assertPortalTenantAllowed(
 ): Promise<void> {
   const decision = await checkPortalTenantStatus(db, authCache, tenantId);
   if (decision.blocked) {
-    throw new AppError(decision.message || 'تم إيقاف أو انتهاء اشتراك هذه النسخة.', decision.code || 'TENANT_NOT_ALLOWED', 401);
+    throw new AppError(
+      decision.message || 'تم إيقاف أو انتهاء اشتراك هذه النسخة.',
+      decision.code || 'TENANT_NOT_ALLOWED',
+      401,
+    );
   }
 }
 

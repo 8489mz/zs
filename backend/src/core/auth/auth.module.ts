@@ -8,7 +8,14 @@ import { AdminRoleGuard } from './guards/admin-role.guard';
 
 @Global()
 @Module({
-  providers: [SessionService, PermissionService, PlanFeatureService, BootstrapAdminService, AuthCacheService, AdminRoleGuard],
+  providers: [
+    SessionService,
+    PermissionService,
+    PlanFeatureService,
+    BootstrapAdminService,
+    AuthCacheService,
+    AdminRoleGuard,
+  ],
   exports: [SessionService, PermissionService, PlanFeatureService, AuthCacheService, AdminRoleGuard],
 })
 export class AuthFoundationModule {}

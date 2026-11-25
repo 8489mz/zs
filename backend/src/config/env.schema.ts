@@ -93,32 +93,41 @@ function isPlaceholderAccount(value: string): boolean {
 }
 
 export function validateEnv(config: Record<string, unknown>): AppEnv {
-  const hasExplicitCsrfSecret = typeof config.SESSION_CSRF_SECRET === 'string' && config.SESSION_CSRF_SECRET.trim().length >= 16;
+  const hasExplicitCsrfSecret =
+    typeof config.SESSION_CSRF_SECRET === 'string' && config.SESSION_CSRF_SECRET.trim().length >= 16;
   const appMode = normalizeAppMode(config.APP_MODE);
 
-  if (appMode === 'CLOUD_SAAS' && [config.PORTABLE_MODE, config.IS_ELECTRON].some((value) => String(value) === 'true')) {
+  if (
+    appMode === 'CLOUD_SAAS' &&
+    [config.PORTABLE_MODE, config.IS_ELECTRON].some((value) => String(value) === 'true')
+  ) {
     throw new Error('CLOUD_SAAS cannot enable PORTABLE_MODE or IS_ELECTRON');
   }
 
   const isPortable = config.PORTABLE_MODE === 'true' && appMode !== 'SELF_CONTAINED';
 
-    const dbHost = (config.DATABASE_HOST ?? config.DB_HOST) || (isPortable ? 'localhost' : undefined);
-    const isLocalHost = typeof dbHost === 'string' && isLocalDatabaseHost(dbHost);
-    const forceDisableSsl = isPortable || appMode === 'SELF_CONTAINED' || isLocalHost;
+  const dbHost = (config.DATABASE_HOST ?? config.DB_HOST) || (isPortable ? 'localhost' : undefined);
+  const isLocalHost = typeof dbHost === 'string' && isLocalDatabaseHost(dbHost);
+  const forceDisableSsl = isPortable || appMode === 'SELF_CONTAINED' || isLocalHost;
 
-    const raw = {
-      ...config,
-      APP_MODE: appMode,
-      APP_PORT: (config.PORT ?? config.APP_PORT) ? Number(config.PORT ?? config.APP_PORT) : 3001,
-      APP_HOST: config.HOST ?? config.APP_HOST ?? '0.0.0.0',
-      APP_PUBLIC_URL: config.APP_PUBLIC_URL ?? '',
-      DATABASE_HOST: dbHost,
-      DATABASE_PORT: (config.DATABASE_PORT ?? config.DB_PORT ?? config.PGPORT) ? Number(config.DATABASE_PORT ?? config.DB_PORT ?? config.PGPORT) : (isPortable ? 5432 : 5432),
-      DATABASE_NAME: config.DATABASE_NAME ?? config.DB_NAME ?? (isPortable ? 'pglite' : undefined),
-      DATABASE_USER: config.DATABASE_USER ?? config.DB_USER ?? (isPortable ? 'pglite' : undefined),
-      DATABASE_PASSWORD: config.DATABASE_PASSWORD ?? config.DB_PASSWORD ?? (isPortable ? 'pglite' : undefined),
-      DATABASE_SSL: forceDisableSsl ? 'false' : (config.DATABASE_SSL ?? config.DB_SSL ?? 'false'),
-      DATABASE_SSL_REJECT_UNAUTHORIZED: forceDisableSsl ? 'false' : (config.DATABASE_SSL_REJECT_UNAUTHORIZED ?? 'false'),
+  const raw = {
+    ...config,
+    APP_MODE: appMode,
+    APP_PORT: (config.PORT ?? config.APP_PORT) ? Number(config.PORT ?? config.APP_PORT) : 3001,
+    APP_HOST: config.HOST ?? config.APP_HOST ?? '0.0.0.0',
+    APP_PUBLIC_URL: config.APP_PUBLIC_URL ?? '',
+    DATABASE_HOST: dbHost,
+    DATABASE_PORT:
+      (config.DATABASE_PORT ?? config.DB_PORT ?? config.PGPORT)
+        ? Number(config.DATABASE_PORT ?? config.DB_PORT ?? config.PGPORT)
+        : isPortable
+          ? 5432
+          : 5432,
+    DATABASE_NAME: config.DATABASE_NAME ?? config.DB_NAME ?? (isPortable ? 'pglite' : undefined),
+    DATABASE_USER: config.DATABASE_USER ?? config.DB_USER ?? (isPortable ? 'pglite' : undefined),
+    DATABASE_PASSWORD: config.DATABASE_PASSWORD ?? config.DB_PASSWORD ?? (isPortable ? 'pglite' : undefined),
+    DATABASE_SSL: forceDisableSsl ? 'false' : (config.DATABASE_SSL ?? config.DB_SSL ?? 'false'),
+    DATABASE_SSL_REJECT_UNAUTHORIZED: forceDisableSsl ? 'false' : (config.DATABASE_SSL_REJECT_UNAUTHORIZED ?? 'false'),
     DATABASE_POOL_MAX: config.DATABASE_POOL_MAX ?? 10,
     DATABASE_POOL_IDLE_TIMEOUT_MS: config.DATABASE_POOL_IDLE_TIMEOUT_MS ?? 10000,
     DATABASE_POOL_CONNECTION_TIMEOUT_MS: config.DATABASE_POOL_CONNECTION_TIMEOUT_MS ?? 10000,
@@ -130,14 +139,12 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     SESSION_COOKIE_NAME: config.SESSION_COOKIE_NAME ?? 'session_id',
     SESSION_CSRF_COOKIE_NAME: config.SESSION_CSRF_COOKIE_NAME ?? 'csrf_token',
     SESSION_COOKIE_SECURE:
-      config.SESSION_COOKIE_SECURE
-      ?? ((config.NODE_ENV as string | undefined) === 'production' ? 'true' : 'false'),
+      config.SESSION_COOKIE_SECURE ?? ((config.NODE_ENV as string | undefined) === 'production' ? 'true' : 'false'),
     SESSION_COOKIE_SAME_SITE:
-      config.SESSION_COOKIE_SAME_SITE
-      ?? ((config.NODE_ENV as string | undefined) === 'production' ? 'strict' : 'lax'),
+      config.SESSION_COOKIE_SAME_SITE ?? ((config.NODE_ENV as string | undefined) === 'production' ? 'strict' : 'lax'),
     SESSION_CSRF_SECRET:
-      config.SESSION_CSRF_SECRET
-      ?? `${String(config.DATABASE_PASSWORD ?? config.DB_PASSWORD ?? 'local-dev-csrf-secret')}:csrf:v1`,
+      config.SESSION_CSRF_SECRET ??
+      `${String(config.DATABASE_PASSWORD ?? config.DB_PASSWORD ?? 'local-dev-csrf-secret')}:csrf:v1`,
     ALLOW_SESSION_ID_HEADER: config.ALLOW_SESSION_ID_HEADER ?? 'false',
     BUSINESS_TIMEZONE: config.BUSINESS_TIMEZONE ?? 'UTC',
     SMTP_HOST: config.SMTP_HOST ?? '',
@@ -175,13 +182,21 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
     throw new Error('SESSION_COOKIE_SECURE must be true when SESSION_COOKIE_SAME_SITE is none');
   }
 
-  if ((parsed.APP_MODE === 'LOCAL_PILOT' || parsed.APP_MODE === 'SELF_CONTAINED') && !isLocalDatabaseHost(parsed.DATABASE_HOST)) {
+  if (
+    (parsed.APP_MODE === 'LOCAL_PILOT' || parsed.APP_MODE === 'SELF_CONTAINED') &&
+    !isLocalDatabaseHost(parsed.DATABASE_HOST)
+  ) {
     throw new Error('DATABASE_HOST must be local-only when APP_MODE is LOCAL_PILOT or SELF_CONTAINED');
   }
 
   if (parsed.NODE_ENV === 'production' && parsed.APP_MODE === 'CLOUD_SAAS') {
-    if (!isLocalDatabaseHost(parsed.DATABASE_HOST) && (!parsed.DATABASE_SSL || !parsed.DATABASE_SSL_REJECT_UNAUTHORIZED)) {
-      throw new Error('DATABASE_SSL and DATABASE_SSL_REJECT_UNAUTHORIZED must be true for CLOUD_SAAS production mode when using remote DB');
+    if (
+      !isLocalDatabaseHost(parsed.DATABASE_HOST) &&
+      (!parsed.DATABASE_SSL || !parsed.DATABASE_SSL_REJECT_UNAUTHORIZED)
+    ) {
+      throw new Error(
+        'DATABASE_SSL and DATABASE_SSL_REJECT_UNAUTHORIZED must be true for CLOUD_SAAS production mode when using remote DB',
+      );
     }
 
     if (hasUnsafeCorsOrigin(parsed.CORS_ORIGINS)) {
@@ -210,7 +225,11 @@ export function validateEnv(config: Record<string, unknown>): AppEnv {
   // letting one store's page call the ERP API as whichever merchant or admin visits it.
   const storefrontRoot = normalizeCookieDomain(config.STOREFRONT_ROOT_DOMAIN);
   const cookieDomain = normalizeCookieDomain(config.SESSION_COOKIE_DOMAIN);
-  if (storefrontRoot && cookieDomain && (cookieDomain === storefrontRoot || storefrontRoot.endsWith(`.${cookieDomain}`))) {
+  if (
+    storefrontRoot &&
+    cookieDomain &&
+    (cookieDomain === storefrontRoot || storefrontRoot.endsWith(`.${cookieDomain}`))
+  ) {
     throw new Error(
       `SESSION_COOKIE_DOMAIN (${cookieDomain}) would share the ERP session with every store under ${storefrontRoot}; leave it empty (host-only cookie)`,
     );

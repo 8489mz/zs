@@ -44,7 +44,9 @@ function readSslCaCertFromEnv(): string {
 }
 
 function normalizeSslMode(value: unknown): 'disable' | 'require' | 'no-verify' | null {
-  const normalized = String(value || '').trim().toLowerCase();
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
   if (!normalized) return null;
   if (normalized === 'disable' || normalized === 'require' || normalized === 'no-verify') return normalized;
   throw new Error(`Unsupported database SSL mode: ${String(value)}`);
@@ -59,13 +61,19 @@ export function resolveMigrationSslModeFromEnv(): 'existing' | 'disable' | 'requ
   if (explicitMode) return explicitMode;
 
   const explicitRejectUnauthorizedFalse =
-    hasExplicitEnv('DATABASE_SSL_REJECT_UNAUTHORIZED')
-    && String(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED || '').trim().toLowerCase() === 'false';
+    hasExplicitEnv('DATABASE_SSL_REJECT_UNAUTHORIZED') &&
+    String(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED || '')
+      .trim()
+      .toLowerCase() === 'false';
   const explicitSslTrue =
-    String(process.env.DATABASE_SSL ?? process.env.DB_SSL ?? '').trim().toLowerCase() === 'true';
+    String(process.env.DATABASE_SSL ?? process.env.DB_SSL ?? '')
+      .trim()
+      .toLowerCase() === 'true';
   const explicitSslFalse =
-    hasExplicitEnv('DATABASE_SSL')
-    && String(process.env.DATABASE_SSL || '').trim().toLowerCase() === 'false';
+    hasExplicitEnv('DATABASE_SSL') &&
+    String(process.env.DATABASE_SSL || '')
+      .trim()
+      .toLowerCase() === 'false';
 
   if (explicitSslTrue && explicitRejectUnauthorizedFalse) return 'no-verify';
   if (explicitSslTrue) return 'require';
@@ -90,7 +98,7 @@ export function resolveDatabaseConfigFromEnv(): ResolvedDbConfig {
   }
 
   const parsed = validateEnv(validationEnv);
-  
+
   function isLocalDatabaseHost(host: string): boolean {
     return ['postgres', 'localhost', '127.0.0.1', '::1'].includes(host.trim().toLowerCase());
   }
@@ -128,7 +136,9 @@ export function resolveDatabaseConfigFromEnv(): ResolvedDbConfig {
   };
 }
 
-export function getSanitizedDatabaseTargetFromResolved(config: Pick<ResolvedDbConfig, 'host' | 'port' | 'user' | 'name'>): string {
+export function getSanitizedDatabaseTargetFromResolved(
+  config: Pick<ResolvedDbConfig, 'host' | 'port' | 'user' | 'name'>,
+): string {
   return `postgres://${config.user}@${config.host}:${String(config.port)}/${config.name}`;
 }
 
@@ -258,7 +268,9 @@ async function reconcileRenamedMigrations(db: Kysely<Database>): Promise<void> {
         let shipmentsWithCourierCount = 0;
 
         if (await checkTableExists('shipping_couriers')) {
-          const res = await sql<{ cnt: string | number }>`SELECT count(*) as cnt FROM ${sql.id(schema, 'shipping_couriers')}`.execute(db);
+          const res = await sql<{
+            cnt: string | number;
+          }>`SELECT count(*) as cnt FROM ${sql.id(schema, 'shipping_couriers')}`.execute(db);
           couriersCount = Number(res.rows[0]?.cnt || 0);
         }
 
@@ -318,7 +330,7 @@ async function reconcileRenamedMigrations(db: Kysely<Database>): Promise<void> {
       ) {
         throw new Error(
           `Migration reconciliation integrity check failed: Courier/settlement data loss detected! ` +
-          `Pre: ${JSON.stringify(preSnapshot)}, Post: ${JSON.stringify(postSnapshot)}`
+            `Pre: ${JSON.stringify(preSnapshot)}, Post: ${JSON.stringify(postSnapshot)}`,
         );
       }
     }
@@ -328,16 +340,34 @@ async function reconcileRenamedMigrations(db: Kysely<Database>): Promise<void> {
       ['2040000000087_contracting_wir_and_handover_workflows', '2040000000092_contracting_wir_and_handover_registers'],
       ['2040000000230_international_import_operations_core', '2040000000232_international_import_operations_core'],
       ['2040000000231_international_import_operations_core', '2040000000232_international_import_operations_core'],
-      ['2040000000236_international_trade_procurement_and_sourcing', '2040000000237_international_trade_procurement_and_sourcing'],
-      ['2040000000237_customs_broker_advances_and_container_deposits', '2040000000238_customs_broker_advances_and_container_deposits'],
-      ['2040000000238_container_preorders_and_inventory_traceability', '2040000000239_container_preorders_and_inventory_traceability'],
-      ['2040000000239_import_governance_approvals_and_reconciliation', '2040000000240_import_governance_approvals_and_reconciliation'],
+      [
+        '2040000000236_international_trade_procurement_and_sourcing',
+        '2040000000237_international_trade_procurement_and_sourcing',
+      ],
+      [
+        '2040000000237_customs_broker_advances_and_container_deposits',
+        '2040000000238_customs_broker_advances_and_container_deposits',
+      ],
+      [
+        '2040000000238_container_preorders_and_inventory_traceability',
+        '2040000000239_container_preorders_and_inventory_traceability',
+      ],
+      [
+        '2040000000239_import_governance_approvals_and_reconciliation',
+        '2040000000240_import_governance_approvals_and_reconciliation',
+      ],
       ['2040000000246_tracked_stock_transfer_details', '2040000000248_tracked_stock_transfer_details'],
       ['2040000000247_purchase_and_damage_tracked_provenance', '2040000000249_purchase_and_damage_tracked_provenance'],
       ['2040000000248_stock_count_tracked_provenance', '2040000000250_stock_count_tracked_provenance'],
-      ['2040000000249_payment_channels_cash_drawer_separation', '2040000000251_payment_channels_cash_drawer_separation'],
+      [
+        '2040000000249_payment_channels_cash_drawer_separation',
+        '2040000000251_payment_channels_cash_drawer_separation',
+      ],
       ['2040000000252_hr_asset_recovery_money_type', '2040000000254_hr_asset_recovery_money_type'],
-      ['2040000000319_import_sale_allocations_allocation_type', '2040000000320_import_sale_allocations_allocation_type'],
+      [
+        '2040000000319_import_sale_allocations_allocation_type',
+        '2040000000320_import_sale_allocations_allocation_type',
+      ],
     ];
 
     for (const [oldName, newName] of shiftedImportMigrations) {

@@ -330,6 +330,7 @@
     "test/critical/backend-lint-clean.spec.ts",
     "test/critical/migrations-format-clean.spec.ts",
     "test/critical/src-modules-a-format-clean.spec.ts",
-    "test/critical/src-modules-b-format-clean.spec.ts"
+    "test/critical/src-modules-b-format-clean.spec.ts",
+    "test/critical/src-core-common-database-scripts-format-clean.spec.ts"
   ]
 }

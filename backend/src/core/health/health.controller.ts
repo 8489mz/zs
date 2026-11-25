@@ -34,11 +34,13 @@ export class HealthController {
       database = 'down';
       status = 'degraded';
       // تنبيه فوري استباقي عبر تيليجرام عند تعطل قاعدة البيانات
-      this.telegramAlerts.sendIncidentAlert(
-        'انقطاع اتصال قاعدة البيانات',
-        `تعذر الاتصال بـ PostgreSQL: ${(err as Error).message}`,
-        'critical'
-      ).catch(() => {});
+      this.telegramAlerts
+        .sendIncidentAlert(
+          'انقطاع اتصال قاعدة البيانات',
+          `تعذر الاتصال بـ PostgreSQL: ${(err as Error).message}`,
+          'critical',
+        )
+        .catch(() => {});
     }
 
     return { status, database };
@@ -128,9 +130,8 @@ export class HealthController {
           table: row.table_name,
           live_rows: Number(row.n_live_tup),
           dead_rows: Number(row.n_dead_tup),
-          bloat_pct: row.n_live_tup > 0
-            ? Number(((row.n_dead_tup / (row.n_live_tup + row.n_dead_tup)) * 100).toFixed(1))
-            : 0,
+          bloat_pct:
+            row.n_live_tup > 0 ? Number(((row.n_dead_tup / (row.n_live_tup + row.n_dead_tup)) * 100).toFixed(1)) : 0,
           last_vacuum: row.last_vacuum || row.last_autovacuum || null,
           last_analyze: row.last_analyze || row.last_autoanalyze || null,
         })),

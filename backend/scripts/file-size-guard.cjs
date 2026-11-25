@@ -128,7 +128,13 @@ function enforceFileSizeCap(options) {
     };
     fs.mkdirSync(path.dirname(baselineFile), { recursive: true });
     fs.writeFileSync(baselineFile, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
-    return { checked: checked.length, overCap: overCap.length, baselineEntries: Object.keys(sorted).length, shrunk, violations: [] };
+    return {
+      checked: checked.length,
+      overCap: overCap.length,
+      baselineEntries: Object.keys(sorted).length,
+      shrunk,
+      violations: [],
+    };
   }
 
   if (violations.length) {

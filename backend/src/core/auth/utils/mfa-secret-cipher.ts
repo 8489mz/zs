@@ -65,7 +65,9 @@ export function encryptMfaSecret(plain: string, env: NodeJS.ProcessEnv = process
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   const encrypted = Buffer.concat([cipher.update(String(plain), 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
-  return [FORMAT_PREFIX, iv.toString('base64url'), tag.toString('base64url'), encrypted.toString('base64url')].join(':');
+  return [FORMAT_PREFIX, iv.toString('base64url'), tag.toString('base64url'), encrypted.toString('base64url')].join(
+    ':',
+  );
 }
 
 export function decryptMfaSecret(payload: string, env: NodeJS.ProcessEnv = process.env): string {
@@ -101,7 +103,9 @@ export function generateRecoveryCodes(count = 10): string[] {
 }
 
 export function normalizeRecoveryCode(code: string): string {
-  return String(code || '').toUpperCase().replace(/[^A-F0-9]/g, '');
+  return String(code || '')
+    .toUpperCase()
+    .replace(/[^A-F0-9]/g, '');
 }
 
 export function hashRecoveryCode(code: string): string {

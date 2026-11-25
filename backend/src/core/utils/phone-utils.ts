@@ -2,7 +2,7 @@
  * Phone Number Validation & Normalization Utility
  * Supports Egypt (+20), Saudi Arabia (+966), Qatar (+974), UAE (+971), Kuwait (+965),
  * Oman (+968), Bahrain (+973), Jordan (+962), and International E.164.
- * 
+ *
  * Strict Enterprise Standards: Zero emojis, explicit validation rules, canonical normalization.
  */
 
@@ -283,9 +283,7 @@ export const SUPPORTED_COUNTRIES: CountryPhoneDefinition[] = [
   },
 ];
 
-export const COUNTRY_BY_CODE = new Map<string, CountryPhoneDefinition>(
-  SUPPORTED_COUNTRIES.map((c) => [c.code, c]),
-);
+export const COUNTRY_BY_CODE = new Map<string, CountryPhoneDefinition>(SUPPORTED_COUNTRIES.map((c) => [c.code, c]));
 
 /**
  * Intelligent country detector based on raw input or dial code
@@ -339,9 +337,8 @@ export function validateAndNormalizePhone(
     };
   }
 
-  const selectedCode = targetCountryCode && COUNTRY_BY_CODE.has(targetCountryCode)
-    ? targetCountryCode
-    : detectCountryFromPhone(trimmed);
+  const selectedCode =
+    targetCountryCode && COUNTRY_BY_CODE.has(targetCountryCode) ? targetCountryCode : detectCountryFromPhone(trimmed);
 
   const countryDef = COUNTRY_BY_CODE.get(selectedCode) || COUNTRY_BY_CODE.get('EG')!;
   const result = countryDef.validate(trimmed);

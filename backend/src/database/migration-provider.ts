@@ -17,7 +17,7 @@ export class FileMigrationProvider implements KyselyMigrationProvider {
         (name) =>
           !name.endsWith('.d.ts') &&
           !name.endsWith('.map') &&
-          (isTsRuntime ? (name.endsWith('.ts') || name.endsWith('.js')) : name.endsWith('.js'))
+          (isTsRuntime ? name.endsWith('.ts') || name.endsWith('.js') : name.endsWith('.js')),
       )
       .sort();
 
@@ -47,7 +47,9 @@ export class FileMigrationProvider implements KyselyMigrationProvider {
         }
       } catch (err) {
         // If a file is being written or missing during hot reload, throw clear error
-        throw new Error(`Failed to load migration file at ${fullPath}: ${err instanceof Error ? err.message : String(err)}`);
+        throw new Error(
+          `Failed to load migration file at ${fullPath}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 

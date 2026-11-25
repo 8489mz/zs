@@ -142,12 +142,7 @@ async function getManagerPin(queryable: DbOrTx, tenantId: string): Promise<Manag
  * first successful verification. Runs on the same queryable (a transaction
  * included), so a rolled-back approval never leaves a half-migrated PIN.
  */
-async function migrateManagerPinToHash(
-  queryable: DbOrTx,
-  tenantId: string,
-  key: string,
-  pin: string,
-): Promise<void> {
+async function migrateManagerPinToHash(queryable: DbOrTx, tenantId: string, key: string, pin: string): Promise<void> {
   const hash = await hashManagerPin(pin);
   await queryable
     .updateTable('settings')
@@ -173,11 +168,14 @@ async function migrateManagerPinToHash(
  */
 export async function isSoloAdminOverride(queryable: DbOrTx, tenantId: string, auth: AuthContext): Promise<boolean> {
   if (auth.role !== 'admin' && auth.role !== 'super_admin') return false;
-  const secondAdmin = await queryable.selectFrom('users').select('id')
+  const secondAdmin = await queryable
+    .selectFrom('users')
+    .select('id')
     .where('tenant_id', '=', tenantId)
     .where('role', 'in', ['admin', 'super_admin'])
     .where('is_active', '=', true)
     .where('id', '!=', Number(auth.userId))
-    .limit(1).executeTakeFirst();
+    .limit(1)
+    .executeTakeFirst();
   return !secondAdmin;
 }

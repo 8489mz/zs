@@ -34,9 +34,22 @@ import { resolvePgSslConfig } from './ssl.util';
             caCert: sslCaCert,
           }),
           application_name: 'backend-new',
-          max: positiveBounded(process.env.DATABASE_POOL_MAX || configService.get<number>('database.poolMax', 25), 25, 40),
-          idleTimeoutMillis: positiveBounded(process.env.DATABASE_POOL_IDLE_MS || configService.get<number>('database.poolIdleTimeoutMs', 30000), 30000, 120000),
-          connectionTimeoutMillis: positiveBounded(process.env.DATABASE_POOL_TIMEOUT_MS || configService.get<number>('database.poolConnectionTimeoutMs', 10000), 10000, 30000),
+          max: positiveBounded(
+            process.env.DATABASE_POOL_MAX || configService.get<number>('database.poolMax', 25),
+            25,
+            40,
+          ),
+          idleTimeoutMillis: positiveBounded(
+            process.env.DATABASE_POOL_IDLE_MS || configService.get<number>('database.poolIdleTimeoutMs', 30000),
+            30000,
+            120000,
+          ),
+          connectionTimeoutMillis: positiveBounded(
+            process.env.DATABASE_POOL_TIMEOUT_MS ||
+              configService.get<number>('database.poolConnectionTimeoutMs', 10000),
+            10000,
+            30000,
+          ),
           statement_timeout: positiveBounded(process.env.DATABASE_STATEMENT_TIMEOUT_MS || 15000, 15000, 30000),
           options: '-c idle_in_transaction_session_timeout=60000',
           keepAlive: true,
@@ -44,7 +57,9 @@ import { resolvePgSslConfig } from './ssl.util';
         });
         // pg emits idle-client errors on the pool. Without a listener Node treats them as an
         // unhandled EventEmitter error and terminates the process during a database failover.
-        pool.on('error', (error: Error) => Logger.error('Idle PostgreSQL connection failed', error.stack, 'DatabasePool'));
+        pool.on('error', (error: Error) =>
+          Logger.error('Idle PostgreSQL connection failed', error.stack, 'DatabasePool'),
+        );
 
         return new Kysely<Database>({
           dialect: new PostgresDialect({ pool }),

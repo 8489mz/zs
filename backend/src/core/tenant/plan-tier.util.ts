@@ -33,7 +33,15 @@ const LEVEL_1_FEATURES = ['sales', 'catalog', 'sessions', 'cashDrawer'] as const
 const LEVEL_2_OPERATIONS = ['purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments'] as const;
 const LEVEL_3_FINANCE_COMPLIANCE = ['accounting', 'fixed_assets', 'hr', 'taxIntegration', 'vat_declaration'] as const;
 
-const LEGACY_PRO_FEATURES = ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports'] as const;
+const LEGACY_PRO_FEATURES = [
+  'sales',
+  'catalog',
+  'sessions',
+  'cashDrawer',
+  'purchases',
+  'inventory',
+  'reports',
+] as const;
 const LEGACY_ULTIMATE_CORE_FEATURES = [
   'sales',
   'catalog',
@@ -77,7 +85,9 @@ const TIERED_PLAN_DISPLAY_NAMES: Record<string, string> = {
 };
 
 export function normalizePlanKey(planId?: string | null): string {
-  return String(planId || '').trim().toLowerCase();
+  return String(planId || '')
+    .trim()
+    .toLowerCase();
 }
 
 export function resolvePlanRank(planId?: string | null): PlanRank | null {
@@ -103,7 +113,18 @@ export function resolveCatalogLevelId(codeOrPlanId?: string | null): CatalogLeve
   if (['pro', 'plan_pro', '2'].includes(normalized)) {
     return 'L2';
   }
-  if (['ultimate', 'plan_ultimate', 'enterprise', 'plan_enterprise', 'omnichannel', 'plan_omnichannel', '3', '4'].includes(normalized)) {
+  if (
+    [
+      'ultimate',
+      'plan_ultimate',
+      'enterprise',
+      'plan_enterprise',
+      'omnichannel',
+      'plan_omnichannel',
+      '3',
+      '4',
+    ].includes(normalized)
+  ) {
     return 'L3';
   }
   const match = normalized.match(TIERED_PLAN_PATTERN);

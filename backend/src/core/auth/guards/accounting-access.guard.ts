@@ -33,9 +33,8 @@ export class AccountingAccessGuard implements CanActivate {
       throw new ForbiddenException('Authentication required');
     }
 
-    const allowed = auth.role === 'super_admin'
-      || auth.role === 'admin'
-      || (auth.permissions || []).includes('accounting');
+    const allowed =
+      auth.role === 'super_admin' || auth.role === 'admin' || (auth.permissions || []).includes('accounting');
 
     if (!allowed) {
       throw new ForbiddenException('Missing required permissions');

@@ -55,7 +55,7 @@ export class IdempotencyController {
   async getOperationStatus(
     @Param('operationType') operationType: string,
     @Param('idempotencyKey') idempotencyKey: string,
-    @Req() req: RequestWithAuth
+    @Req() req: RequestWithAuth,
   ) {
     const { tenantId, accountId } = req.authContext!;
     if (!tenantId || !accountId) {

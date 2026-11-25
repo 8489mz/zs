@@ -4,9 +4,19 @@ import * as os from 'os';
 import { sql } from 'kysely';
 import { createDb } from '../database/migration-runner';
 import {
-  buildBundle, decryptBundle, encryptBundle, isEncrypted, readBundle, resolveTenantPackage,
+  buildBundle,
+  decryptBundle,
+  encryptBundle,
+  isEncrypted,
+  readBundle,
+  resolveTenantPackage,
 } from '../core/tenant-transfer/backup-bundle';
-import { exportTenantPackage, importTenantPackage, readPackage, TenantPackageError } from '../core/tenant-transfer/tenant-package';
+import {
+  exportTenantPackage,
+  importTenantPackage,
+  readPackage,
+  TenantPackageError,
+} from '../core/tenant-transfer/tenant-package';
 
 // Server-side tool for the nightly backup bundle and for moving tenants (docs/DISASTER_RECOVERY.md).
 // Runs from backend/: node --env-file=.env dist/tools/zs-backup-tool.js <command> [--flags]
@@ -27,7 +37,10 @@ function parseFlags(argv: string[]): Flags {
     if (!arg.startsWith('--')) continue;
     const next = argv[i + 1];
     if (next === undefined || next.startsWith('--')) flags[arg.slice(2)] = true;
-    else { flags[arg.slice(2)] = next; i += 1; }
+    else {
+      flags[arg.slice(2)] = next;
+      i += 1;
+    }
   }
   return flags;
 }
@@ -80,7 +93,9 @@ async function run(): Promise<void> {
       const failedTenants = [];
       for (const { id } of tenants.rows) {
         try {
-          packages.push(await exportTenantPackage(db, id, { source: `cloud:${os.hostname()}`, allocateOfflineBlock: true }));
+          packages.push(
+            await exportTenantPackage(db, id, { source: `cloud:${os.hostname()}`, allocateOfflineBlock: true }),
+          );
         } catch (error: any) {
           // one broken tenant must not cost the whole night's backup; the full dump still has it
           failedTenants.push({ tenantId: id, error: String(error?.message ?? error) });
@@ -93,7 +108,9 @@ async function run(): Promise<void> {
       const { zip, manifest } = buildBundle({ fullDump: full, packages, failedTenants, migration: migration.rows[0] });
       const pass = passphrase(flags);
       fs.writeFileSync(need(flags, 'out'), pass ? encryptBundle(zip, pass) : zip);
-      log(`bundle written: ${manifest.tenants.length} tenant packages, ${failedTenants.length} failed, encrypted=${Boolean(pass)}`);
+      log(
+        `bundle written: ${manifest.tenants.length} tenant packages, ${failedTenants.length} failed, encrypted=${Boolean(pass)}`,
+      );
       if (failedTenants.length) process.exitCode = 2;
       return;
     }
@@ -126,7 +143,9 @@ async function run(): Promise<void> {
       return;
     }
 
-    throw new Error(`Unknown command "${command ?? ''}". Commands: bundle, list, extract, export-tenant, import-tenant`);
+    throw new Error(
+      `Unknown command "${command ?? ''}". Commands: bundle, list, extract, export-tenant, import-tenant`,
+    );
   } finally {
     await db.destroy();
   }

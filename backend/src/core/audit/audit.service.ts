@@ -11,7 +11,9 @@ import { requireTenantScope } from '../auth/utils/tenant-boundary';
 // must record null, never a fabricated 0 or the tenant's first user.
 // The insert already wrote `actor.userId ?? null`; the type now says
 // what the database column always allowed.
-type AuditActor = Omit<Pick<AuthContext, 'userId' | 'tenantId' | 'accountId'>, 'userId'> & { userId: number | null } & Pick<Partial<AuthContext>, 'impersonatedBy'>;
+type AuditActor = Omit<Pick<AuthContext, 'userId' | 'tenantId' | 'accountId'>, 'userId'> & {
+  userId: number | null;
+} & Pick<Partial<AuthContext>, 'impersonatedBy'>;
 
 /** Stable event codes consumed by detection logic (fraud radar, alerting). */
 export const AUDIT_EVENT_CODES = {
@@ -86,7 +88,13 @@ export class AuditService {
     await this.logWithExecutor(this.db, action, details, actor, options);
   }
 
-  async logWithExecutor(executor: Kysely<Database>, action: string, details: string, actor: AuditActor, options?: AuditLogOptions): Promise<void> {
+  async logWithExecutor(
+    executor: Kysely<Database>,
+    action: string,
+    details: string,
+    actor: AuditActor,
+    options?: AuditLogOptions,
+  ): Promise<void> {
     const scope = requireTenantScope(actor as AuthContext);
     // A caller-supplied idempotency key deduplicates its own audit row:
     // the same business save replayed (double-click, two UI paths calling

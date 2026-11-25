@@ -121,7 +121,11 @@ function assert(condition, message) {
 }
 
 function isTruthy(value) {
-  return String(value || '').trim().toLowerCase() === 'true';
+  return (
+    String(value || '')
+      .trim()
+      .toLowerCase() === 'true'
+  );
 }
 
 function assertBootstrapEnv(sourceName, env) {
@@ -133,22 +137,43 @@ function assertBootstrapEnv(sourceName, env) {
   if (bootstrapEnabled) {
     assert(username.length > 0, `${sourceName}: DEFAULT_ADMIN_USERNAME is required when bootstrap admin is enabled`);
     assert(password.length > 0, `${sourceName}: DEFAULT_ADMIN_PASSWORD is required when bootstrap admin is enabled`);
-    assert(password !== 'ChangeMe123!', `${sourceName}: bootstrap admin password must not use the forbidden default placeholder`);
+    assert(
+      password !== 'ChangeMe123!',
+      `${sourceName}: bootstrap admin password must not use the forbidden default placeholder`,
+    );
     assert(password.length >= 14, `${sourceName}: bootstrap admin password must be at least 14 characters long`);
   }
 
   if (nodeEnv === 'production') {
-    assert(String(env.SESSION_COOKIE_SECURE || '').toLowerCase() === 'true', `${sourceName}: production config must enable secure session cookies`);
-    assert(String(env.ALLOW_SESSION_ID_HEADER || 'false').toLowerCase() === 'false', `${sourceName}: production config must keep ALLOW_SESSION_ID_HEADER=false`);
-    assert(String(env.ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION || 'false').toLowerCase() === 'false', `${sourceName}: production config must keep ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION=false`);
+    assert(
+      String(env.SESSION_COOKIE_SECURE || '').toLowerCase() === 'true',
+      `${sourceName}: production config must enable secure session cookies`,
+    );
+    assert(
+      String(env.ALLOW_SESSION_ID_HEADER || 'false').toLowerCase() === 'false',
+      `${sourceName}: production config must keep ALLOW_SESSION_ID_HEADER=false`,
+    );
+    assert(
+      String(env.ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION || 'false').toLowerCase() === 'false',
+      `${sourceName}: production config must keep ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION=false`,
+    );
     assert(!bootstrapEnabled, `${sourceName}: production config must keep ENABLE_BOOTSTRAP_ADMIN=false`);
   }
 }
 
 function assertPortableCustomerTemplateSafe(sourceName, env) {
-  assert(String(env.ENABLE_BOOTSTRAP_ADMIN || 'false').toLowerCase() === 'false', `${sourceName}: customer portable template must keep ENABLE_BOOTSTRAP_ADMIN=false`);
-  assert(String(env.DEFAULT_ADMIN_USERNAME || '').trim() === '', `${sourceName}: customer portable template must keep DEFAULT_ADMIN_USERNAME blank`);
-  assert(String(env.DEFAULT_ADMIN_PASSWORD || '').trim() === '', `${sourceName}: customer portable template must keep DEFAULT_ADMIN_PASSWORD blank`);
+  assert(
+    String(env.ENABLE_BOOTSTRAP_ADMIN || 'false').toLowerCase() === 'false',
+    `${sourceName}: customer portable template must keep ENABLE_BOOTSTRAP_ADMIN=false`,
+  );
+  assert(
+    String(env.DEFAULT_ADMIN_USERNAME || '').trim() === '',
+    `${sourceName}: customer portable template must keep DEFAULT_ADMIN_USERNAME blank`,
+  );
+  assert(
+    String(env.DEFAULT_ADMIN_PASSWORD || '').trim() === '',
+    `${sourceName}: customer portable template must keep DEFAULT_ADMIN_PASSWORD blank`,
+  );
 }
 
 function assertFileDoesNotContain(filePath, pattern, message) {
@@ -190,9 +215,15 @@ for (const key of required) {
 
 assert(envExample.ALLOW_SESSION_ID_HEADER === 'false', 'ALLOW_SESSION_ID_HEADER must default to false');
 assert(envExample.ENABLE_BOOTSTRAP_ADMIN === 'false', 'ENABLE_BOOTSTRAP_ADMIN must default to false');
-assert(envExample.ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION === 'false', 'ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION must default to false');
+assert(
+  envExample.ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION === 'false',
+  'ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION must default to false',
+);
 assert(envExample.DEFAULT_ADMIN_PASSWORD === '', 'DEFAULT_ADMIN_PASSWORD must be blank in .env.example');
-assert(envExample.SESSION_CSRF_SECRET && envExample.SESSION_CSRF_SECRET.length >= 16, 'SESSION_CSRF_SECRET example must be present and long enough');
+assert(
+  envExample.SESSION_CSRF_SECRET && envExample.SESSION_CSRF_SECRET.length >= 16,
+  'SESSION_CSRF_SECRET example must be present and long enough',
+);
 assertBootstrapEnv('backend/.env.example', envExample);
 
 if (fs.existsSync(runtimeEnvPath) && String(process.env.CHECK_RUNTIME_ENV || '').toLowerCase() === 'true') {
@@ -201,11 +232,26 @@ if (fs.existsSync(runtimeEnvPath) && String(process.env.CHECK_RUNTIME_ENV || '')
 
   if (nodeEnv === 'production') {
     assert(runtime.SESSION_COOKIE_SECURE === 'true', 'In production, SESSION_COOKIE_SECURE must be true');
-    assert((runtime.SESSION_COOKIE_SAME_SITE || '').toLowerCase() !== 'none' || runtime.SESSION_COOKIE_SECURE === 'true', 'SESSION_COOKIE_SAME_SITE=none requires secure cookies');
-    assert((runtime.ALLOW_SESSION_ID_HEADER || 'false') === 'false', 'In production, ALLOW_SESSION_ID_HEADER must stay false');
-    assert((runtime.ENABLE_BOOTSTRAP_ADMIN || 'false') === 'false', 'In production, ENABLE_BOOTSTRAP_ADMIN must stay false');
-    assert((runtime.ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION || 'false') === 'false', 'In production, ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION must stay false');
-    assert(Boolean(runtime.SESSION_CSRF_SECRET) && runtime.SESSION_CSRF_SECRET.length >= 24, 'In production, SESSION_CSRF_SECRET must be set to a strong value (24+ chars)');
+    assert(
+      (runtime.SESSION_COOKIE_SAME_SITE || '').toLowerCase() !== 'none' || runtime.SESSION_COOKIE_SECURE === 'true',
+      'SESSION_COOKIE_SAME_SITE=none requires secure cookies',
+    );
+    assert(
+      (runtime.ALLOW_SESSION_ID_HEADER || 'false') === 'false',
+      'In production, ALLOW_SESSION_ID_HEADER must stay false',
+    );
+    assert(
+      (runtime.ENABLE_BOOTSTRAP_ADMIN || 'false') === 'false',
+      'In production, ENABLE_BOOTSTRAP_ADMIN must stay false',
+    );
+    assert(
+      (runtime.ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION || 'false') === 'false',
+      'In production, ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION must stay false',
+    );
+    assert(
+      Boolean(runtime.SESSION_CSRF_SECRET) && runtime.SESSION_CSRF_SECRET.length >= 24,
+      'In production, SESSION_CSRF_SECRET must be set to a strong value (24+ chars)',
+    );
     assert(runtime.DEFAULT_ADMIN_PASSWORD !== 'ChangeMe123!', 'Default admin password placeholder must never be used');
   }
 }
@@ -219,8 +265,14 @@ if (fs.existsSync(composeExamplePath)) {
   const composeExample = parseEnv(fs.readFileSync(composeExamplePath, 'utf8'));
   const composePassword = String(composeExample.DEFAULT_ADMIN_PASSWORD || '');
   if (composePassword) {
-    assert(composePassword.length >= 14, '.env.compose.example must use a bootstrap password that satisfies the app guardrails');
-    assert(composePassword !== 'ChangeMe123!', '.env.compose.example must not use the forbidden default admin password placeholder');
+    assert(
+      composePassword.length >= 14,
+      '.env.compose.example must use a bootstrap password that satisfies the app guardrails',
+    );
+    assert(
+      composePassword !== 'ChangeMe123!',
+      '.env.compose.example must not use the forbidden default admin password placeholder',
+    );
   }
 }
 
@@ -249,12 +301,30 @@ assertPortableCustomerTemplateSafe('portable/config/.env.offline.template', port
 
 assert(fs.existsSync(cleanReleaseScriptPath), 'Missing scripts/package-clean-release.sh');
 const cleanReleaseScript = fs.readFileSync(cleanReleaseScriptPath, 'utf8');
-assert(cleanReleaseScript.includes("--exclude 'backend/scripts/reset-zs-password.js'"), 'scripts/package-clean-release.sh must exclude backend/scripts/reset-zs-password.js from customer releases');
-assert(cleanReleaseScript.includes("--exclude 'backend/.env'"), 'scripts/package-clean-release.sh must exclude backend/.env from customer releases');
+assert(
+  cleanReleaseScript.includes("--exclude 'backend/scripts/reset-zs-password.js'"),
+  'scripts/package-clean-release.sh must exclude backend/scripts/reset-zs-password.js from customer releases',
+);
+assert(
+  cleanReleaseScript.includes("--exclude 'backend/.env'"),
+  'scripts/package-clean-release.sh must exclude backend/.env from customer releases',
+);
 
-assertFileDoesNotContain(saleReadyScriptPath, /owner123/, 'scripts/certify-sale-ready.sh still references the rejected bootstrap password owner123');
-assertFileDoesNotContain(localE2EScriptPath, /owner123/, 'scripts/run-backend-e2e-local.sh still references the rejected bootstrap password owner123');
+assertFileDoesNotContain(
+  saleReadyScriptPath,
+  /owner123/,
+  'scripts/certify-sale-ready.sh still references the rejected bootstrap password owner123',
+);
+assertFileDoesNotContain(
+  localE2EScriptPath,
+  /owner123/,
+  'scripts/run-backend-e2e-local.sh still references the rejected bootstrap password owner123',
+);
 assertFileDoesNotContain(readmePath, /owner123/, 'README.md still documents the rejected bootstrap password owner123');
-assertFileDoesNotContain(portableOfflineTemplatePath, /DEFAULT_ADMIN_PASSWORD=\S+/, 'portable/config/.env.offline.template must not contain a distributable default admin password');
+assertFileDoesNotContain(
+  portableOfflineTemplatePath,
+  /DEFAULT_ADMIN_PASSWORD=\S+/,
+  'portable/config/.env.offline.template must not contain a distributable default admin password',
+);
 
 console.log('[check:env-safety] env defaults, compose/CI bootstrap guardrails, and operator docs passed.');

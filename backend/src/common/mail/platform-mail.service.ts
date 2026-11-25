@@ -26,7 +26,9 @@ export class PlatformMailService {
   private readonly logger = new Logger(PlatformMailService.name);
 
   private getDeliveryMode(): 'smtp' | 'console' {
-    const mode = String(process.env.MAIL_DELIVERY_MODE || '').trim().toLowerCase();
+    const mode = String(process.env.MAIL_DELIVERY_MODE || '')
+      .trim()
+      .toLowerCase();
     return mode === 'console' ? 'console' : 'smtp';
   }
 
@@ -36,9 +38,9 @@ export class PlatformMailService {
       return true;
     }
     return Boolean(
-      String(process.env.SMTP_HOST || '').trim()
-      && Number(process.env.SMTP_PORT || 587)
-      && String(process.env.MAIL_FROM_EMAIL || '').trim(),
+      String(process.env.SMTP_HOST || '').trim() &&
+      Number(process.env.SMTP_PORT || 587) &&
+      String(process.env.MAIL_FROM_EMAIL || '').trim(),
     );
   }
 
@@ -56,7 +58,10 @@ export class PlatformMailService {
 
     const host = String(process.env.SMTP_HOST || '').trim();
     const port = Number(process.env.SMTP_PORT || 587);
-    const secure = String(process.env.SMTP_SECURE || 'false').trim().toLowerCase() === 'true';
+    const secure =
+      String(process.env.SMTP_SECURE || 'false')
+        .trim()
+        .toLowerCase() === 'true';
     const user = String(process.env.SMTP_USER || '').trim();
     const pass = String(process.env.SMTP_PASSWORD || '').trim();
 

@@ -25,4 +25,3 @@ export function computeInvoiceTotals(
   const taxAmount = Number((taxableBase * (rate / 100)).toFixed(3));
   return { taxAmount, total: Number((taxableBase + taxAmount + safeDeliveryFee + safeTipAmount).toFixed(3)) };
 }
-

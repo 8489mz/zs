@@ -174,7 +174,9 @@ export class InMemoryRateLimitService {
           created_at timestamptz NOT NULL DEFAULT now(),
           updated_at timestamptz NOT NULL DEFAULT now()
         )
-      `.execute(this.db).then(() => undefined);
+      `
+        .execute(this.db)
+        .then(() => undefined);
     }
 
     await this.ensureTablePromise;

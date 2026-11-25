@@ -96,7 +96,7 @@ async function repair() {
       'storefront_media',
       'pos_audit_events',
       'operation_executions',
-      'settings'
+      'settings',
     ];
 
     console.log('[2/5] Purging commercial store rows tied to tenant_id = "zs"...');
@@ -119,15 +119,49 @@ async function repair() {
     // Ensure platform root tenant 'zs' exists and is properly configured
     console.log('[4/5] Re-establishing platform tenant "zs" in tenants table...');
     const superAdminPerms = JSON.stringify([
-      'dashboard', 'products', 'sales', 'purchases', 'inventory', 'suppliers',
-      'customers', 'accounts', 'accounting', 'returns', 'reports', 'audit',
-      'treasury', 'services', 'hr', 'hrEmployees', 'hrAttendance', 'hrContracts',
-      'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView',
-      'hrSalaryManage', 'settings', 'pricingCenterView', 'pricingCenterManage',
-      'canEditUsers', 'canManageUsers', 'canManageSettings', 'canManageBackups',
-      'canPrint', 'canDiscount', 'canEditPrice', 'canSellWholesale', 'canViewProfit',
-      'canDelete', 'canEditInvoices', 'canDirectReturn', 'canAdjustInventory',
-      'canManageBranchStock', 'cashDrawer', 'deliveryReps'
+      'dashboard',
+      'products',
+      'sales',
+      'purchases',
+      'inventory',
+      'suppliers',
+      'customers',
+      'accounts',
+      'accounting',
+      'returns',
+      'reports',
+      'audit',
+      'treasury',
+      'services',
+      'hr',
+      'hrEmployees',
+      'hrAttendance',
+      'hrContracts',
+      'hrLoans',
+      'hrPayrollView',
+      'hrPayrollManage',
+      'hrPayrollApprove',
+      'hrSalaryView',
+      'hrSalaryManage',
+      'settings',
+      'pricingCenterView',
+      'pricingCenterManage',
+      'canEditUsers',
+      'canManageUsers',
+      'canManageSettings',
+      'canManageBackups',
+      'canPrint',
+      'canDiscount',
+      'canEditPrice',
+      'canSellWholesale',
+      'canViewProfit',
+      'canDelete',
+      'canEditInvoices',
+      'canDirectReturn',
+      'canAdjustInventory',
+      'canManageBranchStock',
+      'cashDrawer',
+      'deliveryReps',
     ]);
 
     await client.query(`
@@ -170,7 +204,8 @@ async function repair() {
 
     // Ensure user 'zs' has super_admin role and clean isolation
     console.log('[5/5] Re-establishing super_admin user "zs"...');
-    await client.query(`
+    await client.query(
+      `
       UPDATE users
       SET tenant_id = 'zs',
           account_id = 'zs',
@@ -182,7 +217,9 @@ async function repair() {
           failed_login_count = 0,
           locked_until = NULL
       WHERE LOWER(TRIM(username)) = 'zs'
-    `, [superAdminPerms]);
+    `,
+      [superAdminPerms],
+    );
 
     // Insert platform company name in settings
     await client.query("DELETE FROM settings WHERE tenant_id = 'zs'");
@@ -193,8 +230,9 @@ async function repair() {
 
     await client.query("SET LOCAL session_replication_role = 'origin'");
     await client.query('COMMIT');
-    console.log('\n[SUCCESS] Platform tenant "zs" has been completely purified and restored to clean Super Admin state!');
-
+    console.log(
+      '\n[SUCCESS] Platform tenant "zs" has been completely purified and restored to clean Super Admin state!',
+    );
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('\n[FATAL] Error repairing platform tenant:', err.message);

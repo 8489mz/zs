@@ -28,8 +28,14 @@ function generateReleasePasscode(version: string): string {
 
 function extractGitChangelog(): { changelogMarkdown: string; commitCount: number } {
   try {
-    const rawLogs = execSync('git log -n 40 --pretty=format:"%s"', { encoding: 'utf8', cwd: path.resolve(__dirname, '../..') });
-    const lines = rawLogs.split('\n').map(l => l.trim()).filter(Boolean);
+    const rawLogs = execSync('git log -n 40 --pretty=format:"%s"', {
+      encoding: 'utf8',
+      cwd: path.resolve(__dirname, '../..'),
+    });
+    const lines = rawLogs
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
 
     const categories: CommitCategory = {
       features: [],
@@ -42,9 +48,19 @@ function extractGitChangelog(): { changelogMarkdown: string; commitCount: number
       const lower = line.toLowerCase();
       if (lower.startsWith('feat') || lower.includes('feature') || lower.includes('add') || lower.includes('جديد')) {
         categories.features.push(line);
-      } else if (lower.startsWith('fix') || lower.includes('bug') || lower.includes('إصلاح') || lower.includes('حل مشكلة')) {
+      } else if (
+        lower.startsWith('fix') ||
+        lower.includes('bug') ||
+        lower.includes('إصلاح') ||
+        lower.includes('حل مشكلة')
+      ) {
         categories.fixes.push(line);
-      } else if (lower.includes('migration') || lower.includes('schema') || lower.includes('db') || lower.includes('قاعدة بيانات')) {
+      } else if (
+        lower.includes('migration') ||
+        lower.includes('schema') ||
+        lower.includes('db') ||
+        lower.includes('قاعدة بيانات')
+      ) {
         categories.database.push(line);
       } else if (!lower.startsWith('merge') && !lower.startsWith('chore')) {
         categories.other.push(line);
@@ -52,23 +68,39 @@ function extractGitChangelog(): { changelogMarkdown: string; commitCount: number
     }
 
     function cleanCommitMessage(msg: string): string {
-      return msg
-        .replace(/^(feat|fix|perf|refactor|docs|style|test|build|ci|chore)(\([^)]+\))?:\s*/i, '')
-        .trim();
+      return msg.replace(/^(feat|fix|perf|refactor|docs|style|test|build|ci|chore)(\([^)]+\))?:\s*/i, '').trim();
     }
 
     const sections: string[] = [];
 
     if (categories.features.length > 0) {
-      sections.push('#### الميزات والتحسينات الجديدة:\n' + categories.features.slice(0, 8).map(f => `- ${cleanCommitMessage(f)}`).join('\n'));
+      sections.push(
+        '#### الميزات والتحسينات الجديدة:\n' +
+          categories.features
+            .slice(0, 8)
+            .map((f) => `- ${cleanCommitMessage(f)}`)
+            .join('\n'),
+      );
     }
 
     if (categories.fixes.length > 0) {
-      sections.push('#### الإصلاحات والاستقرار العام:\n' + categories.fixes.slice(0, 8).map(f => `- ${cleanCommitMessage(f)}`).join('\n'));
+      sections.push(
+        '#### الإصلاحات والاستقرار العام:\n' +
+          categories.fixes
+            .slice(0, 8)
+            .map((f) => `- ${cleanCommitMessage(f)}`)
+            .join('\n'),
+      );
     }
 
     if (categories.database.length > 0) {
-      sections.push('#### ترقيات قاعدة البيانات والأمان:\n' + categories.database.slice(0, 5).map(f => `- ${cleanCommitMessage(f)}`).join('\n'));
+      sections.push(
+        '#### ترقيات قاعدة البيانات والأمان:\n' +
+          categories.database
+            .slice(0, 5)
+            .map((f) => `- ${cleanCommitMessage(f)}`)
+            .join('\n'),
+      );
     }
 
     if (sections.length === 0) {

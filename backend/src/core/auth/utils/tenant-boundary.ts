@@ -9,15 +9,17 @@ export function getPlatformTenantIds(
   appMode: unknown = process.env.APP_MODE,
   platformTenantId: unknown = process.env.PLATFORM_TENANT_ID,
 ): string[] {
-  const configured = String(platformTenantId || 'zs').trim().toLowerCase();
-  const ids = isDesktopRuntimeMode(appMode)
-    ? [configured, 'zs', 'default', 'dev-tenant']
-    : [configured, 'zs'];
+  const configured = String(platformTenantId || 'zs')
+    .trim()
+    .toLowerCase();
+  const ids = isDesktopRuntimeMode(appMode) ? [configured, 'zs', 'default', 'dev-tenant'] : [configured, 'zs'];
   return [...new Set(ids.filter(Boolean))];
 }
 
 export function isPlatformTenantId(value: unknown): boolean {
-  const tenantId = String(value ?? '').trim().toLowerCase();
+  const tenantId = String(value ?? '')
+    .trim()
+    .toLowerCase();
   return Boolean(tenantId) && getPlatformTenantIds().includes(tenantId);
 }
 import type { AuthContext } from '../interfaces/auth-context.interface';

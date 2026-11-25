@@ -13,10 +13,7 @@ export class TamperAuditController {
   constructor(private readonly tamperAuditService: TamperAuditService) {}
 
   @Get()
-  async listLogs(
-    @Query() query: TamperAuditQueryDto,
-    @Req() req: RequestWithAuth,
-  ) {
+  async listLogs(@Query() query: TamperAuditQueryDto, @Req() req: RequestWithAuth) {
     return this.tamperAuditService.listTamperLogs(req.authContext!, query);
   }
 

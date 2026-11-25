@@ -6,7 +6,7 @@ async function seed() {
     port: 5433,
     database: 'zs_dev',
     user: 'postgres',
-    password: 'postgres'
+    password: 'postgres',
   });
 
   await client.connect();
@@ -18,15 +18,21 @@ async function seed() {
     const accountId = res.rows[0].account_id;
     const userId = res.rows[0].user_id;
 
-    const empRes = await client.query('SELECT id, employee_no FROM hr_employees WHERE tenant_id = $1 ORDER BY id LIMIT 4', [tenantId]);
+    const empRes = await client.query(
+      'SELECT id, employee_no FROM hr_employees WHERE tenant_id = $1 ORDER BY id LIMIT 4',
+      [tenantId],
+    );
     const employees = empRes.rows;
-    
+
     if (employees.length < 4) {
-        throw new Error('Not enough employees, please run previous script first.');
+      throw new Error('Not enough employees, please run previous script first.');
     }
 
     // Delete existing records for these days so we can re-run
-    await client.query(`DELETE FROM hr_attendance_records WHERE tenant_id = $1 AND work_date IN ('2026-07-01', '2026-07-02')`, [tenantId]);
+    await client.query(
+      `DELETE FROM hr_attendance_records WHERE tenant_id = $1 AND work_date IN ('2026-07-01', '2026-07-02')`,
+      [tenantId],
+    );
 
     const records = [
       // Day 1: 2026-07-01
@@ -46,23 +52,30 @@ async function seed() {
       // Emp 2 (Hourly): Late Check-in, Early Checkout
       { emp: employees[2], date: '2026-07-02', in: '10:00:00', out: '14:00:00' },
       // Emp 3 (Hourly): Early Check-in, Overtime Checkout
-      { emp: employees[3], date: '2026-07-02', in: '07:30:00', out: '18:30:00' }
+      { emp: employees[3], date: '2026-07-02', in: '07:30:00', out: '18:30:00' },
     ];
 
     for (const rec of records) {
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO hr_attendance_records (
           tenant_id, account_id, employee_id, work_date, status, check_in_at, check_out_at, source, created_by, updated_by
         ) VALUES ($1, $2, $3, $4, 'present', $5, $6, 'import', $7, $8)
-      `, [
-        tenantId, accountId, rec.emp.id, rec.date,
-        `${rec.date}T${rec.in}Z`, `${rec.date}T${rec.out}Z`,
-        userId, userId
-      ]);
+      `,
+        [
+          tenantId,
+          accountId,
+          rec.emp.id,
+          rec.date,
+          `${rec.date}T${rec.in}Z`,
+          `${rec.date}T${rec.out}Z`,
+          userId,
+          userId,
+        ],
+      );
     }
 
     console.log('Successfully inserted attendance records directly to DB.');
-
   } catch (err) {
     console.error(err);
   } finally {

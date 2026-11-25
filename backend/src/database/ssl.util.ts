@@ -4,10 +4,12 @@ type PgSslConfigInput = {
   caCert?: string | null;
 };
 
-type PgSslResult = false | {
-  rejectUnauthorized: boolean;
-  ca?: string;
-};
+type PgSslResult =
+  | false
+  | {
+      rejectUnauthorized: boolean;
+      ca?: string;
+    };
 
 export function toBoolean(value: unknown, defaultValue: boolean): boolean {
   if (typeof value === 'boolean') return value;

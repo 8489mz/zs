@@ -38,8 +38,11 @@ const archivedChecks = [
   'RELEASE_GATE_FINAL.md',
   'PHASE15_FINAL_COMMERCIAL_POLISH.md',
 ];
-missing.push(...archivedChecks.filter((entry) => !fs.existsSync(path.join(repoRoot, 'docs', 'archive', entry)))
-  .map((entry) => `docs/archive/${entry}`));
+missing.push(
+  ...archivedChecks
+    .filter((entry) => !fs.existsSync(path.join(repoRoot, 'docs', 'archive', entry)))
+    .map((entry) => `docs/archive/${entry}`),
+);
 if (!fs.existsSync(path.join(repoRoot, 'docs', 'LIVE_SAAS_OPERATIONS_CHECKLIST.md'))) {
   missing.push('docs/LIVE_SAAS_OPERATIONS_CHECKLIST.md');
 }
@@ -57,4 +60,6 @@ for (const scriptName of ['qa', 'qa:release', 'package:clean', 'qa:sale-ready'])
   }
 }
 
-console.log('[check:commercial-ready] release assets and QA entrypoints are present; live UAT sign-off is a separate gate');
+console.log(
+  '[check:commercial-ready] release assets and QA entrypoints are present; live UAT sign-off is a separate gate',
+);

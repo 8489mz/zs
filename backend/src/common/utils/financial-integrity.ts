@@ -61,15 +61,20 @@ export function ensureUniqueFlowItems(items: FlowItem[], code: string, message: 
       continue;
     }
     const price = item.price != null ? Number(item.price) : item.cost != null ? Number(item.cost) : null;
-    const key = price == null
-      ? `${Number(item.productId)}::${Number(item.unitMultiplier || 1)}`
-      : `${Number(item.productId)}::${Number(item.unitMultiplier || 1)}::${price}`;
+    const key =
+      price == null
+        ? `${Number(item.productId)}::${Number(item.unitMultiplier || 1)}`
+        : `${Number(item.productId)}::${Number(item.unitMultiplier || 1)}::${price}`;
     if (seen.has(key)) throw new AppError(message, code, 400);
     seen.add(key);
   }
 }
 
-export function ensureNonNegativeStock(afterQty: number, code = 'INSUFFICIENT_STOCK', message = 'Stock cannot go negative'): void {
+export function ensureNonNegativeStock(
+  afterQty: number,
+  code = 'INSUFFICIENT_STOCK',
+  message = 'Stock cannot go negative',
+): void {
   if (roundQty(afterQty) < 0) throw new AppError(message, code, 409);
 }
 

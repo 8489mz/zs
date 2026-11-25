@@ -52,9 +52,7 @@ export function resolveInstallSecretPath(env: NodeJS.ProcessEnv = process.env): 
   try {
     home = os.homedir();
   } catch {
-    throw installSecretUnavailable(
-      'تعذّر تحديد مجلد المنزل لحفظ سر التثبيت المحلي. اضبط ZS_INSTALL_SECRET_PATH.',
-    );
+    throw installSecretUnavailable('تعذّر تحديد مجلد المنزل لحفظ سر التثبيت المحلي. اضبط ZS_INSTALL_SECRET_PATH.');
   }
   return path.join(home, INSTALL_SECRET_DIR_NAME, INSTALL_SECRET_FILE_NAME);
 }
@@ -102,10 +100,7 @@ export function resolveInstallSecret(env: NodeJS.ProcessEnv = process.env): stri
  * مفتاح مشتق لغرض واحد من سر التثبيت. الغرضان الحاليان `portal-token`
  * (توقيع رموز البوابات HMAC) و`mfa-encryption` (مدخل scrypt لتشفير سر TOTP).
  */
-export function deriveInstallSecret(
-  purpose: InstallSecretPurpose,
-  env: NodeJS.ProcessEnv = process.env,
-): string {
+export function deriveInstallSecret(purpose: InstallSecretPurpose, env: NodeJS.ProcessEnv = process.env): string {
   const secret = resolveInstallSecret(env);
   return createHash('sha256').update(`${secret}:${purpose}`, 'utf8').digest('hex');
 }

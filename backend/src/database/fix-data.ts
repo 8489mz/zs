@@ -6,7 +6,7 @@ import * as path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/zsystems'
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/zsystems',
 });
 
 async function run() {
