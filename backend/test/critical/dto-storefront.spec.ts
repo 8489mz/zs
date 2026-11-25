@@ -886,7 +886,7 @@ async function main(): Promise<void> {
   }
 
   // 15. Wiring: this spec is in both critical lists, in identical order
-  // (354 specs — the marketplace-sync-sim-row spec is the last entry).
+  // (355 specs — the fashion-rows-ledger-return spec is the last entry).
   {
     const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
       .specs as string[];
@@ -895,12 +895,12 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 354);
-    assert.equal(chain.length, 354);
+    assert.equal(specs.length, 355);
+    assert.equal(chain.length, 355);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/dto-storefront.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/marketplace-sync-sim-row.spec.ts');
-    console.log('  evidence spec wired into both critical lists (354 = 354, identical order), passed');
+    assert.equal(specs[specs.length - 1], 'test/critical/fashion-rows-ledger-return.spec.ts');
+    console.log('  evidence spec wired into both critical lists (355 = 355, identical order), passed');
   }
 
   console.log('DTO storefront tests passed');

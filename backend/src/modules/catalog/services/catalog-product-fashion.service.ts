@@ -52,6 +52,7 @@ import { InventoryScopeService } from '../../inventory/services/inventory-scope.
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { StorefrontMediaService } from '../../storefront/storefront-media.service';
 import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import {
   assertFashionExpectedStock,
   assertFashionRemovedStockSafe,
@@ -450,11 +451,14 @@ export class CatalogProductFashionService {
               if (qtyToMove <= 0) continue;
 
               const rawLocId = ls.location_id != null && Number(ls.location_id) > 0 ? Number(ls.location_id) : null;
-              const effectiveLocId =
-                rawLocId ||
-                (removedProduct.default_location_id ? Number(removedProduct.default_location_id) : fallbackWarehouseId);
 
-              await applyStockDelta(trx, {
+              // Phase 1 A3 (INV-PHASE1-A3-FASHION-ROWS-LEDGER-RETURN): both
+              // legs go through the row-writer, so each row stamps the
+              // ledger's location balances (scopeBefore/scopeAfter), not the
+              // cached byId quantities. The cache updates below use each
+              // leg's globalAfter — the reconciled global — because the
+              // drafts loop later reads prior.stock_qty for kept variants.
+              const removedLeg = await recordStockMovement(trx, {
                 productId: removedId,
                 locationId: rawLocId,
                 branchId: ls.branch_id ? Number(ls.branch_id) : undefined,
@@ -463,9 +467,17 @@ export class CatalogProductFashionService {
                 accountId: actor.accountId,
                 disableAutoDrain: true,
                 allowNegative: false,
+                movementType: 'transfer',
+                referenceType: 'product',
+                referenceId: targetId,
+                reason: 'variant_consolidation',
+                note: `تحويل ودمج رصيد المقاس الملغي إلى نفس اللون (${target.value.color || target.value.name})`,
+                unitCost: Number(removedProduct.cost_price || 0),
+                moneyDigits: consolidationDigits,
+                createdBy: actor.userId,
               });
 
-              await applyStockDelta(trx, {
+              const targetLeg = await recordStockMovement(trx, {
                 productId: targetId,
                 locationId: rawLocId,
                 branchId: ls.branch_id ? Number(ls.branch_id) : undefined,
@@ -474,62 +486,21 @@ export class CatalogProductFashionService {
                 accountId: actor.accountId,
                 disableAutoDrain: true,
                 allowNegative: true,
+                movementType: 'transfer',
+                referenceType: 'product',
+                referenceId: removedId,
+                reason: 'variant_consolidation',
+                note: `دمج رصيد المقاس الملغي (${removedProduct.name || removedProduct.size}) إلى نفس اللون (${target.value.color || target.value.name})`,
+                unitCost: Number(target.value.costPrice || 0),
+                moneyDigits: consolidationDigits,
+                createdBy: actor.userId,
               });
 
               const targetPrior = byId.get(targetId);
-              const prevTargetStock = Number(targetPrior?.stock_qty || 0);
-              const nextTargetStock = prevTargetStock + qtyToMove;
               if (targetPrior) {
-                targetPrior.stock_qty = Number(nextTargetStock.toFixed(3)) as any;
+                targetPrior.stock_qty = Number(targetLeg.globalAfter.toFixed(3)) as any;
               }
-              const prevRemovedStock = Number(removedProduct.stock_qty || 0);
-              removedProduct.stock_qty = Number(Math.max(0, prevRemovedStock - qtyToMove).toFixed(3)) as any;
-
-              await trx
-                .insertInto('stock_movements')
-                .values({
-                  product_id: targetId,
-                  movement_type: 'transfer',
-                  qty: qtyToMove,
-                  before_qty: prevTargetStock,
-                  after_qty: nextTargetStock,
-                  unit_cost: Number(target.value.costPrice || 0),
-                  total_cost: stockMovementTotal(qtyToMove, Number(target.value.costPrice || 0), consolidationDigits),
-                  reason: 'variant_consolidation',
-                  note: `دمج رصيد المقاس الملغي (${removedProduct.name || removedProduct.size}) إلى نفس اللون (${target.value.color || target.value.name})`,
-                  reference_type: 'product',
-                  reference_id: removedId,
-                  location_id: effectiveLocId || null,
-                  branch_id: ls.branch_id ? Number(ls.branch_id) : undefined,
-                  created_by: actor.userId,
-                  ...this.tenantFields(actor),
-                } as any)
-                .execute();
-
-              await trx
-                .insertInto('stock_movements')
-                .values({
-                  product_id: removedId,
-                  movement_type: 'transfer',
-                  qty: -qtyToMove,
-                  before_qty: prevRemovedStock,
-                  after_qty: Math.max(0, prevRemovedStock - qtyToMove),
-                  unit_cost: Number(removedProduct.cost_price || 0),
-                  total_cost: stockMovementTotal(
-                    qtyToMove,
-                    Number(removedProduct.cost_price || 0),
-                    consolidationDigits,
-                  ),
-                  reason: 'variant_consolidation',
-                  note: `تحويل ودمج رصيد المقاس الملغي إلى نفس اللون (${target.value.color || target.value.name})`,
-                  reference_type: 'product',
-                  reference_id: targetId,
-                  location_id: effectiveLocId || null,
-                  branch_id: ls.branch_id ? Number(ls.branch_id) : undefined,
-                  created_by: actor.userId,
-                  ...this.tenantFields(actor),
-                } as any)
-                .execute();
+              removedProduct.stock_qty = Number(Math.max(0, removedLeg.globalAfter).toFixed(3)) as any;
             }
           }
         } else {
@@ -720,7 +691,13 @@ export class CatalogProductFashionService {
                 throw new AppError('حدد مخزنًا لتسوية رصيد الصنف', 'LOCATION_REQUIRED', 400);
               }
 
-              await applyStockDelta(trx, {
+              const unitCost = Number(value.costPrice || prior.cost_price || 0);
+              const bookDigits = await this.bookDigits(trx, actor);
+              // Phase 1 A3 (INV-PHASE1-A3-FASHION-ROWS-LEDGER-RETURN): the
+              // row goes through the row-writer, so it stamps the ledger's
+              // location balances (scopeBefore/scopeAfter) instead of the
+              // cached global currentStock / requested targetStock.
+              const insertedMovement = await recordStockMovement(trx, {
                 productId: id,
                 locationId: effectiveLocationId,
                 branchId: locStock?.branch_id ? Number(locStock.branch_id) : undefined,
@@ -729,38 +706,21 @@ export class CatalogProductFashionService {
                 accountId: actor.accountId,
                 disableAutoDrain: true,
                 allowNegative: false,
+                movementType: stockDelta > 0 ? 'add' : 'deduct',
+                referenceType: 'inventory_adjustment',
+                referenceId: id,
+                reason: 'fashion_matrix_adjustment',
+                note:
+                  stockDelta > 0
+                    ? `تسوية زيادة رصيد المقاس (${value.color || ''} / ${value.size || ''}) من شاشة الموديل`
+                    : `تسوية خفض/تصفير رصيد المقاس (${value.color || ''} / ${value.size || ''}) من شاشة الموديل`,
+                unitCost,
+                moneyDigits: bookDigits,
+                createdBy: actor.userId,
               });
 
-              const unitCost = Number(value.costPrice || prior.cost_price || 0);
-              const absDelta = Math.abs(stockDelta);
-              const bookDigits = await this.bookDigits(trx, actor);
-              const insertedMovement = await trx
-                .insertInto('stock_movements')
-                .values({
-                  product_id: id,
-                  movement_type: stockDelta > 0 ? 'add' : 'deduct',
-                  qty: stockDelta,
-                  before_qty: currentStock,
-                  after_qty: targetStock,
-                  unit_cost: unitCost,
-                  total_cost: stockMovementTotal(absDelta, unitCost, bookDigits),
-                  reason: 'fashion_matrix_adjustment',
-                  note:
-                    stockDelta > 0
-                      ? `تسوية زيادة رصيد المقاس (${value.color || ''} / ${value.size || ''}) من شاشة الموديل`
-                      : `تسوية خفض/تصفير رصيد المقاس (${value.color || ''} / ${value.size || ''}) من شاشة الموديل`,
-                  reference_type: 'inventory_adjustment',
-                  reference_id: id,
-                  location_id: effectiveLocationId,
-                  branch_id: locStock?.branch_id ? Number(locStock.branch_id) : undefined,
-                  created_by: actor.userId,
-                  ...this.tenantFields(actor),
-                } as any)
-                .returning('id')
-                .executeTakeFirst();
-
-              if (insertedMovement?.id && this.accountingPosting) {
-                await this.accountingPosting.postInventoryAdjustment(trx, Number(insertedMovement.id), actor);
+              if (insertedMovement?.movementId && this.accountingPosting) {
+                await this.accountingPosting.postInventoryAdjustment(trx, insertedMovement.movementId, actor);
               }
             }
           }

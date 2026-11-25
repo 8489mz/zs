@@ -227,18 +227,18 @@ async function main(): Promise<void> {
     }
 
     // 6. This spec is wired into both critical lists, in identical order
-    // (354 specs — the marketplace-sync-sim-row spec is the last entry).
+    // (355 specs — the fashion-rows-ledger-return spec is the last entry).
     {
       const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
         .specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 354);
-      assert.equal(chain.length, 354);
+      assert.equal(specs.length, 355);
+      assert.equal(chain.length, 355);
       assert.deepEqual(chain, specs);
       assert.ok(specs.includes('test/critical/reports-home-open-shift.spec.ts'));
-      console.log('6. evidence spec wired into both critical lists (354 = 354, identical order), passed');
+      console.log('6. evidence spec wired into both critical lists (355 = 355, identical order), passed');
     }
 
     console.log('reports-home-open-shift: all cases passed');

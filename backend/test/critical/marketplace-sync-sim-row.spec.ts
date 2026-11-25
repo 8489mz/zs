@@ -46,7 +46,7 @@
  *    calls applyStockDelta(trx, …) directly, and holds no
  *    insertInto('stock_movements') of its own.
  * 5. Wiring: this spec is in both critical lists, in identical order
- *    (354 specs — this spec is the last entry).
+ *    (355 specs — the fashion-rows-ledger-return spec is the last entry).
  *
  * Deliberately NOT driven here: syncInventory behaviour, WhatsApp
  * notification content, real marketplace webhook ingestion, cost-rounding
@@ -293,7 +293,7 @@ async function main(): Promise<void> {
     console.log('  4. source pins: passed');
 
     // 5. Wiring: this spec is in both critical lists, in identical order
-    // (354 specs — the marketplace-sync-sim-row spec is the last entry).
+    // (355 specs — the fashion-rows-ledger-return spec is the last entry).
     {
       const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
         .specs as string[];
@@ -302,12 +302,12 @@ async function main(): Promise<void> {
       };
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 354);
-      assert.equal(chain.length, 354);
+      assert.equal(specs.length, 355);
+      assert.equal(chain.length, 355);
       assert.deepEqual(chain, specs);
       assert.ok(specs.includes('test/critical/marketplace-sync-sim-row.spec.ts'));
-      assert.equal(specs[specs.length - 1], 'test/critical/marketplace-sync-sim-row.spec.ts');
-      console.log('  5. evidence spec wired into both critical lists (354 = 354, identical order), passed');
+      assert.equal(specs[specs.length - 1], 'test/critical/fashion-rows-ledger-return.spec.ts');
+      console.log('  5. evidence spec wired into both critical lists (355 = 355, identical order), passed');
     }
 
     console.log('Marketplace sync sim movement row tests passed');
