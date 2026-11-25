@@ -20,23 +20,24 @@
  * kysely-codegen run would undo, re-breaking this guard. It is
  * never --write'd and pinned below as an excluded file.
  *
- * STOPPED — size-cap collision, L4 way (2 files): `prettier
- * --write` grows these past the file-size cap purely by breaking
- * their long lines — session.service.ts 1023 -> 1294 (longest HEAD
- * line 417 chars; baselined 1023, so the guard trips) and
- * location-stock-ledger.ts 969 -> 1074 (longest HEAD line 199
- * chars; unbaselined, so the 1000 cap trips). Both were reverted
- * to HEAD and pinned below. session.service.ts at 1294 stays
- * excluded (over the user's 1110 split cutoff); location-stock-
- * ledger.ts at 1074 lands at or below 1110 and could be formatted
- * + baselined under the L4b/L5b precedent — that decision belongs
- * to the parent (a possible L6b), so it is STOPPED here like the
- * other file. Full table in ~/workspace/audit/lint-prettier-log.md
- * L6.
+ * STOPPED — size-cap collision, L4 way (1 file): `prettier
+ * --write` grows session.service.ts past the file-size cap purely
+ * by breaking its long lines — 1023 -> 1294 (longest HEAD line
+ * 417 chars; baselined 1023, so the guard trips). It was reverted
+ * to HEAD and pinned below; at 1294 it stays excluded (over the
+ * user's 1110 split cutoff). Full table in
+ * ~/workspace/audit/lint-prettier-log.md L6.
+ *
+ * L6b — location-stock-ledger.ts 969 -> 1074 (longest HEAD line
+ * 199 chars) lands at or below the 1110 cutoff, so it was
+ * formatted + baselined at 1074 under the L4b/L5b precedent
+ * (parent decision 2026-11-25 05:51 EET) and removed from the
+ * excluded set below. Full table in
+ * ~/workspace/audit/lint-prettier-log.md L6b.
  *
  * L8 deletes this spec when the global backend-format-clean guard
  * lands — the global guard inherits the same exclusion until the
- * 3 files are resolved.
+ * 2 files are resolved.
  *
  * This spec invokes `npx prettier --check` on the scope globs so
  * the exact tool CI runs is what is asserted — in CI, `npm ci`
@@ -45,9 +46,11 @@
  *
  * Fail-first: on the pre-L6 tree this spec exits 1 (92 files fail,
  * not the 3); after L6 it exits 1 with exactly the 3 excluded
- * files failing. A second shape is proven by reverting one
- * formatted file (see the log): the spec goes red until it is
- * restored.
+ * files failing. On the pre-L6b tree this spec (with the exclusion
+ * set cut to 2) exits 1 (3 files fail, not the 2); after L6b it
+ * exits 1 with exactly the 2 excluded files failing. A second shape
+ * is proven by reverting one formatted file (see the log): the spec
+ * goes red until it is restored.
  */
 
 import { strict as assert } from 'node:assert';
@@ -69,11 +72,7 @@ const GLOBS = [
 ];
 
 /** Files deliberately left unformatted (see header). */
-const EXCLUDED: string[] = [
-  'src/common/utils/location-stock-ledger.ts',
-  'src/core/auth/services/session.service.ts',
-  'src/database/database.types.ts',
-];
+const EXCLUDED: string[] = ['src/core/auth/services/session.service.ts', 'src/database/database.types.ts'];
 
 function countTsRecursive(dir: string): number {
   let total = 0;
