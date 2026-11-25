@@ -220,7 +220,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'settings->ai-copilot': 2,
   'settings->catalog': 3,
   'settings->sales': 1,
-  'storefront->accounting': 23,
+  'storefront->accounting': 25,
   'storefront->sales': 7,
   'storefront->settings': 8,
   'tax-integration->accounting': 5,
@@ -315,7 +315,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
 ];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 760;
+const PINNED_BACKEND_TOTAL = 762;
 const PINNED_FRONTEND_TOTAL = 138;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;

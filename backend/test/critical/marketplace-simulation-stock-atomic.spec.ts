@@ -28,6 +28,9 @@
  *    On the old code this case leaves one paid order behind.
  * 3. The service file no longer calls applyStockDelta on the pool
  *    handle (the architecture guard spec pins this globally too).
+ *    A2 (INV-PHASE1-A2-SIM-MOVEMENT-ROW): the deduction now goes through
+ *    recordStockMovement, so the simulated order also gains its audit row;
+ *    the in-transaction pin below is updated to the writer.
  *
  * Deliberately NOT driven here: syncInventory behaviour, WhatsApp
  * notification content, and real marketplace webhook ingestion.
@@ -68,9 +71,11 @@ async function main(): Promise<void> {
     await pg.exec(`
       CREATE TABLE tenants (id text PRIMARY KEY, plan_id text, extra_features text, activity_type text, status text, trial_ends_at timestamptz);
       CREATE TABLE settings (key text NOT NULL, value text, tenant_id text NOT NULL, account_id text NOT NULL, PRIMARY KEY (tenant_id, key));
-      CREATE TABLE products (id bigserial PRIMARY KEY, name text NOT NULL, barcode text, retail_price numeric NOT NULL DEFAULT 0, stock_qty numeric NOT NULL DEFAULT 0, reserved_qty numeric NOT NULL DEFAULT 0, tenant_id text NOT NULL, account_id text NOT NULL, is_active boolean NOT NULL DEFAULT true, updated_at timestamptz DEFAULT NOW());
+      CREATE TABLE products (id bigserial PRIMARY KEY, name text NOT NULL, barcode text, retail_price numeric NOT NULL DEFAULT 0, cost_price numeric NOT NULL DEFAULT 0, stock_qty numeric NOT NULL DEFAULT 0, reserved_qty numeric NOT NULL DEFAULT 0, tenant_id text NOT NULL, account_id text NOT NULL, is_active boolean NOT NULL DEFAULT true, updated_at timestamptz DEFAULT NOW());
       CREATE TABLE product_location_stock (id bigserial PRIMARY KEY, product_id bigint NOT NULL, branch_id bigint, location_id bigint, qty numeric NOT NULL DEFAULT 0 CHECK (qty >= 0), reserved_qty numeric NOT NULL DEFAULT 0, tenant_id text NOT NULL, account_id text NOT NULL, updated_at timestamptz DEFAULT NOW());
       CREATE TABLE online_orders (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, order_number text NOT NULL, customer_name text, customer_phone text, customer_address text, customer_notes text, items_json text, subtotal numeric NOT NULL DEFAULT 0, delivery_fee numeric NOT NULL DEFAULT 0, total_amount numeric NOT NULL DEFAULT 0, status text NOT NULL, payment_method text, payment_status text, gateway_provider text, shipping_carrier text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
+      CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, movement_type text, qty numeric, before_qty numeric, after_qty numeric, reason text, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, unit_cost numeric, total_cost numeric, import_receipt_id bigint, serial_tracking jsonb, batch_tracking jsonb, created_at timestamptz NOT NULL DEFAULT NOW());
+      CREATE TABLE currency_exchange_rates (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text, currency_code text NOT NULL, currency_name text, exchange_rate numeric NOT NULL DEFAULT 1, is_base boolean NOT NULL DEFAULT false, symbol text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
     `);
 
     // INV-SF-SIMULATE-ORDER-GATE: simulateIncomingOrder is entitlement-
@@ -172,7 +177,9 @@ async function main(): Promise<void> {
     await assert.rejects(() => service.simulateIncomingOrder('noon', auth()));
     assert.equal(await orderCount(), 1, 'no second (paid, undeducted) order may survive a failed deduction');
 
-    // 3. No pool-handle stock call remains in this service.
+    // 3. No pool-handle stock call remains in this service, and the
+    // deduction goes through the row-writer (A2: INV-PHASE1-A2-SIM-MOVEMENT-
+    // ROW — the simulated order also gains its audit row).
     // MERGE (file #11 split): the simulate path moved to the S4 slice — the
     // pin now reads the slice file. Assertions unchanged.
     const source = fs.readFileSync(
@@ -180,7 +187,11 @@ async function main(): Promise<void> {
       'utf8',
     );
     assert.ok(!source.includes('applyStockDelta(this.db'), 'stock deduction must run on a transaction handle');
-    assert.ok(source.includes('applyStockDelta(trx'), 'stock deduction must run inside the order transaction');
+    assert.ok(
+      source.includes('recordStockMovement(trx'),
+      'stock deduction + audit row must run inside the order transaction via the row-writer',
+    );
+    assert.ok(!source.includes('applyStockDelta(trx'), 'the direct ledger call must be replaced by the row-writer');
 
     console.log('marketplace simulation stock atomicity checks passed');
   } finally {

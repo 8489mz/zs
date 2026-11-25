@@ -7,10 +7,11 @@
  * getSettingJson/setSettingJson + the bound cross-slice dep syncInventory
  * (S3, S10 form) + optional whatsappService / planFeatureService. Types
  * come from ./marketplace-sync.types (S0). The simulate tx uses
- * applyStockDelta(trx, ...) only — never a pool handle. Clock sites
- * travel verbatim: Date.now() order-number suffix, new Date() created_at /
- * updated_at inside the tx, lastPriceCheckedAt ISO stamp; no instant
- * comparison, no UTC-slice normalizer.
+ * recordStockMovement(trx, ...) only — never a pool handle — so the
+ * deduction and its audit row commit or roll back together (A2:
+ * INV-PHASE1-A2-SIM-MOVEMENT-ROW). Clock sites travel verbatim: Date.now()
+ * order-number suffix, new Date() created_at / updated_at inside the tx,
+ * lastPriceCheckedAt ISO stamp; no instant comparison, no UTC-slice normalizer.
  */
 
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -20,7 +21,9 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AuditService } from '../../../core/audit/audit.service';
 import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
-import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
+import { tenantBaseCurrency } from '../../../modules/accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../../modules/accounting/engines/money-minor-units.engine';
 import {
   STOREFRONT_NOT_ENTITLED_MESSAGE,
   isStorefrontEntitledForOrders,
@@ -125,7 +128,7 @@ export class MarketplaceSyncSimulationService {
 
     const product = await this.db
       .selectFrom('products')
-      .select(['id', 'name', 'barcode', 'retail_price', 'stock_qty'])
+      .select(['id', 'name', 'barcode', 'retail_price', 'cost_price', 'stock_qty'])
       .where('id', '=', selectedProductId)
       .where('tenant_id', '=', scope.tenantId)
       .executeTakeFirst();
@@ -198,13 +201,28 @@ export class MarketplaceSyncSimulationService {
 
       orderId = Number(insertResult?.id || 0);
 
-      // Reserve / deduct stock immediately to prevent overselling on other channels via ledger
-      const stockChange = await applyStockDelta(trx, {
+      // Reserve / deduct stock immediately to prevent overselling on other channels via ledger,
+      // and write the audit row for the deduction in the same transaction
+      // (INV-PHASE1-A2-SIM-MOVEMENT-ROW): a real quantity change with no
+      // stock_movements row left the deduction untraceable. Book digits come
+      // from the tenant's base currency (P2 pattern), resolved inside the
+      // transaction so a currency-config failure aborts the order before
+      // any write. unit_cost is the frozen cost_price, never retail price.
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      const stockChange = await recordStockMovement(trx, {
         productId: Number(product.id),
         delta: -orderQty,
         tenantId: scope.tenantId,
         accountId: scope.accountId,
         allowNegative: true,
+        movementType: 'sale',
+        referenceType: 'online_order',
+        referenceId: orderId,
+        reason: 'sale',
+        note: `Marketplace simulated order ${orderNumber} (${marketplace})`,
+        unitCost: Number(product.cost_price),
+        createdBy: auth.userId,
+        moneyDigits,
       });
       newStock = stockChange.globalAfter;
     });
