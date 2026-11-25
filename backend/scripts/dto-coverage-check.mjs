@@ -56,6 +56,28 @@
  * the buckets move dto-class 461 -> 488, inline-object 81 -> 68,
  * dto-interface 38 -> 25, named-interface 4 -> 3.
  *
+ * Package C (INV-DTO-SALES-QUOTATION-CREATE): the script has TWO
+ * fixes. (a) CRLF: lines are split on /\r?\n/ — a Windows checkout
+ * leaves a trailing \r that the old split('\n') kept, so an
+ * annotation read as `UpsertUserDto\r` matched no DTO name. The tree
+ * is LF-normalized (zero \r in backend/src), so this moves the count
+ * by 0 here; it is robustness for Windows runs. (b) Per-import
+ * declaration resolution: the declaration index was first-seen-wins
+ * across the whole tree, so the sales POST /api/quotations create
+ * site resolved to the import-sales CreateQuotationDto CLASS and was
+ * counted dto-class while the controller imports the sales INTERFACE
+ * and the pipe did nothing for it. Each site now resolves its names
+ * through its own imports (following named imports and named/star
+ * re-exports, multi-line blocks included), falling back to the global
+ * index only when no import resolves — the diff proves exactly one
+ * row moves (quotations.controller.ts:23 dto-class -> dto-interface).
+ * Pin arithmetic: 136 + 0 (CRLF) + 1 (reveal) - 1 (convert) = 136 —
+ * the pin STAYS 136 (127 convertible + 9 exclusions). Buckets end
+ * where D5 left them (dto-class 488, dto-interface 25, inline-object
+ * 68, any 25, inline-other 7, named-interface 3, unknown 4,
+ * record 4). NOTE for D6: its expected pin (111) was derived from
+ * the pre-Package-C census — D6 must re-derive from the live census.
+ *
  * Usage: node scripts/dto-coverage-check.mjs [--json]
  *   (run from the backend/ directory; paths are relative to backend/).
  */
@@ -67,7 +89,7 @@ import { fileURLToPath } from 'node:url';
 const BACKEND = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(BACKEND, 'src');
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D5 (136 after sales converts 27). */
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D5 (136 after sales converts 27); Package C keeps it at 136 (136 + 0 CRLF + 1 reveal - 1 convert). */
 const PINNED_COUNT = 136;
 
 /**
@@ -167,45 +189,185 @@ function balancedType(text) {
   return out.join('').trim();
 }
 
-function classify(typeStr, decl, dtoClassNames, dtoIfaceNames) {
+const NAMED_IMPORT_RE = /import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+const NAMED_REEXPORT_RE = /export\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+const STAR_REEXPORT_RE = /export\s*\*\s*from\s*['"]([^'"]+)['"]/g;
+
+/** Parse a `{ A, B as C }` brace body into [{ exported, local }] pairs. */
+function parseBraceNames(body) {
+  const out = [];
+  for (const part of body.split(',')) {
+    const t = part.trim();
+    if (!t) continue;
+    const m = /^([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/.exec(t);
+    if (m) out.push({ exported: m[1], local: m[2] || m[1] });
+  }
+  return out;
+}
+
+function classify(typeStr, siteFile, ctx) {
   if (typeStr === null || typeStr === undefined) return { bucket: 'no-annotation', detail: '' };
   const t = typeStr.trim();
   if (!t) return { bucket: 'no-annotation', detail: '' };
   const names = t.match(IDENT_RE) || [];
-  const dtoClasses = names.filter((n) => dtoClassNames.has(n));
-  if (dtoClasses.length > 0) return { bucket: 'dto-class', detail: dtoClasses[0] };
-  const dtoIfaces = names.filter((n) => dtoIfaceNames.has(n));
-  if (dtoIfaces.length > 0) return { bucket: 'dto-interface', detail: dtoIfaces[0] };
+  // Package C: each name resolves through the SITE file's own imports
+  // (resolveSiteName), not the global first-seen-wins index. A name no
+  // import resolves falls back to the global index, so every other site
+  // classifies exactly as before — only genuine collisions move.
+  const kinds = names.map((n) => ({ name: n, kind: ctx.resolveSiteName(siteFile, n) }));
+  const dtoClasses = kinds.filter(
+    ({ name, kind }) => name.endsWith('Dto') && (kind === 'class' || (kind === null && ctx.dtoClassNames.has(name))),
+  );
+  if (dtoClasses.length > 0) return { bucket: 'dto-class', detail: dtoClasses[0].name };
+  const dtoIfaces = kinds.filter(
+    ({ name, kind }) =>
+      name.endsWith('Dto') && (kind === 'interface' || (kind === null && ctx.dtoIfaceNames.has(name))),
+  );
+  if (dtoIfaces.length > 0) return { bucket: 'dto-interface', detail: dtoIfaces[0].name };
   if (ANY_RE.test(t)) return { bucket: 'any', detail: '' };
   if (t === 'unknown') return { bucket: 'unknown', detail: '' };
   if (t.startsWith('Record<')) return { bucket: 'record', detail: '' };
   if (t.startsWith('{')) return { bucket: 'inline-object', detail: '' };
-  if (SINGLE_IDENT_RE.test(t)) return { bucket: `named-${decl.get(t) || 'undeclared'}`, detail: t };
+  if (SINGLE_IDENT_RE.test(t)) {
+    return {
+      bucket: `named-${ctx.resolveSiteName(siteFile, t) || ctx.decl.get(t) || 'undeclared'}`,
+      detail: t,
+    };
+  }
   return { bucket: 'inline-other', detail: t.slice(0, 60) };
 }
 
 function census() {
   const files = collectTsFiles(SRC);
   const contents = new Map();
-  for (const file of files) contents.set(file, fs.readFileSync(file, 'utf8').split('\n'));
+  // Package C: split on /\r?\n/ — a Windows (CRLF) checkout leaves a
+  // trailing \r on every line, which the old split('\n') kept; the
+  // annotation regex then captured e.g. `UpsertUserDto\r`, which matches
+  // no DTO name and misclassifies the site. The tree is LF-normalized
+  // today (no \r in backend/src), so this moves the count by 0 here —
+  // it is robustness for Windows runs, not a count change.
+  for (const file of files) contents.set(file, fs.readFileSync(file, 'utf8').split(/\r?\n/));
 
   // Declaration index: name -> kind (class/interface/type), first seen wins.
+  // Package C: the global index stays ONLY as the fallback. Each site
+  // resolves its names through its own imports (resolveSiteName below),
+  // so a name declared twice with different kinds (CreateQuotationDto:
+  // import-sales class vs sales interface) classifies per site.
   const decl = new Map();
+  const declByFile = new Map();
+  const fileSet = new Set(files);
   for (const file of files) {
+    const perFile = new Map();
+    declByFile.set(file, perFile);
     for (const line of contents.get(file)) {
       let m = CLASS_RE.exec(line);
       if (m) {
         if (!decl.has(m[1])) decl.set(m[1], 'class');
+        if (!perFile.has(m[1])) perFile.set(m[1], 'class');
         continue;
       }
       m = INTERFACE_RE.exec(line);
       if (m) {
         if (!decl.has(m[1])) decl.set(m[1], 'interface');
+        if (!perFile.has(m[1])) perFile.set(m[1], 'interface');
         continue;
       }
       m = TYPE_RE.exec(line);
-      if (m && !decl.has(m[1])) decl.set(m[1], 'type');
+      if (m) {
+        if (!decl.has(m[1])) decl.set(m[1], 'type');
+        if (!perFile.has(m[1])) perFile.set(m[1], 'type');
+      }
     }
+  }
+
+  // Per-file import / re-export tables, parsed lazily from the file text.
+  // The regexes span lines: controllers and barrels use multi-line
+  // `import { ... } from` / `export { ... } from` blocks.
+  const importCache = new Map();
+  function importsOf(file) {
+    if (importCache.has(file)) return importCache.get(file);
+    const map = new Map();
+    const text = contents.get(file).join('\n');
+    NAMED_IMPORT_RE.lastIndex = 0;
+    let m;
+    while ((m = NAMED_IMPORT_RE.exec(text)) !== null) {
+      for (const { exported, local } of parseBraceNames(m[1])) {
+        if (!map.has(local)) map.set(local, { exported, specifier: m[2] });
+      }
+    }
+    importCache.set(file, map);
+    return map;
+  }
+
+  const reexportCache = new Map();
+  function reexportsOf(file) {
+    if (reexportCache.has(file)) return reexportCache.get(file);
+    const named = [];
+    const star = [];
+    const text = contents.get(file).join('\n');
+    NAMED_REEXPORT_RE.lastIndex = 0;
+    let m;
+    while ((m = NAMED_REEXPORT_RE.exec(text)) !== null) {
+      named.push({ names: parseBraceNames(m[1]), specifier: m[2] });
+    }
+    STAR_REEXPORT_RE.lastIndex = 0;
+    while ((m = STAR_REEXPORT_RE.exec(text)) !== null) star.push(m[1]);
+    const out = { named, star };
+    reexportCache.set(file, out);
+    return out;
+  }
+
+  function resolveSpecifier(fromFile, spec) {
+    if (!spec.startsWith('./') && !spec.startsWith('../')) return null;
+    const base = path.dirname(fromFile);
+    const candidates = [];
+    if (spec.endsWith('.js')) candidates.push(path.resolve(base, `${spec.slice(0, -3)}.ts`));
+    candidates.push(path.resolve(base, `${spec}.ts`));
+    candidates.push(path.resolve(base, spec, 'index.ts'));
+    candidates.push(path.resolve(base, spec));
+    for (const c of candidates) if (fileSet.has(c)) return c;
+    return null;
+  }
+
+  const declKindCache = new Map();
+  function resolveDeclaration(file, name, seen) {
+    const key = `${file}\0${name}`;
+    if (declKindCache.has(key)) return declKindCache.get(key);
+    if (seen.has(key)) return null;
+    seen.add(key);
+    let kind = declByFile.get(file)?.get(name) ?? null;
+    if (!kind) {
+      for (const { names, specifier } of reexportsOf(file).named) {
+        const hit = names.find((n) => n.local === name);
+        if (!hit) continue;
+        const target = resolveSpecifier(file, specifier);
+        if (target) kind = resolveDeclaration(target, hit.exported, seen);
+        if (kind) break;
+      }
+    }
+    if (!kind) {
+      for (const specifier of reexportsOf(file).star) {
+        const target = resolveSpecifier(file, specifier);
+        if (target) kind = resolveDeclaration(target, name, seen);
+        if (kind) break;
+      }
+    }
+    if (kind) declKindCache.set(key, kind);
+    return kind;
+  }
+
+  function resolveSiteName(siteFile, name) {
+    const own = declByFile.get(siteFile)?.get(name);
+    if (own) return own;
+    const imp = importsOf(siteFile).get(name);
+    if (imp) {
+      const target = resolveSpecifier(siteFile, imp.specifier);
+      if (target) {
+        const kind = resolveDeclaration(target, imp.exported, new Set());
+        if (kind) return kind;
+      }
+    }
+    return decl.get(name) ?? null;
   }
   const dtoClassNames = new Set(
     [...decl.entries()]
@@ -255,7 +417,7 @@ function census() {
             if (lines[j].trim() && !lines[j].trimStart().startsWith('@')) break;
           }
         }
-        const { bucket, detail } = classify(tstr, decl, dtoClassNames, dtoIfaceNames);
+        const { bucket, detail } = classify(tstr, file, { decl, dtoClassNames, dtoIfaceNames, resolveSiteName });
         rows.push({ file: rel, line: i + 1, form: 'whole', prop: '', bucket, type: (tstr || '').slice(0, 80), detail });
       }
     }

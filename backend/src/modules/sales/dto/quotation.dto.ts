@@ -3,30 +3,23 @@
  * UpdateQuotationDto converted from interfaces to classes
  * (Rule 5, in place).
  *
- * CreateQuotationDto STAYS an interface — it is NOT converted
- * here, and that is deliberate, not an oversight. TWO
- * declarations share the name: this sales interface (the
- * controller imports it) and a real decorated class
- * CreateQuotationDto in
+ * Package C — CreateQuotationDto is converted here (it STAYED an
+ * interface in D5 deliberately: TWO declarations share the name —
+ * this sales interface and the import-sales CLASS in
  * modules/import-sales/dto/import-sales-dto/import-sales-dto-commercial.ts
- * (a completely different shape: projectId, supplierId,
- * quotationNo, itemName, unitPriceForeign). The census
- * classifier's declaration index is first-seen-wins across the
- * whole tree, so the sales create site resolves to the
- * import-sales CLASS and is counted dto-class — while in reality
- * the controller imports the sales INTERFACE and the pipe does
- * nothing for it. The create site is unvalidated today and NOT
- * in the census list (the true unvalidated population is 265,
- * not 264 — a census-script name-collision blind spot). Fixing
- * the script (resolve declarations per-import) and converting
- * the sales CreateQuotationDto belongs in a later package, NOT
- * D5 (the task forbids converting a site the census does not
- * list). Extra trap for whoever converts it later: the create
- * caller (CreateQuotationPage) sends tax_rate + tax_amount per
- * item, and the sales createQuotation service NEVER reads them
- * (it inserts product_id, product_name, unit_name, quantity,
- * unit_price, discount, total, notes only) — converting without
- * tax_rate? / tax_amount? on items would 400 the create call.
+ * — and the census classifier's first-seen-wins index resolved the
+ * sales create site to the import-sales class, counting it dto-class
+ * while the pipe did nothing for it. Package C fixes the script to
+ * resolve declarations per-import, which reveals the site as
+ * dto-interface, then converts it). The tax trap from D5 is handled:
+ * the create caller sends tax_rate + tax_amount per item and the
+ * service never reads them, so QuotationItemDto carries them as
+ * optional @IsNumber @Min(0) fields — without them the nested
+ * forbidNonWhitelisted check 400s every real create call (proven by
+ * RED-2: 'الحقل أصناف الطلب > tax_rate غير مسموح إرساله').
+ * productId stays required: quotation_items.product_id is integer
+ * NOT NULL (migration 2040000000021), so an item without it fails at
+ * the DB today (500) and the pipe turns it into a 400.
  *
  * UpdateQuotationDto: ZERO frontend callers (no page calls the
  * update endpoint), so the positive case is the interface shape
@@ -75,6 +68,22 @@ export class QuotationItemDto {
   @Min(0)
   discount?: number;
 
+  // Package C: the create caller (CreateQuotationPage.handleSubmit)
+  // ALWAYS sends these per item (Number(item.tax_rate) || 0 /
+  // Number(item.tax_amount) || 0) and the service NEVER reads them.
+  // They must be whitelisted here or the nested
+  // forbidNonWhitelisted check 400s every real create call (proven by
+  // RED-2: 'الحقل أصناف الطلب > tax_rate غير مسموح إرساله').
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  tax_rate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  tax_amount?: number;
+
   @IsNumber()
   @Min(0)
   total!: number;
@@ -84,25 +93,70 @@ export class QuotationItemDto {
   notes?: string;
 }
 
-export interface CreateQuotationDto {
+export class CreateQuotationDto {
+  @IsOptional()
+  @IsNumber()
   customerId?: number | null;
-  customerName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  customerName!: string;
+
+  @IsOptional()
+  @IsString()
   customerPhone?: string;
+
+  @IsOptional()
+  @IsString()
   customerAddress?: string;
+
+  @IsOptional()
+  @IsNumber()
   branchId?: number | null;
-  subtotal: number;
+
+  @IsNumber()
+  @Min(0)
+  subtotal!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   discountAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   taxAmount?: number;
-  totalAmount: number;
+
+  @IsNumber()
+  @Min(0)
+  totalAmount!: number;
+
+  @IsOptional()
+  @IsString()
   validUntil?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
   termsConditions?: string;
-  items: QuotationItemDto[];
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => QuotationItemDto)
+  items!: QuotationItemDto[];
+
   // I10-A (R8): creation-time status. Only 'sent' may be set here —
   // the approve-and-save button issues the quotation instead of
   // leaving it a draft. 'accepted' is the customer's response and
   // 'converted' is set by convertToSale; both are rejected by the
   // service whitelist, which fails closed to 'draft'.
+  @IsOptional()
+  @IsIn(['draft', 'sent'])
   status?: 'draft' | 'sent';
 }
 

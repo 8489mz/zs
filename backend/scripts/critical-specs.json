@@ -340,6 +340,7 @@
     "test/critical/dto-maritime-freight-portal.spec.ts",
     "test/critical/dto-maritime-freight.spec.ts",
     "test/critical/dto-sales-core.spec.ts",
-    "test/critical/dto-sales-orders.spec.ts"
+    "test/critical/dto-sales-orders.spec.ts",
+    "test/critical/dto-sales-quotation-create.spec.ts"
   ]
 }
