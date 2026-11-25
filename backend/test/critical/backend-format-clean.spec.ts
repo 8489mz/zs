@@ -49,6 +49,10 @@
  * (exit 1, zero `[warn]` lines) while the same run's `npm run
  * format:check` step — which runs this same binary directly — passed,
  * so npx resolution was the one unproven variable and is gone now.
+ * FIX-266: the bypass parse strips ANSI escapes before matching
+ * `[warn]` lines — prettier colorizes `warn` when CI=true (GitHub
+ * Actions) even when piped, which made the parse find zero files in
+ * ci-full #266 although the bypass reported exactly the 21.
  * It also runs the repo's own `npm run format:check` and asserts
  * exit 0, so the command the CI lint step runs is proven here too.
  *
@@ -162,8 +166,18 @@ function main(): void {
     maxBuffer: 16 * 1024 * 1024,
   });
   const combined = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  // FIX-266 (ci-full #266): prettier colorizes the `warn` word (ANSI
+  // `\x1b[33m` / `\x1b[39m`) when CI=true even though stderr is piped
+  // — GitHub Actions sets CI=true on every step — so a plain
+  // startsWith('[warn] ') finds zero lines and the misfire guard below
+  // fires, although the bypass did report exactly the 21 files (the
+  // log viewer strips the ANSI, which is why the CI tail *looks*
+  // clean). Strip ANSI escapes (and any trailing CR) before matching;
+  // the filenames themselves are never colored.
   const failing = combined
     .split('\n')
+    // eslint-disable-next-line no-control-regex -- intentional: stripping prettier's ANSI color escapes (FIX-266)
+    .map((line) => line.replace(/\u001b\[[0-9;]*m/g, '').replace(/\r$/, ''))
     .filter((line) => line.startsWith('[warn] '))
     .map((line) => line.slice('[warn] '.length).trim())
     .filter((line) => line.endsWith('.ts') || line.endsWith('.cjs') || line.endsWith('.mjs') || line.endsWith('.js'))
