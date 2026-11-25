@@ -241,12 +241,16 @@ export class MaritimeFreightCarrierInvoicesService {
     auth: AuthContext,
     jobId: string,
     dto: {
-      invoicedTotal: number;
+      // Widened in D4 (INV-DTO-MARITIME-FREIGHT-28): the body defaults
+      // a missing total with Number(dto.invoicedTotal || 0), and the
+      // shipping line falls back to the job's line — both were
+      // declared narrower than the body tolerates.
+      invoicedTotal?: number;
       oceanFreight?: number;
       thcCharges?: number;
       bafCharges?: number;
       otherCharges?: number;
-      shippingLineId?: string | number;
+      shippingLineId?: string | number | null;
       containerType?: string;
       currency?: string;
     },
@@ -325,7 +329,10 @@ export class MaritimeFreightCarrierInvoicesService {
       bafCharges?: number;
       detentionDemurrage?: number;
       otherCharges?: number;
-      shippingLineId?: string | number;
+      // Widened in D4 (INV-DTO-MARITIME-FREIGHT-28): the caller sends
+      // job.shipping_line_id, which is null when the job has no line;
+      // the body falls back to the job's line or null.
+      shippingLineId?: string | number | null;
       carrierName?: string;
       notes?: string;
       allowOverride?: boolean;

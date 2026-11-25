@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { MaritimeFreightService } from './maritime-freight.service';
 import { MaritimeCustomerPortalService } from './maritime-customer-portal.service';
-import { MaritimeMailService, MaritimeMailConfig } from './maritime-mail.service';
+import { MaritimeMailService } from './maritime-mail.service';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { RequireFeature } from '../../core/auth/decorators/feature.decorator';
@@ -27,6 +27,32 @@ import { CreateAgentSettlementDto, UpdateAgentSettlementStatusDto } from './dto/
 import { ReleaseDeliveryOrderDto } from './dto/release-delivery-order.dto';
 import { CreateInlandTruckingTripDto, UpdateInlandTruckingTripStatusDto } from './dto/inland-trucking.dto';
 import { CarrierTrackingEventDto, CarrierTrackingSyncDto } from './dto/carrier-tracking.dto';
+import {
+  CreatePortDto,
+  CreateShippingLineDto,
+  ImportCarriersBulkDto,
+  SetCustomerPortalPinDto,
+  UpdateShippingLineDto,
+} from './dto/freight-master-data.dto';
+import {
+  CreateConsolidationSubJobDto,
+  CreateContainerDto,
+  DispatchRfqEmailsDto,
+  ParseBookingTextDto,
+  ParseEmailTextDto,
+  UpdateJobDto,
+} from './dto/freight-jobs.dto';
+import {
+  CreateCarrierDisputeDto,
+  CreateCarrierInvoiceDto,
+  IssueJobSalesInvoiceDto,
+  OverrideCarrierInvoiceDto,
+  PreviewCarrierInvoiceAuditDto,
+  RecordJobExpenseVoucherDto,
+  ResolveCarrierDisputeDto,
+  SettleJobFromBalanceDto,
+} from './dto/freight-money.dto';
+import { SaveMailSettingsDto, SavePipelineSettingsDto, TestMailConnectionDto } from './dto/freight-settings.dto';
 import { DcsaMilestoneKey, ShipmentMilestoneKey } from './maritime-freight.types';
 
 @Controller(['maritime-freight', 'api/maritime-freight'])
@@ -46,7 +72,11 @@ export class MaritimeFreightController {
   // feature); the public portal controller stays unauthenticated.
   // INV-FREIGHT-PORTAL-PIN-HASHED.
   @Put('customers/:id/portal-pin')
-  async setCustomerPortalPin(@Param('id') id: string, @Body() body: { pinCode: string }, @Req() req: RequestWithAuth) {
+  async setCustomerPortalPin(
+    @Param('id') id: string,
+    @Body() body: SetCustomerPortalPinDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.portalService.setCustomerPortalPin(req.authContext!, Number(id), String(body?.pinCode || ''));
   }
 
@@ -63,10 +93,7 @@ export class MaritimeFreightController {
   }
 
   @Post('ports')
-  async createPort(
-    @Body() body: { code: string; nameAr: string; nameEn: string; countryCode: string; countryName: string },
-    @Req() req: RequestWithAuth,
-  ) {
+  async createPort(@Body() body: CreatePortDto, @Req() req: RequestWithAuth) {
     return this.freightService.createPort(req.authContext!, body);
   }
 
@@ -83,12 +110,12 @@ export class MaritimeFreightController {
   }
 
   @Post('shipping-lines')
-  async createShippingLine(@Body() body: any, @Req() req: RequestWithAuth) {
+  async createShippingLine(@Body() body: CreateShippingLineDto, @Req() req: RequestWithAuth) {
     return this.freightService.createShippingLine(req.authContext!, body);
   }
 
   @Patch('shipping-lines/:id')
-  async updateShippingLine(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithAuth) {
+  async updateShippingLine(@Param('id') id: string, @Body() body: UpdateShippingLineDto, @Req() req: RequestWithAuth) {
     return this.freightService.updateShippingLine(req.authContext!, id, body);
   }
 
@@ -108,7 +135,7 @@ export class MaritimeFreightController {
   }
 
   @Post('shipping-lines/import-bulk')
-  async importCarriersBulk(@Body() body: { items: any[] }, @Req() req: RequestWithAuth) {
+  async importCarriersBulk(@Body() body: ImportCarriersBulkDto, @Req() req: RequestWithAuth) {
     return this.freightService.importCarriersBulk(req.authContext!, body.items);
   }
 
@@ -129,11 +156,7 @@ export class MaritimeFreightController {
   }
 
   @Post('rfqs/:id/dispatch-emails')
-  async dispatchEmails(
-    @Param('id') id: string,
-    @Body() body: { targetLineIds?: number[] },
-    @Req() req: RequestWithAuth,
-  ) {
+  async dispatchEmails(@Param('id') id: string, @Body() body: DispatchRfqEmailsDto, @Req() req: RequestWithAuth) {
     return this.freightService.dispatchRfqEmails(req.authContext!, id, body?.targetLineIds);
   }
 
@@ -149,13 +172,13 @@ export class MaritimeFreightController {
   }
 
   @Post('parse-email-text')
-  parseEmailText(@Body() body: any) {
+  parseEmailText(@Body() body: ParseEmailTextDto) {
     const raw = typeof body === 'string' ? body : body?.text || body?.rawText || '';
     return this.freightService.parseCarrierEmailText(raw);
   }
 
   @Post('jobs/parse-booking-text')
-  parseBookingText(@Body() body: any) {
+  parseBookingText(@Body() body: ParseBookingTextDto) {
     const raw = typeof body === 'string' ? body : body?.text || body?.rawText || '';
     return this.freightService.parseCarrierBookingText(raw);
   }
@@ -202,7 +225,7 @@ export class MaritimeFreightController {
   }
 
   @Put('jobs/:id')
-  async updateJob(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithAuth) {
+  async updateJob(@Param('id') id: string, @Body() body: UpdateJobDto, @Req() req: RequestWithAuth) {
     return this.freightService.updateJob(req.authContext!, id, body);
   }
 
@@ -248,7 +271,7 @@ export class MaritimeFreightController {
   @Post('jobs/:id/issue-invoice')
   async issueJobSalesInvoice(
     @Param('id') id: string,
-    @Body() body: { amount?: number; notes?: string; exchangeRate?: number; currency?: string },
+    @Body() body: IssueJobSalesInvoiceDto,
     @Req() req: RequestWithAuth,
   ) {
     return this.freightService.issueJobSalesInvoice(req.authContext!, id, body);
@@ -257,17 +280,7 @@ export class MaritimeFreightController {
   @Post('jobs/:id/record-expense')
   async recordJobExpenseVoucher(
     @Param('id') id: string,
-    @Body()
-    body: {
-      amount: number;
-      expenseType?: 'carrier' | 'port' | 'other';
-      paymentMethod?: 'payable' | 'cash' | 'bank';
-      supplierId?: number;
-      supplierName?: string;
-      description?: string;
-      currency?: string;
-      exchangeRate?: number;
-    },
+    @Body() body: RecordJobExpenseVoucherDto,
     @Req() req: RequestWithAuth,
   ) {
     return this.freightService.recordJobExpenseVoucher(req.authContext!, id, body);
@@ -289,7 +302,7 @@ export class MaritimeFreightController {
   @Post('jobs/:id/settle-from-balance')
   async settleJobFromBalance(
     @Param('id') id: string,
-    @Body() body: { amount?: number; exchangeRate?: number },
+    @Body() body: SettleJobFromBalanceDto,
     @Req() req: RequestWithAuth,
   ) {
     return this.freightService.settleJobFromCustomerBalance(req.authContext!, id, body);
@@ -316,7 +329,7 @@ export class MaritimeFreightController {
   }
 
   @Post('containers')
-  async createContainer(@Body() body: any, @Req() req: RequestWithAuth) {
+  async createContainer(@Body() body: CreateContainerDto, @Req() req: RequestWithAuth) {
     return this.freightService.createContainer(req.authContext!, body);
   }
 
@@ -362,12 +375,12 @@ export class MaritimeFreightController {
   }
 
   @Post('mail-settings')
-  async saveMailSettings(@Body() dto: Partial<MaritimeMailConfig>, @Req() req: RequestWithAuth) {
+  async saveMailSettings(@Body() dto: SaveMailSettingsDto, @Req() req: RequestWithAuth) {
     return this.mailService.saveMailSettings(req.authContext!, dto);
   }
 
   @Post('mail-settings/test')
-  async testMailConnection(@Body() dto: Partial<MaritimeMailConfig>, @Req() req: RequestWithAuth) {
+  async testMailConnection(@Body() dto: TestMailConnectionDto, @Req() req: RequestWithAuth) {
     return this.mailService.testConnection(req.authContext!, dto);
   }
 
@@ -390,7 +403,7 @@ export class MaritimeFreightController {
   }
 
   @Post('pipeline-settings')
-  async savePipelineSettings(@Body() dto: any, @Req() req: RequestWithAuth) {
+  async savePipelineSettings(@Body() dto: SavePipelineSettingsDto, @Req() req: RequestWithAuth) {
     return this.freightService.savePipelineSettings(req.authContext!, dto);
   }
 
@@ -498,7 +511,11 @@ export class MaritimeFreightController {
   // --------------------------------------------------------------------------
 
   @Post('jobs/:jobId/carrier-invoices/preview')
-  async previewCarrierInvoiceAudit(@Param('jobId') jobId: string, @Body() dto: any, @Req() req: RequestWithAuth) {
+  async previewCarrierInvoiceAudit(
+    @Param('jobId') jobId: string,
+    @Body() dto: PreviewCarrierInvoiceAuditDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.freightService.previewCarrierInvoiceAudit(req.authContext!, jobId, dto);
   }
 
@@ -526,26 +543,38 @@ export class MaritimeFreightController {
   }
 
   @Post('jobs/:jobId/carrier-invoices')
-  async createCarrierInvoice(@Param('jobId') jobId: string, @Body() dto: any, @Req() req: RequestWithAuth) {
+  async createCarrierInvoice(
+    @Param('jobId') jobId: string,
+    @Body() dto: CreateCarrierInvoiceDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.freightService.createCarrierInvoice(req.authContext!, jobId, dto);
   }
 
   @Post('carrier-invoices/:id/override')
-  async overrideCarrierInvoice(@Param('id') id: string, @Body() dto: { reason: string }, @Req() req: RequestWithAuth) {
+  async overrideCarrierInvoice(
+    @Param('id') id: string,
+    @Body() dto: OverrideCarrierInvoiceDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.freightService.overrideCarrierInvoice(req.authContext!, id, dto);
   }
 
   @Post('carrier-invoices/:id/dispute')
   async createCarrierDispute(
     @Param('id') id: string,
-    @Body() dto: { reason: string; disputedAmount?: number },
+    @Body() dto: CreateCarrierDisputeDto,
     @Req() req: RequestWithAuth,
   ) {
     return this.freightService.createCarrierDispute(req.authContext!, id, dto);
   }
 
   @Post('carrier-disputes/:id/resolve')
-  async resolveCarrierDispute(@Param('id') id: string, @Body() dto: any, @Req() req: RequestWithAuth) {
+  async resolveCarrierDispute(
+    @Param('id') id: string,
+    @Body() dto: ResolveCarrierDisputeDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.freightService.resolveCarrierDispute(req.authContext!, id, dto);
   }
 
@@ -649,7 +678,11 @@ export class MaritimeFreightController {
   }
 
   @Post('jobs/:id/sub-jobs')
-  async createConsolidationSubJob(@Param('id') id: string, @Body() dto: any, @Req() req: RequestWithAuth) {
+  async createConsolidationSubJob(
+    @Param('id') id: string,
+    @Body() dto: CreateConsolidationSubJobDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.freightService.createConsolidationSubJob(req.authContext!, id, dto);
   }
 

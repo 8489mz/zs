@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Param, Query, Body } from '@nestjs/common';
 import { MaritimeFreightService } from './maritime-freight.service';
+import { SubmitPublicCarrierBidDto } from './dto/public-carrier-bid.dto';
 
 @Controller([
   'public/freight-tracking',
@@ -30,7 +31,7 @@ export class MaritimePublicTrackingController {
   }
 
   @Post('rfq/:id/bid')
-  async submitPublicCarrierBid(@Param('id') id: string, @Body() dto: any) {
+  async submitPublicCarrierBid(@Param('id') id: string, @Body() dto: SubmitPublicCarrierBidDto) {
     return this.freightService.submitPublicCarrierBid(id, dto);
   }
 }

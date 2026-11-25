@@ -481,7 +481,11 @@ export class MaritimeFreightMasterDataService {
       code: string;
       nameAr: string;
       nameEn?: string;
-      carrierType?: 'shipping_line' | 'overseas_agent';
+      // Widened in D4 (INV-DTO-MARITIME-FREIGHT-28): the form sends
+      // 'airline' and 'trucking' too, and the body maps anything that
+      // is not 'overseas_agent' to 'shipping_line' — the declared
+      // union lied by omitting them.
+      carrierType?: 'shipping_line' | 'overseas_agent' | 'airline' | 'trucking';
       tradeLanes?: string;
       countryName?: string;
       countryCode?: string;

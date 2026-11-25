@@ -336,6 +336,8 @@
     "test/critical/dto-purchases-inventory.spec.ts",
     "test/critical/dto-delivery-reps-portal.spec.ts",
     "test/critical/dto-delivery-reps-admin.spec.ts",
-    "test/critical/dto-delivery-reps-driver.spec.ts"
+    "test/critical/dto-delivery-reps-driver.spec.ts",
+    "test/critical/dto-maritime-freight-portal.spec.ts",
+    "test/critical/dto-maritime-freight.spec.ts"
   ]
 }

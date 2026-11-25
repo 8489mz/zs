@@ -1,17 +1,23 @@
 import { Body, Controller, Get, Headers, Param, Post, Query, Req } from '@nestjs/common';
 import { MaritimeCustomerPortalService, CreatePortalQuoteRequestDto } from './maritime-customer-portal.service';
+import {
+  ApproveQuotationDto,
+  MaritimeCustomerLoginDto,
+  MaritimeCustomerTokenLoginDto,
+  RejectQuotationDto,
+} from './dto/customer-portal.dto';
 
 @Controller(['freight-portal', 'api/freight-portal', 'api/maritime-freight/portal'])
 export class MaritimeCustomerPortalController {
   constructor(private readonly portalService: MaritimeCustomerPortalService) {}
 
   @Post('auth/login')
-  async login(@Body() body: { phone: string; pinCode: string; companyCode?: string; tenantId?: string }) {
+  async login(@Body() body: MaritimeCustomerLoginDto) {
     return this.portalService.customerLogin(body);
   }
 
   @Post('auth/token-login')
-  async tokenLogin(@Body() body: { token: string }) {
+  async tokenLogin(@Body() body: MaritimeCustomerTokenLoginDto) {
     return this.portalService.customerTokenLogin(body.token);
   }
 
@@ -67,7 +73,7 @@ export class MaritimeCustomerPortalController {
   async approveQuotation(
     @Headers('authorization') authHeader: string,
     @Param('id') id: string,
-    @Body() body: { approvalNotes?: string; clientReference?: string; confirmedBy?: string },
+    @Body() body: ApproveQuotationDto,
     @Req() req: any,
   ) {
     const auth = await this.portalService.verifyCustomerToken(authHeader);
@@ -79,7 +85,7 @@ export class MaritimeCustomerPortalController {
   async rejectQuotation(
     @Headers('authorization') authHeader: string,
     @Param('id') id: string,
-    @Body() body: { reason?: string },
+    @Body() body: RejectQuotationDto,
   ) {
     const auth = await this.portalService.verifyCustomerToken(authHeader);
     return this.portalService.rejectQuotation(auth, id, body);

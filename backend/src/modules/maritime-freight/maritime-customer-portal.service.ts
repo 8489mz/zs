@@ -1,4 +1,5 @@
 import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Kysely, sql } from '../../database/kysely';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
@@ -36,25 +37,89 @@ export interface CustomerPortalContext {
   phone: string;
 }
 
-export interface CreatePortalQuoteRequestDto {
-  transportMode: 'sea' | 'air' | 'road' | 'multimodal';
+// Converted interface -> class in D4 (INV-DTO-MARITIME-FREIGHT-28): the
+// global requestValidationPipe does nothing for an interface, so the
+// portal quote request was unvalidated. The form
+// (MaritimeCustomerPortalPage) always sends the 15 fields below;
+// transportMode/polCode/polName/podCode/podName/commodityDescription
+// stay required (the form client-validates the description and always
+// picks ports); the rest stays optional — the service defaults
+// everything (transportMode 'sea', containerCount 1, weights 0,
+// cargoReadyDate/targetDeliveryDate/targetFreeDays absent).
+export class CreatePortalQuoteRequestDto {
+  @IsIn(['sea', 'air', 'road', 'multimodal'])
+  transportMode!: 'sea' | 'air' | 'road' | 'multimodal';
+
+  @IsIn(['import', 'export', 'cross_trade'])
+  @IsOptional()
   direction?: 'import' | 'export' | 'cross_trade';
-  polCode: string;
-  polName: string;
-  podCode: string;
-  podName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  polCode!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  polName!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  podCode!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  podName!: string;
+
+  @IsString()
+  @IsOptional()
   cargoMode?: string;
+
+  @IsString()
+  @IsOptional()
   containerType?: string;
+
+  @IsInt()
+  @IsOptional()
   containerCount?: number;
-  commodityDescription: string;
+
+  @IsString()
+  @IsNotEmpty()
+  commodityDescription!: string;
+
+  @IsNumber()
+  @IsOptional()
   grossWeightKg?: number;
+
+  @IsNumber()
+  @IsOptional()
   volumetricWeightKg?: number;
+
+  @IsNumber()
+  @IsOptional()
   chargeableWeightKg?: number;
+
+  @IsNumber()
+  @IsOptional()
   totalCbm?: number;
+
+  @IsString()
+  @IsOptional()
   incoterm?: string;
+
+  @IsString()
+  @IsOptional()
   cargoReadyDate?: string;
+
+  @IsString()
+  @IsOptional()
   targetDeliveryDate?: string;
+
+  @IsInt()
+  @IsOptional()
   targetFreeDays?: number;
+
+  @IsString()
+  @IsOptional()
   notes?: string;
 }
 

@@ -295,7 +295,9 @@ export class MaritimeFreightService {
       code: string;
       nameAr: string;
       nameEn?: string;
-      carrierType?: 'shipping_line' | 'overseas_agent';
+      // Widened in D4 (INV-DTO-MARITIME-FREIGHT-28): the form sends
+      // 'airline' and 'trucking' too — see the master-data service.
+      carrierType?: 'shipping_line' | 'overseas_agent' | 'airline' | 'trucking';
       tradeLanes?: string;
       countryName?: string;
       countryCode?: string;
@@ -629,12 +631,14 @@ export class MaritimeFreightService {
     auth: AuthContext,
     jobId: string,
     dto: {
-      invoicedTotal: number;
+      // Widened in D4 (INV-DTO-MARITIME-FREIGHT-28): see the
+      // carrier-invoices service — the body tolerates both.
+      invoicedTotal?: number;
       oceanFreight?: number;
       thcCharges?: number;
       bafCharges?: number;
       otherCharges?: number;
-      shippingLineId?: string | number;
+      shippingLineId?: string | number | null;
       containerType?: string;
       currency?: string;
     },
@@ -656,7 +660,9 @@ export class MaritimeFreightService {
       bafCharges?: number;
       detentionDemurrage?: number;
       otherCharges?: number;
-      shippingLineId?: string | number;
+      // Widened in D4 (INV-DTO-MARITIME-FREIGHT-28): see the
+      // carrier-invoices service — the caller sends a nullable line.
+      shippingLineId?: string | number | null;
       carrierName?: string;
       notes?: string;
       allowOverride?: boolean;
@@ -670,7 +676,9 @@ export class MaritimeFreightService {
     return this.carrierInvoicesService.overrideCarrierInvoice(auth, invoiceId, dto);
   }
 
-  async createCarrierDispute(auth: AuthContext, invoiceId: string, dto: { reason: string; disputedAmount?: number }) {
+  // Widened in D4 (INV-DTO-MARITIME-FREIGHT-28): see the
+  // carrier-disputes service — the body defaults a missing reason.
+  async createCarrierDispute(auth: AuthContext, invoiceId: string, dto: { reason?: string; disputedAmount?: number }) {
     return this.carrierDisputesService.createCarrierDispute(auth, invoiceId, dto);
   }
 

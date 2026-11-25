@@ -43,6 +43,13 @@
  * stays 624 and the buckets move dto-class 375 -> 433, inline-object
  * 146 -> 94, any 42 -> 37, no-annotation 1 -> 0.
  *
+ * D4 (INV-DTO-MARITIME-FREIGHT-28): maritime-freight converts 28 sites
+ * (customer portal 5 + freight controller 22 + public tracking 1); the
+ * count is now 163 = 154 convertible + 9 pinned exclusions. Whole-body
+ * total stays 624 and the buckets move dto-class 433 -> 461,
+ * inline-object 94 -> 81, any 37 -> 25, dto-interface 39 -> 38,
+ * inline-other 9 -> 7.
+ *
  * Usage: node scripts/dto-coverage-check.mjs [--json]
  *   (run from the backend/ directory; paths are relative to backend/).
  */
@@ -54,8 +61,8 @@ import { fileURLToPath } from 'node:url';
 const BACKEND = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(BACKEND, 'src');
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D3 (191 after delivery-reps converts 58). */
-const PINNED_COUNT = 191;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D4 (163 after maritime-freight converts 28). */
+const PINNED_COUNT = 163;
 
 /**
  * The 9 pinned exclusions. A DTO on any of these breaks a real flow — see

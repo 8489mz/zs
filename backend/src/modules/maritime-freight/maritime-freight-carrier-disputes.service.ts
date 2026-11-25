@@ -60,7 +60,10 @@ export class MaritimeFreightCarrierDisputesService {
     this.getJobById = deps.getJobById;
   }
 
-  async createCarrierDispute(auth: AuthContext, invoiceId: string, dto: { reason: string; disputedAmount?: number }) {
+  // Widened in D4 (INV-DTO-MARITIME-FREIGHT-28): the body defaults a
+  // missing reason (dto.reason?.trim() || '...'), so the declared
+  // required reason lied.
+  async createCarrierDispute(auth: AuthContext, invoiceId: string, dto: { reason?: string; disputedAmount?: number }) {
     const { tenantId } = requireTenantScope(auth);
 
     const invoice = await this.db
