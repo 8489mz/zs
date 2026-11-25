@@ -41,10 +41,14 @@
  * does not apply here: that ignore would have been unguarded, this
  * one is pinned by this spec.
  *
- * This spec invokes `npx prettier --check` on the format:check
- * scope globs so the exact tool CI runs is what is asserted — in
- * CI, `npm ci` installs prettier (devDep, lock 3.10.1), so npx
- * resolves the local binary there; locally it uses the npx cache.
+ * This spec invokes the repo's own pinned prettier binary directly
+ * (`node node_modules/prettier/bin/prettier.cjs --check`) on the
+ * format:check scope globs so the exact tool CI runs is what is
+ * asserted — in CI, `npm ci` installs prettier (devDep, lock 3.10.1).
+ * It used to spawn `npx prettier`; that misfired in ci-full #264
+ * (exit 1, zero `[warn]` lines) while the same run's `npm run
+ * format:check` step — which runs this same binary directly — passed,
+ * so npx resolution was the one unproven variable and is gone now.
  * It also runs the repo's own `npm run format:check` and asserts
  * exit 0, so the command the CI lint step runs is proven here too.
  *
@@ -143,7 +147,14 @@ function main(): void {
   );
 
   // (2) Bypassing the ignore, exactly the 21 files must fail --check.
-  const result = spawnSync('npx', ['prettier', '--check', '--ignore-path', '/dev/null', ...GLOBS], {
+  // FIX-264 (ci-full #264): the pinned binary is invoked directly (see
+  // header) — `npx prettier` misfired in that run with exit 1 and zero
+  // [warn] lines while the direct binary passed the same run's
+  // format:check step. A missing binary fails here with a clear message
+  // instead of a misleading empty failing list.
+  const prettierBin = path.join(BACKEND, 'node_modules', 'prettier', 'bin', 'prettier.cjs');
+  assert.ok(fs.existsSync(prettierBin), `pinned prettier binary missing at ${prettierBin} — run npm ci`);
+  const result = spawnSync('node', [prettierBin, '--check', '--ignore-path', '/dev/null', ...GLOBS], {
     cwd: BACKEND,
     encoding: 'utf8',
     stdio: 'pipe',
@@ -162,6 +173,13 @@ function main(): void {
     result.status,
     1,
     `prettier --check (ignore bypassed) on the whole backend must exit 1 (exactly the ${String(EXCLUDED.length)} excluded files fail). Got exit ${String(result.status)} signal ${String(result.signal)}.\n${tail(combined, 30)}`,
+  );
+  // A bypass that exits 1 yet reports zero failing files is a misfire,
+  // not a pass — fail with the raw output so the next occurrence is
+  // diagnosable instead of a bare empty list (ci-full #264).
+  assert.ok(
+    failing.length > 0,
+    `prettier --check (ignore bypassed) exited 1 but reported zero failing files — the bypass misfired; raw output tail:\n${tail(combined, 30)}`,
   );
   assert.deepEqual(
     failing,

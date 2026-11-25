@@ -75,6 +75,19 @@ const ADMIN = {
   accountId: ACCOUNT,
 } as unknown as AuthContext;
 
+// YYYY-MM-DD N days from today, built from LOCAL calendar parts (never
+// from UTC toISOString after a local-midnight setHours — in UTC+2 that
+// yields the previous day). The schedule first-due window is
+// [today-7, today+5y] on the tenant day, so a hardcoded past date expires.
+function dateStr(daysFromToday: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromToday);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
@@ -562,7 +575,7 @@ async function main(): Promise<void> {
           mode: 'count',
           scheduleAmount: 8000,
           installmentCount: 2,
-          firstDueDate: '2026-11-15',
+          firstDueDate: dateStr(10),
           intervalDays: 30,
         } as any,
         ADMIN,

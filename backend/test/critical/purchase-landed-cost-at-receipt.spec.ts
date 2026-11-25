@@ -655,10 +655,12 @@ async function main(): Promise<void> {
       'create must allocate at-receipt freight over the stocked lines',
     );
     assert.ok(createBody.includes('landedBaseUnitCost'), 'the receipt blend must use the landed base unit cost');
-    assert.ok(
-      createBody.includes(
-        'valueStockReceipt(trx, scope.tenantId, item.productId, stockChange.globalAfter, increasedQty, increasedQty * landedBaseUnitCost)',
-      ),
+    // The call is wrapped across lines by Prettier (args one per line);
+    // \s allows the newlines while still pinning the exact arg order and
+    // the landed receipt value (the trailing comma is Prettier's).
+    assert.match(
+      createBody,
+      /valueStockReceipt\(\s*trx,\s*scope\.tenantId,\s*item\.productId,\s*stockChange\.globalAfter,\s*increasedQty,\s*increasedQty \* landedBaseUnitCost\s*,?\s*\)/,
       'the WAC blend must receive the landed receipt value',
     );
     assert.ok(createBody.includes("insertInto('purchase_landed_costs')"), 'create must store the freight breakdown');

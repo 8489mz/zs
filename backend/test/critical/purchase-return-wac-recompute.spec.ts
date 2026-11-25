@@ -417,10 +417,11 @@ async function main(): Promise<void> {
     const createStart = serviceSource.indexOf('async createPurchaseReturn(');
     assert.ok(createStart > 0, 'createPurchaseReturn exists');
     const createBody = serviceSource.slice(createStart);
-    assert.ok(
-      createBody.includes(
-        'revalueStockReturn(trx, scope.tenantId, requestItem.productId, stockChange.globalAfter, preparedLine.stockDelta',
-      ),
+    // The call is wrapped across lines by Prettier (args one per line);
+    // \s allows the newlines while still pinning the exact arg order.
+    assert.match(
+      createBody,
+      /revalueStockReturn\(\s*trx,\s*scope\.tenantId,\s*requestItem\.productId,\s*stockChange\.globalAfter,\s*preparedLine\.stockDelta/,
       'creation must re-blend WAC from the corrected globalAfter in the same transaction',
     );
     assert.ok(

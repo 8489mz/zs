@@ -360,7 +360,12 @@ async function run(): Promise<void> {
     const { service } = createService(db);
     const result = await service.listPosProducts({ q: 'milk', limit: 5 }, cashier);
     assert.deepEqual(productIds(result), ['1', '3']);
-    assert.equal(db.lastProductQueryLimit, 5);
+    // The tokenized search over-fetches 3x the requested limit on purpose
+    // (catalog-product-pos.service.ts, 9b67fab6e — headroom for the
+    // dedup/uniqueness pass; the returned rows are sliced back to the
+    // requested limit, and meta.limit stays 5). The SQL fetch limit is
+    // therefore 15, not 5.
+    assert.equal(db.lastProductQueryLimit, 15);
   }
 
   {
@@ -372,7 +377,8 @@ async function run(): Promise<void> {
     const result = await service.listPosProducts({ q: 'product', limit: 500 }, cashier);
     assert.equal((result.products as Array<Record<string, unknown>>).length, 80);
     assert.equal((result.meta as Record<string, unknown>).limit, 500);
-    assert.equal(db.lastProductQueryLimit, 500);
+    // Same 3x over-fetch as above: 500 * 3 = 1500 (capped at 25000).
+    assert.equal(db.lastProductQueryLimit, 1500);
   }
 
   {

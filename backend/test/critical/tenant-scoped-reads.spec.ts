@@ -179,9 +179,11 @@ function testAuditIsolationRemediations(): void {
   expect(webhook, /timingSafeEqual\(expected, Buffer\.from\(supplied, 'hex'\)\)/, 'MT-21');
   assert.doesNotMatch(webhook, /firstActive/, 'MT-21: no first-tenant fallback');
   const webhookController = read('modules/settings/controllers/whatsapp-gateway.controller.ts');
+  // The call is wrapped across lines by Prettier (args one per line); \s
+  // allows the newlines while still pinning the exact arg order/values.
   expect(
     webhookController,
-    /handleVerifiedInboundWebhook\(body, tenantId, req\.headers\['x-zs-webhook-signature'\], req\.rawBody\)/,
+    /handleVerifiedInboundWebhook\(\s*body,\s*tenantId,\s*req\.headers\['x-zs-webhook-signature'\],\s*req\.rawBody,?\s*\)/,
     'MT-21',
   );
 

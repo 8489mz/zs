@@ -605,10 +605,11 @@ async function main(): Promise<void> {
     assert.ok(cancelStart > 0, 'cancelPurchase exists');
     const cancelEnd = cancelSource.indexOf('\n  async ', cancelStart + 1);
     const cancelBody = cancelSource.slice(cancelStart, cancelEnd === -1 ? undefined : cancelEnd);
-    assert.ok(
-      cancelBody.includes(
-        'await revalueStockReturn(trx, scope.tenantId, Number(item.product_id), stockChange.globalAfter, removeQty',
-      ),
+    // The call is wrapped across lines by Prettier (args one per line);
+    // \s allows the newlines while still pinning the exact arg order.
+    assert.match(
+      cancelBody,
+      /await revalueStockReturn\(\s*trx,\s*scope\.tenantId,\s*Number\(item\.product_id\),\s*stockChange\.globalAfter,\s*removeQty/,
       'cancel must re-blend WAC from the corrected globalAfter in the same transaction',
     );
     assert.ok(

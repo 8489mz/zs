@@ -727,8 +727,22 @@ async function main(): Promise<void> {
       );
       const collectionsAt = controllerSource.indexOf("@Post('collections')");
       assert.ok(collectionsAt > 0, 'the collections endpoint exists');
+      // D3 moved the body into a DTO class: the endpoint now takes
+      // RecordCollectionDto, and the supervisor PIN lives on that DTO
+      // (the old 900-char controller-window check went stale when the
+      // inline body type was extracted).
       assert.ok(
-        controllerSource.slice(collectionsAt, collectionsAt + 900).includes('supervisorOverridePin?: string'),
+        controllerSource.slice(collectionsAt, collectionsAt + 300).includes('@Body() body: RecordCollectionDto'),
+        'the collections endpoint takes RecordCollectionDto',
+      );
+      const dtoSource = readFileSync(
+        resolve(here, '../../src/modules/delivery-reps/dto/van-driver-orders.dto.ts'),
+        'utf8',
+      );
+      const dtoAt = dtoSource.indexOf('export class RecordCollectionDto {');
+      assert.ok(dtoAt > 0, 'RecordCollectionDto exists');
+      assert.ok(
+        dtoSource.slice(dtoAt, dtoAt + 1500).includes('supervisorOverridePin?: string'),
         'the collections DTO carries the supervisor PIN',
       );
       console.log('  source pins passed');
