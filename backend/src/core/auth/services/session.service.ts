@@ -46,6 +46,15 @@ function toNonEmpty(value: unknown): string {
  */
 const MFA_CHALLENGE_KIND = 'mfa-challenge';
 const MFA_CHALLENGE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * الجلسة تعيش 7 أيام من آخر استخدام (انتهاء بالخمول، لا من تسجيل الدخول).
+ * التجديد الانزلاقي: عند حلّ الجلسة من قاعدة البيانات (لا من الذاكرة) وكانت
+ * المدة المتبقية أقل من يوم، يُمدَّد `expires_at` إلى الآن + 7 أيام — كتابة
+ * واحدة في اليوم لكل جلسة نشطة كحد أقصى، لا كتابة مع كل طلب.
+ */
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_RENEWAL_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 const MFA_CHALLENGE_ERRORS: PortalTokenErrorSpec = {
   missing: { message: 'انتهت جلسة التحقق. أعد تسجيل الدخول.', code: 'MFA_CHALLENGE_INVALID' },
   invalid: { message: 'انتهت جلسة التحقق. أعد تسجيل الدخول.', code: 'MFA_CHALLENGE_INVALID' },
@@ -329,9 +338,24 @@ export class SessionService {
       ...tenantContext,
     };
 
+    // Sliding renewal (INV-SESSION-TTL-7D-SLIDING): on the cache-miss path only,
+    // a session with less than a day left gets its expiry extended to now + 7 days.
+    // The session id never changes, so CSRF (derived from it) stays valid.
+    const now = new Date();
+    const remainingMs = row.expires_at.getTime() - now.getTime();
+    let effectiveExpiresAt = row.expires_at;
+    if (remainingMs > 0 && remainingMs < SESSION_RENEWAL_THRESHOLD_MS) {
+      effectiveExpiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+      await this.db
+        .updateTable('sessions')
+        .set({ expires_at: effectiveExpiresAt, last_seen_at: now })
+        .where('id', '=', sessionId)
+        .execute();
+    }
+
     // Cache the resolved auth context!
     // A cached authorization must never outlive the underlying session row.
-    this.authCache.setSession(sessionId, auth, Math.min(60, (row.expires_at.getTime() - Date.now()) / 1000));
+    this.authCache.setSession(sessionId, auth, Math.min(60, (effectiveExpiresAt.getTime() - Date.now()) / 1000));
     return auth;
 
   }
@@ -708,7 +732,7 @@ export class SessionService {
     const tenantContext = this.resolveUserTenantContext(user);
     const sessionId = randomUUID();
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
 
     // The authenticated user's state and new session must commit together.
     // Re-lock and re-check the user: an admin may have disabled the account

@@ -328,6 +328,7 @@
     "test/critical/solo-admin-carrier-invoice-override.spec.ts",
     "test/critical/backend-lint-prettier-tooling.spec.ts",
     "test/critical/backend-lint-clean.spec.ts",
-    "test/critical/backend-format-clean.spec.ts"
+    "test/critical/backend-format-clean.spec.ts",
+    "test/critical/session-ttl-sliding.spec.ts"
   ]
 }
