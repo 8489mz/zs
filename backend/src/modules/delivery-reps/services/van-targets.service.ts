@@ -611,7 +611,10 @@ export class VanTargetsService {
     auth: AuthContext,
     payload: {
       repId: number;
-      periodMonth: string;
+      // The admin caller sends `month`, not periodMonth; the month
+      // resolves to the current month when this is absent
+      // (getRepTarget defaults it), so it is optional here.
+      periodMonth?: string;
       amount?: number;
       notes?: string;
     },

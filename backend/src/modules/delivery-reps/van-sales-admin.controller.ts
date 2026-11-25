@@ -14,7 +14,11 @@ import {
 } from '@nestjs/common';
 import { VanSalesService } from './van-sales.service';
 import { VanPreSalesService } from './services/van-pre-sales.service';
-import { VanPromotionsService } from './services/van-promotions.service';
+import {
+  VanPromotionsService,
+  UpdateFmcgPromotionDto,
+  UpsertFmcgPromotionDto,
+} from './services/van-promotions.service';
 import { VanRoutesService } from './services/van-routes.service';
 import { VanFieldExecutionService } from './services/van-field-execution.service';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
@@ -27,6 +31,33 @@ import { VanSalesAdminFleetSlice } from './van-sales-admin/van-sales-admin-fleet
 import { VanSalesAdminTargetsSlice } from './van-sales-admin/van-sales-admin-targets';
 import { VanSalesAdminOpsSlice } from './van-sales-admin/van-sales-admin-ops';
 import { VanSalesAdminPromotionsLedgerSlice } from './van-sales-admin/van-sales-admin-promotions-ledger';
+import { ConsolidatePreSalesOrdersDto, ConvertPreSalesOrderDto } from './dto/van-pre-sales.dto';
+import {
+  AddRepBonusOrCommissionDto,
+  LinkRepToEmployeeDto,
+  AutoCreateEmployeeDto,
+  OptimizeSupervisorRouteDto,
+  PushRepShortagesToPayrollDto,
+  SettleRepFinancialItemDto,
+  TogglePromotionActiveDto,
+} from './dto/van-admin-ops.dto';
+import { RecordAdminFuelLogDto, RecordAdminOilChangeDto, AssignVehicleDriverDto } from './dto/van-fleet.dto';
+import {
+  BulkAssignCustomerRoutesDto,
+  SaveCommissionConfigDto,
+  SetCustomerRouteScheduleDto,
+  SetRepTargetDto,
+  SettleRepCommissionDto,
+} from './dto/van-targets.dto';
+import {
+  AssignRepDto,
+  CreateAdminRequisitionDto,
+  CreateVehicleDto,
+  RejectWithReasonDto,
+  ReviewRequisitionDto,
+  SettleTripAdminDto,
+  UpdateVehicleDto,
+} from './dto/van-trips.dto';
 
 @Controller('api/van-sales/admin')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -97,16 +128,7 @@ export class VanSalesAdminController {
   @RequirePermissions('deliveryRepsAdmin')
   async consolidatePreSalesOrdersToRequisition(
     @Req() req: RequestWithAuth,
-    @Body()
-    body: {
-      orderIds: number[];
-      // F18 (trial problem 30): FE sends `deliveryRepId`; `targetRepId`
-      // is the older name. Either is accepted downstream.
-      targetRepId?: number;
-      deliveryRepId?: number;
-      sourceWarehouseId?: number;
-      notes?: string;
-    },
+    @Body() body: ConsolidatePreSalesOrdersDto,
   ) {
     return this.adminPreSalesTrips.consolidatePreSalesOrdersToRequisition(req, body);
   }
@@ -116,12 +138,7 @@ export class VanSalesAdminController {
   async convertPreSalesOrderToInvoice(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body?: {
-      paymentType?: 'cash' | 'credit';
-      paidAmount?: number;
-      notes?: string;
-    },
+    @Body() body?: ConvertPreSalesOrderDto,
   ) {
     return this.adminPreSalesTrips.convertPreSalesOrderToInvoice(req, id, body);
   }
@@ -154,20 +171,7 @@ export class VanSalesAdminController {
   async settleTripAdmin(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body: {
-      repId: number;
-      countedCash: number;
-      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash.
-      perDayCash?: { businessDay: string; countedCash: number }[];
-      unloadRemainingToWarehouse: boolean;
-      countedStock?: { productId: number; countedQty: number }[];
-      nightStockApproved?: boolean;
-      nightStockNotes?: string;
-      endOdometer?: number;
-      chargeStockVarianceToRep?: boolean;
-      notes?: string;
-    },
+    @Body() body: SettleTripAdminDto,
   ) {
     return this.adminPreSalesTrips.settleTripAdmin(req, id, body);
   }
@@ -180,22 +184,7 @@ export class VanSalesAdminController {
 
   @Post('vehicles')
   @RequirePermissions('deliveryRepsAdmin')
-  async createVehicle(
-    @Req() req: RequestWithAuth,
-    @Body()
-    body: {
-      plateNumber: string;
-      modelName?: string;
-      vehicleType?: string;
-      vinChassis?: string;
-      branchId?: number;
-      currentOdometer?: number;
-      fuelType?: string;
-      licenseExpiresAt?: string;
-      assignedRepId?: number;
-      notes?: string;
-    },
-  ) {
+  async createVehicle(@Req() req: RequestWithAuth, @Body() body: CreateVehicleDto) {
     return this.adminFleet.createVehicle(req, body);
   }
 
@@ -204,31 +193,14 @@ export class VanSalesAdminController {
   async updateVehicle(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body: {
-      plateNumber?: string;
-      modelName?: string;
-      vehicleType?: string;
-      vinChassis?: string;
-      branchId?: number;
-      currentOdometer?: number;
-      fuelType?: string;
-      licenseExpiresAt?: string;
-      status?: string;
-      assignedRepId?: number | null;
-      notes?: string;
-    },
+    @Body() body: UpdateVehicleDto,
   ) {
     return this.adminFleet.updateVehicle(req, id, body);
   }
 
   @Post('vehicles/:id/assign')
   @RequirePermissions('deliveryRepsAdmin')
-  async assignRep(
-    @Req() req: RequestWithAuth,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: { repId: number | null; shiftName?: string },
-  ) {
+  async assignRep(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number, @Body() body: AssignRepDto) {
     return this.adminFleet.assignRep(req, id, body);
   }
 
@@ -255,7 +227,7 @@ export class VanSalesAdminController {
   async rejectReturn(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { reason?: string },
+    @Body() body: RejectWithReasonDto,
   ) {
     return this.adminFleet.rejectReturn(req, id, body);
   }
@@ -284,17 +256,7 @@ export class VanSalesAdminController {
 
   @Post('requisitions')
   @RequirePermissions('deliveryRepsAdmin')
-  async createAdminRequisition(
-    @Req() req: RequestWithAuth,
-    @Body()
-    body: {
-      repId: number;
-      sourceWarehouseId?: number;
-      items: { productId: number; qty: number; sourceWarehouseId?: number; sourceWarehouseName?: string }[];
-      notes?: string;
-      dispatchImmediately?: boolean;
-    },
-  ) {
+  async createAdminRequisition(@Req() req: RequestWithAuth, @Body() body: CreateAdminRequisitionDto) {
     return this.adminFleet.createAdminRequisition(req, body);
   }
 
@@ -303,7 +265,7 @@ export class VanSalesAdminController {
   async reviewRequisition(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { approvedItems: { productId: number; qty: number }[]; notes?: string; sourceWarehouseId?: number },
+    @Body() body: ReviewRequisitionDto,
   ) {
     return this.adminFleet.reviewRequisition(req, id, body);
   }
@@ -319,7 +281,7 @@ export class VanSalesAdminController {
   async rejectRequisition(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { reason?: string },
+    @Body() body: RejectWithReasonDto,
   ) {
     return this.adminFleet.rejectRequisition(req, id, body);
   }
@@ -339,20 +301,7 @@ export class VanSalesAdminController {
 
   @Post('targets')
   @RequirePermissions('deliveryRepsAdmin')
-  async setRepTarget(
-    @Req() req: RequestWithAuth,
-    @Body()
-    body: {
-      repId: number;
-      month: string;
-      targetAmount: number;
-      collectionTarget?: number | null;
-      visitsTarget?: number | null;
-      salesCommissionRatePercent?: number;
-      collectionCommissionRatePercent?: number;
-      targetBonusRatePercent?: number;
-    },
-  ) {
+  async setRepTarget(@Req() req: RequestWithAuth, @Body() body: SetRepTargetDto) {
     return this.adminTargets.setRepTarget(req, body);
   }
 
@@ -364,31 +313,13 @@ export class VanSalesAdminController {
 
   @Post('targets/commission-config')
   @RequirePermissions('deliveryRepsAdmin')
-  async saveCommissionConfig(
-    @Req() req: RequestWithAuth,
-    @Body()
-    body: {
-      salesCommissionRatePercent?: number;
-      collectionCommissionRatePercent?: number;
-      targetBonusRatePercent?: number;
-      repId?: number;
-    },
-  ) {
+  async saveCommissionConfig(@Req() req: RequestWithAuth, @Body() body: SaveCommissionConfigDto) {
     return this.adminTargets.saveCommissionConfig(req, body);
   }
 
   @Post('targets/settle-commission')
   @RequirePermissions('deliveryRepsAdmin')
-  async settleRepCommission(
-    @Req() req: RequestWithAuth,
-    @Body()
-    body: {
-      repId: number;
-      periodMonth: string;
-      amount?: number;
-      notes?: string;
-    },
-  ) {
+  async settleRepCommission(@Req() req: RequestWithAuth, @Body() body: SettleRepCommissionDto) {
     return this.adminTargets.settleRepCommission(req, body);
   }
 
@@ -420,18 +351,7 @@ export class VanSalesAdminController {
   async setCustomerRouteSchedule(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body: {
-      route?: string;
-      routeSequence?: number;
-      visitDays?: string[];
-      customerCode?: string;
-      locationUrl?: string;
-      assignedRepId?: number | null;
-      assignedRepIds?: number[];
-      assignedRepName?: string;
-      repSchedules?: Array<{ repId: number; repName?: string; days: string[] }>;
-    },
+    @Body() body: SetCustomerRouteScheduleDto,
   ) {
     return this.adminTargets.setCustomerRouteSchedule(req, id, body);
   }
@@ -450,19 +370,7 @@ export class VanSalesAdminController {
 
   @Post('supervisor/customer-routes/bulk-assign')
   @RequirePermissions('deliveryRepsAdmin')
-  async bulkAssignCustomerRoutes(
-    @Req() req: RequestWithAuth,
-    @Body()
-    body: {
-      customerIds: number[];
-      assignedRepId?: number | null;
-      assignedRepIds?: number[];
-      appendReps?: boolean;
-      assignedRepName?: string;
-      route?: string;
-      visitDays?: string[];
-    },
-  ) {
+  async bulkAssignCustomerRoutes(@Req() req: RequestWithAuth, @Body() body: BulkAssignCustomerRoutesDto) {
     return this.adminTargets.bulkAssignCustomerRoutes(req, body);
   }
 
@@ -480,20 +388,7 @@ export class VanSalesAdminController {
 
   @Post('fuel-logs')
   @RequirePermissions('deliveryRepsAdmin')
-  async recordFuelLog(
-    @Req() req: RequestWithAuth,
-    @Body()
-    body: {
-      vehicleId: number;
-      tripId?: number;
-      repId?: number;
-      odometer: number;
-      liters: number;
-      pricePerLiter: number;
-      stationName?: string;
-      notes?: string;
-    },
-  ) {
+  async recordFuelLog(@Req() req: RequestWithAuth, @Body() body: RecordAdminFuelLogDto) {
     return this.adminTargets.recordFuelLog(req, body);
   }
 
@@ -506,22 +401,7 @@ export class VanSalesAdminController {
 
   @Post('oil-changes')
   @RequirePermissions('deliveryRepsAdmin')
-  async recordOilChange(
-    @Req() req: RequestWithAuth,
-    @Body()
-    body: {
-      vehicleId: number;
-      odometerAtChange: number;
-      oilType: string;
-      ratedKm: number;
-      withFilter: boolean;
-      alertKmBefore?: number;
-      cost?: number;
-      performedBy?: string;
-      notes?: string;
-      repId?: number;
-    },
-  ) {
+  async recordOilChange(@Req() req: RequestWithAuth, @Body() body: RecordAdminOilChangeDto) {
     return this.adminOps.recordOilChange(req, body);
   }
 
@@ -542,14 +422,7 @@ export class VanSalesAdminController {
   async assignVehicleDriver(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body: {
-      repId: number;
-      shiftName: string;
-      shiftStartTime?: string;
-      shiftEndTime?: string;
-      notes?: string;
-    },
+    @Body() body: AssignVehicleDriverDto,
   ) {
     return this.adminOps.assignVehicleDriver(req, id, body);
   }
@@ -626,13 +499,17 @@ export class VanSalesAdminController {
 
   @Post('promotions')
   @RequirePermissions('deliveryRepsAdmin')
-  async createPromotion(@Req() req: RequestWithAuth, @Body() body: any) {
+  async createPromotion(@Req() req: RequestWithAuth, @Body() body: UpsertFmcgPromotionDto) {
     return this.adminPromotionsLedger.createPromotion(req, body);
   }
 
   @Put('promotions/:id')
   @RequirePermissions('deliveryRepsAdmin')
-  async updatePromotion(@Req() req: RequestWithAuth, @Param('id', ParseIntPipe) id: number, @Body() body: any) {
+  async updatePromotion(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateFmcgPromotionDto,
+  ) {
     return this.adminPromotionsLedger.updatePromotion(req, id, body);
   }
 
@@ -647,25 +524,14 @@ export class VanSalesAdminController {
   async togglePromotionActive(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { isActive: boolean },
+    @Body() body: TogglePromotionActiveDto,
   ) {
     return this.adminPromotionsLedger.togglePromotionActive(req, id, body);
   }
 
   @Post('routes/optimize')
   @RequirePermissions('deliveryRepsAdmin')
-  async optimizeSupervisorRoute(
-    @Req() req: RequestWithAuth,
-    @Body()
-    body: {
-      customerIds?: number[];
-      route?: string;
-      repId?: number;
-      startLat?: number;
-      startLng?: number;
-      persistSequence?: boolean;
-    },
-  ) {
+  async optimizeSupervisorRoute(@Req() req: RequestWithAuth, @Body() body: OptimizeSupervisorRouteDto) {
     return this.adminPromotionsLedger.optimizeSupervisorRoute(req, body);
   }
 
@@ -716,32 +582,26 @@ export class VanSalesAdminController {
   async settleRepFinancialItem(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { method: 'cash' | 'waiver'; notes?: string; reason?: string; supervisorPin?: string },
+    @Body() body: SettleRepFinancialItemDto,
   ) {
     return this.adminPromotionsLedger.settleRepFinancialItem(req, id, body);
   }
 
   @Post('financial-ledger/push-to-payroll')
   @RequireAnyPermission('hrPayrollManage', 'accounting')
-  async pushRepShortagesToPayroll(
-    @Req() req: RequestWithAuth,
-    @Body() body: { settlementIds: number[]; targetMonth?: string },
-  ) {
+  async pushRepShortagesToPayroll(@Req() req: RequestWithAuth, @Body() body: PushRepShortagesToPayrollDto) {
     return this.adminPromotionsLedger.pushRepShortagesToPayroll(req, body);
   }
 
   @Post('financial-ledger/bonus')
   @RequirePermissions('deliveryRepsAdmin')
-  async addRepBonusOrCommission(
-    @Req() req: RequestWithAuth,
-    @Body() body: { repId: number; entryType: 'bonus' | 'commission'; amount: number; notes: string },
-  ) {
+  async addRepBonusOrCommission(@Req() req: RequestWithAuth, @Body() body: AddRepBonusOrCommissionDto) {
     return this.adminPromotionsLedger.addRepBonusOrCommission(req, body);
   }
 
   @Post('financial-ledger/link-employee')
   @RequirePermissions('deliveryRepsAdmin')
-  async linkRepToEmployee(@Req() req: RequestWithAuth, @Body() body: { repId: number; employeeId: number | null }) {
+  async linkRepToEmployee(@Req() req: RequestWithAuth, @Body() body: LinkRepToEmployeeDto) {
     return this.adminPromotionsLedger.linkRepToEmployee(req, body);
   }
 
@@ -753,7 +613,7 @@ export class VanSalesAdminController {
 
   @Post('financial-ledger/auto-create-employee')
   @RequirePermissions('deliveryRepsAdmin')
-  async autoCreateEmployee(@Req() req: RequestWithAuth, @Body() body: { repId: number }) {
+  async autoCreateEmployee(@Req() req: RequestWithAuth, @Body() body: AutoCreateEmployeeDto) {
     return this.adminPromotionsLedger.autoCreateEmployee(req, body);
   }
 }

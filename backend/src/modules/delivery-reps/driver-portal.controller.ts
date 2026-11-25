@@ -1,12 +1,13 @@
 import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
 import { DeliveryRepsService } from './delivery-reps.service';
+import { DriverChangePinDto, DriverLoginDto, DriverSettleOrderDto } from './dto/driver-portal.dto';
 
 @Controller('api/driver-portal')
 export class DriverPortalController {
   constructor(private readonly service: DeliveryRepsService) {}
 
   @Post('login')
-  login(@Body() body: { phone: string; pinCode: string; companyCode?: string; tenantId?: string }) {
+  login(@Body() body: DriverLoginDto) {
     return this.service.driverLogin(body);
   }
 
@@ -14,10 +15,7 @@ export class DriverPortalController {
   // rep still on the default PIN must be able to reach; it verifies the
   // current PIN and returns a fresh, unflagged token.
   @Post('change-pin')
-  async changePin(
-    @Headers('authorization') authHeader: string,
-    @Body() body: { currentPin?: string; newPin?: string },
-  ) {
+  async changePin(@Headers('authorization') authHeader: string, @Body() body: DriverChangePinDto) {
     const driver = await this.service.verifyDriverToken(authHeader);
     return this.service.driverChangePin(driver, body);
   }
@@ -53,8 +51,7 @@ export class DriverPortalController {
   async settleOrder(
     @Param('saleId', ParseIntPipe) saleId: number,
     @Headers('authorization') authHeader: string,
-    @Body()
-    body: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string },
+    @Body() body: DriverSettleOrderDto,
   ) {
     const driver = await this.service.verifyDriverToken(authHeader);
     await this.service.assertDriverPinChanged(driver);

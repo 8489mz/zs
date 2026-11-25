@@ -37,6 +37,12 @@
  * dto-class 360 -> 375, dto-interface 47 -> 39, inline-object 151 -> 146,
  * any 43 -> 42, named-interface 5 -> 4.
  *
+ * D3 (INV-DTO-DELIVERY-REPS-58): delivery-reps converts 58 sites
+ * (driver portal 3 + delivery-reps 4 + admin 27 + driver 24); the count
+ * is now 191 = 182 convertible + 9 pinned exclusions. Whole-body total
+ * stays 624 and the buckets move dto-class 375 -> 433, inline-object
+ * 146 -> 94, any 42 -> 37, no-annotation 1 -> 0.
+ *
  * Usage: node scripts/dto-coverage-check.mjs [--json]
  *   (run from the backend/ directory; paths are relative to backend/).
  */
@@ -48,8 +54,8 @@ import { fileURLToPath } from 'node:url';
 const BACKEND = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(BACKEND, 'src');
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D2 (249 after the pilot converts 15). */
-const PINNED_COUNT = 249;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D3 (191 after delivery-reps converts 58). */
+const PINNED_COUNT = 191;
 
 /**
  * The 9 pinned exclusions. A DTO on any of these breaks a real flow — see

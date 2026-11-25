@@ -457,7 +457,10 @@ export type SaveCommissionConfigPayload = {
 
 export type SettleRepCommissionPayload = {
   repId: number;
-  periodMonth: string;
+  // The admin caller sends `month`, not periodMonth; the service
+  // defaults an absent value to the current month (getRepTarget), so
+  // it is optional here.
+  periodMonth?: string;
   amount?: number;
   notes?: string;
 };

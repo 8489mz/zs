@@ -1,4 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateBy,
+  ValidateNested,
+  ValidationOptions,
+  buildMessage,
+} from 'class-validator';
 import { Kysely, sql } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
@@ -32,19 +46,205 @@ export function promotionDateKey(value: unknown): string {
   return Number.isFinite(parsed.getTime()) ? formatLocalCalendarDay(parsed) : s;
 }
 
-export interface UpsertFmcgPromotionDto {
-  name: string;
+/**
+ * INV-DTO-DELIVERY-REPS-58 (D3): buyConditions is an ARRAY for
+ * mix_and_match and an OBJECT for tiered_qty / invoice_threshold, and
+ * the stock IsObject validator rejects arrays (probed against the
+ * installed class-validator: 1 error on an array, 0 on an object).
+ * This custom validator accepts either shape and rejects strings,
+ * numbers, and booleans.
+ */
+export function IsObjectOrArray(validationOptions?: ValidationOptions): PropertyDecorator {
+  return ValidateBy(
+    {
+      name: 'isObjectOrArray',
+      validator: {
+        validate: (value: unknown): boolean => value !== null && typeof value === 'object',
+        defaultMessage: buildMessage(
+          (eachPrefix) => `${eachPrefix}$property must be an object or an array`,
+          validationOptions,
+        ),
+      },
+    },
+    validationOptions,
+  );
+}
+
+/**
+ * The promotion reward shape mirrors the engine's FmcgPromoReward
+ * (fmcg-promotions.engine.ts): every field optional, because the form
+ * builds only the keys its applyType needs (bonus fields for
+ * free_bonus, discountPercent / discountAmount for the discount
+ * types). bonusUom / targetProductId are engine fields the form does
+ * not send today; they stay accepted so a caller that sets them does
+ * not 400.
+ */
+export class FmcgPromotionRewardDto {
+  @IsOptional()
+  @IsInt()
+  bonusProductId?: number;
+
+  @IsOptional()
+  @IsString()
+  bonusProductName?: string;
+
+  @IsOptional()
+  @IsNumber()
+  bonusQty?: number;
+
+  @IsOptional()
+  @IsString()
+  bonusUom?: string;
+
+  @IsOptional()
+  @IsString()
+  bonusReason?: string;
+
+  @IsOptional()
+  @IsNumber()
+  discountPercent?: number;
+
+  @IsOptional()
+  @IsNumber()
+  discountAmount?: number;
+
+  @IsOptional()
+  @IsInt()
+  targetProductId?: number;
+}
+
+/**
+ * The promotion upsert payload was an interface, so the global pipe
+ * did nothing for it — it is now a class (create). name is required
+ * and non-empty because createPromotion throws
+ * INVALID_PROMOTION_NAME on a blank name. promoType / applyType /
+ * buyConditions / reward are required because the admin form always
+ * sends them (the service defaults them when absent, but the caller
+ * rule governs the boundary); maxApplicationsPerOrder / priority are
+ * optional numbers with no Min — the service coerces falsy values
+ * with `|| 1` / `|| 0` instead of throwing, and an existing spec
+ * (fmcg-promotion-date-mapping.spec.ts) constructs a promotion
+ * without them, so the boundary must not narrow the service's
+ * defaulting capability. The form's number inputs can yield a float,
+ * so IsInt would 400 a real caller value.
+ * startDate / endDate / notes arrive as null from the form when
+ * empty (IsOptional skips null). customerTypes / isActive are never
+ * sent by the form (isActive goes through the toggle route) and stay
+ * optional.
+ */
+export class UpsertFmcgPromotionDto {
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
   code?: string;
-  promoType: 'mix_and_match' | 'tiered_qty' | 'invoice_threshold' | string;
-  applyType: 'free_bonus' | 'discount_percent' | 'discount_amount' | string;
-  buyConditions: any;
-  reward: any;
+
+  @IsString()
+  promoType!: 'mix_and_match' | 'tiered_qty' | 'invoice_threshold' | string;
+
+  @IsString()
+  applyType!: 'free_bonus' | 'discount_percent' | 'discount_amount' | string;
+
+  @IsObjectOrArray()
+  buyConditions!: unknown[] | Record<string, unknown>;
+
+  @ValidateNested()
+  @Type(() => FmcgPromotionRewardDto)
+  reward!: FmcgPromotionRewardDto;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   customerTypes?: string[];
+
+  @IsOptional()
+  @IsString()
   startDate?: string | null;
+
+  @IsOptional()
+  @IsString()
   endDate?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsNumber()
   maxApplicationsPerOrder?: number;
+
+  @IsOptional()
+  @IsNumber()
   priority?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string | null;
+}
+
+/**
+ * The update route takes Partial of the upsert shape at the service
+ * (updatePromotion applies only defined fields), so a name-less
+ * partial update is a legitimate service capability — the update DTO
+ * is a separate all-optional class instead of reusing the create
+ * class with its required name. Using one class with a required name
+ * would narrow a real service capability at the boundary.
+ */
+export class UpdateFmcgPromotionDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  promoType?: 'mix_and_match' | 'tiered_qty' | 'invoice_threshold' | string;
+
+  @IsOptional()
+  @IsString()
+  applyType?: 'free_bonus' | 'discount_percent' | 'discount_amount' | string;
+
+  @IsOptional()
+  @IsObjectOrArray()
+  buyConditions?: unknown[] | Record<string, unknown>;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => FmcgPromotionRewardDto)
+  reward?: FmcgPromotionRewardDto;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  customerTypes?: string[];
+
+  @IsOptional()
+  @IsString()
+  startDate?: string | null;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  maxApplicationsPerOrder?: number;
+
+  @IsOptional()
+  @IsNumber()
+  priority?: number;
+
+  @IsOptional()
+  @IsString()
   notes?: string | null;
 }
 

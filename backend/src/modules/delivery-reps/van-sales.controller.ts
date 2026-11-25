@@ -6,6 +6,33 @@ import { VanPromotionsService } from './services/van-promotions.service';
 import { VanRoutesService } from './services/van-routes.service';
 import { VanFieldExecutionService } from './services/van-field-execution.service';
 import { SubmitLoadRequisitionDto } from './dto/submit-load-requisition.dto';
+import { CreatePreSalesOrderDto } from './services/van-pre-sales/van-pre-sales-types';
+import {
+  ExecuteDamagedSwapDto,
+  ExecuteSaleDto,
+  OpenTripDto,
+  RecordCollectionDto,
+  SettleTripDriverDto,
+  SubmitFieldReturnDto,
+  SubmitTripSettlementDto,
+} from './dto/van-driver-orders.dto';
+import {
+  CheckInStoreVisitDto,
+  CheckOutStoreVisitDto,
+  CreateDriverCustomerDto,
+  CreateTransferDto,
+  EvaluateCartPromotionsDto,
+  OptimizeDriverRouteDto,
+  RecordBreadcrumbDto,
+  RecordFieldVisitDto,
+  RecordPackagingMovementDto,
+  RecordTradeSurveyDto,
+  RecordTripExpenseDto,
+  RecordVisitInventoryDto,
+  RecordVisitNoSaleDto,
+} from './dto/van-driver-field.dto';
+import { RecordFuelLogDto, RecordOilChangeDto } from './dto/van-fleet.dto';
+import { RejectWithReasonDto } from './dto/van-trips.dto';
 import { VanSalesDriverPreSalesSlice } from './van-sales-driver/van-sales-driver-pre-sales';
 import { VanSalesDriverTripsSettleSlice } from './van-sales-driver/van-sales-driver-trips-settle';
 import { VanSalesDriverSalesSlice } from './van-sales-driver/van-sales-driver-sales';
@@ -76,7 +103,7 @@ export class VanSalesController {
   }
 
   @Post('pre-sales/orders')
-  async createPreSalesOrder(@Headers('authorization') authHeader: string, @Body() body: any) {
+  async createPreSalesOrder(@Headers('authorization') authHeader: string, @Body() body: CreatePreSalesOrderDto) {
     return this.preSalesSlice.createPreSalesOrder(authHeader, body);
   }
 
@@ -107,115 +134,22 @@ export class VanSalesController {
   }
 
   @Post('trips/open')
-  async openTrip(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: {
-      sourceWarehouseId?: number;
-      items?: { productId: number; qty: number }[];
-      notes?: string;
-      startOdometer?: number;
-      vehicleId?: number;
-    },
-  ) {
+  async openTrip(@Headers('authorization') authHeader: string, @Body() body: OpenTripDto) {
     return this.tripsSettleSlice.openTrip(authHeader, body);
   }
 
   @Post('trips/settle')
-  async settleTrip(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: {
-      tripId: number;
-      countedCash: number;
-      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash.
-      perDayCash?: { businessDay: string; countedCash: number }[];
-      endOdometer?: number;
-      unloadRemainingToWarehouse: boolean;
-      countedStock?: { productId: number; countedQty: number }[];
-      // INV-VAN-SELF-SETTLE-PIN-REQUIRED: a driver-supplied value here
-      // is IGNORED — the rep never decides whether his own shortage is
-      // charged or waived. The field stays in the type so older phone
-      // builds keep sending it without a 400; the service treats the
-      // shortage as pending until a supervisor decides.
-      chargeStockVarianceToRep?: boolean;
-      // Explicit supervisor-approved overnight retention, requested by
-      // the rep and authorized by the supervisor PIN below. Merely not
-      // unloading is NOT approval.
-      nightStockApproved?: boolean;
-      activeVisitCustomerId?: number;
-      notes?: string;
-      supervisorPin?: string;
-      supervisorOverridePin?: string;
-    },
-  ) {
+  async settleTrip(@Headers('authorization') authHeader: string, @Body() body: SettleTripDriverDto) {
     return this.tripsSettleSlice.settleTrip(authHeader, body);
   }
 
   @Post('trips/submit-settlement')
-  async submitTripSettlement(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: {
-      tripId: number;
-      countedCash: number;
-      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash.
-      perDayCash?: { businessDay: string; countedCash: number }[];
-      endOdometer?: number;
-      unloadRemainingToWarehouse: boolean;
-      notes?: string;
-    },
-  ) {
+  async submitTripSettlement(@Headers('authorization') authHeader: string, @Body() body: SubmitTripSettlementDto) {
     return this.tripsSettleSlice.submitTripSettlement(authHeader, body);
   }
 
   @Post('sales')
-  async executeSale(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: {
-      tripId: number;
-      customerId?: number;
-      customerName?: string;
-      customerPhone?: string;
-      paymentMethod: 'cash' | 'credit' | 'card' | 'split' | 'instapay' | 'vodafone_cash';
-      paidAmount?: number;
-      items: {
-        productId: number;
-        qty: number;
-        unitPrice?: number;
-        unitName?: string;
-        unitMultiplier?: number;
-        isBonus?: boolean;
-        bonusReason?: string;
-        originalPrice?: number;
-        // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line TOTAL
-        // discount amount (POS lineDiscount semantics).
-        lineDiscount?: number;
-      }[];
-      notes?: string;
-      deliveryGpsLat?: number;
-      deliveryGpsLng?: number;
-      // INV-VAN-OFFLINE-TIMESTAMPS: why no GPS fix was captured at
-      // submit time ('timeout' | 'denied' | 'unavailable').
-      gpsMissingReason?: 'timeout' | 'denied' | 'unavailable';
-      deliveryProofPhoto?: string;
-      packagingBreakdown?: { cartonsCount?: number; piecesCount?: number; itemsCount?: number };
-      clientTxId?: string;
-      cashDiscountAmount?: number;
-      supervisorOverridePin?: string;
-      supervisorOverrideReason?: string;
-      transferReference?: string;
-      transferReceiptUrl?: string;
-      recipientName?: string;
-      recipientPhone?: string;
-      recipientRole?: string;
-      recipientSignature?: string;
-      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the sale was made
-      // offline (outbox createdAt, ISO with offset).
-      offlineCreatedAt?: string;
-    },
-  ) {
+  async executeSale(@Headers('authorization') authHeader: string, @Body() body: ExecuteSaleDto) {
     return this.driverSales.executeSale(authHeader, body);
   }
 
@@ -241,26 +175,7 @@ export class VanSalesController {
   }
 
   @Post('collections')
-  async recordCollection(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: {
-      tripId: number;
-      customerId: number;
-      amount: number;
-      paymentMethod?: 'cash' | 'instapay' | 'vodafone_cash' | 'bank_transfer';
-      transferReference?: string;
-      transferReceiptUrl?: string;
-      supervisorOverridePin?: string;
-      notes?: string;
-      gpsLat?: number;
-      gpsLng?: number;
-      clientTxId?: string;
-      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the collection was
-      // made offline (outbox createdAt, ISO with offset).
-      offlineCreatedAt?: string;
-    },
-  ) {
+  async recordCollection(@Headers('authorization') authHeader: string, @Body() body: RecordCollectionDto) {
     return this.driverSales.recordCollection(authHeader, body);
   }
 
@@ -268,17 +183,7 @@ export class VanSalesController {
   async executeDamagedSwap(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
-    @Body()
-    body: {
-      customerId?: number;
-      damagedProductId: number;
-      damagedQty: number;
-      damageReason?: string;
-      replacementProductId: number;
-      replacementQty: number;
-      notes?: string;
-      clientTxId?: string;
-    },
+    @Body() body: ExecuteDamagedSwapDto,
   ) {
     return this.driverSales.executeDamagedSwap(authHeader, tripId, body);
   }
@@ -300,29 +205,7 @@ export class VanSalesController {
   }
 
   @Post('field-returns')
-  async submitFieldReturn(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: {
-      tripId: number;
-      customerId: number;
-      saleId?: number | null;
-      returnReason: 'damaged' | 'expired' | 'manufacturing_defect' | 'stagnant' | 'order_mismatch' | 'customer_request';
-      refundMethod?: 'credit' | 'cash';
-      items: {
-        productId: number;
-        qty: number;
-        unitPrice: number;
-        saleItemId?: number;
-        unitMultiplier?: number;
-        unitName?: string;
-      }[];
-      notes?: string;
-      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the return was made
-      // offline (outbox createdAt, ISO with offset).
-      offlineCreatedAt?: string;
-    },
-  ) {
+  async submitFieldReturn(@Headers('authorization') authHeader: string, @Body() body: SubmitFieldReturnDto) {
     return this.driverSales.submitFieldReturn(authHeader, body);
   }
 
@@ -370,43 +253,17 @@ export class VanSalesController {
   }
 
   @Post('customers')
-  async createDriverCustomer(@Headers('authorization') authHeader: string, @Body() body: any) {
+  async createDriverCustomer(@Headers('authorization') authHeader: string, @Body() body: CreateDriverCustomerDto) {
     return this.requisitions.createDriverCustomer(authHeader, body);
   }
 
   @Post('field-visits')
-  async recordFieldVisit(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: {
-      tripId: number;
-      customerId: number;
-      visitType: 'positive' | 'negative';
-      saleId?: number;
-      negativeReason?: 'no_cash' | 'shop_closed' | 'sufficient_stock' | 'item_unavailable' | 'postponed' | 'other';
-      postponedToDate?: string;
-      gpsLat?: number;
-      gpsLng?: number;
-      notes?: string;
-    },
-  ) {
+  async recordFieldVisit(@Headers('authorization') authHeader: string, @Body() body: RecordFieldVisitDto) {
     return this.requisitions.recordFieldVisit(authHeader, body);
   }
 
   @Post('fuel-logs')
-  async recordFuelLog(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: {
-      vehicleId: number;
-      tripId?: number;
-      odometer: number;
-      liters: number;
-      pricePerLiter: number;
-      stationName?: string;
-      notes?: string;
-    },
-  ) {
+  async recordFuelLog(@Headers('authorization') authHeader: string, @Body() body: RecordFuelLogDto) {
     return this.requisitions.recordFuelLog(authHeader, body);
   }
 
@@ -416,21 +273,7 @@ export class VanSalesController {
   }
 
   @Post('oil-changes')
-  async recordOilChange(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: {
-      vehicleId: number;
-      odometerAtChange: number;
-      oilType: string;
-      ratedKm: number;
-      withFilter: boolean;
-      alertKmBefore?: number;
-      cost?: number;
-      performedBy?: string;
-      notes?: string;
-    },
-  ) {
+  async recordOilChange(@Headers('authorization') authHeader: string, @Body() body: RecordOilChangeDto) {
     return this.requisitions.recordOilChange(authHeader, body);
   }
 
@@ -440,17 +283,7 @@ export class VanSalesController {
   }
 
   @Post('transfers')
-  async createTransfer(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: {
-      toRepId: number;
-      fromTripId?: number;
-      toTripId?: number;
-      items: { productId: number; qty: number }[];
-      notes?: string;
-    },
-  ) {
+  async createTransfer(@Headers('authorization') authHeader: string, @Body() body: CreateTransferDto) {
     return this.requisitions.createTransfer(authHeader, body);
   }
 
@@ -468,7 +301,7 @@ export class VanSalesController {
   async rejectTransfer(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { reason?: string },
+    @Body() body: RejectWithReasonDto,
   ) {
     return this.requisitions.rejectTransfer(authHeader, id, body);
   }
@@ -486,14 +319,7 @@ export class VanSalesController {
   async recordTripExpense(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
-    @Body()
-    body: {
-      expenseType: string;
-      amount: number;
-      notes?: string;
-      receiptPhotoUrl?: string;
-      supervisorOverridePin?: string;
-    },
+    @Body() body: RecordTripExpenseDto,
   ) {
     return this.driverField.recordTripExpense(authHeader, tripId, body);
   }
@@ -507,8 +333,7 @@ export class VanSalesController {
   async recordPackagingMovement(
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
-    @Body()
-    body: { customerId?: number; packageType: string; deliveredQty: number; returnedQty: number; notes?: string },
+    @Body() body: RecordPackagingMovementDto,
   ) {
     return this.driverField.recordPackagingMovement(authHeader, tripId, body);
   }
@@ -559,27 +384,17 @@ export class VanSalesController {
   }
 
   @Post('promotions/evaluate-cart')
-  async evaluateCartPromotions(
-    @Headers('authorization') authHeader: string,
-    @Body() body: { cartItems: any[]; invoiceSubtotal?: number; customerType?: string },
-  ) {
+  async evaluateCartPromotions(@Headers('authorization') authHeader: string, @Body() body: EvaluateCartPromotionsDto) {
     return this.driverField.evaluateCartPromotions(authHeader, body);
   }
 
   @Post('routes/optimize')
-  async optimizeDriverRoute(
-    @Headers('authorization') authHeader: string,
-    @Body()
-    body: { customerIds?: number[]; startLat?: number; startLng?: number; persistSequence?: boolean; route?: string },
-  ) {
+  async optimizeDriverRoute(@Headers('authorization') authHeader: string, @Body() body: OptimizeDriverRouteDto) {
     return this.driverField.optimizeDriverRoute(authHeader, body);
   }
 
   @Post('visits/check-in')
-  async checkInStoreVisit(
-    @Headers('authorization') authHeader: string,
-    @Body() body: { tripId?: number; customerId: number; customerName?: string; latitude?: number; longitude?: number },
-  ) {
+  async checkInStoreVisit(@Headers('authorization') authHeader: string, @Body() body: CheckInStoreVisitDto) {
     return this.driverField.checkInStoreVisit(authHeader, body);
   }
 
@@ -587,7 +402,7 @@ export class VanSalesController {
   async recordVisitInventory(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { items: any[] },
+    @Body() body: RecordVisitInventoryDto,
   ) {
     return this.driverField.recordVisitInventory(authHeader, id, body);
   }
@@ -596,7 +411,7 @@ export class VanSalesController {
   async recordVisitNoSale(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { noSaleReason: string; noSaleNotes?: string },
+    @Body() body: RecordVisitNoSaleDto,
   ) {
     return this.driverField.recordVisitNoSale(authHeader, id, body);
   }
@@ -605,28 +420,18 @@ export class VanSalesController {
   async checkOutStoreVisit(
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body: {
-      hasSale?: boolean;
-      saleId?: number;
-      saleAmount?: number;
-      hasCollection?: boolean;
-      collectionAmount?: number;
-    },
+    @Body() body: CheckOutStoreVisitDto,
   ) {
     return this.driverField.checkOutStoreVisit(authHeader, id, body);
   }
 
   @Post('trade-surveys')
-  async recordTradeSurvey(@Headers('authorization') authHeader: string, @Body() body: any) {
+  async recordTradeSurvey(@Headers('authorization') authHeader: string, @Body() body: RecordTradeSurveyDto) {
     return this.driverField.recordTradeSurvey(authHeader, body);
   }
 
   @Post('breadcrumbs')
-  async recordBreadcrumb(
-    @Headers('authorization') authHeader: string,
-    @Body() body: { tripId: number; latitude: number; longitude: number; speedKmh?: number; batteryLevel?: number },
-  ) {
+  async recordBreadcrumb(@Headers('authorization') authHeader: string, @Body() body: RecordBreadcrumbDto) {
     return this.driverField.recordBreadcrumb(authHeader, body);
   }
 }

@@ -1,3 +1,16 @@
+import { Type } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+
 export interface PreSalesCatalogItem {
   id: number;
   name: string;
@@ -47,22 +60,82 @@ export interface PreSalesCatalogItem {
   }>;
 }
 
-export interface CreatePreSalesOrderDto {
+/**
+ * INV-DTO-DELIVERY-REPS-58 (D3): the driver pre-sales order payload
+ * was an interface, so the global pipe did nothing for it — it is now
+ * a class. customerId is optional: the service interface it replaces
+ * had it optional, the service resolves a customer by name when it is
+ * absent, and an existing spec (van-pre-sales-customer-attribution)
+ * constructs an order without it — so the boundary must not narrow
+ * the service's contract. paymentMethod is the cash/credit union the
+ * caller always sends. The per-item qty AND quantity are both
+ * accepted (the service reads qty ?? quantity and SKIPS qty <= 0
+ * lines, so neither carries a Min).
+ */
+export class PreSalesOrderItemDto {
+  @IsInt()
+  @Min(1)
+  productId!: number;
+
+  @IsOptional()
+  @IsNumber()
+  qty?: number;
+
+  @IsOptional()
+  @IsNumber()
+  quantity?: number;
+
+  @IsOptional()
+  @IsString()
+  unitName?: string;
+
+  @IsOptional()
+  @IsNumber()
+  unitMultiplier?: number;
+
+  @IsOptional()
+  @IsNumber()
+  unitPrice?: number;
+}
+
+export class CreatePreSalesOrderDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   customerId?: number;
+
+  @IsOptional()
+  @IsString()
   customerName?: string;
+
+  @IsOptional()
+  @IsString()
   customerPhone?: string;
+
+  @IsOptional()
+  @IsString()
   customerAddress?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   warehouseLocationId?: number;
-  paymentMethod: 'cash' | 'credit';
-  items: Array<{
-    productId: number;
-    qty?: number;
-    quantity?: number;
-    unitName?: string;
-    unitMultiplier?: number;
-    unitPrice?: number;
-  }>;
+
+  @IsIn(['cash', 'credit'])
+  paymentMethod!: 'cash' | 'credit';
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => PreSalesOrderItemDto)
+  items!: PreSalesOrderItemDto[];
+
+  @IsOptional()
+  @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
   deliveryDate?: string;
 }
 

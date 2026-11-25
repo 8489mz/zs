@@ -1,7 +1,7 @@
 /*
  * D1 DTO coverage guard: the whole-body @Body() sites whose type is not a
- * *Dto class are pinned at exactly 249 at D2 (240 convertible + the 9
- * pinned exclusions below; 264 at D1). The count is produced by
+ * *Dto class are pinned at exactly 191 at D3 (182 convertible + the 9
+ * pinned exclusions below; 264 at D1, 249 at D2). The count is produced by
  * backend/scripts/dto-coverage-check.mjs, a port of the item-(5)
  * (~/workspace/audit/dto-census.py, re-counted at d1989b74e: 681 @Body(
  * occurrences — 624 whole-body + 57 property-form; whole-body buckets
@@ -13,6 +13,13 @@
  * convertible + the 9 pinned exclusions below). Whole-body total stays
  * 624; the buckets move dto-class 360 -> 375, dto-interface 47 -> 39,
  * inline-object 151 -> 146, any 43 -> 42, named-interface 5 -> 4.
+ *
+ * D3 (INV-DTO-DELIVERY-REPS-58): delivery-reps converts 58 sites
+ * (driver portal 3 + delivery-reps 4 + admin 27 + driver 24) and the
+ * pin moves 249 -> 191 (182 convertible + the 9 pinned exclusions
+ * below). Whole-body total stays 624; the buckets move dto-class
+ * 375 -> 433, inline-object 146 -> 94, any 42 -> 37, no-annotation
+ * 1 -> 0.
  *
  * WHY THE NUMBER IS 264 AND NOT 211: the verification files counted 211
  * sites without a *Dto-named type, but 47 of the 407 "with DTO" sites use
@@ -55,7 +62,7 @@
  * Fail-first: this spec is new in D1 — on the unpatched tree the census
  * script does not exist, so the spawn fails (MODULE_NOT_FOUND) and the
  * spec exits 1 (see the log). GREEN means the script exists, exits 0,
- * and reports exactly 249 with exactly the 9 exclusions.
+ * and reports exactly 191 with exactly the 9 exclusions.
  */
 
 import { strict as assert } from 'node:assert';
@@ -65,11 +72,11 @@ import * as path from 'path';
 const BACKEND = path.resolve(__dirname, '../..');
 const SCRIPT = 'scripts/dto-coverage-check.mjs';
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D2 (249 after the pilot converts 15). */
-const PINNED_COUNT = 249;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D3 (191 after delivery-reps converts 58). */
+const PINNED_COUNT = 191;
 
-/** Convertible sites inside the pinned count (249 - 9 exclusions). */
-const CONVERTIBLE_COUNT = 240;
+/** Convertible sites inside the pinned count (191 - 9 exclusions). */
+const CONVERTIBLE_COUNT = 182;
 
 /** The 9 pinned exclusions (paths relative to backend/, line = @Body() line). */
 const PINNED_EXCLUSIONS: Array<{ file: string; line: number }> = [

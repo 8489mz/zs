@@ -6,6 +6,11 @@ import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { DeliveryRepsService } from './delivery-reps.service';
 import { UpsertDeliveryRepDto } from './dto/upsert-delivery-rep.dto';
+import {
+  DispatchDeliveryOrdersDto,
+  SettleAllDeliveryOrdersDto,
+  SettleDeliveryOrderDto,
+} from './dto/delivery-reps-settlement.dto';
 
 @Controller('api/delivery-reps')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -91,15 +96,7 @@ export class DeliveryRepsController {
   @RequirePermissions('deliveryReps')
   settleOrder(
     @Param('saleId', ParseIntPipe) saleId: number,
-    @Body()
-    body: {
-      signatureDataUrl?: string;
-      proofPhotoUrl?: string;
-      gpsLat?: number;
-      gpsLng?: number;
-      notes?: string;
-      countedCashAmount?: number;
-    },
+    @Body() body: SettleDeliveryOrderDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.service.settleOrder(saleId, req.authContext!, body);
@@ -109,15 +106,7 @@ export class DeliveryRepsController {
   @RequirePermissions('deliveryReps')
   settlePartialOrder(
     @Param('saleId', ParseIntPipe) saleId: number,
-    @Body()
-    body: {
-      signatureDataUrl?: string;
-      proofPhotoUrl?: string;
-      gpsLat?: number;
-      gpsLng?: number;
-      notes?: string;
-      countedCashAmount?: number;
-    },
+    @Body() body: SettleDeliveryOrderDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.service.settlePartialOrder(saleId, req.authContext!, body);
@@ -127,7 +116,7 @@ export class DeliveryRepsController {
   @RequirePermissions('deliveryReps')
   settleAllOrders(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { expectedAmount?: number; countedCashAmount?: number },
+    @Body() body: SettleAllDeliveryOrdersDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.service.settleAllOrders(id, body?.expectedAmount as number, req.authContext!, body?.countedCashAmount);
@@ -152,7 +141,7 @@ export class DeliveryRepsController {
   @Post('dispatch')
   @RequirePermissions('deliveryReps')
   dispatchOrders(
-    @Body() payload: { repId: number; saleIds?: number[]; onlineOrderIds?: number[]; notes?: string },
+    @Body() payload: DispatchDeliveryOrdersDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.service.dispatchOrders(req.authContext!, payload);
