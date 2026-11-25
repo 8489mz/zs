@@ -19,6 +19,12 @@ import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { CatalogService } from './catalog.service';
 import { UpsertCategoryDto } from './dto/upsert-category.dto';
 import { UpsertProductDto, SaveFashionGroupDto } from './dto/upsert-product.dto';
+import {
+  AddProductSerialsDto,
+  BulkUpdateIconsDto,
+  ToggleProductArchiveDto,
+  TransferCategoryProductsDto,
+} from './dto/catalog-write.dto';
 
 @Controller('api')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -58,7 +64,7 @@ export class CatalogController {
   @RequirePermissions('products')
   transferCategoryProducts(
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: { targetCategoryId: number },
+    @Body() payload: TransferCategoryProductsDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.catalogService.transferCategoryProducts(id, payload.targetCategoryId, req.authContext!);
@@ -114,7 +120,7 @@ export class CatalogController {
   @Post('products/bulk-icons')
   @RequirePermissions('products')
   bulkUpdateIcons(
-    @Body() payload: { updates: Array<{ id: number; icon: string }> },
+    @Body() payload: BulkUpdateIconsDto,
     @Req() req: RequestWithAuth,
   ): Promise<{ ok: boolean; updated: number }> {
     return this.catalogService.bulkUpdateIcons(payload?.updates || [], req.authContext!);
@@ -160,7 +166,7 @@ export class CatalogController {
   @RequirePermissions('products')
   addProductSerials(
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: { items: any[] },
+    @Body() payload: AddProductSerialsDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.catalogService.addProductSerials(id, payload?.items || [], req.authContext!);
@@ -170,7 +176,7 @@ export class CatalogController {
   @RequirePermissions('products')
   toggleProductArchive(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { zeroStock?: boolean; archiveEntireGroup?: boolean } | undefined,
+    @Body() body: ToggleProductArchiveDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.catalogService.toggleProductArchive(id, req.authContext!, body);

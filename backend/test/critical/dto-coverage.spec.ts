@@ -1,7 +1,7 @@
 /*
  * D1 DTO coverage guard: the whole-body @Body() sites whose type is not a
- * *Dto class are pinned at exactly 45 at D9 (30 convertible + the 15
- * pinned exclusions below; 264 at D1, 249 at D2, 191 at D3, 163 at D4, 136 at D5, 111 at D6, 89 at D7, 75 at D8).
+ * *Dto class are pinned at exactly 15 at D10 (0 convertible + the 15
+ * pinned exclusions below; 264 at D1, 249 at D2, 191 at D3, 163 at D4, 136 at D5, 111 at D6, 89 at D7, 75 at D8, 45 at D9).
  * Package C keeps the pin at 136 (136 + 0 CRLF + 1 reveal - 1 convert). The count is produced by
  * backend/scripts/dto-coverage-check.mjs, a port of the item-(5)
  * (~/workspace/audit/dto-census.py, re-counted at d1989b74e: 681 @Body(
@@ -127,7 +127,7 @@
  *   (settings.controller.ts:52, settings-backup.controller.ts:61, :69,
  *   tenant-transfer.controller.ts:53): open-ended key/value map by
  *   design — no fixed field set exists to validate.
- * - 1 x `any` (tenant-subscription.controller.ts:396): POST
+ * - 1 x `any` (tenant-subscription.controller.ts:401): POST
  *   webhooks/:gateway — the payload shape is the provider's (it can add
  *   fields at any time; forbidNonWhitelisted would 400 a legitimate new
  *   event) and signature verification reads req.rawBody.
@@ -174,10 +174,24 @@
  * single-property extraction, usually a primitive; the pipe cannot
  * validate a bare string/number) and is not counted here.
  *
+ * D10 (INV-DTO-TAIL-30): the tail converts the last 30 sites
+ * (addons 2 + ai-copilot 5 + bosta 2 + catalog 4 + gcc-shipping 2 +
+ * import-sales 4 + partners 3 + pharmacy 1 + saas-admin 4 +
+ * saas-diagnostics 1 + tenant-subscription 1 + users 1) and the pin
+ * moves 45 -> 15 (0 convertible + the 15 pinned exclusions below).
+ * The live census re-derived the list (the grounding's 30 held
+ * exactly). Whole-body total stays 624; the buckets move dto-class
+ * 579 -> 609, inline-object 21 -> 0, any 11 -> 7, dto-interface 3 -> 0,
+ * inline-other 2 -> 0. The gateway-webhook exclusion moves :396 -> :401
+ * (the new DTO import shifts it +1, then Prettier expands the
+ * multi-line controller signatures and shifts it +4) — re-pinned from
+ * the fresh census after Prettier, never before. The pin is now the 15 exclusions only: every whole-body
+ * site in the repo takes a decorated DTO class.
+ *
  * Fail-first: this spec is new in D1 — on the unpatched tree the census
  * script does not exist, so the spawn fails (MODULE_NOT_FOUND) and the
  * spec exits 1 (see the log). GREEN means the script exists, exits 0,
- * and reports exactly 45 with exactly the 15 exclusions.
+ * and reports exactly 15 with exactly the 15 exclusions.
  */
 
 import { strict as assert } from 'node:assert';
@@ -187,11 +201,11 @@ import * as path from 'path';
 const BACKEND = path.resolve(__dirname, '../..');
 const SCRIPT = 'scripts/dto-coverage-check.mjs';
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D9 (45 after hr + tax + approvals convert 30). */
-const PINNED_COUNT = 45;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D10 (15 — the 15 exclusions only; the tail converts the last 30). */
+const PINNED_COUNT = 15;
 
-/** Convertible sites inside the pinned count (45 - 15 exclusions). */
-const CONVERTIBLE_COUNT = 30;
+/** Convertible sites inside the pinned count (15 - 15 exclusions). */
+const CONVERTIBLE_COUNT = 0;
 
 /** The 15 pinned exclusions (paths relative to backend/, line = @Body() line). */
 const PINNED_EXCLUSIONS: Array<{ file: string; line: number }> = [
@@ -203,7 +217,7 @@ const PINNED_EXCLUSIONS: Array<{ file: string; line: number }> = [
   { file: 'src/modules/settings/controllers/settings-backup.controller.ts', line: 69 },
   { file: 'src/modules/settings/controllers/tenant-transfer.controller.ts', line: 53 },
   { file: 'src/modules/settings/settings.controller.ts', line: 52 },
-  { file: 'src/modules/tenant-subscription/tenant-subscription.controller.ts', line: 396 },
+  { file: 'src/modules/tenant-subscription/tenant-subscription.controller.ts', line: 401 },
   { file: 'src/modules/storefront/controllers/marketplace-sync.controller.ts', line: 176 },
   { file: 'src/modules/storefront/storefront-public.controller.ts', line: 254 },
   { file: 'src/modules/storefront/storefront-public.controller.ts', line: 264 },

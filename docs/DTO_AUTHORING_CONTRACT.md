@@ -98,7 +98,7 @@ file:line; a package that converts one fails its own proof.
 | `src/modules/settings/controllers/settings-backup.controller.ts:61` — `POST backup/config`, `Record<string, unknown>` | Open-ended settings map, same as above. |
 | `src/modules/settings/controllers/settings-backup.controller.ts:69` — `POST backup/folder/test`, `Record<string, unknown>` | Open-ended settings map, same as above. |
 | `src/modules/settings/controllers/tenant-transfer.controller.ts:53` — multipart upload body, `Record<string, unknown>` | Multipart form field map — open-ended by design. |
-| `src/modules/tenant-subscription/tenant-subscription.controller.ts:396` — `POST webhooks/:gateway`, `any` | Provider payload: the provider can add fields at any time (`forbidNonWhitelisted` would 400 a legitimate new event), and signature verification reads `req.rawBody`. |
+| `src/modules/tenant-subscription/tenant-subscription.controller.ts:401` — `POST webhooks/:gateway`, `any` | Provider payload: the provider can add fields at any time (`forbidNonWhitelisted` would 400 a legitimate new event), and signature verification reads `req.rawBody`. |
 | `src/modules/storefront/controllers/marketplace-sync.controller.ts:176` — `POST marketplaces/webhook/:marketplace`, `any` | Provider payload, 4 marketplaces (Amazon SP-API, Noon, Jumia, Trendyol) with 4 different notification schemas; the receive service persists the raw payload first. A DTO would 400 a legitimate new event key. |
 | `src/modules/storefront/storefront-public.controller.ts:254` — `POST webhooks/paymob`, `any` | Provider payload: `body?.obj` + ~20 fields under `obj` + `custom_fields`; HMAC-SHA512 over concatenated field values. |
 | `src/modules/storefront/storefront-public.controller.ts:264` — `POST webhooks/xpay`, `any` | Provider payload: `body?.data \|\| body`, transaction fields under `data` or the root. |
@@ -127,10 +127,11 @@ file:line; a package that converts one fails its own proof.
 - Pin arithmetic: 264 at D1 = 255 convertible + 9 exclusions; 75 at D8 =
   60 convertible + 15 exclusions (D8 adds the 6 storefront webhook
   exclusions and converts 14); 45 at D9 = 30 convertible + 15 exclusions
-  (D9 converts 30 hr + tax + approvals sites). Each DTO package converts N sites and
-  updates the pin by exactly N — the script constant AND the spec
-  constant, in the same package. The last DTO package (D10) pins 15
-  (exclusions only).
+  (D9 converts 30 hr + tax + approvals sites); 15 at D10 = 0 convertible
+  + 15 exclusions (D10 converts the last 30 tail sites). Each DTO
+  package converts N sites and updates the pin by exactly N — the script
+  constant AND the spec constant, in the same package. The last DTO
+  package (D10) pins 15 (exclusions only).
 - If the count moves without a pin update, the spec goes red. That is the
   point: the pin moves only deliberately, in a package that proves the
   conversion with a spec.

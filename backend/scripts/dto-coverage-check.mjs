@@ -103,8 +103,8 @@ import { fileURLToPath } from 'node:url';
 const BACKEND = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(BACKEND, 'src');
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D9 (45 after hr + tax + approvals convert 30). */
-const PINNED_COUNT = 45;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D10 (15 — the 15 exclusions only; the tail converts the last 30). */
+const PINNED_COUNT = 15;
 
 /**
  * The 15 pinned exclusions. A DTO on any of these breaks a real flow — see
@@ -164,7 +164,7 @@ const PINNED_EXCLUSIONS = [
   },
   {
     file: 'src/modules/tenant-subscription/tenant-subscription.controller.ts',
-    line: 396,
+    line: 401,
     bucket: 'any',
     reason: 'POST webhooks/:gateway: provider payload + raw-body signature',
   },

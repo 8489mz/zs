@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { PharmacyService } from './pharmacy.service';
+import { ImportDistributorInvoiceDto } from './dto/distributor-invoice-write.dto';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { RequirePermissions, RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
@@ -55,7 +56,7 @@ export class PharmacyController {
   // Distributor Invoice Importer
   @Post('distributors/import-invoice')
   @RequireAnyPermission('pharmacy', 'purchases')
-  importDistributorInvoice(@Req() req: RequestWithAuth, @Body() dto: any) {
+  importDistributorInvoice(@Req() req: RequestWithAuth, @Body() dto: ImportDistributorInvoiceDto) {
     return this.pharmacyService.importDistributorInvoice(req.authContext!, dto);
   }
 

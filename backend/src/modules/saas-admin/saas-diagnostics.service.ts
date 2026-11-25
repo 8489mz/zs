@@ -6,6 +6,7 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { IsOptional, IsString } from 'class-validator';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { Kysely } from 'kysely';
@@ -33,10 +34,27 @@ export function isZipBuffer(buffer: Buffer | undefined): boolean {
   );
 }
 
-export interface UploadDiagnosticDto {
-  clientName: string;
-  clientIdentifier: string;
+/*
+ * D10: UploadDiagnosticDto is a decorated class IN PLACE (Rule 5) —
+ * the upload site takes the class now. ALL fields are optional: the
+ * service defaults clientName/clientIdentifier/appVersion/logPeriod.
+ * NO frontend caller — desktop clients post crash bundles.
+ */
+export class UploadDiagnosticDto {
+  @IsOptional()
+  @IsString()
+  clientName?: string;
+
+  @IsOptional()
+  @IsString()
+  clientIdentifier?: string;
+
+  @IsOptional()
+  @IsString()
   appVersion?: string;
+
+  @IsOptional()
+  @IsString()
   logPeriod?: string;
 }
 

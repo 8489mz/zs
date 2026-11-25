@@ -160,7 +160,7 @@ async function main(): Promise<void> {
   }
 
   // 3. This spec is wired into both critical lists, in identical order
-  // (347 specs — F18 wired van-presales-consolidate-delivery-rep-alias
+  // (349 specs — F18 wired van-presales-consolidate-delivery-rep-alias
   // and van-presales-order-details-line-total; F20 followed it, so this
   // spec is no longer the last entry).
   {
@@ -169,15 +169,15 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 347);
-    assert.equal(chain.length, 347);
+    assert.equal(specs.length, 349);
+    assert.equal(chain.length, 349);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-presales-order-details-line-total.spec.ts'));
     assert.equal(
       specs[specs.indexOf('test/critical/van-presales-order-details-line-total.spec.ts') + 1],
       'test/critical/van-portal-sale-rep-attribution-f20.spec.ts',
     );
-    console.log('3. evidence spec wired into both critical lists (347 = 347, identical order), passed');
+    console.log('3. evidence spec wired into both critical lists (349 = 349, identical order), passed');
   }
 
   console.log('van-presales-order-details-line-total: all cases passed');

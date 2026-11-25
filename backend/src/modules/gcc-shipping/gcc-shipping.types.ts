@@ -1,3 +1,13 @@
+import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+
+/*
+ * D10: GccCreateShipmentDto is a decorated class IN PLACE (Rule 5) —
+ * the ship-order site takes the class now. GccShippingSettings stays
+ * an interface (the settings site takes the SaveGccShippingSettingsDto
+ * class in dto/gcc-shipping-write.dto.ts). ALL shipment fields are
+ * optional: the service defaults every one from the order and the
+ * saved settings.
+ */
 export type GccCarrier = 'aramex' | 'smsa';
 
 export interface GccShippingSettings {
@@ -26,19 +36,57 @@ export interface GccShippingSettings {
   pickupAddress?: string;
 }
 
-export interface GccCreateShipmentDto {
+export class GccCreateShipmentDto {
+  @IsOptional()
+  @IsEnum(['aramex', 'smsa'])
   carrier?: GccCarrier;
+
+  @IsOptional()
+  @IsEnum(['Parcel', 'Document'])
   packageType?: 'Parcel' | 'Document';
-  weight?: number; // In KG
+
+  @IsOptional()
+  @IsNumber()
+  weight?: number;
+
+  @IsOptional()
+  @IsNumber()
   piecesCount?: number;
+
+  @IsOptional()
+  @IsString()
   description?: string;
-  codAmount?: number; // Cash On Delivery in local currency
-  currency?: string; // SAR, AED, KWD, QAR
+
+  @IsOptional()
+  @IsNumber()
+  codAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @IsOptional()
+  @IsString()
   receiverName?: string;
+
+  @IsOptional()
+  @IsString()
   receiverPhone?: string;
+
+  @IsOptional()
+  @IsString()
   receiverCountry?: string;
+
+  @IsOptional()
+  @IsString()
   receiverCity?: string;
+
+  @IsOptional()
+  @IsString()
   receiverAddress?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 

@@ -13,6 +13,7 @@ import { UpsertCustomerDto } from './dto/upsert-customer.dto';
 import { UpsertSupplierDto } from './dto/upsert-supplier.dto';
 import { UpsertContactDto } from './dto/upsert-contact.dto';
 import { UpsertAddressDto } from './dto/upsert-address.dto';
+import { AdjustCustomerLoyaltyPointsDto, CustomerAddressDto } from './dto/partners-write.dto';
 
 @Controller('api')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -66,7 +67,7 @@ export class PartnersController {
   @RequirePermissions('customers')
   adjustCustomerLoyaltyPoints(
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: { pointsChange: number; actionType?: 'earn' | 'redeem' | 'manual_adjust'; notes?: string },
+    @Body() payload: AdjustCustomerLoyaltyPointsDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     // The manual-adjust endpoint records a manual adjustment. An explicit
@@ -101,7 +102,7 @@ export class PartnersController {
   @AllowAuthenticated()
   addCustomerAddress(
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: { address: string },
+    @Body() payload: CustomerAddressDto,
     @Req() req: RequestWithAuth,
   ): Promise<{ ok: boolean; addresses: string[] }> {
     return this.partnersService.addCustomerAddress(id, payload.address, req.authContext!);
@@ -111,7 +112,7 @@ export class PartnersController {
   @AllowAuthenticated()
   deleteCustomerAddress(
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: { address: string },
+    @Body() payload: CustomerAddressDto,
     @Req() req: RequestWithAuth,
   ): Promise<{ ok: boolean; addresses: string[] }> {
     return this.partnersService.deleteCustomerAddress(id, payload.address, req.authContext!);

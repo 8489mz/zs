@@ -1,7 +1,8 @@
 import { Controller, Get, Post, Body, Param, ParseIntPipe, Req, UseGuards, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { BostaService } from './bosta.service';
-import { BostaCreateDeliveryDto, BostaSettings } from './bosta.types';
+import { SaveBostaSettingsDto } from './dto/bosta-write.dto';
+import { BostaCreateDeliveryDto } from './bosta.types';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { escapeHtml } from '../../common/utils/escape-html';
@@ -17,7 +18,7 @@ export class BostaController {
   }
 
   @Post('settings')
-  async saveSettings(@Body() payload: Partial<BostaSettings>, @Req() req: RequestWithAuth) {
+  async saveSettings(@Body() payload: SaveBostaSettingsDto, @Req() req: RequestWithAuth) {
     return this.bostaService.saveSettings(payload, req.authContext!);
   }
 

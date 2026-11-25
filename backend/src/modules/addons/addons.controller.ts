@@ -5,6 +5,7 @@ import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { UpsertAddonDto } from './dto/upsert-addon.dto';
 import { AddonsService } from './addons.service';
+import { ModifierGroupDto } from './dto/modifier-group-write.dto';
 
 @Controller('api/addons')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -45,13 +46,17 @@ export class AddonsController {
 
   @Post('modifier-groups')
   @RequirePermissions('products')
-  createModifierGroup(@Body() payload: any, @Req() req: RequestWithAuth) {
+  createModifierGroup(@Body() payload: ModifierGroupDto, @Req() req: RequestWithAuth) {
     return this.addonsService.createModifierGroup(payload, req.authContext!);
   }
 
   @Put('modifier-groups/:id')
   @RequirePermissions('products')
-  updateModifierGroup(@Param('id', ParseIntPipe) id: number, @Body() payload: any, @Req() req: RequestWithAuth) {
+  updateModifierGroup(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: ModifierGroupDto,
+    @Req() req: RequestWithAuth,
+  ) {
     return this.addonsService.updateModifierGroup(id, payload, req.authContext!);
   }
 

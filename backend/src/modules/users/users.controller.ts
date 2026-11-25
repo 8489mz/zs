@@ -9,6 +9,7 @@ import { BulkDisableUsersDto } from './dto/bulk-disable-users.dto';
 import { UsersService } from './users.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { DeleteUserDto } from './dto/delete-user.dto';
 
 @Controller('api/users')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -59,7 +60,7 @@ export class UsersController {
   @RequirePermissions('canManageUsers')
   remove(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { managerPin?: string },
+    @Body() body: DeleteUserDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.usersService.deleteUser(id, body?.managerPin, req.authContext!);

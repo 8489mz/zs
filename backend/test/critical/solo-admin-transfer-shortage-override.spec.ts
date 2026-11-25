@@ -369,18 +369,18 @@ async function main(): Promise<void> {
     assert.ok(audit3.includes('بفاقد 3'), 'audit log must record the shortfall amount');
     assert.ok(audit3.includes(REASON), 'audit log must record the reason');
 
-    // ---------- Wiring: this spec is in both critical lists, in identical order (347 specs — the dto-tax-approvals spec is the last entry). ----------
+    // ---------- Wiring: this spec is in both critical lists, in identical order (349 specs — the dto-tail-rest spec is the last entry). ----------
     {
       const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
         .specs as string[];
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 347);
-      assert.equal(chain.length, 347);
+      assert.equal(specs.length, 349);
+      assert.equal(chain.length, 349);
       assert.deepEqual(chain, specs);
       assert.ok(specs.includes('test/critical/solo-admin-transfer-shortage-override.spec.ts'));
-      console.log('wiring: evidence spec in both critical lists (347 = 347, identical order), passed');
+      console.log('wiring: evidence spec in both critical lists (349 = 349, identical order), passed');
     }
 
     console.log('Solo-admin transfer shortage override tests passed');

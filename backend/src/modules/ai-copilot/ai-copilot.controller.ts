@@ -16,6 +16,13 @@ import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { AiCopilotService, CopilotResponse } from './ai-copilot.service';
 import { AiAgentService, AgentChatResponse } from './services/ai-agent.service';
 import { AiKnowledgeService } from './services/ai-knowledge.service';
+import {
+  AddKnowledgeSourceDto,
+  AgentChatDto,
+  GetAiModelsDto,
+  SaveAiConfigDto,
+  TestAiKeyDto,
+} from './dto/ai-copilot-write.dto';
 
 @Controller('api/ai-copilot')
 @UseGuards(SessionAuthGuard)
@@ -43,10 +50,7 @@ export class AiCopilotController {
    * New Conversational Reasoning Agent Endpoint (Multi-turn + Tools + Out-of-the-box reasoning)
    */
   @Post('agent/chat')
-  async chatAgent(
-    @Body() body: { message: string; sessionId?: string },
-    @Req() req: RequestWithAuth,
-  ): Promise<AgentChatResponse> {
+  async chatAgent(@Body() body: AgentChatDto, @Req() req: RequestWithAuth): Promise<AgentChatResponse> {
     const actor = req.authContext!;
     const { tenantId } = requireTenantScope(actor);
     const aiConfig = await this.copilotService.getEffectiveAiConfig(tenantId);
@@ -84,13 +88,7 @@ export class AiCopilotController {
   @Post('knowledge/sources')
   async addKnowledgeSource(
     @Body()
-    body: {
-      title: string;
-      sourceType?: string;
-      rawText: string;
-      fileUrl?: string;
-      metadata?: Record<string, unknown>;
-    },
+    body: AddKnowledgeSourceDto,
     @Req() req: RequestWithAuth,
   ) {
     const actor = req.authContext!;
@@ -144,13 +142,7 @@ export class AiCopilotController {
   @Post('config')
   saveConfig(
     @Body()
-    body: {
-      provider?: 'gemini' | 'openai' | 'custom';
-      apiKey?: string;
-      geminiApiKey?: string;
-      model?: string;
-      baseUrl?: string;
-    },
+    body: SaveAiConfigDto,
     @Req() req: RequestWithAuth,
   ) {
     this.assertCanManageAiSettings(req);
@@ -160,12 +152,7 @@ export class AiCopilotController {
   @Post('test-key')
   testKey(
     @Body()
-    body: {
-      apiKey?: string;
-      provider?: 'gemini' | 'openai' | 'custom';
-      model?: string;
-      baseUrl?: string;
-    },
+    body: TestAiKeyDto,
     @Req() req: RequestWithAuth,
   ) {
     this.assertCanManageAiSettings(req);
@@ -175,10 +162,7 @@ export class AiCopilotController {
   @Post('models')
   getModels(
     @Body()
-    body: {
-      apiKey?: string;
-      provider?: 'gemini' | 'openai' | 'custom';
-    },
+    body: GetAiModelsDto,
     @Req() req: RequestWithAuth,
   ) {
     this.assertCanManageAiSettings(req);

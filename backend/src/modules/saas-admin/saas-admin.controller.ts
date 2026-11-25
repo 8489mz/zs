@@ -18,6 +18,12 @@ import {
   UpdateTenantSlugDto,
 } from './dto/saas-admin.dto';
 import { SaasAdminService } from './saas-admin.service';
+import {
+  DeleteTenantDto,
+  ExitImpersonationDto,
+  SeedTenantDemoDto,
+  WipeTenantDataDto,
+} from './dto/saas-admin-lifecycle-write.dto';
 
 @Controller('api/saas-admin')
 @UseGuards(SessionAuthGuard, SuperAdminRoleGuard)
@@ -110,7 +116,7 @@ export class SaasAdminController {
   }
 
   @Post('tenants/:id/delete')
-  deleteTenant(@Param('id') id: string, @Body() body: { superAdminPassword?: string }, @Req() req: RequestWithAuth) {
+  deleteTenant(@Param('id') id: string, @Body() body: DeleteTenantDto, @Req() req: RequestWithAuth) {
     return this.service.deleteTenant(id, body?.superAdminPassword || '', req.authContext!);
   }
 
@@ -145,7 +151,7 @@ export class SaasAdminController {
 
   @Post('exit-impersonation')
   async exitImpersonation(
-    @Body() body: { originalSessionId?: string },
+    @Body() body: ExitImpersonationDto,
     @Req() req: RequestWithAuth,
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -159,16 +165,12 @@ export class SaasAdminController {
   }
 
   @Post('tenants/:id/seed-demo')
-  seedTenantDemo(
-    @Param('id') id: string,
-    @Body() body: { activityType?: string; wipeExisting?: boolean; seedSales?: boolean; seedOnlineOrders?: boolean },
-    @Req() req: RequestWithAuth,
-  ) {
+  seedTenantDemo(@Param('id') id: string, @Body() body: SeedTenantDemoDto, @Req() req: RequestWithAuth) {
     return this.service.seedTenantDemo(id, body, req.authContext!);
   }
 
   @Post('tenants/:id/wipe-data')
-  wipeTenantData(@Param('id') id: string, @Body() body: { superAdminPassword?: string }, @Req() req: RequestWithAuth) {
+  wipeTenantData(@Param('id') id: string, @Body() body: WipeTenantDataDto, @Req() req: RequestWithAuth) {
     return this.service.wipeTenantData(id, body?.superAdminPassword || '', req.authContext!);
   }
 }

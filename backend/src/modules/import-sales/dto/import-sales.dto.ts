@@ -1,5 +1,12 @@
 export { CreateShipmentDto } from './import-sales-dto/import-sales-dto-shipments';
 
+export {
+  CreateImportPartnerDto,
+  UpdateImportPartnerDto,
+  SetProjectPartnersDto,
+  RecordCapitalTransactionDto,
+} from './import-sales-dto/import-sales-dto-partners';
+
 export { UpdateShipmentCostsDto } from './import-sales-dto/import-sales-dto-shipment-costs';
 
 export {

@@ -15,6 +15,12 @@ import {
 import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';
 import { ImportSalesService } from './import-sales.service';
 import {
+  CreateImportPartnerDto,
+  RecordCapitalTransactionDto,
+  SetProjectPartnersDto,
+  UpdateImportPartnerDto,
+} from './dto/import-sales-dto/import-sales-dto-partners';
+import {
   CreateShipmentDto,
   UpdateShipmentCostsDto,
   AddShipmentItemDto,
@@ -121,7 +127,7 @@ export class ImportSalesController {
   async setProjectPartners(
     @Req() req: RequestWithAuth,
     @Param('id') projectId: string,
-    @Body() body: { partners: Array<{ partnerId: string; capitalShare: number; profitPercentage: number }> },
+    @Body() body: SetProjectPartnersDto,
   ) {
     return this.importSalesService.setProjectPartners(req.authContext!.tenantId!, projectId, body.partners);
   }
@@ -287,10 +293,7 @@ export class ImportSalesController {
 
   @RequireAnyPermission('accounting')
   @Post('partners')
-  async createPartner(
-    @Req() req: RequestWithAuth,
-    @Body() dto: { name: string; percentage: number; capitalAmount?: number; accountId?: string },
-  ) {
+  async createPartner(@Req() req: RequestWithAuth, @Body() dto: CreateImportPartnerDto) {
     return this.importSalesService.createPartner(
       req.authContext!.tenantId!,
       req.authContext!.userId!,
@@ -303,11 +306,7 @@ export class ImportSalesController {
 
   @RequireAnyPermission('accounting')
   @Patch('partners/:id')
-  async updatePartner(
-    @Req() req: RequestWithAuth,
-    @Param('id') id: string,
-    @Body() dto: { name?: string; percentage?: number; capitalAmount?: number },
-  ) {
+  async updatePartner(@Req() req: RequestWithAuth, @Param('id') id: string, @Body() dto: UpdateImportPartnerDto) {
     return this.importSalesService.updatePartner(
       req.authContext!.tenantId!,
       id,
@@ -335,14 +334,7 @@ export class ImportSalesController {
     @Req() req: RequestWithAuth,
     @Param('id') id: string,
     @Body()
-    dto: {
-      type: 'DEPOSIT' | 'WITHDRAWAL';
-      amount: number;
-      date: string;
-      note?: string;
-      accountId?: string;
-      idempotencyKey?: string;
-    },
+    dto: RecordCapitalTransactionDto,
   ) {
     return this.importSalesService.recordCapitalTransaction(
       req.authContext!.tenantId!,

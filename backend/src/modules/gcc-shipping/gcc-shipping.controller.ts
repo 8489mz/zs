@@ -1,7 +1,8 @@
 import { Controller, Get, Post, Body, Param, ParseIntPipe, Req, UseGuards, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { GccShippingService } from './gcc-shipping.service';
-import { GccShippingSettings, GccCreateShipmentDto } from './gcc-shipping.types';
+import { SaveGccShippingSettingsDto } from './dto/gcc-shipping-write.dto';
+import { GccCreateShipmentDto } from './gcc-shipping.types';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { escapeHtml } from '../../common/utils/escape-html';
@@ -17,7 +18,7 @@ export class GccShippingController {
   }
 
   @Post('settings')
-  async saveSettings(@Body() payload: Partial<GccShippingSettings>, @Req() req: RequestWithAuth) {
+  async saveSettings(@Body() payload: SaveGccShippingSettingsDto, @Req() req: RequestWithAuth) {
     return this.gccShippingService.saveSettings(payload, req.authContext!);
   }
 

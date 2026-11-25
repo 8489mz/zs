@@ -4,6 +4,7 @@ import { XPayGatewayService } from '../../src/modules/tenant-subscription/gatewa
 import { PaymobGatewayService } from '../../src/modules/tenant-subscription/gateways/paymob.gateway';
 import { StripeGatewayService } from '../../src/modules/tenant-subscription/gateways/stripe.gateway';
 import { TenantSubscriptionController } from '../../src/modules/tenant-subscription/tenant-subscription.controller';
+import { CompleteSandboxCheckoutDto } from '../../src/modules/tenant-subscription/dto/sandbox-checkout-write.dto';
 import { PaymentManagerService } from '../../src/modules/tenant-subscription/gateways/payment-manager.service';
 
 const payment = {
@@ -66,7 +67,12 @@ async function run() {
       await assert.rejects(
         () =>
           controller.completeSandboxCheckout(
-            { gateway: 'xpay', planId: '2', amount: '0' },
+            // D10: the sandbox form posts planId/amount as STRINGS; the
+            // pipe coerces them to numbers before the controller sees
+            // them, and the service coerces again — the cast keeps the
+            // direct-call shape (the service, not the DTO, owns the
+            // coercion for direct callers).
+            { gateway: 'xpay', planId: '2', amount: '0' } as unknown as CompleteSandboxCheckoutDto,
             { authContext: { tenantId: 'merchant-a', role: 'admin', permissions: [] } } as any,
             {} as any,
           ),

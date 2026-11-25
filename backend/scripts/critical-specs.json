@@ -346,6 +346,8 @@
     "test/critical/dto-settings.spec.ts",
     "test/critical/dto-storefront.spec.ts",
     "test/critical/dto-hr.spec.ts",
-    "test/critical/dto-tax-approvals.spec.ts"
+    "test/critical/dto-tax-approvals.spec.ts",
+    "test/critical/dto-tail-core.spec.ts",
+    "test/critical/dto-tail-rest.spec.ts"
   ]
 }

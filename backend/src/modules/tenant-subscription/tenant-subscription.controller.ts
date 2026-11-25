@@ -15,6 +15,7 @@ import type { Response } from 'express';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { TenantSubscriptionService } from './tenant-subscription.service';
+import { CompleteSandboxCheckoutDto } from './dto/sandbox-checkout-write.dto';
 import { PaymentManagerService } from './gateways/payment-manager.service';
 import { InitiateOnlinePaymentDto, RequestRenewalDto } from './dto/tenant-subscription.dto';
 import { escapeHtml, sanitizeRedirectPath } from './sandbox-checkout-render.util';
@@ -322,7 +323,11 @@ export class TenantSubscriptionController {
    */
   @Post('sandbox-checkout/complete')
   @UseGuards(SessionAuthGuard)
-  async completeSandboxCheckout(@Body() body: any, @Req() req: RequestWithAuth, @Res() res: Response) {
+  async completeSandboxCheckout(
+    @Body() body: CompleteSandboxCheckoutDto,
+    @Req() req: RequestWithAuth,
+    @Res() res: Response,
+  ) {
     this.assertSandboxGatewayUsable();
     this.assertSubscriptionManagePermission(req);
     const gateway = String(body.gateway || 'xpay').toLowerCase();
