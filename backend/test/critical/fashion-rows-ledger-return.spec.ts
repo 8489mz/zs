@@ -47,7 +47,8 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
  *   sits in the unassigned pool).
  * - Deliberately OUT of this package: :583 (zeroing deduct — stamps by
  *   construction, full-location deduct, converted by the mechanical
- *   A6–A9 pass) and :893 (opening balance — A4's scope).
+ *   A6–A9 pass) and :893 (opening balance — converted by Phase 1 A4,
+ *   which adds the 4th recordStockMovement call in this file).
  *
  * WHAT THIS PINS, driving the REAL CatalogProductService.saveFashionGroup
  * on PGlite (fresh database per case; no posting service, so the journal
@@ -62,8 +63,9 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
  * - Rollback: a save that throws AFTER the consolidation rows (outsider
  *   name collision) leaves zero movement rows and balances unchanged —
  *   the writer runs inside the save transaction.
- * - Source pins: exactly 3 recordStockMovement(trx, …) calls in the
- *   fashion file; none of the three cached stamps remain; the
+ * - Source pins: exactly 4 recordStockMovement(trx, …) calls in the
+ *   fashion file (3 from this package + the A4 opening-balance branch);
+ *   none of the three cached stamps remain; the
  *   applyStockDelta import stays (the :583 zeroing path still calls it).
  * This is not an end-to-end run on live Postgres.
  */
@@ -490,7 +492,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // Block 4: source pins + wiring (355 specs — this spec is the last entry).
+  // Block 4: source pins + wiring (356 specs — the opening-balances-ledger spec is the last entry).
   {
     const source = readFileSync(
       resolve(__dirname, '../../src/modules/catalog/services/catalog-product-fashion.service.ts'),
@@ -499,8 +501,8 @@ async function main(): Promise<void> {
     const writerCalls = source.match(/recordStockMovement\(trx/g) ?? [];
     assert.equal(
       writerCalls.length,
-      3,
-      `expected exactly 3 recordStockMovement(trx, …) calls, found ${writerCalls.length}`,
+      4,
+      `expected exactly 4 recordStockMovement(trx, …) calls, found ${writerCalls.length}`,
     );
     assert.ok(
       !source.includes('before_qty: prevTargetStock'),
@@ -533,12 +535,12 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 355);
-    assert.equal(chain.length, 355);
+    assert.equal(specs.length, 356);
+    assert.equal(chain.length, 356);
     assert.deepEqual(chain, specs);
-    assert.ok(specs.includes('test/critical/fashion-rows-ledger-return.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/fashion-rows-ledger-return.spec.ts');
-    console.log('  5. evidence spec wired into both critical lists (355 = 355, identical order), passed');
+    assert.ok(specs.includes('test/critical/opening-balances-ledger.spec.ts'));
+    assert.equal(specs[specs.length - 1], 'test/critical/opening-balances-ledger.spec.ts');
+    console.log('  5. evidence spec wired into both critical lists (356 = 356, identical order), passed');
   }
 
   console.log('fashion-rows-ledger-return: all cases passed');

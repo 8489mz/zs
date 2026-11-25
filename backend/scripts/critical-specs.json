@@ -354,6 +354,7 @@
     "test/critical/stock-movement-writer.spec.ts",
     "test/critical/delete-location-transaction.spec.ts",
     "test/critical/marketplace-sync-sim-row.spec.ts",
-    "test/critical/fashion-rows-ledger-return.spec.ts"
+    "test/critical/fashion-rows-ledger-return.spec.ts",
+    "test/critical/opening-balances-ledger.spec.ts"
   ]
 }

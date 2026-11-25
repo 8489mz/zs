@@ -5,16 +5,17 @@
 - Re-scanned at HEAD `3e7035854` (item (5) FIX, ci-full #264 repair): 64 of 70 rows re-lined — Prettier `--write` sweeps, DTO packages D1–D5 and the #116 settings-import split shifted lines; no write added or removed, total still 70. The 2 settings-import rows moved from the split facade (`settings-import.service.ts:615/:1067`) to their slice files (`settings-import-products.ts:282`, `settings-import-suppliers-stock.ts:225`) and their `paired` flips to `no` (the slices never call `applyStockDelta`).
 - Re-scanned at HEAD `9a2eee6a` (Phase 1 A0, INV-PHASE1-A0-ROW-WRITER): +1 write — the unified row-writer itself (`backend/src/common/utils/stock-movement-writer.ts:65`, `recordStockMovement`); total 70 → 71. The writer is the one insert all future callers converge on (A6–A9); it runs the delta through `applyStockDelta` and writes exactly one row from the returned before/after. No caller migrated yet, so all 70 prior rows stand unchanged.
 - Re-scanned at HEAD `e3ac0c8d1` (Phase 1 A3, INV-PHASE1-A3-FASHION-ROWS-LEDGER-RETURN): −3 writes — the three fashion rows (consolidation `:489/:510`, stock edit `:738`) now go through the unified row-writer (`recordStockMovement`); the remaining fashion rows re-lined (`:583` → `:554`, `:893` → `:853`); total 71 → 68. 3 callers migrated so far; the rest still write their own rows.
-- Total business writes: **68**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
+- Re-scanned at HEAD `34c72dfc4` (Phase 1 A4, INV-PHASE1-A4-OPENING-BALANCES-LEDGER): −3 writes — the three opening-balance sites (fashion `:853`, catalog-write `:662`, settings-import-products `:282`) now go through the unified row-writer (`recordStockMovement`); the "no ledger balance call at all" set is closed. The products insert in each site now seeds `stock_qty: 0` and the ledger sets the global (a preset would double the stock — see the A4 spec). Total 68 → 65. 6 callers migrated so far; the rest still write their own rows.
+- Total business writes: **65**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
 - The ledger (`applyStockDelta` in `backend/src/common/utils/location-stock-ledger.ts`) updates balances; each caller still writes its own `stock_movements` row. That split is the risk this inventory exists to close in Phase 1 (single writer).
 - `paired` below is file-level (YES if the same file calls `applyStockDelta` anywhere) — deterministic and reproducible. It does NOT prove the ledger call and the row happen in the same branch: see the notes, especially the archive residual.
 - FIXED ASYMMETRY (catalog archive, INV-STOCK-MOVEMENTS-ARCHIVE-ROW): `toggleProductArchive` used to call `applyStockDelta` for the residual global stock (`-remainingGlobal`) with NO `stock_movements` row for it. It now writes the row at line 364, mirroring the sibling deduct rows (same type, reason, reference, cost, posting call) — before_qty remainingGlobal, after_qty 0, qty -remainingGlobal. A zero residual writes no row.
 - Resolves the map's UNVERIFIED maintenance path: `maintenance/maintenance/ticket-parts.slice.ts:154,305` and `maintenance/maintenance/delete-ticket.slice.ts:121` are all real inserts (maintenance_consumption / maintenance_return), listed below.
-- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 68 and every `file:line` below must be listed.
+- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 65 and every `file:line` below must be listed.
 
 ## Per-module totals
 
-- `catalog`: 6
+- `catalog`: 4
 - `common` (ledger writer): 1
 - `delivery-reps`: 1
 - `import-sales`: 3
@@ -24,10 +25,10 @@
 - `purchases`: 6
 - `returns`: 3
 - `sales`: 12
-- `settings`: 6
+- `settings`: 5
 - `tradein`: 1
 
-## All 68 writes
+## All 65 writes
 
 | file:line | kind | movement_type | paired (file calls applyStockDelta) | notes |
 |---|---|---|---|---|
@@ -35,8 +36,6 @@
 | backend/src/modules/catalog/services/catalog-product-archive.service.ts:319 | insert | deduct | yes | Restore deduct; same method also calls applyStockDelta (line 308) — paired per flow, not per branch. |
 | backend/src/modules/catalog/services/catalog-product-archive.service.ts:364 | insert | deduct | yes | Archive residual deduct (INV-STOCK-MOVEMENTS-ARCHIVE-ROW): the applyStockDelta for -remainingGlobal now has its own row, mirroring the sibling deduct rows; a zero residual writes no row. |
 | backend/src/modules/catalog/services/catalog-product-fashion.service.ts:554 | insert | deduct | yes |  |
-| backend/src/modules/catalog/services/catalog-product-fashion.service.ts:853 | insert | opening_balance | yes |  |
-| backend/src/modules/catalog/services/catalog-product-write.service.ts:662 | insert | opening_balance | no | Opening balance: writes product_location_stock directly + this row; file never calls applyStockDelta. Phase 1: route through the ledger or document why direct. |
 | backend/src/modules/delivery-reps/services/van-common.util.ts:57 | insert | expr: params.movementType | yes |  |
 | backend/src/modules/import-sales/services/import-container-preorders.service.ts:751 | insert | sale | yes |  |
 | backend/src/modules/import-sales/services/import-receipt-posting.service.ts:339 | insert | import_receipt | yes |  |
@@ -94,7 +93,6 @@
 | backend/src/modules/settings/services/demo-data/settings-demo-data-wipe.ts:187 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
 | backend/src/modules/settings/services/demo-data/settings-demo-data-wipe.ts:370 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
 | backend/src/modules/settings/services/settings-demo-data-wipe-tables.ts:281 | delete | (delete) | no | Tenant wipe/demo reset (deleteFrom), not a ledger movement. |
-| backend/src/modules/settings/services/settings-import/settings-import-products.ts:282 | insert | opening_balance | no | Opening balance on import: row written without an applyStockDelta call in this file. Phase 1: route through the ledger or document why direct. Moved here from settings-import.service.ts:615 in the #116 split (the facade no longer holds the write). |
 | backend/src/modules/settings/services/settings-import/settings-import-suppliers-stock.ts:225 | insert | opening_stock | no | Opening stock on import: see above. Moved here from settings-import.service.ts:1067 in the #116 split. |
 | backend/src/modules/settings/settings/settings-locations-admin.ts:179 | delete | (delete) | yes | Location delete cleanup (deleteFrom), not a ledger movement. Phase 1 A1: now in a transaction (was :173, flag no). |
 | backend/src/modules/tradein/tradein.service.ts:401 | insert | tradein_in | yes |  |

@@ -813,7 +813,12 @@ export class CatalogProductFashionService {
                 value.minSellingPrice ??
                 (template?.min_selling_price != null ? Number(template.min_selling_price) : null),
               min_stock_qty: value.minStock,
-              stock_qty: stock,
+              // Phase 1 A4: the opening balance below goes through the
+              // ledger writer, which sets the global — so the insert seeds
+              // stock_qty 0 instead of the opening qty. Presetting it
+              // would make the ledger mint the preset into the unassigned
+              // pool and double the stock (see the A4 spec's note).
+              stock_qty: 0,
               default_location_id: resolvedWarehouseId,
               notes: value.notes,
               is_active: true,
@@ -838,36 +843,26 @@ export class CatalogProductFashionService {
           await this.replaceProductRelations(trx, productId, newValue, actor);
           if (stock > 0) {
             const bookDigits = await this.bookDigits(trx, actor);
-            const openingTotal = stockMovementTotal(stock, value.costPrice, bookDigits);
-            await trx
-              .insertInto('product_location_stock')
-              .values({
-                product_id: productId,
-                branch_id: null,
-                location_id: resolvedWarehouseId!,
-                qty: stock,
-                ...this.tenantFields(actor),
-              })
-              .execute();
-            await trx
-              .insertInto('stock_movements')
-              .values({
-                product_id: productId,
-                movement_type: 'opening_balance',
-                qty: stock,
-                before_qty: 0,
-                after_qty: stock,
-                unit_cost: value.costPrice,
-                total_cost: openingTotal,
-                reason: 'opening_balance',
-                note: 'رصيد افتتاحي لمقاس جديد',
-                reference_type: 'product',
-                reference_id: productId,
-                location_id: resolvedWarehouseId!,
-                created_by: actor.userId,
-                ...this.tenantFields(actor),
-              } as any)
-              .execute();
+            // Phase 1 A4 (INV-PHASE1-A4-OPENING-BALANCES-LEDGER): the
+            // opening balance goes through the row-writer — the ledger
+            // sets the location balance AND the reconciled global, and
+            // writes the one row from the returned scopeBefore/scopeAfter.
+            // The GL posting below stays unchanged.
+            await recordStockMovement(trx, {
+              productId,
+              locationId: resolvedWarehouseId,
+              delta: stock,
+              tenantId: this.tenantId(actor),
+              accountId: actor.accountId,
+              movementType: 'opening_balance',
+              referenceType: 'product',
+              referenceId: productId,
+              reason: 'opening_balance',
+              note: 'رصيد افتتاحي لمقاس جديد',
+              unitCost: Number(value.costPrice || 0),
+              moneyDigits: bookDigits,
+              createdBy: actor.userId,
+            });
             await this.postOpeningStock(trx, productId, stock, value.costPrice, resolvedWarehouseId, actor);
           }
           created++;

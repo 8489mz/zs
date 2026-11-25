@@ -277,16 +277,19 @@ async function main(): Promise<void> {
   // row-writer, so their totals now compute inside the writer at book
   // digits (roundMoney(|delta| * unitCost, moneyDigits) — the computation
   // stockMovementTotal wraps, pinned by the A3 spec's total_cost
-  // assertions); the zeroing deduct + opening balance still call the
-  // helper directly.
+  // assertions); the zeroing deduct still calls the helper directly
+  // (the opening balance did too until A4 moved it into the writer).
+  // Phase 1 A4 moved the opening balance into the writer too (fashion
+  // :841 + catalog-write :658), so only the zeroing deduct still calls
+  // the helper in the fashion file and no site in catalog-write does.
   // The book-digits pin now spans the whole split (catalog-product split
   // 2026-11-16): facade + types module + all 8 slices. The toFixed(2) /
   // roundCurrency bans apply to every file; the stockMovementTotal call
-  // sites are counted across all files (7 total: archive 3, fashion 2,
-  // posting 1, write 1). The archive count was already 3 (the residual
+  // sites are counted across all files (5 total: archive 3, fashion 1,
+  // posting 1, write 0). The archive count was already 3 (the residual
   // fix added a third call site without updating this comment); fashion
   // fell 5 → 2 when A3 moved the consolidation legs + stock edit into
-  // the writer.
+  // the writer, then 2 → 1 when A4 moved the opening balance in.
   {
     const serviceFiles = [
       'catalog-product.service.ts',
@@ -314,8 +317,8 @@ async function main(): Promise<void> {
     }
     const helperCalls = sources.flatMap((source) => source.match(/stockMovementTotal\(/g) ?? []);
     assert.ok(
-      helperCalls.length >= 7,
-      `expected at least 7 stockMovementTotal call sites, found ${helperCalls.length}`,
+      helperCalls.length >= 5,
+      `expected at least 5 stockMovementTotal call sites, found ${helperCalls.length}`,
     );
   }
 

@@ -3,7 +3,7 @@ import { AppError } from '../../../../common/errors/app-error';
 import { resolveImportProductNames } from '../settings-import.utils';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
-import { stockMovementTotal } from '../../../catalog/engines/stock-movement-total.engine';
+import { recordStockMovement } from '../../../../common/utils/stock-movement-writer';
 import {
   MAX_IMPORT_ROWS_PER_REQUEST,
   cleanString,
@@ -252,52 +252,43 @@ export class SettingsImportProducts {
             .values({
               ...payload,
               metadata: metaInsert,
-              stock_qty: initialStockQty,
+              // Phase 1 A4: seeded 0 — the opening-balance writer below sets
+              // the global through the ledger (a preset would double it).
+              stock_qty: 0,
               is_active: true,
               ...this.tenantFields(actor),
             })
             .returning('id')
             .executeTakeFirstOrThrow();
           productId = Number(insertedProduct.id);
-          if (initialStockQty > 0 && locationId != null) {
-            await trx
-              .insertInto('product_location_stock')
-              .values({
-                product_id: productId,
-                branch_id: locationBranchId,
-                location_id: locationId,
-                qty: initialStockQty,
-                ...this.tenantFields(actor),
-              })
-              .execute();
-          }
           if (initialStockQty > 0) {
             // Opening stock must appear in the perpetual ledger, otherwise
             // the stock value and the GL inventory balance diverge from the
             // first imported row (INV-GL-INVENTORY-VALUE). Same movement +
             // journal as the single-product create path.
+            // Phase 1 A4 (INV-PHASE1-A4-OPENING-BALANCES-LEDGER): the balance
+            // and the row go through the row-writer — the ledger sets the
+            // location balance (or the unassigned pool when no location
+            // resolved, where previously no balance existed at all) AND the
+            // reconciled global, and writes the one row from the returned
+            // scopeBefore/scopeAfter. The GL posting below stays unchanged.
             const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
-            const openingTotal = stockMovementTotal(initialStockQty, costPrice, bookDigits);
-            await trx
-              .insertInto('stock_movements')
-              .values({
-                product_id: productId,
-                movement_type: 'opening_balance',
-                qty: initialStockQty,
-                before_qty: 0,
-                after_qty: initialStockQty,
-                unit_cost: costPrice,
-                total_cost: openingTotal,
-                reason: 'opening_balance',
-                note: 'رصيد افتتاحي عند استيراد الصنف',
-                reference_type: 'product',
-                reference_id: productId,
-                branch_id: locationBranchId,
-                location_id: locationId,
-                created_by: actor.userId,
-                ...this.tenantFields(actor),
-              } as any)
-              .execute();
+            await recordStockMovement(trx, {
+              productId,
+              locationId,
+              branchId: locationBranchId ?? undefined,
+              delta: initialStockQty,
+              tenantId: scope.tenantId,
+              accountId: scope.accountId,
+              movementType: 'opening_balance',
+              referenceType: 'product',
+              referenceId: productId,
+              reason: 'opening_balance',
+              note: 'رصيد افتتاحي عند استيراد الصنف',
+              unitCost: Number(costPrice || 0),
+              moneyDigits: bookDigits,
+              createdBy: actor.userId,
+            });
             await this.postImportedOpeningStock(trx, {
               productId,
               signedQty: initialStockQty,

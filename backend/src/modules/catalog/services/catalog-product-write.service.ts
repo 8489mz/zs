@@ -62,7 +62,7 @@ import { InventoryScopeService } from '../../inventory/services/inventory-scope.
 import { StorefrontMediaService } from '../../storefront/storefront-media.service';
 import { NormalizedFashionVariant, NormalizedProductOffer, NormalizedUpsertProduct, UpsertProductDto } from '../dto/upsert-product.dto';
 import { normalizeArabicInput, normalizeArabicSearch } from '../../../common/utils/arabic-search.util';
-import { stockMovementTotal } from '../engines/stock-movement-total.engine';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { ProductOfferColumnCapabilities, ProductWriteExecutor } from './catalog-product-types';
 
@@ -634,7 +634,9 @@ export class CatalogProductWriteService {
             credit_price: draft.creditPrice ?? null,
             consumer_price: draft.consumerPrice ?? null,
             min_selling_price: draft.minSellingPrice ?? null,
-            stock_qty: initialStockQty,
+            // Phase 1 A4: seeded 0 — the opening-balance writer below sets
+            // the global through the ledger (a preset would double it).
+            stock_qty: 0,
             min_stock_qty: draft.minStock,
             default_location_id: resolvedLocationId,
             notes: draft.notes,
@@ -655,26 +657,29 @@ export class CatalogProductWriteService {
         await this.replaceProductRelations(trx, productId, draft, actor);
         if (initialStockQty > 0) {
           const bookDigits = await this.bookDigits(trx, actor);
-          const openingTotal = stockMovementTotal(initialStockQty, draft.costPrice, bookDigits);
-          await trx.insertInto('product_location_stock').values({ product_id: productId, branch_id: null, location_id: resolvedLocationId, qty: initialStockQty, ...this.tenantFields(actor) }).execute();
-          // Opening balance must appear in the perpetual ledger, otherwise rebuilding stock from
-          // stock_movements starts from zero and disagrees with products.stock_qty forever.
-          await trx.insertInto('stock_movements').values({
-            product_id: productId,
-            movement_type: 'opening_balance',
-            qty: initialStockQty,
-            before_qty: 0,
-            after_qty: initialStockQty,
-            unit_cost: draft.costPrice,
-            total_cost: openingTotal,
+          // Phase 1 A4 (INV-PHASE1-A4-OPENING-BALANCES-LEDGER): the opening
+          // balance goes through the row-writer — the ledger sets the
+          // location balance AND the reconciled global, and writes the one
+          // row from the returned scopeBefore/scopeAfter. The product above
+          // is inserted with stock_qty 0: presetting it would make the
+          // ledger mint the preset into the unassigned pool and double the
+          // stock (see the A4 spec's note). The GL posting below stays
+          // unchanged.
+          await recordStockMovement(trx, {
+            productId,
+            locationId: resolvedLocationId,
+            delta: initialStockQty,
+            tenantId: this.tenantId(actor),
+            accountId: this.accountId(actor),
+            movementType: 'opening_balance',
+            referenceType: 'product',
+            referenceId: productId,
             reason: 'opening_balance',
             note: 'رصيد افتتاحي عند إنشاء الصنف',
-            reference_type: 'product',
-            reference_id: productId,
-            location_id: resolvedLocationId,
-            created_by: actor.userId,
-            ...this.tenantFields(actor),
-          } as any).execute();
+            unitCost: Number(draft.costPrice || 0),
+            moneyDigits: bookDigits,
+            createdBy: actor.userId,
+          });
           await this.postOpeningStock(trx, productId, initialStockQty, draft.costPrice, resolvedLocationId, actor);
         }
       }

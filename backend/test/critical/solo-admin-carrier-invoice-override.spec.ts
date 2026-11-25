@@ -469,18 +469,18 @@ async function main(): Promise<void> {
     }
   });
 
-  // 13. Wiring: this spec is in both critical lists, in identical order (355 specs — the fashion-rows-ledger-return spec is the last entry).
+  // 13. Wiring: this spec is in both critical lists, in identical order (356 specs — the opening-balances-ledger spec is the last entry).
   {
     const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
       .specs as string[];
     const pkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 355);
-    assert.equal(chain.length, 355);
+    assert.equal(specs.length, 356);
+    assert.equal(chain.length, 356);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/solo-admin-carrier-invoice-override.spec.ts'));
-    console.log('wiring: evidence spec in both critical lists (355 = 355, identical order), passed');
+    console.log('wiring: evidence spec in both critical lists (356 = 356, identical order), passed');
   }
 
   // 14. Source pins: the override reuses the shared helper (no fourth
