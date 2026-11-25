@@ -1,30 +1,36 @@
 /*
  * L4 scoped guard: src modules A must stay Prettier-clean under the
  * repo config (backend/.prettierrc: singleQuote, printWidth 120),
- * EXCEPT 13 named files that are deliberately left unformatted.
+ * EXCEPT 9 named files that are deliberately left unformatted.
  * The seven directories hold 375 .ts files; 328 failed
  * `prettier --check` at the L3 base (64a023e2d, exact match to the
  * grounding census: accounting 113, sales 88, purchases 46,
  * inventory 28, returns 18, catalog 18, tax-integration 17) and L4
  * formats 315 of them with a pure `prettier --write`.
  *
- * WHY 13 ARE EXCLUDED (not a formatting failure — a size-cap
+ * WHY 9 ARE EXCLUDED (not a formatting failure — a size-cap
  * collision): `prettier --write` grows these files past the
- * 1000-line file-size cap (and 9 of them past the user's 1110-line
- * split cutoff) purely by breaking their very long lines — the code
+ * 1000-line file-size cap (and past the user's 1110-line split
+ * cutoff) purely by breaking their very long lines — the code
  * does not grow, the lines do (e.g. inventory-transfer 1091 -> 2133,
  * tenant-foundation 266 -> 1210, update-sale 1351 -> 1743; full
  * table in ~/workspace/audit/lint-prettier-log.md L4). Formatting
- * them makes the file-size-cap guard red, and baselining 9 files
+ * them makes the file-size-cap guard red, and baselining files
  * over the 1110 cutoff unilaterally would contradict the user's
  * split decision — so they are STOPPED here and the decision
  * (baseline them / split them / prettierignore them) belongs to the
- * parent. The guard pins the exception set exactly: if a 14th file
- * fails, or one of the 13 gets formatted, this spec goes red until
+ * parent. The guard pins the exception set exactly: if a 10th file
+ * fails, or one of the 9 gets formatted, this spec goes red until
  * the list is updated deliberately.
- * L8 deletes this spec when the global backend-format-clean guard
- * lands — the global guard inherits the same exclusion until the
- * 13 are resolved.
+ * L4b (2026-11-25, parent decision): 4 of the original 13 land at or
+ * below the 1110 cutoff after formatting (purchases-write-create
+ * 1007, catalog-product-list 1027, sales-write.helper 1047,
+ * sales-restaurant-and-serials 1093), so they are formatted and
+ * baselined at their formatted counts (P3a precedent — deliberate
+ * reviewed exception, under the cutoff); the 9 over 1110 stay
+ * excluded here. L8 deletes this spec when the global
+ * backend-format-clean guard lands — the global guard inherits the
+ * same exclusion until the 9 are resolved.
  *
  * This spec invokes `npx prettier --check` on the module globs so
  * the exact tool CI runs is what is asserted — in CI, `npm ci`
@@ -32,7 +38,9 @@
  * binary there; locally it uses the npx cache.
  *
  * Fail-first: on the pre-L4 tree this spec exits 1 (328 files fail,
- * not the 13); after L4 it exits 0 (exactly the 13 fail).
+ * not the 13); after L4 it exits 0 (exactly the 13 fail). On the
+ * pre-L4b tree the 9-exclusion shape exits 1 (the 4 sub-cutoff
+ * files fail --check); after L4b it exits 0 (exactly the 9 fail).
  */
 
 import { strict as assert } from 'node:assert';
@@ -57,15 +65,11 @@ const EXCLUDED = [
   'src/modules/accounting/accounting-tenant-foundation.service.ts',
   'src/modules/accounting/services/journal-posting-core.service.ts',
   'src/modules/accounting/services/pdc-posting.service.ts',
-  'src/modules/catalog/services/catalog-product-list.service.ts',
   'src/modules/catalog/services/catalog-product-write.service.ts',
   'src/modules/inventory/services/inventory-count.service.ts',
   'src/modules/inventory/services/inventory-transfer.service.ts',
-  'src/modules/purchases/services/purchases-write-create.service.ts',
   'src/modules/returns/returns-sale-return.service.ts',
-  'src/modules/sales/helpers/sales-write.helper.ts',
   'src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts',
-  'src/modules/sales/services/sales-restaurant-and-serials.service.ts',
 ];
 
 function countTs(dir: string): number {

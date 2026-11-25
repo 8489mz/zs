@@ -74,8 +74,16 @@ export function buildPreparedSaleItem(
   const productName = String(product.name || '').trim();
   const exactRequiredQty = Number(item.qty || 0) * Number(item.unitMultiplier || 1);
   const requiredQty = Number(exactRequiredQty.toFixed(3));
-  if (!Number.isFinite(exactRequiredQty) || exactRequiredQty <= 0 || Math.abs(exactRequiredQty - requiredQty) > 0.00000001) {
-    throw new AppError('كمية المخزون يجب أن تكون بدقة ثلاث خانات عشرية كحد أقصى', 'SALE_QUANTITY_PRECISION_INVALID', 400);
+  if (
+    !Number.isFinite(exactRequiredQty) ||
+    exactRequiredQty <= 0 ||
+    Math.abs(exactRequiredQty - requiredQty) > 0.00000001
+  ) {
+    throw new AppError(
+      'كمية المخزون يجب أن تكون بدقة ثلاث خانات عشرية كحد أقصى',
+      'SALE_QUANTITY_PRECISION_INVALID',
+      400,
+    );
   }
   const beforeQty = Number(product.stock_qty || 0);
 
@@ -83,7 +91,10 @@ export function buildPreparedSaleItem(
     throw new AppError(`Insufficient stock for ${productName || `#${item.productId}`}`, 'INSUFFICIENT_STOCK', 400);
   }
 
-  const modifiersTotal = (item.modifiers || []).reduce((sum: number, mod: any) => sum + (Number(mod.price || 0) * Number(mod.qty || 1)), 0);
+  const modifiersTotal = (item.modifiers || []).reduce(
+    (sum: number, mod: any) => sum + Number(mod.price || 0) * Number(mod.qty || 1),
+    0,
+  );
   // INV-CONVERSION-LINE-DISCOUNTS-PRESERVED: a per-line TOTAL discount
   // reduces this line's gross total before the header discount is
   // allocated over the lines. A discount larger than the gross line
@@ -99,7 +110,10 @@ export function buildPreparedSaleItem(
     throw new AppError('Line discount cannot exceed line total', 'INVALID_DISCOUNT', 400);
   }
   const lineTotal = roundCurrency(Math.max(0, grossLineTotal - lineDiscount), options.moneyDigits);
-  const modifiersCostTotal = (item.modifiers || []).reduce((sum: number, mod: any) => sum + (Number(mod.costPrice || 0) * Number(mod.qty || 1)), 0);
+  const modifiersCostTotal = (item.modifiers || []).reduce(
+    (sum: number, mod: any) => sum + Number(mod.costPrice || 0) * Number(mod.qty || 1),
+    0,
+  );
 
   return {
     productId: Number(product.id || item.productId),
@@ -118,9 +132,14 @@ export function buildPreparedSaleItem(
     // the sale path (from the customer type), never collapsed back
     // to retail/wholesale — a half-wholesale or credit line keeps
     // its tier on the stored row.
-    priceType: (['retail', 'wholesale', 'half_wholesale', 'credit'].includes(item.priceType as string) ? item.priceType : 'retail') as 'retail' | 'wholesale' | 'half_wholesale' | 'credit',
+    priceType: (['retail', 'wholesale', 'half_wholesale', 'credit'].includes(item.priceType as string)
+      ? item.priceType
+      : 'retail') as 'retail' | 'wholesale' | 'half_wholesale' | 'credit',
     // Stored as cost per sold unit on sale_items (not per base piece) so accounting COGS can use qty * cost_price.
-    costPrice: roundCurrency((Number(product.cost_price || 0) * Number(item.unitMultiplier || 1)) + modifiersCostTotal, options.moneyDigits),
+    costPrice: roundCurrency(
+      Number(product.cost_price || 0) * Number(item.unitMultiplier || 1) + modifiersCostTotal,
+      options.moneyDigits,
+    ),
     requiredQty,
     beforeQty,
     afterQty: Number((beforeQty - requiredQty).toFixed(3)),
@@ -167,9 +186,10 @@ export function findBelowFloorSaleItems(lines: BelowFloorSaleLineInput[]): numbe
     if (line.isService) continue;
     const minUnitPrice = Number(line.minSellingPrice || 0) * Number(line.unitMultiplier || 1);
     const standardFloor = Math.max(Number(line.costPrice || 0), minUnitPrice) * Number(line.qty || 0);
-    const preApprovedFloor = line.effectiveAllowedUnitPrice != null && line.effectiveAllowedUnitPrice > 0
-      ? line.effectiveAllowedUnitPrice * Number(line.qty || 0)
-      : standardFloor;
+    const preApprovedFloor =
+      line.effectiveAllowedUnitPrice != null && line.effectiveAllowedUnitPrice > 0
+        ? line.effectiveAllowedUnitPrice * Number(line.qty || 0)
+        : standardFloor;
     const floor = Math.min(standardFloor, preApprovedFloor);
     if (Number(line.netLineTotal) + 0.001 < floor) below.push(Number(line.productId));
   }
@@ -211,12 +231,20 @@ export function findBelowFloorSaleItems(lines: BelowFloorSaleLineInput[]): numbe
  * dashboard float hair sits far below it.
  */
 export function resolveConversionDiscounts(
-  lines: Array<{ quantity: number | string | null; unitPrice: number | string | null; discount?: number | string | null }>,
+  lines: Array<{
+    quantity: number | string | null;
+    unitPrice: number | string | null;
+    discount?: number | string | null;
+  }>,
   headerDiscountAmount: number | string | null,
 ): { lineDiscounts: number[]; globalDiscount: number } {
   const TOL = 0.001;
   const fail = (): never => {
-    throw new AppError('Order/quotation discount rows are inconsistent and cannot be converted', 'CONVERSION_DISCOUNT_MISMATCH', 400);
+    throw new AppError(
+      'Order/quotation discount rows are inconsistent and cannot be converted',
+      'CONVERSION_DISCOUNT_MISMATCH',
+      400,
+    );
   };
   const lineDiscounts = lines.map((line) => {
     const qty = Number(line.quantity || 0);
@@ -253,9 +281,7 @@ export function resolveConversionDiscounts(
  * checks consume the resulting payload (paymentType 'credit' +
  * empty payments => remaining debt is the full total).
  */
-export function resolveConversionPaymentTerms(
-  storedTerms: unknown,
-): 'cash' | 'credit' {
+export function resolveConversionPaymentTerms(storedTerms: unknown): 'cash' | 'credit' {
   if (storedTerms === null || storedTerms === undefined) return 'cash';
   if (typeof storedTerms !== 'string') {
     throw new AppError(
@@ -416,7 +442,8 @@ function frozenLineKey(line: any): string | null {
   if (signature === null) return null;
   const productId = Number(line.productId ?? line.product_id ?? 0);
   const unitMultiplier = Number(line.unitMultiplier ?? line.unit_multiplier ?? 1);
-  if (!Number.isFinite(productId) || !Number.isFinite(unitMultiplier) || productId <= 0 || unitMultiplier <= 0) return null;
+  if (!Number.isFinite(productId) || !Number.isFinite(unitMultiplier) || productId <= 0 || unitMultiplier <= 0)
+    return null;
   return `${productId}|${unitMultiplier}|${signature}`;
 }
 
@@ -446,11 +473,14 @@ export function restoreFrozenSaleLineCosts(items: any[], oldLines: any[]): void 
       const optionId = Number(mod.optionId || mod.option_id || 0) || 0;
       const qty = Number(mod.qty ?? 1);
       const consumption = Number(mod.consumptionQty ?? mod.consumption_qty ?? 1);
-      const match = oldMods.find((oldMod: any) =>
-        (Number(oldMod.productId || oldMod.componentProductId || oldMod.component_product_id || 0) || 0) === componentId &&
-        (Number(oldMod.optionId || oldMod.option_id || 0) || 0) === optionId &&
-        Number(oldMod.qty ?? 1) === qty &&
-        Number(oldMod.consumptionQty ?? oldMod.consumption_qty ?? 1) === consumption);
+      const match = oldMods.find(
+        (oldMod: any) =>
+          (Number(oldMod.productId || oldMod.componentProductId || oldMod.component_product_id || 0) || 0) ===
+            componentId &&
+          (Number(oldMod.optionId || oldMod.option_id || 0) || 0) === optionId &&
+          Number(oldMod.qty ?? 1) === qty &&
+          Number(oldMod.consumptionQty ?? oldMod.consumption_qty ?? 1) === consumption,
+      );
       const oldModCost = match ? Number(match.costPrice ?? match.cost_price ?? NaN) : NaN;
       if (Number.isFinite(oldModCost) && oldModCost >= 0) mod.costPrice = oldModCost;
     }
@@ -556,7 +586,7 @@ export function computeSaleAllocationLegs(params: {
   saleLocationId: number | null;
   saleBranchId: number | null;
 }): { legs: SaleAllocationLeg[]; pooledAvailableQty: number; remainingQty: number } {
-  const roundQty = (value: number): number => Number((Number(value || 0)).toFixed(3));
+  const roundQty = (value: number): number => Number(Number(value || 0).toFixed(3));
   const requiredQty = roundQty(params.requiredQty);
   const poolAvailableQty = Math.max(0, roundQty(params.poolAvailableQty));
   let remainingQty = requiredQty;
@@ -578,9 +608,10 @@ export function computeSaleAllocationLegs(params: {
   }
   if (remainingQty > 0 && poolAvailableQty > 0) {
     const poolQty = Math.min(poolAvailableQty, remainingQty);
-    const attribution = legs.length > 0
-      ? { locationId: legs[0].locationId, branchId: legs[0].branchId }
-      : { locationId: params.saleLocationId, branchId: params.saleBranchId };
+    const attribution =
+      legs.length > 0
+        ? { locationId: legs[0].locationId, branchId: legs[0].branchId }
+        : { locationId: params.saleLocationId, branchId: params.saleBranchId };
     if (attribution.locationId != null) {
       remainingQty = roundQty(remainingQty - poolQty);
       legs.push({
@@ -672,7 +703,12 @@ export function zonedOfferClockParts(timezone: string, now: Date = new Date()): 
   }
 }
 
-export function isOfferActive(offer: SaleProductOfferRow, todayIso: string, now: Date = new Date(), businessTimezone?: string): boolean {
+export function isOfferActive(
+  offer: SaleProductOfferRow,
+  todayIso: string,
+  now: Date = new Date(),
+  businessTimezone?: string,
+): boolean {
   // Offer bounds are STORED pg DATEs (node-postgres local-midnight
   // Dates) -- they key through normalizePgDateOnly, never through
   // the UTC slice: an offer ending today must stay active today.
@@ -691,14 +727,22 @@ export function isOfferActive(offer: SaleProductOfferRow, todayIso: string, now:
   // Day of week check (e.g. "0,1,2,3,4,5,6" or comma-separated numbers)
   if (offer.days_of_week && typeof offer.days_of_week === 'string' && offer.days_of_week.trim()) {
     const currentDay = clockParts.weekday; // 0 is Sunday, ..., 6 is Saturday
-    const allowedDays = offer.days_of_week.split(',').map((d) => Number(d.trim())).filter((d) => !Number.isNaN(d));
+    const allowedDays = offer.days_of_week
+      .split(',')
+      .map((d) => Number(d.trim()))
+      .filter((d) => !Number.isNaN(d));
     if (allowedDays.length > 0 && !allowedDays.includes(currentDay)) {
       return false;
     }
   }
 
   // Happy hour time range check (HH:mm)
-  if (offer.happy_hour_start && offer.happy_hour_end && String(offer.happy_hour_start).trim() && String(offer.happy_hour_end).trim()) {
+  if (
+    offer.happy_hour_start &&
+    offer.happy_hour_end &&
+    String(offer.happy_hour_start).trim() &&
+    String(offer.happy_hour_end).trim()
+  ) {
     const currentMinutes = clockParts.minutes;
     const [startH, startM] = String(offer.happy_hour_start).split(':').map(Number);
     const [endH, endM] = String(offer.happy_hour_end).split(':').map(Number);
@@ -727,12 +771,23 @@ export function getOfferEffectiveMinQty(offer: SaleProductOfferRow): number {
 
 export const getOfferMinQty = getOfferEffectiveMinQty;
 
-export function calculateOfferAdjustedPrice(basePrice: number, offer: SaleProductOfferRow, qty: number = 1, digits: MoneyDigits): number {
+export function calculateOfferAdjustedPrice(
+  basePrice: number,
+  offer: SaleProductOfferRow,
+  qty: number = 1,
+  digits: MoneyDigits,
+): number {
   const offerValue = Number(offer.value || 0);
-  if (!(offerValue > 0) && offer.offer_type !== 'price' && offer.offer_type !== 'bundle' && offer.offer_type !== 'bogo') {
+  if (
+    !(offerValue > 0) &&
+    offer.offer_type !== 'price' &&
+    offer.offer_type !== 'bundle' &&
+    offer.offer_type !== 'bogo'
+  ) {
     return roundCurrency(basePrice, digits);
   }
-  if (offer.offer_type === 'percent') return roundCurrency(Math.max(0, basePrice - ((basePrice * offerValue) / 100)), digits);
+  if (offer.offer_type === 'percent')
+    return roundCurrency(Math.max(0, basePrice - (basePrice * offerValue) / 100), digits);
   if (offer.offer_type === 'fixed') return roundCurrency(Math.max(0, basePrice - offerValue), digits);
   if (offer.offer_type === 'price') return roundCurrency(Math.max(0, offerValue), digits);
   if (offer.offer_type === 'bundle') {
@@ -741,7 +796,7 @@ export function calculateOfferAdjustedPrice(basePrice: number, offer: SaleProduc
     if (normalizedQty < minQty) return roundCurrency(basePrice, digits);
     const bundles = Math.floor(normalizedQty / minQty);
     const remainder = normalizedQty % minQty;
-    const total = (bundles * offerValue) + (remainder * basePrice);
+    const total = bundles * offerValue + remainder * basePrice;
     return roundCurrency(total / normalizedQty, digits);
   }
   if (offer.offer_type === 'bogo') {
@@ -754,31 +809,43 @@ export function calculateOfferAdjustedPrice(basePrice: number, offer: SaleProduc
 
     const fullCycles = Math.floor(normalizedQty / cycle);
     const remainder = normalizedQty % cycle;
-    const discountedUnits = (fullCycles * getQ) + Math.max(0, remainder - buyQ);
+    const discountedUnits = fullCycles * getQ + Math.max(0, remainder - buyQ);
     const discountPerUnit = (basePrice * discPct) / 100;
     const totalDiscount = discountedUnits * discountPerUnit;
-    const totalLinePrice = Math.max(0, (normalizedQty * basePrice) - totalDiscount);
+    const totalLinePrice = Math.max(0, normalizedQty * basePrice - totalDiscount);
     return roundCurrency(totalLinePrice / normalizedQty, digits);
   }
   return roundCurrency(basePrice, digits);
 }
 
-export function pickBestApplicableOffer(offers: SaleProductOfferRow[], todayIso: string, qty: number, basePrice: number, now: Date = new Date(), digits: MoneyDigits, businessTimezone?: string): SaleProductOfferRow | null {
+export function pickBestApplicableOffer(
+  offers: SaleProductOfferRow[],
+  todayIso: string,
+  qty: number,
+  basePrice: number,
+  now: Date = new Date(),
+  digits: MoneyDigits,
+  businessTimezone?: string,
+): SaleProductOfferRow | null {
   const normalizedQty = Math.max(1, Number(qty || 1));
-  const applicableOffers = offers.filter((offer) => isOfferActive(offer, todayIso, now, businessTimezone) && normalizedQty >= getOfferEffectiveMinQty(offer));
+  const applicableOffers = offers.filter(
+    (offer) => isOfferActive(offer, todayIso, now, businessTimezone) && normalizedQty >= getOfferEffectiveMinQty(offer),
+  );
   if (!applicableOffers.length) return null;
 
-  return [...applicableOffers].sort((left, right) => {
-    const leftPrice = calculateOfferAdjustedPrice(basePrice, left, normalizedQty, digits);
-    const rightPrice = calculateOfferAdjustedPrice(basePrice, right, normalizedQty, digits);
-    if (leftPrice !== rightPrice) return leftPrice - rightPrice;
+  return (
+    [...applicableOffers].sort((left, right) => {
+      const leftPrice = calculateOfferAdjustedPrice(basePrice, left, normalizedQty, digits);
+      const rightPrice = calculateOfferAdjustedPrice(basePrice, right, normalizedQty, digits);
+      if (leftPrice !== rightPrice) return leftPrice - rightPrice;
 
-    // Compare actual savings first; minimum quantity is only a tie-breaker.
-    const leftMinQty = getOfferEffectiveMinQty(left);
-    const rightMinQty = getOfferEffectiveMinQty(right);
-    if (leftMinQty !== rightMinQty) return rightMinQty - leftMinQty;
-    return Number(right.value || 0) - Number(left.value || 0);
-  })[0] || null;
+      // Compare actual savings first; minimum quantity is only a tie-breaker.
+      const leftMinQty = getOfferEffectiveMinQty(left);
+      const rightMinQty = getOfferEffectiveMinQty(right);
+      if (leftMinQty !== rightMinQty) return rightMinQty - leftMinQty;
+      return Number(right.value || 0) - Number(left.value || 0);
+    })[0] || null
+  );
 }
 
 export function calculateAllowedSaleUnitPrice(params: {
@@ -815,22 +882,32 @@ export function calculateAllowedSaleUnitPrice(params: {
   if (params.listEffectivePrice != null) {
     return roundCurrency(Number(params.listEffectivePrice || 0) * multiplier, params.moneyDigits);
   }
-  const tierBase = params.priceType === 'wholesale'
-    ? Number(params.wholesalePrice || params.retailPrice || 0)
-    : params.priceType === 'half_wholesale'
-      ? Number(params.halfWholesalePrice || params.wholesalePrice || params.retailPrice || 0)
-      : params.priceType === 'credit'
-        ? Number(params.creditPrice || params.retailPrice || 0)
-        : Number(params.retailPrice || 0);
+  const tierBase =
+    params.priceType === 'wholesale'
+      ? Number(params.wholesalePrice || params.retailPrice || 0)
+      : params.priceType === 'half_wholesale'
+        ? Number(params.halfWholesalePrice || params.wholesalePrice || params.retailPrice || 0)
+        : params.priceType === 'credit'
+          ? Number(params.creditPrice || params.retailPrice || 0)
+          : Number(params.retailPrice || 0);
   if (params.priceType !== 'retail') {
     return roundCurrency(tierBase * multiplier, params.moneyDigits);
   }
   const basePrice = roundCurrency(tierBase * multiplier, params.moneyDigits);
   const now = params.now || new Date();
-  const todayIso = normalizeDateOnly(params.todayIso)
-    || (params.businessTimezone ? todayTenantDate(params.businessTimezone, now) : todayLocalIsoDate(now));
+  const todayIso =
+    normalizeDateOnly(params.todayIso) ||
+    (params.businessTimezone ? todayTenantDate(params.businessTimezone, now) : todayLocalIsoDate(now));
   const qty = Number(params.qty || 1);
-  const activeOffer = pickBestApplicableOffer(params.offers || [], todayIso, qty, basePrice, now, params.moneyDigits, params.businessTimezone);
+  const activeOffer = pickBestApplicableOffer(
+    params.offers || [],
+    todayIso,
+    qty,
+    basePrice,
+    now,
+    params.moneyDigits,
+    params.businessTimezone,
+  );
 
   if (!activeOffer) {
     return roundCurrency(basePrice, params.moneyDigits);
@@ -854,8 +931,7 @@ export function resolveSalePayments(
   let declaredCents = 0;
   for (const payment of payments) {
     const cents = Math.round(Number(payment.amount) * 100);
-    if (!Number.isSafeInteger(cents) || cents <= 0 ||
-        Math.abs(Number(payment.amount) * 100 - cents) > 0.001) {
+    if (!Number.isSafeInteger(cents) || cents <= 0 || Math.abs(Number(payment.amount) * 100 - cents) > 0.001) {
       throw new AppError('Payment amounts must be positive to the cent', 'INVALID_PAID_AMOUNT', 400);
     }
     declaredCents += cents;
@@ -865,23 +941,26 @@ export function resolveSalePayments(
   }
   let validPayments = payments;
   if (!validPayments.length && collectibleTotal > 0 && paymentType !== 'credit') {
-    validPayments = [{
-      paymentChannel: fallbackPaymentChannel === 'card'
-        ? 'card'
-        : fallbackPaymentChannel === 'wallet'
-          ? 'wallet'
-          : fallbackPaymentChannel === 'instapay'
-            ? 'instapay'
-            : 'cash',
-      amount: collectibleTotal,
-    }];
+    validPayments = [
+      {
+        paymentChannel:
+          fallbackPaymentChannel === 'card'
+            ? 'card'
+            : fallbackPaymentChannel === 'wallet'
+              ? 'wallet'
+              : fallbackPaymentChannel === 'instapay'
+                ? 'instapay'
+                : 'cash',
+        amount: collectibleTotal,
+      },
+    ];
   }
 
   const result: Array<{ paymentChannel: 'cash' | 'card' | 'wallet' | 'instapay'; amount: number }> = [];
   let remainingTotal = collectibleCents;
 
   // Process non-cash first
-  for (const p of validPayments.filter(p => p.paymentChannel !== 'cash')) {
+  for (const p of validPayments.filter((p) => p.paymentChannel !== 'cash')) {
     const amountToApply = Math.round(Number(p.amount) * 100);
     if (amountToApply > 0) {
       result.push({ paymentChannel: p.paymentChannel, amount: amountToApply / 100 });
@@ -890,7 +969,7 @@ export function resolveSalePayments(
   }
 
   // Process cash
-  for (const p of validPayments.filter(p => p.paymentChannel === 'cash')) {
+  for (const p of validPayments.filter((p) => p.paymentChannel === 'cash')) {
     if (remainingTotal <= 0) break;
     const amountToApply = Math.round(Number(p.amount) * 100);
     if (amountToApply > 0) {
@@ -907,7 +986,10 @@ export function resolveSalePayments(
 // spec drives it): a future caller must name the tenant's digits
 // instead of silently summing at cents.
 export function calculatePaidAmount(payments: Array<{ amount: number }>, digits: MoneyDigits): number {
-  return roundCurrency(payments.reduce((sum, entry) => sum + Number(entry.amount || 0), 0), digits);
+  return roundCurrency(
+    payments.reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
+    digits,
+  );
 }
 
 // Sale-edit guard: the header paid_amount must not exceed the sum of the
@@ -953,7 +1035,11 @@ export function resolvePostedSalePaymentChannel(
   return payments[0]?.paymentChannel || 'cash';
 }
 
-export function calculateRestoredStockQuantity(currentStockQty: number | string | null | undefined, itemQty: number | string | null | undefined, unitMultiplier: number | string | null | undefined) {
+export function calculateRestoredStockQuantity(
+  currentStockQty: number | string | null | undefined,
+  itemQty: number | string | null | undefined,
+  unitMultiplier: number | string | null | undefined,
+) {
   const restoreQty = Number((Number(itemQty || 0) * Number(unitMultiplier || 1)).toFixed(3));
   const beforeQty = Number(currentStockQty || 0);
   const afterQty = Number((beforeQty + restoreQty).toFixed(3));

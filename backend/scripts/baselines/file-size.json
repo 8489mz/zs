@@ -9,6 +9,10 @@
     "src/modules/inventory/services/inventory-transfer.service.ts": 1091,
     "src/modules/users/users.service.ts": 1012,
     "src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts": 1352,
-    "src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts": 1468
+    "src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts": 1468,
+    "src/modules/catalog/services/catalog-product-list.service.ts": 1027,
+    "src/modules/purchases/services/purchases-write-create.service.ts": 1007,
+    "src/modules/sales/helpers/sales-write.helper.ts": 1047,
+    "src/modules/sales/services/sales-restaurant-and-serials.service.ts": 1093
   }
 }

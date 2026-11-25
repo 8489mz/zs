@@ -62,11 +62,21 @@ export interface CatalogProductListDeps {
   canViewCostPrice: (actor: AuthContext) => boolean;
   productIdAny: (column: string, ids: number[]) => RawBuilder<boolean>;
   normalizeUnitName: (name: unknown) => string;
-  getListProductStock: (product: Pick<ProductRow, 'id' | 'stock_qty'>, scopedLocationId: number | null, scopedStockByProduct: Map<string, number>) => number;
+  getListProductStock: (
+    product: Pick<ProductRow, 'id' | 'stock_qty'>,
+    scopedLocationId: number | null,
+    scopedStockByProduct: Map<string, number>,
+  ) => number;
   // Bound cross-slice deps (sibling slices, wired from their facade fields at
   // merge — P4 merges before P5, P2 before P4; the merge coordinator owns the
   // rebase of this ctor hunk onto the merged facade).
-  resolveScopedStockByProduct: (productIds: number[], eligibleLocationIds: number[], products: Array<Pick<ProductRow, 'id' | 'stock_qty'>>, actor: AuthContext, isFullCatalog?: boolean) => Promise<{ stock: Map<string, number>, locations: Map<string, number[]> }>;
+  resolveScopedStockByProduct: (
+    productIds: number[],
+    eligibleLocationIds: number[],
+    products: Array<Pick<ProductRow, 'id' | 'stock_qty'>>,
+    actor: AuthContext,
+    isFullCatalog?: boolean,
+  ) => Promise<{ stock: Map<string, number>; locations: Map<string, number[]> }>;
   mapOffersByProduct: (offers: ProductOfferReadRow[]) => Map<string, Record<string, unknown>[]>;
   getProductOfferColumnCapabilities: () => Promise<ProductOfferColumnCapabilities>;
 }
@@ -80,8 +90,18 @@ export class CatalogProductListService {
   private readonly canViewCostPrice: (actor: AuthContext) => boolean;
   private readonly productIdAny: (column: string, ids: number[]) => RawBuilder<boolean>;
   private readonly normalizeUnitName: (name: unknown) => string;
-  private readonly getListProductStock: (product: Pick<ProductRow, 'id' | 'stock_qty'>, scopedLocationId: number | null, scopedStockByProduct: Map<string, number>) => number;
-  private readonly resolveScopedStockByProduct: (productIds: number[], eligibleLocationIds: number[], products: Array<Pick<ProductRow, 'id' | 'stock_qty'>>, actor: AuthContext, isFullCatalog?: boolean) => Promise<{ stock: Map<string, number>, locations: Map<string, number[]> }>;
+  private readonly getListProductStock: (
+    product: Pick<ProductRow, 'id' | 'stock_qty'>,
+    scopedLocationId: number | null,
+    scopedStockByProduct: Map<string, number>,
+  ) => number;
+  private readonly resolveScopedStockByProduct: (
+    productIds: number[],
+    eligibleLocationIds: number[],
+    products: Array<Pick<ProductRow, 'id' | 'stock_qty'>>,
+    actor: AuthContext,
+    isFullCatalog?: boolean,
+  ) => Promise<{ stock: Map<string, number>; locations: Map<string, number[]> }>;
   private readonly mapOffersByProduct: (offers: ProductOfferReadRow[]) => Map<string, Record<string, unknown>[]>;
   private readonly getProductOfferColumnCapabilities: () => Promise<ProductOfferColumnCapabilities>;
 
@@ -109,9 +129,52 @@ export class CatalogProductListService {
   private listProductsBaseQuery(actor: AuthContext, view: string) {
     return this.db
       .selectFrom('products')
-      .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'products.id').onRef('b.tenant_id', '=', 'products.tenant_id').on('b.is_active', '=', true))
-      .leftJoin('stock_locations as sl', (join) => join.onRef('sl.id', '=', 'products.default_location_id').on(this.tenantPredicate(actor, 'sl')))
-      .select(['products.id', 'products.name', 'products.name_en', 'products.barcode', 'products.sku', 'products.catalog_updated_at', 'products.item_type', 'products.item_kind', 'products.style_code', 'products.color', 'products.size', 'products.bin_location', 'products.track_serials', 'products.category_id', 'products.supplier_id', 'products.cost_price', 'products.retail_price', 'products.wholesale_price', 'products.half_wholesale_price', 'products.credit_price', 'products.consumer_price', 'products.min_selling_price', 'products.stock_qty', 'products.min_stock_qty', 'sl.id as default_location_id', 'products.notes', 'products.metadata', 'b.id as bom_id', 'sl.name as default_location_name', 'products.is_active', 'products.calories', 'products.allergens', 'products.is_spicy', 'products.is_vegetarian', 'products.is_gluten_free'])
+      .leftJoin('manufacturing_boms as b', (join) =>
+        join
+          .onRef('b.product_id', '=', 'products.id')
+          .onRef('b.tenant_id', '=', 'products.tenant_id')
+          .on('b.is_active', '=', true),
+      )
+      .leftJoin('stock_locations as sl', (join) =>
+        join.onRef('sl.id', '=', 'products.default_location_id').on(this.tenantPredicate(actor, 'sl')),
+      )
+      .select([
+        'products.id',
+        'products.name',
+        'products.name_en',
+        'products.barcode',
+        'products.sku',
+        'products.catalog_updated_at',
+        'products.item_type',
+        'products.item_kind',
+        'products.style_code',
+        'products.color',
+        'products.size',
+        'products.bin_location',
+        'products.track_serials',
+        'products.category_id',
+        'products.supplier_id',
+        'products.cost_price',
+        'products.retail_price',
+        'products.wholesale_price',
+        'products.half_wholesale_price',
+        'products.credit_price',
+        'products.consumer_price',
+        'products.min_selling_price',
+        'products.stock_qty',
+        'products.min_stock_qty',
+        'sl.id as default_location_id',
+        'products.notes',
+        'products.metadata',
+        'b.id as bom_id',
+        'sl.name as default_location_name',
+        'products.is_active',
+        'products.calories',
+        'products.allergens',
+        'products.is_spicy',
+        'products.is_vegetarian',
+        'products.is_gluten_free',
+      ])
       .where(view === 'archived' ? sql<boolean>`products.is_active = false` : sql<boolean>`products.is_active = true`)
       .where(this.tenantPredicate(actor, 'products'));
   }
@@ -245,32 +308,58 @@ export class CatalogProductListService {
             .where('is_active', '=', true)
             .where(this.tenantPredicate(actor))
             .where('product_id', 'in', (eb) =>
-              eb.selectFrom('products').select('products.id')
+              eb
+                .selectFrom('products')
+                .select('products.id')
                 .where('products.is_active', '=', isActive)
                 .where(this.tenantPredicate(actor, 'products')),
             )
-            .executeTakeFirstOrThrow().then((row) => Number(row.n || 0)),
+            .executeTakeFirstOrThrow()
+            .then((row) => Number(row.n || 0)),
           this.db
             .selectFrom('product_customer_prices')
             .select(sql<number>`count(*)`.as('n'))
             .where(this.tenantPredicate(actor))
             .where('product_id', 'in', (eb) =>
-              eb.selectFrom('products').select('products.id')
+              eb
+                .selectFrom('products')
+                .select('products.id')
                 .where('products.is_active', '=', isActive)
                 .where(this.tenantPredicate(actor, 'products')),
             )
-            .executeTakeFirstOrThrow().then((row) => Number(row.n || 0)),
+            .executeTakeFirstOrThrow()
+            .then((row) => Number(row.n || 0)),
         ]);
 
     const [pagedBaseRows, categories, suppliers, locations] = await Promise.all([
-      this.listProductsBaseQuery(actor, view).orderBy('id', 'desc').limit(pageSize).offset(start).execute() as Promise<ProductRow[]>,
-      this.db.selectFrom('product_categories').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
-      this.db.selectFrom('suppliers').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
-      this.db.selectFrom('stock_locations').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
+      this.listProductsBaseQuery(actor, view).orderBy('id', 'desc').limit(pageSize).offset(start).execute() as Promise<
+        ProductRow[]
+      >,
+      this.db
+        .selectFrom('product_categories')
+        .select(['id', 'name'])
+        .where('is_active', '=', true)
+        .where(this.tenantPredicate(actor))
+        .execute(),
+      this.db
+        .selectFrom('suppliers')
+        .select(['id', 'name'])
+        .where('is_active', '=', true)
+        .where(this.tenantPredicate(actor))
+        .execute(),
+      this.db
+        .selectFrom('stock_locations')
+        .select(['id', 'name'])
+        .where('is_active', '=', true)
+        .where(this.tenantPredicate(actor))
+        .execute(),
     ]);
     const pagedIds = pagedBaseRows.map((row) => Number(row.id));
     const scopedStockResult = brief
-      ? { stock: new Map<string, number>(pagedBaseRows.map((p) => [String(p.id), Number(p.stock_qty || 0)])), locations: new Map<string, number[]>() }
+      ? {
+          stock: new Map<string, number>(pagedBaseRows.map((p) => [String(p.id), Number(p.stock_qty || 0)])),
+          locations: new Map<string, number[]>(),
+        }
       : await this.resolveScopedStockByProduct(pagedIds, [], pagedBaseRows, actor);
     const categoriesById = Object.fromEntries(categories.map((entry) => [String(entry.id), String(entry.name || '')]));
     const suppliersById = Object.fromEntries(suppliers.map((entry) => [String(entry.id), String(entry.name || '')]));
@@ -303,10 +392,27 @@ export class CatalogProductListService {
   }
 
   async listProducts(query: Record<string, unknown>, actor: AuthContext): Promise<Record<string, unknown>> {
-    const { page, pageSize, q, rawQuery, identityOnly, preferInStock, view, requestedLocationId, categoryId, supplierId, brief, sortBy, sortDir } = this.parseListProductsQuery(query);
+    const {
+      page,
+      pageSize,
+      q,
+      rawQuery,
+      identityOnly,
+      preferInStock,
+      view,
+      requestedLocationId,
+      categoryId,
+      supplierId,
+      brief,
+      sortBy,
+      sortDir,
+    } = this.parseListProductsQuery(query);
     const canViewCost = this.canViewCostPrice(actor);
     const offerCapabilities = await this.getProductOfferColumnCapabilities();
-    const scopedLocation = requestedLocationId > 0 && actor ? await this.inventoryScope.assertLocationScope(requestedLocationId, actor).catch(() => null) : null;
+    const scopedLocation =
+      requestedLocationId > 0 && actor
+        ? await this.inventoryScope.assertLocationScope(requestedLocationId, actor).catch(() => null)
+        : null;
 
     // Sorting order determination (moved up: the fast-path decision needs it):
     // 1. Explicit sort request takes highest precedence across the entire tenant catalog.
@@ -325,26 +431,57 @@ export class CatalogProductListService {
     // filter, custom sort or fashion grouping keeps the old path below,
     // whose JS filter/sort semantics are unchanged.
     const canPageInSql =
-      !q && !categoryId && !supplierId && !scopedLocation &&
+      !q &&
+      !categoryId &&
+      !supplierId &&
+      !scopedLocation &&
       (view === 'all' || view === 'archived') &&
       !groupedFashion &&
-      effectiveSortBy === 'id' && effectiveSortDir === 'desc';
+      effectiveSortBy === 'id' &&
+      effectiveSortDir === 'desc';
     if (canPageInSql) {
       return this.listProductsPageInSql({ page, pageSize, view, brief, canViewCost, offerCapabilities, actor });
     }
 
     const [products, categories, suppliers, locations] = await Promise.all([
       this.listProductsBaseQuery(actor, view).orderBy('id', 'desc').execute() as Promise<ProductRow[]>,
-      this.db.selectFrom('product_categories').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
-      this.db.selectFrom('suppliers').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
-      this.db.selectFrom('stock_locations').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
+      this.db
+        .selectFrom('product_categories')
+        .select(['id', 'name'])
+        .where('is_active', '=', true)
+        .where(this.tenantPredicate(actor))
+        .execute(),
+      this.db
+        .selectFrom('suppliers')
+        .select(['id', 'name'])
+        .where('is_active', '=', true)
+        .where(this.tenantPredicate(actor))
+        .execute(),
+      this.db
+        .selectFrom('stock_locations')
+        .select(['id', 'name'])
+        .where('is_active', '=', true)
+        .where(this.tenantPredicate(actor))
+        .execute(),
     ]);
 
     const productIds = products.map((product) => Number(product.id));
-    const scopedStockResult = (brief && !scopedLocation && !q)
-      ? { stock: new Map<string, number>(products.map((p) => [String(p.id), Number(p.stock_qty || 0)])), locations: new Map<string, number[]>() }
-      : await this.resolveScopedStockByProduct(productIds, scopedLocation ? [scopedLocation.id] : [], products, actor);
-    const listContext = await this.buildListProductsContext(productIds, q, categories, suppliers, locations, actor, { brief, view });
+    const scopedStockResult =
+      brief && !scopedLocation && !q
+        ? {
+            stock: new Map<string, number>(products.map((p) => [String(p.id), Number(p.stock_qty || 0)])),
+            locations: new Map<string, number[]>(),
+          }
+        : await this.resolveScopedStockByProduct(
+            productIds,
+            scopedLocation ? [scopedLocation.id] : [],
+            products,
+            actor,
+          );
+    const listContext = await this.buildListProductsContext(productIds, q, categories, suppliers, locations, actor, {
+      brief,
+      view,
+    });
     const searchScoresById = new Map<string, number>();
     const filteredBaseRows = this.filterListProducts(products, {
       q,
@@ -417,8 +554,7 @@ export class CatalogProductListService {
     if (groupedFashion) {
       const groupByKey = new Map<string, ProductRow[]>();
       for (const row of filteredBaseRows) {
-        const key = row.item_kind === 'fashion' && row.style_code
-          ? `style:${row.style_code}` : `product:${row.id}`;
+        const key = row.item_kind === 'fashion' && row.style_code ? `style:${row.style_code}` : `product:${row.id}`;
         if (!groupByKey.has(key)) groupByKey.set(key, []);
         groupByKey.get(key)!.push(row);
       }
@@ -490,7 +626,7 @@ export class CatalogProductListService {
       supplierId: query.supplierId ? Number(query.supplierId) : undefined,
       brief: String(query.brief || '').toLowerCase() === 'true' || query.brief === true,
       sortBy: rawSortBy,
-      sortDir: (rawSortDir === 'asc' || rawSortDir === 'desc') ? rawSortDir : undefined,
+      sortDir: rawSortDir === 'asc' || rawSortDir === 'desc' ? rawSortDir : undefined,
     };
   }
 
@@ -506,32 +642,32 @@ export class CatalogProductListService {
     const needCounts = !options?.brief || options?.view === 'offers' || options?.view === 'special';
     const [unitSearchRows, offerCountRows, customerPriceCountRows] = await Promise.all([
       q && productIds.length
-        ? this.db
+        ? (this.db
             .selectFrom('product_units')
             .select(['product_id', 'name', 'barcode'])
             .where(this.productIdAny('product_id', productIds))
             .where(this.tenantPredicate(actor))
             .orderBy('product_id', 'asc')
-            .execute() as Promise<ProductUnitSearchRow[]>
+            .execute() as Promise<ProductUnitSearchRow[]>)
         : Promise.resolve([]),
       needCounts && productIds.length
-        ? this.db
+        ? (this.db
             .selectFrom('product_offers')
             .select(['product_id', (eb) => eb.fn.countAll<number>().as('count')])
             .where('is_active', '=', true)
             .where(this.productIdAny('product_id', productIds))
             .where(this.tenantPredicate(actor))
             .groupBy('product_id')
-            .execute() as Promise<ProductCountRow[]>
+            .execute() as Promise<ProductCountRow[]>)
         : Promise.resolve([]),
       needCounts && productIds.length
-        ? this.db
+        ? (this.db
             .selectFrom('product_customer_prices')
             .select(['product_id', (eb) => eb.fn.countAll<number>().as('count')])
             .where(this.productIdAny('product_id', productIds))
             .where(this.tenantPredicate(actor))
             .groupBy('product_id')
-            .execute() as Promise<ProductCountRow[]>
+            .execute() as Promise<ProductCountRow[]>)
         : Promise.resolve([]),
     ]);
 
@@ -549,7 +685,8 @@ export class CatalogProductListService {
     for (const row of offerCountRows) offerCountByProduct.set(String(row.product_id), Number(row.count || 0));
 
     const customerPriceCountByProduct = new Map<string, number>();
-    for (const row of customerPriceCountRows) customerPriceCountByProduct.set(String(row.product_id), Number(row.count || 0));
+    for (const row of customerPriceCountRows)
+      customerPriceCountByProduct.set(String(row.product_id), Number(row.count || 0));
 
     return {
       categoriesById,
@@ -595,7 +732,9 @@ export class CatalogProductListService {
 
       if (context.scopedLocationId) {
         const activeLocIds = context.activeLocationsByProduct?.get(key) || [];
-        const inLocation = activeLocIds.includes(context.scopedLocationId) || Number(product.default_location_id) === context.scopedLocationId;
+        const inLocation =
+          activeLocIds.includes(context.scopedLocationId) ||
+          Number(product.default_location_id) === context.scopedLocationId;
         if (!inLocation) return false;
       }
 
@@ -612,7 +751,8 @@ export class CatalogProductListService {
       if (!context.identityOnly) {
         const activeLocIds = context.activeLocationsByProduct?.get(key) || [];
         const activeLocNames = activeLocIds.map((id) => context.locationsById[String(id)] || '').filter(Boolean);
-        const defaultLocName = product.default_location_name || context.locationsById[String(product.default_location_id || '')] || '';
+        const defaultLocName =
+          product.default_location_name || context.locationsById[String(product.default_location_id || '')] || '';
         secondaryValues = [
           context.categoriesById[String(product.category_id || '')] || '',
           context.suppliersById[String(product.supplier_id || '')] || '',
@@ -649,7 +789,16 @@ export class CatalogProductListService {
       ? await Promise.all([
           this.db
             .selectFrom('product_units')
-            .select(['id', 'product_id', 'name', 'multiplier', 'barcode', 'is_base_unit', 'is_sale_unit_default', 'is_purchase_unit_default'])
+            .select([
+              'id',
+              'product_id',
+              'name',
+              'multiplier',
+              'barcode',
+              'is_base_unit',
+              'is_sale_unit_default',
+              'is_purchase_unit_default',
+            ])
             .where('product_id', 'in', pagedIds)
             .where(this.tenantPredicate(actor))
             .orderBy('product_id', 'asc')
@@ -657,22 +806,22 @@ export class CatalogProductListService {
             .orderBy('id', 'asc')
             .execute() as Promise<ProductUnitReadRow[]>,
           hasMinQty
-            ? this.db
+            ? (this.db
                 .selectFrom('product_offers')
                 .select(['id', 'product_id', 'offer_type', 'value', 'start_date', 'end_date', 'min_qty'])
                 .where('is_active', '=', true)
                 .where('product_id', 'in', pagedIds)
                 .where(this.tenantPredicate(actor))
                 .orderBy('id', 'desc')
-                .execute() as Promise<ProductOfferReadRow[]>
-            : this.db
+                .execute() as Promise<ProductOfferReadRow[]>)
+            : (this.db
                 .selectFrom('product_offers')
                 .select(['id', 'product_id', 'offer_type', 'value', 'start_date', 'end_date'])
                 .where('is_active', '=', true)
                 .where('product_id', 'in', pagedIds)
                 .where(this.tenantPredicate(actor))
                 .orderBy('id', 'desc')
-                .execute() as Promise<ProductOfferReadRow[]>,
+                .execute() as Promise<ProductOfferReadRow[]>),
           this.db
             .selectFrom('product_customer_prices')
             .select(['id', 'product_id', 'customer_id', 'price'])
@@ -704,7 +853,9 @@ export class CatalogProductListService {
     for (const cp of customerPrices) {
       const key = String(cp.product_id);
       if (!pricesByProduct.has(key)) pricesByProduct.set(key, []);
-      pricesByProduct.get(key)!.push({ id: String(cp.id), customerId: String(cp.customer_id), price: Number(cp.price || 0) });
+      pricesByProduct
+        .get(key)!
+        .push({ id: String(cp.id), customerId: String(cp.customer_id), price: Number(cp.price || 0) });
     }
 
     return { unitsByProduct, offersByProduct, pricesByProduct };
@@ -728,10 +879,14 @@ export class CatalogProductListService {
   ): Record<string, unknown>[] {
     return pagedBaseRows.map((product) => {
       const activeLocIds = context.activeLocationsByProduct?.get(String(product.id)) || [];
-      const activeLocationNames = activeLocIds.map((id) => context.locationsById?.[String(id)]).filter(Boolean) as string[];
+      const activeLocationNames = activeLocIds
+        .map((id) => context.locationsById?.[String(id)])
+        .filter(Boolean) as string[];
       const categoryName = context.categoriesById?.[String(product.category_id || '')] || undefined;
       const supplierName = context.suppliersById?.[String(product.supplier_id || '')] || undefined;
-      const hasMovements = context.productIdsWithMovements ? context.productIdsWithMovements.has(Number(product.id)) : false;
+      const hasMovements = context.productIdsWithMovements
+        ? context.productIdsWithMovements.has(Number(product.id))
+        : false;
       const currentStock = this.getListProductStock(product, context.scopedLocationId, context.scopedStockByProduct);
 
       const mapped: Record<string, unknown> = {
@@ -746,7 +901,12 @@ export class CatalogProductListService {
         categoryName,
         supplierId: product.supplier_id ? String(product.supplier_id) : '',
         supplierName,
-        itemType: product.item_type === 'raw_material' ? 'raw_material' : product.item_type === 'service' ? 'service' : 'product',
+        itemType:
+          product.item_type === 'raw_material'
+            ? 'raw_material'
+            : product.item_type === 'service'
+              ? 'service'
+              : 'product',
         itemKind: product.item_kind === 'fashion' ? 'fashion' : 'standard',
         styleCode: product.style_code || '',
         color: product.color || '',
@@ -768,14 +928,49 @@ export class CatalogProductListService {
         bomId: product.bom_id ? Number(product.bom_id) : undefined,
         hasBom: !!product.bom_id,
         defaultLocationId: product.default_location_id ? String(product.default_location_id) : undefined,
-        defaultLocationName: product.default_location_name || context.locationsById?.[String(product.default_location_id || '')] || undefined,
+        defaultLocationName:
+          product.default_location_name ||
+          context.locationsById?.[String(product.default_location_id || '')] ||
+          undefined,
         activeLocationIds: activeLocIds.map(String),
         activeLocationNames,
-        units: context.unitsByProduct.get(String(product.id)) || [{ id: `base-${product.id}`, name: 'قطعة', multiplier: 1, barcode: product.barcode || '', isBaseUnit: true, isSaleUnit: true, isPurchaseUnit: true }],
+        units: context.unitsByProduct.get(String(product.id)) || [
+          {
+            id: `base-${product.id}`,
+            name: 'قطعة',
+            multiplier: 1,
+            barcode: product.barcode || '',
+            isBaseUnit: true,
+            isSaleUnit: true,
+            isPurchaseUnit: true,
+          },
+        ],
         offers: context.offersByProduct.get(String(product.id)) || [],
         customerPrices: context.pricesByProduct.get(String(product.id)) || [],
-        icon: (product as any).metadata?.icon || (typeof (product as any).metadata === 'string' ? (() => { try { return JSON.parse((product as any).metadata)?.icon; } catch { return null; } })() : null) || null,
-        imageUrl: (product as any).metadata?.imageUrl || (typeof (product as any).metadata === 'string' ? (() => { try { return JSON.parse((product as any).metadata)?.imageUrl; } catch { return null; } })() : null) || null,
+        icon:
+          (product as any).metadata?.icon ||
+          (typeof (product as any).metadata === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse((product as any).metadata)?.icon;
+                } catch {
+                  return null;
+                }
+              })()
+            : null) ||
+          null,
+        imageUrl:
+          (product as any).metadata?.imageUrl ||
+          (typeof (product as any).metadata === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse((product as any).metadata)?.imageUrl;
+                } catch {
+                  return null;
+                }
+              })()
+            : null) ||
+          null,
         metadata: (product as any).metadata || null,
       };
       if (!context.canViewCost) delete mapped.costPrice;
@@ -795,14 +990,38 @@ export class CatalogProductListService {
   ) {
     return {
       totalProducts: filteredBaseRows.length,
-      lowStockCount: filteredBaseRows.filter((row) => this.getListProductStock(row, context.scopedLocationId, context.scopedStockByProduct) <= Number(row.min_stock_qty || 0)).length,
-      outOfStockCount: filteredBaseRows.filter((row) => this.getListProductStock(row, context.scopedLocationId, context.scopedStockByProduct) <= 0).length,
+      lowStockCount: filteredBaseRows.filter(
+        (row) =>
+          this.getListProductStock(row, context.scopedLocationId, context.scopedStockByProduct) <=
+          Number(row.min_stock_qty || 0),
+      ).length,
+      outOfStockCount: filteredBaseRows.filter(
+        (row) => this.getListProductStock(row, context.scopedLocationId, context.scopedStockByProduct) <= 0,
+      ).length,
       inventoryCost: context.canViewCost
-        ? filteredBaseRows.reduce((sum, row) => sum + (this.getListProductStock(row, context.scopedLocationId, context.scopedStockByProduct) * Number(row.cost_price || 0)), 0)
+        ? filteredBaseRows.reduce(
+            (sum, row) =>
+              sum +
+              this.getListProductStock(row, context.scopedLocationId, context.scopedStockByProduct) *
+                Number(row.cost_price || 0),
+            0,
+          )
         : null,
-      inventorySaleValue: filteredBaseRows.reduce((sum, row) => sum + (this.getListProductStock(row, context.scopedLocationId, context.scopedStockByProduct) * Number(row.retail_price || 0)), 0),
-      activeOffersCount: filteredBaseRows.reduce((sum, row) => sum + Number(context.offerCountByProduct.get(String(row.id)) || 0), 0),
-      customerPriceCount: filteredBaseRows.reduce((sum, row) => sum + Number(context.customerPriceCountByProduct.get(String(row.id)) || 0), 0),
+      inventorySaleValue: filteredBaseRows.reduce(
+        (sum, row) =>
+          sum +
+          this.getListProductStock(row, context.scopedLocationId, context.scopedStockByProduct) *
+            Number(row.retail_price || 0),
+        0,
+      ),
+      activeOffersCount: filteredBaseRows.reduce(
+        (sum, row) => sum + Number(context.offerCountByProduct.get(String(row.id)) || 0),
+        0,
+      ),
+      customerPriceCount: filteredBaseRows.reduce(
+        (sum, row) => sum + Number(context.customerPriceCountByProduct.get(String(row.id)) || 0),
+        0,
+      ),
     };
   }
 }
