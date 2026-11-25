@@ -204,7 +204,7 @@ export class SettleRepFinancialItemSlice {
           // below: authorization is decided before posting validity.
           // INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE: the gate reports
           // whether the solo-admin override bit; the stamp (who settled,
-          // who approved, the amount, no second admin available) is
+          // who approved, the amount, no second approval required) is
           // appended to the waived item's notes only then.
           const waiverGate = await this.assertRepWaiverApproval(
             trxAny,
@@ -219,7 +219,7 @@ export class SettleRepFinancialItemSlice {
           const waiverNotes =
             `${item.notes ? item.notes + ' | ' : ''}${waiverReason}` +
             (waiverGate.soloOverrideUsed
-              ? ` — اعتماد منفرد بقرار إداري — سوّى ${authContext.username} الرحلة واعتمد إعفاء عجز ${waiverGate.waiverAmount} بنفسه — لا يوجد مدير ثانٍ متاح`
+              ? ` — اعتماد منفرد بقرار إداري — سوّى ${authContext.username} الرحلة واعتمد إعفاء عجز ${waiverGate.waiverAmount} بنفسه`
               : '');
           // INV-VAN-REP-SHORTAGE-WAIVER-REVERSAL: a pending stock
           // shortage was charged to the rep at trip settlement
@@ -298,7 +298,7 @@ export class SettleRepFinancialItemSlice {
             await this.audit.logWithExecutor(
               trxAny,
               'إعفاء عجز مندوب باعتماد منفرد',
-              `اعتمد ${authContext.username} إعفاء عجز ${waiverGate.waiverAmount} للمندوب بعد أن سوّى الرحلة بنفسه (المسوّي ${actorUserId} / المعتمد ${actorUserId}) — لا يوجد مدير ثانٍ متاح`,
+              `اعتمد ${authContext.username} إعفاء عجز ${waiverGate.waiverAmount} للمندوب بعد أن سوّى الرحلة بنفسه (المسوّي ${actorUserId} / المعتمد ${actorUserId})`,
               authContext,
               { eventCode: 'REP_WAIVER_SOLO_ADMIN_OVERRIDE' },
             );

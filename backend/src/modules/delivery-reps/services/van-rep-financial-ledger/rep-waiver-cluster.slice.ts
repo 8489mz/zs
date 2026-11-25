@@ -77,11 +77,12 @@ export class RepWaiverClusterSlice {
    * unauthorized, not as a custody problem.
    *
    * INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE: legs (2) and (4) are excused
-   * for the SAME person when he is the tenant's only admin — the
+   * for the SAME person when he is an admin — the
    * shared isSoloAdminOverride helper (manager-approval.ts, created
-   * by P5; no second copy here) returns true only when the actor is
-   * an admin/super_admin and no OTHER active admin/super_admin
-   * exists in the tenant. The actor leg is excused when the actor is
+   * by P5; no second copy here) returns true when the actor is
+   * an admin/super_admin: no second-manager approval is ever
+   * required (INV-SECOND-MANAGER-PASSWORD-REMOVED), whether or not another
+   * admin exists in the tenant. The actor leg is excused when the actor is
    * the settler; the approver leg only when the attributed approver
    * is the actor himself (supervisorId === actorUserId) — a different
    * approver who happens to be the settler is still refused. The rep
@@ -138,9 +139,9 @@ export class RepWaiverClusterSlice {
     }
     let soloOverrideUsed = false;
     if (actorUserId && tripSettledBy && actorUserId === tripSettledBy) {
-      // INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE: the tenant's only admin
-      // settled the trip himself, so a different-admin waiver is
-      // unsatisfiable — he may waive alone with a logged override.
+      // INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE: an admin settled the
+      // trip himself — he may waive alone with a logged override;
+      // no second approval is required (INV-SECOND-MANAGER-PASSWORD-REMOVED).
       if (await isSoloAdminOverride(trxAny, tenantId, auth)) {
         soloOverrideUsed = true;
       } else {

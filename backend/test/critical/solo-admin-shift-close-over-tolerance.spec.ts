@@ -1,40 +1,44 @@
 /*
  * INV-SOLO-ADMIN-SHIFT-CLOSE-OVER-TOLERANCE: the second-approval
  * gate over the shortage-tolerance cap (SHIFT_SECOND_APPROVAL_REQUIRED
- * / SHIFT_SECOND_APPROVER_MUST_DIFFER) applied to EVERY closer with
- * no role exception — a DIFFERENT admin/manager account password was
- * required, the shared manager PIN was rejected (no identity) and
- * self-approval was rejected. In a shop with only ONE admin that
- * gate is unsatisfiable: the solo admin cannot approve their own
- * over-tolerance variance, so the shift cannot be closed at all.
+ * / SHIFT_SECOND_APPROVER_MUST_DIFFER) used to require a DIFFERENT
+ * admin/manager account password from every closer — the shared
+ * manager PIN was rejected (no identity) and self-approval was
+ * rejected. That gate is gone entirely
+ * (INV-SECOND-MANAGER-PASSWORD-REMOVED): no second-manager password
+ * is collected or required from ANY closer — an admin, a manager, or
+ * any other role closes alone with a >=10-char note, stamped. A
+ * supplied approverSecret is ignored. The >=10-char note stays: the
+ * override needs a recorded reason.
  *
  * WHAT THIS PINS (drives the real CashDrawerService against a
  * minimal PGlite harness, same accounting seed as
  * admin-close-declared-totals-waiver.spec.ts):
- * - A solo admin closing an ADMIN-opened shift with a -20 variance
+ * - An admin closing an ADMIN-opened shift with a -20 variance
  *   over the default 0.001 cap, a >=10-char note and NO approver
  *   secret closes with status `closed`, and the override is stamped
  *   into the close note (who closed, the variance, the tolerance
- *   cap, and that no second admin was available); the closer stays
- *   the approver of record (variance_approved_by = closer) and the
- *   variance journal is posted. The control is recorded, not
- *   silently dropped.
+ *   cap); the closer stays the approver of record
+ *   (variance_approved_by = closer) and the variance journal is
+ *   posted. The control is recorded, not silently dropped — and the
+ *   stamp carries NO second-manager reference at all.
  * - A solo super_admin closes the same way, stamped with their name.
- * - An admin WITH a second admin's account password still closes
- *   through the old second-approval path: variance_approved_by is
- *   the second approver, and the old approver stamp is used (no
- *   solo-override stamp).
- * - A non-privileged closer is STILL refused: a manager closing
+ * - A supplied approver secret is IGNORED: an admin closing WITH a
+ *   second admin's account password still closes alone — the closer
+ *   stays the approver of record and the solo-override stamp is
+ *   used, never the old second-approval stamp.
+ * - A non-privileged closer closes alone too: a manager closing
  *   their OWN manager-opened shift over tolerance with a >=10-char
- *   note and no approver gets SHIFT_SECOND_APPROVAL_REQUIRED, the
- *   shift stays open and nothing posts; with a different admin's
- *   password it closes through the second-approval path.
+ *   note and no approver closes with status `closed`, stamped, the
+ *   manager staying the approver of record and the variance journal
+ *   posted; with a different admin's password supplied it still
+ *   closes alone (the secret is ignored).
  *   (A cashier can never reach this gate: a cashier closing their
  *   own shift is blind by the opener's role, so the gate — which
  *   fires only on non-blind closes — never runs for a cashier
  *   closer. The manager-opened shift is the non-privileged closer
  *   that can actually reach a non-blind close.)
- * - A solo admin with a short (<10-char) note and no approver is
+ * - A closer with a short (<10-char) note and no approver is
  *   refused with SHIFT_SECOND_APPROVAL_NOTE_REQUIRED: the override
  *   needs a recorded reason, and a short note refuses instead of
  *   closing silently.
@@ -262,8 +266,8 @@ async function main() {
       'the override stamp must record the tolerance cap',
     );
     assert.ok(
-      String(soloRow.close_note || '').includes('لا يوجد مدير ثانٍ متاح'),
-      'the override stamp must record that no second admin was available',
+      !String(soloRow.close_note || '').includes('ثانٍ'),
+      'the override stamp must carry no second-manager reference at all',
     );
 
     // ---------- Solo super_admin: same override, stamped with their name. ----------
@@ -290,7 +294,7 @@ async function main() {
       'the override stamp must name the super_admin who closed',
     );
 
-    // ---------- Second-admin approval still works as before. ----------
+    // ---------- A supplied approver secret is IGNORED: no second-manager password is collected any more. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
     const shiftSecond = await shiftIdOf(1);
     await drawer.closeCashierShift(
@@ -299,56 +303,85 @@ async function main() {
       admin1,
     );
     const secondRow = await shiftRow(shiftSecond);
-    assert.equal(secondRow.status, 'closed', 'an admin closing with a second admin approval must still close');
+    assert.equal(secondRow.status, 'closed', 'an admin closing with a supplied approver secret must still close');
     assert.equal(
       Number(secondRow.variance_approved_by),
-      2,
-      'variance_approved_by must be the second approver, not the closer',
+      1,
+      'variance_approved_by must be the closer — the supplied secret names no approver any more',
     );
     assert.ok(
-      String(secondRow.close_note || '').includes('اعتماد فرق فوق حد التسامح بواسطة manager2'),
-      'the second-approval stamp must name the approver',
+      String(secondRow.close_note || '').includes('اعتماد فرق منفرد بقرار إداري'),
+      'a close with a supplied secret must carry the solo-override stamp',
     );
     assert.ok(
-      !String(secondRow.close_note || '').includes('اعتماد فرق منفرد'),
-      'a second-approval close must not carry the solo-override stamp',
+      !String(secondRow.close_note || '').includes('اعتماد فرق فوق حد التسامح بواسطة'),
+      'a close with a supplied secret must not carry the old second-approval stamp',
+    );
+    assert.ok(
+      !String(secondRow.close_note || '').includes('ثانٍ'),
+      'the close note must carry no second-manager reference at all',
     );
 
-    // ---------- Non-privileged closer still refused without a second approval. ----------
+    // ---------- Non-privileged closer closes alone too: no second approval is required from any role. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, manager6);
     const shiftManager = await shiftIdOf(6);
     const journalsBeforeManager = await journalCount();
-    await expectCode(
-      drawer.closeCashierShift(
-        shiftManager,
-        { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-manager-6' },
-        manager6,
-      ),
-      'SHIFT_SECOND_APPROVAL_REQUIRED',
-      'a manager closing their own shift over tolerance with no second approval must still be refused',
-    );
-    assert.equal((await shiftRow(shiftManager)).status, 'open', 'a refused close must leave the shift open');
-    assert.equal(await journalCount(), journalsBeforeManager, 'a refused close must post no variance journal');
     await drawer.closeCashierShift(
       shiftManager,
-      { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-manager-6', approverSecret: 'pw-admin-1' },
+      { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-manager-6' },
       manager6,
     );
     const managerRow = await shiftRow(shiftManager);
-    assert.equal(managerRow.status, 'closed', 'the same manager closes once a different admin approves');
     assert.equal(
-      Number(managerRow.variance_approved_by),
-      1,
-      'variance_approved_by must be the approving admin, not the manager closer',
+      managerRow.status,
+      'closed',
+      'a manager closing their own shift over tolerance with a recorded reason must close alone',
+    );
+    assert.equal(Number(managerRow.variance_approved_by), 6, 'the manager closer stays the approver of record');
+    assert.equal(
+      await journalCount(),
+      journalsBeforeManager + 1,
+      'a manager solo-override close must still post the variance journal',
+    );
+    assert.ok(
+      String(managerRow.close_note || '').includes('اعتماد فرق منفرد بقرار إداري'),
+      'the manager close note must carry the solo-override stamp',
+    );
+    assert.ok(
+      String(managerRow.close_note || '').includes('manager6'),
+      'the override stamp must name the manager who closed',
+    );
+    assert.ok(
+      !String(managerRow.close_note || '').includes('ثانٍ'),
+      'the close note must carry no second-manager reference at all',
+    );
+    // A supplied admin password is ignored on the manager path too.
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, manager6);
+    const shiftManagerSecret = await shiftIdOf(6);
+    await drawer.closeCashierShift(
+      shiftManagerSecret,
+      { countedCash: 80, note: LONG_NOTE, managerPin: 'pw-manager-6', approverSecret: 'pw-admin-1' },
+      manager6,
+    );
+    const managerSecretRow = await shiftRow(shiftManagerSecret);
+    assert.equal(managerSecretRow.status, 'closed', 'a manager closing with a supplied admin password must close');
+    assert.equal(
+      Number(managerSecretRow.variance_approved_by),
+      6,
+      'variance_approved_by must be the manager closer — the supplied secret names no approver any more',
+    );
+    assert.ok(
+      !String(managerSecretRow.close_note || '').includes('اعتماد فرق فوق حد التسامح بواسطة'),
+      'a manager close with a supplied secret must not carry the old second-approval stamp',
     );
 
-    // ---------- Solo admin with a short note and no approver: refused until the reason is recorded. ----------
+    // ---------- A closer with a short note: refused until the reason is recorded. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
     const shiftShort = await shiftIdOf(1);
     await expectCode(
       drawer.closeCashierShift(shiftShort, { countedCash: 80, note: 'x', managerPin: 'pw-admin-1' }, admin1),
       'SHIFT_SECOND_APPROVAL_NOTE_REQUIRED',
-      'a solo admin closing over tolerance with a <10-char note and no approver must be refused until the override reason is recorded',
+      'a closer closing over tolerance with a <10-char note must be refused until the override reason is recorded',
     );
     assert.equal((await shiftRow(shiftShort)).status, 'open', 'a refused close must leave the shift open');
 

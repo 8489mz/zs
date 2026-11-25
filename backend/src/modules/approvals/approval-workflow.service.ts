@@ -390,13 +390,12 @@ export class ApprovalWorkflowService {
       // request they created — the old ban refused the requester
       // outright, so the order sat in `pending_approval` forever
       // with no second admin to approve it. When the decider is an
-      // admin/super_admin AND no other active admin/super_admin
-      // exists in the tenant, the requester may decide alone — but
+      // admin/super_admin, the requester may decide alone — but
       // never silently: the override is stamped into the approval
       // audit trail (`approval_request_logs.notes`) with who decided
-      // (requester == decider) and that no second admin was
-      // available. When a second active admin exists, the old ban
-      // stands; a non-admin requester is still refused.
+      // (requester == decider) and that no second approval is
+      // required (INV-SECOND-MANAGER-PASSWORD-REMOVED). A non-admin requester
+      // is still refused.
       let soloOverride = false;
       if (Number(request.requested_by) === auth.userId) {
         soloOverride = await this.isSoloAdminOverride(trx, tenantId, auth);
@@ -421,9 +420,7 @@ export class ApprovalWorkflowService {
           action_role: auth.role,
           notes:
             (notes || `تمت الموافقة على المستوى ${currentTier}.`) +
-            (soloOverride
-              ? ` — اعتماد منفرد بقرار إداري — صاحب الطلب ${auth.username} اعتمد مستنده بنفسه — لا يوجد مدير ثانٍ متاح`
-              : ''),
+            (soloOverride ? ` — اعتماد منفرد بقرار إداري — صاحب الطلب ${auth.username} اعتمد مستنده بنفسه` : ''),
         } as any)
         .execute();
       await trx
@@ -464,9 +461,9 @@ export class ApprovalWorkflowService {
       if (request.module !== 'purchase_orders') throw new BadRequestException('مسار رفض هذا النوع غير مفعل.');
       // INV-SOLO-ADMIN-PO-SELF-APPROVAL-OVERRIDE: same solo-admin
       // override as approveRequest — the requester may reject alone
-      // only when they are an admin/super_admin and no other active
-      // admin/super_admin exists in the tenant; the override is
-      // stamped into the rejection log row.
+      // when they are an admin/super_admin; no second-manager
+      // approval is ever required (INV-SECOND-MANAGER-PASSWORD-REMOVED). The
+      // override is stamped into the rejection log row.
       let soloOverride = false;
       if (Number(request.requested_by) === auth.userId) {
         soloOverride = await this.isSoloAdminOverride(trx, tenantId, auth);
@@ -486,9 +483,7 @@ export class ApprovalWorkflowService {
           action_role: auth.role,
           notes:
             reason.trim() +
-            (soloOverride
-              ? ` — رفض منفرد بقرار إداري — صاحب الطلب ${auth.username} رفض مستنده بنفسه — لا يوجد مدير ثانٍ متاح`
-              : ''),
+            (soloOverride ? ` — رفض منفرد بقرار إداري — صاحب الطلب ${auth.username} رفض مستنده بنفسه` : ''),
         } as any)
         .execute();
       await trx
@@ -502,27 +497,21 @@ export class ApprovalWorkflowService {
   }
 
   /**
-   * INV-SOLO-ADMIN-PO-SELF-APPROVAL-OVERRIDE: true only when the
-   * decider is an admin/super_admin AND no OTHER active
-   * admin/super_admin exists in the tenant. The check reads the
-   * `users` table directly — no schema change: tenant scope via
-   * `tenant_id`, privilege via `role`, liveness via `is_active`.
-   * An inactive second admin does not count, and an admin in another
-   * tenant does not count. A non-admin decider is never a solo
-   * override (they are refused by the caller).
+   * INV-SECOND-MANAGER-PASSWORD-REMOVED: true when the decider is an
+   * admin/super_admin — no second-manager approval is ever
+   * required, so there is no tenant-size check: whether or not
+   * another active admin exists in the tenant, an admin may decide
+   * alone with a logged override. A non-admin decider is never a
+   * solo override (they are refused by the caller). The `_trx` /
+   * `_tenantId` parameters are retained (unused) so the call sites
+   * keep their shape.
    */
-  private async isSoloAdminOverride(trx: Transaction<Database>, tenantId: string, auth: AuthContext): Promise<boolean> {
-    if (auth.role !== 'admin' && auth.role !== 'super_admin') return false;
-    const secondAdmin = await trx
-      .selectFrom('users')
-      .select('id')
-      .where('tenant_id', '=', tenantId)
-      .where('role', 'in', ['admin', 'super_admin'])
-      .where('is_active', '=', true)
-      .where('id', '!=', Number(auth.userId))
-      .limit(1)
-      .executeTakeFirst();
-    return !secondAdmin;
+  private async isSoloAdminOverride(
+    _trx: Transaction<Database>,
+    _tenantId: string,
+    auth: AuthContext,
+  ): Promise<boolean> {
+    return auth.role === 'admin' || auth.role === 'super_admin';
   }
 
   private async assertApprover(

@@ -1,9 +1,9 @@
 /*
- * S4 (INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE) — a solo admin who settled
+ * S4 (INV-SOLO-ADMIN-REP-WAIVER-OVERRIDE) — an admin who settled
  * a van trip may approve the rep shortage waiver alone, with a logged
- * override, when no other active admin/super_admin exists in the
- * tenant. When a second admin exists, the M5 maker-checker rule stands
- * byte-identically.
+ * override. No second-manager approval may block any admin, ever
+ * (INV-SECOND-MANAGER-PASSWORD-REMOVED) — the override applies whether or not
+ * a second admin exists in the tenant.
  *
  * THE DEFECT (S4): assertRepWaiverApproval refused the trip settler
  * as actor (REP_WAIVER_MAKER_CHECKER, 403) and refused an attributed
@@ -48,7 +48,7 @@
  * DECISIONS PINNED HERE: (1) the override excuses only the SAME
  * person being settler + actor (+ approver above the threshold): a
  * cashier actor whose PIN approver is the settler still refuses —
- * fail-closed, out of scope; the solo admin does it by being the
+ * fail-closed, out of scope; the admin does it by being the
  * actor himself; (2) the gate computes the override lazily, only
  * when a leg would otherwise refuse — a waiver by a different admin
  * costs no extra query and behaves byte-identically; (3) the stamp
@@ -513,7 +513,7 @@ async function main(): Promise<void> {
   // who settled, who approved, the shortage amount, and that no second
   // admin was available. It is appended to the waived item's notes.
   const stampFor = (amount: number): string =>
-    ` — اعتماد منفرد بقرار إداري — سوّى admin-one الرحلة واعتمد إعفاء عجز ${amount} بنفسه — لا يوجد مدير ثانٍ متاح`;
+    ` — اعتماد منفرد بقرار إداري — سوّى admin-one الرحلة واعتمد إعفاء عجز ${amount} بنفسه`;
 
   async function overrideAuditRows(db: Kysely<Database>): Promise<Array<Record<string, any>>> {
     return (await auditRows(db)).filter(
@@ -573,8 +573,8 @@ async function main(): Promise<void> {
         );
         assert.ok(String(overrides[0].details || '').includes('40'), 'the audit row names the shortage amount');
         assert.ok(
-          String(overrides[0].details || '').includes('لا يوجد مدير ثانٍ متاح'),
-          'the audit row records that no second admin was available',
+          !String(overrides[0].details || '').includes('ثانٍ'),
+          'the audit row must carry no second-manager reference at all',
         );
       } finally {
         await db.destroy();
@@ -583,9 +583,9 @@ async function main(): Promise<void> {
   );
 
   // 2. Second admin present: the settler waiving his own trip's
-  // shortage is STILL refused with the exact old code, row pending,
-  // no journal, no stamp, no audit row (M5 case 7 verbatim).
-  await check('S4 second admin present: settler self-waiver still refused REP_WAIVER_MAKER_CHECKER', async () => {
+  // shortage is now allowed, stamped + audited (a cash-shortage
+  // waiver posts no reversal journal — only stock shortages do).
+  await check('S4 second admin present: settler self-waiver now allowed, stamped + audited', async () => {
     const { pg, db } = await makeDb();
     try {
       await seedFoundation(db, true);
@@ -593,19 +593,28 @@ async function main(): Promise<void> {
       await seedTrip(db);
       const { controller } = buildServices(db);
       await seedSettlementItem(db, 402, 'cash_shortage', 25);
-      await assert.rejects(
-        () =>
-          controller.settleRepFinancialItem(controllerReqFor(adminOneAuth), 402, { method: 'waiver', notes: REASON }),
-        (err: any) => err && err.code === 'REP_WAIVER_MAKER_CHECKER',
-        'the waiver must fail closed with the specific code',
-      );
-      assert.equal((await itemRow(db, 402)).status, 'pending', 'the row stays pending for manual review');
-      assert.equal(await journalCount(db, 'rep_shortage_waiver'), 0, 'no waiver journal is posted');
+      const result: any = await controller.settleRepFinancialItem(controllerReqFor(adminOneAuth), 402, {
+        method: 'waiver',
+        notes: REASON,
+      });
+      assert.equal(result.status, 'waived');
+      assert.equal((await itemRow(db, 402)).status, 'waived');
+      const notes = String((await itemRow(db, 402)).notes || '');
+      assert.ok(notes.includes(REASON), 'the reason is recorded on the item');
+      assert.ok(notes.includes(stampFor(25)), 'the solo-override stamp is on the item');
+      assert.equal(await journalCount(db, 'rep_shortage_waiver'), 0, 'a cash-shortage waiver posts no journal');
+      const overrides = await overrideAuditRows(db);
+      assert.equal(overrides.length, 1, 'exactly one solo-override audit row');
+      assert.equal(Number(overrides[0].created_by), 1, 'the audit row attributes the solo admin');
       assert.ok(
-        !String((await itemRow(db, 402)).notes || '').includes('اعتماد منفرد'),
-        'no override stamp on a refused waiver',
+        String(overrides[0].details || '').includes('admin-one'),
+        'the audit row names who settled and approved',
       );
-      assert.equal((await overrideAuditRows(db)).length, 0, 'no override audit row on a refused waiver');
+      assert.ok(String(overrides[0].details || '').includes('25'), 'the audit row names the shortage amount');
+      assert.ok(
+        !String(overrides[0].details || '').includes('ثانٍ'),
+        'the audit row must carry no second-manager reference at all',
+      );
     } finally {
       await db.destroy();
     }
@@ -694,7 +703,11 @@ async function main(): Promise<void> {
   // 5. Above threshold, second admin present: actor admin 2 presents
   // the TRIP SETTLER's (admin 1) password — a valid PIN, but the
   // approver is the load decision-maker and is NOT the actor, so the
-  // solo override does not excuse him (M5 case 6 verbatim).
+  // solo override does not excuse him (M5 case 6 verbatim). This
+  // refusal is the approver-identity rule (the approver must differ
+  // from the settler), NOT a second-admin requirement: admin 2 is
+  // not blocked from waiving — he waives with his own PIN (case 3).
+  // INV-SECOND-MANAGER-PASSWORD-REMOVED changes nothing here.
   await check(
     'S4 second admin present: settler-as-approver still refused REP_WAIVER_MAKER_CHECKER, even with a valid PIN',
     async () => {

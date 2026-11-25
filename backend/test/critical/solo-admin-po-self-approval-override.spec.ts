@@ -33,11 +33,11 @@
  * - A second admin deciding works as before: another active admin
  *   approves the requester's request, the order confirms, and the log
  *   row carries NO override stamp.
- * - Self-decision when a second admin EXISTS is still refused: with
- *   a second active admin in the tenant, the requester approving or
- *   rejecting their own request gets the old ForbiddenException, the
- *   request stays `pending` and the purchase order stays
- *   `pending_approval`, with no decision logged.
+ * - Self-decision when a second admin EXISTS is now allowed, stamped
+ *   the same way: no second-manager approval may block any admin,
+ *   ever (INV-SECOND-MANAGER-PASSWORD-REMOVED) — with a second active admin in
+ *   the tenant, the requester approving or rejecting their own
+ *   request succeeds and the log row carries the override stamp.
  */
 
 import 'reflect-metadata';
@@ -186,8 +186,8 @@ async function main() {
     );
     assert.ok(String(logs1[0].notes || '').includes('admin1'), 'the override stamp must name who decided');
     assert.ok(
-      String(logs1[0].notes || '').includes('لا يوجد مدير ثانٍ متاح'),
-      'the override stamp must record that no second admin was available',
+      !String(logs1[0].notes || '').includes('ثانٍ'),
+      'the override stamp must carry no second-manager reference at all',
     );
 
     // ---------- Solo admin rejects their OWN request: allowed + override logged. ----------
@@ -205,8 +205,8 @@ async function main() {
       'the log must carry the solo-admin override stamp',
     );
     assert.ok(
-      String(logs2[0].notes || '').includes('لا يوجد مدير ثانٍ متاح'),
-      'the override stamp must record that no second admin was available',
+      !String(logs2[0].notes || '').includes('ثانٍ'),
+      'the override stamp must carry no second-manager reference at all',
     );
 
     // ---------- Solo admin clears a 2-tier request alone, tier by tier. ----------
@@ -249,7 +249,7 @@ async function main() {
     assert.equal(await poStatus(107), 'pending_approval', 'a refused decision must leave the order pending approval');
     assert.equal((await logsFor('req-7')).length, 0, 'a refused decision must log nothing');
 
-    // ---------- Activate the second admin: the old ban returns. ----------
+    // ---------- Activate the second admin: no second approval is required any more. ----------
     await pg.query(`UPDATE users SET is_active=true WHERE id=2`);
 
     // ---------- A second admin deciding works as before, with NO override stamp. ----------
@@ -264,25 +264,56 @@ async function main() {
       'a second-admin decision must not carry the solo-override stamp',
     );
 
-    // ---------- Self-decision when a second admin EXISTS is still refused (approve). ----------
-    await expectForbidden(
-      approvals.approveRequest('req-5', '', admin1),
-      SELF_APPROVE_MSG,
-      'a requester approving their own request while a second admin exists must still be refused',
+    // ---------- Self-decision when a second admin EXISTS is now allowed (approve). ----------
+    const approved5 = await approvals.approveRequest('req-5', '', admin1);
+    assert.equal(
+      approved5.status,
+      'approved',
+      'a requester approving their own request with a second admin present must now succeed',
     );
-    assert.equal((await requestRow('req-5')).status, 'pending', 'a refused decision must leave the request pending');
-    assert.equal(await poStatus(105), 'pending_approval', 'a refused decision must leave the order pending approval');
-    assert.equal((await logsFor('req-5')).length, 0, 'a refused decision must log nothing');
+    assert.equal(
+      approved5.isFullyApproved,
+      true,
+      'a single-tier approval with a second admin present must fully approve',
+    );
+    assert.equal((await requestRow('req-5')).status, 'approved', 'the request must be approved');
+    assert.equal(await poStatus(105), 'confirmed', 'the purchase order must move to confirmed');
+    const logs5 = await logsFor('req-5');
+    assert.equal(logs5.length, 1, 'exactly one decision log row must be written');
+    assert.equal(logs5[0].action, 'approved', 'the log action must be approved');
+    assert.equal(Number(logs5[0].action_by), 1, 'the log must record the requester as the decider');
+    assert.ok(
+      String(logs5[0].notes || '').includes('اعتماد منفرد بقرار إداري'),
+      'the log must carry the solo-admin override stamp',
+    );
+    assert.ok(String(logs5[0].notes || '').includes('admin1'), 'the override stamp must name who decided');
+    assert.ok(
+      !String(logs5[0].notes || '').includes('ثانٍ'),
+      'the override stamp must carry no second-manager reference at all',
+    );
 
-    // ---------- Self-decision when a second admin EXISTS is still refused (reject). ----------
-    await expectForbidden(
-      approvals.rejectRequest('req-6', 'لا أحتاجه', admin1),
-      SELF_REJECT_MSG,
-      'a requester rejecting their own request while a second admin exists must still be refused',
+    // ---------- Self-decision when a second admin EXISTS is now allowed (reject). ----------
+    const rejected6 = await approvals.rejectRequest('req-6', 'لا أحتاجه', admin1);
+    assert.equal(
+      rejected6.status,
+      'rejected',
+      'a requester rejecting their own request with a second admin present must now succeed',
     );
-    assert.equal((await requestRow('req-6')).status, 'pending', 'a refused decision must leave the request pending');
-    assert.equal(await poStatus(106), 'pending_approval', 'a refused decision must leave the order pending approval');
-    assert.equal((await logsFor('req-6')).length, 0, 'a refused decision must log nothing');
+    assert.equal((await requestRow('req-6')).status, 'rejected', 'the request must be rejected');
+    assert.equal(await poStatus(106), 'draft', 'the purchase order must return to draft');
+    const logs6 = await logsFor('req-6');
+    assert.equal(logs6.length, 1, 'exactly one decision log row must be written');
+    assert.equal(logs6[0].action, 'rejected', 'the log action must be rejected');
+    assert.equal(Number(logs6[0].action_by), 1, 'the log must record the requester as the decider');
+    assert.ok(String(logs6[0].notes || '').includes('لا أحتاجه'), 'the rejection reason must stay in the log');
+    assert.ok(
+      String(logs6[0].notes || '').includes('رفض منفرد بقرار إداري'),
+      'the log must carry the solo-admin override stamp',
+    );
+    assert.ok(
+      !String(logs6[0].notes || '').includes('ثانٍ'),
+      'the override stamp must carry no second-manager reference at all',
+    );
 
     // ---------- Wiring: this spec is in both critical lists, in identical order (341 specs — the dto-sales-orders spec is the last entry). ----------
     {

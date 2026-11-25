@@ -55,22 +55,19 @@ export class CloseCashierShiftDto {
   @IsOptional() @IsString() @MaxLength(500) note?: string;
   @IsString() @MaxLength(100) managerPin!: string;
   /**
-   * INV-REST-SHIFT-CLOSE-CONTROL (I21): the second approver's
-   * secret, required when |variance| is over the shortage-tolerance
-   * cap. Verified by account password (a manager/admin other than
-   * the closer) — the shared manager PIN carries no identity, so
-   * it cannot prove a second person and is rejected for this use.
+   * INV-SECOND-MANAGER-PASSWORD-REMOVED: legacy field, accepted
+   * but IGNORED — no second-manager password is collected or
+   * required when |variance| is over the shortage-tolerance cap;
+   * any closer closes alone with a >=10-char note. Kept optional
+   * so older clients sending it do not 400.
    */
   @IsOptional() @IsString() @MaxLength(100) approverSecret?: string;
   /**
-   * INV-REST-SHIFT-CLOSE-CONTROL (I20): override for a close
-   * blocked by open tables / draft sales. Same identity rule as
-   * approverSecret, plus a reason of at least 10 characters,
-   * stamped into close_note.
-   * INV-SHIFT-CLOSE-HANDOVER-NOTE-REASON: the reason may also
-   * live in the closing note (note) — the server falls back to
-   * it — and an admin/super_admin closer needs no second
-   * manager's secret at all.
+   * INV-SECOND-MANAGER-PASSWORD-REMOVED: legacy field, accepted
+   * but IGNORED — the open-tables override needs a >=10-char
+   * reason only (openTablesOverrideReason, or the closing note —
+   * INV-SHIFT-CLOSE-HANDOVER-NOTE-REASON). Kept optional so older
+   * clients sending it do not 400.
    */
   @IsOptional() @IsString() @MaxLength(100) openTablesOverrideSecret?: string;
   @IsOptional() @IsString() @MaxLength(500) openTablesOverrideReason?: string;

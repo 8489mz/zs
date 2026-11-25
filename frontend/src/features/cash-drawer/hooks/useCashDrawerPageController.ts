@@ -43,18 +43,11 @@ export interface CloseShiftValues {
   note: string;
   managerPin?: string;
   /**
-   * INV-REST-SHIFT-CLOSE-CONTROL (I21): the second approver's
-   * secret, required when |variance| is over the
-   * shortage-tolerance cap. Sent only when the close actually
-   * needs it; the server decides.
+   * INV-SECOND-MANAGER-PASSWORD-REMOVED: no second-manager password
+   * is collected any more — the open-tables override needs a
+   * >=10-char reason only. The reason may also live in the
+   * closing note (note) — the server falls back to it.
    */
-  approverSecret?: string;
-  /**
-   * INV-REST-SHIFT-CLOSE-CONTROL (I20): override for a close
-   * blocked by open tables / draft sales — a different manager's
-   * secret plus a reason of at least 10 characters.
-   */
-  openTablesOverrideSecret?: string;
   openTablesOverrideReason?: string;
 }
 
@@ -102,8 +95,6 @@ export function useCashDrawerPageController() {
       instapayDetails: [],
       note: '',
       managerPin: '',
-      approverSecret: '',
-      openTablesOverrideSecret: '',
       openTablesOverrideReason: '',
     },
   });
@@ -142,8 +133,6 @@ export function useCashDrawerPageController() {
       instapayDetails: [],
       note: '',
       managerPin: '',
-      approverSecret: '',
-      openTablesOverrideSecret: '',
       openTablesOverrideReason: '',
     }),
     onReviewSuccess: () => {

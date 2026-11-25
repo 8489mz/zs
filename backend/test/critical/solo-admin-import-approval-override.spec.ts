@@ -1,9 +1,9 @@
 /*
- * S5 (INV-SOLO-ADMIN-IMPORT-APPROVAL-OVERRIDE) — a solo admin who
+ * S5 (INV-SOLO-ADMIN-IMPORT-APPROVAL-OVERRIDE) — an admin who
  * created an import approval request may decide it alone, with a
- * logged override, when no other active admin/super_admin exists in
- * the tenant. When a second admin exists, the maker-checker ban
- * stands byte-identically.
+ * logged override. No second-manager approval may block any admin,
+ * ever (INV-SECOND-MANAGER-PASSWORD-REMOVED) — the override applies whether
+ * or not a second admin exists in the tenant.
  *
  * THE DEFECT (S5): decideApprovalRequest in
  * import-commercial.service.ts refused the requester outright
@@ -44,8 +44,10 @@
  * rejection_reason, the row's only notes field; (3) the status
  * check still runs after the self-check, so a solo admin deciding
  * an already-decided own request gets 'تم البت في هذا الطلب
- * مسبقاً.'; (4) an inactive second admin does not count, and a
- * second admin in another tenant does not count; (5) a non-admin
+ * مسبقاً.'; (4) the second-admin condition is removed entirely
+ * (INV-SECOND-MANAGER-PASSWORD-REMOVED): an active, inactive or other-tenant
+ * second admin changes nothing — the only leg that still refuses is
+ * the role leg (a non-admin requester); (5) a non-admin
  * requester is never a solo override.
  *
  * BASE-RED: at base, cases 1, 2, 3, 7, 8, 9 and 10 fail with the
@@ -77,7 +79,6 @@ const TENANT = 't1';
 const OLD_MSG = 'مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز للمستخدم الذي أنشأ الطلب اعتماده بنفسه.';
 const DECIDED_MSG = 'تم البت في هذا الطلب مسبقاً.';
 const STAMP_HEAD = 'اعتماد منفرد بقرار إداري';
-const STAMP_TAIL = 'لا يوجد مدير ثانٍ متاح';
 
 type SecondAdmin = 'none' | 'active' | 'inactive' | 'other-tenant';
 
@@ -124,7 +125,7 @@ async function makeDb(opts: {
       .execute();
   }
   // A cashier requester still needs the tenant's admin present for
-  // case 6 to prove the role leg (not the tenant-size leg) refuses.
+  // case 6 to prove the role leg refuses.
   if (requesterRole === 'cashier') {
     await db
       .insertInto('users')
@@ -182,7 +183,7 @@ async function main(): Promise<void> {
       assert.ok(stamp.includes(STAMP_HEAD), 'the override stamp must be on the row');
       assert.ok(stamp.includes('صاحب الطلب 1'), 'the stamp must name the requester');
       assert.ok(stamp.includes('(approved)'), 'the stamp must record the decision');
-      assert.ok(stamp.includes(STAMP_TAIL), 'the stamp must record that no second admin was available');
+      assert.ok(!stamp.includes('ثانٍ'), 'the stamp must carry no second-manager reference at all');
     } finally {
       await db.destroy();
     }
@@ -223,18 +224,20 @@ async function main(): Promise<void> {
     }
   });
 
-  // 4. Second active admin present -> self-decision still refused, byte-identical.
-  await run('4 second admin present, self-decision still refused', async () => {
+  // 4. Second active admin present -> self-decision now allowed, stamped.
+  await run('4 second admin present, self-decision now allowed and stamped', async () => {
     const { pg, db, service, requestId } = await makeDb({ secondAdmin: 'active' });
     try {
-      await assert.rejects(
-        service.decideApprovalRequest(TENANT, 1, requestId, { decision: 'approved' }),
-        (e: Error) => e.message === OLD_MSG,
-      );
-      const row = await requestRow(db, requestId);
-      assert.equal(row.status, 'pending', 'the request must stay pending');
-      assert.equal(row.rejection_reason, null, 'nothing must be logged on a refused decision');
-      assert.equal(row.approved_by, null);
+      const out = await service.decideApprovalRequest(TENANT, 1, requestId, { decision: 'approved' });
+      assert.equal(out.status, 'approved');
+      assert.equal(Number(out.approved_by), 1, 'approved_by must be the requester');
+      assert.ok(out.decided_at, 'decided_at must be set');
+      assert.equal(Number(out.requested_by), Number(out.approved_by), 'requester == decider must be on the row');
+      const stamp = String(out.rejection_reason || '');
+      assert.ok(stamp.includes(STAMP_HEAD), 'the override stamp must be on the row');
+      assert.ok(stamp.includes('صاحب الطلب 1'), 'the stamp must name the requester');
+      assert.ok(stamp.includes('(approved)'), 'the stamp must record the decision');
+      assert.ok(!stamp.includes('ثانٍ'), 'the stamp must carry no second-manager reference at all');
     } finally {
       await db.destroy();
     }

@@ -530,13 +530,12 @@ export class MaritimeFreightCarrierInvoicesService {
       // invoice they recorded — the engine's maker-checker ban
       // refused the creator outright, so the invoice sat in
       // `overcharge` forever with no second approver to turn to.
-      // When the actor IS the invoice creator AND no other active
-      // admin/super_admin exists in the tenant, the creator may
+      // When the actor IS the invoice creator, the creator may
       // approve alone — but never silently: the override is stamped
       // into the invoice row's `override_reason` (the row's
       // free-text field for the override decision) with creator ==
-      // approver, the overcharge amount and that no second eligible
-      // approver was available; the supplied reason is preserved in
+      // approver, the overcharge amount and that no second approval
+      // is required (INV-SECOND-MANAGER-PASSWORD-REMOVED); the supplied reason is preserved in
       // front of the stamp, and override_approved_by /
       // override_approved_at already record who approved and when.
       // The shared isSoloAdminOverride helper (created by P5, reused
@@ -561,7 +560,7 @@ export class MaritimeFreightCarrierInvoicesService {
       // reached exactly when the ban would have fired. The reason
       // leg still applies on the solo path with the engine's exact
       // message — a solo override without a reason is still refused.
-      // When a second active admin exists, the old ban stands; a
+      // No second-manager approval is ever required; a
       // non-admin creator is still refused. The audit_status gate
       // above still runs first.
       let soloOverride = false;
@@ -604,7 +603,7 @@ export class MaritimeFreightCarrierInvoicesService {
         });
       }
 
-      const soloStamp = `تجاوز منفرد بقرار إداري — من سجل الفاتورة ${auth.userId} اعتمد التجاوز بنفسه — الزيادة ${Number(invoice.variance_amount)} — لا يوجد مدقق ثانٍ مؤهل متاح`;
+      const soloStamp = `تجاوز منفرد بقرار إداري — من سجل الفاتورة ${auth.userId} اعتمد التجاوز بنفسه — الزيادة ${Number(invoice.variance_amount)}`;
       const [row] = await trx
         .updateTable('maritime_carrier_invoices')
         .set({

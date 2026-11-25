@@ -42,8 +42,6 @@ interface CloseShiftValues {
   instapayDetails?: Array<{ amount?: number; reference?: string }>;
   note: string;
   managerPin?: string;
-  approverSecret?: string;
-  openTablesOverrideSecret?: string;
   openTablesOverrideReason?: string;
 }
 
@@ -153,12 +151,10 @@ export function useCashDrawerMutations(actions?: {
           : [],
         note: values.note || '',
         managerPin: values.managerPin || '',
-        // INV-REST-SHIFT-CLOSE-CONTROL (I20/I21): the second
-        // approver's secret and the open-tables override travel
-        // only when the cashier filled them; the server decides
-        // whether they are required.
-        approverSecret: values.approverSecret || undefined,
-        openTablesOverrideSecret: values.openTablesOverrideSecret || undefined,
+        // INV-SECOND-MANAGER-PASSWORD-REMOVED: no second-manager
+        // password travels any more — the open-tables override
+        // reason travels only when the cashier filled it; the
+        // server decides whether it is required.
         openTablesOverrideReason: values.openTablesOverrideReason || undefined,
       }),
     onSuccess: async (_data, variables) => {

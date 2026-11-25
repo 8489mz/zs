@@ -1,9 +1,10 @@
 /*
- * S7 (INV-SOLO-ADMIN-CARRIER-INVOICE-OVERRIDE) — a solo admin who
+ * S7 (INV-SOLO-ADMIN-CARRIER-INVOICE-OVERRIDE) — an admin who
  * created (recorded) a maritime carrier invoice may approve their own
- * overcharge override alone, with a logged override, when no other
- * eligible approver exists in the tenant. When a second eligible
- * approver exists, the maker-checker ban stands byte-identically.
+ * overcharge override alone, with a logged override. No second-manager
+ * approval may block any admin, ever (INV-SECOND-MANAGER-PASSWORD-REMOVED) —
+ * the override applies whether or not a second eligible approver
+ * exists in the tenant.
  *
  * THE DEFECT (S7): validateMakerCheckerOverride in
  * freight-audit.engine.ts refused the invoice creator outright
@@ -56,9 +57,11 @@
  * String(1) === String("1"), so the ban DOES fire against live
  * Postgres and the override is reached exactly when the ban would
  * have fired; PGlite returns bigint as number, so this spec proves
- * the intended logic; (4) an inactive second admin does not count,
- * a second admin in another tenant does not count, and a cashier
- * never counts as an eligible approver; (5) the journal is posted
+ * the intended logic; (4) the second-admin condition is removed
+ * entirely (INV-SECOND-MANAGER-PASSWORD-REMOVED): an active, inactive or
+ * other-tenant second admin changes nothing, and a cashier never
+ * counts as an eligible approver — the only leg that still refuses
+ * is the role leg (a non-admin / finance_manager creator); (5) the journal is posted
  * only when none exists — the spec seeds journal_entry_id so the
  * poster is never called and the override path is proven without
  * the accounting poster; (6) the engine itself is untouched, so its
@@ -101,7 +104,6 @@ const OLD_MSG =
 const REASON_MSG = 'يجب تقديم مبرر مالي لاعتماد التجاوز يوضح سبب قبول الزيادة عن التعرفة.';
 const REASON = 'اعتماد الزيادة بعد مراجعة إيميل الخط الملاحي بخصوص رسوم التكدس بالميناء';
 const STAMP_HEAD = 'تجاوز منفرد بقرار إداري';
-const STAMP_TAIL = 'لا يوجد مدقق ثانٍ مؤهل متاح';
 const VARIANCE = 150.5;
 
 type SecondUser = 'none' | 'active-admin' | 'inactive-admin' | 'other-tenant-admin' | 'active-cashier';
@@ -173,7 +175,7 @@ async function makeDb(opts: {
       .execute();
   }
   // A cashier creator still needs the tenant's admin present for
-  // case 5 to prove the role leg (not the tenant-size leg) refuses.
+  // case 5 to prove the role leg refuses.
   if (creatorRole === 'cashier') {
     await db
       .insertInto('users')
@@ -281,7 +283,7 @@ async function main(): Promise<void> {
       assert.ok(stored.includes('من سجل الفاتورة 1'), 'the stamp must name the creator');
       assert.ok(stored.includes('اعتمد التجاوز بنفسه'), 'the stamp must record self-approval');
       assert.ok(stored.includes(`الزيادة ${VARIANCE}`), 'the stamp must record the overcharge amount');
-      assert.ok(stored.includes(STAMP_TAIL), 'the stamp must record that no second eligible approver was available');
+      assert.ok(!stored.includes('ثانٍ'), 'the stamp must carry no second-manager reference at all');
     } finally {
       await db.destroy();
     }
@@ -295,25 +297,41 @@ async function main(): Promise<void> {
       assert.equal(out.invoice.audit_status, 'approved_override');
       assert.equal(Number(out.invoice.override_approved_by), 1);
       assert.ok(String(out.invoice.override_reason || '').includes(STAMP_HEAD));
-      assert.ok(String(out.invoice.override_reason || '').includes(STAMP_TAIL));
+      assert.ok(
+        !String(out.invoice.override_reason || '').includes('ثانٍ'),
+        'the override reason must carry no second-manager reference at all',
+      );
     } finally {
       await db.destroy();
     }
   });
 
-  // 3. Second active admin present -> self-approval still refused, byte-identical.
-  await run('3 second admin present, self-approval still refused', async () => {
+  // 3. Second active admin present -> self-approval now allowed, stamped.
+  await run('3 second admin present, self-approval now allowed and stamped', async () => {
     const { pg, db, service } = await makeDb({ secondUser: 'active-admin' });
     try {
-      await assert.rejects(
-        service.overrideCarrierInvoice(authFor(1, 'admin'), '1', { reason: REASON }),
-        (e: Error) => e.message === OLD_MSG,
+      const out = await service.overrideCarrierInvoice(authFor(1, 'admin'), '1', { reason: REASON });
+      assert.equal(out.success, true, 'the override must succeed');
+      assert.equal(out.invoice.audit_status, 'approved_override', 'the invoice must move to approved_override');
+      assert.equal(Number(out.invoice.override_approved_by), 1, 'override_approved_by must be the creator');
+      assert.equal(
+        Number(out.invoice.created_by),
+        Number(out.invoice.override_approved_by),
+        'creator == approver must be on the row',
       );
-      const row = await invoiceRow(db);
-      assert.equal(row.audit_status, 'overcharge', 'the invoice must stay in overcharge');
-      assert.equal(row.override_approved_by, null);
-      assert.equal(row.override_reason, null, 'nothing must be logged on a refused override');
-      assert.equal(Number(row.journal_entry_id), 77);
+      assert.ok(out.invoice.override_approved_at, 'override_approved_at must be set');
+      assert.equal(
+        Number(out.invoice.journal_entry_id),
+        77,
+        'the pre-existing journal entry must be kept, no new posting',
+      );
+      const stored = String(out.invoice.override_reason || '');
+      assert.ok(stored.startsWith(REASON), 'the supplied reason must be preserved in front of the stamp');
+      assert.ok(stored.includes(STAMP_HEAD), 'the override stamp must be on the invoice row');
+      assert.ok(stored.includes('من سجل الفاتورة 1'), 'the stamp must name the creator');
+      assert.ok(stored.includes('اعتمد التجاوز بنفسه'), 'the stamp must record self-approval');
+      assert.ok(stored.includes(`الزيادة ${VARIANCE}`), 'the stamp must record the overcharge amount');
+      assert.ok(!stored.includes('ثانٍ'), 'the stamp must carry no second-manager reference at all');
     } finally {
       await db.destroy();
     }

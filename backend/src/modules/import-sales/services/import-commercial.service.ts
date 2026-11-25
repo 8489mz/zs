@@ -946,13 +946,13 @@ export class ImportCommercialService {
       // gated action (shipment, broker, trip-expense, payment
       // method, partner payout, project close) sat blocked forever
       // with no second admin to decide it. When the decider is an
-      // admin/super_admin AND no other active admin/super_admin
-      // exists in the tenant, the requester may decide alone — but
+      // admin/super_admin, the requester may decide alone — but
       // never silently: the override is stamped into the approval
       // row's rejection_reason (the row's only free-text audit
       // field, already the carrier for decision notes on both
       // decisions) with requester == decider, the decision, and
-      // that no second admin was available; any supplied reason or
+      // that no second approval is required
+      // (INV-SECOND-MANAGER-PASSWORD-REMOVED); any supplied reason or
       // notes are preserved in front of the stamp. The decider's
       // role is read from the `users` row in this same transaction
       // — the decide path carries only userId, no auth context —
@@ -960,9 +960,8 @@ export class ImportCommercialService {
       // reused by P6; no third copy) is consulted lazily, only
       // when a self-decision would otherwise be refused, so a
       // decision by a different admin costs no extra query and
-      // behaves byte-identically. When a second active admin
-      // exists, the old ban stands; a non-admin requester is still
-      // refused. The gate (verifyAndConsumeApprovalRequest) reads
+      // behaves byte-identically. No second-manager approval is
+      // ever required; a non-admin requester is still refused. The gate (verifyAndConsumeApprovalRequest) reads
       // only status / action_type / reference_id / request_payload,
       // never rejection_reason, so the stamp cannot change
       // consumption, and it survives it (the consume update
@@ -1000,7 +999,7 @@ export class ImportCommercialService {
           decided_at: new Date(),
           rejection_reason: soloOverride
             ? (decisionNotes ? `${decisionNotes} — ` : '') +
-              `اعتماد منفرد بقرار إداري — صاحب الطلب ${userId} قرر طلبه بنفسه (${dto.decision}) — لا يوجد مدير ثانٍ متاح`
+              `اعتماد منفرد بقرار إداري — صاحب الطلب ${userId} قرر طلبه بنفسه (${dto.decision})`
             : decisionNotes,
         })
         .where('id', '=', requestId)

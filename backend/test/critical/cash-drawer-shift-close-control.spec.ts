@@ -7,38 +7,35 @@
  *
  * WHAT THIS PINS:
  * I20 — close is blocked while the opener still has open tables
- *   (held_sales rows) or draft sales in the shift window; only a
- *   DIFFERENT manager's secret + a >=10-char reason overrides it,
- *   and the override is stamped into close_note.
+ *   (held_sales rows) or draft sales in the shift window; a
+ *   >=10-char reason overrides it — NO second-manager password is
+ *   collected or required from any closer
+ *   (INV-SECOND-MANAGER-PASSWORD-REMOVED) — and the override is
+ *   stamped into close_note.
  *   INV-SHIFT-CLOSE-HANDOVER-NOTE-REASON: the closing note IS the
  *   handover justification — the reason is read from
  *   openTablesOverrideReason OR the closing note (ملاحظة الإغلاق),
- *   so a reason typed in the visible note field counts. An
- *   admin/super_admin closer closes with a >=10-char reason alone
- *   (admin-as-super_admin: their own password-confirmed close +
- *   recorded reason is the control); a cashier still needs a
- *   different manager's account secret. Held tables and drafts
- *   survive the close — they belong to the shop, not the shift.
+ *   so a reason typed in the visible note field counts. Any closer
+ *   closes with a >=10-char reason alone (their own
+ *   password-confirmed close + recorded reason is the control).
+ *   Held tables and drafts survive the close — they belong to the
+ *   shop, not the shift.
  * INV-SHIFT-CLOSE-ADMIN-CLOSE-ANY: an admin closes ANY cashier's
  *   shift (recorded as the closer, blind close goes to review);
  *   a cashier closes only their own — another cashier's shift
  *   throws SHIFT_FORBIDDEN.
- * I21 — a variance over the shortage-tolerance cap needs a second
- *   approver (a manager/admin other than the closer, by account
- *   password — the shared PIN has no identity and cannot prove a
- *   second person) + a >=10-char note; variance_approved_by is the
- *   approver. INV-SOLO-ADMIN-SHIFT-CLOSE-OVER-TOLERANCE: a solo
- *   admin/super_admin closer may close alone with NO second
- *   approver when the >=10-char note is present — the override is
- *   stamped into the close note (who, variance, cap, no second
- *   admin available) and the closer stays the approver of record;
- *   with a short note and no approver the close is still refused,
- *   now with SHIFT_SECOND_APPROVAL_NOTE_REQUIRED (the recorded
- *   reason is the missing piece, not a second person); a
- *   non-privileged closer with no approver is still refused with
- *   SHIFT_SECOND_APPROVAL_REQUIRED. Blind close keys off the
- *   OPENER's role, so a super_admin closing a cashier's shift goes
- *   to pending_review.
+ * I21 — a variance over the shortage-tolerance cap needs a
+ *   >=10-char note; any closer closes alone, stamped, and the
+ *   closer stays the approver of record
+ *   (INV-SECOND-MANAGER-PASSWORD-REMOVED: no second-manager
+ *   password is collected or required — a supplied approverSecret
+ *   is ignored). INV-SOLO-ADMIN-SHIFT-CLOSE-OVER-TOLERANCE: the
+ *   override is stamped into the close note (who, variance, cap)
+ *   with no second-manager reference; with a short note the close
+ *   is still refused, now with SHIFT_SECOND_APPROVAL_NOTE_REQUIRED
+ *   (the recorded reason is the missing piece, not a second
+ *   person). Blind close keys off the OPENER's role, so a
+ *   super_admin closing a cashier's shift goes to pending_review.
  * I22 — review takes a decision: approve with any declared/computed
  *   delta, count delta, or detail-total delta and no >=3-char note
  *   throws; reject reopens the shift with the reason stamped and
@@ -74,7 +71,6 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
-import { hashManagerPin } from '../../src/common/utils/manager-approval';
 import { CashDrawerService } from '../../src/modules/cash-drawer/cash-drawer.service';
 import { TransactionHelper } from '../../src/database/helpers/transaction.helper';
 import {
@@ -352,7 +348,7 @@ async function main() {
     await drawer.closeCashierShift(shiftA, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1);
     assert.equal((await shiftRow(shiftA)).status, 'closed', 'with no open tables or drafts the close succeeds');
 
-    // Override: a different manager's secret + a >=10-char reason, stamped.
+    // Override: a >=10-char reason alone opens the gate — no second-manager secret is collected any more.
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
     const shiftB = await shiftIdOf(1);
     await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
@@ -369,14 +365,13 @@ async function main() {
         admin1,
       ),
       (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OVERRIDE_REASON_REQUIRED',
-      'an override reason under 10 chars must not open the gate',
+      'an override reason under 10 chars must not open the gate, even with a secret supplied',
     );
     await drawer.closeCashierShift(
       shiftB,
       {
         countedCash: 100,
         managerPin: 'pw-admin-1',
-        openTablesOverrideSecret: 'pw-manager-2',
         openTablesOverrideReason: 'الطاولة ستنتقل إلى وردية المساء',
       },
       admin1,
@@ -386,32 +381,26 @@ async function main() {
     assert.ok(String(rowB.close_note || '').includes('T5'), 'the override stamp must name the open table');
     assert.ok(String(rowB.close_note || '').includes('وردية المساء'), 'the override stamp must carry the reason');
 
-    // The identity rule still binds a non-admin closer: the shared
-    // manager PIN carries no identity, so it cannot approve an override.
-    await pg.query(`INSERT INTO settings VALUES ('t1','managerPin',$1)`, [
-      JSON.stringify(await hashManagerPin('1234')),
-    ]);
+    // A non-admin closer overrides with a reason alone too: no
+    // second-manager secret is collected from any closer.
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
     const shiftB2 = await shiftIdOf(3);
     await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
       VALUES (3,'t1','a1','T5','dine_in',1,3,now())`);
-    await assert.rejects(
-      drawer.closeCashierShift(
-        shiftB2,
-        {
-          countedCash: 100,
-          managerPin: 'pw-cashier-3',
-          openTablesOverrideSecret: '1234',
-          openTablesOverrideReason: 'الطاولة ستنتقل إلى وردية المساء',
-        },
-        cashier3,
-      ),
-      (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OVERRIDE_IDENTITY_REQUIRED',
-      'a cashier cannot override with the shared manager PIN — it proves no second person',
+    await drawer.closeCashierShift(
+      shiftB2,
+      {
+        countedCash: 100,
+        managerPin: 'pw-cashier-3',
+        openTablesOverrideReason: 'الطاولة ستنتقل إلى وردية المساء',
+      },
+      cashier3,
     );
-    await pg.query(`DELETE FROM settings WHERE tenant_id='t1' AND key='managerPin'`);
+    const rowB2 = await shiftRow(shiftB2);
+    assert.equal(rowB2.status, 'pending_review', 'a cashier-opener shift closed with an override goes to review');
+    assert.ok(String(rowB2.close_note || '').includes('T5'), 'the override stamp must name the open table');
+    assert.ok(String(rowB2.close_note || '').includes('وردية المساء'), 'the override stamp must carry the reason');
     await pg.query(`DELETE FROM held_sales WHERE id=3`);
-    await drawer.closeCashierShift(shiftB2, { countedCash: 100, managerPin: 'pw-cashier-3' }, cashier3);
 
     // INV-SHIFT-CLOSE-HANDOVER-NOTE-REASON: an admin closer with a
     // >=10-char reason in the closing note alone closes with open
@@ -466,30 +455,19 @@ async function main() {
     await pg.query(`DELETE FROM held_sales WHERE id=22`);
     await drawer.closeCashierShift(shiftH2, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1);
 
-    // A cashier still needs a second manager's secret even with a long
-    // closing note — the note fallback waives no secret for cashiers.
+    // A cashier closes with open tables on a long closing note alone —
+    // the reason may live in the closing note instead of the
+    // override-reason box, and no second-manager secret is needed.
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
     const shiftH3 = await shiftIdOf(3);
     await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
       VALUES (23,'t1','a1','T5','dine_in',1,3,now())`);
-    await assert.rejects(
-      drawer.closeCashierShift(
-        shiftH3,
-        { countedCash: 100, note: 'الطاولات ستنتقل إلى وردية المساء', managerPin: 'pw-cashier-3' },
-        cashier3,
-      ),
-      (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OPEN_TABLES',
-      'a cashier still needs a second manager secret even with a long closing note',
-    );
-    // ...but the reason may live in the closing note instead of the
-    // override-reason box: secret + note reason closes (to review).
     await drawer.closeCashierShift(
       shiftH3,
       {
         countedCash: 100,
         note: 'الطاولات ستنتقل إلى وردية المساء',
         managerPin: 'pw-cashier-3',
-        openTablesOverrideSecret: 'pw-manager-2',
       },
       cashier3,
     );
@@ -602,22 +580,39 @@ async function main() {
       (err: unknown) => codeOf(err) === 'SHIFT_SECOND_APPROVAL_NOTE_REQUIRED',
       'a solo admin over the default 0.001 cap with a <10-char note and no approver must still throw — the override needs a recorded reason',
     );
-    await assert.rejects(
-      drawer.closeCashierShift(
-        shiftC,
-        {
-          countedCash: 80,
-          note: 'فرق كبير في الدرج يستدعي المراجعة',
-          managerPin: 'pw-admin-1',
-          approverSecret: 'pw-admin-1',
-        },
-        admin1,
-      ),
-      (err: unknown) => codeOf(err) === 'SHIFT_SECOND_APPROVER_MUST_DIFFER',
-      'the closer cannot second-approve their own variance',
-    );
+    // A supplied approver secret is ignored: the closer's own password
+    // as the secret no longer refuses anything — the closer closes alone.
     await drawer.closeCashierShift(
       shiftC,
+      {
+        countedCash: 80,
+        note: 'فرق كبير في الدرج يستدعي المراجعة',
+        managerPin: 'pw-admin-1',
+        approverSecret: 'pw-admin-1',
+      },
+      admin1,
+    );
+    const rowC = await shiftRow(shiftC);
+    assert.equal(rowC.status, 'closed');
+    assert.equal(
+      Number(rowC.variance_approved_by),
+      1,
+      'variance_approved_by must be the closer — a supplied secret names no approver any more',
+    );
+    assert.equal(Number(rowC.variance), -20);
+    assert.ok(
+      String(rowC.close_note || '').includes('اعتماد فرق منفرد بقرار إداري'),
+      'the close note must carry the solo-override stamp',
+    );
+    assert.ok(
+      !String(rowC.close_note || '').includes('ثانٍ'),
+      'the close note must carry no second-manager reference at all',
+    );
+    // A different manager's password supplied as the secret is ignored the same way.
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
+    const shiftC2 = await shiftIdOf(1);
+    await drawer.closeCashierShift(
+      shiftC2,
       {
         countedCash: 80,
         note: 'فرق كبير في الدرج يستدعي المراجعة',
@@ -626,14 +621,17 @@ async function main() {
       },
       admin1,
     );
-    const rowC = await shiftRow(shiftC);
-    assert.equal(rowC.status, 'closed');
+    const rowC2 = await shiftRow(shiftC2);
+    assert.equal(rowC2.status, 'closed');
     assert.equal(
-      Number(rowC.variance_approved_by),
-      2,
-      'variance_approved_by must be the second approver, not the closer',
+      Number(rowC2.variance_approved_by),
+      1,
+      'variance_approved_by must be the closer even when another admin password is supplied',
     );
-    assert.equal(Number(rowC.variance), -20);
+    assert.ok(
+      !String(rowC2.close_note || '').includes('اعتماد فرق فوق حد التسامح بواسطة'),
+      'a close with a supplied secret must not carry the old second-approval stamp',
+    );
 
     // Within an explicitly configured cap (25) the same variance closes alone.
     await pg.query(`INSERT INTO settings VALUES ('t1','cashierShortageTolerance','25')`);

@@ -381,62 +381,15 @@ export function CashDrawerCloseForm({
                   {closeVariancePreview !== 0 ? t('cash_drawer.cash_drawer_forms_panel.s98', " — يلزم كتابة ملاحظة قبل إغلاق وردية نقطة البيع مع وجود فرق.") : ''}
                 </div>
 
-                {closeVariancePreview !== 0 ? (
-                  <div className="close-shift-auth-row" style={{ gridColumn: '1 / -1' }}>
-                    <div className="close-shift-note-col">
-                      <Field label={t('cash_drawer.cash_drawer_forms_panel.s119', "اعتماد مدير ثانٍ (عند تجاوز حد التسامح)")}>
-                        <input
-                          type="text"
-                          className="secure-password-field"
-                          placeholder={t('cash_drawer.cash_drawer_forms_panel.s120', "كلمة مرور مدير آخر غير من يغلق الوردية")}
-                          autoComplete="off"
-                          data-lpignore="true"
-                          data-1p-ignore="true"
-                          data-form-type="other"
-                          autoCorrect="off"
-                          autoCapitalize="off"
-                          spellCheck={false}
-                          {...closeForm.register('approverSecret')}
-                          disabled={closeMutation.isPending}
-                          style={{ width: '100%' }}
-                        />
-                      </Field>
-                    </div>
-                    <div className="close-shift-pin-col">
-                      <div className="muted small" style={{ paddingTop: '22px' }}>
-                        {t('cash_drawer.cash_drawer_forms_panel.s121', "الفرق فوق حد التسامح يتطلب اعتماد مدير آخر وسبباً لا يقل عن 10 أحرف في ملاحظة الإغلاق.")}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
               </>
             )}
 
             {showOpenTablesOverride ? (
               <div style={{ gridColumn: '1 / -1', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '12px 16px' }}>
                 <div style={{ fontWeight: 800, color: '#92400e', marginBottom: '8px' }}>
-                  {t('cash_drawer.cash_drawer_forms_panel.s122', "توجد طاولات مفتوحة أو فواتير مسودة في هذه الوردية. للإغلاق رغم ذلك يلزم تجاوز من مدير آخر.")}
+                  {t('cash_drawer.cash_drawer_forms_panel.s122', "توجد طاولات مفتوحة أو فواتير مسودة في هذه الوردية. للإغلاق رغم ذلك اكتب سبب التجاوز (10 أحرف على الأقل).")}
                 </div>
                 <div className="close-shift-auth-row">
-                  <div className="close-shift-note-col">
-                    <Field label={t('cash_drawer.cash_drawer_forms_panel.s123', "كلمة مرور المدير المعتمد للتجاوز")}>
-                      <input
-                        type="text"
-                        className="secure-password-field"
-                        placeholder={t('cash_drawer.cash_drawer_forms_panel.s124', "كلمة مرور مدير آخر غير من يغلق الوردية")}
-                        autoComplete="off"
-                        data-lpignore="true"
-                        data-1p-ignore="true"
-                        data-form-type="other"
-                        autoCorrect="off"
-                        autoCapitalize="off"
-                        spellCheck={false}
-                        {...closeForm.register('openTablesOverrideSecret')}
-                        disabled={closeMutation.isPending}
-                        style={{ width: '100%' }}
-                      />
-                    </Field>
-                  </div>
                   <div className="close-shift-pin-col">
                     <Field label={t('cash_drawer.cash_drawer_forms_panel.s125', "سبب التجاوز (10 أحرف على الأقل)")}>
                       <input

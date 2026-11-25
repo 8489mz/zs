@@ -1,9 +1,9 @@
 /*
- * S6 (INV-SOLO-ADMIN-BROKER-EXPENSE-OVERRIDE) — a solo admin who
+ * S6 (INV-SOLO-ADMIN-BROKER-EXPENSE-OVERRIDE) — an admin who
  * settled (liquidated) a broker expense may verify it alone, with a
- * logged override, when no other active admin/super_admin exists in
- * the tenant. When a second admin exists, the maker-checker ban
- * stands byte-identically.
+ * logged override. No second-manager approval may block any admin,
+ * ever (INV-SECOND-MANAGER-PASSWORD-REMOVED) — the override applies whether
+ * or not a second admin exists in the tenant.
  *
  * THE DEFECT (S6): verifyBrokerExpense in
  * import-treasury.service.ts refused the settler outright
@@ -45,8 +45,10 @@
  * expense row's free-text field, and verified_by/verified_at carry
  * the verifier identity; (3) the is_verified check still runs before
  * the self-check, so re-verifying an already-verified own expense
- * still conflicts; (4) an inactive second admin does not count, and
- * a second admin in another tenant does not count; (5) a non-admin
+ * still conflicts; (4) the second-admin condition is removed
+ * entirely (INV-SECOND-MANAGER-PASSWORD-REMOVED): an active, inactive or
+ * other-tenant second admin changes nothing — the only leg that
+ * still refuses is the role leg (a non-admin settler); (5) a non-admin
  * settler is never a solo override; (6) a missing approval token is
  * still refused before any override logic runs.
  *
@@ -81,7 +83,6 @@ const OLD_MSG =
 const CONFLICT_MSG = 'تم التحقق من مصروف المخلص مسبقاً.';
 const TOKEN_REQUIRED_MSG = 'التحقق من مصروف مخلص يتطلب موافقة Maker-Checker معتمدة.';
 const STAMP_HEAD = 'تحقق منفرد بقرار إداري';
-const STAMP_TAIL = 'لا يوجد مدير ثانٍ متاح';
 
 type SecondAdmin = 'none' | 'active' | 'inactive' | 'other-tenant';
 
@@ -141,7 +142,7 @@ async function makeDb(opts: {
       .execute();
   }
   // A cashier settler still needs the tenant's admin present for
-  // case 5 to prove the role leg (not the tenant-size leg) refuses.
+  // case 5 to prove the role leg refuses.
   if (settlerRole === 'cashier') {
     await db
       .insertInto('users')
@@ -239,7 +240,7 @@ async function main(): Promise<void> {
       assert.ok(stamp.includes(STAMP_HEAD), 'the override stamp must be on the expense row');
       assert.ok(stamp.includes('من سوّى المصروف 1'), 'the stamp must name the settler');
       assert.ok(stamp.includes('تحقق منه بنفسه'), 'the stamp must record self-verification');
-      assert.ok(stamp.includes(STAMP_TAIL), 'the stamp must record that no second admin was available');
+      assert.ok(!stamp.includes('ثانٍ'), 'the stamp must carry no second-manager reference at all');
       assert.equal(await tokenStatus(db, 'tok-1'), 'executed', 'the token is single-use and consumed');
     } finally {
       await db.destroy();
@@ -261,24 +262,22 @@ async function main(): Promise<void> {
     }
   });
 
-  // 3. Second active admin present -> self-verification still refused, byte-identical.
-  await run('3 second admin present, self-verification still refused', async () => {
+  // 3. Second active admin present -> self-verification now allowed, stamped.
+  await run('3 second admin present, self-verification now allowed and stamped', async () => {
     const { pg, db, service, expenseId } = await makeDb({ secondAdmin: 'active' });
     try {
       await insertToken(db, 'tok-1', expenseId);
-      await assert.rejects(
-        service.verifyBrokerExpense(TENANT, 1, expenseId, { approvalRequestId: 'tok-1' }),
-        (e: Error) => e.message === OLD_MSG,
-      );
-      const row = await expenseRow(db, expenseId);
-      assert.equal(row.is_verified, false, 'the expense must stay unverified');
-      assert.equal(row.verified_by, null);
-      assert.equal(row.notes, null, 'nothing must be logged on a refused verification');
-      assert.equal(
-        await tokenStatus(db, 'tok-1'),
-        'approved',
-        'the refused self-verification does not consume the token',
-      );
+      const out = await service.verifyBrokerExpense(TENANT, 1, expenseId, { approvalRequestId: 'tok-1' });
+      assert.equal(out.is_verified, true, 'the expense must be verified');
+      assert.equal(Number(out.verified_by), 1, 'verified_by must be the settler');
+      assert.ok(out.verified_at, 'verified_at must be set');
+      assert.equal(Number(out.created_by), Number(out.verified_by), 'settler == verifier must be on the row');
+      const stamp = String(out.notes || '');
+      assert.ok(stamp.includes(STAMP_HEAD), 'the override stamp must be on the expense row');
+      assert.ok(stamp.includes('من سوّى المصروف 1'), 'the stamp must name the settler');
+      assert.ok(stamp.includes('تحقق منه بنفسه'), 'the stamp must record self-verification');
+      assert.ok(!stamp.includes('ثانٍ'), 'the stamp must carry no second-manager reference at all');
+      assert.equal(await tokenStatus(db, 'tok-1'), 'executed', 'the token is single-use and consumed');
     } finally {
       await db.destroy();
     }

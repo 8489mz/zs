@@ -567,7 +567,7 @@ export class InventoryTransferService {
               before_qty: shrinkage.scopeBefore,
               after_qty: shrinkage.scopeAfter,
               reason: 'transit_shrinkage',
-              note: `فاقد نقل للتحويل TR-${transferId}: أُرسل ${dispatched} واستُلم ${received}` + (soloOverride ? ` — اعتماد منفرد بقرار إداري — المستلم ${auth.username} قبل الفاقد — لا يوجد مدير ثانٍ متاح` : ''),
+              note: `فاقد نقل للتحويل TR-${transferId}: أُرسل ${dispatched} واستُلم ${received}` + (soloOverride ? ` — اعتماد منفرد بقرار إداري — المستلم ${auth.username} قبل الفاقد` : ''),
               reference_type: 'transfer',
               reference_id: transferId,
               created_by: auth.userId,
@@ -608,7 +608,7 @@ export class InventoryTransferService {
       if (Number(effectiveToLocationId) !== Number(transfer.from_location_id)) headerUpdate.to_location_id = effectiveToLocationId;
       await trx.updateTable('stock_transfers').set(headerUpdate as any).where('id', '=', transferId).where(this.tenantPredicate(auth)).execute();
 
-      await this.audit.logWithExecutor(trx, 'استلام تحويل مخزون', `تم استلام التحويل TR-${transferId}` + (soloOverride ? ` — اعتماد فاقد منفرد بقرار إداري — استلم ${auth.username} التحويل بفاقد ${Number(receiptPlan.reduce((sum, row) => sum + (row.shortfall > 0.0001 ? row.shortfall : 0), 0).toFixed(3))} — ${varianceReason} — لا يوجد مدير ثانٍ متاح` : ''), auth);
+      await this.audit.logWithExecutor(trx, 'استلام تحويل مخزون', `تم استلام التحويل TR-${transferId}` + (soloOverride ? ` — اعتماد فاقد منفرد بقرار إداري — استلم ${auth.username} التحويل بفاقد ${Number(receiptPlan.reduce((sum, row) => sum + (row.shortfall > 0.0001 ? row.shortfall : 0), 0).toFixed(3))} — ${varianceReason}` : ''), auth);
 
       const responsePayload = { ok: true, stockTransfers: (await this.listStockTransfers({}, auth, trx)).stockTransfers };
 

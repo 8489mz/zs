@@ -153,29 +153,16 @@ async function migrateManagerPinToHash(queryable: DbOrTx, tenantId: string, key:
 }
 
 /**
- * INV-SOLO-ADMIN-TRANSFER-SHORTAGE-OVERRIDE: true only when the
- * actor is an admin/super_admin AND no OTHER active admin/super_admin
- * exists in the tenant — the shop has only one admin, so a
- * different-admin approval is unsatisfiable and the actor may act
- * alone with a logged override instead. Reads the `users` table
- * directly — no schema change: tenant scope via `tenant_id`,
- * privilege via `role`, liveness via `is_active`. An inactive second
- * admin does not count, and an admin in another tenant does not
- * count. A non-admin actor is never a solo override. Same rule as
- * the private helper in approval-workflow.service.ts (P4); shared
- * here so later second-admin fixes reuse one copy instead of
- * growing a third.
+ * INV-SECOND-MANAGER-PASSWORD-REMOVED: true when the actor is an
+ * admin/super_admin — no second-manager approval is ever required,
+ * so there is no tenant-size check: whether or not another active
+ * admin exists in the tenant, an admin may act alone with a logged
+ * override. A non-admin actor is never a solo override. Same rule
+ * as the private helper in approval-workflow.service.ts (P4);
+ * shared here so later second-admin fixes reuse one copy instead
+ * of growing a third. The `_queryable` / `_tenantId` parameters
+ * are retained (unused) so the seven call sites keep their shape.
  */
-export async function isSoloAdminOverride(queryable: DbOrTx, tenantId: string, auth: AuthContext): Promise<boolean> {
-  if (auth.role !== 'admin' && auth.role !== 'super_admin') return false;
-  const secondAdmin = await queryable
-    .selectFrom('users')
-    .select('id')
-    .where('tenant_id', '=', tenantId)
-    .where('role', 'in', ['admin', 'super_admin'])
-    .where('is_active', '=', true)
-    .where('id', '!=', Number(auth.userId))
-    .limit(1)
-    .executeTakeFirst();
-  return !secondAdmin;
+export async function isSoloAdminOverride(_queryable: DbOrTx, _tenantId: string, auth: AuthContext): Promise<boolean> {
+  return auth.role === 'admin' || auth.role === 'super_admin';
 }

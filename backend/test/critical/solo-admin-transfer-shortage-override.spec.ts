@@ -34,14 +34,16 @@
  *   receiving with no secret is still refused with
  *   TRANSFER_SHORTAGE_APPROVAL_REQUIRED, even when the tenant's
  *   only admin is someone else.
- * - When a second active admin EXISTS, the old rule stands
- *   byte-identically: the receiver's own password is still refused
- *   with TRANSFER_SHORTAGE_SELF_APPROVAL, and no secret is still
- *   refused with TRANSFER_SHORTAGE_APPROVAL_REQUIRED.
+ * - When a second active admin EXISTS, no second approval is
+ *   required either (INV-SECOND-MANAGER-PASSWORD-REMOVED): the receiver with
+ *   no secret accepts alone, stamped the same way. The receiver's
+ *   own password as the approval secret is still refused with
+ *   TRANSFER_SHORTAGE_SELF_APPROVAL — the override path takes no
+ *   secret at all, and a supplied secret must still differ.
  * - A different admin approving works as before, with NO override
  *   stamp in the audit log or the shrinkage movement note.
- * - An INACTIVE second admin does not count: once the second admin
- *   is deactivated, the solo admin may accept alone again, stamped.
+ * - An INACTIVE second admin changes nothing either: the admin may
+ *   accept alone, stamped, whether or not a second admin exists.
  */
 
 import 'reflect-metadata';
@@ -230,7 +232,7 @@ async function main(): Promise<void> {
     assert.ok(audit1.includes('admin'), 'audit log must name the receiver');
     assert.ok(audit1.includes('بفاقد 2'), 'audit log must record the shortfall amount');
     assert.ok(audit1.includes(REASON), 'audit log must record the reason');
-    assert.ok(audit1.includes('لا يوجد مدير ثانٍ متاح'), 'audit log must record that no second admin was available');
+    assert.ok(!audit1.includes('ثانٍ'), 'audit log must carry no second-manager reference at all');
     const note1 = await lossNote(db, t1);
     assert.ok(note1.includes('اعتماد منفرد بقرار إداري'), 'shrinkage note must carry the solo-override stamp');
     assert.ok(note1.includes('المستلم admin'), 'shrinkage note must name the receiver');
@@ -289,12 +291,15 @@ async function main(): Promise<void> {
     assert.equal(await transferStatus(db, t2), 'sent');
     assert.equal(await lossCount(db, t2), 0);
 
-    // Phase B: a SECOND active admin exists — the old rule stands.
+    // Phase B: a SECOND active admin exists — no second approval is
+    // required either (INV-SECOND-MANAGER-PASSWORD-REMOVED).
     await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(
       db,
     );
 
-    // Case B1: self-approval is still refused when a second admin exists.
+    // Case B1: supplying your OWN password as the approval secret is
+    // still refused — the override takes no secret at all, and a
+    // supplied secret must still differ (P3 precedent).
     await assert.rejects(
       service.receiveStockTransfer(t2, AUTH, {
         items: [{ itemId: t2item, receivedQty: 8 }],
@@ -306,36 +311,49 @@ async function main(): Promise<void> {
     assert.equal(await transferStatus(db, t2), 'sent');
     assert.equal(await lossCount(db, t2), 0);
 
-    // Case B2: no secret is still refused when a second admin exists.
-    await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, {
-        items: [{ itemId: t2item, receivedQty: 8 }],
-        varianceReason: REASON,
-      } as never),
-      /TRANSFER_SHORTAGE_APPROVAL_REQUIRED/,
-    );
-    assert.equal(await transferStatus(db, t2), 'sent');
-    assert.equal(await lossCount(db, t2), 0);
-
-    // Case B3: a DIFFERENT admin approving works as before, with NO
-    // override stamp in the audit log or the shrinkage note.
+    // Case B2: no secret is now accepted even when a second admin
+    // exists — the admin accepts alone, stamped the same way as A1.
     await service.receiveStockTransfer(t2, AUTH, {
       items: [{ itemId: t2item, receivedQty: 8 }],
       varianceReason: REASON,
-      approvalSecret: APPROVER_PASSWORD,
     } as never);
     assert.equal(await transferStatus(db, t2), 'received');
     assert.equal(await lossCount(db, t2), 1);
     assert.equal(await itemReason(db, t2item), REASON);
+    const auditB2 = await latestAuditDetails(db);
+    assert.ok(auditB2.includes('اعتماد فاقد منفرد بقرار إداري'), 'audit log must carry the solo-override stamp');
+    assert.ok(auditB2.includes('admin'), 'audit log must name the receiver');
+    assert.ok(auditB2.includes('بفاقد 2'), 'audit log must record the shortfall amount');
+    assert.ok(auditB2.includes(REASON), 'audit log must record the reason');
+    assert.ok(!auditB2.includes('ثانٍ'), 'audit log must carry no second-manager reference at all');
+    const noteB2 = await lossNote(db, t2);
+    assert.ok(noteB2.includes('اعتماد منفرد بقرار إداري'), 'shrinkage note must carry the solo-override stamp');
+    assert.ok(noteB2.includes('المستلم admin'), 'shrinkage note must name the receiver');
+
+    // Case B3: a DIFFERENT admin approving works as before, with NO
+    // override stamp in the audit log or the shrinkage note. (A fresh
+    // transfer: B2 already received t2.)
+    await seedProduct(db, 4, 100, 10);
+    const t2b = await makeTransfer(service, [{ productId: 4, qty: 10 }]);
+    const t2bitem = await transferItemId(db, t2b, 4);
+    await service.receiveStockTransfer(t2b, AUTH, {
+      items: [{ itemId: t2bitem, receivedQty: 8 }],
+      varianceReason: REASON,
+      approvalSecret: APPROVER_PASSWORD,
+    } as never);
+    assert.equal(await transferStatus(db, t2b), 'received');
+    assert.equal(await lossCount(db, t2b), 1);
+    assert.equal(await itemReason(db, t2bitem), REASON);
     const audit2 = await latestAuditDetails(db);
     assert.ok(!audit2.includes('اعتماد فاقد منفرد'), 'the two-admin path must carry no override stamp');
     assert.ok(
-      !(await lossNote(db, t2)).includes('اعتماد منفرد'),
+      !(await lossNote(db, t2b)).includes('اعتماد منفرد'),
       'the two-admin shrinkage note must carry no override stamp',
     );
 
-    // Case B4: an INACTIVE second admin does not count — once user 2
-    // is deactivated, the solo admin may accept alone again, stamped.
+    // Case B4: an INACTIVE second admin changes nothing — the admin
+    // may accept alone, stamped (as before, and as with an active
+    // second admin since INV-SECOND-MANAGER-PASSWORD-REMOVED).
     await sql`UPDATE users SET is_active = false WHERE id = 2`.execute(db);
     await seedProduct(db, 3, 100, 10);
     const t3 = await makeTransfer(service, [{ productId: 3, qty: 10 }]);
