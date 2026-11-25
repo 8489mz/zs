@@ -344,6 +344,8 @@
     "test/critical/dto-sales-quotation-create.spec.ts",
     "test/critical/dto-accounting.spec.ts",
     "test/critical/dto-settings.spec.ts",
-    "test/critical/dto-storefront.spec.ts"
+    "test/critical/dto-storefront.spec.ts",
+    "test/critical/dto-hr.spec.ts",
+    "test/critical/dto-tax-approvals.spec.ts"
   ]
 }

@@ -17,12 +17,15 @@ import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { RequireFeature } from '../../../core/auth/decorators/feature.decorator';
 import { RequirePermissions } from '../../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
+import { BiometricAttendanceService } from '../services/biometric-attendance.service';
 import {
-  BiometricAttendanceService,
-  type ImportBiometricLogDto,
-  type PreviewBiometricLogDto,
-  type UpsertBiometricDeviceDto,
-} from '../services/biometric-attendance.service';
+  AssignEmployeeBiometricPinDto,
+  BulkCreateEmployeesDto,
+  CreateEmployeeFromBiometricPinDto,
+  ImportBiometricLogDto,
+  PreviewBiometricLogDto,
+  UpsertBiometricDeviceDto,
+} from '../dto/hr-biometric-write.dto';
 import { BiometricStagingService } from '../services/biometric-staging.service';
 import {
   normalizeGenericJsonPushToAttlogLines,
@@ -82,7 +85,7 @@ export class BiometricAttendanceController {
   @RequirePermissions('hrAttendance')
   async assignEmployeePin(
     @Param('employeeId', ParseIntPipe) employeeId: number,
-    @Body() body: { biometricPin: string | null },
+    @Body() body: AssignEmployeeBiometricPinDto,
     @Req() req: RequestWithAuth,
   ) {
     return this.biometricService.assignEmployeeBiometricPin(employeeId, body?.biometricPin ?? null, req.authContext!);
@@ -108,16 +111,13 @@ export class BiometricAttendanceController {
 
   @Post('create-employee')
   @RequirePermissions('hrAttendance')
-  async createEmployeeFromPin(@Body() body: { pin: string; displayName?: string | null }, @Req() req: RequestWithAuth) {
+  async createEmployeeFromPin(@Body() body: CreateEmployeeFromBiometricPinDto, @Req() req: RequestWithAuth) {
     return this.stagingService.createEmployeeFromBiometricPin(body, req.authContext!);
   }
 
   @Post('bulk-create-employees')
   @RequirePermissions('hrAttendance')
-  async bulkCreateEmployees(
-    @Body() body: { items: Array<{ pin: string; displayName?: string | null }> },
-    @Req() req: RequestWithAuth,
-  ) {
+  async bulkCreateEmployees(@Body() body: BulkCreateEmployeesDto, @Req() req: RequestWithAuth) {
     return this.stagingService.bulkCreateEmployeesFromPins(body?.items || [], req.authContext!);
   }
 

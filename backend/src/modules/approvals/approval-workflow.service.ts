@@ -1,3 +1,4 @@
+import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Inject, Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Kysely, Transaction, sql } from '../../database/kysely';
@@ -6,14 +7,48 @@ import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 
-export interface CreateApprovalRuleDto {
-  module: 'purchase_orders' | 'purchases' | 'expenses' | 'treasury_transactions';
-  minAmount: number;
-  maxAmount?: number | null;
+/*
+ * D9 — CreateApprovalRuleDto is converted from an interface to a
+ * class IN PLACE (Rule 5), so the real global pipe validates it. No
+ * frontend caller exists for this endpoint — the positive case is the
+ * interface shape.
+ * - module is purchase_orders ONLY (the service throws otherwise — D8
+ *   settlement precedent); requiredRole is 'admin' ONLY (the service
+ *   throws otherwise).
+ * - minAmount is optional @Min(0) (the service defaults 0, throws on
+ *   negative); tierLevel is optional @IsInt @Min(1) (the service
+ *   defaults 1).
+ */
+export class CreateApprovalRuleDto {
+  @IsEnum(['purchase_orders'])
+  module!: 'purchase_orders';
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxAmount?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   tierLevel?: number;
+
+  @IsOptional()
+  @IsEnum(['admin'])
   requiredRole?: string;
-  approverUserId?: number | null;
-  notes?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  approverUserId?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
 
 export interface ApprovalRequestFilter {

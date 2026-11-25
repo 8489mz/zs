@@ -78,8 +78,14 @@ async function main(): Promise<void> {
     const complianceDb = fakeDb(productionEgs);
     globalThis.fetch = (async () => response(401, { message: 'invalid OTP' })) as typeof fetch;
     const service = new ZatcaOnboardingService(complianceDb as any, {} as any);
+    // D9: egsId is NARROWED to string in RequestComplianceDto (the pipe
+    // coerces a numeric egsId to '42'); this spec drives the SERVICE
+    // directly, which still accepts a numeric egsId via String(), so
+    // the numeric literal is cast here — the DTO is right, the spec
+    // tests the service validator, which keeps its own String() as the
+    // backstop for internal callers (D6 payment-allocation precedent).
     await assert.rejects(
-      () => service.requestComplianceCsid('tenant-a', { egsId: 1, otp: '123456' }),
+      () => service.requestComplianceCsid('tenant-a', { egsId: 1 as unknown as string, otp: '123456' }),
       /ZATCA compliance request failed with HTTP 401/,
     );
     assert.equal(complianceDb.updateCount, 0, 'failed production compliance must not update the EGS');

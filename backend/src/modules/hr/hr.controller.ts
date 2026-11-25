@@ -47,6 +47,7 @@ import {
   UpdateEmployeeStatusDto,
   GenerateWpsDto,
 } from './dto/hr.dto';
+import { UpdatePayrollPoliciesDto } from './dto/payroll-policies-write.dto';
 import { HrService } from './hr.service';
 import { RequireFeature } from '../../core/auth/decorators/feature.decorator';
 
@@ -66,7 +67,7 @@ export class HrController {
    */
   @Put('settings/payroll-policies')
   @RequireAnyPermission('hrPayrollManage', 'hrSalaryManage')
-  async updatePayrollPolicies(@Req() req: RequestWithAuth, @Body() body: any) {
+  async updatePayrollPolicies(@Req() req: RequestWithAuth, @Body() body: UpdatePayrollPoliciesDto) {
     return this.hr.updatePayrollPolicies(req.authContext!, body);
   }
 

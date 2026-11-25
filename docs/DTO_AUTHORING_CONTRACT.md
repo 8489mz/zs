@@ -126,7 +126,8 @@ file:line; a package that converts one fails its own proof.
   `test:critical` (332 → 333 at D1).
 - Pin arithmetic: 264 at D1 = 255 convertible + 9 exclusions; 75 at D8 =
   60 convertible + 15 exclusions (D8 adds the 6 storefront webhook
-  exclusions and converts 14). Each DTO package converts N sites and
+  exclusions and converts 14); 45 at D9 = 30 convertible + 15 exclusions
+  (D9 converts 30 hr + tax + approvals sites). Each DTO package converts N sites and
   updates the pin by exactly N — the script constant AND the spec
   constant, in the same package. The last DTO package (D10) pins 15
   (exclusions only).

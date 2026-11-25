@@ -455,18 +455,18 @@ async function main(): Promise<void> {
     console.log('8. FE gates pinned by source (admin page, router, bell, dashboard, POS), passed');
   }
 
-  // 9. This spec is wired into BOTH critical lists (345 specs, identical order).
+  // 9. This spec is wired into BOTH critical lists (347 specs, identical order).
   {
     const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
       .specs as string[];
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 345);
-    assert.equal(chain.length, 345);
+    assert.equal(specs.length, 347);
+    assert.equal(chain.length, 347);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-admin-permission-split.spec.ts'));
-    console.log('9. spec wired into both critical lists (345 = 345, identical order), passed');
+    console.log('9. spec wired into both critical lists (347 = 347, identical order), passed');
   }
 
   console.log('van-admin-permission-split: all cases passed');

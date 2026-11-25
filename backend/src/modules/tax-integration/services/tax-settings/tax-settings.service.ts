@@ -1,14 +1,40 @@
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { Injectable, Inject } from '@nestjs/common';
 import { KYSELY_DB } from '../../../../database/database.constants';
 import { Kysely } from 'kysely';
 import { Database } from '../../../../database/database.types';
 
-export interface TaxSettingsDto {
-  provider: string;
+/*
+ * D9 — TaxSettingsDto is converted from an interface to a class IN
+ * PLACE (Rule 5), so the real global pipe validates it. provider is
+ * OPTIONAL (the controller defaults ETA_EGYPT when it is missing);
+ * every other field is optional (the service falls back to the
+ * existing row / sandbox / is_active true). No frontend caller exists
+ * for this endpoint — the positive case is the interface shape.
+ */
+export class TaxSettingsDto {
+  @IsOptional()
+  @IsString()
+  provider?: string;
+
+  @IsOptional()
+  @IsString()
   client_id?: string;
+
+  @IsOptional()
+  @IsString()
   client_secret?: string;
+
+  @IsOptional()
+  @IsString()
   tax_id?: string;
+
+  @IsOptional()
+  @IsString()
   environment?: string;
+
+  @IsOptional()
+  @IsBoolean()
   is_active?: boolean;
 }
 
@@ -77,7 +103,7 @@ export class TaxSettingsService {
         .values({
           tenant_id: tenantId,
           account_id: accountId,
-          provider: payload.provider,
+          provider: payload.provider || 'ETA_EGYPT',
           client_id: payload.client_id,
           client_secret: incomingSecret || null,
           tax_id: payload.tax_id,

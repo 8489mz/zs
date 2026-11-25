@@ -1,3 +1,4 @@
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { Injectable, Inject, BadRequestException, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { Kysely } from 'kysely';
@@ -15,9 +16,17 @@ export interface CanonicalDocumentResult {
   etaDocument: any;
 }
 
-export interface AttachSignatureDto {
-  saleId: number;
-  cadesSignature: string; // Base64 DER PKCS#7 / CAdES-BES
+export class AttachSignatureDto {
+  @IsNumber()
+  saleId!: number;
+
+  @IsString()
+  cadesSignature!: string; // Base64 DER PKCS#7 / CAdES-BES
+
+  // D9: signerCertificate is NEVER read by the service (only saleId +
+  // cadesSignature are used) — accepted as optional (Package C trap).
+  @IsOptional()
+  @IsString()
   signerCertificate?: string;
 }
 

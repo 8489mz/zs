@@ -1,7 +1,7 @@
 /*
  * D1 DTO coverage guard: the whole-body @Body() sites whose type is not a
- * *Dto class are pinned at exactly 75 at D8 (60 convertible + the 15
- * pinned exclusions below; 264 at D1, 249 at D2, 191 at D3, 163 at D4, 136 at D5, 111 at D6, 89 at D7).
+ * *Dto class are pinned at exactly 45 at D9 (30 convertible + the 15
+ * pinned exclusions below; 264 at D1, 249 at D2, 191 at D3, 163 at D4, 136 at D5, 111 at D6, 89 at D7, 75 at D8).
  * Package C keeps the pin at 136 (136 + 0 CRLF + 1 reveal - 1 convert). The count is produced by
  * backend/scripts/dto-coverage-check.mjs, a port of the item-(5)
  * (~/workspace/audit/dto-census.py, re-counted at d1989b74e: 681 @Body(
@@ -78,6 +78,40 @@
  * the first post-edit census read 626 whole-body / 77 non-DTO
  * until the reword).
  *
+ * D9 (INV-DTO-HR-TAX-APPROVALS-30): hr + tax-integration + approvals
+ * convert 30 sites (10 dto-interface + 17 inline-object + 2 any + 1
+ * named-class) and the pin moves 75 -> 45 (30 convertible + the 15
+ * pinned exclusions below). The live census re-derived the list (the
+ * grounding's 30 held exactly). Whole-body total stays 624; the buckets
+ * move dto-class 549 -> 579, inline-object 37 -> 21, any 13 -> 11,
+ * dto-interface 14 -> 3, named-interface 1 -> 0. Two census traps
+ * caught by the live re-count: (1) SettlementCalculateInput does NOT
+ * end in Dto, so the classifier counted it named-class even after the
+ * in-place conversion — the type is RENAMED
+ * SettlementCalculateInputDto (5 backend sites + the D9 spec) so the
+ * census sees it; (2) a `| null` union on a DTO property emits Object
+ * metadata, so implicit conversion does NOT coerce (the D5 trap in a
+ * new shape — biometricPin 42 stayed a number and the pipe 400d) — all
+ * DTO `| null` unions are narrowed to their plain scalar type
+ * (null still passes via @IsOptional + the service's ?? null).
+ * Array elements do NOT coerce without an explicit @Type(() => String)
+ * (invoiceIds [1,2] stayed numbers and the pipe 400d) — both tax
+ * invoiceIds arrays carry it, and the object-for-string negative is
+ * replaced by a coercion pin ('[object Object]' — the D7/D8 trap).
+ * The 3 biometric device-push exclusions end at their ORIGINAL lines
+ * :153/:196/:227 (the new hr-biometric-write.dto.ts import block grew
+ * them +5, merging the two import blocks shrank them -2, then Prettier
+ * collapsed two multi-line controller signatures and shrank them -3) —
+ * the D8 lesson, re-proven: re-pin from the FRESH census AFTER
+ * Prettier, never before. The pins below are the post-Prettier lines.
+ * File-size cap: the 4 biometric DTOs were first converted IN PLACE,
+ * which pushed biometric-attendance.service.ts 982 -> 1121 (past the
+ * 1110 cutoff, so no baseline is possible) — they MOVED to
+ * hr-biometric-write.dto.ts instead (service 948 lines after the
+ * move). employee-portal.service.ts grew 1072 -> 1073 on one import
+ * line; its baseline entry is bumped to 1073 as a deliberate reviewed
+ * exception (under the 1110 cutoff).
+ *
  * WHY THE NUMBER IS 264 AND NOT 211: the verification files counted 211
  * sites without a *Dto-named type, but 47 of the 407 "with DTO" sites use
  * an INTERFACE named *Dto, not a class — and the global ValidationPipe
@@ -143,7 +177,7 @@
  * Fail-first: this spec is new in D1 — on the unpatched tree the census
  * script does not exist, so the spawn fails (MODULE_NOT_FOUND) and the
  * spec exits 1 (see the log). GREEN means the script exists, exits 0,
- * and reports exactly 75 with exactly the 15 exclusions.
+ * and reports exactly 45 with exactly the 15 exclusions.
  */
 
 import { strict as assert } from 'node:assert';
@@ -153,11 +187,11 @@ import * as path from 'path';
 const BACKEND = path.resolve(__dirname, '../..');
 const SCRIPT = 'scripts/dto-coverage-check.mjs';
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D8 (75 after storefront converts 14 + 6 new webhook exclusions). */
-const PINNED_COUNT = 75;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D9 (45 after hr + tax + approvals convert 30). */
+const PINNED_COUNT = 45;
 
-/** Convertible sites inside the pinned count (75 - 15 exclusions). */
-const CONVERTIBLE_COUNT = 60;
+/** Convertible sites inside the pinned count (45 - 15 exclusions). */
+const CONVERTIBLE_COUNT = 30;
 
 /** The 15 pinned exclusions (paths relative to backend/, line = @Body() line). */
 const PINNED_EXCLUSIONS: Array<{ file: string; line: number }> = [

@@ -11,6 +11,7 @@ import {
   RequestComplianceDto,
 } from '../../services/zatca/zatca-onboarding.service';
 import { ZatcaSubmissionService } from '../../services/zatca/zatca-submission.service';
+import { SubmitZatcaInvoicesBulkDto, ValidateZatcaComplianceDto } from '../../dto/tax-write.dto';
 
 @Controller('api/tax-integration/zatca')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -41,7 +42,7 @@ export class ZatcaController {
 
   @Post('invoices/submit-bulk')
   @RequirePermissions('sales')
-  async bulkSubmitInvoices(@Req() req: RequestWithAuth, @Body() body: { invoiceIds: (number | string)[] }) {
+  async bulkSubmitInvoices(@Req() req: RequestWithAuth, @Body() body: SubmitZatcaInvoicesBulkDto) {
     const tenantId = String(req.authContext!.tenantId);
     const numericIds = (body.invoiceIds || []).map((id) => Number(id)).filter((id) => !isNaN(id) && id > 0);
     const summary = await this.zatcaSubmission.bulkSubmitInvoices(tenantId, numericIds);
@@ -93,7 +94,7 @@ export class ZatcaController {
 
   @Post('compliance-check')
   @RequirePermissions('sales')
-  async validateCompliance(@Body() body: any) {
+  async validateCompliance(@Body() body: ValidateZatcaComplianceDto) {
     const validation = this.zatcaService.validateCompliance(body);
     return { success: validation.valid, errors: validation.errors };
   }

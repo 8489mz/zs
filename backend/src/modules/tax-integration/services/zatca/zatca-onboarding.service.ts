@@ -1,3 +1,4 @@
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { Injectable, Inject, BadRequestException, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { Kysely, sql } from 'kysely';
@@ -6,16 +7,44 @@ import { Database } from '../../../../database/database.types';
 import { TaxSettingsService } from '../tax-settings/tax-settings.service';
 import { createPkcs10Csr } from './pkcs10-csr';
 
-export interface CreateEgsUnitDto {
-  deviceName: string;
+/*
+ * D9 — CreateEgsUnitDto + RequestComplianceDto are converted from
+ * interfaces to classes IN PLACE (Rule 5), so the real global pipe
+ * validates them. No frontend caller exists for either endpoint —
+ * the positive cases are the interface shapes.
+ * - environment stays a PLAIN STRING, not an enum (the service falls
+ *   back to sandbox for an unknown value — D8 CalculateFees
+ *   precedent).
+ * - egsId is NARROWED from string|number to string (D5 cashierShiftId
+ *   precedent: a numeric 42 coerces to '42'). otp is a required
+ *   string only (the service enforces exactly-6).
+ */
+export class CreateEgsUnitDto {
+  @IsString()
+  deviceName!: string;
+
+  @IsOptional()
+  @IsString()
   customId?: string;
+
+  @IsOptional()
+  @IsNumber()
   branchId?: number;
+
+  @IsOptional()
+  @IsString()
   environment?: 'sandbox' | 'simulation' | 'production';
 }
 
-export interface RequestComplianceDto {
-  egsId: string | number;
-  otp: string;
+export class RequestComplianceDto {
+  // NARROWED from string|number to plain string (D5 precedent): a
+  // union type emits Object metadata, so implicit conversion would
+  // NOT coerce and the pipe would 400 a numeric egsId.
+  @IsString()
+  egsId!: string;
+
+  @IsString()
+  otp!: string;
 }
 
 @Injectable()

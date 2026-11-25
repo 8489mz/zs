@@ -103,8 +103,8 @@ import { fileURLToPath } from 'node:url';
 const BACKEND = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(BACKEND, 'src');
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D8 (75 after storefront converts 14 + 6 new webhook exclusions). */
-const PINNED_COUNT = 75;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D9 (45 after hr + tax + approvals convert 30). */
+const PINNED_COUNT = 45;
 
 /**
  * The 15 pinned exclusions. A DTO on any of these breaks a real flow — see

@@ -1,3 +1,4 @@
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Kysely, sql } from 'kysely';
 import { Database } from '../../../database/database.types';
@@ -18,26 +19,88 @@ import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date
 import { requireStoredHrMoney } from '../engines/hr-payroll-run.engine';
 import { daysInCalendarMonth } from '../engines/hourly-attendance-pay.engine';
 
-export interface SettlementCalculateInput {
-  employeeId: number;
-  terminationDate: string;
-  terminationReason: string;
+/*
+ * D9 — SettlementCalculateInputDto + CreateSettlementDto are converted
+ * from interfaces to classes IN PLACE (Rule 5), so the real global
+ * pipe validates them. Caller traps (verified against
+ * HrEndOfServicePage at eba4e59d1):
+ * - lawType is REQUIRED enum saudi|egyptian|custom — the service
+ *   throws when it is missing, and 'egyptian' stays IN the enum so
+ *   the service's specific business error surfaces (not a pipe 400).
+ *   The page ALWAYS sends lawType (UI-guarded).
+ * - terminationReason is OPTIONAL (the service defaults 'resignation');
+ *   contractType is NEVER sent by the page (optional).
+ * - Money amounts carry NO @Min — the service accepts any number.
+ * - confirmTermination is NEVER read by the service (interface line
+ *   only) — accepted as optional (Package C trap). clearanceChecklist
+ *   + settlementDate are NEVER sent (service defaults [] / today).
+ */
+export class SettlementCalculateInputDto {
+  @IsNumber()
+  employeeId!: number;
+
+  @IsDateString()
+  terminationDate!: string;
+
+  @IsOptional()
+  @IsString()
+  terminationReason?: string;
+
+  @IsOptional()
+  @IsString()
   contractType?: string;
-  lawType?: 'saudi' | 'egyptian' | 'custom';
+
+  @IsEnum(['saudi', 'egyptian', 'custom'])
+  lawType!: 'saudi' | 'egyptian' | 'custom';
+
+  @IsOptional()
+  @IsNumber()
   customGratuityDaysPerYear?: number;
+
+  @IsOptional()
+  @IsNumber()
   pendingSalaryAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
   customEntitlements?: number;
+
+  @IsOptional()
+  @IsNumber()
   noticePeriodAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
   assetsDeduction?: number;
+
+  @IsOptional()
+  @IsNumber()
   otherDeductions?: number;
 }
 
-export interface CreateSettlementDto extends SettlementCalculateInput {
+export class CreateSettlementDto extends SettlementCalculateInputDto {
+  @IsOptional()
+  @IsDateString()
   settlementDate?: string;
+
+  @IsOptional()
+  @IsBoolean()
   custodyCleared?: boolean;
+
+  @IsOptional()
+  @IsArray()
   clearanceChecklist?: any[];
+
+  @IsOptional()
+  @IsString()
   clearanceNotes?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
   confirmTermination?: boolean;
 }
 
@@ -100,7 +163,7 @@ export class EndOfServiceService {
   /**
    * Preview & calculate end-of-service breakdown according to labor laws
    */
-  async calculateSettlementPreview(input: SettlementCalculateInput, auth: AuthContext) {
+  async calculateSettlementPreview(input: SettlementCalculateInputDto, auth: AuthContext) {
     const { tenantId } = requireTenantScope(auth);
     const bookDigits = await eosBookDigits(this.db, tenantId);
 

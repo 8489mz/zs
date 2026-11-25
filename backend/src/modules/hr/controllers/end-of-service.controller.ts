@@ -4,7 +4,12 @@ import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { RequireFeature } from '../../../core/auth/decorators/feature.decorator';
 import { RequirePermissions, RequireAnyPermission } from '../../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
-import { EndOfServiceService, SettlementCalculateInput, CreateSettlementDto } from '../services/end-of-service.service';
+import {
+  EndOfServiceService,
+  SettlementCalculateInputDto,
+  CreateSettlementDto,
+} from '../services/end-of-service.service';
+import { PostSettlementAccountingDto } from '../dto/hr-eos-write.dto';
 
 @Controller('api/hr/settlements')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -14,7 +19,7 @@ export class EndOfServiceController {
 
   @Post('calculate-preview')
   @RequireAnyPermission('hrSalaryView', 'hrSalaryManage', 'hrPayrollApprove')
-  async calculatePreview(@Body() body: SettlementCalculateInput, @Req() req: RequestWithAuth) {
+  async calculatePreview(@Body() body: SettlementCalculateInputDto, @Req() req: RequestWithAuth) {
     return this.eosService.calculateSettlementPreview(body, req.authContext!);
   }
 
@@ -47,7 +52,7 @@ export class EndOfServiceController {
   @RequirePermissions('hrPayrollApprove')
   async postAccounting(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { treasuryAccountId?: number; notes?: string },
+    @Body() body: PostSettlementAccountingDto,
     @Req() req: RequestWithAuth,
   ) {
     return this.eosService.postAccountingEntry(id, body, req.authContext!);

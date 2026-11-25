@@ -3,6 +3,7 @@ import { SessionAuthGuard } from '../../../../core/auth/guards/session-auth.guar
 import { PermissionsGuard } from '../../../../core/auth/guards/permissions.guard';
 import { RequirePermissions } from '../../../../core/auth/decorators/permissions.decorator';
 import { EtaSubmissionService } from '../../services/eta-submission/eta-submission.service';
+import { SubmitEtaInvoicesDto } from '../../dto/tax-write.dto';
 import {
   EtaSignatureBridgeService,
   AttachSignatureDto,
@@ -26,8 +27,8 @@ export class EtaInvoicesController {
 
   @Post('submit')
   @RequirePermissions('canEditInvoices')
-  async submitInvoices(@Req() req: RequestWithAuth, @Body() body: { invoiceIds: string[] }) {
-    return this.etaSubmissionService.submitInvoices(String(req.authContext!.tenantId), body.invoiceIds);
+  async submitInvoices(@Req() req: RequestWithAuth, @Body() body: SubmitEtaInvoicesDto) {
+    return this.etaSubmissionService.submitInvoices(String(req.authContext!.tenantId), body.invoiceIds ?? []);
   }
 
   @Get('status/:submissionId')

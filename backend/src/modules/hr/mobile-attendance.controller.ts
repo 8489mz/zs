@@ -5,13 +5,19 @@ import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { RequirePermissions } from '../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
+import {
+  MobilePunchLoginDto,
+  RecordPunchDto,
+  SetEmployeePinDto,
+  UpdateBranchGeofenceDto,
+} from './dto/mobile-attendance-write.dto';
 
 @Controller('api/hr/mobile-punch')
 export class MobileAttendanceController {
   constructor(private readonly service: MobileAttendanceService) {}
 
   @Post('login')
-  login(@Body() body: { phone: string; pinCode: string; companyCode?: string; tenantId?: string }) {
+  login(@Body() body: MobilePunchLoginDto) {
     return this.service.employeeLogin(body);
   }
 
@@ -25,13 +31,7 @@ export class MobileAttendanceController {
   async recordPunch(
     @Headers('authorization') authHeader: string,
     @Body()
-    body: {
-      type: 'check_in' | 'check_out';
-      latitude: number;
-      longitude: number;
-      selfieDataUrl?: string;
-      notes?: string;
-    },
+    body: RecordPunchDto,
   ) {
     const user = await this.service.verifyToken(authHeader);
     return this.service.recordPunch(user, body);
@@ -42,7 +42,7 @@ export class MobileAttendanceController {
   @RequirePermissions('hrAttendance')
   updateBranchGeofence(
     @Param('id', ParseIntPipe) branchId: number,
-    @Body() body: { latitude: number; longitude: number; geofenceRadiusMeters?: number },
+    @Body() body: UpdateBranchGeofenceDto,
     @Req() req: RequestWithAuth,
   ) {
     const { tenantId } = requireTenantScope(req.authContext);
@@ -54,7 +54,7 @@ export class MobileAttendanceController {
   @RequirePermissions('hrAttendance')
   setEmployeePin(
     @Param('id', ParseIntPipe) employeeId: number,
-    @Body() body: { pinCode: string },
+    @Body() body: SetEmployeePinDto,
     @Req() req: RequestWithAuth,
   ) {
     const { tenantId } = requireTenantScope(req.authContext);

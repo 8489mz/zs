@@ -1,5 +1,11 @@
 import { Body, Controller, Get, Headers, Post, Query } from '@nestjs/common';
 import { EmployeePortalService } from './employee-portal.service';
+import {
+  EmployeePortalChangePinDto,
+  EmployeePortalLoginDto,
+  RequestAdvanceDto,
+  RequestLeaveDto,
+} from './dto/employee-portal-write.dto';
 
 /**
  * بوابة الموظف: مسارات عامة لا تمر على `SessionAuthGuard` (الموظف ليس مستخدم نظام).
@@ -15,15 +21,12 @@ export class EmployeePortalController {
   constructor(private readonly service: EmployeePortalService) {}
 
   @Post('login')
-  login(@Body() body: { identifier: string; pinCode: string; companyCode?: string; tenantId?: string }) {
+  login(@Body() body: EmployeePortalLoginDto) {
     return this.service.login(body);
   }
 
   @Post('pin/change')
-  async changePin(
-    @Headers('authorization') authHeader: string,
-    @Body() body: { currentPin?: string; newPin?: string },
-  ) {
+  async changePin(@Headers('authorization') authHeader: string, @Body() body: EmployeePortalChangePinDto) {
     const user = await this.service.verifyToken(authHeader);
     return this.service.changePin(user, body);
   }
@@ -57,10 +60,7 @@ export class EmployeePortalController {
   }
 
   @Post('leaves/request')
-  async requestLeave(
-    @Headers('authorization') authHeader: string,
-    @Body() body: { leaveTypeId: number; startDate: string; endDate: string; reason?: string },
-  ) {
+  async requestLeave(@Headers('authorization') authHeader: string, @Body() body: RequestLeaveDto) {
     const user = await this.service.verifyToken(authHeader);
     this.service.assertPinChanged(user);
     return this.service.requestLeave(user.employeeId, user.tenantId, user.accountId, body);
@@ -74,10 +74,7 @@ export class EmployeePortalController {
   }
 
   @Post('loans/request')
-  async requestAdvance(
-    @Headers('authorization') authHeader: string,
-    @Body() body: { amount: number; reason: string; repaymentMonths?: number },
-  ) {
+  async requestAdvance(@Headers('authorization') authHeader: string, @Body() body: RequestAdvanceDto) {
     const user = await this.service.verifyToken(authHeader);
     this.service.assertPinChanged(user);
     return this.service.requestAdvance(user.employeeId, user.tenantId, user.accountId, body);

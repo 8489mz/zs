@@ -1,4 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
+import {
+  BiometricColumnMappingDto,
+  ImportBiometricLogDto,
+  PreviewBiometricLogDto,
+  UpsertBiometricDeviceDto,
+  type BiometricSyncScope,
+} from '../dto/hr-biometric-write.dto';
 import { Kysely, sql } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
@@ -15,7 +22,6 @@ import {
   parseAndAggregateBiometricLog,
   parseZkUserDatBuffer,
   type AggregatedBiometricDailyRecord,
-  type BiometricColumnMapping,
   type DecodedZkDeviceUser,
   type EmployeeBiometricCandidate,
 } from '../engines/biometric-log-parser.engine';
@@ -29,46 +35,6 @@ import {
   probeHikvisionLanDevice,
 } from './http-biometric-lan.client';
 import { BiometricStagingService } from './biometric-staging.service';
-
-export interface UpsertBiometricDeviceDto {
-  deviceName: string;
-  serialNumber: string;
-  deviceBrand?: 'zkteco' | 'hikvision' | 'dahua' | 'generic';
-  deviceModel?: string | null;
-  ipAddress?: string | null;
-  port?: number;
-  commKey?: string | null;
-  branchName?: string | null;
-  status?: 'active' | 'inactive';
-  notes?: string | null;
-}
-
-export type BiometricSyncScope = 'since_last' | 'open_month' | 'custom';
-
-export interface PreviewBiometricLogDto {
-  rawText?: string;
-  base64UserDat?: string;
-  debounceMinutes?: number;
-  minSessionMinutes?: number;
-  columnMapping?: BiometricColumnMapping;
-  syncScope?: BiometricSyncScope;
-  fromDate?: string | null;
-  toDate?: string | null;
-}
-
-export interface ImportBiometricLogDto {
-  rawText: string;
-  debounceMinutes?: number;
-  minSessionMinutes?: number;
-  onlyOpenPayrollMonth?: boolean;
-  columnMapping?: BiometricColumnMapping;
-  autoCreateEmployees?: boolean;
-  stageUnmatched?: boolean;
-  deviceSerial?: string | null;
-  syncScope?: BiometricSyncScope;
-  fromDate?: string | null;
-  toDate?: string | null;
-}
 
 @Injectable()
 export class BiometricAttendanceService {

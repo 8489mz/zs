@@ -15,6 +15,7 @@ import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.eng
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { LoginAttemptLimiter } from '../../common/utils/login-attempt-limiter';
+import { RequestAdvanceDto } from './dto/employee-portal-write.dto';
 import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
 import {
   PORTAL_TOKEN_TTL_MS,
@@ -981,12 +982,7 @@ export class EmployeePortalService {
   /**
    * Submit an advance request
    */
-  async requestAdvance(
-    employeeId: number,
-    tenantId: string,
-    accountId: string,
-    body: { amount: number; reason: string; repaymentMonths?: number },
-  ) {
+  async requestAdvance(employeeId: number, tenantId: string, accountId: string, body: RequestAdvanceDto) {
     let amount: number;
     let schedule: ReturnType<typeof calculateLoanInstallmentSchedule>;
     try {
