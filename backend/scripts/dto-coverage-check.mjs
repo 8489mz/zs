@@ -85,6 +85,13 @@
  * 624 and the buckets move dto-class 488 -> 513, inline-object
  * 68 -> 57, any 25 -> 22, dto-interface 25 -> 14.
  *
+ * D7 (INV-DTO-SETTINGS-22): settings converts 22 sites (3
+ * inline-other + 14 inline-object + 5 any); the count is now 89 =
+ * 80 convertible + 9 pinned exclusions. The live census re-derived
+ * the list (the grounding's 22 held exactly). Whole-body total stays
+ * 624 and the buckets move dto-class 513 -> 535, inline-object
+ * 57 -> 43, any 22 -> 17, inline-other 7 -> 4.
+ *
  * Usage: node scripts/dto-coverage-check.mjs [--json]
  *   (run from the backend/ directory; paths are relative to backend/).
  */
@@ -96,8 +103,8 @@ import { fileURLToPath } from 'node:url';
 const BACKEND = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(BACKEND, 'src');
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D6 (111 after accounting converts 25). */
-const PINNED_COUNT = 111;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D7 (89 after settings converts 22). */
+const PINNED_COUNT = 89;
 
 /**
  * The 9 pinned exclusions. A DTO on any of these breaks a real flow — see
@@ -131,13 +138,13 @@ const PINNED_EXCLUSIONS = [
   },
   {
     file: 'src/modules/settings/controllers/settings-backup.controller.ts',
-    line: 60,
+    line: 61,
     bucket: 'record',
     reason: 'POST backup/config: open-ended settings map',
   },
   {
     file: 'src/modules/settings/controllers/settings-backup.controller.ts',
-    line: 68,
+    line: 69,
     bucket: 'record',
     reason: 'POST backup/folder/test: open-ended settings map',
   },

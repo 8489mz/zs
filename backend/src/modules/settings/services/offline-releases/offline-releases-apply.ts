@@ -99,7 +99,7 @@ export class OfflineReleasesApply {
   /**
    * Called by the local desktop client to apply an update downloaded from SaaS.
    */
-  async applyLocalUpdate(body: { version: string; patchUrl: string; changelog: string; passcode?: string }) {
+  async applyLocalUpdate(body: { version: string; patchUrl: string; changelog?: string; passcode?: string }) {
     if (!isDesktopRuntimeMode(process.env.APP_MODE)) {
       throw new BadRequestException('Updates can only be applied in Desktop/Offline mode');
     }

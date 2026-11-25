@@ -20,6 +20,12 @@ import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { RequirePermissions } from '../../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { OfflineReleasesService } from '../services/offline-releases.service';
+import {
+  ApplyLocalUpdateDto,
+  CreateOfflineReleaseDto,
+  SetReleasePasscodeDto,
+  SimulateUpdateDto,
+} from '../dto/settings-write.dto';
 
 // ─── Public endpoint (no auth) — called by offline clients to check for updates ───
 @Controller('api/updates')
@@ -61,7 +67,7 @@ export class OfflineUpdatesPublicController {
   @Post('simulate')
   @UseGuards(SessionAuthGuard, PermissionsGuard)
   @RequirePermissions('canManageSettings')
-  async simulateUpdate(@Body() body: { fromVersion?: string; targetVersion?: string; passcode?: string }) {
+  async simulateUpdate(@Body() body: SimulateUpdateDto) {
     return this.releasesService.simulateUpdate(body);
   }
 
@@ -82,7 +88,7 @@ export class OfflineUpdatesPublicController {
   @Post('apply')
   @UseGuards(SessionAuthGuard, PermissionsGuard)
   @RequirePermissions('canManageSettings')
-  async applyUpdateLegacy(@Body() body: { version: string; patchUrl: string; changelog: string; passcode?: string }) {
+  async applyUpdateLegacy(@Body() body: ApplyLocalUpdateDto) {
     return this.releasesService.applyLocalUpdate(body);
   }
 }
@@ -99,7 +105,7 @@ export class OfflineUpdatesProtectedController {
    */
   @Post('apply')
   @RequirePermissions('canManageSettings')
-  async applyUpdate(@Body() body: { version: string; patchUrl: string; changelog: string; passcode?: string }) {
+  async applyUpdate(@Body() body: ApplyLocalUpdateDto) {
     return this.releasesService.applyLocalUpdate(body);
   }
 
@@ -146,7 +152,7 @@ export class OfflineReleasesAdminController {
    * Body: { passcode }
    */
   @Post(':id/passcode')
-  setReleasePasscode(@Req() req: RequestWithAuth, @Param('id') id: string, @Body() body: { passcode: string }) {
+  setReleasePasscode(@Req() req: RequestWithAuth, @Param('id') id: string, @Body() body: SetReleasePasscodeDto) {
     return this.releasesService.setReleasePasscode(req.authContext!, Number(id), body?.passcode);
   }
 
@@ -159,7 +165,7 @@ export class OfflineReleasesAdminController {
   createRelease(
     @Req() req: RequestWithAuth,
     @Body()
-    body: { version: string; changelog: string; patchUrl: string; passcode?: string; requiresPasscode?: boolean },
+    body: CreateOfflineReleaseDto,
   ) {
     return this.releasesService.createRelease(req.authContext!, body);
   }

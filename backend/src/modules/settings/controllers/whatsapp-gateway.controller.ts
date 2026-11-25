@@ -5,6 +5,8 @@ import { RequirePermissions } from '../../../core/auth/decorators/permissions.de
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { WhatsAppGatewayService, WhatsAppConfig } from '../services/whatsapp-gateway.service';
+import { WhatsAppConfigDto } from '../dto/settings-write.dto';
+import { WhatsAppWebhookDto } from '../dto/whatsapp-webhook.dto';
 
 @Controller('api/settings/whatsapp')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -19,7 +21,7 @@ export class WhatsAppGatewayController {
 
   @Post()
   @RequirePermissions('canManageSettings')
-  saveConfig(@Body() payload: Partial<WhatsAppConfig>, @Req() req: RequestWithAuth): Promise<{ ok: boolean }> {
+  saveConfig(@Body() payload: WhatsAppConfigDto, @Req() req: RequestWithAuth): Promise<{ ok: boolean }> {
     return this.whatsappService.saveConfig(payload, req.authContext!);
   }
 
@@ -59,7 +61,7 @@ export class WhatsAppPublicWebhookController {
   }
 
   @Post('webhook')
-  handleWebhook(@Body() body: any, @Req() req: any, @Query('tenantId') tenantId?: string) {
+  handleWebhook(@Body() body: WhatsAppWebhookDto, @Req() req: any, @Query('tenantId') tenantId?: string) {
     return this.whatsappService.handleVerifiedInboundWebhook(
       body,
       tenantId,
@@ -69,7 +71,7 @@ export class WhatsAppPublicWebhookController {
   }
 
   @Post('webhook/:tenantId')
-  handleTenantWebhook(@Param('tenantId') tenantId: string, @Body() body: any, @Req() req: any) {
+  handleTenantWebhook(@Param('tenantId') tenantId: string, @Body() body: WhatsAppWebhookDto, @Req() req: any) {
     return this.whatsappService.handleVerifiedInboundWebhook(
       body,
       tenantId,

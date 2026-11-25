@@ -5,6 +5,7 @@ import { RequirePermissions } from '../../../core/auth/decorators/permissions.de
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { DailyDigestService, DailyDigestConfig } from '../services/daily-digest.service';
+import { DailyDigestConfigDto } from '../dto/settings-write.dto';
 
 @Controller('api/settings/daily-digest')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -19,7 +20,7 @@ export class DailyDigestController {
 
   @Post('config')
   @RequirePermissions('canManageSettings')
-  saveConfig(@Body() payload: Partial<DailyDigestConfig>, @Req() req: RequestWithAuth): Promise<{ ok: boolean }> {
+  saveConfig(@Body() payload: DailyDigestConfigDto, @Req() req: RequestWithAuth): Promise<{ ok: boolean }> {
     return this.dailyDigestService.saveConfig(payload, req.authContext!);
   }
 

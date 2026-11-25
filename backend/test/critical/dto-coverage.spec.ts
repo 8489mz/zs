@@ -1,7 +1,7 @@
 /*
  * D1 DTO coverage guard: the whole-body @Body() sites whose type is not a
- * *Dto class are pinned at exactly 111 at D6 (102 convertible + the 9
- * pinned exclusions below; 264 at D1, 249 at D2, 191 at D3, 163 at D4, 136 at D5).
+ * *Dto class are pinned at exactly 89 at D7 (80 convertible + the 9
+ * pinned exclusions below; 264 at D1, 249 at D2, 191 at D3, 163 at D4, 136 at D5, 111 at D6).
  * Package C keeps the pin at 136 (136 + 0 CRLF + 1 reveal - 1 convert). The count is produced by
  * backend/scripts/dto-coverage-check.mjs, a port of the item-(5)
  * (~/workspace/audit/dto-census.py, re-counted at d1989b74e: 681 @Body(
@@ -53,6 +53,14 @@
  * 488 -> 513, inline-object 68 -> 57, any 25 -> 22, dto-interface
  * 25 -> 14.
  *
+ * D7 (INV-DTO-SETTINGS-22): settings converts 22 sites (3
+ * inline-other + 14 inline-object + 5 any) and the pin moves
+ * 111 -> 89 (80 convertible + the 9 pinned exclusions below).
+ * The live census re-derived the list (the grounding's 22 held
+ * exactly). Whole-body total stays 624; the buckets move dto-class
+ * 513 -> 535, inline-object 57 -> 43, any 22 -> 17, inline-other
+ * 7 -> 4.
+ *
  * WHY THE NUMBER IS 264 AND NOT 211: the verification files counted 211
  * sites without a *Dto-named type, but 47 of the 407 "with DTO" sites use
  * an INTERFACE named *Dto, not a class — and the global ValidationPipe
@@ -65,7 +73,7 @@
  *   raw text/Buffer, not JSON. A DTO class would fail or mangle a
  *   non-JSON body and silently lose fingerprint punches.
  * - 4 x `Record<string, unknown>` settings endpoints
- *   (settings.controller.ts:52, settings-backup.controller.ts:60, :68,
+ *   (settings.controller.ts:52, settings-backup.controller.ts:61, :69,
  *   tenant-transfer.controller.ts:53): open-ended key/value map by
  *   design — no fixed field set exists to validate.
  * - 1 x `any` (tenant-subscription.controller.ts:396): POST
@@ -104,11 +112,11 @@ import * as path from 'path';
 const BACKEND = path.resolve(__dirname, '../..');
 const SCRIPT = 'scripts/dto-coverage-check.mjs';
 
-/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D6 (111 after accounting converts 25). */
-const PINNED_COUNT = 111;
+/** Whole-body @Body() sites whose type is not a *Dto class — pinned at D7 (89 after settings converts 22). */
+const PINNED_COUNT = 89;
 
-/** Convertible sites inside the pinned count (111 - 9 exclusions). */
-const CONVERTIBLE_COUNT = 102;
+/** Convertible sites inside the pinned count (89 - 9 exclusions). */
+const CONVERTIBLE_COUNT = 80;
 
 /** The 9 pinned exclusions (paths relative to backend/, line = @Body() line). */
 const PINNED_EXCLUSIONS: Array<{ file: string; line: number }> = [
@@ -116,8 +124,8 @@ const PINNED_EXCLUSIONS: Array<{ file: string; line: number }> = [
   { file: 'src/modules/hr/controllers/biometric-attendance.controller.ts', line: 153 },
   { file: 'src/modules/hr/controllers/biometric-attendance.controller.ts', line: 196 },
   { file: 'src/modules/hr/controllers/biometric-attendance.controller.ts', line: 227 },
-  { file: 'src/modules/settings/controllers/settings-backup.controller.ts', line: 60 },
-  { file: 'src/modules/settings/controllers/settings-backup.controller.ts', line: 68 },
+  { file: 'src/modules/settings/controllers/settings-backup.controller.ts', line: 61 },
+  { file: 'src/modules/settings/controllers/settings-backup.controller.ts', line: 69 },
   { file: 'src/modules/settings/controllers/tenant-transfer.controller.ts', line: 53 },
   { file: 'src/modules/settings/settings.controller.ts', line: 52 },
   { file: 'src/modules/tenant-subscription/tenant-subscription.controller.ts', line: 396 },

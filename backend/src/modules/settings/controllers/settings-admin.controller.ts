@@ -5,6 +5,13 @@ import { SuperAdminRoleGuard } from '../../../core/auth/guards/super-admin-role.
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { SettingsAdminService } from '../services/settings-admin.service';
 import { SettingsDemoDataService } from '../services/settings-demo-data.service';
+import {
+  ClearDemoDataDto,
+  ResetStockBalancesDto,
+  WipeCatalogProductsDto,
+  WipeDemoDataDto,
+} from '../dto/settings-write.dto';
+import { SeedDemoDataDto } from '../dto/seed-demo-data.dto';
 
 @Controller('api/admin')
 @UseGuards(SessionAuthGuard, AdminRoleGuard)
@@ -75,29 +82,29 @@ export class SettingsAdminController {
   }
 
   @Post('demo-data/seed')
-  seedDemoData(@Body() body: any, @Req() req: RequestWithAuth) {
+  seedDemoData(@Body() body: SeedDemoDataDto, @Req() req: RequestWithAuth) {
     return this.demoDataService.seedComprehensiveDemoData(body || {}, req.authContext!);
   }
 
   @Post('demo-data/clear')
   @UseGuards(SuperAdminRoleGuard)
-  clearDemoData(@Body() body: { password?: string }, @Req() req: RequestWithAuth) {
+  clearDemoData(@Body() body: ClearDemoDataDto, @Req() req: RequestWithAuth) {
     return this.demoDataService.clearDemoData(body?.password || '', req.authContext!);
   }
 
   @Post('demo-data/wipe')
   @UseGuards(SuperAdminRoleGuard)
-  wipeDemoData(@Body() body: { password?: string }, @Req() req: RequestWithAuth) {
+  wipeDemoData(@Body() body: WipeDemoDataDto, @Req() req: RequestWithAuth) {
     return this.demoDataService.wipeAllData(body?.password || '', req.authContext!);
   }
 
   @Post('reset-stock-balances')
-  resetStockBalances(@Body() body: { password?: string }, @Req() req: RequestWithAuth) {
+  resetStockBalances(@Body() body: ResetStockBalancesDto, @Req() req: RequestWithAuth) {
     return this.demoDataService.resetStockBalances(body?.password || '', req.authContext!);
   }
 
   @Post('wipe-catalog-products')
-  wipeCatalogProducts(@Body() body: { password?: string }, @Req() req: RequestWithAuth) {
+  wipeCatalogProducts(@Body() body: WipeCatalogProductsDto, @Req() req: RequestWithAuth) {
     return this.demoDataService.wipeCatalogAndStock(body?.password || '', req.authContext!);
   }
 }

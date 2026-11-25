@@ -23,6 +23,7 @@ import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth
 import { SettingsBackupService } from '../services/settings-backup.service';
 import { CloudBackupService, CloudBackupConfig } from '../services/cloud-backup.service';
 import { BackupEnvelopeDto } from '../dto/backup-envelope.dto';
+import { CloudBackupConfigDto } from '../dto/settings-write.dto';
 
 @Controller('api')
 @UseGuards(SessionAuthGuard, AdminRoleGuard)
@@ -82,10 +83,7 @@ export class SettingsBackupController {
   }
 
   @Post('backup/cloud/config')
-  saveCloudConfig(
-    @Body() payload: Partial<CloudBackupConfig>,
-    @Req() req: RequestWithAuth,
-  ): Promise<CloudBackupConfig> {
+  saveCloudConfig(@Body() payload: CloudBackupConfigDto, @Req() req: RequestWithAuth): Promise<CloudBackupConfig> {
     return this.cloudBackupService.saveCloudConfig(payload, req.authContext!);
   }
 
@@ -109,7 +107,7 @@ export class SettingsBackupController {
       }),
     )
     file: Express.Multer.File | undefined,
-    @Body() body: any,
+    @Body() body: BackupEnvelopeDto,
     @Req() _req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     let payload: unknown = undefined;
@@ -135,7 +133,7 @@ export class SettingsBackupController {
       }),
     )
     file: Express.Multer.File | undefined,
-    @Body() body: any,
+    @Body() body: BackupEnvelopeDto,
     @Req() req: RequestWithAuth,
     @Query('dryRun', new ParseBoolPipe({ optional: true })) dryRun?: boolean,
   ): Promise<Record<string, unknown>> {

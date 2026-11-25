@@ -95,7 +95,7 @@ export class OfflineReleasesAdmin {
 
   async createRelease(
     _auth: AuthContext,
-    body: { version: string; changelog: string; patchUrl: string; passcode?: string; requiresPasscode?: boolean },
+    body: { version: string; changelog?: string; patchUrl: string; passcode?: string; requiresPasscode?: boolean },
   ) {
     const { version, changelog, patchUrl, passcode, requiresPasscode } = body;
 

@@ -85,7 +85,7 @@ export class OfflineReleasesService implements OnModuleInit {
   }
   async createRelease(
     _auth: AuthContext,
-    body: { version: string; changelog: string; patchUrl: string; passcode?: string; requiresPasscode?: boolean },
+    body: { version: string; changelog?: string; patchUrl: string; passcode?: string; requiresPasscode?: boolean },
   ) {
     return this.s5.createRelease(_auth, body);
   }
@@ -99,7 +99,7 @@ export class OfflineReleasesService implements OnModuleInit {
   async triggerUpdate(auth: AuthContext) {
     return this.s6.triggerUpdate(auth);
   }
-  async applyLocalUpdate(body: { version: string; patchUrl: string; changelog: string; passcode?: string }) {
+  async applyLocalUpdate(body: { version: string; patchUrl: string; changelog?: string; passcode?: string }) {
     return this.s6.applyLocalUpdate(body);
   }
 

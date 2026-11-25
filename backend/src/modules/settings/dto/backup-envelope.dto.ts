@@ -10,6 +10,11 @@ class BackupMetaDto {
   @IsString()
   exportedAt?: string;
 
+  // Legacy snake_case key — normalizeEnvelope reads exported_at too.
+  @IsOptional()
+  @IsString()
+  exported_at?: string;
+
   @IsOptional()
   @IsString()
   source?: string;

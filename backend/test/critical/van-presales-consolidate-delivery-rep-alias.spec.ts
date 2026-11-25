@@ -197,7 +197,7 @@ async function main(): Promise<void> {
   }
 
   // 5. This spec is wired into both critical lists, in identical order
-  // (343 specs — F18 wired van-presales-consolidate-delivery-rep-alias
+  // (344 specs — F18 wired van-presales-consolidate-delivery-rep-alias
   // and van-presales-order-details-line-total).
   {
     const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
@@ -205,11 +205,11 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 343);
-    assert.equal(chain.length, 343);
+    assert.equal(specs.length, 344);
+    assert.equal(chain.length, 344);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-presales-consolidate-delivery-rep-alias.spec.ts'));
-    console.log('5. evidence spec wired into both critical lists (343 = 343, identical order), passed');
+    console.log('5. evidence spec wired into both critical lists (344 = 344, identical order), passed');
   }
 
   console.log('van-presales-consolidate-delivery-rep-alias: all cases passed');
