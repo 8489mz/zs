@@ -17,6 +17,7 @@ import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import {
   SessionService,
+  SESSION_TTL_MS,
   isMfaChallenge,
   type AuthenticatedSessionResult,
 } from '../../core/auth/services/session.service';
@@ -371,7 +372,13 @@ export class SessionsController {
   @Get('me')
   @UseGuards(SessionAuthGuard)
   me(@Req() req: RequestWithAuth, @Res({ passthrough: true }) res: Response): Promise<Record<string, unknown>> {
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    // S2 (INV-SESSION-ME-COOKIE-DB-EXPIRY): the cookie carries the DB row's
+    // expiry — as resolved (and possibly renewed) by resolveAuthContext —
+    // never a freshly computed value. The old code minted now + 30 days here,
+    // so the cookie outlived the DB session on every bootstrap. The guard
+    // guarantees resolveAuthContext ran, so expiresAt is always set; the
+    // fallback only guards a future construction site that forgets it.
+    const expiresAt = req.authContext!.expiresAt ?? new Date(Date.now() + SESSION_TTL_MS);
     this.setAuthCookies(res, req.authContext!.sessionId, expiresAt);
     return this.sessionService.buildMePayload(req.authContext!);
   }

@@ -53,7 +53,7 @@ const MFA_CHALLENGE_TTL_MS = 5 * 60 * 1000;
  * المدة المتبقية أقل من يوم، يُمدَّد `expires_at` إلى الآن + 7 أيام — كتابة
  * واحدة في اليوم لكل جلسة نشطة كحد أقصى، لا كتابة مع كل طلب.
  */
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_RENEWAL_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 const MFA_CHALLENGE_ERRORS: PortalTokenErrorSpec = {
   missing: { message: 'انتهت جلسة التحقق. أعد تسجيل الدخول.', code: 'MFA_CHALLENGE_INVALID' },
@@ -355,6 +355,12 @@ export class SessionService {
 
     // Cache the resolved auth context!
     // A cached authorization must never outlive the underlying session row.
+    // S2: carry the (possibly renewed) row expiry on the context — the /me
+    // handler sets the cookie from it, so cookie and DB can no longer disagree.
+    // The cache stores this object by reference and the row cannot change
+    // while cached (renewal happens on the cache-miss path only), so a cache
+    // hit returns an expiry that still equals the row.
+    auth.expiresAt = effectiveExpiresAt;
     this.authCache.setSession(sessionId, auth, Math.min(60, (effectiveExpiresAt.getTime() - Date.now()) / 1000));
     return auth;
 
