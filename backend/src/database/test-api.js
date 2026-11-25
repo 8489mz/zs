@@ -1,3 +1,5 @@
+/* global require, console -- flat config ignores eslint-env comments, so this declares the Node runtime globals this plain .js CJS script actually runs with. */
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- plain .js CommonJS script: require() is the correct import mechanism here; an ESM import would be a runtime SyntaxError in this package.
 const http = require('http');
 
 const data = JSON.stringify({

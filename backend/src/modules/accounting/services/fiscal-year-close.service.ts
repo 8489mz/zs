@@ -315,7 +315,7 @@ export class FiscalYearCloseService {
     const endDate = this.formatDate(fy.end_date);
 
     // Retained Earnings Account
-    let retainedEarningsAccountId = dto.retainedEarningsAccountId
+    const retainedEarningsAccountId = dto.retainedEarningsAccountId
       ? Number(dto.retainedEarningsAccountId)
       : preview.retainedEarningsAccount?.id;
 

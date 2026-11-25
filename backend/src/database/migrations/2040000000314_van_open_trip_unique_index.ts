@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0314 — one open van trip per rep (INV-VAN-TRIP-LOCKED-STATE-RECHECK).

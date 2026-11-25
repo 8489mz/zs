@@ -1,11 +1,9 @@
-import { sql } from '../../../database/kysely';
-import type { Kysely } from '../../../database/kysely';
+import { sql, type Kysely } from '../../../database/kysely';
 import type { Database } from '../../../database/database.types';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, type Logger } from '@nestjs/common';
 import type { AiProvider } from './ai-copilot-types';
-import type { Logger } from '@nestjs/common';
 
 export class AiCopilotConfig {
   constructor(
@@ -154,7 +152,7 @@ export class AiCopilotConfig {
     const isExplicitKeyPassed = typeof payload.apiKey === 'string' && payload.apiKey.trim().length > 0;
     const keyVal = isExplicitDelete ? '' : isExplicitKeyPassed ? payload.apiKey!.trim() : (existingConfig.apiKey || '');
 
-    let provider = payload.provider || existingConfig.provider || (keyVal.startsWith('sk-') ? 'openai' : 'gemini');
+    const provider = payload.provider || existingConfig.provider || (keyVal.startsWith('sk-') ? 'openai' : 'gemini');
     let model = isExplicitDelete ? '' : (payload.model !== undefined ? payload.model.trim() : (existingConfig.model || ''));
     if (/[^\x20-\x7E]/.test(model)) {
       model = '';

@@ -1,8 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, type Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { Logger } from '@nestjs/common';
-import { parseTerminalHostAndPort } from './pos-terminal-shared';
-import type { TerminalPaymentRequest, TerminalPaymentSession, BridgeJob, PosTerminalInfo } from './pos-terminal-shared';
+import { parseTerminalHostAndPort, type TerminalPaymentRequest, type TerminalPaymentSession, type BridgeJob, type PosTerminalInfo } from './pos-terminal-shared';
 
 export class PosTerminalPayments {
   constructor(

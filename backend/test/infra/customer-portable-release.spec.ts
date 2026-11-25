@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+/* eslint-disable @typescript-eslint/no-require-imports -- the targets are untyped repo-root .cjs scripts (no .d.ts can live beside them from this checkout); the `as {...}` casts below give them their shapes. */
 const {
   copyDirectoryFiltered,
   isExcludedPortablePath,
@@ -13,6 +14,7 @@ const {
 const { verifyPortableRelease } = require('../../../scripts/verify-customer-portable-release.cjs') as {
   verifyPortableRelease: (releaseRoot: string) => { ok: boolean; root: string };
 };
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 function writeFile(root: string, relPath: string, content = 'x'): void {
   const fullPath = path.join(root, relPath);

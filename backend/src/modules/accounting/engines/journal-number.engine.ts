@@ -1,5 +1,4 @@
-import type { Kysely } from '../../../database/kysely';
-import { sql } from '../../../database/kysely';
+import { type Kysely, sql } from '../../../database/kysely';
 import type { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 

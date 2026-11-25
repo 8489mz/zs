@@ -170,7 +170,7 @@ function testCashierTemplateOpensNoMoney(): void {
       if (!entry.name.endsWith('.controller.ts')) continue;
 
       const source = readFileSync(full, 'utf8').replace(/\r\n/g, '\n');
-      const prefix = (/@Controller\('([^']*)'\)/.exec(source) || [, ''])[1];
+      const prefix = (/@Controller\('([^']*)'\)/.exec(source) || ['', ''])[1];
       const guardedByAccounting = source.includes('AccountingAccessGuard');
       const classAll = parse(/^@RequirePermissions\(([^)]*)\)/m.exec(source)?.[1]);
       const classAny = parse(/^@RequireAnyPermission\(([^)]*)\)/m.exec(source)?.[1]);
@@ -233,7 +233,6 @@ function run(): void {
   testFinancialControllersAreGuarded();
   testPermissionLabelsAreDistinguishable();
   testCashierTemplateOpensNoMoney();
-  // eslint-disable-next-line no-console
   console.log('accounting-access.spec: ACC-ACCESS-1..5 hold — "accounts" no longer opens the books');
 }
 
@@ -241,7 +240,6 @@ try {
   run();
   process.exit(0);
 } catch (error) {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 }

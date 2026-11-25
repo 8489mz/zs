@@ -1,7 +1,6 @@
-import { sql } from '../../../../database/kysely';
+import { sql, type Kysely } from '../../../../database/kysely';
 import { executeWipeTables } from '../settings-demo-data-wipe-tables';
 import { resetTenantStockToZero } from '../../../../common/utils/location-stock-ledger';
-import type { Kysely } from '../../../../database/kysely';
 import type { Database } from '../../../../database/database.types';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import type { AuditService } from '../../../../core/audit/audit.service';

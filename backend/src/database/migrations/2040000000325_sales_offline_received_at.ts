@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0325 — add sales.received_at (server receipt instant for offline sales).

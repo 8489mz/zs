@@ -60,7 +60,7 @@ export class AccountingFixedAssetsService {
   }
 
   private async ensureDepreciationAccounts(trx: any, tenantId: string, accountId: string): Promise<{ deprExpenseAccountId: number; accumDeprAccountId: number }> {
-    let accumRow = await trx
+    const accumRow = await trx
       .selectFrom('accounting_accounts')
       .select(['id', 'code'])
       .where('tenant_id', '=', tenantId)
@@ -107,7 +107,7 @@ export class AccountingFixedAssetsService {
       accumDeprAccountId = Number(created.id);
     }
 
-    let expenseRow = await trx
+    const expenseRow = await trx
       .selectFrom('accounting_accounts')
       .select(['id', 'code'])
       .where('tenant_id', '=', tenantId)
@@ -308,10 +308,7 @@ export class AccountingFixedAssetsService {
         ? `إهلاك الأصل ${asset.name} (${asset.code}): ${body.note}`
         : `إهلاك الأصل ${asset.name} (${asset.code}) - ${method === 'declining_balance' ? 'قسط متناقص' : 'قسط ثابت'}`;
 
-      let journalEntryId: number;
-      let finalEntryNo: string;
-
-      journalEntryId = await posting.postDomainJournal(trx, {
+      const journalEntryId = await posting.postDomainJournal(trx, {
         sourceType: 'depreciation',
         sourceId: id,
         tenantId: scope.tenantId,
@@ -348,7 +345,7 @@ export class AccountingFixedAssetsService {
       // fail closed rather than reporting a fabricated number.
       const postedEntryNo = await readJournalEntryNo(trx, scope.tenantId, journalEntryId);
       if (!postedEntryNo) throw new Error('Depreciation journal entry number is missing after posting');
-      finalEntryNo = postedEntryNo;
+      const finalEntryNo = postedEntryNo;
 
       // 4. Update Fixed Asset Record
       await trx

@@ -310,7 +310,7 @@ export class ContractingMasterBoqService {
       throw new NotFoundException('البند المرجعي غير موجود');
     }
 
-    const newStatus = targetActive !== undefined ? targetActive : !Boolean(item.is_active);
+    const newStatus = targetActive !== undefined ? targetActive : !item.is_active;
 
     if (item.tenant_id === tenantId) {
       const updated = await (this.db as any)

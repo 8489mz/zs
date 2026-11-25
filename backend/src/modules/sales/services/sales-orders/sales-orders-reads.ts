@@ -1,6 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import type { Kysely } from 'kysely';
-import { sql } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import type { Database } from '../../../../database/database.types';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';

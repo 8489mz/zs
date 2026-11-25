@@ -166,8 +166,8 @@ export class StorefrontPaymentWebhooks2Service {
     const metadata = body?.metadata || {};
     const reference = body?.reference || {};
 
-    let orderNumber = String(metadata?.orderNumber || reference?.order || reference?.transaction || '');
-    let tenantId = String(metadata?.tenantId || '');
+    const orderNumber = String(metadata?.orderNumber || reference?.order || reference?.transaction || '');
+    const tenantId = String(metadata?.tenantId || '');
 
     const order = await this.resolveWebhookOrder({
       provider: 'Tap',

@@ -1,4 +1,3 @@
-/* eslint-disable */
 // ملف مُولَّد آلياً — لا تعدّله يداً.
 // المصدر: pricing/pricing-catalog.json
 // أعد التوليد بـ: node pricing/validate-catalog.mjs

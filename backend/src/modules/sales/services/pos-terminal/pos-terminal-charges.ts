@@ -1,7 +1,6 @@
 import * as net from 'node:net';
 import type { Logger } from '@nestjs/common';
-import { translateBankResponseCode, isPrivateSubnetIp } from './pos-terminal-shared';
-import type { TerminalPaymentSession, PosTerminalInfo, TerminalPaymentRequest } from './pos-terminal-shared';
+import { translateBankResponseCode, isPrivateSubnetIp, type TerminalPaymentSession, type PosTerminalInfo, type TerminalPaymentRequest } from './pos-terminal-shared';
 
 export class PosTerminalCharges {
   constructor(private readonly logger: Logger) {}

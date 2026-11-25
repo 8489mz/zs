@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { strict as assert } from 'node:assert';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import * as acorn from 'acorn';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { CatalogProductService } from '../../src/modules/catalog/services/catalog-product.service';
 import { CatalogProductPosService } from '../../src/modules/catalog/services/catalog-product-pos.service';
@@ -172,7 +173,7 @@ async function testCheckoutSettingsUseTransactionConnection(): Promise<void> {
 function testHotPathIndexMigration(): void {
   const file = join(SRC, 'database', 'migrations', '2040000000136_performance_hot_path_indexes.ts');
   assert.ok(existsSync(file), 'migration 136 (hot-path indexes) must exist');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- the migration path is computed at runtime; a static import cannot express it, and require() is the only loader that reads .ts under ts-node CJS.
   const { migration } = require(file);
   assert.equal(typeof migration.up, 'function');
   assert.equal(typeof migration.down, 'function');
@@ -265,11 +266,9 @@ async function run(): Promise<void> {
   await testCheckoutSettingsUseTransactionConnection();
   testHotPathIndexMigration();
   await testStorefrontStaleWhileRevalidate();
-  // eslint-disable-next-line no-console
   testPublicCatalogIsSerializedOnce();
   testLoadSuiteIsUsable();
 
-  // eslint-disable-next-line no-console
   console.log('performance-hot-paths.spec: all performance invariants hold (PERF-1..PERF-4, PERF-9, PERF-10, PERF-15) and the load suite is wired');
 }
 
@@ -333,8 +332,6 @@ function testLoadSuiteIsUsable(): void {
   // inside a single-quoted English string ("another branch's warehouse") that re-tokenised into
   // something the CJS wrapper accepted and goja did not. A green local check, a dead production
   // round. acorn in module mode flags it at 255:41 — one column off k6's own number.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const acorn = require('acorn');
   const scenarioFiles = readdirSync(join(ROOT, 'load-tests', 'scenarios'))
     .filter((name) => name.endsWith('.js'))
     .map((name) => `scenarios/${name}`);
@@ -439,7 +436,7 @@ function testLoadSuiteIsUsable(): void {
   for (const scenario of ['pos-catalog-sync.js', 'storefront-checkout.js', 'stress-all.js', 'auth-login-burst.js', 'pos-sell.js']) {
     const raw = loadFile(join('scenarios', scenario));
     const body = codeOf(raw);
-    const imported = (raw.match(/import\s*\{([\s\S]*?)\}\s*from\s*'\.\.\/config\.js'/) || [, ''])[1];
+    const imported = (raw.match(/import\s*\{([\s\S]*?)\}\s*from\s*'\.\.\/config\.js'/) || ['', ''])[1];
     for (const name of ['SESSION_COOKIE_NAME', 'writerIpHeaders', 'classifyWriteFailure', 'clientIpHeaders', 'rampProfile']) {
       if (new RegExp(`\\b${name}\\b`).test(body)) {
         assert.ok(
@@ -716,7 +713,6 @@ function testLoadSuiteIsUsable(): void {
 run().then(
   () => process.exit(0),
   (error) => {
-    // eslint-disable-next-line no-console
     console.error(error);
     process.exit(1);
   },

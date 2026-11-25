@@ -1,10 +1,8 @@
-import { sql } from '../../../database/kysely';
-import type { Kysely } from '../../../database/kysely';
+import { sql, type Kysely } from '../../../database/kysely';
 import type { Database } from '../../../database/database.types';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
-import type { CopilotResponse } from './ai-copilot-types';
-import type { AiProvider } from './ai-copilot-types';
+import type { CopilotResponse, AiProvider } from './ai-copilot-types';
 import type { Logger } from '@nestjs/common';
 
 export class AiCopilotAsk {

@@ -617,6 +617,7 @@ async function testOnlinePaidOrderSaleConversion(): Promise<void> {
     }),
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- load-bearing: this spec constructs StorefrontService with only (db, salesService), but the typed constructor requires 4-6 args (kdsService + media are unused by the convertToSale path); a static import cannot express this 2-arg construction, so the untyped require is the only way to build it.
   const storefrontService = new (require('../../src/modules/storefront/storefront.service').StorefrontService)(
     db,
     mockSalesService,

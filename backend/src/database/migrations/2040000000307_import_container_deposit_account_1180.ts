@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0307 — seed account 1180 "تأمينات الحاويات المستردة" (Refundable

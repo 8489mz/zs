@@ -115,7 +115,7 @@ function runRouteShape(): void {
 
   for (const method of publicMethods) {
     assert.equal(typeof proto[method], 'function', `SessionsController.${method} مفقود`);
-    const guards = (Reflect.getMetadata(GUARDS_METADATA, proto[method]) || []).map((g: Function) => g?.name || '');
+    const guards = (Reflect.getMetadata(GUARDS_METADATA, proto[method]) || []).map((g: { name?: string }) => g?.name || '');
     assert.ok(!guards.includes(SessionAuthGuard.name), `${method} يجب أن يبقى عاماً بلا SessionAuthGuard`);
     assert.equal(Reflect.getMetadata(METHOD_METADATA, proto[method]), 1, `${method} يجب أن يكون POST`);
   }
@@ -126,7 +126,7 @@ function runRouteShape(): void {
   assert.equal(Reflect.getMetadata(PATH_METADATA, SessionsController), 'api/auth');
 
   // الجار المحروس: لو سقط الحارس عن تغيير كلمة المرور صار أي مجهول يغيّرها.
-  const changePasswordGuards = (Reflect.getMetadata(GUARDS_METADATA, proto.changePassword) || []).map((g: Function) => g?.name || '');
+  const changePasswordGuards = (Reflect.getMetadata(GUARDS_METADATA, proto.changePassword) || []).map((g: { name?: string }) => g?.name || '');
   assert.ok(changePasswordGuards.includes(SessionAuthGuard.name), 'change-password يجب أن يبقى خلف SessionAuthGuard');
 }
 

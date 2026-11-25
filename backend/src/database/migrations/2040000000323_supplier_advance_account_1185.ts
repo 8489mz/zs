@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0323 — seed account 1185 "دفعات مقدمة للموردين" (Supplier Advances)

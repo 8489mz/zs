@@ -2,9 +2,8 @@ import { ForbiddenException } from '@nestjs/common';
 import { sql } from '../../../../database/kysely';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';
 import { formatBranchStockLocationName } from '../../../../common/utils/branch-stock.util';
-import { normalizeImportKey, cleanString, normalizeArabicDigits } from './settings-import-shared';
+import { normalizeImportKey, cleanString, normalizeArabicDigits, type TenantScope, type DbExecutor } from './settings-import-shared';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
-import type { TenantScope, DbExecutor } from './settings-import-shared';
 
 export class SettingsImportGuards {
   assertAdmin(auth?: AuthContext | null): asserts auth is AuthContext {

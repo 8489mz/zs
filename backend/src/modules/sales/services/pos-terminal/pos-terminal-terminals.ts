@@ -1,8 +1,7 @@
 import type { Kysely } from '../../../../database/kysely';
 import type { Database } from '../../../../database/database.types';
 import type { Logger } from '@nestjs/common';
-import { parseTerminalHostAndPort } from './pos-terminal-shared';
-import type { PosTerminalInfo } from './pos-terminal-shared';
+import { parseTerminalHostAndPort, type PosTerminalInfo } from './pos-terminal-shared';
 
 export class PosTerminalTerminals {
   constructor(

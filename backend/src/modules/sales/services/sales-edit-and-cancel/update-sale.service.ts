@@ -20,8 +20,7 @@ import { applyStockDelta, previewConsumableStockQty } from '../../../../common/u
 import { posSellsFromAllOperationalLocations } from '../../../../common/engines/branch-sellable-locations.engine';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';
 import { formatCreditLimitExceededMessage } from '../credit-limit-message';
-import type { SalesEditAndCancelDeps } from './sales-edit-and-cancel-types';
-import { applyTripCounterDelta, lockOpenTripRow } from './sales-edit-and-cancel-types';
+import { type SalesEditAndCancelDeps, applyTripCounterDelta, lockOpenTripRow } from './sales-edit-and-cancel-types';
 import type { PreparedWasteAndShiftRefreshService } from './prepared-waste-and-shift-refresh.service';
 
 export class UpdateSaleService {

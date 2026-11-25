@@ -48,13 +48,13 @@ function parseComposeBackendEnv(content) {
         continue;
       }
 
-      if (/^  [A-Za-z0-9_-]+:$/.test(line)) {
+      if (/^ {2}[A-Za-z0-9_-]+:$/.test(line)) {
         break;
       }
       continue;
     }
 
-    const envMatch = line.match(/^      ([A-Z0-9_]+):\s*(.*)$/);
+    const envMatch = line.match(/^ {6}([A-Z0-9_]+):\s*(.*)$/);
     if (envMatch) {
       env[envMatch[1]] = envMatch[2].trim().replace(/^['"]|['"]$/g, '');
       continue;
@@ -92,13 +92,13 @@ function parseGithubJobEnv(content, jobName) {
         continue;
       }
 
-      if (/^  [A-Za-z0-9_-]+:$/.test(line)) {
+      if (/^ {2}[A-Za-z0-9_-]+:$/.test(line)) {
         break;
       }
       continue;
     }
 
-    const envMatch = line.match(/^      ([A-Z0-9_]+):\s*(.*)$/);
+    const envMatch = line.match(/^ {6}([A-Z0-9_]+):\s*(.*)$/);
     if (envMatch) {
       env[envMatch[1]] = envMatch[2].trim().replace(/^['"]|['"]$/g, '');
       continue;

@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0310 — header fields for held drafts (INV-REST-HOLD-RECALL-TRUTH, R5-B I29/I31).

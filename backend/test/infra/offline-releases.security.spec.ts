@@ -3,6 +3,7 @@ import { OfflineReleasesService } from '../../src/modules/settings/services/offl
 import * as crypto from 'crypto';
 import AdmZip from 'adm-zip';
 import * as fs from 'fs';
+import * as path from 'path';
 import * as cp from 'child_process';
 
 async function run() {
@@ -11,16 +12,16 @@ async function run() {
   // Mock env
   process.env.APP_MODE = 'SELF_CONTAINED';
   process.env.PORTABLE_MODE = 'true';
-  process.env.ELECTRON_EXE_PATH = require('path').join(process.cwd(), 'electron.exe');
+  process.env.ELECTRON_EXE_PATH = path.join(process.cwd(), 'electron.exe');
   process.env.NODE_ENV = 'test';
 
   const exitOrig = process.exit;
   (process as any).exit = () => {};
 
   // Create dummy ApplyAndRestart.ps1
-  const scriptDir = require('path').join(process.cwd(), 'tools', 'launcher', 'scripts');
-  require('fs').mkdirSync(scriptDir, { recursive: true });
-  require('fs').writeFileSync(require('path').join(scriptDir, 'ApplyAndRestart.ps1'), '');
+  const scriptDir = path.join(process.cwd(), 'tools', 'launcher', 'scripts');
+  fs.mkdirSync(scriptDir, { recursive: true });
+  fs.writeFileSync(path.join(scriptDir, 'ApplyAndRestart.ps1'), '');
 
   function createValidManifest(zip: AdmZip) {
     const files = [

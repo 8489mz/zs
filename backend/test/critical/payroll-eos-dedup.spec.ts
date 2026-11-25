@@ -54,9 +54,11 @@ import { calculateSettlementAbsorption } from '../../src/modules/hr/engines/eos-
 
 // Routing-pin handles: the same CommonJS module objects the services
 // imported, so assigning a wrapper here intercepts the services' calls.
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- load-bearing: this test assigns wrapper functions onto the CJS module object (and restores them after); ESM namespace imports are read-only, so a static import cannot express this.
 const payrollEngineModule = require('../../src/modules/hr/engines/payroll-calculation.engine') as {
   calculateProgressiveDelayDeduction: typeof calculateProgressiveDelayDeduction;
 };
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- same routing-pin as above: the module object is mutated by this test.
 const eosEngineModule = require('../../src/modules/hr/engines/eos-calculation.engine') as {
   calculateSettlementAbsorption: typeof calculateSettlementAbsorption;
 };

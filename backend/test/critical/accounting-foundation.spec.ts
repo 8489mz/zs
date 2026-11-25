@@ -148,7 +148,7 @@ function testForbiddenPatternsAreGone(): void {
 
   // ابتلاع فشل التهيئة هو ما جعل الترحيل يفشل بصمت بعده.
   assert.ok(
-    !/catch \(err: any\) \{[\s\S]{0,200}this\.logger\.error[\s\S]{0,120}\n    \}\n  \}\n\}/.test(foundation),
+    !/catch \(err: any\) \{[\s\S]{0,200}this\.logger\.error[\s\S]{0,120}\n {4}\}\n {2}\}\n\}/.test(foundation),
     'ensureForScope must not swallow its own failure',
   );
   assert.ok(
@@ -199,7 +199,7 @@ function testForbiddenPatternsAreGone(): void {
 /** الهجرة 147 موجودة وقابلة للرجوع. */
 function testMigrationContract(): void {
   const file = join(SRC, 'database', 'migrations', '2040000000147_accounting_posting_failures.ts');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- the migration path is computed at runtime; a static import cannot express it, and require() is the only loader that reads .ts under ts-node CJS.
   const { migration } = require(file);
   assert.equal(typeof migration.up, 'function');
   assert.equal(typeof migration.down, 'function');
@@ -214,7 +214,6 @@ function run(): void {
   testSettingsMappingResolution();
   testForbiddenPatternsAreGone();
   testMigrationContract();
-  // eslint-disable-next-line no-console
   console.log('accounting-foundation.spec: ACC-1..ACC-4 hold — no tenant can sell without books, and no failed journal is silent');
 }
 
@@ -222,7 +221,6 @@ try {
   run();
   process.exit(0);
 } catch (error) {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 }

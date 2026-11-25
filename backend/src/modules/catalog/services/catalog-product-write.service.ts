@@ -343,7 +343,7 @@ export class CatalogProductWriteService {
   async ensureCategoryAndSupplierInTenant(payload: NormalizedUpsertProduct, actor: AuthContext): Promise<void> {
     const tenantId = this.tenantId(actor);
     if (payload.itemType === 'service' && !payload.categoryId) {
-      let existingCategory = await this.db
+      const existingCategory = await this.db
         .selectFrom('product_categories')
         .select(['id', 'is_active'])
         .where(sql`LOWER(TRIM(name))`, '=', 'خدمات')

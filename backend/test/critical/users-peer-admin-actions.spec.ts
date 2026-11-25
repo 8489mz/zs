@@ -198,7 +198,6 @@ async function main(): Promise<void> {
     assert.equal((neutral as any).ok, true);
     assert.equal((await readUser(2)).username, 'admin-two-renamed');
 
-    // eslint-disable-next-line no-console
     console.log('users peer admin actions checks passed');
   } finally {
     await db.destroy();
@@ -206,7 +205,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 });

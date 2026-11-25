@@ -182,7 +182,6 @@ function run(): void {
   testBodiesMatchDtos();
   testRoutesExist();
   testPipeStillForbidsExtraFields();
-  // eslint-disable-next-line no-console
   console.log('load-test-contract.spec: LTC-1..LTC-3 hold — every field and every route the load suite uses exists');
 }
 
@@ -190,7 +189,6 @@ try {
   run();
   process.exit(0);
 } catch (error) {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 }

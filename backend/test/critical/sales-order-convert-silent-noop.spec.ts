@@ -170,7 +170,6 @@ async function main() {
     assert.ok(/onError/.test(convertMutationBlock), 'QuotationsPage convertMutation must have an onError handler');
     assert.ok(/toast\.error/.test(convertMutationBlock), 'QuotationsPage convertMutation onError must show an error toast naming the failure');
 
-    // eslint-disable-next-line no-console
     console.log('sales order convert silent-noop checks passed');
   } finally {
     await db.destroy();
@@ -178,7 +177,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 });

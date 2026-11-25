@@ -410,7 +410,6 @@ function run(): void {
   testSentryFrontendBuildEnv();
   testTelegramAlertsCheck();
   testAutoDeploy();
-  // eslint-disable-next-line no-console
   console.log('deploy-pipeline.spec: all deploy and backup invariants hold (DEPLOY-1..DEPLOY-12)');
 }
 
@@ -418,7 +417,6 @@ try {
   run();
   process.exit(0);
 } catch (error) {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 }

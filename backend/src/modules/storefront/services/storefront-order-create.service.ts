@@ -244,7 +244,7 @@ export class StorefrontOrderCreateService {
     const cleanCustomerName = (dto.customerName || (isDineIn ? `عميل طاولة ${dto.tableNumber}` : '')).trim();
     assertValidCustomerName(cleanCustomerName);
 
-    let cleanCustomerAddress = isDineIn
+    const cleanCustomerAddress = isDineIn
       ? `طاولة رقم ${dto.tableNumber}`
       : isPickup
       ? 'استلام ذاتي من الفرع'

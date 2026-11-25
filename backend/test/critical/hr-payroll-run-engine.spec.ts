@@ -1,6 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { calculateHrPayrollRunLine, requirePayrollMonetaryCurrency, requireStoredHrMoney, requireBankPayrollPaymentReference, canReincludeAutoExcludedPayrollItem, AUTO_PAYROLL_EXCLUSION_NOTE, MANUAL_PAYROLL_EXCLUSION_NOTE } from '../../src/modules/hr/engines/hr-payroll-run.engine';
-import type { HrPayrollRunLineInput } from '../../src/modules/hr/engines/hr-payroll-run.engine';
+import { calculateHrPayrollRunLine, requirePayrollMonetaryCurrency, requireStoredHrMoney, requireBankPayrollPaymentReference, canReincludeAutoExcludedPayrollItem, AUTO_PAYROLL_EXCLUSION_NOTE, MANUAL_PAYROLL_EXCLUSION_NOTE, type HrPayrollRunLineInput } from '../../src/modules/hr/engines/hr-payroll-run.engine';
 
 // No financial record may be silently rounded on salary contract storage.
 assert.equal(requireStoredHrMoney(0, 2), 0);

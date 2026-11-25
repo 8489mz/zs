@@ -465,7 +465,7 @@ async function main() { console.log('MAIN EXECUTING');
       if (dmgQuery.rows.length > 0) { pass = false; actual += `Duplicate damaged_stock journal created! `; }
 
       let totalDebit = 0, totalCredit = 0;
-      let dr1140 = 0, cr7100 = 0, dr5200 = 0, cr1140_5200 = 0, dr5300 = 0, cr1140_5300 = 0;
+      let dr1140 = 0, cr7100 = 0, dr5200 = 0, cr1140_5200 = 0, dr5300 = 0;
       for (const line of linesQuery.rows) {
         const d = Number(line.debit || 0), c = Number(line.credit || 0);
         totalDebit += d; totalCredit += c;
@@ -772,11 +772,11 @@ async function main() { console.log('MAIN EXECUTING');
       await Promise.all(promises);
 
       const journalsReview = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'cashier_shift_variance' AND source_id = $1", [shiftId2]);
-      let passReview = journalsReview.rows.length === 1;
+      const passReview = journalsReview.rows.length === 1;
       let actualReview = '';
       if (!passReview) { actualReview += `Found ${journalsReview.rows.length} journals, expected 1. `; }
 
-      let passDup = passReview;
+      const passDup = passReview;
       logResult('ACC_SHIFT_MANAGER_REVIEW', passReview ? 'PASS' : 'FAIL', '1 Journal created upon review', actualReview || 'Valid', {});
       logResult('ACC_SHIFT_DUPLICATE_REVIEW', passDup ? 'PASS' : 'FAIL', '1 Journal despite concurrent review', actualReview || 'Valid', {});
 
@@ -812,7 +812,7 @@ async function main() { console.log('MAIN EXECUTING');
       });
       const sale1Id = sale1Res.sale?.id || sale1Res.id;
       const jSale1 = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'sale' AND source_id = $1", [sale1Id]);
-      let sale1Pass = jSale1.rows.length === 1;
+      const sale1Pass = jSale1.rows.length === 1;
 
       // 2. Unpaid Sale
       const sale2Res = await admin.post('/api/sales', {
@@ -823,7 +823,7 @@ async function main() { console.log('MAIN EXECUTING');
       });
       const sale2Id = sale2Res.sale?.id || sale2Res.id;
       const jSale2 = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'sale' AND source_id = $1", [sale2Id]);
-      let sale2Pass = jSale2.rows.length === 1;
+      const sale2Pass = jSale2.rows.length === 1;
 
       // 3. Purchase Unpaid
       const suppName2 = 'Reg Supplier 2 ' + Date.now();
@@ -836,7 +836,7 @@ async function main() { console.log('MAIN EXECUTING');
       });
       const purchId = purchRes.purchase?.id || purchRes.id;
       const jPurch = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'purchase' AND source_id = $1", [purchId]);
-      let purchPass = jPurch.rows.length === 1;
+      const purchPass = jPurch.rows.length === 1;
 
       // 4. Return (Sale Refund)
       const retMarker = `RET_TEST_${Date.now()}`;
@@ -850,7 +850,7 @@ async function main() { console.log('MAIN EXECUTING');
       const retObj = retRes.returns?.find((r: any) => r.note === retMarker);
       const retId = retObj?.id || retRes.createdIds?.[0];
       const jRet = await pg.query("SELECT * FROM journal_entries WHERE source_type IN ('return', 'sales_return') AND source_id = $1", [retId]);
-      let retPass = jRet.rows.length === 1;
+      const retPass = jRet.rows.length === 1;
 
       // 5. Customer Payment
       const custPayMarker = `CUST_PAY_${Date.now()}`;
@@ -862,7 +862,7 @@ async function main() { console.log('MAIN EXECUTING');
       const custDb = await pg.query("SELECT id FROM customer_payments WHERE note = $1 AND tenant_id = 'default'", [custPayMarker]);
       const custPayId = custDb.rows[0]?.id;
       const jCustPay = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'customer_payment' AND source_id = $1", [custPayId]);
-      let custPayPass = jCustPay.rows.length === 1;
+      const custPayPass = jCustPay.rows.length === 1;
 
       // 6. Supplier Payment
       const suppPayRes = await admin.post('/api/supplier-payments', {
@@ -870,7 +870,7 @@ async function main() { console.log('MAIN EXECUTING');
       });
       const suppPayId = suppPayRes.supplierPayments?.[0]?.id || suppPayRes.id;
       const jSuppPay = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'supplier_payment' AND source_id = $1", [suppPayId]);
-      let suppPayPass = jSuppPay.rows.length === 1;
+      const suppPayPass = jSuppPay.rows.length === 1;
 
       // 7. Expense
       const expRes = await admin.post('/api/expenses', {
@@ -878,7 +878,7 @@ async function main() { console.log('MAIN EXECUTING');
       });
       const expId = expRes.expenses?.[0]?.id || expRes.id;
       const jExp = await pg.query("SELECT * FROM journal_entries WHERE source_type = 'expense' AND source_id = $1", [expId]);
-      let expPass = jExp.rows.length === 1;
+      const expPass = jExp.rows.length === 1;
 
       logResult('ACC_REGRESSION', (sale1Pass && sale2Pass && purchPass && retPass && custPayPass && suppPayPass && expPass) ? 'PASS' : 'FAIL', '1 Journal per operation',
         `Sale1:${sale1Pass} Sale2:${sale2Pass} Purch:${purchPass} Ret:${retPass} CustPay:${custPayPass} SuppPay:${suppPayPass} Exp:${expPass}`, {});

@@ -70,7 +70,7 @@ export class SettingsSave {
 
       if (branch) {
         normalizedPayload.currentBranchId = String(branch.id);
-        let locationId = currentLocationIdRaw ? Number(currentLocationIdRaw) : branch.default_stock_location_id;
+        const locationId = currentLocationIdRaw ? Number(currentLocationIdRaw) : branch.default_stock_location_id;
 
         if (locationId && Number.isFinite(locationId) && locationId > 0) {
           const location = await this.db

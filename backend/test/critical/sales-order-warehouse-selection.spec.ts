@@ -222,7 +222,6 @@ async function main() {
     assert.equal(convertedRow.status, 'converted');
     assert.equal(Number(convertedRow.sale_id), 501);
 
-    // eslint-disable-next-line no-console
     console.log('sales order warehouse selection checks passed');
   } finally {
     await db.destroy();
@@ -230,7 +229,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 });

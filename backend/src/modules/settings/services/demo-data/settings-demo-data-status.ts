@@ -1,6 +1,5 @@
-import { sql } from '../../../../database/kysely';
+import { sql, type Kysely } from '../../../../database/kysely';
 import { listSupportedDemoActivities } from '../demo-datasets';
-import type { Kysely } from '../../../../database/kysely';
 import type { Database } from '../../../../database/database.types';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 

@@ -38,7 +38,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'node:child_process';
 
-const guard = require('../../scripts/file-size-guard.cjs');
+import * as guard from '../../scripts/file-size-guard.cjs';
 
 const repoRoot = path.resolve(__dirname, '../../..');
 const backendRoot = path.join(repoRoot, 'backend');

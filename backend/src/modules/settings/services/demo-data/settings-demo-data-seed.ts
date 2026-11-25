@@ -1,9 +1,8 @@
-import { sql } from '../../../../database/kysely';
+import { sql, type Kysely } from '../../../../database/kysely';
 import { randomBytes } from 'node:crypto';
 import { AppError } from '../../../../common/errors/app-error';
 import { getDemoDataset, mapIndustryToDemoActivity } from '../demo-datasets';
 import { createPasswordRecord } from '../../../../core/auth/utils/password-hasher';
-import type { Kysely } from '../../../../database/kysely';
 import type { Database } from '../../../../database/database.types';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import type { AuditService } from '../../../../core/audit/audit.service';

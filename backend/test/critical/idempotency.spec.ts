@@ -6,7 +6,7 @@ import { idempotencyStorage } from '../../src/core/idempotency/idempotency.conte
 // Mock DB
 let insertSuccess = true;
 let existingRecord: any = null;
-let updatedRecord: any = null;
+const updatedRecord: any = null;
 let updates: any[] = [];
 
 const mockDb: any = {

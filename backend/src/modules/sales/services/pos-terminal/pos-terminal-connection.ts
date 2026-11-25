@@ -1,8 +1,7 @@
 import * as net from 'node:net';
 import type { Kysely } from '../../../../database/kysely';
 import type { Database } from '../../../../database/database.types';
-import { parseTerminalHostAndPort, isPrivateSubnetIp, execAsync } from './pos-terminal-shared';
-import type { TerminalConnectionTestResult } from './pos-terminal-shared';
+import { parseTerminalHostAndPort, isPrivateSubnetIp, execAsync, type TerminalConnectionTestResult } from './pos-terminal-shared';
 
 export class PosTerminalConnection {
   constructor(

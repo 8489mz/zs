@@ -53,8 +53,7 @@
 
 import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
-import { roundMoney } from '../engines/money-minor-units.engine';
-import type { MoneyDigits } from '../engines/money-minor-units.engine';
+import { roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 
 /** Account codes used by sale journals. 2150 is store credit, checked separately. */
 const ACCOUNT_CODES = [

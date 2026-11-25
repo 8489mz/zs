@@ -1920,7 +1920,7 @@ export interface HrDepartmentTable {
   updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
 }
 
-export interface HrJobTitleTable extends HrDepartmentTable {}
+export type HrJobTitleTable = HrDepartmentTable;
 
 export interface HrPositionTable extends HrDepartmentTable {
   department_id: number | null;

@@ -26,11 +26,10 @@
 import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import cors from 'cors';
 import { buildCorsOriginCallback } from '../../src/common/utils/cors-options.util';
 import { MARKETING_SITE_ORIGIN } from '../../src/common/utils/public-cors-origin.util';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const cors = require('cors');
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 

@@ -9,8 +9,7 @@ import { assertSaleNotZatcaSigned } from '../../../tax-integration/services/zatc
 import { negateContribution, tripSaleContribution } from '../../../delivery-reps/van-trip-counters.engine';
 import { restoreImportLotsFromCancelledSale } from '../../../import-sales/helpers/import-lot-allocation.helper';
 import { sql } from '../../../../database/kysely';
-import type { SalesEditAndCancelDeps } from './sales-edit-and-cancel-types';
-import { applyTripCounterDelta, lockOpenTripRow } from './sales-edit-and-cancel-types';
+import { type SalesEditAndCancelDeps, applyTripCounterDelta, lockOpenTripRow } from './sales-edit-and-cancel-types';
 import type { PreparedWasteAndShiftRefreshService } from './prepared-waste-and-shift-refresh.service';
 
 export class CancelSaleService {

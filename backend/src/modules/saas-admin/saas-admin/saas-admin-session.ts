@@ -1,11 +1,10 @@
 import type { Kysely, Selectable } from '../../../database/kysely';
 import type { Database } from '../../../database/database.types';
-import type { AuditService } from '../../../core/audit/audit.service';
+import { type AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import type { ConfigService } from '@nestjs/config';
 import type { SessionService } from '../../../core/auth/services/session.service';
 import type { SettingsDemoDataService } from '../../settings/services/settings-demo-data.service';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { randomUUID } from 'node:crypto';
 import { createCsrfToken } from '../../../core/auth/utils/csrf-token';
 import type { Response } from 'express';

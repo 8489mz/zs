@@ -241,7 +241,7 @@ export class ImportProjectsPartnersService {
 
       }
 
-      let updateData: any = {};
+      const updateData: any = {};
       if (name !== undefined) updateData.name = name.trim();
       if (percentage !== undefined) updateData.profit_share_percentage = Number(percentage);
 

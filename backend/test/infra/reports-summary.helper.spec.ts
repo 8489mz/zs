@@ -133,7 +133,7 @@ console.log('reports-summary.helper specs passed');
   });
 
   assert.equal(payload.returns.total, 0);
-});
+})();
 
 // KWD/OMR receivable aging and book amounts cannot silently drop one fil.
 assert.equal(toMoney(0.001, 3), 0.001);

@@ -116,7 +116,6 @@ function run(): void {
   testOriginalIdsAreKeptWhenFree();
   testOrphanGateRunsBeforeCommit();
   testTopologicalOrderAndCircularResolution();
-  // eslint-disable-next-line no-console
   console.log('backup-restore-integrity.spec: all restore invariants hold (RESTORE-1..RESTORE-3)');
 }
 
@@ -124,7 +123,6 @@ try {
   run();
   process.exit(0);
 } catch (error) {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 }

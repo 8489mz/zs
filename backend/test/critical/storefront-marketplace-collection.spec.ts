@@ -123,6 +123,7 @@ function runConversion(orderRow: Record<string, any>): Promise<{ payload: any; r
       },
     }),
   };
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- load-bearing: this spec constructs StorefrontService with only (db, salesService), but the typed constructor requires 4-6 args (kdsService + media are unused by the convertToSale path); a static import cannot express this 2-arg construction, so the untyped require is the only way to build it.
   const storefrontService = new (require('../../src/modules/storefront/storefront.service').StorefrontService)(db, mockSalesService);
   const actor: any = { userId: 1, username: 'admin', role: 'admin', tenantId: 'tenant-1', accountId: 'tenant-1:main' };
   return storefrontService.convertToSale(10, actor).then((result: any) => ({ payload: capturedSalePayload, result }));

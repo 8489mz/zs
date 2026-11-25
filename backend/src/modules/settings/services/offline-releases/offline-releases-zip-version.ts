@@ -2,12 +2,12 @@
 import { BadRequestException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { spawn } from 'child_process';
 import AdmZip from 'adm-zip';
 import { isDesktopRuntimeMode } from '../../../../config/app-mode';
 import { getPortableRoot } from './offline-releases-portable-root';
-import { assertTrustedOfflineUpdatePackage } from './offline-releases-passcode';
-import { expectedPasscodeOrFail } from './offline-releases-passcode';
+import { assertTrustedOfflineUpdatePackage, expectedPasscodeOrFail } from './offline-releases-passcode';
 
 export class OfflineReleasesZipVersion {
   constructor() {}
@@ -72,7 +72,6 @@ export class OfflineReleasesZipVersion {
         }
 
         // 2. Checksum validation
-        const crypto = require('crypto');
         for (const f of manifest.files || []) {
           const fileEntry = zip.getEntry(f.path) || zip.getEntry(f.path.replace(/\//g, '\\'));
           if (!fileEntry) throw new Error(`الملف المذكور في manifest غير موجود: ${f.path}`);

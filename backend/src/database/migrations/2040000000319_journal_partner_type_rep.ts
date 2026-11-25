@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0319 — allow 'rep' as a journal line partner (INV-REP-CUSTODY-LEDGER, M12/C8).

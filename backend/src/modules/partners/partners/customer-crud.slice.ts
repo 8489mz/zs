@@ -215,7 +215,7 @@ export class CustomerCrudSlice {
       ? await this.resolveAssignablePriceListId(payload.priceListId, actor)
       : undefined;
 
-    let metaToSave: any = payload.metadata ? { ...payload.metadata } : null;
+    const metaToSave: any = payload.metadata ? { ...payload.metadata } : null;
     if (metaToSave && typeof metaToSave === 'object') {
       if (metaToSave.visit_day !== undefined || metaToSave.visit_days !== undefined) {
         const { visitDays, visitDay } = extractCustomerVisitDays(metaToSave);

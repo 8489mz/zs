@@ -1,10 +1,8 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException, type Logger } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import type { Kysely } from '../../../../database/kysely';
 import type { Database } from '../../../../database/database.types';
-import type { Logger } from '@nestjs/common';
-import { derivePosBridgeKey } from './pos-terminal-shared';
-import type { BridgeJob, TerminalPaymentSession, BridgePoller } from './pos-terminal-shared';
+import { derivePosBridgeKey, type BridgeJob, type TerminalPaymentSession, type BridgePoller } from './pos-terminal-shared';
 
 export class PosTerminalBridge {
   constructor(
@@ -55,13 +53,12 @@ export class PosTerminalBridge {
 
     // 2. Long-poll wait up to 25 seconds
     return new Promise((resolve) => {
-      let timeoutId: NodeJS.Timeout;
       const resolveWrapper = (data: { hasJob: boolean; job?: BridgeJob }) => {
         clearTimeout(timeoutId);
         resolve(data);
       };
 
-      timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         const list = this.bridgePollers.get(cleanTenant) || [];
         this.bridgePollers.set(cleanTenant, list.filter((p: any) => p.resolve !== resolveWrapper));
         resolve({ hasJob: false });

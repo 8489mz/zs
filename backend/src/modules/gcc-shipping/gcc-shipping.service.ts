@@ -185,7 +185,7 @@ export class GccShippingService {
 
     let shipmentId = '';
     let trackingNumber = '';
-    let status = 'Shipment Created';
+    const status = 'Shipment Created';
     let awbUrl = '';
     const now = new Date();
 

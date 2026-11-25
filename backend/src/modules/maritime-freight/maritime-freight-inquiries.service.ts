@@ -64,8 +64,8 @@ export class MaritimeFreightInquiriesService {
     const { tenantId } = requireTenantScope(auth);
 
     const transportMode = dto.transportMode || 'sea';
-    let grossWeightKg = Number(dto.grossWeightKg || 0);
-    let totalCbm = Number(dto.totalCbm || dto.cbm || 0);
+    const grossWeightKg = Number(dto.grossWeightKg || 0);
+    const totalCbm = Number(dto.totalCbm || dto.cbm || 0);
     let volumetricWeightKg = Number(dto.volumetricWeightKg || 0);
     let chargeableWeightKg = Number(dto.chargeableWeightKg || 0);
 
@@ -248,8 +248,8 @@ export class MaritimeFreightInquiriesService {
     }
 
     const transportMode = dto.transportMode || 'sea';
-    let grossWeightKg = Number(dto.grossWeightKg || 0);
-    let totalCbm = Number(dto.totalCbm || 0);
+    const grossWeightKg = Number(dto.grossWeightKg || 0);
+    const totalCbm = Number(dto.totalCbm || 0);
     let volumetricWeightKg = Number(dto.volumetricWeightKg || 0);
     let chargeableWeightKg = Number(dto.chargeableWeightKg || 0);
 

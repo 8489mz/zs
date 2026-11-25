@@ -121,7 +121,6 @@ function run(): void {
   testPlatformTablesAndTenantMatch();
   testGateBeforeCommit();
   testBundle();
-  // eslint-disable-next-line no-console
   console.log('tenant-transfer.spec: all tenant transfer invariants hold (TRANSFER-1..TRANSFER-5)');
 }
 
@@ -129,7 +128,6 @@ try {
   run();
   process.exit(0);
 } catch (error) {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 }

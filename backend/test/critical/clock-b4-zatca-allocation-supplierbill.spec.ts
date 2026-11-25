@@ -95,7 +95,8 @@ import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { PaymentAllocationService } from '../../src/modules/accounting/services/payment-allocation.service';
-import { todayTenantDate, formatLocalCalendarDay } from '../../src/common/utils/tenant-timezone.util';
+import * as migration0329 from '../../src/database/migrations/2040000000329_payment_allocations_allocation_date';
+import { todayTenantDate, formatLocalCalendarDay, formatTenantTime24 } from '../../src/common/utils/tenant-timezone.util';
 
 const SRC = path.resolve(__dirname, '../../src');
 const BACKEND = path.resolve(__dirname, '../..');
@@ -177,9 +178,8 @@ async function main(): Promise<void> {
     console.log('✓ §B passed: ZATCA issueTime is tenant-zone; no toTimeString() remains');
 
     // ── §A. formatTenantTime24 on a frozen instant ───
-    const util = require('../../src/common/utils/tenant-timezone.util') as { formatTenantTime24?: (tz: string, d?: Date) => string };
-    assert.equal(typeof util.formatTenantTime24, 'function', 'formatTenantTime24 exists on the tenant-timezone util');
-    const fmt = util.formatTenantTime24!;
+    assert.equal(typeof formatTenantTime24, 'function', 'formatTenantTime24 exists on the tenant-timezone util');
+    const fmt = formatTenantTime24;
     assert.equal(fmt('UTC', FROZEN), '21:30:00', 'UTC time of the frozen instant');
     assert.equal(fmt('Africa/Cairo', FROZEN), '23:30:00', 'Cairo time of the frozen instant');
     assert.equal(fmt('Asia/Kuwait', FROZEN), '00:30:00', 'Kuwait time of the frozen instant (next day)');
@@ -249,19 +249,13 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     console.log('✓ §D passed: postSupplierBill passes the day string; old path proven one day early');
 
     // ── §E. The REAL migration 0329 on PGlite ───
-    let migrationMod: { migration?: { up: (db: unknown) => Promise<void> } };
-    try {
-      migrationMod = require('../../src/database/migrations/2040000000329_payment_allocations_allocation_date');
-    } catch (e: any) {
-      assert.fail(`migration 0329 module missing: ${e.message}`);
-    }
-    assert.equal(typeof migrationMod!.migration?.up, 'function', 'migration 0329 exports an up()');
+    assert.equal(typeof migration0329.migration?.up, 'function', 'migration 0329 exports an up()');
     const defBefore = await sql<{ column_default: string | null }>`SELECT column_default FROM information_schema.columns WHERE table_name = 'payment_allocations' AND column_name = 'allocation_date'`.execute(db);
     assert.notEqual(defBefore.rows[0]?.column_default, null, 'fixture carries the 0063 CURRENT_DATE default before the migration');
-    await migrationMod!.migration!.up(db);
+    await migration0329.migration!.up(db);
     const defAfter = await sql<{ column_default: string | null }>`SELECT column_default FROM information_schema.columns WHERE table_name = 'payment_allocations' AND column_name = 'allocation_date'`.execute(db);
     assert.equal(defAfter.rows[0]?.column_default, null, 'migration 0329 dropped the CURRENT_DATE default');
-    await migrationMod!.migration!.up(db); // idempotent re-run
+    await migration0329.migration!.up(db); // idempotent re-run
     const defAgain = await sql<{ column_default: string | null }>`SELECT column_default FROM information_schema.columns WHERE table_name = 'payment_allocations' AND column_name = 'allocation_date'`.execute(db);
     assert.equal(defAgain.rows[0]?.column_default, null, 'migration 0329 re-run is a no-op');
     let threw = false;

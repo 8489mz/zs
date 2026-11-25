@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0305 — seed account 1181 "عهد المخلصين الجمركيين" (Customs Broker

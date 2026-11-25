@@ -126,7 +126,7 @@ export class UpdateChequeStatusSlice {
         settlementUpdate.registered_exchange_rate = settlementSnapshot.registered_exchange_rate;
       }
       await trx.updateTable('accounting_cheques').set(settlementUpdate).where('tenant_id', '=', tenantId).where('id', '=', id).execute();
-      let updateFields: Record<string, any> = {
+      const updateFields: Record<string, any> = {
         updated_at: sql`CURRENT_TIMESTAMP`,
       };
 

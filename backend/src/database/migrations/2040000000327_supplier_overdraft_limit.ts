@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0327 — supplier type + overdraft limit (INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT).

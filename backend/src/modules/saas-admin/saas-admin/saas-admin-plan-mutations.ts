@@ -1,12 +1,10 @@
-import type { Kysely } from '../../../database/kysely';
+import { type Kysely, sql } from '../../../database/kysely';
 import type { Database } from '../../../database/database.types';
-import type { AuditService } from '../../../core/audit/audit.service';
+import { type AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import type { TrialTenantProvisioningService } from '../trial-tenant-provisioning.service';
 import type { SettingsService } from '../../settings/settings.service';
 import type { AuthCacheService } from '../../../core/auth/services/auth-cache.service';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
-import { sql } from '../../../database/kysely';
 import { isReservedStoreSlug } from '../../storefront/engines/store-public-url.engine';
 import { normalizeIndustryProfileKey } from '../../../core/tenant/industry-profiles';
 import { isEnterpriseOrUltimatePlan, isOmnichannelPlanId } from '../../../core/tenant/plan-tier.util';

@@ -95,7 +95,7 @@ export class MaritimeCustomerPortalService {
         ? cleanDigits.slice(1)
         : cleanDigits;
 
-      let tenantFilter = companyScope ? String(companyScope).trim() : undefined;
+      const tenantFilter = companyScope ? String(companyScope).trim() : undefined;
 
       // Query customer matching phone
       let query = this.db

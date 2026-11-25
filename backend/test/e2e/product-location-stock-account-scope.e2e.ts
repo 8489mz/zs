@@ -49,7 +49,7 @@ async function runTest() {
       }
     }, 200);
 
-    let branchRes = await tenantClient.get('/api/branches');
+    const branchRes = await tenantClient.get('/api/branches');
     const branches = Array.isArray(branchRes) ? branchRes : branchRes.branches || branchRes.data || [];
     let branch = branches[0];
     if (!branch) {

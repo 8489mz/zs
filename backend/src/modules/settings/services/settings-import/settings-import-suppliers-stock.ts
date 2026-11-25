@@ -1,15 +1,13 @@
-import { sql } from '../../../../database/kysely';
+import { sql, type Kysely } from '../../../../database/kysely';
 import { AppError } from '../../../../common/errors/app-error';
 import { setScopedStockQty } from '../../../../common/utils/location-stock-ledger';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
 import { stockMovementTotal } from '../../../catalog/engines/stock-movement-total.engine';
-import { MAX_IMPORT_ROWS_PER_REQUEST, cleanString, toNumber, normalizeBarcodeText } from './settings-import-shared';
-import type { Kysely } from '../../../../database/kysely';
+import { MAX_IMPORT_ROWS_PER_REQUEST, cleanString, toNumber, normalizeBarcodeText, type DbExecutor, type TenantScope } from './settings-import-shared';
 import type { Database } from '../../../../database/database.types';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import type { AuditService } from '../../../../core/audit/audit.service';
-import type { DbExecutor, TenantScope } from './settings-import-shared';
 
 export class SettingsImportSuppliersStock {
   constructor(

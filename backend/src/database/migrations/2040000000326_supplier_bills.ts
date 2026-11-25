@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0326 — non-stock supplier bills (INV-SUPPLIER-NONSTOCK-BILL).

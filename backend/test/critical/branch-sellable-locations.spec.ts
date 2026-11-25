@@ -203,7 +203,6 @@ function run(): void {
   testBothPathsUseTheEngine();
   testCatalogueShowsWhatCanBeReserved();
   testStorefrontModeOverride();
-  // eslint-disable-next-line no-console
   console.log('branch-sellable-locations.spec: STK-1..STK-5 hold — the website and the till sell from the same warehouses, and the catalogue shows only what can be reserved');
 }
 
@@ -211,7 +210,6 @@ try {
   run();
   process.exit(0);
 } catch (error) {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 }

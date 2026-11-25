@@ -370,7 +370,7 @@ export class TenantSubscriptionService {
     const availablePlans = await this.readPlans();
 
     // 1. Get latest/active subscription
-    let subscription = await this.db
+    const subscription = await this.db
       .selectFrom('tenant_subscriptions as s')
       .leftJoin('saas_plans as p', 's.plan_id', 'p.id')
       .select([

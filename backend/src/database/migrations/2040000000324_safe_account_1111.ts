@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0324 — seed account 1111 "الخزينة الآمنة" (Safe / Cash Box) for

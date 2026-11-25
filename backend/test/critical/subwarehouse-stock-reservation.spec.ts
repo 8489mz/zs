@@ -32,9 +32,9 @@ function createMockStockDb(initialData: {
   const mockDb: any = {
     _state: { products, locationStock },
     selectFrom(table: string) {
-      let selectedTable = table;
+      const selectedTable = table;
       let selectedColumns: string[] = [];
-      let whereConditions: Array<{ col: string; op: string; val: any }> = [];
+      const whereConditions: Array<{ col: string; op: string; val: any }> = [];
 
       const queryBuilder: any = {
         select(cols: any) {
@@ -118,7 +118,7 @@ function createMockStockDb(initialData: {
     },
     updateTable(table: string) {
       let updateValues: any = {};
-      let whereConditions: Array<{ col: string; op: string; val: any }> = [];
+      const whereConditions: Array<{ col: string; op: string; val: any }> = [];
 
       const updateBuilder: any = {
         set(values: any) {

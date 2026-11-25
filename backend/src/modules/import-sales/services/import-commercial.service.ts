@@ -651,7 +651,7 @@ export class ImportCommercialService {
         .forUpdate().executeTakeFirstOrThrow();
       if (pi.po_status === 'issued' && pi.po_number) return pi;
       if (pi.status !== 'approved') throw new BadRequestException('يجب اعتماد الفاتورة المبدئية قبل إصدار أمر شراء.');
-      let raw = typeof pi.items === 'string' ? JSON.parse(pi.items) : pi.items;
+      const raw = typeof pi.items === 'string' ? JSON.parse(pi.items) : pi.items;
 
       // No auto-recovery: a proforma without usable items must fail
       // closed here. The old fallback first tried the linked project's

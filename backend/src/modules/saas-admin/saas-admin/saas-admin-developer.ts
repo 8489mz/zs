@@ -2,8 +2,7 @@ import type { Kysely } from '../../../database/kysely';
 import type { Database } from '../../../database/database.types';
 import type { AuditService } from '../../../core/audit/audit.service';
 import type { AuthCacheService } from '../../../core/auth/services/auth-cache.service';
-import type { Logger } from '@nestjs/common';
-import { NotFoundException } from '@nestjs/common';
+import { type Logger, NotFoundException } from '@nestjs/common';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 

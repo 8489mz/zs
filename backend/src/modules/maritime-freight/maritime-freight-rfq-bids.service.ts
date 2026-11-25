@@ -10,6 +10,7 @@ import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { SubmitMaritimeBidDto } from './dto/submit-bid.dto';
 import { type MaritimeMailService } from './maritime-mail.service';
+import nodemailer from 'nodemailer';
 
 /**
  * MaritimeFreightRfqBidsService — slice S2 of the maritime-freight split.
@@ -139,7 +140,6 @@ export class MaritimeFreightRfqBidsService {
     let transporter: any = null;
     if (host && user && pass) {
       try {
-        const nodemailer = require('nodemailer');
         transporter = nodemailer.createTransport({
           host,
           port,

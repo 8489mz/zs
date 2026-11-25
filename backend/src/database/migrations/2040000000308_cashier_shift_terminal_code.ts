@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0308 — POS station identity for cashier shifts (INV-REST-SHIFT-CLOSE-CONTROL, I24).

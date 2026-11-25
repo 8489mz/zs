@@ -38,7 +38,6 @@ function fail(message) {
 }
 
 function ok(message) {
-  // eslint-disable-next-line no-console
   console.log(`check-telegram-alerts: OK — ${message}`);
 }
 
@@ -48,7 +47,6 @@ function parseArgs(argv) {
     if (arg === '--check-only') flags.checkOnly = true;
     else if (arg === '--send-test') flags.sendTest = true;
     else if (arg === '--help' || arg === '-h') {
-      // eslint-disable-next-line no-console
       console.log(
         'Usage: node backend/scripts/check-telegram-alerts.cjs [--check-only] [--send-test]\n' +
           '  (no flag)    verify the token (getMe) and the chat (getChat), no message sent\n' +

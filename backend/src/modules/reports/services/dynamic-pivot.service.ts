@@ -171,7 +171,7 @@ export class DynamicPivotService {
       records = await query.limit(10001).execute();
         if (records.length > 10000) throw new BadRequestException('التقرير يحتوي على أكثر من 10,000 سجل؛ يرجى تضييق الفترة حتى لا تظهر نتائج جزئية.');
     } else if (dto.dataset === 'inventory') {
-      let query = (this.db as any)
+      const query = (this.db as any)
         .selectFrom('product_location_stock as pls')
         .innerJoin('products as p', (j: any) => j.onRef('p.id', '=', 'pls.product_id').onRef('p.tenant_id', '=', 'pls.tenant_id'))
         .leftJoin('categories as cat', (j: any) => j.onRef('cat.id', '=', 'p.category_id').onRef('cat.tenant_id', '=', 'p.tenant_id'))

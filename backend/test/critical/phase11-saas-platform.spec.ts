@@ -86,7 +86,7 @@ export function evaluateBranchCreationLimit(params: {
     return { allowed: true, maxBranches: Infinity };
   }
 
-  let maxBranches = params.subscriptionMaxBranches ?? (params.hasMultiBranchFeature ? (params.tenantPlanId === 'plan_pro' ? 3 : 999) : (params.tenantStatus === 'trial' ? 2 : 1));
+  const maxBranches = params.subscriptionMaxBranches ?? (params.hasMultiBranchFeature ? (params.tenantPlanId === 'plan_pro' ? 3 : 999) : (params.tenantStatus === 'trial' ? 2 : 1));
   const allowed = params.activeBranchesCount < maxBranches;
   return { allowed, maxBranches };
 }

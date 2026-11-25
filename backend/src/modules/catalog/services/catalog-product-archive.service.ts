@@ -166,7 +166,7 @@ export class CatalogProductArchiveService {
       const initialProduct = await trx.selectFrom('products').selectAll()
         .where('id', '=', id).where(this.tenantPredicate(actor)).executeTakeFirst();
       if (!initialProduct) throw new AppError('Product not found', 'PRODUCT_NOT_FOUND', 404);
-      const nextActive = !Boolean(initialProduct.is_active);
+      const nextActive = !initialProduct.is_active;
 
       let targetProductIds = [id];
       const isFashionGroupTarget = Boolean(options?.archiveEntireGroup && initialProduct.item_kind === 'fashion' && initialProduct.style_code);

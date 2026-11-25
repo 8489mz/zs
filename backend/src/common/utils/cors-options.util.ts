@@ -48,7 +48,7 @@ export function buildCorsOriginCallback(
     }
     // No /api/updates/ special case: those routes fall through to the
     // default allowlist below, like every other endpoint.
-    let allowedOrigins: (string | RegExp)[] = [...corsOrigins];
+    const allowedOrigins: (string | RegExp)[] = [...corsOrigins];
     const isLanServer =
       process.env.APP_MODE === 'SELF_CONTAINED' &&
       process.env.ELECTRON_RUNTIME_MODE === 'lan_server';

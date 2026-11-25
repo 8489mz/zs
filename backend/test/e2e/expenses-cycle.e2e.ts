@@ -103,7 +103,7 @@ async function main() {
     const journalDb = await pg.query('SELECT * FROM journal_entries WHERE source_type = $1 AND source_id = $2', ['expense', String(expenseIdA!)]);
     
     let pass = true;
-    let issues = [];
+    const issues = [];
 
     if (expDb.rows.length === 0) { pass = false; issues.push("Expense not in DB"); }
     else if (expDb.rows[0].tenant_id !== tenantA) { pass = false; issues.push("Wrong tenant_id in expense"); }

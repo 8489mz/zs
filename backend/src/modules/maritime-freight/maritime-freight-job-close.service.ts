@@ -136,8 +136,8 @@ export class MaritimeFreightJobCloseService {
 
     if (dto.hawbNumber !== undefined) updatePayload.hawb_number = dto.hawbNumber || null;
 
-    let grossWeightKg = dto.grossWeightKg !== undefined ? Number(dto.grossWeightKg || 0) : Number(existing.gross_weight_kg || 0);
-    let totalCbm = dto.totalCbm !== undefined ? Number(dto.totalCbm || 0) : Number(existing.total_cbm || 0);
+    const grossWeightKg = dto.grossWeightKg !== undefined ? Number(dto.grossWeightKg || 0) : Number(existing.gross_weight_kg || 0);
+    const totalCbm = dto.totalCbm !== undefined ? Number(dto.totalCbm || 0) : Number(existing.total_cbm || 0);
     let volumetricWeightKg = dto.volumetricWeightKg !== undefined ? Number(dto.volumetricWeightKg || 0) : Number(existing.volumetric_weight_kg || 0);
     let chargeableWeightKg = dto.chargeableWeightKg !== undefined ? Number(dto.chargeableWeightKg || 0) : Number(existing.chargeable_weight_kg || 0);
 

@@ -1,4 +1,5 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import nodemailer from 'nodemailer';
 
 export type PlatformMailPayload = {
   to: string;
@@ -63,12 +64,6 @@ export class PlatformMailService {
       throw new InternalServerErrorException('MAIL_CONFIG_MISSING');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const nodemailer = require('nodemailer') as {
-      createTransport(config: Record<string, unknown>): {
-        sendMail(payload: Record<string, unknown>): Promise<unknown>;
-      };
-    };
     const transporter = nodemailer.createTransport({
       host,
       port,

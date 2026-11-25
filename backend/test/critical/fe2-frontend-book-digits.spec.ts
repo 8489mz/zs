@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment -- this spec runs under plain Node (ESM) with .ts-extension imports the backend tsconfig rejects (TS5097); it cannot be type-checked, so @ts-nocheck is load-bearing (see the header below).
 // @ts-nocheck
 /*
  * INV-FE2-FRONTEND-BOOK-DIGITS (U6 FE2): purchases / inventory /

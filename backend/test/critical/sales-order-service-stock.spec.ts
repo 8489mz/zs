@@ -172,7 +172,6 @@ async function main() {
     assert.equal(Number(convertedRow.sale_id), 99);
     assert.deepEqual((await orderItems(serviceOrderId)).map((row) => ({ delivered: row.delivered, reserved: row.reserved })), [{ delivered: 2, reserved: 0 }]);
 
-    // eslint-disable-next-line no-console
     console.log('sales order service stock checks passed');
   } finally {
     await db.destroy();
@@ -180,7 +179,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 });

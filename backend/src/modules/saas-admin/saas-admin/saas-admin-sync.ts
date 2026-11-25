@@ -1,7 +1,6 @@
-import type { Kysely } from '../../../database/kysely';
+import { type Kysely, sql } from '../../../database/kysely';
 import type { Database } from '../../../database/database.types';
 import type { SettingsService } from '../../settings/settings.service';
-import { sql } from '../../../database/kysely';
 import { PLAN_MANAGED_MODULES_SETTING_KEY } from '../../../common/constants/platform-settings-keys';
 import { normalizeIndustryProfileKey, getIndustryProfile } from '../../../core/tenant/industry-profiles';
 import { getFallbackPlanFeatures, isOmnichannelPlanId } from '../../../core/tenant/plan-tier.util';

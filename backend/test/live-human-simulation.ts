@@ -123,7 +123,7 @@ async function runLiveHumanSimulation() {
     // الاحتياج = المبيعات + نقطة إعادة الطلب - الرصيد الحالي
     const targetReq = Math.max(sold, prod.minStock * 2);
     const deficit = targetReq - shopStock;
-    let rawNeeded = Math.max(1, deficit > 0 ? deficit : sold);
+    const rawNeeded = Math.max(1, deficit > 0 ? deficit : sold);
 
     // التقريب لكراتين
     const cartons = Math.ceil(rawNeeded / prod.packMultiplier);
@@ -257,7 +257,7 @@ async function runLiveHumanSimulation() {
   console.log('\n  2️⃣ تجربة رادار كشف سرقات وتلاعب الكاشير (Fraud Radar):');
   {
     const cashierStats = { voids: 7, draftCancels: 3, cancelledSales: 2, sales: 12 };
-    let rawScore = (cashierStats.voids * 12) + (cashierStats.draftCancels * 18) + (cashierStats.cancelledSales * 25);
+    const rawScore = (cashierStats.voids * 12) + (cashierStats.draftCancels * 18) + (cashierStats.cancelledSales * 25);
     const riskScore = Math.min(100, Math.round(rawScore / Math.max(1, cashierStats.sales / 20)));
     const isHighRisk = riskScore >= 60 || cashierStats.voids >= 5;
 

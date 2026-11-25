@@ -1,7 +1,5 @@
 // Enable Node.js 22+ built-in V8 compile cache for accelerated startup
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { enableCompileCache } = require('node:module');
   if (typeof enableCompileCache === 'function') {
     enableCompileCache();
   }
@@ -11,6 +9,8 @@ try {
 
 import * as Sentry from '@sentry/node';
 import { json, urlencoded, type Request, type Response, type NextFunction } from 'express';
+import compression from 'compression';
+import { enableCompileCache } from 'node:module';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -130,8 +130,6 @@ async function bootstrap(): Promise<void> {
   // compression@1.8.1 negotiates Brotli/gzip/deflate on Node 22; its default
   // Brotli quality is 4. Fail startup if the dependency is unavailable rather than
   // silently serving every large JSON payload uncompressed.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const compression = require('compression') as typeof import('compression');
   app.use(compression({ threshold: 1024 }));
 
   app.useGlobalPipes(requestValidationPipe);
@@ -190,7 +188,6 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(port, host);
   logger.log(`API bootstrap complete on ${host}:${port}`);
-  // eslint-disable-next-line no-console
   console.log(`API bootstrap complete on ${host}:${port}`);
 
   if (typeof process.send === 'function') {
@@ -202,7 +199,6 @@ bootstrap().catch((error: unknown) => {
   const details = formatErrorDetails(error);
   // Hostinger's runtime log viewer reliably captures stderr, while the app logger may
   // not be fully initialized when bootstrap/config validation fails.
-  // eslint-disable-next-line no-console
   console.error(details);
   const logger = new LoggerService();
   logger.error(details);

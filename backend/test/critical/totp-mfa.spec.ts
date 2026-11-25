@@ -216,6 +216,5 @@ function runRecoveryCodes(): void {
   runSecretCipher();
   runRecoveryCodes();
 
-  // eslint-disable-next-line no-console
   console.log('totp-mfa.spec: ok');
 })();

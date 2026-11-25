@@ -300,7 +300,7 @@ export class DailyCommercialRollupService {
 
     const branchKey = branchId ?? -1;
 
-    let query = (this.db as any)
+    const query = (this.db as any)
       .selectFrom('daily_commercial_rollups')
       .select([
         sql<number>`EXTRACT(YEAR FROM rollup_date)`.as('year'),

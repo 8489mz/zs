@@ -141,8 +141,8 @@ export class MaritimeFreightQuotationsService {
     const finalTotalLocal = convertFxAmount(finalTotal, exchangeRate, digits);
 
     const transportMode = dto.transportMode || 'sea';
-    let grossWeightKg = Number(dto.grossWeightKg || 0);
-    let totalCbm = Number(dto.totalCbm || 0);
+    const grossWeightKg = Number(dto.grossWeightKg || 0);
+    const totalCbm = Number(dto.totalCbm || 0);
     let volumetricWeightKg = Number(dto.volumetricWeightKg || 0);
     let chargeableWeightKg = Number(dto.chargeableWeightKg || 0);
 

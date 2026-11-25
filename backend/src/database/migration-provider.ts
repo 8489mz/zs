@@ -27,6 +27,7 @@ export class FileMigrationProvider implements KyselyMigrationProvider {
       const fullPath = join(this.migrationsPath, fileName);
       if (!existsSync(fullPath)) continue;
       try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- dynamic migration path: require() is the only sync loader that reads both .ts (ts-node) and .js (compiled) migration files; await import() cannot load .ts under ts-node CJS.
         const migrationModule = require(fullPath) as {
           migration?: Migration;
           default?: Migration;

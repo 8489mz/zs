@@ -54,7 +54,7 @@ export class AiCopilotTestKeys {
     const config = tenantId ? await this.getEffectiveAiConfig(tenantId) : { provider: 'gemini' as AiProvider, apiKey: null, model: '' };
 
     const keyToTest = (params.apiKey || config.apiKey || '').trim();
-    let provider = params.provider || (keyToTest.startsWith('sk-') ? 'openai' : config.provider || 'gemini');
+    const provider = params.provider || (keyToTest.startsWith('sk-') ? 'openai' : config.provider || 'gemini');
     const rawModel = (params.model !== undefined ? params.model : config.model) || '';
     const model = rawModel && !/[^\x20-\x7E]/.test(rawModel) ? rawModel.trim() : '';
     const baseUrl = params.baseUrl || (config as any).baseUrl || 'https://api.openai.com/v1';

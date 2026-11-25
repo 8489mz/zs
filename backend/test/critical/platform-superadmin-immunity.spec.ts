@@ -1,5 +1,7 @@
 import 'reflect-metadata';
 import { strict as assert } from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { isPlatformTenantId } from '../../src/core/auth/utils/tenant-boundary';
 import { ForbiddenException } from '@nestjs/common';
 import { AppError } from '../../src/common/errors/app-error';
@@ -33,8 +35,6 @@ function testPlatformTenantIdentity(): void {
 
 function testPlatformRestoreShield(): void {
   // Read service source code to verify structural invariants
-  const { readFileSync } = require('node:fs');
-  const { join } = require('node:path');
   const service = readFileSync(join(__dirname, '../../src/modules/settings/services/settings-backup.service.ts'), 'utf8');
 
   // 1. Guard against restoring backup on platform tenant: the
@@ -76,8 +76,6 @@ function testPlatformRestoreShield(): void {
 }
 
 function testTenantTransferShield(): void {
-  const { readFileSync } = require('node:fs');
-  const { join } = require('node:path');
   const transferService = readFileSync(join(__dirname, '../../src/modules/settings/services/tenant-transfer.service.ts'), 'utf8');
   const pkgService = readFileSync(join(__dirname, '../../src/core/tenant-transfer/tenant-package.ts'), 'utf8');
 
@@ -97,8 +95,6 @@ function testTenantTransferShield(): void {
 }
 
 function testUsersServiceImmunity(): void {
-  const { readFileSync } = require('node:fs');
-  const { join } = require('node:path');
   const usersService = readFileSync(join(__dirname, '../../src/modules/users/users.service.ts'), 'utf8');
 
   // 1. Reserved username zs
@@ -125,8 +121,6 @@ function testUsersServiceImmunity(): void {
 }
 
 function testBootstrapAdminSelfHealing(): void {
-  const { readFileSync } = require('node:fs');
-  const { join } = require('node:path');
   const bootstrap = readFileSync(join(__dirname, '../../src/core/auth/services/bootstrap-admin.service.ts'), 'utf8');
 
   assert.ok(

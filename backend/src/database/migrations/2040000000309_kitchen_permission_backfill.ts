@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0309 — backfill the 'kitchen' permission to existing users (INV-REST-KDS-TRUTH-2, I18).

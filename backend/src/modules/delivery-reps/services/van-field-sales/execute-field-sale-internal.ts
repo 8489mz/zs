@@ -1,5 +1,5 @@
 import { sql, type Kysely } from '../../../../database/kysely';
-import { AUDIT_EVENT_CODES } from '../../../../core/audit/audit.service';
+import { AUDIT_EVENT_CODES, type AuditService } from '../../../../core/audit/audit.service';
 import { AppError } from '../../../../common/errors/app-error';
 import { assertBusinessAccountingDate } from '../../../accounting/accounting-boundaries';
 import { evaluateCreditLimitCheck, evaluateFieldCardPayment } from '../../van-trip-reconciliation.engine';
@@ -24,7 +24,6 @@ import { resolveSaleTaxRate } from '../../../sales/engines/sale-tax-rate.engine'
 import { resolvePriceListContext, resolveListEffectivePrice } from '../../../sales/engines/price-list-resolution.engine';
 import { computeInvoiceTotals } from '../../../../common/utils/invoice-totals';
 import type { Database } from '../../../../database/database.types';
-import type { AuditService } from '../../../../core/audit/audit.service';
 import type { AccountingPostingService } from '../../../accounting/accounting-posting.service';
 import type { VanFraudRadarService } from '../van-fraud-radar.service';
 import type { VanFieldSalesDeps } from '../van-field-sales.service';

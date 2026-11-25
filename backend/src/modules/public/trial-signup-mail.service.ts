@@ -1,5 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DEFAULT_TRIAL_DAYS } from '../saas-admin/trial.constants';
+import nodemailer from 'nodemailer';
 
 type TrialSignupMailPayload = {
   businessName: string;
@@ -228,7 +229,6 @@ export class TrialSignupMailService {
 
     if (mode === 'console' && !isProduction) {
       // Development-only console mode. Never use this in production.
-      // eslint-disable-next-line no-console
       console.info(`[trial-signup-mail] to=${payload.ownerEmail} subject=${subject}`);
       return;
     }
@@ -243,11 +243,6 @@ export class TrialSignupMailService {
       throw new InternalServerErrorException('MAIL_CONFIG_MISSING');
     }
 
-    const nodemailer = require('nodemailer') as {
-      createTransport(config: Record<string, unknown>): {
-        sendMail(payload: Record<string, unknown>): Promise<unknown>;
-      };
-    };
     const transporter = nodemailer.createTransport({
       host,
       port,

@@ -234,7 +234,7 @@ export class ContractingPostingService {
         }
 
         // 2. Contracting Revenue
-        let revAccount = await (trx as any)
+        const revAccount = await (trx as any)
           .selectFrom('accounting_accounts')
           .select('id')
           .where('tenant_id', '=', tenantId)
@@ -262,7 +262,7 @@ export class ContractingPostingService {
         }
 
         // 4. Retentions Receivable
-        let retentionAccount = await (trx as any)
+        const retentionAccount = await (trx as any)
           .selectFrom('accounting_accounts')
           .select('id')
           .where('tenant_id', '=', tenantId)

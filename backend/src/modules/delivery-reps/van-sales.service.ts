@@ -16,13 +16,12 @@ import { VanRoutesService } from './services/van-routes.service';
 import { VanFraudRadarService, RecordVanSuspicionParams } from './services/van-fraud-radar.service';
 import { VanCollectionsAndSwapsService } from './services/van-collections-and-swaps.service';
 import { VanFieldSalesService } from './services/van-field-sales.service';
-import { VanTripLifecycleService } from './services/van-trip-lifecycle.service';
+import { VanTripLifecycleService, type VanStockItem, type VanTripSummary } from './services/van-trip-lifecycle.service';
 import { VanRepFinancialLedgerService } from './services/van-rep-financial-ledger.service';
 import { VanExpensesPackagingCustomersService } from './services/van-expenses-packaging-customers.service';
 import { VanRepEmployeeLinkService } from './services/van-rep-employee-link.service';
 import { VanRequisitionDispatchService } from './services/van-requisition-dispatch.service';
 
-import type { VanStockItem, VanTripSummary } from './services/van-trip-lifecycle.service';
 import { StockBatchHelpersService } from './van-sales/stock-batch-helpers';
 import type {
   GetFraudRadarEventsOptions,

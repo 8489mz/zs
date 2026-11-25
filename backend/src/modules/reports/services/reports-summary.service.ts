@@ -1,8 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type Kysely } from '../../../database/kysely';
+import { type Kysely, sql } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
-import { sql } from '../../../database/kysely';
 import { toMoney } from '../helpers/reports-math.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';

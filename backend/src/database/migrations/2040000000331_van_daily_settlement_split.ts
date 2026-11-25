@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0331 — daily-split settlement (INV-VAN-DAILY-SPLIT-SETTLEMENT, P1).

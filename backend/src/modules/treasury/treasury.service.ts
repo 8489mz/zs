@@ -93,7 +93,7 @@ export class TreasuryService {
 
     const result = await querySql.execute(this.db) as any;
 
-    let rows = result.rows.map((row: any) => ({
+    const rows = result.rows.map((row: any) => ({
       id: String(row.id),
       title: row.title || '',
       amount: Number(row.amount || 0),

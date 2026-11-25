@@ -214,7 +214,7 @@ export class AccountingAccountsService {
         .executeTakeFirst();
       if (existing) throw new BadRequestException('Account code already exists');
 
-      let parentId = dto.parentId || null;
+      const parentId = dto.parentId || null;
       let normalBalance = dto.normalBalance;
 
       if (parentId) {
@@ -292,7 +292,7 @@ export class AccountingAccountsService {
         .limit(1)
         .executeTakeFirst();
 
-      let updateData: any = {};
+      const updateData: any = {};
 
       if (existing.is_system) {
         if (dto.nameAr) updateData.name_ar = dto.nameAr;

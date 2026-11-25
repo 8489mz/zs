@@ -5,8 +5,7 @@ import { Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import * as tls from 'tls';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const nodemailer = require('nodemailer');
+import nodemailer from 'nodemailer';
 
 export interface MaritimeMailConfig {
   outgoingProvider: 'outlook' | 'gmail' | 'custom';

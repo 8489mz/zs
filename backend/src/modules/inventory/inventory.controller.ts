@@ -1,9 +1,8 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards, UseInterceptors } from '@nestjs/common';
 import { RequirePermissions, AllowAuthenticated } from '../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
-import { UseInterceptors } from '@nestjs/common';
 import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';
 import { CreateDamagedStockDto } from './dto/create-damaged-stock.dto';
 import { CreateStockCountSessionDto, PostStockCountSessionDto, RecountStockCountItemDto } from './dto/create-stock-count-session.dto';

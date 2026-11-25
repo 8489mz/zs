@@ -99,7 +99,7 @@ function zonedDateTimeToUtc(
   millisecond = 0,
 ): Date {
   const utcGuess = Date.UTC(year, month - 1, day, hour, minute, second, millisecond);
-  let offset = getTimezoneOffsetMs(new Date(utcGuess), timezone);
+  const offset = getTimezoneOffsetMs(new Date(utcGuess), timezone);
   let corrected = utcGuess - offset;
   const nextOffset = getTimezoneOffsetMs(new Date(corrected), timezone);
   if (nextOffset !== offset) {

@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0334 — rep lifetime-report indexes (INV-VAN-PROFIT-REP-REPORTING, P6).

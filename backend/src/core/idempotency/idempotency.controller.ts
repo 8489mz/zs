@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query, Req, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, Req, UseGuards, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { AllowAuthenticated, RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -6,7 +6,6 @@ import { RequestWithAuth } from '../auth/interfaces/request-with-auth.interface'
 import { Kysely } from 'kysely';
 import { Database } from '../../database/database.types';
 import { KYSELY_DB } from '../../database/database.constants';
-import { Inject } from '@nestjs/common';
 import { IdempotencyService, IDEMPOTENCY_STUCK_PROCESSING_MS } from './idempotency.service';
 
 @Controller('api/operations')

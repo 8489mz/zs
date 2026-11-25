@@ -679,7 +679,7 @@ export class ImportTreasuryService {
         }
       }
       const expectedEgpCost = roundMoney(foreignAmount * liveRate, currencyMoneyDigits('EGP'));
-      let egpCost = expectedEgpCost;
+      const egpCost = expectedEgpCost;
       if (dto.egpCost !== undefined && dto.egpCost !== null) {
         const suppliedCost = Number(dto.egpCost);
         if (Math.abs(suppliedCost - expectedEgpCost) > 0.01) {

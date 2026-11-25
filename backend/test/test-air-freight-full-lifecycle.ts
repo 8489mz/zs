@@ -335,9 +335,9 @@ async function runAirFreightLifecycleTest() {
     
     // 9a: RCS - Cargo Received from Shipper at Cairo Cargo Village
     await freightService.addJobMilestone(auth, String(job.id), 'RCS', 'تم استلام 15 طرد بمستودع قرية البضائع بالقاهرة ومطابقة الوزن 500 كجم والحجم 4 م3', 'CAI Cargo Village');
-    let track = await freightService.getJobById(auth, String(job.id));
+    const track = await freightService.getJobById(auth, String(job.id));
     assert(track.milestone_status === 'RCS', 'Milestone status must be RCS');
-    let lastMs = track.milestones[track.milestones.length - 1];
+    const lastMs = track.milestones[track.milestones.length - 1];
     assert(lastMs.milestone_title.includes('استلام الشحنة بمستودع المطار'), `Bilingual title must exist: ${lastMs.milestone_title}`);
 
     // 9b: MAN - Manifested on Flight

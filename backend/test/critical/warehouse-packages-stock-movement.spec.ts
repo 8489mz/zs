@@ -139,7 +139,7 @@ async function main(): Promise<void> {
     await seedProduct(db, 1, 10);
     const pack1 = await service.createPackage(AUTH, { packageType: 'box', locationId: 1, items: [{ productId: 1, quantity: 10 }] } as any);
     assert.equal(pack1.success, true);
-    let bal = await balances(db, 1);
+    const bal = await balances(db, 1);
     assert.deepEqual(bal, { stock: 10, reserved: 10, locQty: 10, locReserved: 10 });
     assert.equal(bal.stock - bal.reserved, 0);
     assert.equal((await packageRow(db, pack1.packageId)).status, 'sealed');

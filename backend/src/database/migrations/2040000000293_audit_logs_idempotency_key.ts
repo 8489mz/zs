@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0293 — audit_logs idempotency key (INV-AUDIT-GENERAL-LOG-CONTENT).

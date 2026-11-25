@@ -50,7 +50,6 @@ import { resolvePgSslConfig } from './ssl.util';
           dialect: new PostgresDialect({ pool }),
           log(event) {
             if (event.level === 'error') {
-              // eslint-disable-next-line no-console
               console.error('Kysely query error', event.error);
             }
           },

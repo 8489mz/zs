@@ -74,7 +74,7 @@ async function main() {
   tId = 'SHIFT-01';
   try {
     // 0. Close existing shifts via API
-    let openShifts = await admin.get(`/api/cashier-shifts?limit=50`);
+    const openShifts = await admin.get(`/api/cashier-shifts?limit=50`);
     const activeShifts = (openShifts.cashierShifts || []).filter((s: any) => s.status === 'open');
     for (const s of activeShifts) {
        await admin.post(`/api/cashier-shifts/${s.id}/close`, {
@@ -91,9 +91,9 @@ async function main() {
     shiftId = Number(dbShift1.rows[0].id);
 
     // Baseline Totals
-    let shiftList = await admin.get(`/api/cashier-shifts?limit=50`);
+    const shiftList = await admin.get(`/api/cashier-shifts?limit=50`);
     if (!shiftList.cashierShifts) throw new Error("No cashierShifts in shiftList: " + JSON.stringify(shiftList));
-    let baselineShift = (shiftList.cashierShifts as any[]).find((s: any) => s.id == shiftId);
+    const baselineShift = (shiftList.cashierShifts as any[]).find((s: any) => s.id == shiftId);
     
     const custRes = await admin.post('/api/customers', {
       name: 'Shift Cust ' + Date.now(), phone: '012' + Math.floor(10000000 + Math.random() * 90000000), type: 'cash', creditLimit: 5000, balance: 0, storeCreditBalance: 0
@@ -142,9 +142,9 @@ async function main() {
     });
 
     // Check final totals
-    let finalShiftList = await admin.get(`/api/cashier-shifts?limit=50`);
+    const finalShiftList = await admin.get(`/api/cashier-shifts?limit=50`);
     if (!finalShiftList.cashierShifts) throw new Error("No cashierShifts in finalShiftList: " + JSON.stringify(finalShiftList));
-    let finalShift = (finalShiftList.cashierShifts as any[]).find((s: any) => s.id == shiftId);
+    const finalShift = (finalShiftList.cashierShifts as any[]).find((s: any) => s.id == shiftId);
     const totals = finalShift || {};
 
     const expectedCashSales = retailPrice * 2 + retailPrice; // Cash sale + split cash
@@ -177,7 +177,7 @@ async function main() {
   tId = 'SHIFT-03';
   let shift3Id: number = 0;
   try {
-    let openShifts2 = await admin.get(`/api/cashier-shifts?limit=50`);
+    const openShifts2 = await admin.get(`/api/cashier-shifts?limit=50`);
     const activeShifts2 = (openShifts2.cashierShifts || []).filter((s: any) => s.status === 'open');
     for (const s of activeShifts2) {
        await admin.post(`/api/cashier-shifts/${s.id}/close`, {
@@ -197,7 +197,7 @@ async function main() {
       items: [{ productId, qty: 1, price: retailPrice, unitName: 'Piece', unitMultiplier: 1, priceType: 'retail' }]
     });
 
-    let shiftList = await admin.get(`/api/cashier-shifts?limit=50`);
+    const shiftList = await admin.get(`/api/cashier-shifts?limit=50`);
     if (!shiftList.cashierShifts) throw new Error("No cashierShifts in shiftList: " + JSON.stringify(shiftList));
     const shiftData = (shiftList.cashierShifts as any[]).find((s: any) => s.id == shift3Id);
     const expected = Number(shiftData?.expectedCash || shiftData?.expected_cash || 0);
@@ -226,7 +226,7 @@ async function main() {
   tId = 'SHIFT-02';
   try {
     // 0. Close existing shifts via API
-    let openShifts3 = await admin.get(`/api/cashier-shifts?limit=50`);
+    const openShifts3 = await admin.get(`/api/cashier-shifts?limit=50`);
     const activeShifts3 = (openShifts3.cashierShifts || []).filter((s: any) => s.status === 'open');
     for (const s of activeShifts3) {
        await admin.post(`/api/cashier-shifts/${s.id}/close`, {
@@ -242,7 +242,7 @@ async function main() {
     });
     
     // Fetch latest shift list to get the ID
-    let shiftListRes = await admin.get(`/api/cashier-shifts?limit=50`);
+    const shiftListRes = await admin.get(`/api/cashier-shifts?limit=50`);
     const shiftData02 = (shiftListRes.cashierShifts as any[])[0];
     const shift02Id = shiftData02.id;
 
@@ -254,7 +254,7 @@ async function main() {
     });
 
     // 3. Read expected Cash
-    let updatedShiftList = await admin.get(`/api/cashier-shifts?limit=50`);
+    const updatedShiftList = await admin.get(`/api/cashier-shifts?limit=50`);
     const updatedShiftData02 = (updatedShiftList.cashierShifts as any[]).find((s: any) => s.id == shift02Id);
     const expected = Number(updatedShiftData02?.expectedCash || updatedShiftData02?.expected_cash || 0);
 
@@ -269,7 +269,7 @@ async function main() {
     const passClose = closeRes.ok === true;
     
     // Check final status via API
-    let finalShiftList = await admin.get(`/api/cashier-shifts?limit=50`);
+    const finalShiftList = await admin.get(`/api/cashier-shifts?limit=50`);
     const finalShiftData = (finalShiftList.cashierShifts as any[]).find((s: any) => s.id == shift02Id);
 
     const passVariance = Number(finalShiftData.variance) === 0;

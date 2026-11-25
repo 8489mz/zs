@@ -408,7 +408,7 @@ export class CustomerInstallmentsService {
 
     // Get aggregated payments per plan
     const planIds = plans.map((p) => Number(p.id));
-    let progressMap = new Map<number, { paid_amount: number; paid_count: number }>();
+    const progressMap = new Map<number, { paid_amount: number; paid_count: number }>();
 
     if (planIds.length > 0) {
       const stats = await this.db

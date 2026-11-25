@@ -25,9 +25,8 @@ import { MfaService } from './mfa.service';
 import { DisableMfaDto, MfaCodeDto, MfaLoginDto } from './dto/mfa.dto';
 import { resolveClientIp } from '../../common/middleware/storefront-public-rate-limit.middleware';
 import { createCsrfToken } from '../../core/auth/utils/csrf-token';
-import { isLocalAuthCookieHost } from '../../core/auth/utils/auth-cookie-cleanup';
+import { isLocalAuthCookieHost, clearKnownAuthCookies } from '../../core/auth/utils/auth-cookie-cleanup';
 import { ActivationService } from '../activation/activation.service';
-import { clearKnownAuthCookies } from '../../core/auth/utils/auth-cookie-cleanup';
 
 @Controller('api/auth')
 export class SessionsController {

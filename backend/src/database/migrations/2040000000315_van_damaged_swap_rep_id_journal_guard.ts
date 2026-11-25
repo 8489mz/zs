@@ -1,5 +1,4 @@
-import type { Migration } from 'kysely';
-import { sql } from 'kysely';
+import { type Migration, sql } from 'kysely';
 
 /*
  * 0315 — van damaged swaps: missing rep_id column + journal guard (INV-VAN-DAMAGED-SWAP-JOURNAL-QUARANTINE).

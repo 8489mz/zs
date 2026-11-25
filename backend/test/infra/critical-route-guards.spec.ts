@@ -9,12 +9,12 @@ import { PurchasesController } from '../../src/modules/purchases/purchases.contr
 import { ReturnsController } from '../../src/modules/returns/returns.controller';
 import { SalesController } from '../../src/modules/sales/sales.controller';
 
-function readClassGuards(controller: Function): string[] {
+function readClassGuards(controller: { name: string }): string[] {
   const guards = Reflect.getMetadata(GUARDS_METADATA, controller) || [];
-  return guards.map((guard: Function) => guard?.name || '');
+  return guards.map((guard: { name?: string }) => guard?.name || '');
 }
 
-function assertProtectedClass(controller: Function): void {
+function assertProtectedClass(controller: { name: string }): void {
   const guards = readClassGuards(controller);
   assert.ok(guards.includes(SessionAuthGuard.name), `${controller.name} must use SessionAuthGuard`);
   assert.ok(guards.includes(PermissionsGuard.name), `${controller.name} must use PermissionsGuard`);

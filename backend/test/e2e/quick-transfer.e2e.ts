@@ -98,14 +98,14 @@ async function main() {
   // Check stock
   let { stocks } = (await tenantClient.get('/api/location-stocks')) as any;
   let mainStock = stocks.find((s: any) => String(s.locationId) === String(mainLocation.id) && String(s.productId) === String(productId));
-  let secStock = stocks.find((s: any) => String(s.locationId) === String(secLocation.id) && String(s.productId) === String(productId));
+  const secStock = stocks.find((s: any) => String(s.locationId) === String(secLocation.id) && String(s.productId) === String(productId));
   
   expectNum(mainStock?.qty || 0, 10 - 0.135, 'Main Location stock after transfer 1');
   expectNum(secStock?.qty || 0, 0.135, 'Secondary Location stock after transfer 1');
 
   // Verify Default Location wasn't silently changed
-  let fetchedProdRes = (await tenantClient.get(`/api/products/${productId}`)) as any;
-  let fetchedProd = fetchedProdRes.product || fetchedProdRes;
+  const fetchedProdRes = (await tenantClient.get(`/api/products/${productId}`)) as any;
+  const fetchedProd = fetchedProdRes.product || fetchedProdRes;
   if (fetchedProd.defaultLocationId != null && String(fetchedProd.defaultLocationId) !== String(mainLocation.id)) {
     console.error(`BUG DETECTED: defaultLocationId was changed to ${fetchedProd.defaultLocationId}`);
   } else {
@@ -180,7 +180,7 @@ async function main() {
   
   // Check stock again to see if it deducted twice
   ({ stocks } = (await tenantClient.get('/api/location-stocks')) as any);
-  let mainStockAfterIdempotency = stocks.find((s: any) => String(s.locationId) === String(mainLocation.id) && String(s.productId) === String(productId));
+  const mainStockAfterIdempotency = stocks.find((s: any) => String(s.locationId) === String(mainLocation.id) && String(s.productId) === String(productId));
   console.log(`Stock after idempotency test: ${mainStockAfterIdempotency?.qty}`);
 
   // Cleanup

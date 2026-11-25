@@ -1,6 +1,5 @@
-import { sql } from '../../../../database/kysely';
+import { sql, type Kysely } from '../../../../database/kysely';
 import { AppError } from '../../../../common/errors/app-error';
-import type { Kysely } from '../../../../database/kysely';
 import type { Database } from '../../../../database/database.types';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import type { AuditService } from '../../../../core/audit/audit.service';

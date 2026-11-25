@@ -168,7 +168,6 @@ async function main() {
     });
     assert.deepEqual(await reservedQty(db), { global: 4, location: 4 });
 
-    // eslint-disable-next-line no-console
     console.log('sales order conversion stock legs checks passed');
   } finally {
     await db.destroy();
@@ -176,7 +175,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 });
