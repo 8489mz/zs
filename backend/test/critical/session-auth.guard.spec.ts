@@ -136,6 +136,24 @@ async function run(): Promise<void> {
     createContext({ method: 'GET', headers: { 'x-session-id': 'session-1' } } as any),
   );
   assert.equal(allowed, true);
+
+  // S3 (INV-SESSION-QUERY-ID-REMOVED): a session id carried only in the URL
+  // query string is refused — it leaks into server/proxy logs, browser
+  // history, and Referer headers. Cookie and Bearer still authenticate.
+  const queryOnlyRequests: Array<Record<string, unknown>> = [
+    { method: 'GET', headers: {}, query: { sessionId: 'session-1' } },
+    { method: 'GET', headers: {}, query: { session_id: 'session-1' } },
+    { method: 'GET', headers: {}, query: { token: 'session-1' } },
+    { method: 'HEAD', headers: {}, query: { sessionId: 'session-1' } },
+  ];
+  for (const queryRequest of queryOnlyRequests) {
+    await expectThrows(() => guard.canActivate(createContext(queryRequest as any)), UnauthorizedException);
+  }
+
+  const canAccessBearer = await guard.canActivate(
+    createContext({ method: 'GET', headers: { authorization: 'Bearer session-1' } } as any),
+  );
+  assert.equal(canAccessBearer, true);
 }
 
 run().then(() => {
