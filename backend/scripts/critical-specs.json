@@ -331,6 +331,7 @@
     "test/critical/backend-format-clean.spec.ts",
     "test/critical/session-ttl-sliding.spec.ts",
     "test/critical/global-rate-limit.spec.ts",
-    "test/critical/saas-admin-impersonation.spec.ts"
+    "test/critical/saas-admin-impersonation.spec.ts",
+    "test/critical/dto-coverage.spec.ts"
   ]
 }

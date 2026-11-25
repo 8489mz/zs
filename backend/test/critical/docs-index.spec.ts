@@ -7,8 +7,10 @@
  * index must point at it, and the real documentation-integrity check
  * (scripts/validate-capabilities-docs.mjs) must pass when driven here.
  * Adding a doc without indexing it fails this spec and the check on
- * purpose. Grounded at this HEAD: 21 top-level docs (20 at the original
- * grounding plus sentry-live-check.md, added by the final-3 Package 2;
+ * purpose. Grounded at this HEAD: 22 top-level docs (21 at the S5 base
+ * plus DTO_AUTHORING_CONTRACT.md, added by the item-(5) D1 foundation
+ * package; 20 at the original grounding plus sentry-live-check.md,
+ * added by the final-3 Package 2;
  * 19 at the original grounding plus FIRE_DRILL_PLAYBOOK.md, added by the backup/fire-drill
  * playbook package; the plan's 17 was counted before the fire-drill
  * playbook era and missed files) and 8
@@ -85,8 +87,8 @@ async function main(): Promise<void> {
   const files = topLevelDocs();
   assert.equal(
     files.length,
-    21,
-    'docs/ must hold 21 top-level .md files (re-pin this spec + the index if a doc is added or removed)',
+    22,
+    'docs/ must hold 22 top-level .md files (re-pin this spec + the index if a doc is added or removed)',
   );
   for (const file of files) {
     assert.ok(isLinked(indexText, file), `docs/README.md is missing the link for docs/${file}`);

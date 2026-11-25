@@ -21,6 +21,7 @@ lives under `docs/` itself.
 | [DEPLOYMENT_PIPELINE.md](DEPLOYMENT_PIPELINE.md) | Oracle VPS deploy pipeline: build on GitHub, ship, swap, health-check. |
 | [DEVELOPMENT_MODE.md](DEVELOPMENT_MODE.md) | Local development mode with hot reload (ports and isolation). |
 | [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) | Disaster recovery: rebuild on a new server from encrypted backups (full guide). |
+| [DTO_AUTHORING_CONTRACT.md](DTO_AUTHORING_CONTRACT.md) | DTO authoring contract: every @Body() payload arrives as a decorated class — caller-verified fields, @IsOptional rules, boolean care, and the 9 pinned exclusions. |
 | [ENGINE_MAP.md](ENGINE_MAP.md) | Canonical money engines — the single approved implementation per financial computation. |
 | [ENGINE_UNIFICATION_METHODOLOGY.md](ENGINE_UNIFICATION_METHODOLOGY.md) | Method of the engine-unification work: how the canonical engines were derived. |
 | [FIRE_DRILL_PLAYBOOK.md](FIRE_DRILL_PLAYBOOK.md) | One-page server-down runbook: six steps to restore the live DB from encrypted backups. |
