@@ -34,6 +34,7 @@ import { SecurityHeadersMiddleware } from './common/middleware/security-headers.
 import { LoginRateLimitMiddleware } from './common/middleware/login-rate-limit.middleware';
 import { AuthBurstRateLimitMiddleware } from './common/middleware/auth-burst-rate-limit.middleware';
 import { StorefrontPublicRateLimitMiddleware } from './common/middleware/storefront-public-rate-limit.middleware';
+import { GlobalRateLimitMiddleware } from './common/middleware/global-rate-limit.middleware';
 import { InMemoryRateLimitService } from './common/security/in-memory-rate-limit.service';
 import { TaxIntegrationModule } from './modules/tax-integration/tax-integration.module';
 import { ImportSalesModule } from './modules/import-sales/import-sales.module';
@@ -104,11 +105,16 @@ import { ContractingModule } from './modules/contracting/contracting.module';
     LoginRateLimitMiddleware,
     AuthBurstRateLimitMiddleware,
     StorefrontPublicRateLimitMiddleware,
+    GlobalRateLimitMiddleware,
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
+
+    // S4: the global outer budget runs first, before the scoped limiters — every
+    // route gains it, and the scoped limits keep their own thresholds.
+    consumer.apply(GlobalRateLimitMiddleware).forRoutes('*');
 
     consumer
       .apply(LoginRateLimitMiddleware)

@@ -45,6 +45,8 @@ const envSchema = z.object({
   LOGIN_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(30).max(86400).default(600),
   AUTH_BURST_RATE_LIMIT_MAX: z.coerce.number().int().min(10).max(5000).default(60),
   AUTH_BURST_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(10).max(3600).default(60),
+  GLOBAL_RATE_LIMIT_MAX: z.coerce.number().int().min(10).max(100000).default(600),
+  GLOBAL_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(10).max(3600).default(60),
   BUSINESS_TIMEZONE: z.string().default('UTC'),
   SMTP_HOST: z.string().trim().default(''),
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
