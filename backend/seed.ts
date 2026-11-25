@@ -1,8 +1,39 @@
-import { Kysely, PostgresDialect } from 'kysely';
+import { type Generated, Kysely, PostgresDialect } from 'kysely';
 import { Pool } from 'pg';
 
 const pool = new Pool({ connectionString: 'postgres://postgres:postgres@localhost:5432/zsystems' });
-const db = new Kysely<any>({ dialect: new PostgresDialect({ pool }) });
+
+// Minimal local shape for the tables this seed script touches. The
+// generated Database type does not cover them: saas_tenants is not in
+// it, and the hr_employees / hr_compensation_packages shapes it has
+// no longer match what this script inserts (old schema), so the
+// script carries its own shape instead of Kysely<Database>.
+interface SeedDatabase {
+  saas_tenants: { id: number };
+  hr_employees: {
+    id: Generated<number>;
+    tenant_id: number;
+    name: string;
+    employee_no: string;
+    status: string;
+    hired_at: string;
+    work_days: number;
+    daily_hours: number;
+  };
+  hr_compensation_packages: {
+    id: Generated<number>;
+    tenant_id: number;
+    employee_id: number;
+    type: string;
+    hourly_rate: number;
+    base_salary: number;
+    housing_allowance: number;
+    transportation_allowance: number;
+    effective_date: string;
+  };
+}
+
+const db = new Kysely<SeedDatabase>({ dialect: new PostgresDialect({ pool }) });
 
 async function seed() {
   try {
