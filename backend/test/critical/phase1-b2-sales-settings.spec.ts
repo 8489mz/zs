@@ -206,12 +206,12 @@ async function main(): Promise<void> {
     'module-boundary must keep sales->settings pinned at 4 (the staying leg)',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 750;'),
-    'module-boundary must re-pin the backend total 752 -> 750',
+    boundary.includes('const PINNED_BACKEND_TOTAL = 746;'),
+    'module-boundary must re-pin the backend total 750 -> 746',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
-    'module-boundary must re-pin the backend edge table 66 -> 65 edges',
+    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 64,'),
+    'module-boundary must re-pin the backend edge table 65 -> 64 edges',
   );
 
   // 5. Invalidation still works through both doors (behavioral proof:
@@ -253,10 +253,10 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 375);
-  assert.equal(chain.length, 375);
+  assert.equal(specs.length, 376);
+  assert.equal(chain.length, 376);
   assert.deepEqual(chain, specs, 'critical lists must agree in identical order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts');
   assert.ok(specs.includes('test/critical/phase1-b2-sales-settings.spec.ts'));
 
   console.log('phase1 B2 sales|settings decoupling checks passed (375 specs wired, pair gone, invalidation identical)');

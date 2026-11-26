@@ -1,13 +1,10 @@
-import type { allocateRefundTenders, RefundTender } from './engines/refund-tender.engine';
+import type { RefundTender } from './engines/refund-tender.engine';
 
-export interface ExchangeReturnContext {
-  returnId: number;
-  total: number;
-  customerId: number;
-  branchId: number | null;
-  locationId: number | null;
-  refundBase: Omit<Parameters<typeof allocateRefundTenders>[0], 'amount' | 'requested'>;
-}
+// Phase 1 B7 — ExchangeReturnContext moved to the shared port
+// (backend/src/common/utils/exchange-return.port.ts) so the sales
+// module can use the type without importing the returns module.
+// This re-export keeps every returns-internal consumer unchanged.
+export type { ExchangeReturnContext } from '../../common/utils/exchange-return.port';
 
 export type ReturnInputItem = {
   productId: number;

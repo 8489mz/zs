@@ -35,7 +35,7 @@ import { IdempotencyService } from '../../../core/idempotency/idempotency.servic
 import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
 import { CashierFraudRadarService } from './cashier-fraud-radar.service';
 import { PlanFeatureService } from '../../../core/auth/services/plan-feature.service';
-import { ReturnsService } from '../../returns/returns.service';
+import { ExchangeReturnPort } from '../../../common/utils/exchange-return.port';
 import { CashDrawerService } from '../../cash-drawer/cash-drawer.service';
 import { KdsService } from './kds.service';
 import { SalesRestaurantAndSerialsHelper } from './sales-restaurant-and-serials.service';
@@ -99,7 +99,7 @@ export class SalesWriteService {
     private readonly accountingPosting: AccountingPostingService,
     private readonly idempotency: IdempotencyService,
     private readonly planFeatureService: PlanFeatureService,
-    private readonly returnsService: ReturnsService,
+    private readonly returnsService: ExchangeReturnPort,
     @Optional() private readonly whatsappService?: WhatsAppGatewayService,
     @Optional() private readonly fraudRadarService?: CashierFraudRadarService,
     // INV-CLOSED-SHIFT-POST-CLOSE-REFRESH: the drawer service refreshes

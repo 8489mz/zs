@@ -738,8 +738,8 @@ async function main(): Promise<void> {
       };
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 375);
-      assert.equal(chain.length, 375);
+      assert.equal(specs.length, 376);
+      assert.equal(chain.length, 376);
       assert.deepEqual(chain, specs);
       assert.equal(specs[358], 'test/critical/sales-writer-create.spec.ts');
       assert.equal(specs[359], 'test/critical/sales-writer-cancel-edit.spec.ts');

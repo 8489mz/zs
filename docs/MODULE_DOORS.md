@@ -199,10 +199,8 @@
 ### backend/returns
 
 - Nest module: `backend/src/modules/returns/returns.module.ts`
-- Imported by (de-facto door today):
-  - `backend/src/modules/returns/returns.module` — 1 statement(s), from sales (1)
-  - `backend/src/modules/returns/returns.service` — 2 statement(s), from sales (2)
-- Intended door: the Nest module file plus the 2 file(s) above.
+- Imported by (de-facto door today): none — no other backend module imports a returns file after Phase 1 B7 (the sales->returns edge is gone; the port + the type live in src/common/utils).
+- Intended door: the Nest module file only.
 
 ### backend/saas-admin
 

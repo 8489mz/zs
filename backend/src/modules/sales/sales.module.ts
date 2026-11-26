@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ReturnsModule } from '../returns/returns.module';
 import { AccountingModule } from '../accounting/accounting.module';
 import { AuditModule } from '../../core/audit/audit.module';
 import { AuthFoundationModule } from '../../core/auth/auth.module';
@@ -45,15 +44,7 @@ import { RestaurantAdvancedFnbController } from './controllers/restaurant-advanc
 import { RestaurantAdvancedFnbService } from './services/restaurant-advanced-fnb.service';
 
 @Module({
-  imports: [
-    DatabaseModule,
-    AuditModule,
-    AuthFoundationModule,
-    AccountingModule,
-    SettingsModule,
-    ReturnsModule,
-    CashDrawerModule,
-  ],
+  imports: [DatabaseModule, AuditModule, AuthFoundationModule, AccountingModule, SettingsModule, CashDrawerModule],
   controllers: [
     PriceListsController,
     PosTerminalController,

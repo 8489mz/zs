@@ -286,12 +286,12 @@ async function main(): Promise<void> {
     'module-boundary must no longer list the accounting|manufacturing pair',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 750;'),
-    'module-boundary backend total is now 750 (B4 pinned 756; B5 re-pins 756 -> 752; B6 re-pins 752 -> 750)',
+    boundary.includes('const PINNED_BACKEND_TOTAL = 746;'),
+    'module-boundary backend total is now 746 (B4 pinned 756; B5 re-pins 756 -> 752; B6 re-pins 752 -> 750; B7 re-pins 750 -> 746)',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
-    'module-boundary backend edge table is now 65 (B4 pinned 68; B5 re-pins 68 -> 66; B6 re-pins 66 -> 65)',
+    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 64,'),
+    'module-boundary backend edge table is now 64 (B4 pinned 68; B5 re-pins 68 -> 66; B6 re-pins 66 -> 65; B7 re-pins 65 -> 64)',
   );
 
   // 7. The doors doc retires the engine door row.
@@ -310,8 +310,8 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-B5-ACCOUNTING-MANUFACTURING-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B5 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-B6-ACCOUNTING-PURCHASES-DECOUPLED/g) || []).length;
-  assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the B5 INV exactly once');
+  const guardCount = (guard.match(/INV-PHASE1-B7-RETURNS-SALES-DECOUPLED/g) || []).length;
+  assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the B7 INV exactly once');
 
   // 9. The B1/B2/B3/B4 specs re-pin their boundary assertions to the B5 numbers.
   for (const [label, specPath] of [
@@ -322,12 +322,12 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('const PINNED_BACKEND_TOTAL = 750;'),
-      `${label} spec must re-pin the backend total 752 -> 750`,
+      src.includes('const PINNED_BACKEND_TOTAL = 746;'),
+      `${label} spec must re-pin the backend total 750 -> 746`,
     );
     assert.ok(
-      src.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
-      `${label} spec must re-pin the backend edge table 66 -> 65 edges`,
+      src.includes('Object.keys(PINNED_BACKEND_EDGES).length, 64,'),
+      `${label} spec must re-pin the backend edge table 65 -> 64 edges`,
     );
   }
 
@@ -341,11 +341,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 375);
-  assert.equal(chain.length, 375);
+  assert.equal(specs.length, 376);
+  assert.equal(chain.length, 376);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 375 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -354,12 +354,12 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 375);') && src.includes('assert.equal(chain.length, 375);'),
+      src.includes('assert.equal(specs.length, 376);') && src.includes('assert.equal(chain.length, 376);'),
       `${label} spec wiring must re-pin to 375`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts'"),
-      `${label} spec last-entry must re-pin to the B5 spec`,
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts'"),
+      `${label} spec last-entry must re-pin to the B7 spec`,
     );
   }
 

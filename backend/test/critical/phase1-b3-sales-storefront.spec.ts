@@ -299,12 +299,12 @@ async function main(): Promise<void> {
     'module-boundary frontend table must keep its own sales->storefront edge at 1 (untouched)',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 750;'),
-    'module-boundary must re-pin the backend total 752 -> 750',
+    boundary.includes('const PINNED_BACKEND_TOTAL = 746;'),
+    'module-boundary must re-pin the backend total 750 -> 746',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
-    'module-boundary must re-pin the backend edge table 66 -> 65 edges',
+    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 64,'),
+    'module-boundary must re-pin the backend edge table 65 -> 64 edges',
   );
 
   // 6. The doors doc retires the slug-resolution door row.
@@ -316,32 +316,32 @@ async function main(): Promise<void> {
   assert.ok(doors.includes('plus the 3 file(s) above'), 'MODULE_DOORS.md storefront door must now list 3 files');
 
   // 7. The INV entry exists exactly once in both places (never quote another INV id literally).
-  // The guard tail holds ONLY the newest id, so B5 re-pins this block's
-  // guard assertion to the B5 INV; the invariants-file assertion still
+  // The guard tail holds ONLY the newest id, so B7 re-pins this block's
+  // guard assertion to the B7 INV; the invariants-file assertion still
   // pins B3 (its line stays in ARCHITECTURE_INVARIANTS.md exactly once).
   const invariants = fs.readFileSync(INVARIANTS, 'utf8');
   const invCount = (invariants.match(/INV-PHASE1-B3-SALES-STOREFRONT-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B3 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-B6-ACCOUNTING-PURCHASES-DECOUPLED/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-B7-RETURNS-SALES-DECOUPLED/g) || []).length;
   assert.equal(
     guardCount,
     1,
-    'architecture-guard.spec.ts must carry the B5 INV exactly once (the guard tail holds only the newest id)',
+    'architecture-guard.spec.ts must carry the B7 INV exactly once (the guard tail holds only the newest id)',
   );
 
   // 8. The B1/B2 specs re-pin their boundary assertions to the B3 numbers.
   const b1 = fs.readFileSync(B1_SPEC, 'utf8');
-  assert.ok(b1.includes('const PINNED_BACKEND_TOTAL = 750;'), 'B1 spec must re-pin the backend total 752 -> 750');
+  assert.ok(b1.includes('const PINNED_BACKEND_TOTAL = 746;'), 'B1 spec must re-pin the backend total 750 -> 746');
   assert.ok(
-    b1.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
-    'B1 spec must re-pin the backend edge table 66 -> 65 edges',
+    b1.includes('Object.keys(PINNED_BACKEND_EDGES).length, 64,'),
+    'B1 spec must re-pin the backend edge table 65 -> 64 edges',
   );
   const b2 = fs.readFileSync(B2_SPEC, 'utf8');
-  assert.ok(b2.includes('const PINNED_BACKEND_TOTAL = 750;'), 'B2 spec must re-pin the backend total 752 -> 750');
+  assert.ok(b2.includes('const PINNED_BACKEND_TOTAL = 746;'), 'B2 spec must re-pin the backend total 750 -> 746');
   assert.ok(
-    b2.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
-    'B2 spec must re-pin the backend edge table 66 -> 65 edges',
+    b2.includes('Object.keys(PINNED_BACKEND_EDGES).length, 64,'),
+    'B2 spec must re-pin the backend edge table 65 -> 64 edges',
   );
 
   // 9. Wiring: both critical lists carry 375 specs in identical order, this spec last.
@@ -354,26 +354,26 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 375);
-  assert.equal(chain.length, 375);
+  assert.equal(specs.length, 376);
+  assert.equal(chain.length, 376);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 375 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts');
   assert.ok(
-    b1.includes('assert.equal(specs.length, 375);') && b1.includes('assert.equal(chain.length, 375);'),
+    b1.includes('assert.equal(specs.length, 376);') && b1.includes('assert.equal(chain.length, 376);'),
     'B1 spec wiring must re-pin to 375',
   );
   assert.ok(
-    b1.includes("specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts'"),
-    'B1 spec last-entry must re-pin to the B5 spec',
+    b1.includes("specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts'"),
+    'B1 spec last-entry must re-pin to the B7 spec',
   );
   assert.ok(
-    b2.includes('assert.equal(specs.length, 375);') && b2.includes('assert.equal(chain.length, 375);'),
+    b2.includes('assert.equal(specs.length, 376);') && b2.includes('assert.equal(chain.length, 376);'),
     'B2 spec wiring must re-pin to 375',
   );
   assert.ok(
-    b2.includes("specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts'"),
-    'B2 spec last-entry must re-pin to the B5 spec',
+    b2.includes("specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts'"),
+    'B2 spec last-entry must re-pin to the B7 spec',
   );
 
   // 10. The wiring re-pin sweep is complete: no critical spec may still

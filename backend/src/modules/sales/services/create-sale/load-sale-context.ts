@@ -10,7 +10,7 @@ import {
   resolveBranchSellableLocations,
 } from '../../../../common/engines/branch-sellable-locations.engine';
 import { assertProductsNot86ed } from '../restaurant-advanced-fnb.service';
-import type { ExchangeReturnContext } from '../../../returns/returns.service';
+import type { ExchangeReturnContext } from '../../../../common/utils/exchange-return.port';
 import type { CreateSaleContext, CreateSaleDeps } from './create-sale-types';
 
 export class LoadSaleContextService {

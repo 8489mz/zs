@@ -225,6 +225,31 @@
  * B1 precedent). The single-source property is preserved: the
  * function is moved, never duplicated.
  *
+ * B7 (returns|sales decoupling): the exchange-return execution moves
+ * behind a shared port — the ExchangeReturnContext type + the
+ * ExchangeReturnPort abstract class move to
+ * backend/src/common/utils/exchange-return.port.ts — so sales no
+ * longer imports from the returns module at all. sales->returns 4 ->
+ * 0 (edge gone: the module-DI line drops from sales.module.ts, the
+ * create-sale types + load-sale-context re-point at the shared port,
+ * sales-write.service injects the port). ReturnsService extends the
+ * port (its two methods already match the abstract signatures) and
+ * ReturnsModule binds it ({ provide: ExchangeReturnPort, useExisting:
+ * ReturnsService }) and becomes @Global() — the NestJS-native way to
+ * make the binding resolvable from SalesModule without SalesModule
+ * importing ReturnsModule; the only alternatives are a ModuleRef
+ * lazy lookup (zero precedent) or keeping the module import (the
+ * edge itself). returns->sales stays 5 (the pricing/exchange engines
+ * + the authorization service, one-way, not a cycle). Backend total
+ * pin 750 -> 746 and backend edge pin 65 -> 64 (= the B7 edge delta
+ * −1, no other growth); the returns|sales pair leaves the
+ * bidirectional list (only delivery-reps|sales remains — B8). Both
+ * returns door rows retire (docs/MODULE_DOORS.md drops their lines;
+ * returns door table 2 -> 0 files); the doors spec needs no change.
+ * The port file's feature-module imports are type-only (erased at
+ * runtime), and the single-source property is preserved: the type +
+ * the port are moved, never duplicated.
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -298,7 +323,6 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'sales->delivery-reps': 8,
   'sales->import-sales': 4,
   'sales->reports': 1,
-  'sales->returns': 4,
   'sales->settings': 4,
   'sales->tax-integration': 3,
   'services->accounting': 4,
@@ -375,7 +399,7 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
   'updates->settings': 1,
 };
 
-const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['delivery-reps|sales', 'returns|sales'];
+const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['delivery-reps|sales'];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
   'accounting|treasury',
   'accounts|purchases',
@@ -392,7 +416,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
 ];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 750;
+const PINNED_BACKEND_TOTAL = 746;
 const PINNED_FRONTEND_TOTAL = 138;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
@@ -636,7 +660,7 @@ async function main(): Promise<void> {
   );
 
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
-  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 65, 'pinned backend edge table must list 65 edges');
+  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 64, 'pinned backend edge table must list 64 edges');
   const backend = scanBackend();
   assert.ok(
     backend.total >= BACKEND_TOTAL_FLOOR,

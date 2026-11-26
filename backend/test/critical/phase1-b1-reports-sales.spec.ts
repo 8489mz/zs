@@ -219,12 +219,12 @@ async function main(): Promise<void> {
     'module-boundary must re-pin delivery-reps->sales 11 -> 9',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 750;'),
-    'module-boundary backend total is now 750 (B1 pinned 760; B2 re-pinned 760 -> 759; B3 re-pinned 759 -> 758; B4 re-pinned 758 -> 756; B5 re-pins 756 -> 752; B6 re-pins 752 -> 750)',
+    boundary.includes('const PINNED_BACKEND_TOTAL = 746;'),
+    'module-boundary backend total is now 746 (B1 pinned 760; B2 re-pinned 760 -> 759; B3 re-pinned 759 -> 758; B4 re-pinned 758 -> 756; B5 re-pins 756 -> 752; B6 re-pins 752 -> 750; B7 re-pins 750 -> 746)',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
-    'module-boundary backend edge table is now 65 (B1 pinned 71; B2 re-pinned 71 -> 70; B3 re-pinned 70 -> 69; B4 re-pinned 69 -> 68; B5 re-pins 68 -> 66; B6 re-pins 66 -> 65)',
+    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 64,'),
+    'module-boundary backend edge table is now 64 (B1 pinned 71; B2 re-pinned 71 -> 70; B3 re-pinned 70 -> 69; B4 re-pinned 69 -> 68; B5 re-pins 68 -> 66; B6 re-pins 66 -> 65; B7 re-pins 65 -> 64)',
   );
   assert.ok(
     !boundary.includes("'purchases->catalog':"),
@@ -288,10 +288,10 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 375);
-  assert.equal(chain.length, 375);
+  assert.equal(specs.length, 376);
+  assert.equal(chain.length, 376);
   assert.deepEqual(chain, specs, 'critical lists must agree in identical order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts');
   assert.ok(specs.includes('test/critical/phase1-b1-reports-sales.spec.ts'));
 
   console.log('phase1 B1 reports|sales decoupling checks passed (375 specs wired, pair gone, SQL identical)');

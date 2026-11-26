@@ -9,7 +9,7 @@ import { type MoneyDigits } from '../../../accounting/engines/money-minor-units.
 import { AccountingPostingService } from '../../../accounting/accounting-posting.service';
 import { AuditService } from '../../../../core/audit/audit.service';
 import { PlanFeatureService } from '../../../../core/auth/services/plan-feature.service';
-import { ReturnsService, type ExchangeReturnContext } from '../../../returns/returns.service';
+import { ExchangeReturnPort, type ExchangeReturnContext } from '../../../../common/utils/exchange-return.port';
 import { SalesAuthorizationService } from '../sales-authorization.service';
 import { type AllocatedInvoiceLine } from '../../engines/invoice-discount.engine';
 import { type AppliedSaleTender } from '../../engines/sale-tender.engine';
@@ -36,7 +36,7 @@ export type CreateSaleDeps = {
   accountingPosting: AccountingPostingService;
   idempotency: IdempotencyService;
   planFeatureService: PlanFeatureService;
-  returnsService: ReturnsService;
+  returnsService: ExchangeReturnPort;
   whatsappService: WhatsAppGatewayService | undefined;
   logger: Logger;
   transferKdsTicketStateInTrx: (

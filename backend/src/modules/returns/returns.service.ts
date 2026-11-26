@@ -25,9 +25,10 @@ import { ReturnsReadsService } from './returns-reads.service';
 import { ReturnsCreateService } from './returns-create.service';
 import { ReturnsSaleReturnService } from './returns-sale-return.service';
 import { ReturnsPurchaseReturnService } from './returns-purchase-return.service';
+import { ExchangeReturnPort } from '../../common/utils/exchange-return.port';
 
 @Injectable()
-export class ReturnsService {
+export class ReturnsService extends ExchangeReturnPort {
   private readonly reads: ReturnsReadsService;
   private readonly relief: ReturnsReliefService;
   private readonly writeHelpers: ReturnsWriteHelpersService;
@@ -43,6 +44,7 @@ export class ReturnsService {
     private readonly idempotency: IdempotencyService,
     @Optional() private readonly whatsappService?: WhatsAppGatewayService,
   ) {
+    super();
     this.reads = new ReturnsReadsService({
       db: this.db,
       tenantPredicate: this.tenantPredicate.bind(this),
