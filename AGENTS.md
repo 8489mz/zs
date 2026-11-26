@@ -382,3 +382,15 @@ Document every changed/new capability in its owning domain file, including imple
   - **حظر المجموعات الفارغة:** إذا استُنفدت عناصر أي مجموعة بالكامل بسبب تصعيدها للأعلى، تُحجب المجموعة ورأسها تلقائياً من العرض.
   - **حوكمة التحديد اللحظي:** المجموعات المنسدلة لا تُبرز ولا تُفتح تلقائياً عند الوقوف على اختصار علوي، مما يمنع التشتت والفتح غير المبرر للمجموعات.
 
+## 26. Hardware Bridge Fixed-URL Replacement Standard (دستور ثبات روابط الجسر واستبدال النسخ القديمة بالحديثة في مكانها)
+- **روابط التحميل الثابتة للجسر (`/download`):**
+  - النسخ العامة المتاحة للعملاء عبر صفحة `/download` هي دائماً وبشكل ثابت:
+    - `frontend/public/downloads/z-systems-bridge.exe` (`/downloads/z-systems-bridge.exe`)
+    - `frontend/public/downloads/z-systems-bridge.zip` (`/downloads/z-systems-bridge.zip`)
+    - `frontend/public/downloads/bridge-manifest.json`
+- **قاعدة الاستبدال الإلزامية عند أي تحديث للجسر (`tools/z-systems-bridge/Program.cs` أو `src/ui/diagnostics.html`):**
+  - يُمنع منعاً باتاً إنشاء ملفات مرقّمة بإصدار داخل اسم الملف (مثل `z-systems-bridge-v1.3.exe`) أو ترك نسخ قديمة متراكمة في `frontend/public/downloads/`.
+  - عند أي تعديل على الجسر، يجب إعادة بناء `tools/z-systems-bridge/z-systems-bridge.exe` عبر `tools/z-systems-bridge/build.bat` (والذي يستدعي تلقائياً `scripts/sync-bridge-downloads.cjs`) أو تشغيل `node scripts/sync-bridge-downloads.cjs` بعد التجميع، لمسح أي ملفات قديمة واستبدال `z-systems-bridge.exe` و`z-systems-bridge.zip` و`bridge-manifest.json` **في مكانها وبنفس الأسماء الثابتة** حتى لا يتغير رابط التحميل أبداً.
+  - يُمنع منعاً باتاً نسخ `bridge-config.json` أو `debug.log` إلى مجلد `frontend/public/downloads/`.
+
+

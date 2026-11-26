@@ -33,6 +33,7 @@ frontend/**/*.tsbuildinfo
 **/coverage/
 **/test-results/
 *.zip
+!frontend/public/downloads/z-systems-bridge.zip
 portable/app/
 portable/runtime/
 portable/config/.env.offline

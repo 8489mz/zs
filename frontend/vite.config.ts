@@ -99,10 +99,11 @@ export default defineConfig(({ mode }) => {
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globIgnores: ['downloads/**'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\/.*/],
+        navigateFallbackDenylist: [/^\/api\/.*/, /^\/downloads\/.*/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

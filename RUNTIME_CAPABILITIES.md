@@ -12,6 +12,16 @@
 
 ## التحديثات الحالية
 
+<a id="runtime-public-bridge-download-center"></a>
+### مركز تحميل أدوات الزبائن والجسر الثابت (`/download`) — 2026-11-26
+- **السلوك:** مسار عام بدون تسجيل دخول على `/download` (وإعادة توجيه `/downloads` -> `/download`) يوفّر للعملاء والفنيين:
+  - تحميل جسر الأجهزة والطباعة الصامتة بنسختين بنفس الأسماء الثابتة دائماً: `/downloads/z-systems-bridge.exe` (تنفيذي مباشر) و`/downloads/z-systems-bridge.zip` (أرشيف مضغوط يحتوي ملف `.exe` فقط، يفتح تلقائياً على Windows 10/11) مع قراءة الإصدار والحجم وبصمة `SHA-256` من `/downloads/bridge-manifest.json`.
+  - زر فحص حي لاتصال الجسر المحلي على `http://127.0.0.1:18181/health`.
+  - روابط رسمية خارجية لـ `Visual C++ Redistributable (x64)` من مايكروسوفت و`7-Zip` المجاني الاختياري، وخطوات تشغيل سريعة.
+- **قاعدة الاستبدال في المكان (Fixed-URL In-Place Sync):** عند إعادة تجميع `tools/z-systems-bridge/build.bat` أو تشغيل `node scripts/sync-bridge-downloads.cjs` تُحذف أي ملفات جسر قديمة في `frontend/public/downloads/` وتُستبدل النسخة الأحدث في نفس المسار وبنفس الاسمين الثابتين، مع استبعاد `bridge-config.json` و`debug.log` بالكامل.
+- **حماية كاش PWA:** استبعاد `downloads/**` من `workbox.globPatterns` (`globIgnores`) وإضافة `/^\/downloads\/.*/` إلى `navigateFallbackDenylist` في `frontend/vite.config.ts`.
+- **المصادر:** `frontend/src/features/activation/pages/PublicDownloadsPage.tsx` · `frontend/src/features/activation/hooks/usePublicDownloads.ts` · `frontend/src/app/router/root-router.tsx` · `scripts/sync-bridge-downloads.cjs` · `tools/z-systems-bridge/build.bat` · `frontend/vite.config.ts` · `.gitignore`.
+
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
 

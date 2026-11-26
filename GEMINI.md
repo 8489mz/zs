@@ -692,3 +692,12 @@ Document every changed/new capability in its owning domain file, including imple
 - **حظر السقوط الصامت للمفاتيح (Zero Arabic Fallback Swallowing):**
   - يُمنع الاعتماد على السقوط التلقائي للغة العربية (Fallback to Arabic) عند تصفح النظام بالإنجليزية.
   - الحفاظ الدائم على نسبة تغطية 100% لمفاتيح `en.json` وعدم ترك أي مفتاح فارغاً أو متطابقاً مع النص العربي.
+
+### 36. Hardware Bridge Fixed-URL Replacement Standard (دستور ثبات روابط الجسر واستبدال النسخ القديمة في مكانها)
+- عند أي تحديث على `tools/z-systems-bridge/Program.cs` أو `tools/z-systems-bridge/src/ui/diagnostics.html`:
+  - يجب إعادة تجميع `tools/z-systems-bridge/z-systems-bridge.exe` وتشغيل `scripts/sync-bridge-downloads.cjs` (يعمل تلقائياً من `tools/z-systems-bridge/build.bat`) لحذف أي ملفات جسر قديمة داخل `frontend/public/downloads/` واستبدالها **بنفس الاسم الثابت** فقط:
+    - `frontend/public/downloads/z-systems-bridge.exe`
+    - `frontend/public/downloads/z-systems-bridge.zip` (يحتوي `z-systems-bridge.exe` فقط)
+    - `frontend/public/downloads/bridge-manifest.json`
+  - **ممنوع** وضع أرقام إصدار في أسماء الملفات، و**ممنوع** نسخ `bridge-config.json` أو `debug.log` داخل `frontend/public/downloads/`، حتى يظل رابط التحميل العام `/download` و`/downloads/z-systems-bridge.exe` و`/downloads/z-systems-bridge.zip` ثابتاً دائماً بأحدث نسخة.
+

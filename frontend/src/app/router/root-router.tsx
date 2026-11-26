@@ -229,6 +229,11 @@ const router = storeHostSlug ? createRouter(storeHostRoutes()) : createRouter([
     path: '/trial',
     element: createLazyRoute(() => import('@/features/public-trial/pages/TrialSignupPage').then((module) => ({ default: module.TrialSignupPage }))),
   },
+  {
+    path: '/download',
+    element: createLazyRoute(() => import('@/features/activation/pages/PublicDownloadsPage').then((module) => ({ default: module.PublicDownloadsPage }))),
+  },
+  { path: '/downloads', element: <Navigate to="/download" replace /> },
   // استعادة كلمة المرور: عامة بلا `AppGateGuard` عمداً — من نسي كلمته لا يملك جلسة، ولا يصح
   // أن تحوّله بوابة التفعيل/التهيئة بعيداً عن الرابط الذي وصله في البريد.
   {
