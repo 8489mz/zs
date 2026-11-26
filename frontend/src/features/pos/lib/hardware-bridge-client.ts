@@ -59,37 +59,137 @@ export interface BridgePrinterListResponse {
   error?: string;
 }
 
+export interface BridgeWarmPrintersRequest {
+  printers?: string[];
+  deviceName?: string;
+  pageSize?: 'A4' | 'receipt' | 'auto';
+  receiptWidthMm?: number;
+}
+
 export class HardwareBridgeClient {
   private static cachedOnline: boolean | null = null;
   private static lastCheckTime = 0;
-  private static readonly CHECK_INTERVAL_MS = 15_000;
+  private static inFlightCheck: Promise<boolean> | null = null;
+  private static readonly CHECK_INTERVAL_MS = 60_000;
+  private static keepAliveSource: EventSource | null = null;
+  private static keepAliveSubscribers = 0;
 
   /**
-   * Fast probe to verify if local bridge is running on 127.0.0.1:18181
+   * Maintains a persistent SSE stream (/events) to 127.0.0.1:18181 while POS is mounted.
+   * Keeps the local bridge process & loopback TCP stack awake in RAM and continuously
+   * refreshes cachedOnline so isAvailable() resolves in 0ms on checkout.
+   */
+  static connectKeepAlive(): () => void {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+      return () => {};
+    }
+    this.keepAliveSubscribers += 1;
+    if (!this.keepAliveSource) {
+      try {
+        const es = new EventSource(`${BRIDGE_BASE_URL}/events`);
+        es.onopen = () => {
+          this.cachedOnline = true;
+          this.lastCheckTime = Date.now();
+        };
+        es.onmessage = () => {
+          this.cachedOnline = true;
+          this.lastCheckTime = Date.now();
+        };
+        es.onerror = () => {
+          // Only mark offline if we had not just verified online; EventSource auto-reconnects.
+          this.cachedOnline = false;
+          this.lastCheckTime = Date.now();
+        };
+        this.keepAliveSource = es;
+      } catch {
+        this.keepAliveSource = null;
+      }
+    }
+
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.keepAliveSubscribers = Math.max(0, this.keepAliveSubscribers - 1);
+      if (this.keepAliveSubscribers === 0 && this.keepAliveSource) {
+        try {
+          this.keepAliveSource.close();
+        } catch {
+          // ignore
+        }
+        this.keepAliveSource = null;
+      }
+    };
+  }
+
+  /**
+   * Pre-warms target printer driver handles (winspool.drv OpenPrinter) and stages
+   * the bridge's hidden WebBrowser viewport width in parallel BEFORE or DURING
+   * POST /api/sales so the subsequent printWindows() call hits 0ms setup overhead.
+   */
+  static warmPrinters(request: BridgeWarmPrintersRequest): void {
+    try {
+      const bodyStr = JSON.stringify(request);
+      void fetch(`${BRIDGE_BASE_URL}/api/printer/warm`, {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
+        keepalive: bodyStr.length < 60_000,
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: bodyStr,
+        signal: AbortSignal.timeout(1500),
+      })
+        .then((res) => {
+          if (res.ok) {
+            this.cachedOnline = true;
+            this.lastCheckTime = Date.now();
+          }
+        })
+        .catch(() => {
+          // Silent background pre-warm; never blocks checkout
+        });
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Fast probe to verify if local bridge is running on 127.0.0.1:18181.
+   * Loopback responds in <2ms when online; short 450ms timeout avoids stalling
+   * fallback browser printing when the bridge is not running.
    */
   static async isAvailable(): Promise<boolean> {
     const now = Date.now();
     if (this.cachedOnline !== null && now - this.lastCheckTime < this.CHECK_INTERVAL_MS) {
       return this.cachedOnline;
     }
-
-    try {
-      const res = await fetch(`${BRIDGE_BASE_URL}/health`, {
-        method: 'GET',
-        mode: 'cors',
-        credentials: 'omit',
-        signal: AbortSignal.timeout(3500),
-      });
-      const data = await res.json();
-      const online = res.ok && data?.status === 'ONLINE';
-      this.cachedOnline = online;
-      this.lastCheckTime = now;
-      return online;
-    } catch {
-      this.cachedOnline = false;
-      this.lastCheckTime = now;
-      return false;
+    if (this.inFlightCheck) {
+      return this.inFlightCheck;
     }
+
+    this.inFlightCheck = (async () => {
+      try {
+        const res = await fetch(`${BRIDGE_BASE_URL}/health`, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'omit',
+          signal: AbortSignal.timeout(450),
+        });
+        const data = await res.json();
+        const online = res.ok && data?.status === 'ONLINE';
+        this.cachedOnline = online;
+        this.lastCheckTime = Date.now();
+        return online;
+      } catch {
+        this.cachedOnline = false;
+        this.lastCheckTime = Date.now();
+        return false;
+      } finally {
+        this.inFlightCheck = null;
+      }
+    })();
+
+    return this.inFlightCheck;
   }
 
   /**
@@ -221,17 +321,23 @@ export class HardwareBridgeClient {
    */
   static async printWindows(request: BridgeWindowsPrintRequest): Promise<BridgeWindowsPrintResponse> {
     try {
+      const bodyStr = JSON.stringify(request);
       const res = await fetch(`${BRIDGE_BASE_URL}/api/printer/print-windows`, {
         method: 'POST',
         mode: 'cors',
         credentials: 'omit',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
+        ...(bodyStr.length < 60_000 ? { keepalive: true } : {}),
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: bodyStr,
         signal: AbortSignal.timeout(65000),
       });
+      this.cachedOnline = true;
+      this.lastCheckTime = Date.now();
       const data = await res.json().catch(() => ({}));
       return { success: Boolean(res.ok && data?.success), printer: data?.printer, error: data?.error };
     } catch (err) {
+      this.cachedOnline = false;
+      this.lastCheckTime = Date.now();
       return { success: false, error: err instanceof Error ? err.message : 'تعذر الوصول إلى الجسر المحلي' };
     }
   }

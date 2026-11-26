@@ -2,16 +2,17 @@ import { getCachedAppSettings } from '@/lib/browser';
 import type { PosItem } from '@/features/pos/types/pos.types';
 import type { Sale, AppSettings } from '@/types/domain';
 import { buildReceiptDocument } from '@/lib/pos-printing/template';
+import { prestagePostedSaleReceipt, resolvePostedSaleReceiptDocument } from '@/lib/pos-printing/prestage';
 import { openReceiptDocument, type PrintReceiptOptions } from '@/lib/pos-printing/open-receipt';
 import {
   formatDateTime,
-  formatSalePaymentText,
   paymentLabel,
   type PosPrintPageSize,
 } from '@/lib/pos-printing/shared';
 import { tryPrintViaHardware, formatSaleForHardwarePrinter } from '@/lib/pos-printing/hardware';
 
 export { openReceiptDocument, type PrintReceiptOptions } from '@/lib/pos-printing/open-receipt';
+export { prestagePostedSaleReceipt };
 
 export function printPosDraftPreview(options: {
   title?: string;
@@ -92,83 +93,6 @@ export function printPosDraftPreview(options: {
   );
 }
 
-function buildPostedSaleDocument(sale: Sale, options: PrintReceiptOptions) {
-  const pointsPer100 = Number(options.settings?.loyaltyPointsPer100Egp ?? 10);
-  const loyaltyPointsEarned = (sale as any).loyaltyPointsEarned !== undefined
-    ? Number((sale as any).loyaltyPointsEarned)
-    : (Number(sale.paidAmount || 0) > 0 && pointsPer100 > 0 && options.settings?.loyaltyEnabled === true
-        ? Math.floor((Number(sale.paidAmount || 0) / 100) * pointsPer100)
-        : undefined);
-
-  return buildReceiptDocument({
-    pageSize: options.pageSize,
-    settings: options.settings,
-    documentLabel: options.pageSize === 'receipt' ? 'إيصال بيع' : 'فاتورة بيع',
-    documentNumber: sale.docNo || sale.id || 'فاتورة بيع',
-    onlineOrderNumber: (sale as any).onlineOrderNumber || (sale as any).online_order_number || (sale as any).orderNumber || (sale as any).order_number,
-    dateText: formatDateTime(sale.date || (sale as any).createdAt || new Date()),
-    customerName: sale.customerName || 'عميل نقدي',
-    customerPhone: sale.customerPhone,
-    customerAddress: sale.customerAddress,
-    paymentText: formatSalePaymentText(
-      sale.paymentType,
-      sale.paymentChannel,
-      sale.paidAmount,
-      sale.total,
-      (sale as any).orderType || (sale as any).order_type,
-      (sale as any).collectionStatus || (sale as any).collection_status,
-      (sale as any).cardScheme || (sale as any).card_scheme
-    ),
-    cashierName: sale.createdBy || options.cashierName || '—',
-    branchName: sale.branchName || 'المتجر الرئيسي',
-    locationName: sale.locationName || 'المخزن الأساسي',
-    note: sale.note || '',
-    tableNumber: (sale as any).tableNumber || (sale as any).table_number || null,
-    orderType: (sale as any).orderType || (sale as any).order_type || null,
-    pagerNumber: (sale as any).pagerNumber || (sale as any).pager_number || null,
-    deliveryRepName: (sale as any).deliveryRepName || (sale as any).delivery_rep_name || null,
-    items: ((sale as any).cart || sale.items || []).map((item: any) => ({
-      name: item.name,
-      unitName: item.unitName,
-      qty: Number(item.qty || 0),
-      price: Number(item.price || 0),
-      originalPrice: item.originalPrice ? Number(item.originalPrice) : (item.original_price ? Number(item.original_price) : undefined),
-      offerDiscount: item.offerDiscount ? Number(item.offerDiscount) : (item.offer_discount ? Number(item.offer_discount) : undefined),
-      offerName: item.offerName || item.offer_name || undefined,
-      /* INV-POS-LINE-DISCOUNT: the stored per-line discount (the read
-       * path returns it as lineDiscount; the snake-case fallback
-       * covers raw sale rows). item.total is already the NET line
-       * total from the backend; the fallback subtracts the discount
-       * from the gross so a raw row reconciles too. */
-      lineDiscount: item.lineDiscount != null ? Number(item.lineDiscount) : (item.line_discount != null ? Number(item.line_discount) : undefined),
-      total: Number(item.total || (Number(item.qty || 0) * (Number(item.price || 0) + (item.modifiers || []).reduce((sum: number, mod: any) => sum + Number(mod.price || 0) * Number(mod.qty || 1), 0)) - Number(item.lineDiscount ?? item.line_discount ?? 0))),
-      modifiers: item.modifiers,
-    })),
-    subtotal: Number(sale.subTotal || (sale as any).expectedTotal || 0),
-    discount: Number(sale.discount || 0),
-    deliveryFee: Number((sale as any).deliveryFee || (sale as any).delivery_fee || 0),
-    taxAmount: Number(sale.taxAmount || 0),
-    total: Number(sale.total || 0),
-    paidAmount: Number(sale.paidAmount || 0),
-    tenderedAmount: Number((sale as any).tenderedAmount || 0),
-    changeAmount: Number((sale as any).changeAmount || 0),
-    payments: sale.payments,
-    loyaltyPointsEarned,
-    loyaltyPointsRedeemed: Number((sale as any).loyaltyPointsRedeemed || (sale as any).loyalty_points_redeemed || 0),
-    loyaltyPointsBalance: (sale as any).customerLoyaltyPoints ?? (sale as any).customer?.loyaltyPoints ?? (sale as any).loyaltyPointsBalance,
-    terminalId: (sale as any).terminalId || (sale as any).terminal_id,
-    terminalAuthCode: (sale as any).terminalAuthCode || (sale as any).terminal_auth_code,
-    terminalRrn: (sale as any).terminalRrn || (sale as any).terminal_rrn,
-    cardScheme: (sale as any).cardScheme || (sale as any).card_scheme,
-    cardLastFour: (sale as any).cardLastFour || (sale as any).card_last_four,
-    serviceCharge: Number((sale as any).serviceCharge || (sale as any).service_charge || 0),
-    tipAmount: Number((sale as any).tipAmount || (sale as any).tip_amount || 0),
-    guestCount: Number((sale as any).guestCount || (sale as any).guest_count || 0),
-    copyType: options.copyType || (options.settings?.printDualReceiptForOnlineDelivery && (sale.orderType === 'delivery' || sale.paymentChannel === 'instapay' || sale.paymentChannel === 'wallet' || sale.paymentChannel === 'card') ? 'dual' : 'customer'),
-    isReprint: options.isReprint,
-  });
-}
-
 export async function printPostedSaleReceipt(sale: Sale, options: PrintReceiptOptions = {}): Promise<void> {
   const effectiveSettings = options.settings ?? getCachedAppSettings();
   const effectiveOptions: PrintReceiptOptions = { pageSize: 'receipt', ...options, settings: effectiveSettings };
@@ -184,19 +108,14 @@ export async function printPostedSaleReceipt(sale: Sale, options: PrintReceiptOp
     }
   }
 
-  // 2. Hardware printer via local socket/service (Port 9100 or Port 8080)
-  // Skip probing raw 9100/8080 sockets when a Windows printer (Z-Systems Bridge :18181)
-  // or Electron printer is configured, unless an explicit raw hardware URL/IP is set.
-  const hasWindowsOrElectronPrinter = Boolean(
-    effectiveOptions.settings?.posWindowsPrinterName ||
-    effectiveOptions.settings?.posElectronCashierPrinter ||
-    (typeof window !== 'undefined' && (window as any).electronPrinter?.printHtmlSilent)
-  );
+  // 2. Raw hardware printer via explicit socket/service URL or network IP only.
+  // Never probe localhost:9100 blindly when unconfigured (avoids 650ms TCP timeout
+  // before Bridge silent printing or standard browser printing).
   const hasExplicitRawHardware = Boolean(
     (effectiveOptions.settings as any)?.posHardwarePrinterUrl ||
     effectiveOptions.settings?.posNetworkThermalPrinterIp
   );
-  if (effectiveOptions.pageSize === 'receipt' && (!hasWindowsOrElectronPrinter || hasExplicitRawHardware)) {
+  if (effectiveOptions.pageSize === 'receipt' && hasExplicitRawHardware) {
     try {
       const printedViaHardware = await tryPrintViaHardware(sale, effectiveOptions);
       if (printedViaHardware) {
@@ -207,7 +126,8 @@ export async function printPostedSaleReceipt(sale: Sale, options: PrintReceiptOp
     }
   }
 
-  const document = buildPostedSaleDocument(sale, effectiveOptions);
+  const document = resolvePostedSaleReceiptDocument(sale, effectiveOptions);
+
   openReceiptDocument(
     `${effectiveOptions.pageSize === 'receipt' ? 'إيصال بيع' : 'فاتورة'} ${sale.docNo || sale.id}`,
     document.html,

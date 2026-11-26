@@ -15,7 +15,28 @@ import { getPosTerminalCode } from '@/features/pos/lib/pos-offline-sync';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { computePaidAmount } from '@/features/pos/lib/pos-paid-amount';
-import { printKitchenTicketAuto, shouldAutoPrintKitchenTicket } from '@/lib/pos-printing/kitchen';
+import { printPostedSaleReceipt } from '@/lib/pos-printing';
+import { prestagePostedSaleReceipt } from '@/lib/pos-printing/prestage';
+import { printKitchenTicket, printKitchenTicketAuto, shouldAutoPrintKitchenTicket } from '@/lib/pos-printing/kitchen';
+import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
+import { resolveBridgePrinter } from '@/lib/printer-preferences';
+
+function kickCashDrawerForPostedSale(sale: Sale, settings?: PosWorkspaceActionParams['settings']) {
+  const isCashPayment = sale.payments?.length
+    ? sale.payments.some((payment) => payment.paymentChannel === 'cash' && Number(payment.amount) > 0)
+    : sale.paymentChannel === 'cash' && Number(sale.paidAmount) > 0;
+  if (sale.status !== 'posted' || !isCashPayment) return;
+
+  if (typeof window !== 'undefined' && (window as any).electronPrinter?.kickCashDrawer) {
+    void (window as any).electronPrinter.kickCashDrawer(settings?.posElectronCashierPrinter).catch(() => {});
+  } else if (settings?.posCashDrawerPrinterEnabled === true) {
+    HardwareBridgeClient.isAvailable().then((avail) => {
+      if (avail) {
+        void HardwareBridgeClient.kickDrawer({ ip: (settings as any)?.posNetworkPrinterIp || '127.0.0.1' }).catch(() => {});
+      }
+    }).catch(() => {});
+  }
+}
 
 function getSaleKey(sale: Sale | null) {
   if (!sale) return '';
@@ -300,6 +321,86 @@ export function createPosWorkspaceAsyncActions(
 
     const activeOnlineOrderId = readActiveOnlineOrderId();
 
+    // Parallel Bridge Pre-Staging & Receipt HTML Pre-Build: while POST /api/sales
+    // travels to the server, warm Chrome's loopback keep-alive socket + target printer
+    // handle AND pre-build the receipt HTML in memory so printing dispatches in <0.2ms
+    // the instant createdSale resolves.
+    if (params.settings?.posAutoPrintReceipt !== false) {
+      const preStageMode = getPostSalePrintMode(params.settings || null);
+      const hasElectronSilent = typeof window !== 'undefined' && Boolean((window as any).electronPrinter?.printHtmlSilent);
+      if (!hasElectronSilent) {
+        const preStagePrinter = resolveBridgePrinter(preStageMode === 'A4' ? 'document' : 'cashier', params.settings);
+        if (preStagePrinter) {
+          HardwareBridgeClient.warmPrinters?.({
+            deviceName: preStagePrinter,
+            pageSize: preStageMode,
+            receiptWidthMm: params.settings?.receiptWidthMm === 58 ? 58 : 80,
+          });
+        }
+      }
+      if (typeof prestagePostedSaleReceipt === 'function') {
+        const preStageTendered = (options.tenderedAmount && options.tenderedAmount > 0)
+          ? options.tenderedAmount
+          : (params.tenderedAmount && params.tenderedAmount > 0 ? params.tenderedAmount : effectiveCashAmount);
+        const preStageCashierName = (params.ownOpenShift as any)?.openedByName || params.authUserName || '—';
+        const preStageCopyType =
+          preStageMode === 'receipt'
+          && Boolean(params.settings?.printDualReceiptForOnlineDelivery)
+          && params.orderType === 'delivery'
+            ? ('dual' as const)
+            : undefined;
+        const selectedCustomer = (params.customers || []).find((c) => String(c.id) === String(effectiveCustomerId || ''));
+        prestagePostedSaleReceipt(
+          {
+            id: '__ZS_PREBUILD_DOC_NO__',
+            docNo: '__ZS_PREBUILD_DOC_NO__',
+            status: 'posted',
+            cart: params.cart,
+            items: [],
+            customerName: selectedCustomer?.name || params.quickCustomerName || 'عميل نقدي',
+            customerPhone: params.quickCustomerPhone || selectedCustomer?.phone || '',
+            customerAddress: params.quickCustomerAddress || selectedCustomer?.address || '',
+            branchName: params.currentBranch?.name || '',
+            locationName: params.currentLocation?.name || '',
+            paymentType: effectivePaymentType,
+            paymentChannel: effectivePaymentChannel,
+            payments: [
+              ...(effectiveCashAmount > 0 ? [{ paymentChannel: 'cash' as const, amount: effectiveCashAmount }] : []),
+              ...(effectiveCardAmount > 0 ? [{ paymentChannel: 'card' as const, amount: effectiveCardAmount }] : []),
+              ...(effectiveTransferAmount > 0 ? [{ paymentChannel: (params.paymentChannel === 'wallet' ? 'wallet' as const : 'instapay' as const), amount: effectiveTransferAmount }] : []),
+            ],
+            subTotal: params.totals.subtotal,
+            discount: Number(params.discount || 0),
+            deliveryFee: params.totals.deliveryFee,
+            serviceCharge: params.totals.serviceCharge,
+            tipAmount: Number(params.tipAmount || 0),
+            taxAmount: params.totals.taxAmount,
+            total,
+            paidAmount: effectivePaidAmount,
+            tenderedAmount: preStageTendered,
+            changeAmount: preStageTendered > total ? roundMoneyValue(preStageTendered - total, bookDigits) : 0,
+            orderType: params.orderType,
+            collectionStatus: effectiveCollectionStatus,
+            tableNumber: params.tableNumber,
+            pagerNumber: params.pagerNumber || undefined,
+            note: params.note,
+            onlineOrderNumber: localStorage.getItem('zs_pos_online_order_number') || undefined,
+            terminalId: params.terminalPaymentDetails?.terminalId,
+            terminalAuthCode: params.terminalPaymentDetails?.authCode,
+            terminalRrn: params.terminalPaymentDetails?.rrn,
+            cardScheme: params.terminalPaymentDetails?.cardScheme,
+            cardLastFour: params.terminalPaymentDetails?.cardLastFour,
+          } as any,
+          {
+            pageSize: preStageMode,
+            settings: params.settings || null,
+            cashierName: preStageCashierName,
+            ...(preStageCopyType ? { copyType: preStageCopyType } : {}),
+          },
+        );
+      }
+    }
+
     try {
       const createdSale = await params.createSale.mutateAsync({
         source: 'pos',
@@ -359,8 +460,10 @@ export function createPosWorkspaceAsyncActions(
       const resolvedTendered = (createdSale as any)?.sale?.tenderedAmount
         ?? (createdSale as any)?.tenderedAmount
         ?? ((options.tenderedAmount && options.tenderedAmount > 0) ? options.tenderedAmount : params.tenderedAmount || effectiveCashAmount);
+      const isOffline = Boolean((createdSale as any)?.offline);
       const hydratedSale: Sale = {
         ...(createdSale as Sale),
+        status: (createdSale as any)?.status || (isOffline ? 'draft' : 'posted'),
         cart: params.cart,
         tenderedAmount: resolvedTendered,
         changeAmount: (createdSale as any)?.sale?.changeAmount
@@ -376,6 +479,41 @@ export function createPosWorkspaceAsyncActions(
       } as any;
       params.setLastSale(hydratedSale);
       const createdSaleKey = getSaleKey(hydratedSale);
+
+      // Instant Receipt Dispatch: when posAutoPrintReceipt is enabled (default true),
+      // dispatch receipt print + cash drawer kick at t=0ms BEFORE awaiting any
+      // network kitchen ticket or storefront link, and skip PosSaleSuccessDialog.
+      // When posAutoPrintReceipt === false, keep postSaleSaleKey set so
+      // PosSaleSuccessDialog opens and waits for cashier F2.
+      const autoPrintReceipt = params.settings?.posAutoPrintReceipt !== false;
+      const postSalePrintMode = getPostSalePrintMode(params.settings || null);
+      if (autoPrintReceipt) {
+        const cashierName = (params.ownOpenShift as any)?.openedByName || params.authUserName || '—';
+        const copyType =
+          postSalePrintMode === 'receipt'
+          && Boolean(params.settings?.printDualReceiptForOnlineDelivery)
+          && hydratedSale.orderType === 'delivery'
+            ? ('dual' as const)
+            : undefined;
+        try {
+          void printPostedSaleReceipt(hydratedSale, {
+            pageSize: postSalePrintMode,
+            settings: params.settings || null,
+            cashierName,
+            ...(copyType ? { copyType } : {}),
+          });
+        } catch (printErr) {
+          console.error('Failed to auto-print POS receipt:', printErr);
+        }
+        kickCashDrawerForPostedSale(hydratedSale, params.settings);
+        if (params.settings?.posKitchenPrinterEnabled && params.settings?.posKitchenPrinterAuto) {
+          try {
+            printKitchenTicket(hydratedSale, params.settings);
+          } catch (kotErr) {
+            console.error('Failed to auto-print KOT:', kotErr);
+          }
+        }
+      }
 
       // Link online order if this sale originated from an online store order
       try {
@@ -397,7 +535,7 @@ export function createPosWorkspaceAsyncActions(
       }
 
       base.resetPosDraft();
-      params.setPostSaleSaleKey(createdSaleKey);
+      params.setPostSaleSaleKey(autoPrintReceipt ? '' : createdSaleKey);
       // R4-E I13: the automatic kitchen print lives on the POST, never on
       // the HOLD (a held draft never reaches the KDS). Network printers
       // first; zero matches fall back to the Electron print; a failed
@@ -424,13 +562,14 @@ export function createPosWorkspaceAsyncActions(
           }
         }
       }
-      const postSalePrintMode = getPostSalePrintMode(params.settings || null);
-      const isOffline = Boolean((createdSale as any)?.offline);
       const docNo = (createdSale as Sale)?.docNo || (createdSale as any)?.id || '';
       const baseMsg = isOffline
         ? `تم حفظ الفاتورة محلياً (بدون إنترنت): ${docNo}. ستُرحل تلقائياً فور عودة الاتصال.`
         : `تم حفظ فاتورة البيع بنجاح${docNo ? `: ${docNo}` : ''}.`;
-      params.setSubmitMessage(`${baseMsg}${kitchenPrintWarning} ${getPostSalePrintHint(postSalePrintMode)}`);
+      const postHint = autoPrintReceipt
+        ? 'تم إرسال الفاتورة للطباعة تلقائياً — جاهز لعميل جديد.'
+        : getPostSalePrintHint(postSalePrintMode);
+      params.setSubmitMessage(`${baseMsg}${kitchenPrintWarning} ${postHint}`);
       params.requestBarcodeFocus();
       // T10-A: only a posted sale reports success — the checkout
       // dialog closes on this value, never unconditionally.

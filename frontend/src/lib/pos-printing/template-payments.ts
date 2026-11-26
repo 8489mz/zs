@@ -90,6 +90,7 @@ export function renderInvoiceBarcode(documentNumber?: string | number | null, co
 
   const docNo = String(documentNumber || '').trim();
   if (!docNo || docNo === '—' || docNo === 'مسودة') return '';
+  if (docNo === '__ZS_PREBUILD_DOC_NO__') return '<!--__ZS_PREBUILD_INVOICE_BARCODE__-->';
 
   // Extract the numeric sequence (e.g. Z-260827-0002 -> 2608270002) for Code 128C double-width bars and wide spacing
   const numbersMatch = docNo.match(/(\d{6})[^\d]*(\d{3,})/);

@@ -10,6 +10,7 @@
  * zero-price gate, underpaid gate (F8), and a pending sale. */
 import { describe, expect, it, vi } from 'vitest';
 import { createPosWorkspaceAsyncActions } from './createPosWorkspaceAsyncActions';
+import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
 import type { PosItem } from '@/features/pos/types/pos.types';
 
@@ -26,7 +27,16 @@ vi.mock('@/features/storefront/api/storefront.api', () => ({
   storefrontApi: { updateOrderStatus: vi.fn() },
 }));
 
+const { mockPrintPostedSaleReceipt } = vi.hoisted(() => ({
+  mockPrintPostedSaleReceipt: vi.fn(),
+}));
+
+vi.mock('@/lib/pos-printing', () => ({
+  printPostedSaleReceipt: mockPrintPostedSaleReceipt,
+}));
+
 vi.mock('@/lib/pos-printing/kitchen', () => ({
+  printKitchenTicket: vi.fn(),
   printKitchenTicketAuto: vi.fn(),
   shouldAutoPrintKitchenTicket: vi.fn(() => false),
 }));
@@ -497,6 +507,61 @@ describe('createPosWorkspaceAsyncActions — COD is delivery-only (T13-N1)', () 
       payments: [],
     });
     expect(params.setCashAmount).not.toHaveBeenCalled();
+  });
+});
+
+describe('createPosWorkspaceAsyncActions — instant auto-print receipt toggle (posAutoPrintReceipt)', () => {
+  it('auto-prints immediately and skips success dialog when posAutoPrintReceipt is enabled (default)', async () => {
+    mockPrintPostedSaleReceipt.mockClear();
+    const { actions, params } = makeActions({
+      settings: { paperSize: 'receipt' },
+    });
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mockPrintPostedSaleReceipt).toHaveBeenCalledTimes(1);
+    expect(mockPrintPostedSaleReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 7, docNo: 'INV-1' }),
+      expect.objectContaining({ pageSize: 'receipt' }),
+    );
+    expect(params.setPostSaleSaleKey).toHaveBeenLastCalledWith('');
+  });
+
+  it('does not auto-print and leaves postSaleSaleKey set for F2 modal when posAutoPrintReceipt is false', async () => {
+    mockPrintPostedSaleReceipt.mockClear();
+    const { actions, params } = makeActions({
+      settings: { paperSize: 'receipt', posAutoPrintReceipt: false },
+    });
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mockPrintPostedSaleReceipt).not.toHaveBeenCalled();
+    expect(params.setPostSaleSaleKey).toHaveBeenLastCalledWith('INV-1');
+  });
+
+  it('pre-stages the configured Windows bridge printer in parallel BEFORE createSale.mutateAsync resolves', async () => {
+    const events: string[] = [];
+    const warmSpy = vi.spyOn(HardwareBridgeClient, 'warmPrinters').mockImplementation(() => {
+      events.push('warmPrinters');
+    });
+
+    const { actions } = makeActions(
+      { settings: { paperSize: 'receipt', receiptWidthMm: 80, posWindowsPrinterName: 'XP-80C' } as any },
+      async () => {
+        events.push('mutateAsync:start');
+        await Promise.resolve();
+        events.push('mutateAsync:done');
+        return { id: 9, docNo: 'INV-9' };
+      },
+    );
+
+    const result = await actions.handleSubmit({});
+    warmSpy.mockRestore();
+
+    expect(result).toBe(true);
+    expect(events).toEqual(['warmPrinters', 'mutateAsync:start', 'mutateAsync:done']);
   });
 });
 

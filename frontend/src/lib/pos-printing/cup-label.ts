@@ -1,4 +1,5 @@
 import { escapeHtml, printHtmlDocument } from '@/lib/browser';
+import { resolveBridgePrinter, resolveElectronPrinter } from '@/lib/printer-preferences';
 import type { AppSettings } from '@/types/domain';
 
 export interface CupLabelItem {
@@ -225,12 +226,23 @@ export function printOrderCupLabels(
 ) {
   const html = buildAllCupLabelsDocument(order);
   const title = `ملصقات الأكواب والعلب - ${order.orderNumber}`;
+  const electronPrinter =
+    resolveElectronPrinter('barcode', settings) ||
+    resolveElectronPrinter('kitchen', settings) ||
+    settings?.posElectronKitchenPrinter ||
+    undefined;
+  const bridgePrinter = resolveBridgePrinter('barcode', settings) || undefined;
 
   printHtmlDocument(title, html, {
     subtitle: '',
     footerHtml: '',
-    pageSize: 'receipt',
+    pageSize: 'auto',
+    pageSizeMm: { widthMm: 50, heightMm: 30 },
+    pageMarginMm: 0,
+    hideHeader: true,
     extraStyles: getCupLabelStyles(),
-    deviceName: settings?.posElectronKitchenPrinter || undefined,
+    deviceName: electronPrinter,
+    windowsPrinterName: bridgePrinter,
+    disableWindowsBridge: !bridgePrinter,
   });
 }

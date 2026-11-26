@@ -3,6 +3,7 @@ import { queryKeys } from '@/app/query-keys';
 import { queryClient } from '@/app/providers';
 import { DEFAULT_STORE_NAME, useAuthStore } from '@/stores/auth-store';
 import { resolveBridgePrinter, resolveElectronPrinter } from '@/lib/printer-preferences';
+import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 import type { AppSettings } from '@/types/domain';
 
 export function escapeHtml(value: unknown) {
@@ -328,7 +329,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
     pageSize = 'auto',
     orientation = 'portrait',
     layout = 'standard',
-    printDelayMs = 260,
+    printDelayMs = 0,
     autoClose = false,
     documentDirection = 'rtl',
     deviceName,
@@ -715,6 +716,9 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
   const bridgeAttemptPlanned = Boolean(windowsPrinterName);
 
   const printViaDialog = () => {
+    if (typeof window === 'undefined' || typeof document === 'undefined' || !document.body) {
+      return;
+    }
     // Remove any print iframe left by an earlier print (autoClose:false
     // keeps it until the next print); at most one stale iframe exists.
     document.querySelectorAll('iframe[data-print-frame="true"]').forEach((el) => el.remove());
@@ -739,27 +743,53 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
     frameDocument.close();
 
     let printed = false;
+    const triggerBrowserPrint = () => {
+      frameWindow.focus();
+      frameWindow.print();
+      if (autoClose) {
+        // Protect browsers where print() returns before the dialog has captured the document.
+        window.setTimeout(() => {
+          try { document.body.removeChild(frame); } catch { /* already gone */ }
+        }, 220);
+      }
+    };
+
     const finalizePrint = () => {
       if (printed) return;
       printed = true;
-      window.setTimeout(() => {
-        frameWindow.focus();
-        frameWindow.print();
-        if (autoClose) {
-          // The 220ms delay protects browsers where print() returns before
-          // the dialog has captured the document.
-          window.setTimeout(() => {
-            try { document.body.removeChild(frame); } catch { /* already gone */ }
-          }, 220);
-        }
-      }, Math.max(220, Number(printDelayMs || 0)));
+      const requestedDelay = Math.max(0, Number(printDelayMs || 0));
+      const pendingImages = frameDocument.images
+        ? Array.from(frameDocument.images).filter((img) => !img.complete)
+        : [];
+
+      if (pendingImages.length === 0) {
+        window.setTimeout(triggerBrowserPrint, requestedDelay);
+        return;
+      }
+
+      let remaining = pendingImages.length;
+      let fired = false;
+      const runOnce = () => {
+        if (fired) return;
+        fired = true;
+        window.setTimeout(triggerBrowserPrint, requestedDelay);
+      };
+      const onSettled = () => {
+        remaining -= 1;
+        if (remaining <= 0) runOnce();
+      };
+      for (const img of pendingImages) {
+        img.addEventListener('load', onSettled, { once: true });
+        img.addEventListener('error', onSettled, { once: true });
+      }
+      window.setTimeout(runOnce, Math.max(180, requestedDelay));
     };
 
     if (frameDocument.readyState === 'complete') {
       finalizePrint();
     } else {
       frame.addEventListener('load', finalizePrint, { once: true });
-      window.setTimeout(finalizePrint, Math.max(400, Number(printDelayMs || 0) + 120));
+      window.setTimeout(finalizePrint, Math.max(180, Number(printDelayMs || 0) + 60));
     }
   };
 
@@ -774,7 +804,6 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
   // never lost.
   void (async () => {
     try {
-      const { HardwareBridgeClient } = await import('@/features/pos/lib/hardware-bridge-client');
       if (await HardwareBridgeClient.isAvailable()) {
         const result = await HardwareBridgeClient.printWindows({
           html,

@@ -302,6 +302,9 @@ export function buildSettingsUpdatePayload(
     posKitchenPrinterEnabled: values.posKitchenPrinterEnabled !== undefined
       ? values.posKitchenPrinterEnabled === true
       : current?.posKitchenPrinterEnabled === true,
+    posAutoPrintReceipt: values.posAutoPrintReceipt !== undefined
+      ? values.posAutoPrintReceipt !== false
+      : current?.posAutoPrintReceipt !== false,
     posCashDrawerPrinterEnabled: values.posCashDrawerPrinterEnabled !== undefined
       ? values.posCashDrawerPrinterEnabled === true
       : current?.posCashDrawerPrinterEnabled === true,

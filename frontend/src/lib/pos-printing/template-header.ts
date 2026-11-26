@@ -2,6 +2,7 @@ import { escapeHtml } from '@/lib/browser';
 import { getPrintOption } from '@/lib/pos-printing/shared';
 import type { AppSettings } from '@/types/domain';
 import { resolveStoreIdentity, getAdaptiveBrandFontSize, formatReceiptText } from './template-helpers';
+import { resolveCachedReceiptLogo } from './logo-cache';
 
 export function renderStoreHeader(settings?: Partial<AppSettings> | null, compact = false) {
   const { brandName } = resolveStoreIdentity(settings);
@@ -12,7 +13,7 @@ export function renderStoreHeader(settings?: Partial<AppSettings> | null, compac
   const phone = showPhone ? formatReceiptText(String(settings?.phone || '').trim(), settings) : '';
   const address = showAddress ? String(settings?.address || '').trim() : '';
   const taxNumber = showTaxNumber ? formatReceiptText(String(settings?.taxNumber || '').trim(), settings) : '';
-  const logoData = showLogo ? String(settings?.logoData || '').trim() : '';
+  const logoData = showLogo ? resolveCachedReceiptLogo(settings?.logoData) : '';
   const details = [
     phone ? `<div class="store-detail-line store-phone-line">${escapeHtml(phone)}</div>` : '',
     address ? `<div class="store-detail-line store-address-line">${escapeHtml(address)}</div>` : '',

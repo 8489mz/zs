@@ -141,6 +141,7 @@ export const SETTINGS_FIELD_METADATA: Record<
   posMobileGridColumns: { tab: 'sales_inventory', label: 'أعمدة عرض الأصناف على الموبايل' },
   posAutoHideBottomNav: { tab: 'sales_inventory', label: 'إخفاء شريط التنقل السفلي وتثبيت السلة' },
   posKitchenPrinterEnabled: { tab: 'printing', label: 'طابعة المطبخ' },
+  posAutoPrintReceipt: { tab: 'printing', label: 'الطباعة التلقائية لفاتورة الكاشير' },
   posCashDrawerPrinterEnabled: { tab: 'printing', label: 'طابعة الكاشير (فتح الدرج)' },
   posKitchenPrinterAuto: { tab: 'printing', label: 'طباعة المطبخ التلقائية' },
   posKitchenPrinterMode: { tab: 'printing', label: 'تنسيق طباعة المطبخ' },

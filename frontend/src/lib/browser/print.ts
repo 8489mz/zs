@@ -40,7 +40,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
     extraStyles = '',
     pageSize = 'auto',
     orientation = 'portrait',
-    printDelayMs = 160,
+    printDelayMs = 0,
     autoClose = false,
     documentDirection = 'rtl',
   } = options;

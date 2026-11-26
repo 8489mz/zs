@@ -126,7 +126,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
     bodyHtml = String(titleOrBody || '').trim();
   }
 
-  const { subtitle = '', footerHtml = '', extraStyles = '', pageSize = 'auto', orientation = 'portrait', printDelayMs = 160, autoClose = false, documentDirection = 'rtl' } = options;
+  const { subtitle = '', footerHtml = '', extraStyles = '', pageSize = 'auto', orientation = 'portrait', printDelayMs = 0, autoClose = false, documentDirection = 'rtl' } = options;
   const printedAt = new Date().toLocaleString('ar-EG');
   const printWindow = window.open('', '_blank', 'width=1120,height=820');
   if (!printWindow) throw new Error('المتصفح منع نافذة الطباعة');

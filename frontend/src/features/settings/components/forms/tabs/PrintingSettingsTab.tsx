@@ -471,13 +471,21 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
         </div>
       </FormSection>
 
-      {/* ===== 2b. طابعة الكاشير وفتح الدرج ===== */}
+      {/* ===== 2b. الطباعة التلقائية للفاتورة وفتح الدرج ===== */}
       {showPosSettings && (
         <FormSection
-          title={t('settings.forms.tabs.printing_settings_tab.s173', "طابعة الكاشير وفتح الدرج")}
-          description={t('settings.forms.tabs.printing_settings_tab.s174', "حدد ما إذا كانت هناك طابعة متصلة بدرج نقدية ليفتح الدرج تلقائياً بعد البيع النقدي.")}
+          title={t('settings.forms.tabs.printing_settings_tab.s173', "الطباعة التلقائية لفاتورة الكاشير وفتح الدرج")}
+          description={t('settings.forms.tabs.printing_settings_tab.s174', "تحكم في طباعة الفاتورة لحظياً فور تأكيد البيع أو الانتظار لضغط F2، وتفعيل فتح درج النقدية تلقائياً.")}
         >
           <div className="document-prototype-grid compact-grid-2">
+            <label style={premiumCardStyle}>
+              <div style={premiumCardTextStyle}>
+                <strong>{t('settings.forms.tabs.printing_settings_tab.auto_print_receipt_title', "طباعة فاتورة الكاشير تلقائياً فور إتمام البيع")}</strong>
+                <small className="muted">{t('settings.forms.tabs.printing_settings_tab.auto_print_receipt_desc', "عند التفعيل تُطبع الفاتورة في نفس لحظة تأكيد البيع وتعود الشاشة لعميل جديد فوراً؛ وعند الإيقاف تظهر شاشة التأكيد ويلزم الضغط على F2 للطباعة.")}</small>
+              </div>
+              <input type="checkbox" style={premiumCheckboxInputStyle} {...form.register('posAutoPrintReceipt')} disabled={disabled} />
+            </label>
+
             <label style={premiumCardStyle}>
               <div style={premiumCardTextStyle}>
                 <strong>{t('settings.forms.tabs.printing_settings_tab.s175', "طابعة كاشير متصلة بدرج نقدية")}</strong>
