@@ -51,6 +51,13 @@ async function getWindowsPrintWindow() {
   return windowsPrintWindow;
 }
 
+if (isElectronRuntime) {
+  try {
+    const { app } = require('electron');
+    app.whenReady().then(() => getWindowsPrintWindow().then((win) => win.loadURL('about:blank'))).catch(() => {});
+  } catch {}
+}
+
 async function printHtmlOnWindowsPrinter({ html, deviceName, pageSize = 'A4', receiptWidthMm = 80 }) {
   const win = await getWindowsPrintWindow();
   const base64 = Buffer.from(html, 'utf8').toString('base64');
@@ -131,6 +138,7 @@ function setCorsHeaders(req, res) {
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-pairing-key, X-Requested-With');
+  res.setHeader('Access-Control-Max-Age', '86400');
 }
 
 function parseJsonBody(req) {
@@ -330,6 +338,15 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: err.message }));
     }
+    return;
+  }
+
+  if (pathname === '/api/printer/warm' && req.method === 'POST') {
+    if (isElectronRuntime) {
+      getWindowsPrintWindow().catch(() => {});
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true }));
     return;
   }
 

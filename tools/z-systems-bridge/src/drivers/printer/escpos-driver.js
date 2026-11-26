@@ -28,11 +28,11 @@ function sendRawToTcpPrinter(ip, port = 9100, dataBuffer, timeoutMs = 7000) {
     };
 
     socket.setTimeout(timeoutMs);
+    socket.setNoDelay(true);
 
     socket.on('connect', () => {
       socket.write(dataBuffer, () => {
-        // Wait briefly for buffer to flush
-        setTimeout(() => finish(null), 150);
+        socket.end(() => finish(null));
       });
     });
 

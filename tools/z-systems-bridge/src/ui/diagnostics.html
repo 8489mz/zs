@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>لوحة تشخيص جسر Z-Systems للعتاد</title>
+  <title>حالة الطابعات والأجهزة — Z-Systems</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
     body { background-color: #f8fafc; color: #0f172a; padding: 24px; direction: rtl; }
@@ -43,6 +43,9 @@
     .log-approved { color: #34d399; font-weight: 700; }
     .log-declined { color: #f87171; font-weight: 700; }
     .log-info { color: #38bdf8; }
+    .about-footer { margin-top: 18px; padding: 14px 20px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 12.5px; color: #64748b; }
+    .about-footer a { color: #170e5e; font-weight: 700; text-decoration: none; }
+    .about-footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -52,31 +55,31 @@
       <div class="brand-title">
         <div class="navy-bar"></div>
         <div>
-          <h1>لوحة تشخيص جسر Z-Systems للعتاد</h1>
-          <div class="subtitle">فحص واختبار التخاطب مع ماكينات الدفع وطابعات الإيصالات المحلية</div>
+          <h1>حالة الطابعات والأجهزة — Z-Systems</h1>
+          <div class="subtitle">فحص واختبار الاتصال بأجهزة الدفع وطابعات الفواتير المتصلة بهذا الجهاز</div>
         </div>
       </div>
       <div class="status-badge">
         <div class="pulse-dot"></div>
-        <span id="bridge-status">الجسر نشط (منفذ 18181)</span>
+        <span id="bridge-status">الخدمة تعمل وجاهزة</span>
       </div>
     </header>
 
     <div class="grid">
       <!-- POS Terminal Card -->
       <div class="card">
-        <div class="card-title">اختبار ماكينة الدفع البنكي (Smart POS / ECR)</div>
+        <div class="card-title">اختبار جهاز الدفع البنكي</div>
         <div class="form-group">
-          <label>عنوان IP الماكينة:</label>
+          <label>عنوان جهاز الدفع على الشبكة (IP):</label>
           <input type="text" id="term-ip" value="" placeholder="192.168.1.150">
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
           <div class="form-group">
-            <label>المنفذ (Port):</label>
+            <label>رقم المنفذ:</label>
             <input type="number" id="term-port" value="8080">
           </div>
           <div class="form-group">
-            <label>نوع الماكينة:</label>
+            <label>نوع جهاز الدفع:</label>
             <select id="term-provider">
               <option value="fawry">فوري / باكس (PAX POSLink)</option>
               <option value="geidea">جيديا (Geidea mada)</option>
@@ -102,44 +105,54 @@
         </div>
 
         <div class="btn-row">
-          <button class="btn-secondary" onclick="testTerminalPing()">فحص الاتصال والنبض</button>
-          <button class="btn-primary" onclick="sendTerminalCharge()">إرسال عملية دفع تجريبية</button>
+          <button class="btn-secondary" onclick="testTerminalPing()">فحص الاتصال</button>
+          <button class="btn-primary" onclick="sendTerminalCharge()">تجربة عملية دفع</button>
           <button class="btn-secondary" style="background:#fee2e2; color:#991b1b; border-color:#fecaca;" onclick="cancelTerminalCharge()">إلغاء</button>
         </div>
-        <div class="result-box" id="term-result">في انتظار الاختبار...</div>
+        <div class="result-box" id="term-result">جاهز لإجراء الفحص...</div>
       </div>
 
       <!-- Thermal Printer Card -->
       <div class="card">
-        <div class="card-title">اختبار طابعة الفواتير ودرج النقدية (ESC/POS)</div>
+        <div class="card-title">اختبار طابعة الفواتير ودرج النقدية</div>
         <div class="form-group">
-          <label>عنوان IP طابعة الشبكة:</label>
+          <label>عنوان الطابعة على الشبكة (IP):</label>
           <input type="text" id="print-ip" value="" placeholder="192.168.1.200">
         </div>
         <div class="form-group">
-          <label>منفذ الطباعة الحرارية ESC/POS (المنفذ القياسي 9100):</label>
+          <label>منفذ الطابعة (الافتراضي 9100):</label>
           <input type="number" id="print-port" value="9100" placeholder="9100">
         </div>
         <div class="form-group">
-          <label>اسم المتجر في الإيصال:</label>
-          <input type="text" id="store-name" value="متجر Z-Systems النموذجي">
+          <label>اسم المتجر في إيصال التجربة:</label>
+          <input type="text" id="store-name" value="متجر Z-Systems">
         </div>
 
         <div class="btn-row">
           <button class="btn-primary" onclick="testThermalPrint()">طباعة إيصال تجريبي</button>
           <button class="btn-secondary" onclick="testKickDrawer()">فتح درج النقدية</button>
         </div>
-        <div class="result-box" id="print-result">في انتظار أمر الطباعة...</div>
+        <div class="result-box" id="print-result">جاهز لاختبار الطباعة...</div>
       </div>
     </div>
 
     <!-- Live Event Log -->
     <div class="card">
-      <div class="card-title">سجل النبضات اللحظي (Bridge Live Events SSE)</div>
+      <div class="card-title">سجل العمليات المباشر</div>
       <div class="log-box" id="event-log">
-        <div class="log-entry log-info">[النظام] تم بدء الاتصال بخادم الجسر المحلي 127.0.0.1:18181...</div>
+        <div class="log-entry log-info">[النظام] جارٍ الاتصال بخدمة الأجهزة المحلية...</div>
       </div>
     </div>
+
+    <footer class="about-footer">
+      <div>أداة ربط أجهزة <strong>Z-Systems</strong> — تطوير فريق Z-Systems</div>
+      <div>
+        الموقع الرسمي:
+        <a href="https://www.zsystemai.com" target="_blank" rel="noopener noreferrer">www.zsystemai.com</a>
+        &nbsp;|&nbsp;
+        <span>المنفذ المحلي: 127.0.0.1:18181</span>
+      </div>
+    </footer>
   </div>
 
   <script>
@@ -158,7 +171,7 @@
       try {
         const data = JSON.parse(e.data);
         if (data.type === 'connected') {
-          addLog(`متصل بنجاح بالجسر المحلي (الإصدار ${data.version})`, 'info');
+          addLog(`تم الاتصال بالخدمة بنجاح (الإصدار ${data.version})`, 'info');
         } else if (data.type === 'ecr_waiting') {
           addLog(`طلب سداد جديد: ${data.amount} ${data.currency} على ${data.ip}:${data.port}`, 'info');
         } else if (data.type === 'ecr_approved') {
@@ -174,7 +187,7 @@
     async function testTerminalPing() {
       const resultBox = document.getElementById('term-result');
       resultBox.className = 'result-box';
-      resultBox.textContent = 'جاري فحص الاتصال بالماكينة...';
+      resultBox.textContent = 'جارٍ فحص الاتصال بجهاز الدفع...';
 
       const payload = {
         ip: document.getElementById('term-ip').value.trim(),
@@ -191,10 +204,10 @@
         const json = await res.json();
         if (json.data && json.data.reachable) {
           resultBox.className = 'result-box success';
-          resultBox.textContent = `نجح الاتصال بالماكينة (${json.data.latencyMs}ms): ${json.data.message}`;
+          resultBox.textContent = `تم الاتصال بجهاز الدفع بنجاح (${json.data.latencyMs}ms): ${json.data.message}`;
         } else {
           resultBox.className = 'result-box error';
-          resultBox.textContent = `فشل الاتصال بالماكينة: ${json.data?.message || 'الماكينة غير مستجيبة'}`;
+          resultBox.textContent = `تعذر الاتصال بجهاز الدفع: ${json.data?.message || 'الجهاز غير مستجيب'}`;
         }
       } catch (err) {
         resultBox.className = 'result-box error';
@@ -205,7 +218,7 @@
     async function sendTerminalCharge() {
       const resultBox = document.getElementById('term-result');
       resultBox.className = 'result-box';
-      resultBox.textContent = 'جاري إرسال المبلغ للماكينة... يرجى تمرير البطاقة على شاشة الجهاز';
+      resultBox.textContent = 'جارٍ إرسال المبلغ إلى جهاز الدفع... يرجى تمرير البطاقة الآن.';
 
       const payload = {
         ip: document.getElementById('term-ip').value.trim(),
@@ -238,7 +251,7 @@
 
     async function cancelTerminalCharge() {
       const resultBox = document.getElementById('term-result');
-      resultBox.textContent = 'جاري إرسال أمر الإلغاء للماكينة...';
+      resultBox.textContent = 'جارٍ إرسال طلب الإلغاء إلى جهاز الدفع...';
 
       const payload = {
         ip: document.getElementById('term-ip').value.trim(),
@@ -255,7 +268,7 @@
         });
         const json = await res.json();
         resultBox.className = 'result-box error';
-        resultBox.textContent = 'تم إرسال أمر الإلغاء بنجاح وتفريغ شاشة الماكينة.';
+        resultBox.textContent = 'تم إلغاء العملية وتصفير شاشة جهاز الدفع.';
       } catch (err) {
         resultBox.className = 'result-box error';
         resultBox.textContent = `خطأ: ${err.message}`;
@@ -265,7 +278,7 @@
     async function testThermalPrint() {
       const resultBox = document.getElementById('print-result');
       resultBox.className = 'result-box';
-      resultBox.textContent = 'جاري إرسال إيصال الطباعة الحرارية...';
+      resultBox.textContent = 'جارٍ إرسال إيصال تجريبي إلى الطابعة...';
 
       const payload = {
         ip: document.getElementById('print-ip').value.trim(),
@@ -282,10 +295,10 @@
         const json = await res.json();
         if (json.success) {
           resultBox.className = 'result-box success';
-          resultBox.textContent = `تمت الطباعة بنجاح! تم إرسال بايتات ESC/POS إلى الطابعة (${json.data?.bytesWritten} بايت).`;
+          resultBox.textContent = 'تمت طباعة الإيصال التجريبي بنجاح.';
         } else {
           resultBox.className = 'result-box error';
-          resultBox.textContent = `فشل الطباعة: ${json.error}`;
+          resultBox.textContent = `تعذرت الطباعة: ${json.error}`;
         }
       } catch (err) {
         resultBox.className = 'result-box error';
@@ -295,7 +308,7 @@
 
     async function testKickDrawer() {
       const resultBox = document.getElementById('print-result');
-      resultBox.textContent = 'جاري إرسال نبضة فتح درج النقدية...';
+      resultBox.textContent = 'جارٍ إرسال أمر فتح درج النقدية...';
 
       const payload = {
         ip: document.getElementById('print-ip').value.trim(),
@@ -311,10 +324,10 @@
         const json = await res.json();
         if (json.success) {
           resultBox.className = 'result-box success';
-          resultBox.textContent = 'تم إرسال نبضة فتح درج النقدية بنجاح.';
+          resultBox.textContent = 'تم إرسال أمر فتح درج النقدية بنجاح.';
         } else {
           resultBox.className = 'result-box error';
-          resultBox.textContent = `فشل فتح الدرج: ${json.error}`;
+          resultBox.textContent = `تعذر فتح الدرج: ${json.error}`;
         }
       } catch (err) {
         resultBox.className = 'result-box error';

@@ -41,20 +41,20 @@ if (!isElectron) {
     const icon = nativeImage.createFromDataURL(`data:image/png;base64,${iconData}`);
 
     tray = new Tray(icon);
-    tray.setToolTip('Z-Systems Hardware Bridge (نشط)');
+    tray.setToolTip('أداة ربط أجهزة Z-Systems — تعمل بنجاح');
 
     const contextMenu = Menu.buildFromTemplate([
-      { label: 'جسر Z-Systems للعتاد v1.0.0', enabled: false },
-      { label: 'الحالة: متصل (127.0.0.1:18181)', enabled: false },
+      { label: 'أداة ربط أجهزة Z-Systems — الإصدار 1.2.0', enabled: false },
+      { label: 'الحالة: تعمل وجاهزة للاتصال', enabled: false },
       { type: 'separator' },
       {
-        label: 'فتح لوحة التشخيص والفحص',
+        label: 'حالة الطابعات والأجهزة',
         click: () => {
           shell.openExternal('http://127.0.0.1:18181/diagnostics');
         },
       },
       {
-        label: 'تشغيل تلقائي مع إقلاع الجهاز',
+        label: 'التشغيل التلقائي مع بدء ويندوز',
         type: 'checkbox',
         checked: app.getLoginItemSettings().openAtLogin,
         click: (item) => {
@@ -63,7 +63,14 @@ if (!isElectron) {
       },
       { type: 'separator' },
       {
-        label: 'خروج',
+        label: 'عن المطوّر — www.zsystemai.com',
+        click: () => {
+          shell.openExternal('https://www.zsystemai.com');
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'إيقاف الخدمة وإغلاق',
         click: () => {
           app.quit();
         },

@@ -20,7 +20,14 @@ if (!gotTheLock) {
 }
 
 const RuntimeConfig = require('./runtime-config.cjs');
-const { printThermalLabelsOnWindows, printThermalReceiptOnWindows } = require('./thermal-label-printer.cjs');
+const {
+  printThermalLabelsOnWindows,
+  printThermalReceiptOnWindows,
+  warmThermalSpooler,
+  shutdownThermalSpooler,
+} = require('./thermal-label-printer.cjs');
+let sharedChromiumPrintWin = null;
+let chromiumPrintQueue = Promise.resolve();
 let runtimeConfigInstance = null;
 let currentConfig = null;
 
@@ -883,6 +890,13 @@ app.whenReady().then(async () => {
   const cleanShutdown = () => {
     if (isQuitting) return;
     isQuitting = true;
+    try { shutdownThermalSpooler(); } catch {}
+    try {
+      if (sharedChromiumPrintWin && !sharedChromiumPrintWin.isDestroyed()) {
+        sharedChromiumPrintWin.destroy();
+      }
+      sharedChromiumPrintWin = null;
+    } catch {}
     if (backendProcess && backendProcess.pid && !backendProcess.killed) {
       try { backendProcess.kill(); } catch (err) {
         console.error('[ELECTRON] Backend graceful shutdown failed:', err);
@@ -987,47 +1001,67 @@ app.whenReady().then(async () => {
         : pageSize === 'receipt'
           ? { width: receiptWidthMm === 58 ? 58000 : 80000, height: 297000 }
           : (pageSize === 'A4' ? 'A4' : undefined);
-    return new Promise((resolve) => {
-      let printWin = null;
+    const runChromiumSilentPrint = () => new Promise((resolve) => {
       let completed = false;
+      const cleanupListeners = (win) => {
+        if (!win || win.isDestroyed()) return;
+        win.webContents.removeListener('did-fail-load', onFail);
+        win.webContents.removeListener('did-finish-load', onFinish);
+      };
       const finish = (result) => {
         if (completed) return;
         completed = true;
         clearTimeout(watchdog);
-        try { if (printWin && !printWin.isDestroyed()) printWin.destroy(); } catch {}
+        cleanupListeners(sharedChromiumPrintWin);
         resolve(result);
       };
-      const watchdog = setTimeout(() => finish({ ok: false, error: 'Printing timed out' }), 30000);
+      const watchdog = setTimeout(() => {
+        try {
+          if (sharedChromiumPrintWin && !sharedChromiumPrintWin.isDestroyed()) {
+            sharedChromiumPrintWin.destroy();
+          }
+          sharedChromiumPrintWin = null;
+        } catch {}
+        finish({ ok: false, error: 'Printing timed out' });
+      }, 30000);
+      const onFail = (_e, code, reason) =>
+        finish({ ok: false, error: `Print document failed to load (${code}): ${reason}` });
+      const onFinish = () => {
+        setTimeout(() => {
+          if (completed || !sharedChromiumPrintWin || sharedChromiumPrintWin.isDestroyed()) return;
+          try {
+            sharedChromiumPrintWin.webContents.print({
+              silent: true,
+              printBackground: true,
+              deviceName: typeof deviceName === 'string' ? deviceName : undefined,
+              margins: { marginType: 'none' },
+              ...(orientation === 'landscape' ? { landscape: true } : {}),
+              pageSize: resolvedPageSize
+            }, (success, reason) => finish(success ? { ok: true } : { ok: false, error: reason || 'Print failed' }));
+          } catch (error) {
+            finish({ ok: false, error: String(error.message || error) });
+          }
+        }, 20);
+      };
       try {
-        printWin = new BrowserWindow({
-          show: false,
-          webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
-        });
-        printWin.webContents.once('did-fail-load', (_e, code, reason) =>
-          finish({ ok: false, error: `Print document failed to load (${code}): ${reason}` }));
-        printWin.webContents.once('did-finish-load', () => {
-          setTimeout(() => {
-            if (completed || !printWin || printWin.isDestroyed()) return;
-            try {
-              printWin.webContents.print({
-                silent: true,
-                printBackground: true,
-                deviceName: typeof deviceName === 'string' ? deviceName : undefined,
-                margins: { marginType: 'none' },
-                ...(orientation === 'landscape' ? { landscape: true } : {}),
-                pageSize: resolvedPageSize
-              }, (success, reason) => finish(success ? { ok: true } : { ok: false, error: reason || 'Print failed' }));
-            } catch (error) {
-              finish({ ok: false, error: String(error.message || error) });
-            }
-          }, 200);
-        });
-        printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+        if (!sharedChromiumPrintWin || sharedChromiumPrintWin.isDestroyed()) {
+          sharedChromiumPrintWin = new BrowserWindow({
+            show: false,
+            webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
+          });
+        }
+        sharedChromiumPrintWin.webContents.once('did-fail-load', onFail);
+        sharedChromiumPrintWin.webContents.once('did-finish-load', onFinish);
+        sharedChromiumPrintWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
           .catch((error) => finish({ ok: false, error: String(error.message || error) }));
       } catch (error) {
         finish({ ok: false, error: String(error.message || error) });
       }
     });
+
+    const queuedPrint = chromiumPrintQueue.catch(() => {}).then(runChromiumSilentPrint);
+    chromiumPrintQueue = queuedPrint.catch(() => {});
+    return queuedPrint;
   });
 
   // Handle IPC for Cash Drawer Kick
@@ -1226,6 +1260,13 @@ app.whenReady().then(async () => {
   }
 
   tryRevealApp();
+
+  // Warm the silent print offscreen renderer + PowerShell System.Drawing daemon in the background
+  setTimeout(() => {
+    if (!isQuitting) {
+      warmThermalSpooler(BrowserWindow);
+    }
+  }, 1500);
 
   // Safety fallback: if app did not signal rendered within 10s of backend ready, reveal anyway
   setTimeout(() => {

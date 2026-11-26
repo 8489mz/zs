@@ -9,10 +9,19 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Printing;
 using System.Drawing.Text;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Web.Script.Serialization;
 using Microsoft.Win32;
+
+[assembly: AssemblyTitle("أداة ربط أجهزة Z-Systems")]
+[assembly: AssemblyDescription("أداة ربط الطابعات وأجهزة نقاط البيع بنظام Z-Systems")]
+[assembly: AssemblyCompany("Z-Systems")]
+[assembly: AssemblyProduct("أداة ربط أجهزة Z-Systems")]
+[assembly: AssemblyCopyright("Z-Systems — www.zsystemai.com")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace ZSystems.HardwareBridge
 {
@@ -26,11 +35,24 @@ namespace ZSystems.HardwareBridge
         // Serializes Windows silent prints: switching the default printer is a
         // process-wide side effect, so two prints must never interleave it.
         private static readonly object WindowsPrintLock = new object();
+        private static readonly object PrinterCacheLock = new object();
+        private static readonly object PrintDocLock = new object();
+        private static readonly HashSet<string> _verifiedPrinterNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, byte[]> _inMemoryPrintDocs = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        private static Form _warmPrintForm = null;
+        private static WebBrowser _warmPrintBrowser = null;
+        private static System.Windows.Forms.Timer _postPrintRestoreTimer = null;
+        private static Dictionary<string, object> _pendingRestorePageSetup = null;
+        private static string _pendingRestoreDefaultPrinter = null;
         private static HttpListener _listener;
         private static NotifyIcon _trayIcon;
         private static Control _uiDispatcher;
 
         private static readonly string ConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bridge-config.json");
+        private const string AppDisplayName = "أداة ربط أجهزة Z-Systems";
+        private const string AppVersion = "1.2.0";
+        private const string DeveloperWebsiteUrl = "https://www.zsystemai.com";
+        private const string DeveloperWebsiteDisplay = "www.zsystemai.com";
         private static string CloudServerUrl = "https://app.zsystemai.com";
         private static string TenantId = "dev-tenant";
         private static string BridgeKey = "";
@@ -152,6 +174,45 @@ namespace ZSystems.HardwareBridge
             catch {}
         }
 
+        private static string GetTenantMenuText()
+        {
+            if (string.IsNullOrWhiteSpace(TenantId))
+            {
+                return "حساب المنشأة: غير محدد";
+            }
+            if (BridgeKey.Length == 64)
+            {
+                return "حساب المنشأة: مرتبط بالنظام";
+            }
+            return "حساب المنشأة: وضع التشغيل المحلي";
+        }
+
+        private static string GetCloudStatusMenuText()
+        {
+            if (IsCloudRelayConnected)
+            {
+                return "الاتصال بالسحابة: متصل";
+            }
+            if (string.IsNullOrWhiteSpace(TenantId) || BridgeKey.Length != 64)
+            {
+                return "الاتصال بالسحابة: غير مُفعّل (يعمل محلياً)";
+            }
+            return "الاتصال بالسحابة: جارٍ الاتصال...";
+        }
+
+        private static void OpenDeveloperWebsite()
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = DeveloperWebsiteUrl,
+                    UseShellExecute = true
+                });
+            }
+            catch {}
+        }
+
         private static void UpdateTrayMenuLabels()
         {
             try
@@ -163,60 +224,315 @@ namespace ZSystems.HardwareBridge
                 }
                 if (_tenantMenuItem != null)
                 {
-                    _tenantMenuItem.Text = string.Format("المنشأة: \u200E{0}", string.IsNullOrEmpty(TenantId) ? "غير محدد" : TenantId);
+                    _tenantMenuItem.Text = GetTenantMenuText();
                 }
                 if (_relayStatusMenuItem != null)
                 {
-                    _relayStatusMenuItem.Text = string.Format("التتابع السحابي: {0}", IsCloudRelayConnected ? "متصل ومستعد" : "جاري المحاولة...");
+                    _relayStatusMenuItem.Text = GetCloudStatusMenuText();
                 }
             }
             catch {}
         }
 
+        private static void ShowAboutDialog()
+        {
+            using (Form form = new Form())
+            using (Icon dialogIcon = CreateBrandTrayIcon())
+            using (Bitmap logoBitmap = dialogIcon.ToBitmap())
+            {
+                form.Text = "حول البرنامج — " + AppDisplayName;
+                form.Icon = dialogIcon;
+                form.BackColor = Color.White;
+                form.ForeColor = Color.FromArgb(15, 23, 42);
+                form.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+                form.RightToLeft = RightToLeft.Yes;
+                form.RightToLeftLayout = true;
+                form.ClientSize = new Size(460, 328);
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.StartPosition = FormStartPosition.CenterScreen;
+                form.MaximizeBox = false;
+                form.MinimizeBox = false;
+
+                PictureBox picLogo = new PictureBox
+                {
+                    Image = logoBitmap,
+                    SizeMode = PictureBoxSizeMode.Zoom,
+                    Left = 22,
+                    Top = 20,
+                    Width = 40,
+                    Height = 40
+                };
+
+                Label lblTitle = new Label
+                {
+                    Text = AppDisplayName,
+                    Font = new Font("Segoe UI", 12f, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(23, 14, 94),
+                    Left = 74,
+                    Top = 18,
+                    Width = 364,
+                    Height = 26
+                };
+
+                Label lblVersion = new Label
+                {
+                    Text = "الإصدار " + AppVersion,
+                    Font = new Font("Segoe UI", 9f, FontStyle.Regular),
+                    ForeColor = Color.FromArgb(100, 116, 139),
+                    Left = 74,
+                    Top = 45,
+                    Width = 364,
+                    Height = 20
+                };
+
+                Panel sep1 = new Panel
+                {
+                    BackColor = Color.FromArgb(226, 232, 240),
+                    Left = 22,
+                    Top = 74,
+                    Width = 416,
+                    Height = 1
+                };
+
+                Label lblDesc = new Label
+                {
+                    Text = "أداة مساعدة لتشغيل طابعات الفواتير وأجهزة الدفع وربطها مباشرة بنظام Z-Systems.",
+                    ForeColor = Color.FromArgb(51, 65, 85),
+                    Left = 22,
+                    Top = 88,
+                    Width = 416,
+                    Height = 42
+                };
+
+                Label lblDevHeader = new Label
+                {
+                    Text = "تطوير: فريق Z-Systems",
+                    Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(15, 23, 42),
+                    Left = 22,
+                    Top = 138,
+                    Width = 416,
+                    Height = 22
+                };
+
+                LinkLabel lnkWebsite = new LinkLabel
+                {
+                    Text = "الموقع الرسمي: \u200E" + DeveloperWebsiteDisplay + "\u200E",
+                    Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                    LinkColor = Color.FromArgb(23, 14, 94),
+                    ActiveLinkColor = Color.FromArgb(37, 99, 235),
+                    VisitedLinkColor = Color.FromArgb(23, 14, 94),
+                    LinkBehavior = LinkBehavior.HoverUnderline,
+                    Left = 22,
+                    Top = 164,
+                    Width = 416,
+                    Height = 24
+                };
+                lnkWebsite.LinkClicked += (s, e) => OpenDeveloperWebsite();
+
+                Panel sep2 = new Panel
+                {
+                    BackColor = Color.FromArgb(226, 232, 240),
+                    Left = 22,
+                    Top = 200,
+                    Width = 416,
+                    Height = 1
+                };
+
+                Label lblTechTitle = new Label
+                {
+                    Text = "بيانات الدعم الفني:",
+                    Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(100, 116, 139),
+                    Left = 22,
+                    Top = 212,
+                    Width = 416,
+                    Height = 18
+                };
+
+                Label lblTechInfo = new Label
+                {
+                    Text = string.Format(
+                        "المنفذ المحلي: \u200E127.0.0.1:{0}\u200E\nرمز المنشأة: \u200E{1}\u200E",
+                        Port,
+                        string.IsNullOrWhiteSpace(TenantId) ? "غير محدد" : TenantId
+                    ),
+                    Font = new Font("Segoe UI", 8.25f, FontStyle.Regular),
+                    ForeColor = Color.FromArgb(100, 116, 139),
+                    Left = 22,
+                    Top = 232,
+                    Width = 416,
+                    Height = 34
+                };
+
+                Panel sep3 = new Panel
+                {
+                    BackColor = Color.FromArgb(226, 232, 240),
+                    Left = 0,
+                    Top = 272,
+                    Width = 460,
+                    Height = 1
+                };
+
+                Button btnWebsite = new Button
+                {
+                    Text = "زيارة الموقع الرسمي",
+                    BackColor = Color.FromArgb(23, 14, 94),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat,
+                    Font = new Font("Segoe UI", 9.25f, FontStyle.Bold),
+                    Cursor = Cursors.Hand,
+                    Left = 22,
+                    Top = 282,
+                    Width = 160,
+                    Height = 34
+                };
+                btnWebsite.FlatAppearance.BorderSize = 0;
+                btnWebsite.Click += (s, e) => OpenDeveloperWebsite();
+
+                Button btnClose = new Button
+                {
+                    Text = "إغلاق",
+                    BackColor = Color.White,
+                    ForeColor = Color.FromArgb(51, 65, 85),
+                    FlatStyle = FlatStyle.Flat,
+                    Font = new Font("Segoe UI", 9.25f, FontStyle.Regular),
+                    Cursor = Cursors.Hand,
+                    Left = 192,
+                    Top = 282,
+                    Width = 96,
+                    Height = 34
+                };
+                btnClose.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
+                btnClose.Click += (s, e) => form.Close();
+
+                form.CancelButton = btnClose;
+                form.Controls.Add(picLogo);
+                form.Controls.Add(lblTitle);
+                form.Controls.Add(lblVersion);
+                form.Controls.Add(sep1);
+                form.Controls.Add(lblDesc);
+                form.Controls.Add(lblDevHeader);
+                form.Controls.Add(lnkWebsite);
+                form.Controls.Add(sep2);
+                form.Controls.Add(lblTechTitle);
+                form.Controls.Add(lblTechInfo);
+                form.Controls.Add(sep3);
+                form.Controls.Add(btnWebsite);
+                form.Controls.Add(btnClose);
+                form.ShowDialog();
+            }
+        }
+
         private static void ShowConfigDialog()
         {
-            Form form = new Form();
-            form.Text = "إعدادات الربط السحابي - Z-Systems Bridge v1.2.0";
-            form.Icon = CreateBrandTrayIcon();
-            form.RightToLeft = RightToLeft.Yes;
-            form.RightToLeftLayout = true;
-            form.Width = 480;
-            form.Height = 340;
-            form.FormBorderStyle = FormBorderStyle.FixedDialog;
-            form.StartPosition = FormStartPosition.CenterScreen;
-            form.MaximizeBox = false;
-            form.MinimizeBox = false;
-
-            Label lblServer = new Label { Text = "رابط السيرفر السحابي (Server URL):", Left = 20, Top = 20, Width = 420 };
-            TextBox txtServer = new TextBox { Text = CloudServerUrl, Left = 20, Top = 45, Width = 420 };
-
-            Label lblTenant = new Label { Text = "معرّف المنشأة (Tenant ID) أو كود الربط:", Left = 20, Top = 85, Width = 420 };
-            TextBox txtTenant = new TextBox { Text = TenantId, Left = 20, Top = 110, Width = 420 };
-
-            Label lblBridgeKey = new Label { Text = "مفتاح الربط الآمن (Tenant Bridge Key):", Left = 20, Top = 150, Width = 420 };
-            TextBox txtBridgeKey = new TextBox { Text = BridgeKey, Left = 20, Top = 175, Width = 420, UseSystemPasswordChar = true };
-
-            Button btnSave = new Button { Text = "حفظ وتوصيل", Left = 160, Top = 225, Width = 150, Height = 36 };
-            btnSave.Click += (s, e) =>
+            using (Form form = new Form())
+            using (Icon dialogIcon = CreateBrandTrayIcon())
             {
-                string newServer = txtServer.Text.Trim();
-                string newTenant = txtTenant.Text.Trim();
-                if (!string.IsNullOrEmpty(newServer)) CloudServerUrl = newServer;
-                TenantId = newTenant;
-                BridgeKey = txtBridgeKey.Text.Trim();
-                SaveConfig();
-                MessageBox.Show("تم حفظ إعدادات الربط بنجاح. سيتم الاتصال بالسيرفر فوراً.", "نجاح", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                form.Close();
-            };
+                form.Text = "إعدادات الاتصال والحساب — " + AppDisplayName;
+                form.Icon = dialogIcon;
+                form.BackColor = Color.White;
+                form.ForeColor = Color.FromArgb(15, 23, 42);
+                form.Font = new Font("Segoe UI", 9.25f, FontStyle.Regular);
+                form.RightToLeft = RightToLeft.Yes;
+                form.RightToLeftLayout = true;
+                form.ClientSize = new Size(460, 296);
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.StartPosition = FormStartPosition.CenterScreen;
+                form.MaximizeBox = false;
+                form.MinimizeBox = false;
 
-            form.Controls.Add(lblServer);
-            form.Controls.Add(txtServer);
-            form.Controls.Add(lblTenant);
-            form.Controls.Add(txtTenant);
-            form.Controls.Add(lblBridgeKey);
-            form.Controls.Add(txtBridgeKey);
-            form.Controls.Add(btnSave);
-            form.ShowDialog();
+                Label lblServer = new Label { Text = "رابط النظام السحابي:", Left = 22, Top = 20, Width = 416, Height = 20, ForeColor = Color.FromArgb(51, 65, 85) };
+                TextBox txtServer = new TextBox { Text = CloudServerUrl, Left = 22, Top = 44, Width = 416, RightToLeft = RightToLeft.No };
+
+                Label lblTenant = new Label { Text = "رمز المنشأة:", Left = 22, Top = 82, Width = 416, Height = 20, ForeColor = Color.FromArgb(51, 65, 85) };
+                TextBox txtTenant = new TextBox { Text = TenantId, Left = 22, Top = 106, Width = 416, RightToLeft = RightToLeft.No };
+
+                Label lblBridgeKey = new Label { Text = "مفتاح الربط الآمن:", Left = 22, Top = 144, Width = 416, Height = 20, ForeColor = Color.FromArgb(51, 65, 85) };
+                TextBox txtBridgeKey = new TextBox { Text = BridgeKey, Left = 22, Top = 168, Width = 416, RightToLeft = RightToLeft.No, UseSystemPasswordChar = true };
+
+                Label lblHint = new Label
+                {
+                    Text = "تُستخدم هذه البيانات عند الحاجة لربط الأجهزة بحسابك السحابي في Z-Systems.",
+                    Font = new Font("Segoe UI", 8.25f, FontStyle.Regular),
+                    ForeColor = Color.FromArgb(100, 116, 139),
+                    Left = 22,
+                    Top = 202,
+                    Width = 416,
+                    Height = 24
+                };
+
+                Panel sep = new Panel
+                {
+                    BackColor = Color.FromArgb(226, 232, 240),
+                    Left = 0,
+                    Top = 236,
+                    Width = 460,
+                    Height = 1
+                };
+
+                Button btnSave = new Button
+                {
+                    Text = "حفظ الإعدادات",
+                    BackColor = Color.FromArgb(23, 14, 94),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat,
+                    Font = new Font("Segoe UI", 9.25f, FontStyle.Bold),
+                    Cursor = Cursors.Hand,
+                    Left = 22,
+                    Top = 248,
+                    Width = 140,
+                    Height = 34
+                };
+                btnSave.FlatAppearance.BorderSize = 0;
+                btnSave.Click += (s, e) =>
+                {
+                    string newServer = txtServer.Text.Trim();
+                    string newTenant = txtTenant.Text.Trim();
+                    if (!string.IsNullOrEmpty(newServer)) CloudServerUrl = newServer;
+                    TenantId = newTenant;
+                    BridgeKey = txtBridgeKey.Text.Trim();
+                    SaveConfig();
+                    MessageBox.Show(
+                        "تم حفظ الإعدادات بنجاح، وسيتم تحديث الاتصال تلقائياً.",
+                        "تم الحفظ",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information,
+                        MessageBoxDefaultButton.Button1,
+                        MessageBoxOptions.RightAlign | MessageBoxOptions.RtlReading
+                    );
+                    form.Close();
+                };
+
+                Button btnCancel = new Button
+                {
+                    Text = "إغلاق",
+                    BackColor = Color.White,
+                    ForeColor = Color.FromArgb(51, 65, 85),
+                    FlatStyle = FlatStyle.Flat,
+                    Cursor = Cursors.Hand,
+                    Left = 172,
+                    Top = 248,
+                    Width = 96,
+                    Height = 34
+                };
+                btnCancel.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
+                btnCancel.Click += (s, e) => form.Close();
+
+                form.AcceptButton = btnSave;
+                form.CancelButton = btnCancel;
+                form.Controls.Add(lblServer);
+                form.Controls.Add(txtServer);
+                form.Controls.Add(lblTenant);
+                form.Controls.Add(txtTenant);
+                form.Controls.Add(lblBridgeKey);
+                form.Controls.Add(txtBridgeKey);
+                form.Controls.Add(lblHint);
+                form.Controls.Add(sep);
+                form.Controls.Add(btnSave);
+                form.Controls.Add(btnCancel);
+                form.ShowDialog();
+            }
         }
 
         private static void StartCloudRelay()
@@ -455,7 +771,7 @@ namespace ZSystems.HardwareBridge
                 Icon brandIcon = CreateBrandTrayIcon();
                 _trayIcon = new NotifyIcon();
                 _trayIcon.Icon = brandIcon;
-                _trayIcon.Text = "جسر Z-Systems للعتاد v1.2.0 — متصل (127.0.0.1:18181)";
+                _trayIcon.Text = AppDisplayName + " — تعمل بنجاح";
                 _trayIcon.Visible = true;
 
                 _trayMenu = new ContextMenuStrip();
@@ -463,33 +779,36 @@ namespace ZSystems.HardwareBridge
                 _trayMenu.ShowImageMargin = false;
                 _trayMenu.Font = new Font("Segoe UI", 9.25f, FontStyle.Regular);
 
-                ToolStripMenuItem headerItem = new ToolStripMenuItem("جسر Z-Systems للعتاد — الإصدار 1.2.0")
+                ToolStripMenuItem headerItem = new ToolStripMenuItem(AppDisplayName + " — الإصدار " + AppVersion)
                 {
                     Enabled = false,
                     Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
                 };
                 _trayMenu.Items.Add(headerItem);
 
-                ToolStripMenuItem statusItem = new ToolStripMenuItem("الحالة: متصل — \u200E127.0.0.1:18181\u200E") { Enabled = false };
+                ToolStripMenuItem statusItem = new ToolStripMenuItem("الحالة: تعمل وجاهزة للاتصال") { Enabled = false };
                 _trayMenu.Items.Add(statusItem);
 
-                _tenantMenuItem = new ToolStripMenuItem(string.Format("المنشأة: \u200E{0}", string.IsNullOrEmpty(TenantId) ? "غير محدد" : TenantId)) { Enabled = false };
+                _tenantMenuItem = new ToolStripMenuItem(GetTenantMenuText()) { Enabled = false };
                 _trayMenu.Items.Add(_tenantMenuItem);
 
-                _relayStatusMenuItem = new ToolStripMenuItem("التتابع السحابي: جاري المحاولة...") { Enabled = false };
+                _relayStatusMenuItem = new ToolStripMenuItem(GetCloudStatusMenuText()) { Enabled = false };
                 _trayMenu.Items.Add(_relayStatusMenuItem);
 
                 _trayMenu.Items.Add(new ToolStripSeparator());
-                _trayMenu.Items.Add("إعدادات الربط السحابي والمنشأة...", null, (s, e) => ShowConfigDialog());
-                _trayMenu.Items.Add("فتح لوحة التشخيص والفحص", null, (s, e) =>
+                _trayMenu.Items.Add("إعدادات الاتصال والحساب...", null, (s, e) => ShowConfigDialog());
+                _trayMenu.Items.Add("حالة الطابعات والأجهزة", null, (s, e) =>
                 {
                     try { System.Diagnostics.Process.Start("http://127.0.0.1:18181/diagnostics"); } catch {}
                 });
                 _trayMenu.Items.Add(new ToolStripSeparator());
-                _trayMenu.Items.Add("إيقاف الخدمة وخروج", null, (s, e) =>
+                _trayMenu.Items.Add("حول البرنامج...", null, (s, e) => ShowAboutDialog());
+                _trayMenu.Items.Add("عن المطوّر — \u200E" + DeveloperWebsiteDisplay + "\u200E", null, (s, e) => OpenDeveloperWebsite());
+                _trayMenu.Items.Add(new ToolStripSeparator());
+                _trayMenu.Items.Add("إيقاف الخدمة وإغلاق", null, (s, e) =>
                 {
                     DialogResult confirm = MessageBox.Show(
-                        "هل أنت متأكد من رغبتك في إيقاف جسر Z-Systems للعتاد؟\n\nتنبيه: إيقاف الجسر سيعطل التخاطب مع ماكينات الدفع وطابعات الفواتير في الكاشير.",
+                        "هل تريد إيقاف " + AppDisplayName + "؟\n\nتنبيه: إيقاف الخدمة سيؤدي إلى توقف الطباعة المباشرة وأجهزة الدفع المرتبطة بنقطة البيع حتى إعادة تشغيلها.",
                         "تأكيد إيقاف الخدمة",
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Warning,
@@ -513,13 +832,19 @@ namespace ZSystems.HardwareBridge
                 // Notification Balloon
                 _trayIcon.ShowBalloonTip(
                     3000,
-                    "جسر Z-Systems للعتاد",
-                    "الجسر نشط الآن في الخلفية وجاهز للربط مع نقاط البيع والماكينات.",
+                    AppDisplayName,
+                    "الخدمة تعمل الآن وجاهزة لتشغيل الطابعات وأجهزة نقاط البيع.",
                     ToolTipIcon.Info
                 );
 
                 _uiDispatcher = new Control();
                 IntPtr dispatcherHandle = _uiDispatcher.Handle;
+
+                // Pre-warm the hidden IE11 print WebBrowser on the STA thread so the very
+                // first POS receipt prints with zero ActiveX cold-start delay. Never scan
+                // Windows printers at startup or during silent print — target only the
+                // configured printer directly.
+                EnsureWarmPrintBrowser(302, 1100);
 
                 Application.Run(new ApplicationContext());
                 }
@@ -527,7 +852,14 @@ namespace ZSystems.HardwareBridge
             catch (Exception ex)
             {
                 try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bridge-error.log"), ex.ToString()); } catch {}
-                MessageBox.Show(ex.ToString(), "Bridge Startup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(
+                    "تعذر تشغيل " + AppDisplayName + ":\n\n" + ex.Message,
+                    "تعذر التشغيل",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error,
+                    MessageBoxDefaultButton.Button1,
+                    MessageBoxOptions.RightAlign | MessageBoxOptions.RtlReading
+                );
             }
         }
 
@@ -671,6 +1003,35 @@ namespace ZSystems.HardwareBridge
 
                 string path = context.Request.Url.AbsolutePath.ToLowerInvariant();
 
+                // 0. Internal RAM-backed print document endpoint (serves HTML to the local
+                // IE11 print host in <0.2ms without touching disk or triggering Windows Defender).
+                if (path == "/internal/print-doc" && context.Request.HttpMethod == "GET")
+                {
+                    string docId = context.Request.QueryString["id"] ?? "";
+                    byte[] htmlBytes = null;
+                    lock (PrintDocLock)
+                    {
+                        if (!string.IsNullOrEmpty(docId) && _inMemoryPrintDocs.ContainsKey(docId))
+                        {
+                            htmlBytes = _inMemoryPrintDocs[docId];
+                        }
+                    }
+                    if (htmlBytes == null)
+                    {
+                        context.Response.StatusCode = 404;
+                        context.Response.ContentLength64 = 0;
+                        context.Response.OutputStream.Close();
+                        return;
+                    }
+                    context.Response.StatusCode = 200;
+                    context.Response.ContentType = "text/html; charset=utf-8";
+                    context.Response.Headers["Cache-Control"] = "no-store, no-cache";
+                    context.Response.ContentLength64 = htmlBytes.Length;
+                    context.Response.OutputStream.Write(htmlBytes, 0, htmlBytes.Length);
+                    context.Response.OutputStream.Close();
+                    return;
+                }
+
                 // 1. Health & Ping
                 if (path == "/health" || path == "/ping")
                 {
@@ -797,6 +1158,13 @@ namespace ZSystems.HardwareBridge
                     return;
                 }
 
+                // 10b. Pre-warm / Pre-stage target printer & viewport while POS sale is in flight
+                if (path == "/api/printer/warm" && context.Request.HttpMethod == "POST")
+                {
+                    HandlePrinterWarm(context, jsonBody);
+                    return;
+                }
+
                 // 11. Silent HTML Print on a Windows printer (no browser print dialog)
                 if (path == "/api/printer/print-windows" && context.Request.HttpMethod == "POST")
                 {
@@ -859,7 +1227,7 @@ namespace ZSystems.HardwareBridge
 
             if (string.IsNullOrEmpty(html))
             {
-                html = "<!DOCTYPE html><html dir='rtl'><head><meta charset='utf-8'><title>Z-Systems Bridge</title></head><body><h1>جسر Z-Systems للعتاد نشط ومستعد</h1><p>الحالة: متصل (127.0.0.1:18181)</p></body></html>";
+                html = "<!DOCTYPE html><html dir='rtl'><head><meta charset='utf-8'><title>" + AppDisplayName + "</title></head><body><h1>" + AppDisplayName + " تعمل بنجاح</h1><p>الخدمة جاهزة لتشغيل الطابعات وأجهزة نقاط البيع. — <a href='" + DeveloperWebsiteUrl + "' target='_blank' rel='noopener'>" + DeveloperWebsiteDisplay + "</a></p></body></html>";
             }
 
             byte[] bytes = Encoding.UTF8.GetBytes(html);
@@ -1106,6 +1474,7 @@ namespace ZSystems.HardwareBridge
         {
             using (TcpClient client = new TcpClient())
             {
+                client.NoDelay = true;
                 var ar = client.BeginConnect(ip, port, null, null);
                 if (!ar.AsyncWaitHandle.WaitOne(5000))
                 {
@@ -1116,8 +1485,8 @@ namespace ZSystems.HardwareBridge
                 {
                     stream.Write(bytes, 0, bytes.Length);
                     stream.Flush();
-                    Thread.Sleep(100);
                 }
+                try { client.Client.Shutdown(SocketShutdown.Both); } catch {}
             }
         }
 
@@ -1220,8 +1589,73 @@ namespace ZSystems.HardwareBridge
             }
         }
 
+        [DllImport("winspool.drv", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern bool OpenPrinter(string pPrinterName, out IntPtr phPrinter, IntPtr pDefault);
+
+        [DllImport("winspool.drv", SetLastError = true)]
+        private static extern bool ClosePrinter(IntPtr hPrinter);
+
+        [DllImport("winspool.drv", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern bool GetDefaultPrinter(StringBuilder pszBuffer, ref int pcchBuffer);
+
+        private static string GetFastDefaultPrinterName()
+        {
+            try
+            {
+                int size = 260;
+                StringBuilder sb = new StringBuilder(size);
+                if (GetDefaultPrinter(sb, ref size))
+                {
+                    return sb.ToString();
+                }
+                if (size > 260)
+                {
+                    sb = new StringBuilder(size);
+                    if (GetDefaultPrinter(sb, ref size))
+                    {
+                        return sb.ToString();
+                    }
+                }
+            }
+            catch { }
+            try { return new PrinterSettings().PrinterName; } catch { return ""; }
+        }
+
+        // Verifies ONLY the single target printer directly via winspool OpenPrinter
+        // without enumerating or touching any other Windows/network printers.
+        private static bool VerifyTargetPrinterDirect(string printerName)
+        {
+            if (string.IsNullOrWhiteSpace(printerName)) return false;
+            string trimmed = printerName.Trim();
+            lock (PrinterCacheLock)
+            {
+                if (_verifiedPrinterNames.Contains(trimmed)) return true;
+            }
+            IntPtr hPrinter = IntPtr.Zero;
+            try
+            {
+                if (OpenPrinter(trimmed, out hPrinter, IntPtr.Zero))
+                {
+                    lock (PrinterCacheLock)
+                    {
+                        _verifiedPrinterNames.Add(trimmed);
+                    }
+                    return true;
+                }
+            }
+            catch { }
+            finally
+            {
+                if (hPrinter != IntPtr.Zero)
+                {
+                    try { ClosePrinter(hPrinter); } catch { }
+                }
+            }
+            return false;
+        }
+
         // 10. List the printers installed on this PC (Windows printer queue names),
-        // so the web app can offer them in the printer picker.
+        // ONLY when the user explicitly opens Settings (/api/printer/list).
         private static void HandlePrinterList(HttpListenerContext context)
         {
             try
@@ -1275,32 +1709,22 @@ namespace ZSystems.HardwareBridge
                 }
 
                 string printerName = string.IsNullOrWhiteSpace(deviceName)
-                    ? new PrinterSettings().PrinterName
+                    ? GetFastDefaultPrinterName()
                     : deviceName.Trim();
 
-                string matchedPrinterName = null;
-                foreach (string name in PrinterSettings.InstalledPrinters)
-                {
-                    if (string.Equals(name, printerName, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(name.Trim(), printerName.Trim(), StringComparison.OrdinalIgnoreCase))
-                    {
-                        matchedPrinterName = name;
-                        break;
-                    }
-                }
-                if (matchedPrinterName == null)
+                if (!VerifyTargetPrinterDirect(printerName))
                 {
                     SendJson(context, 400, new Dictionary<string, object> { { "success", false }, { "error", "الطابعة غير موجودة على هذا الجهاز: " + printerName } });
                     return;
                 }
-                printerName = matchedPrinterName;
 
                 // A4 (794px at 96dpi), receipt width (58mm ~ 220px, 80mm ~ 302px), or explicit pageSizeMm.
                 int viewportWidth = string.Equals(pageSize, "receipt", StringComparison.OrdinalIgnoreCase)
                     ? (receiptWidthMm == 58 ? 220 : 302)
                     : 794;
                 int viewportHeight = 1100;
-                if (body.ContainsKey("pageSizeMm") && body["pageSizeMm"] is Dictionary<string, object> sizeMm)
+                Dictionary<string, object> sizeMm = body.ContainsKey("pageSizeMm") ? body["pageSizeMm"] as Dictionary<string, object> : null;
+                if (sizeMm != null)
                 {
                     try
                     {
@@ -1420,20 +1844,155 @@ namespace ZSystems.HardwareBridge
             catch { }
         }
 
+        private static void HandlePrinterWarm(HttpListenerContext context, Dictionary<string, object> body)
+        {
+            try
+            {
+                System.Collections.IEnumerable printerList = (body.ContainsKey("printers") && !(body["printers"] is string))
+                    ? (body["printers"] as System.Collections.IEnumerable)
+                    : null;
+                if (printerList != null)
+                {
+                    foreach (object item in printerList)
+                    {
+                        string pName = Convert.ToString(item);
+                        if (!string.IsNullOrWhiteSpace(pName))
+                        {
+                            VerifyTargetPrinterDirect(pName.Trim());
+                        }
+                    }
+                }
+                else if (body.ContainsKey("deviceName"))
+                {
+                    string dName = Convert.ToString(body["deviceName"]);
+                    if (!string.IsNullOrWhiteSpace(dName))
+                    {
+                        VerifyTargetPrinterDirect(dName.Trim());
+                    }
+                }
+
+                string pageSize = body.ContainsKey("pageSize") ? Convert.ToString(body["pageSize"]) : "receipt";
+                int receiptWidthMm = 80;
+                if (body.ContainsKey("receiptWidthMm") && body["receiptWidthMm"] != null)
+                {
+                    try { receiptWidthMm = Convert.ToInt32(body["receiptWidthMm"]); } catch { receiptWidthMm = 80; }
+                }
+                int targetWidth = string.Equals(pageSize, "receipt", StringComparison.OrdinalIgnoreCase)
+                    ? (receiptWidthMm == 58 ? 220 : 302)
+                    : 794;
+
+                if (_uiDispatcher != null && _uiDispatcher.IsHandleCreated)
+                {
+                    _uiDispatcher.BeginInvoke((MethodInvoker)delegate
+                    {
+                        EnsureWarmPrintBrowser(targetWidth, 1100);
+                    });
+                }
+                SendJson(context, 200, new Dictionary<string, object> { { "success", true } });
+            }
+            catch (Exception ex)
+            {
+                SendJson(context, 200, new Dictionary<string, object> { { "success", false }, { "error", ex.Message } });
+            }
+        }
+
+        private static WebBrowser EnsureWarmPrintBrowser(int viewportWidth, int viewportHeight)
+        {
+            try
+            {
+                if (_warmPrintForm == null || _warmPrintForm.IsDisposed || _warmPrintBrowser == null || _warmPrintBrowser.IsDisposed)
+                {
+                    try { if (_warmPrintBrowser != null && !_warmPrintBrowser.IsDisposed) _warmPrintBrowser.Dispose(); } catch {}
+                    try { if (_warmPrintForm != null && !_warmPrintForm.IsDisposed) _warmPrintForm.Dispose(); } catch {}
+
+                    lock (PrintDocLock)
+                    {
+                        if (!_inMemoryPrintDocs.ContainsKey("__warmup__"))
+                        {
+                            _inMemoryPrintDocs["__warmup__"] = new UTF8Encoding(true).GetBytes(
+                                "<!doctype html><html dir=\"rtl\"><head><meta charset=\"utf-8\"><style>@page{margin:0}body{margin:0}</style></head><body></body></html>"
+                            );
+                        }
+                    }
+
+                    _warmPrintForm = new Form();
+                    _warmPrintForm.FormBorderStyle = FormBorderStyle.None;
+                    _warmPrintForm.ShowInTaskbar = false;
+                    _warmPrintForm.StartPosition = FormStartPosition.Manual;
+                    _warmPrintForm.Location = new Point(-32000, -32000);
+                    _warmPrintForm.Size = new Size(viewportWidth, viewportHeight);
+
+                    _warmPrintBrowser = new WebBrowser();
+                    _warmPrintBrowser.Dock = DockStyle.Fill;
+                    _warmPrintBrowser.Width = viewportWidth;
+                    _warmPrintBrowser.Height = viewportHeight;
+                    _warmPrintBrowser.ScrollBarsEnabled = false;
+                    _warmPrintBrowser.ScriptErrorsSuppressed = true;
+                    _warmPrintForm.Controls.Add(_warmPrintBrowser);
+
+                    IntPtr formHandle = _warmPrintForm.Handle;
+                    IntPtr browserHandle = _warmPrintBrowser.Handle;
+                    _warmPrintBrowser.Navigate(string.Format("http://127.0.0.1:{0}/internal/print-doc?id=__warmup__", Port));
+                }
+                else if (_warmPrintForm.Width != viewportWidth || _warmPrintForm.Height != viewportHeight)
+                {
+                    _warmPrintForm.Size = new Size(viewportWidth, viewportHeight);
+                    _warmPrintBrowser.Width = viewportWidth;
+                    _warmPrintBrowser.Height = viewportHeight;
+                }
+                return _warmPrintBrowser;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void FlushPendingPrintRestoreImmediate()
+        {
+            if (_postPrintRestoreTimer != null)
+            {
+                try { _postPrintRestoreTimer.Stop(); } catch {}
+                try { _postPrintRestoreTimer.Dispose(); } catch {}
+                _postPrintRestoreTimer = null;
+            }
+            if (_pendingRestorePageSetup != null)
+            {
+                try { RestoreWindowsPrintPageSetup(_pendingRestorePageSetup); } catch {}
+                _pendingRestorePageSetup = null;
+            }
+            if (_pendingRestoreDefaultPrinter != null)
+            {
+                try { SetDefaultPrinter(_pendingRestoreDefaultPrinter); } catch {}
+                _pendingRestoreDefaultPrinter = null;
+            }
+        }
+
         private static string PrintHtmlOnWindowsPrinter(string html, string printerName, int viewportWidth, int viewportHeight = 1100)
         {
             string error = null;
+            string docId = Guid.NewGuid().ToString("N");
+            byte[] utf8HtmlBytes = new UTF8Encoding(true).GetBytes(html);
+            lock (PrintDocLock)
+            {
+                _inMemoryPrintDocs[docId] = utf8HtmlBytes;
+            }
+
             MethodInvoker doPrint = delegate()
             {
                 string previousDefault = null;
-                Form hostForm = null;
-                WebBrowser browser = null;
-                string tempHtmlPath = null;
+                bool switchedDefaultPrinter = false;
+                Form transientForm = null;
+                WebBrowser transientBrowser = null;
                 Dictionary<string, object> savedPageSetup = null;
+                bool printDispatched = false;
                 try
                 {
-                    PrinterSettings current = new PrinterSettings();
-                    previousDefault = current.PrinterName;
+                    // If a previous job's deferred restore is still pending on the STA thread,
+                    // finalize it first so we capture the true user default printer & PageSetup.
+                    FlushPendingPrintRestoreImmediate();
+
+                    previousDefault = GetFastDefaultPrinterName();
                     if (!string.Equals(printerName, previousDefault, StringComparison.OrdinalIgnoreCase))
                     {
                         if (!SetDefaultPrinter(printerName))
@@ -1441,41 +2000,41 @@ namespace ZSystems.HardwareBridge
                             error = "تعذر تعيين الطابعة الافتراضية: " + printerName;
                             return;
                         }
+                        switchedDefaultPrinter = true;
                     }
 
-                    // Override IE PageSetup for this print only (restored in
-                    // finally): no header/footer lines, zero margins, and
-                    // backgrounds on, so the table header prints as designed.
                     savedPageSetup = ApplyWindowsPrintPageSetup();
 
-                    // Write HTML to a real UTF-8 BOM temp file so ieframe.dll's
-                    // print template has a valid file:// URL and UTF-8 stream
-                    // (DocumentText / about:blank silently fails to spool on
-                    // many Windows print drivers).
-                    tempHtmlPath = Path.Combine(Path.GetTempPath(), "zs-receipt-" + Guid.NewGuid().ToString("N") + ".html");
-                    File.WriteAllText(tempHtmlPath, html, new UTF8Encoding(true));
+                    bool useSharedWarmHost = (_uiDispatcher != null && !_uiDispatcher.InvokeRequired);
+                    WebBrowser browser = useSharedWarmHost ? EnsureWarmPrintBrowser(viewportWidth, viewportHeight) : null;
+                    if (browser == null)
+                    {
+                        transientForm = new Form();
+                        transientForm.FormBorderStyle = FormBorderStyle.None;
+                        transientForm.ShowInTaskbar = false;
+                        transientForm.StartPosition = FormStartPosition.Manual;
+                        transientForm.Location = new Point(-32000, -32000);
+                        transientForm.Size = new Size(viewportWidth, viewportHeight);
 
-                    hostForm = new Form();
-                    hostForm.FormBorderStyle = FormBorderStyle.None;
-                    hostForm.ShowInTaskbar = false;
-                    hostForm.StartPosition = FormStartPosition.Manual;
-                    hostForm.Location = new Point(-32000, -32000);
-                    hostForm.Size = new Size(viewportWidth, viewportHeight);
+                        transientBrowser = new WebBrowser();
+                        transientBrowser.Dock = DockStyle.Fill;
+                        transientBrowser.Width = viewportWidth;
+                        transientBrowser.Height = viewportHeight;
+                        transientBrowser.ScrollBarsEnabled = false;
+                        transientBrowser.ScriptErrorsSuppressed = true;
+                        transientForm.Controls.Add(transientBrowser);
 
-                    browser = new WebBrowser();
-                    browser.Dock = DockStyle.Fill;
-                    browser.Width = viewportWidth;
-                    browser.Height = viewportHeight;
-                    browser.ScrollBarsEnabled = false;
-                    browser.ScriptErrorsSuppressed = true;
-                    hostForm.Controls.Add(browser);
+                        IntPtr formHandle = transientForm.Handle;
+                        IntPtr handle = transientBrowser.Handle;
+                        browser = transientBrowser;
+                    }
 
-                    // Force underlying HWND and ActiveX handles to exist before navigation.
-                    IntPtr formHandle = hostForm.Handle;
-                    IntPtr handle = browser.Handle;
+                    string ramUrl = string.Format("http://127.0.0.1:{0}/internal/print-doc?id={1}", Port, docId);
+                    browser.Navigate(ramUrl);
 
-                    browser.Navigate(new Uri(tempHtmlPath).AbsoluteUri);
-
+                    // Zero Thread.Sleep on the STA thread: Thread.Sleep(1..15) blocks for a full
+                    // 15.6ms Windows clock tick and stalls ieframe.dll itself. Yielding CPU slices
+                    // while pumping DoEvents completes loopback RAM navigation in ~1-3ms!
                     DateTime loadDeadline = DateTime.UtcNow.AddSeconds(20);
                     while (browser.ReadyState != WebBrowserReadyState.Complete || browser.IsBusy)
                     {
@@ -1485,27 +2044,27 @@ namespace ZSystems.HardwareBridge
                             return;
                         }
                         Application.DoEvents();
-                        Thread.Sleep(10);
+                        Thread.Yield();
                     }
 
-                    // Pump 60ms after Complete so inline data:image logos and SVG barcodes finish layout.
-                    DateTime settleUntil = DateTime.UtcNow.AddMilliseconds(60);
-                    while (DateTime.UtcNow < settleUntil)
-                    {
-                        Application.DoEvents();
-                        Thread.Sleep(15);
-                    }
+                    // One synchronous layout flush without sleeping the STA thread.
+                    Application.DoEvents();
 
                     browser.Print();
+                    Application.DoEvents();
+                    printDispatched = true;
 
-                    // Print() queues the hidden ieframe print template asynchronously on the main STA UI thread;
-                    // pump messages for 600ms so ieframe.dll opens the default printer and spools to winspool.drv,
-                    // while deferring browser/temp-file disposal for 2.5s via a UI timer.
-                    DateTime printStartedAt = DateTime.UtcNow;
-                    while (DateTime.UtcNow < printStartedAt.AddMilliseconds(600))
+                    // When running on a transient fallback thread (not the persistent _uiDispatcher),
+                    // pump briefly before the thread exits; on _uiDispatcher, Application.Run()
+                    // pumps Win32 messages continuously at native C++ speed with 0ms sleep!
+                    if (!useSharedWarmHost)
                     {
-                        Application.DoEvents();
-                        Thread.Sleep(15);
+                        DateTime fallbackUntil = DateTime.UtcNow.AddMilliseconds(150);
+                        while (DateTime.UtcNow < fallbackUntil)
+                        {
+                            Application.DoEvents();
+                            Thread.Yield();
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -1514,28 +2073,49 @@ namespace ZSystems.HardwareBridge
                 }
                 finally
                 {
-                    try { if (savedPageSetup != null) RestoreWindowsPrintPageSetup(savedPageSetup); } catch {}
-                    try
+                    if (printDispatched && (_uiDispatcher != null && !_uiDispatcher.InvokeRequired))
                     {
-                        if (previousDefault != null && !string.Equals(printerName, previousDefault, StringComparison.OrdinalIgnoreCase))
+                        // Defer PageSetup & DefaultPrinter restore for 250ms on the non-blocking
+                        // WinForms UI timer so HTTP 200 returns immediately and Application.Run()
+                        // feeds ieframe.dll -> winspool.drv at full native speed.
+                        _pendingRestorePageSetup = savedPageSetup;
+                        _pendingRestoreDefaultPrinter = switchedDefaultPrinter ? previousDefault : null;
+                        _postPrintRestoreTimer = new System.Windows.Forms.Timer();
+                        _postPrintRestoreTimer.Interval = 250;
+                        _postPrintRestoreTimer.Tick += delegate(object s, EventArgs ev)
                         {
-                            SetDefaultPrinter(previousDefault);
-                        }
+                            FlushPendingPrintRestoreImmediate();
+                        };
+                        _postPrintRestoreTimer.Start();
                     }
-                    catch {}
+                    else
+                    {
+                        try { if (savedPageSetup != null) RestoreWindowsPrintPageSetup(savedPageSetup); } catch {}
+                        try
+                        {
+                            if (switchedDefaultPrinter && previousDefault != null)
+                            {
+                                SetDefaultPrinter(previousDefault);
+                            }
+                        }
+                        catch {}
+                    }
 
-                    WebBrowser browserToDispose = browser;
-                    Form formToDispose = hostForm;
-                    string fileToDelete = tempHtmlPath;
+                    WebBrowser browserToDispose = transientBrowser;
+                    Form formToDispose = transientForm;
+                    string idToRemove = docId;
                     System.Windows.Forms.Timer cleanupTimer = new System.Windows.Forms.Timer();
-                    cleanupTimer.Interval = 2500;
+                    cleanupTimer.Interval = 4000;
                     cleanupTimer.Tick += delegate(object s, EventArgs ev)
                     {
                         cleanupTimer.Stop();
                         cleanupTimer.Dispose();
                         try { if (browserToDispose != null) browserToDispose.Dispose(); } catch {}
                         try { if (formToDispose != null) formToDispose.Dispose(); } catch {}
-                        try { if (fileToDelete != null && File.Exists(fileToDelete)) File.Delete(fileToDelete); } catch {}
+                        lock (PrintDocLock)
+                        {
+                            _inMemoryPrintDocs.Remove(idToRemove);
+                        }
                     };
                     cleanupTimer.Start();
                 }
