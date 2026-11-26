@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
 import { CustomSelect } from '@/shared/ui/custom-select';
@@ -13,7 +12,7 @@ import { SINGLE_STORE_MODE } from '@/config/product-scope';
 import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
 import type { Location } from '@/types/domain';
 import type { ExpenseFormState } from '@/features/treasury/lib/treasury-page.helpers';
-import { costCentersApi } from '@/features/accounting/api/cost-centers.api';
+import { useCostCentersQuery } from '@/shared/hooks/use-catalog-queries';
 
 const EXPENSE_PRESETS = [
   'إيجار',
@@ -49,10 +48,7 @@ export function TreasuryExpenseEntryCard({ expenseForm, setExpenseForm, branches
   const [customPresets, setCustomPresets] = useState<string[]>([]);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
 
-  const { data: costCenters = [] } = useQuery({
-    queryKey: ['accounting-cost-centers'],
-    queryFn: costCentersApi.list,
-  });
+  const { data: costCenters = [] } = useCostCentersQuery();
 
   useEffect(() => {
     try {

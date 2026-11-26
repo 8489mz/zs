@@ -383,6 +383,7 @@
     "test/critical/phase1-f5a-audit-settings.spec.ts",
     "test/critical/phase1-f5b-products-settings.spec.ts",
     "test/critical/phase1-f5c-accounts-purchases.spec.ts",
-    "test/critical/phase1-f5d-maintenance-products.spec.ts"
+    "test/critical/phase1-f5d-maintenance-products.spec.ts",
+    "test/critical/phase1-f5e-accounting-treasury.spec.ts"
   ]
 }

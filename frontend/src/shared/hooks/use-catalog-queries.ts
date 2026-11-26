@@ -8,6 +8,7 @@ import { suppliersApi } from '@/features/suppliers/api/suppliers.api';
 import { settingsApi } from '@/features/settings/api/settings.api';
 import { maintenanceApi, type MaintenanceListPageResponse } from '@/features/maintenance/api/maintenance.api';
 import { getMaintenanceProfile } from '@/features/maintenance/constants/maintenance-profiles';
+import { costCentersApi } from '@/features/accounting/api/cost-centers.api';
 import type { Purchase } from '@/types/domain';
 
 const referenceStaleTime = 60_000;
@@ -53,6 +54,10 @@ export function useImeiMaintenanceQuery(activeSerial: string) {
         : Promise.resolve({ tickets: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }),
     enabled: Boolean(activeSerial),
   });
+}
+
+export function useCostCentersQuery() {
+  return useQuery({ queryKey: ['accounting-cost-centers'], queryFn: costCentersApi.list });
 }
 
 export function useCustomersQuery() {
