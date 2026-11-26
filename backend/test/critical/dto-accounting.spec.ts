@@ -721,7 +721,7 @@ async function main(): Promise<void> {
   }
 
   // 24. Wiring: this spec is in both critical lists, in identical order
-  // (357 specs — the stock-movement-writer-modes spec is the last entry).
+  // (358 specs — the inventory-transfers-writer spec is the last entry).
   {
     const specs = JSON.parse(readFileSync(resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
       .specs as string[];
@@ -730,12 +730,12 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 357);
-    assert.equal(chain.length, 357);
+    assert.equal(specs.length, 358);
+    assert.equal(chain.length, 358);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/dto-accounting.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/stock-movement-writer-modes.spec.ts');
-    console.log('  evidence spec wired into both critical lists (357 = 357, identical order), passed');
+    assert.equal(specs[specs.length - 1], 'test/critical/inventory-transfers-writer.spec.ts');
+    console.log('  evidence spec wired into both critical lists (358 = 358, identical order), passed');
   }
 
   console.log('DTO accounting tests passed');

@@ -6,7 +6,7 @@
   "entries": {
     "src/core/auth/services/session.service.ts": 1053,
     "src/modules/hr/employee-portal.service.ts": 1073,
-    "src/modules/inventory/services/inventory-transfer.service.ts": 1091,
+    "src/modules/inventory/services/inventory-transfer.service.ts": 1214,
     "src/modules/users/users.service.ts": 1012,
     "src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts": 1352,
     "src/modules/delivery-reps/services/van-field-sales/execute-field-sale-internal.ts": 1468,

@@ -205,11 +205,11 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 357);
-    assert.equal(chain.length, 357);
+    assert.equal(specs.length, 358);
+    assert.equal(chain.length, 358);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-presales-consolidate-delivery-rep-alias.spec.ts'));
-    console.log('5. evidence spec wired into both critical lists (357 = 357, identical order), passed');
+    console.log('5. evidence spec wired into both critical lists (358 = 358, identical order), passed');
   }
 
   console.log('van-presales-consolidate-delivery-rep-alias: all cases passed');

@@ -887,12 +887,12 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 357);
-    assert.equal(chain.length, 357);
+    assert.equal(specs.length, 358);
+    assert.equal(chain.length, 358);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/opening-balances-ledger.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/stock-movement-writer-modes.spec.ts');
-    console.log('  8. evidence spec wired into both critical lists (357 = 357, identical order), passed');
+    assert.equal(specs[specs.length - 1], 'test/critical/inventory-transfers-writer.spec.ts');
+    console.log('  8. evidence spec wired into both critical lists (358 = 358, identical order), passed');
   }
 
   console.log('opening-balances-ledger: all cases passed');
