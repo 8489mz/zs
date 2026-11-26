@@ -360,6 +360,8 @@
     "test/critical/inventory-transfers-writer.spec.ts",
     "test/critical/sales-writer-create.spec.ts",
     "test/critical/sales-writer-cancel-edit.spec.ts",
-    "test/critical/sales-writer-food-waste.spec.ts"
+    "test/critical/sales-writer-food-waste.spec.ts",
+    "test/critical/manufacturing-writer.spec.ts",
+    "test/critical/purchases-writer.spec.ts"
   ]
 }

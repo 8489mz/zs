@@ -121,7 +121,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, name_en text, barcode text, style_code text, metadata text, stock_qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, cost_price numeric DEFAULT 0, retail_price numeric DEFAULT 0, wholesale_price numeric DEFAULT 0, half_wholesale_price numeric, credit_price numeric DEFAULT 0, consumer_price numeric DEFAULT 0, min_selling_price numeric, item_type text, is_active boolean DEFAULT true, track_serials boolean DEFAULT false, default_location_id bigint, updated_at timestamptz);
       CREATE TABLE manufacturing_boms (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, is_active boolean DEFAULT true);
       CREATE TABLE product_location_stock (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, branch_id bigint, location_id bigint, qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, updated_at timestamptz);
-      CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, movement_type text, qty numeric, before_qty numeric, after_qty numeric, reason text, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, unit_cost numeric, total_cost numeric, created_at timestamptz DEFAULT NOW());
+      CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, movement_type text, qty numeric, before_qty numeric, after_qty numeric, reason text, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, unit_cost numeric, total_cost numeric, import_receipt_id bigint, created_at timestamptz DEFAULT NOW());
       CREATE TABLE pharmacy_drugs (id bigint PRIMARY KEY, tenant_id text, account_id text, product_id bigint, drug_id bigint, batch_number varchar(100), expiry_date varchar(30), quantity numeric, unit_cost numeric, location_id integer, supplier_name varchar(150), status varchar(50), notes text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
       CREATE TABLE pharmacy_batches (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, drug_id bigint, batch_number varchar(100) NOT NULL, expiry_date varchar(30) NOT NULL, quantity numeric(14,3) DEFAULT 0 NOT NULL, unit_cost numeric(14,3) DEFAULT 0 NOT NULL, location_id integer, supplier_name varchar(150), status varchar(50) DEFAULT 'active' NOT NULL, notes text, created_at timestamptz DEFAULT NOW() NOT NULL, updated_at timestamptz DEFAULT NOW() NOT NULL);
       CREATE TABLE van_sales_trips (id bigserial PRIMARY KEY, tenant_id text, account_id text, rep_id bigint, vehicle_id bigint, shift_name text, start_odometer numeric, end_odometer numeric, distance_km numeric, van_location_id bigint, source_warehouse_id bigint, status text, settlement_status text, loaded_amount numeric DEFAULT 0, sales_amount numeric DEFAULT 0, cash_collected numeric DEFAULT 0, credit_sales numeric DEFAULT 0, returns_amount numeric DEFAULT 0, cash_refunds numeric DEFAULT 0, total_instapay_sales numeric DEFAULT 0, total_instapay_collections numeric DEFAULT 0, variance numeric, stock_variance_amount numeric, stock_variance_details jsonb, night_stock_approved boolean, notes text, night_stock_approved_by bigint, night_stock_notes text, business_day date, submitted_per_day_cash jsonb, opened_at timestamptz, submitted_at timestamptz, settled_by bigint, supervisor_id bigint, closed_at timestamptz, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
@@ -1232,7 +1232,7 @@ async function main(): Promise<void> {
   }
 
   // 8. The orphan evidence spec is wired into BOTH critical lists,
-  // in identical order (308 specs — P8 wired the date-filter spec, P9 wired the FEFO spec, file #11 wired 6 marketplace specs, P10 wired the feature-overrides spec, F2 wired the POS collection-balance-cap spec, F5 wired the shift-close-password-identity spec, F19 wired the final-issue-paired-movement spec, F7 wired the pos-sale-trip-attribution spec, F7c wired the pos-collection-trip-attribution spec, F3 wired the van-route-sale-gate spec, F8 wired the pos-cash-discount spec, F4 wired the customer-phone-validation spec, F9 wired the pos-van-stock-pool spec, F10 wired the van-load-available-qty spec, F12 wired the van-admin-permission-split spec, F13 wired the reports-discount-profit spec, F18 wired the van-presales-consolidate-delivery-rep-alias spec and the van-presales-order-details-line-total spec, F20 wired the van-portal-sale-rep-attribution-f20 spec).
+  // in identical order (363 specs — P8 wired the date-filter spec, P9 wired the FEFO spec, file #11 wired 6 marketplace specs, P10 wired the feature-overrides spec, F2 wired the POS collection-balance-cap spec, F5 wired the shift-close-password-identity spec, F19 wired the final-issue-paired-movement spec, F7 wired the pos-sale-trip-attribution spec, F7c wired the pos-collection-trip-attribution spec, F3 wired the van-route-sale-gate spec, F8 wired the pos-cash-discount spec, F4 wired the customer-phone-validation spec, F9 wired the pos-van-stock-pool spec, F10 wired the van-load-available-qty spec, F12 wired the van-admin-permission-split spec, F13 wired the reports-discount-profit spec, F18 wired the van-presales-consolidate-delivery-rep-alias spec and the van-presales-order-details-line-total spec, F20 wired the van-portal-sale-rep-attribution-f20 spec, A8 wired the purchases-writer spec).
   {
     const specDir = __dirname;
     const jsonPath = path.join(specDir, '..', '..', 'scripts', 'critical-specs.json');
@@ -1242,13 +1242,13 @@ async function main(): Promise<void> {
     const chain = String(pkg.scripts['test:critical:serial'])
       .split(' && ')
       .map((x) => x.replace(/^ts-node /, ''));
-    assert.equal(list.length, 308);
-    assert.equal(chain.length, 308);
+    assert.equal(list.length, 363);
+    assert.equal(chain.length, 363);
     assert.deepEqual(list, chain);
     assert.ok(list.includes('test/critical/van-field-noncash-evidence.spec.ts'));
     const idx = list.indexOf('test/critical/van-field-noncash-evidence.spec.ts');
     assert.equal(list[idx - 1], 'test/critical/van-field-sale-wholesale-price.spec.ts');
-    console.log('8. evidence spec wired into both critical lists (308 = 308, identical order), passed');
+    console.log('8. evidence spec wired into both critical lists (363 = 363, identical order), passed');
   }
 
   // 9. Regressions: (a) a main return without invoiceId is refused

@@ -9,12 +9,13 @@
 - Re-scanned at HEAD `63e7f1298` (Phase 1 A5, INV-PHASE1-A5-WRITER-MODES): −1 write — `recordBinMovement` (`warehouse-bins.service.ts:202`) is folded into the writer: it now only delegates to the new row-only mode (`recordStockMovementRow`), so its own insert is gone; the writer's single shared insert (`insertMovementRow`) is the one insert all modes funnel through (the A0 spec pins exactly one direct write in the writer file). The writer also gains the set mode (`recordStockMovementSet`, nextQty — count :638 + suppliers-stock :225) and the two-leg mode (`recordStockRelocation` — QA :348/:360); no caller migrates in A5, so all other rows stand unchanged. Total 65 → 64. 6 callers migrated so far; the rest still write their own rows.
 - Re-scanned at HEAD `684fc3235` (Phase 1 A6, INV-PHASE1-A6-TRANSFERS-WRITER): −15 writes — the fifteen inventory-transfer sites (inventory-transfer.service.ts:298/:328/:336/:515/:521/:563/:656/:661/:726/:855/:860/:932/:942/:1035/:1040) now go through the unified row-writer (`recordStockMovement`); the writer's single shared insert is already counted, so the pin drops by the full 15. The 11 no-cost rows now store unit_cost/total_cost 0/0 instead of NULL (pinned in the A6 spec); the 4 cost-carrying rows are unchanged. Total 64 → 49. 21 callers migrated so far; the rest still write their own rows.
 - Re-scanned at HEAD `d9429a229` (Phase 1 A7, INV-PHASE1-A7-SALES-WRITER): −12 writes — the twelve sales sites (food-waste `:199/:307`, insert-sale-and-stock `:424/:587`, cancel-sale `:253/:286`, update-sale `:412/:451/:1127/:1261`, sales-restaurant-and-serials `:610/:642`) now go through the unified row-writer (`recordStockMovement`); the writer's single shared insert is already counted, so the pin drops by the full 12. The 8 no-cost rows now store unit_cost/total_cost 0/0 instead of NULL (pinned in the 3 A7 specs); the 4 cost-carrying rows keep cost exactly — the sale rows keep total_cost NULL via the writer's new `omitTotalCost` flag (INV-SALE-MOVEMENT-UNIT-COST), and the auto-produce sale row carries the post-production WAC (production re-blends products.cost_price before the line is costed). The writer's shared insert re-lines `:191` → `:214` (omitTotalCost branch). Total 49 → 37. 33 callers migrated so far; the rest still write their own rows.
-- Total business writes: **37**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
+- Re-scanned at HEAD `ab21ffb7c` (Phase 1 A8, INV-PHASE1-A8-PURCHASES-MANUFACTURING-WRITER): −8 writes — the five manufacturing sites (`manufacturing.service.ts:516/:609/:648/:961/:1007`) and the three purchases sites that can migrate now (`purchases-write-cancel.service.ts:279`, `purchases-write-update.service.ts:254/:497`) now go through the unified row-writer (`recordStockMovement`); the writer's single shared insert is already counted, so the pin drops by the full 8. The 3 no-cost purchases rows now store unit_cost/total_cost 0/0 instead of NULL (pinned in the A8 purchases spec); the 5 manufacturing cost rows keep cost exactly — consumption/production/byproduct/unbuild/recovery totals are the same expressions the old code used, and the production total stays exactly finishedValue (the GL posting slice reads it off the row). The 3 remaining purchases sites stay hand-written, DEFERRED to A10 (cost-rounding unification): GRN `:301` stores a composite total (stockMovementTotal + freight share), create `:708` stores roundMoney(net*qty) + freight, and receive-goods `:247` stores roundMoney from a full repeating-decimal division — brute-forced against the real roundMoney, the plain writer's total diverges from the stored total on ~20% / ~15% of realistic lines (a full minor unit on concrete inputs pinned in the A8 purchases spec), so a totalCost override is NOT the answer; A10 adds a composite-total mode. Total 37 → 29. 41 callers migrated so far; the rest still write their own rows.
+- Total business writes: **29**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
 - The ledger (`applyStockDelta` in `backend/src/common/utils/location-stock-ledger.ts`) updates balances; each caller still writes its own `stock_movements` row. That split is the risk this inventory exists to close in Phase 1 (single writer).
 - `paired` below is file-level (YES if the same file calls `applyStockDelta` anywhere) — deterministic and reproducible. It does NOT prove the ledger call and the row happen in the same branch: see the notes, especially the archive residual.
 - FIXED ASYMMETRY (catalog archive, INV-STOCK-MOVEMENTS-ARCHIVE-ROW): `toggleProductArchive` used to call `applyStockDelta` for the residual global stock (`-remainingGlobal`) with NO `stock_movements` row for it. It now writes the row at line 364, mirroring the sibling deduct rows (same type, reason, reference, cost, posting call) — before_qty remainingGlobal, after_qty 0, qty -remainingGlobal. A zero residual writes no row.
 - Resolves the map's UNVERIFIED maintenance path: `maintenance/maintenance/ticket-parts.slice.ts:154,305` and `maintenance/maintenance/delete-ticket.slice.ts:121` are all real inserts (maintenance_consumption / maintenance_return), listed below.
-- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 37 and every `file:line` below must be listed.
+- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 29 and every `file:line` below must be listed.
 
 ## Per-module totals
 
@@ -24,13 +25,13 @@
 - `import-sales`: 3
 - `inventory`: 5
 - `maintenance`: 3
-- `manufacturing`: 5
-- `purchases`: 6
+- `manufacturing`: 0
+- `purchases`: 3
 - `returns`: 3
 - `settings`: 5
 - `tradein`: 1
 
-## All 37 writes
+## All 29 writes
 
 | file:line | kind | movement_type | paired (file calls applyStockDelta) | notes |
 |---|---|---|---|---|
@@ -50,17 +51,9 @@
 | backend/src/modules/maintenance/maintenance/ticket-parts.slice.ts:154 | insert | maintenance_consumption | yes |  |
 | backend/src/modules/maintenance/maintenance/ticket-parts.slice.ts:305 | insert | maintenance_return | yes |  |
 | backend/src/modules/maintenance/maintenance/delete-ticket.slice.ts:121 | insert | maintenance_return | yes |  |
-| backend/src/modules/manufacturing/services/manufacturing.service.ts:516 | insert | manufacturing_consumption | yes |  |
-| backend/src/modules/manufacturing/services/manufacturing.service.ts:609 | insert | manufacturing_production | yes |  |
-| backend/src/modules/manufacturing/services/manufacturing.service.ts:648 | insert | manufacturing_byproduct | yes |  |
-| backend/src/modules/manufacturing/services/manufacturing.service.ts:961 | insert | manufacturing_unbuild | yes |  |
-| backend/src/modules/manufacturing/services/manufacturing.service.ts:1007 | insert | manufacturing_unbuild_recovery | yes |  |
 | backend/src/modules/purchases/services/goods-receipt-post.service.ts:301 | insert | goods_receipt | yes |  |
-| backend/src/modules/purchases/services/purchases-write-cancel.service.ts:279 | insert | purchase_cancel | yes |  |
 | backend/src/modules/purchases/services/purchases-write-create.service.ts:708 | insert | purchase | yes |  |
 | backend/src/modules/purchases/services/purchases-write-receive-goods.service.ts:247 | insert | purchase_receipt | yes |  |
-| backend/src/modules/purchases/services/purchases-write-update.service.ts:254 | insert | purchase_edit_restore | yes |  |
-| backend/src/modules/purchases/services/purchases-write-update.service.ts:497 | insert | purchase_edit_apply | yes |  |
 | backend/src/modules/returns/returns-purchase-return.service.ts:460 | insert | purchase_return | yes |  |
 | backend/src/modules/returns/returns-sale-return.service.ts:367 | insert | sale_return | yes |  |
 | backend/src/modules/returns/returns-sale-return.service.ts:380 | insert | sale_return | yes |  |

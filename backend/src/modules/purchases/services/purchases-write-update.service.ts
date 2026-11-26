@@ -19,11 +19,8 @@ import {
   CLIENT_BUSINESS_DATE_FUTURE_DAYS,
 } from '../../../common/utils/client-date-bounds.util';
 import { ensureNonNegativeStock } from '../../../common/utils/financial-integrity';
-import {
-  applyStockDelta,
-  lockStockProducts,
-  previewConsumableStockQty,
-} from '../../../common/utils/location-stock-ledger';
+import { lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { UpsertPurchaseDto } from '../dto/upsert-purchase.dto';
@@ -240,7 +237,11 @@ export class PurchasesWriteUpdateService {
           'PURCHASE_EDIT_STOCK_INVALID',
           `Cannot edit purchase because stock would go negative for product #${item.product_id}`,
         );
-        const stockChange = await applyStockDelta(trx, {
+        // Phase 1 A8: the restore row goes through the single writer
+        // (INV-PHASE1-A8-PURCHASES-MANUFACTURING-WRITER). The old row
+        // carried NO unit_cost/total_cost at all, so the writer stores
+        // the A6/A7 0/0 shape.
+        await recordStockMovement(trx, {
           productId: Number(item.product_id),
           delta: -removeQty,
           branchId: purchase.branch_id,
@@ -249,26 +250,14 @@ export class PurchasesWriteUpdateService {
           accountId: scope.accountId,
           errorCode: 'PURCHASE_EDIT_STOCK_INVALID',
           errorMessage: `Cannot edit purchase because stock would go negative for product #${item.product_id}`,
+          movementType: 'purchase_edit_restore',
+          referenceType: 'purchase',
+          referenceId: purchaseId,
+          reason: 'purchase_edit_restore',
+          note: buildPurchaseReferenceNote('Edit restore', purchase),
+          createdBy: auth.userId,
+          moneyDigits,
         });
-        await trx
-          .insertInto('stock_movements')
-          .values({
-            product_id: item.product_id,
-            movement_type: 'purchase_edit_restore',
-            qty: -removeQty,
-            before_qty: stockChange.scopeBefore,
-            after_qty: stockChange.scopeAfter,
-            reason: 'purchase_edit_restore',
-            note: buildPurchaseReferenceNote('Edit restore', purchase),
-            reference_type: 'purchase',
-            reference_id: purchaseId,
-            branch_id: purchase.branch_id,
-            location_id: itemLocationId,
-            created_by: auth.userId,
-            tenant_id: scope.tenantId,
-            account_id: scope.accountId,
-          })
-          .execute();
       }
 
       if (purchase.payment_type === 'credit' && purchase.supplier_id) {
@@ -469,13 +458,25 @@ export class PurchasesWriteUpdateService {
             0,
           );
           const itemLocationId = normalizedItem.locationId!;
-          const stockChange = await applyStockDelta(trx, {
+          // Phase 1 A8: the apply row goes through the single writer
+          // (INV-PHASE1-A8-PURCHASES-MANUFACTURING-WRITER). The old row
+          // carried NO unit_cost/total_cost at all, so the writer stores
+          // the A6/A7 0/0 shape; valueStockReceipt still reads the
+          // returned globalAfter, exactly as before.
+          const stockChange = await recordStockMovement(trx, {
             productId: normalizedItem.productId,
             delta: increaseQty,
             branchId,
             locationId: itemLocationId,
             tenantId: scope.tenantId,
             accountId: scope.accountId,
+            movementType: 'purchase_edit_apply',
+            referenceType: 'purchase',
+            referenceId: purchaseId,
+            reason: 'purchase_edit_apply',
+            note: buildPurchaseReferenceNote('Edit apply', purchase),
+            createdBy: auth.userId,
+            moneyDigits,
           });
 
           const baseUnitCost = netRepricedCost / normalizedItem.unitMultiplier;
@@ -493,25 +494,6 @@ export class PurchasesWriteUpdateService {
               increaseQty * baseUnitCost,
             );
           }
-          await trx
-            .insertInto('stock_movements')
-            .values({
-              product_id: normalizedItem.productId,
-              movement_type: 'purchase_edit_apply',
-              qty: increaseQty,
-              before_qty: stockChange.scopeBefore,
-              after_qty: stockChange.scopeAfter,
-              reason: 'purchase_edit_apply',
-              note: buildPurchaseReferenceNote('Edit apply', purchase),
-              reference_type: 'purchase',
-              reference_id: purchaseId,
-              branch_id: branchId,
-              location_id: itemLocationId,
-              created_by: auth.userId,
-              tenant_id: scope.tenantId,
-              account_id: scope.accountId,
-            })
-            .execute();
         }
       }
 

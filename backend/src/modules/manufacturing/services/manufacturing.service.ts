@@ -5,11 +5,8 @@ import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
-import {
-  applyStockDelta,
-  lockStockProducts,
-  previewAssignedLocationStockQty,
-} from '../../../common/utils/location-stock-ledger';
+import { lockStockProducts } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { Database } from '../../../database/database.types';
@@ -496,42 +493,29 @@ export class ManufacturingService {
           })
           .execute();
 
-        const stockScope = {
+        // Phase 1 A8: the consumption row goes through the single writer
+        // (INV-PHASE1-A8-PURCHASES-MANUFACTURING-WRITER). The total is the
+        // same expression as before — roundMoney(requiredQty * actualUnitCost)
+        // — so the stored row is identical. The dead beforeQty preview
+        // (assigned, never read) goes away with the hand-written row.
+        await recordStockMovement(trx, {
           tenantId: scope.tenantId,
           accountId: scope.accountId,
           productId: Number(line.component_product_id),
           branchId: null,
           locationId: sourceLocation,
-        };
-        const beforeQty = sourceLocation ? await previewAssignedLocationStockQty(trx, stockScope) : 0;
-
-        const stockChange = await applyStockDelta(trx, {
-          ...stockScope,
           delta: -requiredQty,
           errorCode: 'INSUFFICIENT_RAW_MATERIAL',
           errorMessage: `لا يوجد رصيد كافٍ من المادة الخام: ${line.component_name}`,
+          movementType: 'manufacturing_consumption',
+          referenceType: 'manufacturing_work_order',
+          referenceId: wo.id,
+          reason: 'استهلاك تصنيع',
+          note: `أمر إنتاج #${wo.id}`,
+          unitCost: actualUnitCost,
+          createdBy: auth.userId,
+          moneyDigits,
         });
-
-        await trx
-          .insertInto('stock_movements')
-          .values({
-            product_id: Number(line.component_product_id),
-            movement_type: 'manufacturing_consumption',
-            unit_cost: actualUnitCost,
-            total_cost: lineTotalCost,
-            qty: -requiredQty,
-            before_qty: stockChange.scopeBefore,
-            after_qty: stockChange.scopeAfter,
-            reason: 'استهلاك تصنيع',
-            note: `أمر إنتاج #${wo.id}`,
-            reference_type: 'manufacturing_work_order',
-            reference_id: wo.id,
-            location_id: sourceLocation,
-            created_by: auth.userId,
-            tenant_id: scope.tenantId,
-            account_id: scope.accountId,
-          })
-          .execute();
       }
 
       // Add overhead cost (single shared formula: scaledBomOverhead).
@@ -592,39 +576,27 @@ export class ManufacturingService {
       totalCost = roundMoney(totalCost, moneyDigits);
       const finishedValue = roundMoney(totalCost - byProductValue, moneyDigits);
 
-      // Add finished product
-      const fgStockScope = {
+      // Add finished product — through the writer (A8). The total stays
+      // exactly finishedValue: it is already at book digits, so the
+      // writer's roundMoney(|delta| * finishedValue/qtyToProduce) cannot
+      // cross a rounding boundary. The GL posting slice reads total_cost
+      // off this row, so the spec pins total == finishedValue.
+      const fgStockChange = await recordStockMovement(trx, {
         tenantId: scope.tenantId,
         accountId: scope.accountId,
         productId: Number(wo.finished_product_id),
         branchId: null,
         locationId: destinationLocation,
-      };
-      const fgStockChange = await applyStockDelta(trx, {
-        ...fgStockScope,
         delta: qtyToProduce,
+        movementType: 'manufacturing_production',
+        referenceType: 'manufacturing_work_order',
+        referenceId: wo.id,
+        reason: 'إنتاج تام',
+        note: `أمر إنتاج #${wo.id}`,
+        unitCost: finishedValue / qtyToProduce,
+        createdBy: auth.userId,
+        moneyDigits,
       });
-
-      await trx
-        .insertInto('stock_movements')
-        .values({
-          product_id: Number(wo.finished_product_id),
-          movement_type: 'manufacturing_production',
-          unit_cost: finishedValue / qtyToProduce,
-          total_cost: finishedValue,
-          qty: qtyToProduce,
-          before_qty: fgStockChange.scopeBefore,
-          after_qty: fgStockChange.scopeAfter,
-          reason: 'إنتاج تام',
-          note: `أمر إنتاج #${wo.id}`,
-          reference_type: 'manufacturing_work_order',
-          reference_id: wo.id,
-          location_id: destinationLocation,
-          created_by: auth.userId,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-        })
-        .execute();
 
       // Add by-products if any
       if (payload.byProducts && payload.byProducts.length > 0) {
@@ -632,38 +604,24 @@ export class ManufacturingService {
           const bpQty = Number(bp.quantity || 0);
           if (bpQty <= 0) continue;
           const bpLoc = bp.locationId || destinationLocation;
-          const bpStockScope = {
+          // Byproduct row through the writer (A8): same inputs as before,
+          // roundMoney(bpQty * cost), so the stored row is identical.
+          await recordStockMovement(trx, {
             tenantId: scope.tenantId,
             accountId: scope.accountId,
             productId: Number(bp.productId),
             branchId: null,
             locationId: bpLoc,
-          };
-          const bpStockChange = await applyStockDelta(trx, {
-            ...bpStockScope,
             delta: bpQty,
+            movementType: 'manufacturing_byproduct',
+            referenceType: 'manufacturing_work_order',
+            referenceId: wo.id,
+            reason: 'منتج ثانوي ناتج عن التصنيع',
+            note: `أمر إنتاج #${wo.id} - منتج ثانوي`,
+            unitCost: Number(costByProduct.get(Number(bp.productId))),
+            createdBy: auth.userId,
+            moneyDigits,
           });
-
-          await trx
-            .insertInto('stock_movements')
-            .values({
-              product_id: Number(bp.productId),
-              movement_type: 'manufacturing_byproduct',
-              unit_cost: costByProduct.get(Number(bp.productId)),
-              total_cost: roundMoney(bpQty * Number(costByProduct.get(Number(bp.productId))), moneyDigits),
-              qty: bpQty,
-              before_qty: bpStockChange.scopeBefore,
-              after_qty: bpStockChange.scopeAfter,
-              reason: 'منتج ثانوي ناتج عن التصنيع',
-              note: `أمر إنتاج #${wo.id} - منتج ثانوي`,
-              reference_type: 'manufacturing_work_order',
-              reference_id: wo.id,
-              location_id: bpLoc,
-              created_by: auth.userId,
-              tenant_id: scope.tenantId,
-              account_id: scope.accountId,
-            })
-            .execute();
         }
       }
 
@@ -911,7 +869,6 @@ export class ManufacturingService {
         const qtyToUnbuild = Number(payload.quantity);
         const bomQty = Number(bom.quantity || 1);
         const fgUnitCost = liveUnitCost(Number(payload.productId));
-        const fgTotalCost = roundMoney(qtyToUnbuild * fgUnitCost, moneyDigits);
 
         // Insert unbuild order first with temporary number to acquire identity
         const tempUnbuildNumber = `UB-TMP-${Date.now()}`;
@@ -943,40 +900,28 @@ export class ManufacturingService {
           await getTenantTimezone(trx, scope.tenantId),
         );
 
-        const fgStockScope = {
+        // Unbuild row through the writer (A8): the writer computes the
+        // total as roundMoney(qtyToUnbuild * fgUnitCost), the same value
+        // the old row stored, so the stored row is identical, and the
+        // unbuild journal keeps reading the same total off it.
+        await recordStockMovement(trx, {
           tenantId: scope.tenantId,
           accountId: scope.accountId,
           productId: Number(payload.productId),
           branchId: null,
           locationId,
-        };
-        const fgStockChange = await applyStockDelta(trx, {
-          ...fgStockScope,
           delta: -qtyToUnbuild,
           errorCode: 'INSUFFICIENT_FINISHED_PRODUCT',
           errorMessage: `لا يتوفر رصيد كافٍ من المنتج التام: ${product.name} للتفكيك`,
+          movementType: 'manufacturing_unbuild',
+          referenceType: 'manufacturing_unbuild_order',
+          referenceId: unbuildId,
+          reason: 'تفكيك منتج تام',
+          note: `أمر تفكيك #${unbuildNumber}`,
+          unitCost: fgUnitCost,
+          createdBy: auth.userId,
+          moneyDigits,
         });
-
-        await trx
-          .insertInto('stock_movements')
-          .values({
-            product_id: Number(payload.productId),
-            movement_type: 'manufacturing_unbuild',
-            qty: -qtyToUnbuild,
-            before_qty: fgStockChange.scopeBefore,
-            after_qty: fgStockChange.scopeAfter,
-            reason: 'تفكيك منتج تام',
-            note: `أمر تفكيك #${unbuildNumber}`,
-            reference_type: 'manufacturing_unbuild_order',
-            reference_id: unbuildId,
-            location_id: locationId,
-            created_by: auth.userId,
-            tenant_id: scope.tenantId,
-            account_id: scope.accountId,
-            unit_cost: fgUnitCost,
-            total_cost: fgTotalCost,
-          })
-          .execute();
 
         let totalRecoveredCost = 0;
         for (const line of [...bomLines].sort(
@@ -991,38 +936,24 @@ export class ManufacturingService {
           totalRecoveredCost += lineCost;
 
           const compLoc = line.comp_location_id || locationId;
-          const compScope = {
+          // Recovery row through the writer (A8): same inputs as before —
+          // lineCost = roundMoney(returnQty * compUnitCost).
+          await recordStockMovement(trx, {
             tenantId: scope.tenantId,
             accountId: scope.accountId,
             productId: Number(line.component_product_id),
             branchId: null,
             locationId: compLoc,
-          };
-          const compStockChange = await applyStockDelta(trx, {
-            ...compScope,
             delta: returnQty,
+            movementType: 'manufacturing_unbuild_recovery',
+            referenceType: 'manufacturing_unbuild_order',
+            referenceId: unbuildId,
+            reason: 'استرجاع مواد خام من تفكيك',
+            note: `أمر تفكيك #${unbuildNumber} - استرجاع ${line.component_name}`,
+            unitCost: compUnitCost,
+            createdBy: auth.userId,
+            moneyDigits,
           });
-
-          await trx
-            .insertInto('stock_movements')
-            .values({
-              product_id: Number(line.component_product_id),
-              movement_type: 'manufacturing_unbuild_recovery',
-              qty: returnQty,
-              before_qty: compStockChange.scopeBefore,
-              after_qty: compStockChange.scopeAfter,
-              reason: 'استرجاع مواد خام من تفكيك',
-              note: `أمر تفكيك #${unbuildNumber} - استرجاع ${line.component_name}`,
-              reference_type: 'manufacturing_unbuild_order',
-              reference_id: unbuildId,
-              location_id: compLoc,
-              created_by: auth.userId,
-              tenant_id: scope.tenantId,
-              account_id: scope.accountId,
-              unit_cost: compUnitCost,
-              total_cost: lineCost,
-            })
-            .execute();
         }
 
         await trx

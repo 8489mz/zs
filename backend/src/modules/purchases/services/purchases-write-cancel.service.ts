@@ -20,11 +20,8 @@ import { reversePurchaseTrackedStock } from '../helpers/purchase-cancellation-tr
 import { buildPurchaseReferenceNote, calculatePurchaseStockDecrease } from '../helpers/purchases-write.helper';
 import { purchaseReceiptBaseUnitCost } from '../engines/purchase-receipt-cost.engine';
 import { revalueStockReturn } from '../../accounting/inventory-valuation';
-import {
-  applyStockDelta,
-  lockStockProducts,
-  previewConsumableStockQty,
-} from '../../../common/utils/location-stock-ledger';
+import { lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { ensureNonNegativeStock } from '../../../common/utils/financial-integrity';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
@@ -228,7 +225,13 @@ export class PurchasesWriteCancelService {
           quantity: removeQty,
           batchNumber: item.batch_number,
         });
-        const stockChange = await applyStockDelta(trx, {
+        // Phase 1 A8: the cancel row goes through the single writer
+        // (INV-PHASE1-A8-PURCHASES-MANUFACTURING-WRITER). The old row
+        // carried NO unit_cost/total_cost at all, so the writer stores
+        // the A6/A7 0/0 shape; the WAC revalue below still reads the
+        // returned globalAfter, exactly as before. disableAutoDrain
+        // passes through untouched.
+        const stockChange = await recordStockMovement(trx, {
           productId: Number(item.product_id),
           delta: -removeQty,
           branchId: purchase.branch_id,
@@ -238,6 +241,13 @@ export class PurchasesWriteCancelService {
           errorCode: 'PURCHASE_CANCEL_STOCK_INVALID',
           errorMessage: `Cannot cancel purchase because stock would go negative for product #${item.product_id}`,
           disableAutoDrain: true,
+          movementType: 'purchase_cancel',
+          referenceType: 'purchase',
+          referenceId: purchaseId,
+          reason: 'purchase_cancel',
+          note: buildPurchaseReferenceNote('Cancel', purchase),
+          createdBy: auth.userId,
+          moneyDigits,
         });
         // INV-PURCHASE-CANCEL-WAC-RECOMPUTE: the cancelled receipt leaves
         // the pool at its ORIGINAL receipt value — the exact inverse of
@@ -275,25 +285,6 @@ export class PurchasesWriteCancelService {
             roundMoney(removeQty * removedBaseUnitCost, moneyDigits),
           );
         }
-        await trx
-          .insertInto('stock_movements')
-          .values({
-            product_id: item.product_id,
-            movement_type: 'purchase_cancel',
-            qty: -removeQty,
-            before_qty: stockChange.scopeBefore,
-            after_qty: stockChange.scopeAfter,
-            reason: 'purchase_cancel',
-            note: buildPurchaseReferenceNote('Cancel', purchase),
-            reference_type: 'purchase',
-            reference_id: purchaseId,
-            branch_id: purchase.branch_id,
-            location_id: itemLocationId,
-            created_by: auth.userId,
-            tenant_id: scope.tenantId,
-            account_id: scope.accountId,
-          })
-          .execute();
       }
 
       if (purchase.payment_type === 'credit' && purchase.supplier_id) {

@@ -544,14 +544,14 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 361);
-    assert.equal(chain.length, 361);
+    assert.equal(specs.length, 363);
+    assert.equal(chain.length, 363);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/reports-discount-profit.spec.ts'));
     const idx = specs.indexOf('test/critical/reports-discount-profit.spec.ts');
     assert.equal(specs[idx + 1], 'test/critical/van-presales-consolidate-delivery-rep-alias.spec.ts');
     assert.equal(specs[idx + 2], 'test/critical/van-presales-order-details-line-total.spec.ts');
-    console.log('7. evidence spec wired into both critical lists (361 = 361, identical order), passed');
+    console.log('7. evidence spec wired into both critical lists (363 = 363, identical order), passed');
   }
 
   console.log('reports-discount-profit: all cases passed');

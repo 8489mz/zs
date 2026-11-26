@@ -175,7 +175,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       allocated_tax numeric, cost_price numeric, sale_item_id bigint, purchase_item_id bigint);
     CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint,
       movement_type text, qty numeric, before_qty numeric, after_qty numeric, unit_cost numeric, total_cost numeric,
-      reason text, note text, reference_type text, reference_id bigint, branch_id bigint, location_id bigint, created_by bigint);
+      reason text, note text, reference_type text, reference_id bigint, branch_id bigint, location_id bigint, created_by bigint, import_receipt_id bigint);
     CREATE TABLE product_serials (id bigserial PRIMARY KEY, tenant_id text, account_id text, serial_number text,
       imei_2 text, status text, product_id bigint, purchase_id bigint, purchase_item_id bigint,
       location_id bigint, branch_id bigint, updated_at timestamptz);
