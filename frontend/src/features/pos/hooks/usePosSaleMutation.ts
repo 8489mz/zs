@@ -81,8 +81,37 @@ export function usePosSaleMutation() {
         isInFlightRef.current = false;
       }
     },
-    onSuccess: (result) => {
+    onSuccess: (result, input) => {
       const isOffline = Boolean(result && typeof result === 'object' && (result as any).offline);
+
+      // Optimistically deduct sold base quantities in cached POS product lists so the
+      // cashier sees updated stock immediately in 0ms without waiting for a network refetch.
+      if (input?.cart?.length) {
+        const soldByProduct = new Map<string, number>();
+        for (const item of input.cart) {
+          const pid = String(item.productId || '').trim();
+          const baseQty = Number(item.qty || 0) * Math.max(1, Number(item.unitMultiplier || 1));
+          if (pid && baseQty > 0) {
+            soldByProduct.set(pid, (soldByProduct.get(pid) || 0) + baseQty);
+          }
+        }
+        if (soldByProduct.size > 0) {
+          const applyOptimisticStock = (list: any[]) =>
+            list.map((p) => {
+              const delta = soldByProduct.get(String(p?.id ?? ''));
+              if (!delta || typeof p?.stock !== 'number') return p;
+              return { ...p, stock: Number((p.stock - delta).toFixed(4)) };
+            });
+          queryClient.setQueriesData({ queryKey: ['products', 'pos'] }, (old: any) => {
+            if (Array.isArray(old)) return applyOptimisticStock(old);
+            if (old && Array.isArray(old.products)) {
+              return { ...old, products: applyOptimisticStock(old.products) };
+            }
+            return old;
+          });
+        }
+      }
+
       if (isOffline) {
         return;
       }
@@ -91,11 +120,14 @@ export function usePosSaleMutation() {
         ? String((result as { id?: string | number }).id || '')
         : '';
 
-      // The invoice is already committed. Refetching active screens must not delay the
-      // cashier's success feedback or block the next sale.
-      void invalidateSalesDomain(queryClient, { saleId, includeDashboard: true }).catch((error) => {
-        console.error('Failed to refresh sales data after POS checkout:', error);
-      });
+      // Defer background invalidation by 180ms so t=0ms receipt HTML dispatch to the
+      // local printer bridge / Electron spooler and cart reset run with zero main-thread
+      // JSON-parse or TCP pool contention.
+      setTimeout(() => {
+        void invalidateSalesDomain(queryClient, { saleId, includeDashboard: true }).catch((error) => {
+          console.error('Failed to refresh sales data after POS checkout:', error);
+        });
+      }, 180);
     }
   });
 }

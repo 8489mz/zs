@@ -12,7 +12,8 @@ import type { PosCardDensity, PosPriceType, PosProductGroupCardProps } from '@/f
 import type { PosSaleMode } from '@/features/pos/lib/pos-sale-mode';
 import { ProductIconStudioModal } from '@/shared/components/icons/ProductIconStudioModal';
 import { useProductIconSettings } from '@/shared/components/icons/product-icon-theme';
-import { getBarcodeLookupCandidates, isInvoiceBarcodeQuery, sanitizeSearchInputLive } from '@/features/pos/lib/pos-barcode-normalizer';
+import { isInvoiceBarcodeQuery, sanitizeSearchInputLive } from '@/features/pos/lib/pos-barcode-normalizer';
+import { hasProductCodeMatch } from '@/features/pos/lib/pos-workspace.helpers';
 import { isAutoSubmittableWeightedBarcode } from '@/features/pos/lib/weighted-barcode';
 import { useScannerBuffer } from '@/features/pos/hooks/useScannerBuffer';
 import { CameraBarcodeScannerModal } from '@/shared/components/CameraBarcodeScannerModal';
@@ -95,15 +96,7 @@ function focusSearchInput(searchInputRef: RefObject<HTMLInputElement | null>) {
 }
 
 function hasExactCodeMatch(products: Product[], query: string) {
-  const candidates = getBarcodeLookupCandidates(query).map((c) => c.toLowerCase());
-  if (!candidates.length) return false;
-  return candidates.some((candidate) =>
-    products.some((product) =>
-      product.barcode?.trim().toLowerCase() === candidate ||
-      product.sku?.trim().toLowerCase() === candidate ||
-      product.units?.some((unit) => unit.barcode?.trim().toLowerCase() === candidate),
-    ),
-  );
+  return hasProductCodeMatch(products, query);
 }
 
 // Memoized product-grid card. Every prop is a primitive, a stable ref object,
@@ -274,7 +267,7 @@ function PosProductsPanelComponent({
     inputRef: searchInputRef,
     sanitize: sanitizeSearchInputLive,
     scanThresholdMs: 65,
-    scanFlushMs: 75,
+    scanFlushMs: 20,
     typeFlushMs: 120,
   });
   const defaultLayoutFromSettings = settingsQuery.data?.posProductCardLayout;
@@ -624,17 +617,18 @@ function PosProductsPanelComponent({
         setIsMobileKeyboardActive(false);
         searchInputRef.current?.blur();
       }
-      // Flush scanner buffer immediately so parent state is up-to-date
-      scannerBuffer.flushNow(currentQuery);
       if (currentQuery.trim()) {
         if (hasExactCodeMatch(products, currentQuery) && onSearchSubmitFirstResult(currentQuery)) {
+          scannerBuffer.flushNow('');
           setOpenGroupKey(null);
           setSelectedIndex(0);
           return;
         }
+        scannerBuffer.flushNow(currentQuery);
         onSearchSubmitFirstResult(currentQuery);
         return;
       }
+      scannerBuffer.flushNow(currentQuery);
       if (selectedGroup) activateGroup(selectedGroup);
     }
   }

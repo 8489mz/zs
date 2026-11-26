@@ -1794,22 +1794,20 @@ html[dir="ltr"] .pos-shift-dropdown-menu,
 }
 
 .pos-workspace .pos-group-card {
-  transition: transform 0.12s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.12s ease;
-  will-change: transform;
+  transition: none;
 }
 
 .pos-workspace .pos-group-card:active:not(.is-out-of-stock),
 .pos-workspace .pos-group-card:has(.pos-group-card-action:active):not(.is-out-of-stock) {
-  transform: scale(0.965);
+  transform: none;
 }
 
 .pos-workspace .pos-group-card-action:active {
-  transform: scale(0.98);
+  transform: none;
 }
 
 .pos-workspace .pos-card-add-pill {
-  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease, transform 0.12s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.12s ease;
-  will-change: transform, background-color;
+  transition: none;
 }
 
 .pos-workspace .pos-group-card-action:active:not([disabled]) .pos-card-add-pill {
@@ -2139,7 +2137,7 @@ html[dir="ltr"] .pos-shift-dropdown-menu,
     box-shadow: 0 -12px 40px rgba(15, 23, 42, 0.2) !important;
     padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px)) !important;
     gap: 8px !important;
-    animation: posPickerSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    animation: none !important;
     margin: 0 !important;
   }
 
@@ -2388,7 +2386,7 @@ input.pos-cart-discount-input {
 }
 
 .pos-workspace .pos-cart-add-discount-btn {
-  transition: color 0.15s ease, background-color 0.15s ease;
+  transition: none;
 }
 
 .pos-workspace .pos-cart-add-discount-btn:hover:not(:disabled) {
@@ -2401,7 +2399,7 @@ input.pos-cart-discount-input {
 }
 
 .pos-workspace .pos-cart-modifiers-btn {
-  transition: all 0.15s ease;
+  transition: none;
 }
 
 .pos-workspace .pos-cart-modifiers-btn:hover {
@@ -2424,7 +2422,7 @@ input.pos-cart-discount-input {
   line-height: 1;
   cursor: pointer;
   padding: 0;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  transition: none;
 }
 
 .pos-workspace .pos-cart-qty-btn:hover,

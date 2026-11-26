@@ -10,7 +10,7 @@ import { PosWorkspaceAuxDialogs1 } from '@/features/pos/components/pos-workspace
 import { PosWorkspaceAuxDialogs2 } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs2';
 import { printOrderCupLabels } from '@/lib/pos-printing/cup-label';
 import { salesApi } from '@/features/sales/api/sales.api';
-import { getSelectedCustomerName, printCurrentPosDraft } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
+import { getPostSalePrintMode, getSelectedCustomerName, printCurrentPosDraft } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { isPosModalOpen } from '@/features/pos/lib/pos-keyboard-safety';
 import { posApi } from '@/features/pos/api/pos.api';
 import { isNegativeStockSalesAllowed, repriceCartLine, getProductItemCode, getSaleUnit, summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
@@ -38,6 +38,9 @@ import {
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import type { Product, Sale } from '@/types/domain';
 import { toast } from '@/shared/components/system-alert';
+import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
+import { resolveBridgePrinter } from '@/lib/printer-preferences';
+import { warmReceiptLogoDataUri } from '@/lib/pos-printing/logo-cache';
 
 
 export function PosWorkspace() {
@@ -586,6 +589,36 @@ export function PosWorkspace() {
     }
     return focusBarcodeEntry();
   }, [catalogsLoading, focusBarcodeEntry, pos.registerBarcodeFocusListener, pos.barcodeFocusTick]);
+
+  // Keep the local Hardware Bridge awake (/events SSE) and pre-verify target Windows
+  // printer handles + viewport width on POS mount so the very first receipt or barcode
+  // label prints with 0ms health-check or setup latency.
+  useEffect(() => {
+    const settings = pos.settingsQuery.data;
+    if (settings?.logoData) {
+      warmReceiptLogoDataUri(settings.logoData);
+    }
+    const cashierPrinter = resolveBridgePrinter('cashier', settings);
+    const docPrinter = resolveBridgePrinter('document', settings);
+    const barcodePrinter = resolveBridgePrinter('barcode', settings);
+    const configuredPrinters = Array.from(
+      new Set([cashierPrinter, docPrinter, barcodePrinter].filter((p): p is string => Boolean(p))),
+    );
+    if (configuredPrinters.length === 0) return;
+
+    const disconnect = HardwareBridgeClient.connectKeepAlive?.();
+    if (typeof HardwareBridgeClient.isAvailable === 'function') {
+      void HardwareBridgeClient.isAvailable().catch(() => undefined);
+    }
+    HardwareBridgeClient.warmPrinters?.({
+      printers: configuredPrinters,
+      pageSize: getPostSalePrintMode(settings || null),
+      receiptWidthMm: settings?.receiptWidthMm === 58 ? 58 : 80,
+    });
+    return () => {
+      disconnect?.();
+    };
+  }, [pos.settingsQuery.data]);
 
   useEffect(() => {
     if (pos.canShowLastSaleActions && pos.lastSale) {

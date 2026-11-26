@@ -200,7 +200,7 @@ export function PosProductsToolbar({
                   color: priceType === 'retail' ? '#ffffff' : '#475569',
                   boxShadow: priceType === 'retail' ? '0 1px 2px rgba(0,0,0,0.12)' : 'none',
                   cursor: 'pointer',
-                  transition: 'background-color 0.15s ease',
+                  transition: 'none',
                 }}
                 onClick={() => onPriceTypeChange('retail')}
               >
@@ -219,7 +219,7 @@ export function PosProductsToolbar({
                   color: priceType === 'wholesale' ? '#ffffff' : '#475569',
                   boxShadow: priceType === 'wholesale' ? '0 1px 2px rgba(220,38,38,0.2)' : 'none',
                   cursor: 'pointer',
-                  transition: 'background-color 0.15s ease',
+                  transition: 'none',
                 }}
                 onClick={() => onPriceTypeChange('wholesale')}
               >
