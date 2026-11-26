@@ -585,7 +585,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-B8-DELIVERY-REPS-SALES-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B8 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F3-FEATURE-BOUNDARY-LEGS/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F2-REPAIR-CONTRACT-DOORS/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the B8 INV exactly once');
 
   // 10. The B1/B2/B3/B4/B5/B6/B7 specs re-pin their boundary assertions to the B8 numbers.
@@ -679,7 +679,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F3-FEATURE-BOUNDARY-LEGS/g)'),
+      src.includes('guard.match(/INV-PHASE1-F2-REPAIR-CONTRACT-DOORS/g)'),
       `${label} spec guard assertion must re-pin to the B8 INV`,
     );
   }

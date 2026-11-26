@@ -317,21 +317,21 @@
 
 ### frontend/ai-copilot
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by: no other feature imports this feature today.
-- Intended door: `frontend/src/features/ai-copilot/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/ai-copilot/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/approvals
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by: no other feature imports this feature today.
-- Intended door: `frontend/src/features/approvals/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/approvals/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/apps-store
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by: no other feature imports this feature today.
-- Intended door: `frontend/src/features/apps-store/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/apps-store/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/audit
 
@@ -383,22 +383,22 @@
 
 ### frontend/delivery-reps
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by: no other feature imports this feature today.
-- Intended door: `frontend/src/features/delivery-reps/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/delivery-reps/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/hr
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by (de-facto door today):
   - `frontend/src/features/hr/api/hr.api` — 1 statement(s), from settings (1)
-- Intended door: `frontend/src/features/hr/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/hr/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/import-sales
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by: no other feature imports this feature today.
-- Intended door: `frontend/src/features/import-sales/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/import-sales/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/inventory
 
@@ -409,18 +409,18 @@
 
 ### frontend/maintenance
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by (de-facto door today):
   - `frontend/src/features/maintenance/api/maintenance.api` — 1 statement(s), from products (1)
   - `frontend/src/features/maintenance/constants/maintenance-profiles` — 4 statement(s), from products (1), settings (1), tradein (2)
-- Intended door: `frontend/src/features/maintenance/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/maintenance/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/manufacturing
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by (de-facto door today):
   - `frontend/src/features/manufacturing/api/work-orders.api` — 1 statement(s), from sales (1)
-- Intended door: `frontend/src/features/manufacturing/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/manufacturing/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/maritime-freight
 
@@ -437,17 +437,17 @@
 
 ### frontend/pharmacy
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by (de-facto door today):
   - `frontend/src/features/pharmacy/api/pharmacy.api` — 1 statement(s), from inventory (1)
   - `frontend/src/features/pharmacy/types/pharmacy.types` — 1 statement(s), from inventory (1)
-- Intended door: `frontend/src/features/pharmacy/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/pharmacy/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/portals-hub
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by: no other feature imports this feature today.
-- Intended door: `frontend/src/features/portals-hub/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/portals-hub/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/pos
 
@@ -483,9 +483,9 @@
 
 ### frontend/public-trial
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by: no other feature imports this feature today.
-- Intended door: `frontend/src/features/public-trial/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/public-trial/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/purchases
 
@@ -508,9 +508,9 @@
 
 ### frontend/saas-admin
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by: no other feature imports this feature today.
-- Intended door: `frontend/src/features/saas-admin/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/saas-admin/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/sales
 
@@ -565,10 +565,10 @@
 
 ### frontend/tradein
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by (de-facto door today):
   - `frontend/src/features/tradein/api/tradein.api` — 1 statement(s), from products (1)
-- Intended door: `frontend/src/features/tradein/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/tradein/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
 ### frontend/treasury
 
@@ -579,27 +579,13 @@
 
 ### frontend/updates
 
-- Public `index.ts`: NO — missing, create in Phase 5
+- Public `index.ts`: YES — created by Phase 1 F2 (2026-11-26).
 - Imported by: no other feature imports this feature today.
-- Intended door: `frontend/src/features/updates/index.ts` re-exporting the file(s) above; Phase 5 creates the index where missing.
+- Intended door: `frontend/src/features/updates/index.ts` re-exporting the file(s) above (created by Phase 1 F2, 2026-11-26).
 
-## 3. Features missing a public index.ts (14)
+## 3. Features missing a public index.ts (0)
 
-- `ai-copilot`
-- `approvals`
-- `apps-store`
-- `delivery-reps`
-- `hr`
-- `import-sales`
-- `maintenance`
-- `manufacturing`
-- `pharmacy`
-- `portals-hub`
-- `public-trial`
-- `saas-admin`
-- `tradein`
-- `updates`
-
+None — every frontend feature now has a public `index.ts`. The last 14 were created by Phase 1 F2 (2026-11-26); the list was re-pinned to 0 by the F2 repair.
 Flagged imported files total: 0 — 6 of the 8 resolved in Phase 1 (see section 4); the 7th (the purchases write helper) was retired by Phase 1 B6, which moved its one cross-module function to the shared layer (src/common/utils), so it is no longer a cross-module door; the 8th (the sales discount-filter helper) was retired by Phase 1 B1, which moved it to the shared layer (src/common/utils), so it is no longer a cross-module door; no flag remains in this document.
 
 ## 4. Phase 1 door resolution (2026-11-18)

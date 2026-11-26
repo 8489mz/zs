@@ -27,6 +27,24 @@ import * as path from 'node:path';
  * Consequences, all re-pinned in this package:
  * - Wiring: both critical lists carry 379 specs in identical order,
  *   this spec last.
+ *
+ * F2-REPAIR (2026-11-26): CI on e7077ed63 failed the frontend
+ * contract check (10 NEW violations) and module-doors (14 vs 0).
+ * The check demands every index re-export its routes and page
+ * component; F2's live-importer derivation had missed pages/routes
+ * the router loads dynamically (lazy imports, no static external
+ * importer). This repair adds the 9 real re-exports: approvals,
+ * apps-store, import-sales (landing page ImportCommandCenter +
+ * ChinaSourcingPage), manufacturing, pharmacy and saas-admin gain
+ * their route pages; portals-hub and public-trial gain a routes
+ * module (mirroring the inline root-router routes, exactly like
+ * activation/routes.tsx, which only its index imports) re-exported
+ * from the index. ai-copilot gains nothing: it is a toolbar-launched
+ * modal by design — no page, no route exists anywhere — so its 2
+ * violations are a deliberate, reviewed exception in the contract
+ * baseline (hand-added, not --update-baseline), pinned by §8 below.
+ * No behavior changes: re-exports and two unregistered route modules
+ * only.
  */
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
@@ -131,13 +149,25 @@ const INDICES: IndexEntry[] = [
   },
   {
     feature: 'approvals',
-    lines: ["export { approvalsRouteModule } from '@/features/approvals/routes';"],
-    sources: [{ name: 'approvalsRouteModule', file: 'routes.tsx', kind: 'named' }],
+    lines: [
+      "export { ApprovalsWorkspacePage } from '@/features/approvals/pages/ApprovalsWorkspacePage';",
+      "export { approvalsRouteModule } from '@/features/approvals/routes';",
+    ],
+    sources: [
+      { name: 'ApprovalsWorkspacePage', file: 'pages/ApprovalsWorkspacePage.tsx', kind: 'named' },
+      { name: 'approvalsRouteModule', file: 'routes.tsx', kind: 'named' },
+    ],
   },
   {
     feature: 'apps-store',
-    lines: ["export { appsStoreRouteModule } from '@/features/apps-store/routes';"],
-    sources: [{ name: 'appsStoreRouteModule', file: 'routes.tsx', kind: 'named' }],
+    lines: [
+      "export { AppsStorePage } from '@/features/apps-store/pages/AppsStorePage';",
+      "export { appsStoreRouteModule } from '@/features/apps-store/routes';",
+    ],
+    sources: [
+      { name: 'AppsStorePage', file: 'pages/AppsStorePage.tsx', kind: 'named' },
+      { name: 'appsStoreRouteModule', file: 'routes.tsx', kind: 'named' },
+    ],
   },
   {
     feature: 'delivery-reps',
@@ -189,8 +219,16 @@ const INDICES: IndexEntry[] = [
   },
   {
     feature: 'import-sales',
-    lines: ["export { importSalesRouteModule } from '@/features/import-sales/routes';"],
-    sources: [{ name: 'importSalesRouteModule', file: 'routes.tsx', kind: 'named' }],
+    lines: [
+      "export { default as ImportCommandCenter } from '@/features/import-sales/ImportCommandCenter';",
+      "export { default as ChinaSourcingPage } from '@/features/import-sales/ChinaSourcingPage';",
+      "export { importSalesRouteModule } from '@/features/import-sales/routes';",
+    ],
+    sources: [
+      { name: 'ImportCommandCenter', file: 'ImportCommandCenter.tsx', kind: 'default' },
+      { name: 'ChinaSourcingPage', file: 'ChinaSourcingPage.tsx', kind: 'default' },
+      { name: 'importSalesRouteModule', file: 'routes.tsx', kind: 'named' },
+    ],
   },
   {
     feature: 'maintenance',
@@ -214,10 +252,12 @@ const INDICES: IndexEntry[] = [
   {
     feature: 'manufacturing',
     lines: [
+      "export { default as WorkOrdersListPage } from '@/features/manufacturing/pages/WorkOrdersListPage';",
       "export { manufacturingRouteModule } from '@/features/manufacturing/routes';",
       "export { workOrdersApi } from '@/features/manufacturing/api/work-orders.api';",
     ],
     sources: [
+      { name: 'WorkOrdersListPage', file: 'pages/WorkOrdersListPage.tsx', kind: 'default' },
       { name: 'manufacturingRouteModule', file: 'routes.tsx', kind: 'named' },
       { name: 'workOrdersApi', file: 'api/work-orders.api.ts', kind: 'named' },
     ],
@@ -225,11 +265,13 @@ const INDICES: IndexEntry[] = [
   {
     feature: 'pharmacy',
     lines: [
+      "export { default as PharmacyDashboardPage } from '@/features/pharmacy/pages/PharmacyDashboardPage';",
       "export { pharmacyRouteModule } from '@/features/pharmacy/routes';",
       "export { pharmacyApi } from '@/features/pharmacy/api/pharmacy.api';",
       "export type { PharmacyBatch } from '@/features/pharmacy/types/pharmacy.types';",
     ],
     sources: [
+      { name: 'PharmacyDashboardPage', file: 'pages/PharmacyDashboardPage.tsx', kind: 'default' },
       { name: 'pharmacyRouteModule', file: 'routes.tsx', kind: 'named' },
       { name: 'pharmacyApi', file: 'api/pharmacy.api.ts', kind: 'named' },
       { name: 'PharmacyBatch', file: 'types/pharmacy.types.ts', kind: 'named' },
@@ -237,21 +279,35 @@ const INDICES: IndexEntry[] = [
   },
   {
     feature: 'portals-hub',
-    lines: ["export { PortalsHubPage } from '@/features/portals-hub/pages/PortalsHubPage';"],
-    sources: [{ name: 'PortalsHubPage', file: 'pages/PortalsHubPage.tsx', kind: 'named' }],
+    lines: [
+      "export { PortalsHubPage } from '@/features/portals-hub/pages/PortalsHubPage';",
+      "export { portalsHubRouteModule } from '@/features/portals-hub/routes';",
+    ],
+    sources: [
+      { name: 'PortalsHubPage', file: 'pages/PortalsHubPage.tsx', kind: 'named' },
+      { name: 'portalsHubRouteModule', file: 'routes.tsx', kind: 'named' },
+    ],
   },
   {
     feature: 'public-trial',
-    lines: ["export { TrialSignupPage } from '@/features/public-trial/pages/TrialSignupPage';"],
-    sources: [{ name: 'TrialSignupPage', file: 'pages/TrialSignupPage.tsx', kind: 'named' }],
+    lines: [
+      "export { TrialSignupPage } from '@/features/public-trial/pages/TrialSignupPage';",
+      "export { publicTrialRouteModule } from '@/features/public-trial/routes';",
+    ],
+    sources: [
+      { name: 'TrialSignupPage', file: 'pages/TrialSignupPage.tsx', kind: 'named' },
+      { name: 'publicTrialRouteModule', file: 'routes.tsx', kind: 'named' },
+    ],
   },
   {
     feature: 'saas-admin',
     lines: [
+      "export { SaasTenantsPage } from '@/features/saas-admin/pages/SaasTenantsPage';",
       "export { saasAdminRouteModule } from '@/features/saas-admin/routes';",
       "export { saasAdminApi } from '@/features/saas-admin/api/saas-admin.api';",
     ],
     sources: [
+      { name: 'SaasTenantsPage', file: 'pages/SaasTenantsPage.tsx', kind: 'named' },
       { name: 'saasAdminRouteModule', file: 'routes.tsx', kind: 'named' },
       { name: 'saasAdminApi', file: 'api/saas-admin.api.ts', kind: 'named' },
     ],
@@ -388,7 +444,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F2-FEATURE-PUBLIC-INDICES/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F2 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F3-FEATURE-BOUNDARY-LEGS/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F2-REPAIR-CONTRACT-DOORS/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F2 INV exactly once');
 
   // 5. Wiring: both critical lists carry 379 specs in identical order, the F3 spec last.
@@ -463,13 +519,30 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F3-FEATURE-BOUNDARY-LEGS/g)'),
+      src.includes('guard.match(/INV-PHASE1-F2-REPAIR-CONTRACT-DOORS/g)'),
       `${label} spec guard assertion must re-pin to the F2 INV`,
     );
   }
 
+  // 8. The ai-copilot exception is pinned in the contract baseline:
+  // the feature is a toolbar-launched modal by design (no page, no
+  // route exists anywhere), so its 2 violations are a deliberate,
+  // reviewed exception — hand-added to the baseline, never via
+  // --update-baseline (which would rewrite the whole file).
+  const contractBaseline = JSON.parse(
+    fs.readFileSync(path.join(REPO_ROOT, 'frontend', 'scripts', 'baselines', 'feature-contract.json'), 'utf8'),
+  ) as string[];
+  assert.ok(
+    contractBaseline.includes('Feature ai-copilot index.ts does not re-export its page component.'),
+    'the contract baseline must carry the ai-copilot page exception',
+  );
+  assert.ok(
+    contractBaseline.includes('Feature ai-copilot index.ts does not re-export routes.'),
+    'the contract baseline must carry the ai-copilot routes exception',
+  );
+
   console.log(
-    'phase1 F2 feature public indices checks passed (14 indices, 40 public exports, counts unmoved, 378 specs wired)',
+    'phase1 F2 feature public indices checks passed (14 indices, 49 public exports, counts unmoved, 379 specs wired)',
   );
 }
 

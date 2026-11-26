@@ -97,8 +97,8 @@ async function main(): Promise<void> {
   );
   assert.equal(
     missingOnDisk.length,
-    14,
-    '14 frontend features must lack a public index.ts (re-pin if a feature gains one)',
+    0,
+    '0 frontend features must lack a public index.ts (re-pin if a feature gains one)',
   );
   for (const feat of missingOnDisk) {
     assert.ok(doc.includes(`- \`${feat}\``), `docs/MODULE_DOORS.md must list ${feat} as missing a public index.ts`);

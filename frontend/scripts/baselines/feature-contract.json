@@ -1,5 +1,7 @@
 [
   "Feature accounting index.ts does not re-export its page component.",
+  "Feature ai-copilot index.ts does not re-export its page component.",
+  "Feature ai-copilot index.ts does not re-export routes.",
   "Feature ai-copilot is missing index.ts",
   "Feature approvals is missing index.ts",
   "Feature apps-store is missing index.ts",
