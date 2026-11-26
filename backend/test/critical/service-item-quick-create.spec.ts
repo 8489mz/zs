@@ -12,8 +12,8 @@ import { strict as assert } from 'node:assert';
 import {
   allocatePurchaseInvoiceDiscount,
   buildNormalizedPurchaseItem,
-  partitionPurchaseLineTotals,
 } from '../../src/modules/purchases/helpers/purchases-write.helper';
+import { partitionPurchaseLineTotals } from '../../src/common/utils/purchase-line-totals.helper';
 
 // 1. The normalized line carries the service flag from the product row.
 const serviceLine = buildNormalizedPurchaseItem(

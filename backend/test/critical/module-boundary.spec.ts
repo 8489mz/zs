@@ -208,10 +208,22 @@
  * engine door row is retired (docs/MODULE_DOORS.md drops its line;
  * manufacturing door table 1 -> 0 files); the doors spec needs no change.
  * The single-source property is preserved: the engine is moved, never
- * duplicated. The alternative (moving the engine into accounting's own
- * engines) was rejected: the engine has three live callers outside
- * accounting, and that move would make manufacturing.service.ts and the
- * sales auto-produce path import from accounting instead.
+ * B6 (accounting|purchases decoupling): the single pure function
+ * partitionPurchaseLineTotals (+ its input type) moves to shared —
+ * backend/src/common/utils/purchase-line-totals.helper.ts — so
+ * accounting no longer imports from the purchases module at all.
+ * accounting->purchases 2 -> 0 (edge gone: the accounting-posting
+ * facade import was UNUSED and is removed outright; the
+ * post-trade-in-purchase slice re-points at shared).
+ * purchases->accounting stays 70 (the load-bearing money spine).
+ * Backend total pin 752 -> 750 and backend edge pin 66 -> 65 (= the
+ * B6 edge delta −2, no other growth); the accounting|purchases pair
+ * leaves the bidirectional list. The purchases-write.helper door row
+ * is retired (docs/MODULE_DOORS.md drops its §3 line and its §4 row;
+ * purchases door table 4 -> 3 files; 7 -> 6 remaining doors), and
+ * module-doors.spec.ts drops it from the resolved-doors list (the
+ * B1 precedent). The single-source property is preserved: the
+ * function is moved, never duplicated.
  *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
@@ -236,7 +248,6 @@ const BACKEND_MODULES = path.join(REPO_ROOT, 'backend', 'src', 'modules');
 const FRONTEND_FEATURES = path.join(REPO_ROOT, 'frontend', 'src', 'features');
 
 const PINNED_BACKEND_EDGES: Record<string, number> = {
-  'accounting->purchases': 2,
   'ai-copilot->storefront': 1,
   'approvals->settings': 2,
   'cash-drawer->accounting': 12,
@@ -364,7 +375,7 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
   'updates->settings': 1,
 };
 
-const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|purchases', 'delivery-reps|sales', 'returns|sales'];
+const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['delivery-reps|sales', 'returns|sales'];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
   'accounting|treasury',
   'accounts|purchases',
@@ -381,7 +392,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
 ];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 752;
+const PINNED_BACKEND_TOTAL = 750;
 const PINNED_FRONTEND_TOTAL = 138;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
@@ -625,7 +636,7 @@ async function main(): Promise<void> {
   );
 
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
-  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 66, 'pinned backend edge table must list 66 edges');
+  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 65, 'pinned backend edge table must list 65 edges');
   const backend = scanBackend();
   assert.ok(
     backend.total >= BACKEND_TOTAL_FLOOR,

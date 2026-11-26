@@ -73,7 +73,7 @@ import { scaledBomOverhead } from '../../src/common/utils/manufacturing-overhead
  *   scaledBomOverhead' at :219). Spec-only, intent preserved: the
  *   auto-produce path must still call the single function, no inline
  *   formula.
- * - Wiring: both critical lists carry 374 specs in identical order,
+ * - Wiring: both critical lists carry 375 specs in identical order,
  *   this spec last.
  */
 
@@ -286,12 +286,12 @@ async function main(): Promise<void> {
     'module-boundary must no longer list the accounting|manufacturing pair',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 752;'),
-    'module-boundary backend total is now 752 (B4 pinned 756; B5 re-pins 756 -> 752)',
+    boundary.includes('const PINNED_BACKEND_TOTAL = 750;'),
+    'module-boundary backend total is now 750 (B4 pinned 756; B5 re-pins 756 -> 752; B6 re-pins 752 -> 750)',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 66,'),
-    'module-boundary backend edge table is now 66 (B4 pinned 68; B5 re-pins 68 -> 66)',
+    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
+    'module-boundary backend edge table is now 65 (B4 pinned 68; B5 re-pins 68 -> 66; B6 re-pins 66 -> 65)',
   );
 
   // 7. The doors doc retires the engine door row.
@@ -310,7 +310,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-B5-ACCOUNTING-MANUFACTURING-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B5 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-B5-ACCOUNTING-MANUFACTURING-DECOUPLED/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-B6-ACCOUNTING-PURCHASES-DECOUPLED/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the B5 INV exactly once');
 
   // 9. The B1/B2/B3/B4 specs re-pin their boundary assertions to the B5 numbers.
@@ -322,16 +322,16 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('const PINNED_BACKEND_TOTAL = 752;'),
-      `${label} spec must re-pin the backend total 756 -> 752`,
+      src.includes('const PINNED_BACKEND_TOTAL = 750;'),
+      `${label} spec must re-pin the backend total 752 -> 750`,
     );
     assert.ok(
-      src.includes('Object.keys(PINNED_BACKEND_EDGES).length, 66,'),
-      `${label} spec must re-pin the backend edge table 68 -> 66 edges`,
+      src.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
+      `${label} spec must re-pin the backend edge table 66 -> 65 edges`,
     );
   }
 
-  // 10. Wiring: both critical lists carry 374 specs in identical order, this spec last.
+  // 10. Wiring: both critical lists carry 375 specs in identical order, this spec last.
   const specsJson = JSON.parse(fs.readFileSync(CRITICAL_JSON, 'utf8')) as { specs: string[] };
   const specs = specsJson.specs;
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')) as {
@@ -341,11 +341,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 374);
-  assert.equal(chain.length, 374);
-  assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 374 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b5-accounting-manufacturing.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-b5-accounting-manufacturing.spec.ts');
+  assert.equal(specs.length, 375);
+  assert.equal(chain.length, 375);
+  assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 375 specs in order');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -354,37 +354,37 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 374);') && src.includes('assert.equal(chain.length, 374);'),
-      `${label} spec wiring must re-pin to 374`,
+      src.includes('assert.equal(specs.length, 375);') && src.includes('assert.equal(chain.length, 375);'),
+      `${label} spec wiring must re-pin to 375`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-b5-accounting-manufacturing.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts'"),
       `${label} spec last-entry must re-pin to the B5 spec`,
     );
   }
 
   // 11. The wiring re-pin sweep is complete: no critical spec may still
-  // pin the old 373 count or point its last-entry at the B4 spec. (The
+  // pin the old 374 count or point its last-entry at the B5 spec. (The
   // B4 brief named only the B1/B2/B3/B4 specs; the live tree had 43 files
-  // asserting 373 — the #264-fix / D12 lesson. The B4 filename is built
+  // asserting 374 — the #264-fix / D12 lesson. The B5 filename is built
   // by concatenation so this block's own source never contains the
   // literals it scans for.)
   const staleCount: string[] = [];
   const staleLastEntry: string[] = [];
-  const b4Name = 'phase1-b4' + '-accounting-hr.spec.ts';
-  const staleSpecs = 'specs.length, 37' + '3';
-  const staleChain = 'chain.length, 37' + '3';
+  const b5Name = 'phase1-b5' + '-accounting-manufacturing.spec.ts';
+  const staleSpecs = 'specs.length, 37' + '4';
+  const staleChain = 'chain.length, 37' + '4';
   for (const file of fs.readdirSync(path.join(BACKEND, 'test', 'critical'))) {
     if (!file.endsWith('.spec.ts')) continue;
     const src = fs.readFileSync(path.join(BACKEND, 'test', 'critical', file), 'utf8');
     if (src.includes(staleSpecs) || src.includes(staleChain)) staleCount.push(file);
-    if (src.includes(`specs[specs.length - 1], 'test/critical/${b4Name}'`)) staleLastEntry.push(file);
+    if (src.includes(`specs[specs.length - 1], 'test/critical/${b5Name}'`)) staleLastEntry.push(file);
   }
-  assert.deepEqual(staleCount, [], 'no critical spec may still pin the 373 wiring count');
-  assert.deepEqual(staleLastEntry, [], 'no critical spec may still point its last-entry at the B4 spec');
+  assert.deepEqual(staleCount, [], 'no critical spec may still pin the 374 wiring count');
+  assert.deepEqual(staleLastEntry, [], 'no critical spec may still point its last-entry at the B5 spec');
 
   console.log(
-    'phase1 B5 accounting|manufacturing decoupling checks passed (374 specs wired, pair gone, overhead identical)',
+    'phase1 B5 accounting|manufacturing decoupling checks passed (375 specs wired, pair gone, overhead identical)',
   );
 }
 

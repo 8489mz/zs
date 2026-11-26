@@ -4,7 +4,7 @@ import type { Database } from '../../../../database/database.types';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../../common/errors/app-error';
-import { partitionPurchaseLineTotals } from '../../../purchases/helpers/purchases-write.helper';
+import { partitionPurchaseLineTotals } from '../../../../common/utils/purchase-line-totals.helper';
 import { tenantBaseCurrency } from '../../accounting-currency';
 import { currencyMoneyDigits, toMinorUnits, fromMinorUnits } from '../../engines/money-minor-units.engine';
 import type { DbOrTx, JournalLineDraft } from '../../accounting-posting.service';

@@ -32,7 +32,7 @@
  *   docs/MODULE_DOORS.md drops its line (sales door table 13 -> 12 files).
  *   The doors SPEC needs no change (it asserts headings, the missing-index
  *   list, the pinned P0-1 prose, no REVIEW flag, and the 7 resolved §4 doors).
- * - Wiring: both critical lists carry 374 specs in identical order,
+ * - Wiring: both critical lists carry 375 specs in identical order,
  *   this spec last.
  */
 
@@ -206,12 +206,12 @@ async function main(): Promise<void> {
     'module-boundary must keep sales->settings pinned at 4 (the staying leg)',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 752;'),
-    'module-boundary must re-pin the backend total 756 -> 752',
+    boundary.includes('const PINNED_BACKEND_TOTAL = 750;'),
+    'module-boundary must re-pin the backend total 752 -> 750',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 66,'),
-    'module-boundary must re-pin the backend edge table 68 -> 66 edges',
+    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
+    'module-boundary must re-pin the backend edge table 66 -> 65 edges',
   );
 
   // 5. Invalidation still works through both doors (behavioral proof:
@@ -244,7 +244,7 @@ async function main(): Promise<void> {
   SalesWriteService.invalidateSettingsCache();
   assert.equal(map.size, 0, 'no-arg invalidation must clear the whole shared map');
 
-  // 6. Wiring: both critical lists carry 374 specs in identical order,
+  // 6. Wiring: both critical lists carry 375 specs in identical order,
   // this spec last.
   const specsJson = JSON.parse(fs.readFileSync(path.join(BACKEND, 'scripts', 'critical-specs.json'), 'utf8'));
   const specs: string[] = specsJson.specs;
@@ -253,13 +253,13 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 374);
-  assert.equal(chain.length, 374);
+  assert.equal(specs.length, 375);
+  assert.equal(chain.length, 375);
   assert.deepEqual(chain, specs, 'critical lists must agree in identical order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b5-accounting-manufacturing.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts');
   assert.ok(specs.includes('test/critical/phase1-b2-sales-settings.spec.ts'));
 
-  console.log('phase1 B2 sales|settings decoupling checks passed (374 specs wired, pair gone, invalidation identical)');
+  console.log('phase1 B2 sales|settings decoupling checks passed (375 specs wired, pair gone, invalidation identical)');
 }
 
 main().catch((error) => {

@@ -40,7 +40,7 @@
  *   (Doc note: the §4 row listed only delivery-reps (2) importers —
  *   the F13 reports import was never recorded there; the row is gone
  *   now, so the staleness retires with it.)
- * - Wiring: both critical lists carry 374 specs in identical order,
+ * - Wiring: both critical lists carry 375 specs in identical order,
  *   this spec last.
  */
 
@@ -219,12 +219,12 @@ async function main(): Promise<void> {
     'module-boundary must re-pin delivery-reps->sales 11 -> 9',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 752;'),
-    'module-boundary backend total is now 752 (B1 pinned 760; B2 re-pinned 760 -> 759; B3 re-pinned 759 -> 758; B4 re-pinned 758 -> 756; B5 re-pins 756 -> 752)',
+    boundary.includes('const PINNED_BACKEND_TOTAL = 750;'),
+    'module-boundary backend total is now 750 (B1 pinned 760; B2 re-pinned 760 -> 759; B3 re-pinned 759 -> 758; B4 re-pinned 758 -> 756; B5 re-pins 756 -> 752; B6 re-pins 752 -> 750)',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 66,'),
-    'module-boundary backend edge table is now 66 (B1 pinned 71; B2 re-pinned 71 -> 70; B3 re-pinned 70 -> 69; B4 re-pinned 69 -> 68; B5 re-pins 68 -> 66)',
+    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 65,'),
+    'module-boundary backend edge table is now 65 (B1 pinned 71; B2 re-pinned 71 -> 70; B3 re-pinned 70 -> 69; B4 re-pinned 69 -> 68; B5 re-pins 68 -> 66; B6 re-pins 66 -> 65)',
   );
   assert.ok(
     !boundary.includes("'purchases->catalog':"),
@@ -279,7 +279,7 @@ async function main(): Promise<void> {
   );
   assert.deepEqual(returnCompiled.parameters, [], 'discountedReturnInvoiceSql must take no parameters');
 
-  // 8. Wiring: both critical lists carry 374 specs in identical order,
+  // 8. Wiring: both critical lists carry 375 specs in identical order,
   // this spec last.
   const specsJson = JSON.parse(fs.readFileSync(path.join(BACKEND, 'scripts', 'critical-specs.json'), 'utf8'));
   const specs: string[] = specsJson.specs;
@@ -288,13 +288,13 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 374);
-  assert.equal(chain.length, 374);
+  assert.equal(specs.length, 375);
+  assert.equal(chain.length, 375);
   assert.deepEqual(chain, specs, 'critical lists must agree in identical order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b5-accounting-manufacturing.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b6-accounting-purchases.spec.ts');
   assert.ok(specs.includes('test/critical/phase1-b1-reports-sales.spec.ts'));
 
-  console.log('phase1 B1 reports|sales decoupling checks passed (374 specs wired, pair gone, SQL identical)');
+  console.log('phase1 B1 reports|sales decoupling checks passed (375 specs wired, pair gone, SQL identical)');
 }
 
 main().catch((error) => {

@@ -1232,7 +1232,7 @@ async function main(): Promise<void> {
   }
 
   // 8. The orphan evidence spec is wired into BOTH critical lists,
-  // in identical order (370 specs — P8 wired the date-filter spec, P9 wired the FEFO spec, file #11 wired 6 marketplace specs, P10 wired the feature-overrides spec, F2 wired the POS collection-balance-cap spec, F5 wired the shift-close-password-identity spec, F19 wired the final-issue-paired-movement spec, F7 wired the pos-sale-trip-attribution spec, F7c wired the pos-collection-trip-attribution spec, F3 wired the van-route-sale-gate spec, F8 wired the pos-cash-discount spec, F4 wired the customer-phone-validation spec, F9 wired the pos-van-stock-pool spec, F10 wired the van-load-available-qty spec, F12 wired the van-admin-permission-split spec, F13 wired the reports-discount-profit spec, F18 wired the van-presales-consolidate-delivery-rep-alias spec and the van-presales-order-details-line-total spec, F20 wired the van-portal-sale-rep-attribution-f20 spec, A8 wired the purchases-writer spec, A10 wired the three phase1-a10 specs).
+  // in identical order (375 specs — P8 wired the date-filter spec, P9 wired the FEFO spec, file #11 wired 6 marketplace specs, P10 wired the feature-overrides spec, F2 wired the POS collection-balance-cap spec, F5 wired the shift-close-password-identity spec, F19 wired the final-issue-paired-movement spec, F7 wired the pos-sale-trip-attribution spec, F7c wired the pos-collection-trip-attribution spec, F3 wired the van-route-sale-gate spec, F8 wired the pos-cash-discount spec, F4 wired the customer-phone-validation spec, F9 wired the pos-van-stock-pool spec, F10 wired the van-load-available-qty spec, F12 wired the van-admin-permission-split spec, F13 wired the reports-discount-profit spec, F18 wired the van-presales-consolidate-delivery-rep-alias spec and the van-presales-order-details-line-total spec, F20 wired the van-portal-sale-rep-attribution-f20 spec, A8 wired the purchases-writer spec, A10 wired the three phase1-a10 specs, B1 wired the phase1-b1-reports-sales spec, B2 wired the phase1-b2-sales-settings spec, B3 wired the phase1-b3-sales-storefront spec, B4 wired the phase1-b4-accounting-hr spec, B5 wired the phase1-b5-accounting-manufacturing spec, B6 wired the phase1-b6-accounting-purchases spec).
   {
     const specDir = __dirname;
     const jsonPath = path.join(specDir, '..', '..', 'scripts', 'critical-specs.json');
@@ -1242,8 +1242,8 @@ async function main(): Promise<void> {
     const chain = String(pkg.scripts['test:critical:serial'])
       .split(' && ')
       .map((x) => x.replace(/^ts-node /, ''));
-    assert.equal(list.length, 370);
-    assert.equal(chain.length, 374);
+    assert.equal(list.length, 375);
+    assert.equal(chain.length, 375);
     assert.deepEqual(list, chain);
     assert.ok(list.includes('test/critical/van-field-noncash-evidence.spec.ts'));
     const idx = list.indexOf('test/critical/van-field-noncash-evidence.spec.ts');

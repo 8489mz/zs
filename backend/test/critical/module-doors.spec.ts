@@ -130,10 +130,12 @@ async function main(): Promise<void> {
     'docs/MODULE_DOORS.md must state the pinned foundation-service cap',
   );
 
-  // 5. No REVIEW flag remains: the 7 remaining Phase 1 doors are resolved, each
+  // 5. No REVIEW flag remains: the 6 remaining Phase 1 doors are resolved, each
   // recorded as a confirmed public door in section 4 of the document
   // (the 8th door, the sales discount-filter helper, was retired by
-  // Phase 1 B1, which moved it to src/common/utils).
+  // Phase 1 B1, which moved it to src/common/utils; the 7th door, the
+  // purchases write helper, was retired by Phase 1 B6, which moved its
+  // one cross-module function to src/common/utils).
   assert.ok(
     !doc.includes('REVIEW'),
     'docs/MODULE_DOORS.md must not contain any REVIEW flag: all 8 Phase 1 doors are resolved',
@@ -146,7 +148,6 @@ async function main(): Promise<void> {
     'backend/src/modules/cash-drawer/helpers/cash-drawer.helper',
     'backend/src/modules/import-sales/helpers/import-lot-allocation.helper',
     'backend/src/modules/inventory/helpers/inventory-tracked-stock.helper',
-    'backend/src/modules/purchases/helpers/purchases-write.helper',
     'backend/src/modules/reports/helpers/reports-range.helper',
     'backend/src/modules/sales/helpers/restaurant-modifier-contract.helper',
     'backend/src/modules/sales/helpers/sales-write.helper',
