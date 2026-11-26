@@ -8,16 +8,25 @@ shortfall immediately as Dr 5300 / Cr 1140 at the frozen dispatch
 cost, with no written reason and no second person involved. One UI
 slip turned real stock into a loss posting, approved by nobody.
 
-THE RULE: a receipt with ANY shortfall over 0.0001 needs BOTH a
-written variance reason of at least 8 characters AND approval by a
-different user than the receiver, verified through the one shared
-authorizeManagerSecret. The approval credential must resolve to an
-admin user id different from the receiver: the shared manager PIN
-identifies no approver, so it cannot satisfy segregation of duties.
-If either is missing or invalid, the WHOLE receipt is rejected
-fail-closed with nothing half-moved. Full receipts are unchanged:
-no reason or approval needed. Approved shortfalls keep the frozen
-dispatch-cost valuation and the Dr 5300 / Cr 1140 journal shape.
+THE RULE (post-cancellation — INV-TRANSFER-SHORTAGE-SPEC-POST-CANCELLATION):
+a receipt with ANY shortfall over 0.0001 still needs a written
+variance reason of at least 8 characters, and the reason check runs
+first, before any approval logic. Approval, however, changed with
+the unconditional second-manager cancellation (commit 3b45aff2d,
+INV-SECOND-MANAGER-PASSWORD-REMOVED): `isSoloAdminOverride` is
+role-only, so an admin/super_admin receiver with NO approval secret
+accepts the shortfall alone via the LOGGED solo override — the
+shrinkage note and the audit log carry the override stamp, and no
+second approval is required even when a second admin exists. A
+DIFFERENT admin approving with their own password still works and
+posts with NO override stamp. A supplied secret must still differ
+from the receiver (self-approval is refused), the shared manager
+PIN still identifies no approver (refused), and a wrong secret is
+still MANAGER_AUTH_INVALID. If either the reason or the approval
+leg fails, the WHOLE receipt is rejected fail-closed with nothing
+half-moved. Full receipts are unchanged: no reason or approval
+needed. Approved shortfalls keep the frozen dispatch-cost valuation
+and the Dr 5300 / Cr 1140 journal shape.
 
 WHAT THIS PINS, driving the REAL createStockTransfer and
 receiveStockTransfer on PGlite:
@@ -25,7 +34,10 @@ receiveStockTransfer on PGlite:
   approval, the receipt is rejected: the transfer stays 'sent',
   transit stock is intact, and no shrinkage movement or journal
   exists.
-- a shortfall with a reason but no approval is rejected.
+- a shortfall with a reason and NO approval secret is ACCEPTED by
+  an admin receiver via the logged solo override (case 2): the
+  transfer becomes 'received', the shrinkage posts at the frozen
+  dispatch cost, and the movement note carries the override stamp.
 - a shortfall with a reason and a wrong approval secret is
   rejected with MANAGER_AUTH_INVALID.
 - a shortfall with a reason approved by the receiver's own
@@ -207,58 +219,94 @@ async function main(): Promise<void> {
     const journals1 = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM journal_entries`.execute(db);
     assert.equal(Number(journals1.rows[0].n), 0);
 
-    // Case 2: shortfall + reason but no approval -> rejected.
+    // Case 2 (post-cancellation, INV-TRANSFER-SHORTAGE-SPEC-POST-CANCELLATION):
+    // shortfall + reason, NO approval secret -> ACCEPTED by an admin
+    // receiver via the logged solo override (commit 3b45aff2d,
+    // INV-SECOND-MANAGER-PASSWORD-REMOVED: isSoloAdminOverride is
+    // role-only, so no second approval is required even though a
+    // second admin exists in this tenant). The transfer becomes
+    // 'received', the shrinkage posts at the frozen dispatch cost,
+    // and the movement note carries the override stamp.
     await seedProduct(db, 3, 100, 10);
     const t2 = await makeTransfer(service, [{ productId: 3, qty: 10 }]);
     const t2item = await transferItemId(db, t2, 3);
-    await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, {
-        items: [{ itemId: t2item, receivedQty: 8 }],
-        varianceReason: REASON,
-      } as never),
-      /TRANSFER_SHORTAGE_APPROVAL_REQUIRED/,
+    await service.receiveStockTransfer(t2, AUTH, {
+      items: [{ itemId: t2item, receivedQty: 8 }],
+      varianceReason: REASON,
+    } as never);
+    assert.equal(await transferStatus(db, t2), 'received');
+    assert.equal(await lossCount(db, t2), 1);
+    const loss2 = await sql<{
+      unit_cost: string;
+      total_cost: string;
+      note: string;
+    }>`SELECT unit_cost, total_cost, note FROM stock_movements WHERE reference_id = ${t2} AND movement_type = 'transfer_transit_loss'`.execute(
+      db,
     );
-    assert.equal(await transferStatus(db, t2), 'sent');
-    assert.equal(await transitQty(db, 3), 10);
-    assert.equal(await lossCount(db, t2), 0);
+    assert.equal(Number(loss2.rows[0].unit_cost), 10);
+    assert.equal(Number(loss2.rows[0].total_cost), 20);
+    assert.ok(
+      String(loss2.rows[0].note || '').includes('اعتماد منفرد بقرار إداري'),
+      'shrinkage note must carry the solo-override stamp',
+    );
+    const dest2 = await sql<{
+      qty: string;
+    }>`SELECT qty FROM product_location_stock WHERE product_id = 3 AND location_id = 2`.execute(db);
+    assert.equal(Number(dest2.rows[0].qty), 8);
+    const glob2 = await sql<{ stock_qty: string }>`SELECT stock_qty FROM products WHERE id = 3`.execute(db);
+    assert.equal(Number(glob2.rows[0].stock_qty), 98);
+    assert.equal(await transitQty(db, 3), 0);
+
+    // Cases 3-5 share one fresh transfer: case 2 ACCEPTED t2 above,
+    // so it can no longer be re-received. Each rejection below leaves
+    // this transfer 'sent' with nothing moved.
+    const t2b = await makeTransfer(service, [{ productId: 3, qty: 10 }]);
+    const t2bitem = await transferItemId(db, t2b, 3);
 
     // Case 3: shortfall + reason + wrong approval secret -> rejected.
+    // Unchanged by the cancellation: authorizeManagerSecret throws
+    // MANAGER_AUTH_INVALID for a wrong secret before any override
+    // logic runs (the override path takes no secret at all).
     await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, {
-        items: [{ itemId: t2item, receivedQty: 8 }],
+      service.receiveStockTransfer(t2b, AUTH, {
+        items: [{ itemId: t2bitem, receivedQty: 8 }],
         varianceReason: REASON,
         approvalSecret: 'wrong-secret',
       } as never),
       /MANAGER_AUTH_INVALID/,
     );
-    assert.equal(await transferStatus(db, t2), 'sent');
-    assert.equal(await lossCount(db, t2), 0);
+    assert.equal(await transferStatus(db, t2b), 'sent');
+    assert.equal(await lossCount(db, t2b), 0);
 
     // Case 4: shortfall + reason approved by the receiver's own
-    // password -> rejected (no self-approval).
+    // password -> rejected (no self-approval). Unchanged by the
+    // cancellation: a supplied secret must still differ from the
+    // receiver (the override path takes no secret at all).
     await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, {
-        items: [{ itemId: t2item, receivedQty: 8 }],
+      service.receiveStockTransfer(t2b, AUTH, {
+        items: [{ itemId: t2bitem, receivedQty: 8 }],
         varianceReason: REASON,
         approvalSecret: RECEIVER_PASSWORD,
       } as never),
       /TRANSFER_SHORTAGE_SELF_APPROVAL/,
     );
-    assert.equal(await transferStatus(db, t2), 'sent');
-    assert.equal(await lossCount(db, t2), 0);
+    assert.equal(await transferStatus(db, t2b), 'sent');
+    assert.equal(await lossCount(db, t2b), 0);
 
     // Case 5: shortfall + reason shorter than 8 characters, even with
-    // a valid different approver -> rejected.
+    // a valid different approver -> rejected. Unchanged by the
+    // cancellation: the reason check runs first, before any approval
+    // logic.
     await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, {
-        items: [{ itemId: t2item, receivedQty: 8 }],
+      service.receiveStockTransfer(t2b, AUTH, {
+        items: [{ itemId: t2bitem, receivedQty: 8 }],
         varianceReason: 'lost',
         approvalSecret: APPROVER_PASSWORD,
       } as never),
       /TRANSFER_SHORTAGE_REASON_REQUIRED/,
     );
-    assert.equal(await transferStatus(db, t2), 'sent');
-    assert.equal(await lossCount(db, t2), 0);
+    assert.equal(await transferStatus(db, t2b), 'sent');
+    assert.equal(await lossCount(db, t2b), 0);
 
     // Case 6: shortfall + reason + DIFFERENT approver -> accepted, and
     // the loss stays at the frozen dispatch cost (10, not the moved 25).
