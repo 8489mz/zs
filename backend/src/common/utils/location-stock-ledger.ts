@@ -67,7 +67,7 @@ export type StockDeltaParams = StockScopeParams & {
   disableAutoDrain?: boolean;
 };
 
-type StockSetParams = StockScopeParams & {
+export type StockSetParams = StockScopeParams & {
   nextQty: number;
   errorCode?: string;
   errorMessage?: string;
@@ -75,7 +75,7 @@ type StockSetParams = StockScopeParams & {
   disableAutoDrain?: boolean;
 };
 
-type StockTransferParams = TenantStockScope & {
+export type StockTransferParams = TenantStockScope & {
   productId: number;
   qty: number;
   fromBranchId?: number | null;
@@ -107,7 +107,7 @@ export type StockDeltaResult = {
   scopeAfter: number;
 };
 
-type StockTransferResult = {
+export type StockTransferResult = {
   globalBefore: number;
   globalAfter: number;
   sourceBefore: number;

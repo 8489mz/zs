@@ -9,9 +9,10 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { setScopedStockQty } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovementRow } from '../../../common/utils/stock-movement-writer';
 import { AppError } from '../../../common/errors/app-error';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 
 // INV-DTO-PILOT-PURCHASES-INVENTORY (D2 pilot): the four bin DTOs were
@@ -179,6 +180,14 @@ export class WarehouseBinsService {
     return this.round3(qty);
   }
 
+  /**
+   * Phase 1 A5 (INV-PHASE1-A5-WRITER-MODES): this helper is folded into the
+   * unified writer — it now only delegates to recordStockMovementRow (the
+   * row-only writer mode), resolving moneyDigits with the exact expression
+   * it used to resolve itself. The two callers (quickReassignProduct,
+   * quickAuditUpdate) are UNTOUCHED in A5 and migrate to the writer
+   * directly in A6–A9, when this method is deleted.
+   */
   private async recordBinMovement(
     trx: Transaction<Database>,
     args: {
@@ -197,33 +206,24 @@ export class WarehouseBinsService {
     },
   ): Promise<number> {
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, args.scope.tenantId));
-    const totalCost = roundMoney(Math.abs(args.delta) * args.unitCost, moneyDigits);
-    const inserted = await trx
-      .insertInto('stock_movements')
-      .values({
-        product_id: args.productId,
-        movement_type: args.movementType,
-        qty: args.delta,
-        before_qty: args.beforeQty,
-        after_qty: args.afterQty,
-        reason: args.referenceType,
-        note: '',
-        reference_type: args.referenceType,
-        reference_id: args.binId,
-        branch_id: args.branchId,
-        location_id: args.locationId,
-        created_by: args.createdBy,
-        tenant_id: args.scope.tenantId,
-        account_id: args.scope.accountId,
-        unit_cost: args.unitCost,
-        total_cost: totalCost,
-      } as any)
-      .returning('id')
-      .executeTakeFirst();
-    if (!inserted?.id) {
-      throw new AppError('Failed to capture stock movement ID for bin posting', 'MOVEMENT_INSERT_FAILED', 500);
-    }
-    return Number(inserted.id);
+    return recordStockMovementRow(trx, {
+      productId: args.productId,
+      branchId: args.branchId,
+      locationId: args.locationId,
+      tenantId: args.scope.tenantId,
+      accountId: args.scope.accountId,
+      movementType: args.movementType,
+      delta: args.delta,
+      beforeQty: args.beforeQty,
+      afterQty: args.afterQty,
+      referenceType: args.referenceType,
+      referenceId: args.binId,
+      reason: args.referenceType,
+      note: '',
+      unitCost: args.unitCost,
+      createdBy: args.createdBy,
+      moneyDigits,
+    });
   }
 
   private async upsertAllocation(

@@ -492,7 +492,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // Block 4: source pins + wiring (356 specs — the opening-balances-ledger spec is the last entry).
+  // Block 4: source pins + wiring (357 specs — the stock-movement-writer-modes spec is the last entry).
   {
     const source = readFileSync(
       resolve(__dirname, '../../src/modules/catalog/services/catalog-product-fashion.service.ts'),
@@ -535,12 +535,12 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 356);
-    assert.equal(chain.length, 356);
+    assert.equal(specs.length, 357);
+    assert.equal(chain.length, 357);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/opening-balances-ledger.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/opening-balances-ledger.spec.ts');
-    console.log('  5. evidence spec wired into both critical lists (356 = 356, identical order), passed');
+    assert.equal(specs[specs.length - 1], 'test/critical/stock-movement-writer-modes.spec.ts');
+    console.log('  5. evidence spec wired into both critical lists (357 = 357, identical order), passed');
   }
 
   console.log('fashion-rows-ledger-return: all cases passed');

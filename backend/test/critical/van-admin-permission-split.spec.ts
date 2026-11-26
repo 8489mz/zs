@@ -462,11 +462,11 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 356);
-    assert.equal(chain.length, 356);
+    assert.equal(specs.length, 357);
+    assert.equal(chain.length, 357);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-admin-permission-split.spec.ts'));
-    console.log('9. spec wired into both critical lists (356 = 356, identical order), passed');
+    console.log('9. spec wired into both critical lists (357 = 357, identical order), passed');
   }
 
   console.log('van-admin-permission-split: all cases passed');

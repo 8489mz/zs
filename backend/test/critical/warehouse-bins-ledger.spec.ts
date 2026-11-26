@@ -111,7 +111,7 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
     CREATE TABLE product_location_stock (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, branch_id bigint, location_id bigint, qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, updated_at timestamptz);
     CREATE TABLE warehouse_bins (id bigint PRIMARY KEY, tenant_id text, account_id text, location_id bigint, code text, barcode text, aisle text, rack text, shelf text, bin text, capacity numeric, is_active boolean DEFAULT true, notes text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
     CREATE TABLE product_bin_allocations (id bigserial PRIMARY KEY, tenant_id text, account_id text, bin_id bigint, product_id bigint, quantity numeric DEFAULT 0, is_primary boolean DEFAULT false, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
-    CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, movement_type text, qty numeric, before_qty numeric, after_qty numeric, reason text, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, unit_cost numeric, total_cost numeric, created_at timestamptz DEFAULT NOW());
+    CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, movement_type text, qty numeric, before_qty numeric, after_qty numeric, reason text, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, unit_cost numeric, total_cost numeric, import_receipt_id bigint, created_at timestamptz DEFAULT NOW());
   `);
   return { pg, db };
 }
