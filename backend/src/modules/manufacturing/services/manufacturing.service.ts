@@ -22,7 +22,7 @@ import {
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
-import { scaledBomOverhead } from '../engines/manufacturing-overhead.engine';
+import { scaledBomOverhead } from '../../../common/utils/manufacturing-overhead.engine';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 

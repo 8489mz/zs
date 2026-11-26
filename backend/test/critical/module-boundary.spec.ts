@@ -194,6 +194,25 @@
  * the accounting side and cannot import the hr engines without
  * re-creating the edge.
  *
+ * B5 (accounting|manufacturing decoupling): the single scaled-BOM-overhead
+ * engine moves to shared — backend/src/common/utils/manufacturing-overhead.engine.ts
+ * — so accounting no longer imports from the manufacturing module at all.
+ * accounting->manufacturing 2 -> 0 (edge gone: the accounting-posting
+ * facade import was UNUSED and is removed outright; the poster slice
+ * re-points at shared), manufacturing->accounting 6 -> 5 (the engine's
+ * own money-engine import leaves the module with the file), and
+ * sales->manufacturing 1 -> 0 (edge gone: the restaurant auto-produce
+ * path re-points at shared). Backend total pin 756 -> 752 and backend
+ * edge pin 68 -> 66 (= the B5 edge delta −4, no other growth); the
+ * accounting|manufacturing pair leaves the bidirectional list. The
+ * engine door row is retired (docs/MODULE_DOORS.md drops its line;
+ * manufacturing door table 1 -> 0 files); the doors spec needs no change.
+ * The single-source property is preserved: the engine is moved, never
+ * duplicated. The alternative (moving the engine into accounting's own
+ * engines) was rejected: the engine has three live callers outside
+ * accounting, and that move would make manufacturing.service.ts and the
+ * sales auto-produce path import from accounting instead.
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -217,7 +236,6 @@ const BACKEND_MODULES = path.join(REPO_ROOT, 'backend', 'src', 'modules');
 const FRONTEND_FEATURES = path.join(REPO_ROOT, 'frontend', 'src', 'features');
 
 const PINNED_BACKEND_EDGES: Record<string, number> = {
-  'accounting->manufacturing': 2,
   'accounting->purchases': 2,
   'ai-copilot->storefront': 1,
   'approvals->settings': 2,
@@ -240,7 +258,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'inventory->accounting': 17,
   'inventory->import-sales': 3,
   'maintenance->accounting': 26,
-  'manufacturing->accounting': 6,
+  'manufacturing->accounting': 5,
   'manufacturing->inventory': 1,
   'maritime-freight->accounting': 52,
   'maritime-freight->sales': 3,
@@ -268,7 +286,6 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'sales->cash-drawer': 5,
   'sales->delivery-reps': 8,
   'sales->import-sales': 4,
-  'sales->manufacturing': 1,
   'sales->reports': 1,
   'sales->returns': 4,
   'sales->settings': 4,
@@ -347,12 +364,7 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
   'updates->settings': 1,
 };
 
-const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = [
-  'accounting|manufacturing',
-  'accounting|purchases',
-  'delivery-reps|sales',
-  'returns|sales',
-];
+const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['accounting|purchases', 'delivery-reps|sales', 'returns|sales'];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
   'accounting|treasury',
   'accounts|purchases',
@@ -369,7 +381,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
 ];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 756;
+const PINNED_BACKEND_TOTAL = 752;
 const PINNED_FRONTEND_TOTAL = 138;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
@@ -613,7 +625,7 @@ async function main(): Promise<void> {
   );
 
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
-  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 68, 'pinned backend edge table must list 68 edges');
+  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 66, 'pinned backend edge table must list 66 edges');
   const backend = scanBackend();
   assert.ok(
     backend.total >= BACKEND_TOTAL_FLOOR,

@@ -1,4 +1,4 @@
-import { roundMoney, MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { roundMoney, MoneyDigits } from '../../modules/accounting/engines/money-minor-units.engine';
 
 /**
  * Scaled BOM overhead: the single computation of the BOM overhead

@@ -9,7 +9,7 @@
 import { valueStockReceipt } from '../../accounting/inventory-valuation';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
-import { scaledBomOverhead } from '../../manufacturing/engines/manufacturing-overhead.engine';
+import { scaledBomOverhead } from '../../../common/utils/manufacturing-overhead.engine';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';

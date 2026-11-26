@@ -1243,7 +1243,7 @@ async function main(): Promise<void> {
       .split(' && ')
       .map((x) => x.replace(/^ts-node /, ''));
     assert.equal(list.length, 370);
-    assert.equal(chain.length, 373);
+    assert.equal(chain.length, 374);
     assert.deepEqual(list, chain);
     assert.ok(list.includes('test/critical/van-field-noncash-evidence.spec.ts'));
     const idx = list.indexOf('test/critical/van-field-noncash-evidence.spec.ts');

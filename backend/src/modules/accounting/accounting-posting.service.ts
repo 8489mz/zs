@@ -12,7 +12,6 @@ import { lockAccountingPeriod } from './accounting-period-lock';
 import { tenantBaseCurrency } from './accounting-currency';
 import { resolveBusinessDateKey } from './engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, toMinorUnits, fromMinorUnits, MoneyDigits } from './engines/money-minor-units.engine';
-import { scaledBomOverhead } from '../manufacturing/engines/manufacturing-overhead.engine';
 import { partitionPurchaseLineTotals } from '../purchases/helpers/purchases-write.helper';
 import { PdcPostingService } from './services/pdc-posting.service';
 import { JournalPostingCoreService } from './services/journal-posting-core.service';

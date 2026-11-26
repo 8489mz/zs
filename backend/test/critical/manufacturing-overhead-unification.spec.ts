@@ -50,7 +50,7 @@ import { Database } from '../../src/database/database.types';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
-import { scaledBomOverhead } from '../../src/modules/manufacturing/engines/manufacturing-overhead.engine';
+import { scaledBomOverhead } from '../../src/common/utils/manufacturing-overhead.engine';
 
 const AUTH = {
   tenantId: 't1',
@@ -215,13 +215,17 @@ async function main(): Promise<void> {
     const posterBody = posterSource.slice(posterStart);
     assert.ok(posterBody.includes('scaledBomOverhead('), 'poster must call scaledBomOverhead');
     assert.ok(!posterBody.includes('overhead_cost || 0) * ('), 'inline formula must be gone from poster');
-    const salesWrite = readSrc('../../src/modules/sales/services/sales-write.service.ts');
-    assert.ok(salesWrite.includes('scaledBomOverhead('), 'auto-produce path must call scaledBomOverhead');
+    // The auto-produce implementation lives in
+    // sales-restaurant-and-serials.service.ts (sales-write.service.ts only
+    // delegates via getRestaurantSerials().autoProduceShortfall) — the
+    // read follows the implementation, not the delegating facade.
+    const autoProduce = readSrc('../../src/modules/sales/services/sales-restaurant-and-serials.service.ts');
+    assert.ok(autoProduce.includes('scaledBomOverhead('), 'auto-produce path must call scaledBomOverhead');
     assert.ok(
-      !salesWrite.includes('overhead_cost || 0) * (baseShortfall'),
+      !autoProduce.includes('overhead_cost || 0) * (baseShortfall'),
       'inline formula must be gone from auto-produce path',
     );
-    const engine = readSrc('../../src/modules/manufacturing/engines/manufacturing-overhead.engine.ts');
+    const engine = readSrc('../../src/common/utils/manufacturing-overhead.engine.ts');
     assert.ok(engine.includes('export function scaledBomOverhead'), 'shared function must exist');
     const invariants = readSrc('../../../ARCHITECTURE_INVARIANTS.md');
     assert.ok(invariants.includes('INV-MANUFACTURING-OVERHEAD-UNIFICATION'), 'invariant must be recorded');

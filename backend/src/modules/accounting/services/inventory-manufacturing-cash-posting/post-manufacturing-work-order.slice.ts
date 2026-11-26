@@ -4,7 +4,7 @@ import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary'
 import { AppError } from '../../../../common/errors/app-error';
 import { tenantBaseCurrency } from '../../accounting-currency';
 import { currencyMoneyDigits, roundMoney, MoneyDigits } from '../../engines/money-minor-units.engine';
-import { scaledBomOverhead } from '../../../manufacturing/engines/manufacturing-overhead.engine';
+import { scaledBomOverhead } from '../../../../common/utils/manufacturing-overhead.engine';
 import type { DbOrTx, JournalLineDraft } from '../../accounting-posting.service';
 import type { InventoryManufacturingCashPostingDeps } from './inventory-manufacturing-cash-posting.types';
 

@@ -55,7 +55,7 @@ import { calculateSettlementAbsorption } from '../../src/common/utils/eos-calcul
  *   only). The doors SPEC needs no change (it asserts headings, the
  *   missing-index list, the pinned P0-1 prose, no REVIEW flag, and the
  *   7 resolved §4 doors — neither engine is one of those).
- * - Wiring: both critical lists carry 373 specs in identical order,
+ * - Wiring: both critical lists carry 374 specs in identical order,
  *   this spec last.
  */
 
@@ -271,12 +271,12 @@ async function main(): Promise<void> {
   assert.ok(!backendTable.includes("'accounting->hr':"), 'module-boundary must no longer pin an accounting->hr edge');
   assert.ok(!backendPairs.includes("'accounting|hr',"), 'module-boundary must no longer list the accounting|hr pair');
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 756;'),
-    'module-boundary backend total is now 756 (B3 pinned 758; B4 re-pins 758 -> 756)',
+    boundary.includes('const PINNED_BACKEND_TOTAL = 752;'),
+    'module-boundary backend total is now 752 (B4 pinned 756; B5 re-pins 756 -> 752)',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 68,'),
-    'module-boundary backend edge table is now 68 (B3 pinned 69; B4 re-pins 69 -> 68)',
+    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 66,'),
+    'module-boundary backend edge table is now 66 (B4 pinned 68; B5 re-pins 68 -> 66)',
   );
 
   // 7. The doors doc retires both engine door rows.
@@ -296,8 +296,8 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-B4-ACCOUNTING-HR-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B4 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-B4-ACCOUNTING-HR-DECOUPLED/g) || []).length;
-  assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the B4 INV exactly once');
+  const guardCount = (guard.match(/INV-PHASE1-B5-ACCOUNTING-MANUFACTURING-DECOUPLED/g) || []).length;
+  assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the B5 INV exactly once');
 
   // 9. The B1/B2/B3 specs re-pin their boundary assertions to the B4 numbers.
   for (const [label, specPath] of [
@@ -307,16 +307,16 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('const PINNED_BACKEND_TOTAL = 756;'),
-      `${label} spec must re-pin the backend total 758 -> 756`,
+      src.includes('const PINNED_BACKEND_TOTAL = 752;'),
+      `${label} spec must re-pin the backend total 756 -> 752`,
     );
     assert.ok(
-      src.includes('Object.keys(PINNED_BACKEND_EDGES).length, 68,'),
-      `${label} spec must re-pin the backend edge table 69 -> 68 edges`,
+      src.includes('Object.keys(PINNED_BACKEND_EDGES).length, 66,'),
+      `${label} spec must re-pin the backend edge table 68 -> 66 edges`,
     );
   }
 
-  // 10. Wiring: both critical lists carry 373 specs in identical order, this spec last.
+  // 10. Wiring: both critical lists carry 374 specs in identical order, this spec last.
   const specsJson = JSON.parse(fs.readFileSync(CRITICAL_JSON, 'utf8')) as { specs: string[] };
   const specs = specsJson.specs;
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')) as {
@@ -326,11 +326,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 373);
-  assert.equal(chain.length, 373);
-  assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 373 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b4-accounting-hr.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-b4-accounting-hr.spec.ts');
+  assert.equal(specs.length, 374);
+  assert.equal(chain.length, 374);
+  assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 374 specs in order');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b5-accounting-manufacturing.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-b5-accounting-manufacturing.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -338,36 +338,36 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 373);') && src.includes('assert.equal(chain.length, 373);'),
-      `${label} spec wiring must re-pin to 373`,
+      src.includes('assert.equal(specs.length, 374);') && src.includes('assert.equal(chain.length, 374);'),
+      `${label} spec wiring must re-pin to 374`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-b4-accounting-hr.spec.ts'"),
-      `${label} spec last-entry must re-pin to the B4 spec`,
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-b5-accounting-manufacturing.spec.ts'"),
+      `${label} spec last-entry must re-pin to the B5 spec`,
     );
   }
 
   // 11. The wiring re-pin sweep is complete: no critical spec may still
-  // pin the old count or point its last-entry at the B3 spec. (The B3
-  // brief named only the B1/B2 specs; the live tree had 39 files
-  // asserting the old count — the #264-fix / D12 lesson. The B3
+  // pin the old count or point its last-entry at the B4 spec. (The B3
+  // brief named only the B1/B2/B3 specs; the live tree had 43 files
+  // asserting the old count — the #264-fix / D12 lesson. The B4
   // filename is built by concatenation so this block's own source never
   // contains the literals it scans for.)
   const staleCount: string[] = [];
   const staleLastEntry: string[] = [];
-  const b3Name = 'phase1-b3' + '-sales-storefront.spec.ts';
-  const staleSpecs = 'specs.length, 37' + '2';
-  const staleChain = 'chain.length, 37' + '2';
+  const b4Name = 'phase1-b4' + '-accounting-hr.spec.ts';
+  const staleSpecs = 'specs.length, 37' + '3';
+  const staleChain = 'chain.length, 37' + '3';
   for (const file of fs.readdirSync(path.join(BACKEND, 'test', 'critical'))) {
     if (!file.endsWith('.spec.ts')) continue;
     const src = fs.readFileSync(path.join(BACKEND, 'test', 'critical', file), 'utf8');
     if (src.includes(staleSpecs) || src.includes(staleChain)) staleCount.push(file);
-    if (src.includes(`specs[specs.length - 1], 'test/critical/${b3Name}'`)) staleLastEntry.push(file);
+    if (src.includes(`specs[specs.length - 1], 'test/critical/${b4Name}'`)) staleLastEntry.push(file);
   }
   assert.deepEqual(staleCount, [], 'no critical spec may still pin the old wiring count');
-  assert.deepEqual(staleLastEntry, [], 'no critical spec may still point its last-entry at the B3 spec');
+  assert.deepEqual(staleLastEntry, [], 'no critical spec may still point its last-entry at the B4 spec');
 
-  console.log('phase1 B4 accounting|hr decoupling checks passed (373 specs wired, pair gone, engines identical)');
+  console.log('phase1 B4 accounting|hr decoupling checks passed (374 specs wired, pair gone, engines identical)');
 }
 
 main().catch((error) => {

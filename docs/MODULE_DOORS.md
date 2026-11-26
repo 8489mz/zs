@@ -147,9 +147,8 @@
 ### backend/manufacturing
 
 - Nest module: `backend/src/modules/manufacturing/manufacturing.module.ts`
-- Imported by (de-facto door today):
-  - `backend/src/modules/manufacturing/engines/manufacturing-overhead.engine` — 3 statement(s), from accounting (2), sales (1)
-- Intended door: the Nest module file plus the 1 file(s) above.
+- Imported by: no other module imports this module today.
+- Intended door: the Nest module file only (`manufacturing.module.ts`).
 
 ### backend/maritime-freight
 
