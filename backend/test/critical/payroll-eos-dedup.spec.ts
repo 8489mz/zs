@@ -50,7 +50,7 @@ import { HrService } from '../../src/modules/hr/hr.service';
 import { TransactionHelper } from '../../src/database/helpers/transaction.helper';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { calculateProgressiveDelayDeduction } from '../../src/modules/hr/engines/payroll-calculation.engine';
-import { calculateSettlementAbsorption } from '../../src/modules/hr/engines/eos-calculation.engine';
+import { calculateSettlementAbsorption } from '../../src/common/utils/eos-calculation.engine';
 
 // Routing-pin handles: the same CommonJS module objects the services
 // imported, so assigning a wrapper here intercepts the services' calls.
@@ -59,7 +59,7 @@ const payrollEngineModule = require('../../src/modules/hr/engines/payroll-calcul
   calculateProgressiveDelayDeduction: typeof calculateProgressiveDelayDeduction;
 };
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- same routing-pin as above: the module object is mutated by this test.
-const eosEngineModule = require('../../src/modules/hr/engines/eos-calculation.engine') as {
+const eosEngineModule = require('../../src/common/utils/eos-calculation.engine') as {
   calculateSettlementAbsorption: typeof calculateSettlementAbsorption;
 };
 

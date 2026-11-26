@@ -178,6 +178,22 @@
  * files); the doors spec needs no change. The single-source property
  * is preserved: the lookup is moved, never duplicated.
  *
+ * B4 (accounting|hr decoupling): the two HR-domain pure engines move to
+ * shared — backend/src/common/utils/payroll-accrual-allocation.engine.ts
+ * and backend/src/common/utils/eos-calculation.engine.ts — so accounting
+ * no longer imports from the hr module at all. accounting->hr 2 -> 0 (edge
+ * gone), hr->accounting stays 29 (the load-bearing money spine: posting
+ * service + the shared money engines used by every HR engine, one-way,
+ * not a cycle). Backend total pin 758 -> 756 and backend edge pin
+ * 69 -> 68 (= the B4 edge delta −1, no other growth); the accounting|hr
+ * pair leaves the bidirectional list. Both engine door rows are retired
+ * (docs/MODULE_DOORS.md drops their lines; hr door table 2 -> 0 files);
+ * the doors spec needs no change. The single-source property is
+ * preserved: the engines are moved, never duplicated. The caller
+ * inversion was rejected: accounting-recovery replays both postings from
+ * the accounting side and cannot import the hr engines without
+ * re-creating the edge.
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -201,7 +217,6 @@ const BACKEND_MODULES = path.join(REPO_ROOT, 'backend', 'src', 'modules');
 const FRONTEND_FEATURES = path.join(REPO_ROOT, 'frontend', 'src', 'features');
 
 const PINNED_BACKEND_EDGES: Record<string, number> = {
-  'accounting->hr': 2,
   'accounting->manufacturing': 2,
   'accounting->purchases': 2,
   'ai-copilot->storefront': 1,
@@ -333,7 +348,6 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
 };
 
 const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = [
-  'accounting|hr',
   'accounting|manufacturing',
   'accounting|purchases',
   'delivery-reps|sales',
@@ -355,7 +369,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
 ];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 758;
+const PINNED_BACKEND_TOTAL = 756;
 const PINNED_FRONTEND_TOTAL = 138;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
@@ -599,7 +613,7 @@ async function main(): Promise<void> {
   );
 
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
-  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 69, 'pinned backend edge table must list 69 edges');
+  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 68, 'pinned backend edge table must list 68 edges');
   const backend = scanBackend();
   assert.ok(
     backend.total >= BACKEND_TOTAL_FLOOR,

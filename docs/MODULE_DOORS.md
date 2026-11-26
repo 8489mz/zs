@@ -113,10 +113,8 @@
 ### backend/hr
 
 - Nest module: `backend/src/modules/hr/hr.module.ts`
-- Imported by (de-facto door today):
-  - `backend/src/modules/hr/engines/eos-calculation.engine` — 1 statement(s), from accounting (1)
-  - `backend/src/modules/hr/engines/payroll-accrual-allocation.engine` — 1 statement(s), from accounting (1)
-- Intended door: the Nest module file plus the 2 file(s) above.
+- Imported by: no other module imports this module today.
+- Intended door: the Nest module file only (`hr.module.ts`).
 
 ### backend/import-sales
 

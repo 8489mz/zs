@@ -11,8 +11,8 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AccountingTenantFoundationService } from '../accounting-tenant-foundation.service';
 import { AppError } from '../../../common/errors/app-error';
-import { allocatePayrollAccrual } from '../../hr/engines/payroll-accrual-allocation.engine';
-import { calculateSettlementAbsorption } from '../../hr/engines/eos-calculation.engine';
+import { allocatePayrollAccrual } from '../../../common/utils/payroll-accrual-allocation.engine';
+import { calculateSettlementAbsorption } from '../../../common/utils/eos-calculation.engine';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, MoneyDigits } from '../engines/money-minor-units.engine';
 import type { DbOrTx, JournalLineDraft } from '../accounting-posting.service';

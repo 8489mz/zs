@@ -3,7 +3,7 @@ import {
   toMinorUnits,
   fromMinorUnits,
   roundMoney,
-} from '../../accounting/engines/money-minor-units.engine';
+} from '../../modules/accounting/engines/money-minor-units.engine';
 
 /** HR accrual posting amounts, calculated in integer minor units at the tenant's book precision. */
 export type PayrollAccrualInput = {

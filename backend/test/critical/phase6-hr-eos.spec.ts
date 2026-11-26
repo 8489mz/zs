@@ -7,7 +7,7 @@ import { strict as assert } from 'node:assert';
 
 console.log('=== بدء اختبارات المرحلة (6): الموارد البشرية ومستحقات نهاية الخدمة والرواتب والسلف ===\n');
 
-import { calculateGratuity, calculateSettlementAbsorption } from '../../src/modules/hr/engines/eos-calculation.engine';
+import { calculateGratuity, calculateSettlementAbsorption } from '../../src/common/utils/eos-calculation.engine';
 
 function testGratuityCalculations() {
   console.log('--- 1. اختبارات احتساب مكافأة نهاية الخدمة وفقاً لقانون العمل السعودي والمصري ---');

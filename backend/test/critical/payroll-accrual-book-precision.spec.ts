@@ -37,7 +37,7 @@ import { Database } from '../../src/database/database.types';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
-import { allocatePayrollAccrual } from '../../src/modules/hr/engines/payroll-accrual-allocation.engine';
+import { allocatePayrollAccrual } from '../../src/common/utils/payroll-accrual-allocation.engine';
 
 function testAllocatorAtBookPrecision(): void {
   // Case 1 (spurious block): book-exact totals that do not reconcile in cents.

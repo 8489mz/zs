@@ -49,7 +49,7 @@ import {
   payrollCalendarMonthFraction,
   daysInCalendarMonth,
 } from '../../src/modules/hr/engines/hourly-attendance-pay.engine';
-import { calculateGratuity } from '../../src/modules/hr/engines/eos-calculation.engine';
+import { calculateGratuity } from '../../src/common/utils/eos-calculation.engine';
 import { calculateAttendancePenalty } from '../../src/modules/hr/engines/attendance-penalty.engine';
 import { calculateEmployeeWithdrawalBalance } from '../../src/modules/hr/engines/employee-withdrawal-balance.engine';
 

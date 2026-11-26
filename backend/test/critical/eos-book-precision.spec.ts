@@ -22,7 +22,7 @@ import {
   calculateGratuity,
   calculateLeaveEncashment,
   calculateSettlementAbsorption,
-} from '../../src/modules/hr/engines/eos-calculation.engine';
+} from '../../src/common/utils/eos-calculation.engine';
 import { up as eosPrecisionMigrationUp } from '../../src/database/migrations/2040000000266_eos_minor_unit_precision';
 
 const wholeFils = (value: number): boolean => Math.abs(value * 1000 - Math.round(value * 1000)) < 0.001;

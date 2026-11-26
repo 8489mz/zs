@@ -13,7 +13,7 @@ import {
   calculateGratuity,
   calculateLeaveEncashment,
   calculateSettlementAbsorption,
-} from '../engines/eos-calculation.engine';
+} from '../../../common/utils/eos-calculation.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { requireStoredHrMoney } from '../engines/hr-payroll-run.engine';

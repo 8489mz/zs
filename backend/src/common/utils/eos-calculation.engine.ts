@@ -12,7 +12,7 @@
  * Imported identically by production services and critical spec tests.
  */
 
-import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { roundMoney, type MoneyDigits } from '../../modules/accounting/engines/money-minor-units.engine';
 
 export type LawType = 'saudi' | 'egyptian' | 'custom';
 

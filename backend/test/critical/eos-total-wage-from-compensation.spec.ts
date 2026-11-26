@@ -45,7 +45,7 @@ import { Kysely } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
 import { EndOfServiceService } from '../../src/modules/hr/services/end-of-service.service';
-import { calculateGratuity } from '../../src/modules/hr/engines/eos-calculation.engine';
+import { calculateGratuity } from '../../src/common/utils/eos-calculation.engine';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const AUTH = {

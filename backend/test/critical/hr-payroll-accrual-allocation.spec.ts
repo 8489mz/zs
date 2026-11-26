@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { allocatePayrollAccrual } from '../../src/modules/hr/engines/payroll-accrual-allocation.engine';
+import { allocatePayrollAccrual } from '../../src/common/utils/payroll-accrual-allocation.engine';
 
 const posting = allocatePayrollAccrual(
   {
