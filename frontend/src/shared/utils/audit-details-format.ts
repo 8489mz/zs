@@ -1,5 +1,5 @@
 import type { AuditLog } from '@/types/domain';
-import { normalizeAuditDetailText } from '@/features/audit/lib/audit-activity-presenter';
+import { normalizeAuditDetailText } from '@/shared/utils/audit-activity-presenter';
 
 type AuditDetailsObject = Record<string, unknown>;
 

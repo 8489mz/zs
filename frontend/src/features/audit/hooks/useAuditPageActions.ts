@@ -4,8 +4,8 @@ import { formatDate } from '@/lib/format';
 import { downloadExcelFile, escapeHtml, printHtmlDocument } from '@/lib/browser';
 import type { AuditLog } from '@/types/domain';
 
-import { getAuditActionLabel, normalizeAuditDetailText, normalizeAuditUserDisplay } from '@/features/audit/lib/audit-activity-presenter';
-import { formatAuditDetails } from '@/features/audit/lib/audit-details-format';
+import { getAuditActionLabel, normalizeAuditDetailText, normalizeAuditUserDisplay } from '@/shared/utils/audit-activity-presenter';
+import { formatAuditDetails } from '@/shared/utils/audit-details-format';
 
 interface Params {
   search: string;

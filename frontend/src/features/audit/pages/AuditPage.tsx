@@ -14,14 +14,14 @@ import { StatsGrid } from '@/shared/components/stats-grid';
 import { formatDate } from '@/lib/format';
 import { useAuditLogs } from '@/features/audit/hooks/useAuditLogs';
 import { useAuditPageActions } from '@/features/audit/hooks/useAuditPageActions';
-import { formatAuditDetails } from '@/features/audit/lib/audit-details-format';
+import { formatAuditDetails } from '@/shared/utils/audit-details-format';
 import {
   getAuditActionLabel,
   getAuditActivityMeta,
   normalizeAuditDetailText,
   normalizeAuditUserDisplay,
   type AuditActivityType,
-} from '@/features/audit/lib/audit-activity-presenter';
+} from '@/shared/utils/audit-activity-presenter';
 import { userDirectoryApi } from '@/shared/api/user-directory';
 import type { AuditLog } from '@/types/domain';
 import { FileTextIcon, ShieldAlertIcon, ShieldCheckIcon } from '@/shared/components/icons/AppIcons';

@@ -14,7 +14,7 @@
  * - a completed password change still labels 'تغيير كلمة المرور'.
  */
 import { describe, expect, it } from 'vitest';
-import { getAuditActionLabel } from '@/features/audit/lib/audit-activity-presenter';
+import { getAuditActionLabel } from '@/shared/utils/audit-activity-presenter';
 
 describe('getAuditActionLabel — skipped password change (INV-AUDIT-GENERAL-LOG-CONTENT)', () => {
   it('labels the dismiss action as a skip, not a password change', () => {

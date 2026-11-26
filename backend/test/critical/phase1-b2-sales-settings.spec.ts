@@ -33,7 +33,7 @@
  *   The doors SPEC needs no change (it asserts headings, the missing-index
  *   list, the pinned P0-1 prose, no REVIEW flag, and the 7 resolved §4 doors).
  * - Wiring: both critical lists carry 375 specs in identical order,
- *   this spec last.
+ *   the F5a spec last.
  */
 
 import { strict as assert } from 'node:assert';
@@ -245,7 +245,7 @@ async function main(): Promise<void> {
   assert.equal(map.size, 0, 'no-arg invalidation must clear the whole shared map');
 
   // 6. Wiring: both critical lists carry 375 specs in identical order,
-  // this spec last.
+  // the F5a spec last.
   const specsJson = JSON.parse(fs.readFileSync(path.join(BACKEND, 'scripts', 'critical-specs.json'), 'utf8'));
   const specs: string[] = specsJson.specs;
   const pkg = JSON.parse(fs.readFileSync(path.join(BACKEND, 'package.json'), 'utf8'));
@@ -253,10 +253,10 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 380);
-  assert.equal(chain.length, 380);
+  assert.equal(specs.length, 381);
+  assert.equal(chain.length, 381);
   assert.deepEqual(chain, specs, 'critical lists must agree in identical order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f4-settings-access-door.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5a-audit-settings.spec.ts');
   assert.ok(specs.includes('test/critical/phase1-b2-sales-settings.spec.ts'));
 
   console.log('phase1 B2 sales|settings decoupling checks passed (375 specs wired, pair gone, invalidation identical)');

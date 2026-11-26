@@ -65,7 +65,7 @@ import { partitionPurchaseLineTotals } from '../../src/common/utils/purchase-lin
  *   resolved-doors list. (The B1 precedent: a retired door leaves
  *   the resolved-doors list in the spec too.)
  * - Wiring: both critical lists carry 375 specs in identical order,
- *   this spec last.
+ *   the F5a spec last.
  */
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
@@ -351,7 +351,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-B6-ACCOUNTING-PURCHASES-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B6 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F2-REPAIR-2-PORTALS-NAV/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5A-AUDIT-SETTINGS-DECOUPLED/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the B7 INV exactly once');
 
   // 9. The B1/B2/B3/B4/B5 specs re-pin their boundary assertions to the B6 numbers.
@@ -373,7 +373,7 @@ async function main(): Promise<void> {
     );
   }
 
-  // 10. Wiring: both critical lists carry 375 specs in identical order, this spec last.
+  // 10. Wiring: both critical lists carry 375 specs in identical order, the F5a spec last.
   const specsJson = JSON.parse(fs.readFileSync(CRITICAL_JSON, 'utf8')) as { specs: string[] };
   const specs = specsJson.specs;
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')) as {
@@ -383,11 +383,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 380);
-  assert.equal(chain.length, 380);
+  assert.equal(specs.length, 381);
+  assert.equal(chain.length, 381);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 375 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f4-settings-access-door.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f4-settings-access-door.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5a-audit-settings.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5a-audit-settings.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -397,11 +397,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 380);') && src.includes('assert.equal(chain.length, 380);'),
+      src.includes('assert.equal(specs.length, 381);') && src.includes('assert.equal(chain.length, 381);'),
       `${label} spec wiring must re-pin to 375`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-f4-settings-access-door.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5a-audit-settings.spec.ts'"),
       `${label} spec last-entry must re-pin to the B7 spec`,
     );
   }
@@ -441,7 +441,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F2-REPAIR-2-PORTALS-NAV/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5A-AUDIT-SETTINGS-DECOUPLED/g)'),
       `${label} spec guard assertion must re-pin to the B7 INV`,
     );
   }

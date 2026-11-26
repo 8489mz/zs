@@ -34,8 +34,8 @@ import * as path from 'node:path';
  *   statements reach 0 (code moves / inversion) — that is F5, not F3.
  *
  * Consequences, all re-pinned in this package:
- * - Wiring: both critical lists carry 380 specs in identical order,
- *   this spec last.
+ * - Wiring: both critical lists carry 381 specs in identical order,
+ *   the F5a spec last.
  */
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
@@ -228,16 +228,16 @@ async function main(): Promise<void> {
     'module-boundary must still pin the backend total 738',
   );
   assert.ok(
-    boundary.includes('const PINNED_FRONTEND_TOTAL = 138;'),
-    'module-boundary must still pin the frontend total 138',
+    boundary.includes('const PINNED_FRONTEND_TOTAL = 136;'),
+    'module-boundary must still pin the frontend total 136',
   );
   assert.ok(
     boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
     'module-boundary must still pin 63 backend edges',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 57,'),
-    'module-boundary must still pin 57 frontend edges',
+    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 55,'),
+    'module-boundary must still pin 55 frontend edges',
   );
   assert.ok(
     boundary.includes("'cash-drawer->pos': 2,"),
@@ -255,10 +255,10 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F3-FEATURE-BOUNDARY-LEGS/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F3 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F2-REPAIR-2-PORTALS-NAV/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5A-AUDIT-SETTINGS-DECOUPLED/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F3 INV exactly once');
 
-  // 5. Wiring: both critical lists carry 380 specs in identical order, the F4 spec last.
+  // 5. Wiring: both critical lists carry 381 specs in identical order, the F4 spec last.
   const specsJson = JSON.parse(fs.readFileSync(CRITICAL_JSON, 'utf8')) as { specs: string[] };
   const specs = specsJson.specs;
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')) as {
@@ -268,11 +268,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 380);
-  assert.equal(chain.length, 380);
+  assert.equal(specs.length, 381);
+  assert.equal(chain.length, 381);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 379 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f4-settings-access-door.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f4-settings-access-door.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5a-audit-settings.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5a-audit-settings.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -286,11 +286,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 380);') && src.includes('assert.equal(chain.length, 380);'),
+      src.includes('assert.equal(specs.length, 381);') && src.includes('assert.equal(chain.length, 381);'),
       `${label} spec wiring must re-pin to 379`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-f4-settings-access-door.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5a-audit-settings.spec.ts'"),
       `${label} spec last-entry must re-pin to the F3 spec`,
     );
   }
@@ -332,7 +332,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F2-REPAIR-2-PORTALS-NAV/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5A-AUDIT-SETTINGS-DECOUPLED/g)'),
       `${label} spec guard assertion must re-pin to the F3 INV`,
     );
   }

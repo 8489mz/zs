@@ -24,7 +24,7 @@
  * - a plain-sentence activity-log detail still passes through verbatim.
  */
 import { describe, expect, it } from 'vitest';
-import { formatAuditDetails, formatEmployeeActivityDetails } from '@/features/audit/lib/audit-details-format';
+import { formatAuditDetails, formatEmployeeActivityDetails } from '@/shared/utils/audit-details-format';
 import type { AuditLog } from '@/types/domain';
 
 const POST_BATCH_DETAILS = JSON.stringify({

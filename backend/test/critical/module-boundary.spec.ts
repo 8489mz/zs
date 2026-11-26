@@ -397,7 +397,6 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
   'products->tradein': 1,
   'purchases->accounts': 1,
   'purchases->products': 3,
-  'reports->audit': 1,
   'reports->purchases': 1,
   'reports->sales': 2,
   'saas-admin->settings': 1,
@@ -405,7 +404,6 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
   'sales->manufacturing': 1,
   'sales->pos': 3,
   'sales->storefront': 1,
-  'settings->audit': 1,
   'settings->hr': 1,
   'settings->maintenance': 2,
   'settings->pos': 3,
@@ -423,7 +421,6 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = [];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
   'accounting|treasury',
   'accounts|purchases',
-  'audit|settings',
   'cash-drawer|pos',
   'customers|sales',
   'inventory|products',
@@ -437,7 +434,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
 const PINNED_BACKEND_TOTAL = 738;
-const PINNED_FRONTEND_TOTAL = 138;
+const PINNED_FRONTEND_TOTAL = 136;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
 const BACKEND_EDGE_FLOOR = 60;
@@ -706,7 +703,7 @@ async function main(): Promise<void> {
   );
 
   // 2. Frontend ratchet: same rules.
-  assert.equal(Object.keys(PINNED_FRONTEND_EDGES).length, 57, 'pinned frontend edge table must list 57 edges');
+  assert.equal(Object.keys(PINNED_FRONTEND_EDGES).length, 55, 'pinned frontend edge table must list 55 edges');
   const frontend = scanFrontend();
   assert.ok(
     frontend.total >= FRONTEND_TOTAL_FLOOR,

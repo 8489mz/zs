@@ -322,8 +322,8 @@ async function main() {
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 380);
-      assert.equal(chain.length, 380);
+      assert.equal(specs.length, 381);
+      assert.equal(chain.length, 381);
       assert.deepEqual(chain, specs);
       assert.ok(specs.includes('test/critical/solo-admin-po-self-approval-override.spec.ts'));
       console.log('wiring: evidence spec in both critical lists (373 = 373, identical order), passed');

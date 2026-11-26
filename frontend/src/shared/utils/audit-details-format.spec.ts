@@ -17,7 +17,7 @@
  *   stock branch is unchanged.
  */
 import { describe, expect, it } from 'vitest';
-import { formatAuditDetails } from '@/features/audit/lib/audit-details-format';
+import { formatAuditDetails } from '@/shared/utils/audit-details-format';
 import type { AuditLog } from '@/types/domain';
 
 const LEGACY_DETAILS = JSON.stringify({

@@ -32,8 +32,8 @@
  *   getAuditActionLabel, and an unknown title passes through verbatim.
  */
 import { describe, expect, it } from 'vitest';
-import { formatEmployeeActivityDetails } from '@/features/audit/lib/audit-details-format';
-import { getAuditActionLabel, normalizeAuditDetailText } from '@/features/audit/lib/audit-activity-presenter';
+import { formatEmployeeActivityDetails } from '@/shared/utils/audit-details-format';
+import { getAuditActionLabel, normalizeAuditDetailText } from '@/shared/utils/audit-activity-presenter';
 
 // Recorded live 2026-11-08 in the user-details activity log (session 24).
 const APPROVE_SESSION_24 = JSON.stringify({
