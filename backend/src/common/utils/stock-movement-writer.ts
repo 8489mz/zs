@@ -67,6 +67,18 @@ import {
  * - quickReassignProduct's direct `products` update (warehouse-bins L698) is
  *   CLASSIFIED OUT of the writer: it sets only primary_bin_id / bin_location
  *   (a metadata pointer, never a balance), so no ledger routing is needed.
+ *
+ * Phase 1 A7 — omitTotalCost (INV-PHASE1-A7-SALES-WRITER). The sale rows
+ * (sites 3-4) must keep total_cost NULL per INV-SALE-MOVEMENT-UNIT-COST:
+ * storing a second rounded total would reopen the 91.87/91.88 rounding-
+ * divergence vector, and the pinned sale-movement-unit-cost.spec.ts drives
+ * the real createSale asserting total_cost === null. So recordStockMovement
+ * (only) takes omitTotalCost?: boolean (default false): when true, the
+ * shared insert stores total_cost NULL instead of the computed total.
+ * The default path is unchanged; no other mode gets the flag; A10 does
+ * not decide it (it is the absence of a total, not a rounding spelling).
+ * It also serves A9's import-preorder 'sale' row later (the same NULL
+ * shape).
  */
 
 export type RecordStockMovementParams = StockDeltaParams & {
@@ -80,6 +92,13 @@ export type RecordStockMovementParams = StockDeltaParams & {
   /** Tenant book digits (2 or 3), resolved by the caller via the P2 pattern. */
   moneyDigits: 2 | 3;
   importReceiptId?: number | null;
+  /**
+   * Phase 1 A7: when true, total_cost is stored NULL instead of the
+   * computed total. Only the sale rows use it (INV-SALE-MOVEMENT-
+   * UNIT-COST — a second rounded total would reopen the 91.87/91.88
+   * divergence vector). Default false (the A0 contract).
+   */
+  omitTotalCost?: boolean;
 };
 
 export type RecordStockMovementResult = StockDeltaResult & {
@@ -170,6 +189,8 @@ type MovementRowValues = {
   unitCost: number;
   moneyDigits: 2 | 3;
   signedTotal?: boolean;
+  /** Phase 1 A7: store total_cost NULL instead of the computed total. */
+  omitTotalCost?: boolean;
   reason: string;
   note: string;
   referenceType: string | null;
@@ -186,7 +207,9 @@ type MovementRowValues = {
  * and the row shape exist exactly once.
  */
 async function insertMovementRow(trx: Kysely<Database>, row: MovementRowValues): Promise<number> {
-  const totalCost = roundMoney((row.signedTotal ? row.delta : Math.abs(row.delta)) * row.unitCost, row.moneyDigits);
+  const totalCost = row.omitTotalCost
+    ? null
+    : roundMoney((row.signedTotal ? row.delta : Math.abs(row.delta)) * row.unitCost, row.moneyDigits);
   const inserted = await trx
     .insertInto('stock_movements')
     .values({
@@ -242,6 +265,7 @@ export async function recordStockMovement(
     locationId: params.locationId ?? null,
     createdBy: params.createdBy ?? null,
     importReceiptId: params.importReceiptId ?? null,
+    omitTotalCost: params.omitTotalCost,
   });
   return { ...change, movementId };
 }

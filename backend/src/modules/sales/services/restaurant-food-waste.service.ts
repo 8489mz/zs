@@ -5,7 +5,7 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
-import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
@@ -167,17 +167,8 @@ export class RestaurantFoodWasteService {
         };
       }
 
-      // Stock is available: deduct stock with strict non-negative invariant and post GL
-      const stockChange = await applyStockDelta(trx, {
-        productId: dto.productId,
-        delta: -dto.quantity,
-        branchId: dto.branchId,
-        locationId,
-        tenantId: scope.tenantId,
-        accountId: scope.accountId,
-        allowNegative: false,
-      });
-
+      // Stock is available: deduct stock with strict non-negative invariant and post GL.
+      // The log row is written first so the writer can reference it.
       const log = await trx
         .insertInto('restaurant_food_waste_logs')
         .values({
@@ -195,25 +186,22 @@ export class RestaurantFoodWasteService {
         .returning('id')
         .executeTakeFirstOrThrow();
 
-      await trx
-        .insertInto('stock_movements')
-        .values({
-          product_id: dto.productId,
-          movement_type: 'damaged',
-          qty: -dto.quantity,
-          before_qty: stockChange.scopeBefore,
-          after_qty: stockChange.scopeAfter,
-          reason: `food_waste_${dto.reason}`,
-          note: `هدر مطبخ #${log.id}: ${dto.notes || dto.reason}`,
-          reference_type: 'food_waste',
-          reference_id: Number(log.id),
-          branch_id: dto.branchId,
-          location_id: locationId,
-          created_by: auth.userId ? Number(auth.userId) : 0,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-        } as any)
-        .execute();
+      await recordStockMovement(trx, {
+        productId: dto.productId,
+        delta: -dto.quantity,
+        branchId: dto.branchId,
+        locationId,
+        tenantId: scope.tenantId,
+        accountId: scope.accountId,
+        allowNegative: false,
+        movementType: 'damaged',
+        referenceType: 'food_waste',
+        referenceId: Number(log.id),
+        reason: `food_waste_${dto.reason}`,
+        note: `هدر مطبخ #${log.id}: ${dto.notes || dto.reason}`,
+        createdBy: auth.userId ? Number(auth.userId) : 0,
+        moneyDigits,
+      });
 
       const journalResult = await this.accountingPosting.postFoodWaste(trx, Number(log.id), auth);
 
@@ -290,7 +278,10 @@ export class RestaurantFoodWasteService {
       if (!product) throw new NotFoundException('الصنف غير موجود');
 
       const wasteQty = Number(log.quantity);
-      const stockChange = await applyStockDelta(trx, {
+      const costPrice = Number(product.cost_price);
+      const totalCost = roundMoney(costPrice * wasteQty, moneyDigits);
+
+      await recordStockMovement(trx, {
         productId: Number(log.product_id),
         delta: -wasteQty,
         branchId: Number(log.branch_id),
@@ -298,30 +289,14 @@ export class RestaurantFoodWasteService {
         tenantId: scope.tenantId,
         accountId: scope.accountId,
         allowNegative: false,
+        movementType: 'damaged',
+        referenceType: 'food_waste',
+        referenceId: logId,
+        reason: `food_waste_${log.reason}`,
+        note: `تسوية هدر مطبخ معلق #${logId}`,
+        createdBy: auth.userId ? Number(auth.userId) : 0,
+        moneyDigits,
       });
-
-      const costPrice = Number(product.cost_price);
-      const totalCost = roundMoney(costPrice * wasteQty, moneyDigits);
-
-      await trx
-        .insertInto('stock_movements')
-        .values({
-          product_id: Number(log.product_id),
-          movement_type: 'damaged',
-          qty: -wasteQty,
-          before_qty: stockChange.scopeBefore,
-          after_qty: stockChange.scopeAfter,
-          reason: `food_waste_${log.reason}`,
-          note: `تسوية هدر مطبخ معلق #${logId}`,
-          reference_type: 'food_waste',
-          reference_id: logId,
-          branch_id: Number(log.branch_id),
-          location_id: locationId,
-          created_by: auth.userId ? Number(auth.userId) : 0,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-        } as any)
-        .execute();
 
       const cleanNotes = (log.notes || '').replace('[بانتظار تسوية المخزون]', '[تمت تسوية الهدر]').trim();
       await trx

@@ -357,6 +357,9 @@
     "test/critical/fashion-rows-ledger-return.spec.ts",
     "test/critical/opening-balances-ledger.spec.ts",
     "test/critical/stock-movement-writer-modes.spec.ts",
-    "test/critical/inventory-transfers-writer.spec.ts"
+    "test/critical/inventory-transfers-writer.spec.ts",
+    "test/critical/sales-writer-create.spec.ts",
+    "test/critical/sales-writer-cancel-edit.spec.ts",
+    "test/critical/sales-writer-food-waste.spec.ts"
   ]
 }

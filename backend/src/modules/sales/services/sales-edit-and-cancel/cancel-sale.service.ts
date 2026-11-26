@@ -1,7 +1,7 @@
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
 import { AppError } from '../../../../common/errors/app-error';
-import { applyStockDelta } from '../../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../../common/utils/stock-movement-writer';
 import { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';
 import {
@@ -239,7 +239,7 @@ export class CancelSaleService {
               );
             const branchId = locData.branch_id ?? sale.branch_id;
 
-            const stockChange = await applyStockDelta(trx, {
+            await recordStockMovement(trx, {
               productId: alloc.product_id,
               delta: qtyToRestore,
               branchId: branchId,
@@ -247,60 +247,35 @@ export class CancelSaleService {
               tenantId: scope.tenantId,
               accountId: scope.accountId,
               allowNegative: true,
+              movementType: 'sale_cancel',
+              referenceType: 'sale',
+              referenceId: saleId,
+              reason: 'sale_cancel',
+              note: `Cancel S-${saleId}`,
+              createdBy: auth.userId,
+              moneyDigits,
             });
-
-            await trx
-              .insertInto('stock_movements')
-              .values({
-                product_id: alloc.product_id,
-                movement_type: 'sale_cancel',
-                qty: qtyToRestore,
-                before_qty: stockChange.scopeBefore,
-                after_qty: stockChange.scopeAfter,
-                reason: 'sale_cancel',
-                note: `Cancel S-${saleId}`,
-                reference_type: 'sale',
-                reference_id: saleId,
-                branch_id: branchId,
-                location_id: alloc.location_id,
-                created_by: auth.userId,
-                tenant_id: scope.tenantId,
-                account_id: scope.accountId,
-              } as any)
-              .execute();
           }
         } else {
           // Fallback for legacy sales without allocations
           if (isPreparedWaste) {
             continue;
           }
-          const stockChange = await applyStockDelta(trx, {
+          await recordStockMovement(trx, {
             productId: Number(item.product_id),
             delta: restoreQty,
             branchId: sale.branch_id,
             locationId: sale.location_id,
             tenantId: scope.tenantId,
             accountId: scope.accountId,
+            movementType: 'sale_cancel',
+            referenceType: 'sale',
+            referenceId: saleId,
+            reason: 'sale_cancel',
+            note: `Cancel S-${saleId}`,
+            createdBy: auth.userId,
+            moneyDigits,
           });
-          await trx
-            .insertInto('stock_movements')
-            .values({
-              product_id: item.product_id,
-              movement_type: 'sale_cancel',
-              qty: restoreQty,
-              before_qty: stockChange.scopeBefore,
-              after_qty: stockChange.scopeAfter,
-              reason: 'sale_cancel',
-              note: `Cancel S-${saleId}`,
-              reference_type: 'sale',
-              reference_id: saleId,
-              branch_id: sale.branch_id,
-              location_id: sale.location_id,
-              created_by: auth.userId,
-              tenant_id: scope.tenantId,
-              account_id: scope.accountId,
-            } as any)
-            .execute();
         }
       }
 

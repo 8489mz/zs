@@ -16,7 +16,8 @@ import { sql } from '../../../../database/kysely';
 import { getTenantTimezone } from '../../../../common/utils/tenant-timezone.util';
 import { computeInvoiceTotals } from '../../../../common/utils/invoice-totals';
 import { ensureUniqueFlowItems } from '../../../../common/utils/financial-integrity';
-import { applyStockDelta, previewConsumableStockQty } from '../../../../common/utils/location-stock-ledger';
+import { previewConsumableStockQty } from '../../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../../common/utils/stock-movement-writer';
 import { posSellsFromAllOperationalLocations } from '../../../../common/engines/branch-sellable-locations.engine';
 import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary';
 import { formatCreditLimitExceededMessage } from '../credit-limit-message';
@@ -400,31 +401,21 @@ export class UpdateSaleService {
              if (!locData) throw new AppError('مخزن سطر الفاتورة الأصلي غير موجود؛ يجب تسوية المخزون قبل التعديل', 'SALE_EDIT_LOCATION_RECONCILIATION_REQUIRED', 409);
              const branchId = locData.branch_id ?? sale.branch_id;
 
-             const stockChange = await applyStockDelta(trx, {
+             await recordStockMovement(trx, {
                productId: Number(alloc.product_id),
                delta: qtyToRestore,
                branchId: branchId,
                locationId: alloc.location_id,
                tenantId: scope.tenantId,
                accountId: scope.accountId,
-             });
-
-             await trx.insertInto('stock_movements').values({
-               product_id: Number(alloc.product_id),
-               movement_type: 'sale_edit_reversal',
-               qty: qtyToRestore,
-               before_qty: stockChange.scopeBefore,
-               after_qty: stockChange.scopeAfter,
+               movementType: 'sale_edit_reversal',
+               referenceType: 'sale',
+               referenceId: saleId,
                reason: 'sale_edit_reversal',
                note: `Edit reversal S-${saleId}`,
-               reference_type: 'sale',
-               reference_id: saleId,
-               branch_id: branchId,
-               location_id: alloc.location_id,
-               created_by: auth.userId,
-               tenant_id: scope.tenantId,
-               account_id: scope.accountId,
-             }).execute();
+               createdBy: auth.userId,
+               moneyDigits,
+             });
            }
            // Prepared waste: the un-restored remainder is consumed food,
            // not a reconciliation gap, so the completeness throw is
@@ -440,30 +431,21 @@ export class UpdateSaleService {
              ? Math.min(restoreQty, Math.max(0, Number((Number(wasteConsumptionByProduct.get(Number(item.product_id)) || 0) - Number(wasteRestoredByProduct.get(Number(item.product_id)) || 0)).toFixed(3))))
              : restoreQty;
            if (fallbackRestoreQty > 0) {
-             const stockChange = await applyStockDelta(trx, {
+             await recordStockMovement(trx, {
                productId: Number(item.product_id),
                delta: fallbackRestoreQty,
                branchId: sale.branch_id,
                locationId: sale.location_id,
                tenantId: scope.tenantId,
                accountId: scope.accountId,
-             });
-             await trx.insertInto('stock_movements').values({
-               product_id: item.product_id,
-               movement_type: 'sale_edit_reversal',
-               qty: fallbackRestoreQty,
-               before_qty: stockChange.scopeBefore,
-               after_qty: stockChange.scopeAfter,
+               movementType: 'sale_edit_reversal',
+               referenceType: 'sale',
+               referenceId: saleId,
                reason: 'sale_edit_reversal',
                note: `Edit reversal S-${saleId}`,
-               reference_type: 'sale',
-               reference_id: saleId,
-               branch_id: sale.branch_id,
-               location_id: sale.location_id,
-               created_by: auth.userId,
-               tenant_id: scope.tenantId,
-               account_id: scope.accountId,
-             }).execute();
+               createdBy: auth.userId,
+               moneyDigits,
+             });
              if (isPreparedWaste) {
                wasteRestoredByProduct.set(Number(item.product_id), Number((Number(wasteRestoredByProduct.get(Number(item.product_id)) || 0) + fallbackRestoreQty).toFixed(3)));
                restoredBaseBySaleItemId.set(Number(item.id), Number((Number(restoredBaseBySaleItemId.get(Number(item.id)) || 0) + fallbackRestoreQty).toFixed(3)));
@@ -1112,7 +1094,7 @@ export class UpdateSaleService {
         }
 
         for (const alloc of allocations) {
-          const stockChange = await applyStockDelta(trx, {
+          await recordStockMovement(trx, {
             productId: item.productId,
             delta: -alloc.qty,
             branchId: alloc.branchId,
@@ -1122,24 +1104,14 @@ export class UpdateSaleService {
             errorCode: 'INSUFFICIENT_STOCK',
             errorMessage: `Insufficient stock for ${item.productName}`,
             allowNegative: allowNegativeStockSales,
-          });
-
-          await trx.insertInto('stock_movements').values({
-            product_id: item.productId,
-            movement_type: 'sale_edit',
-            qty: -alloc.qty,
-            before_qty: stockChange.scopeBefore,
-            after_qty: stockChange.scopeAfter,
+            movementType: 'sale_edit',
+            referenceType: 'sale',
+            referenceId: saleId,
             reason: 'sale_edit',
             note: `Sale edit S-${saleId}`,
-            reference_type: 'sale',
-            reference_id: saleId,
-            branch_id: alloc.branchId,
-            location_id: alloc.locationId,
-            created_by: auth.userId,
-            tenant_id: scope.tenantId,
-            account_id: scope.accountId,
-          }).execute();
+            createdBy: auth.userId,
+            moneyDigits,
+          });
 
           await trx.insertInto('sale_line_stock_allocations').values({
              tenant_id: scope.tenantId,
@@ -1245,7 +1217,7 @@ export class UpdateSaleService {
               }
 
               for (const alloc of modAllocations) {
-                const modStockChange = await applyStockDelta(trx, {
+                await recordStockMovement(trx, {
                   productId: Number(mod.productId),
                   delta: -alloc.qty,
                   branchId: alloc.branchId,
@@ -1255,27 +1227,14 @@ export class UpdateSaleService {
                   errorCode: 'INSUFFICIENT_MODIFIER_STOCK',
                   errorMessage: `Insufficient stock for modifier ${mod.name}`,
                   allowNegative: allowNegativeStockSales,
+                  movementType: 'sale_edit',
+                  referenceType: 'sale',
+                  referenceId: saleId,
+                  reason: 'sale_edit_modifier',
+                  note: `Sale edit S-${saleId} (${item.productName})`,
+                  createdBy: auth.userId,
+                  moneyDigits,
                 });
-
-                await trx
-                  .insertInto('stock_movements')
-                  .values({
-                    product_id: Number(mod.productId),
-                    movement_type: 'sale_edit',
-                    qty: -alloc.qty,
-                    before_qty: modStockChange.scopeBefore,
-                    after_qty: modStockChange.scopeAfter,
-                    reason: 'sale_edit_modifier',
-                    note: `Sale edit S-${saleId} (${item.productName})`,
-                    reference_type: 'sale',
-                    reference_id: saleId,
-                    branch_id: alloc.branchId,
-                    location_id: alloc.locationId,
-                    created_by: auth.userId,
-                    tenant_id: scope.tenantId,
-                    account_id: scope.accountId,
-                  } as any)
-                  .execute();
 
                 await trx.insertInto('sale_line_stock_allocations').values({
                    tenant_id: scope.tenantId,

@@ -13,7 +13,8 @@ import { scaledBomOverhead } from '../../manufacturing/engines/manufacturing-ove
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
-import { applyStockDelta, previewAssignedLocationStockQty } from '../../../common/utils/location-stock-ledger';
+import { previewAssignedLocationStockQty } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { Database } from '../../../database/database.types';
 import {
@@ -596,7 +597,7 @@ export class SalesRestaurantAndSerialsHelper {
           })
           .execute();
 
-        const stockChange = await applyStockDelta(trx, {
+        await recordStockMovement(trx, {
           tenantId: scope.tenantId,
           accountId: scope.accountId,
           productId: Number(line.component_product_id),
@@ -604,65 +605,39 @@ export class SalesRestaurantAndSerialsHelper {
           locationId,
           delta: -requiredMaterialQty,
           allowNegative: false,
+          movementType: 'manufacturing_consumption',
+          // The writer computes total_cost = roundMoney(|delta| x unitCost)
+          // = lineTotalCost, identical to the old explicit total.
+          unitCost: actualUnitCost,
+          referenceType: 'manufacturing_work_order',
+          referenceId: woId,
+          reason: 'استهلاك تصنيع تلقائي',
+          note: `أمر إنتاج تلقائي #${woId} لفاتورة S-${saleId}`,
+          createdBy: auth.userId,
+          moneyDigits,
         });
-
-        await trx
-          .insertInto('stock_movements')
-          .values({
-            product_id: Number(line.component_product_id),
-            movement_type: 'manufacturing_consumption',
-            unit_cost: actualUnitCost,
-            total_cost: lineTotalCost,
-            qty: -requiredMaterialQty,
-            before_qty: stockChange.scopeBefore,
-            after_qty: stockChange.scopeAfter,
-            reason: 'استهلاك تصنيع تلقائي',
-            note: `أمر إنتاج تلقائي #${woId} لفاتورة S-${saleId}`,
-            reference_type: 'manufacturing_work_order',
-            reference_id: woId,
-            branch_id: branchId,
-            location_id: locationId,
-            created_by: auth.userId,
-            tenant_id: scope.tenantId,
-            account_id: scope.accountId,
-          })
-          .execute();
       }
 
-      const fgStockChange = await applyStockDelta(trx, {
+      const fgStockChange = await recordStockMovement(trx, {
         tenantId: scope.tenantId,
         accountId: scope.accountId,
         productId: item.productId,
         branchId,
         locationId,
         delta: baseShortfall,
+        movementType: 'manufacturing_production',
+        // Do not re-round the book amount coarser than itself: totalCost is
+        // already at book precision and is also written to the work order
+        // that the GL posts. The writer computes total_cost =
+        // roundMoney(|delta| x unitCost) = roundMoney(totalCost) = totalCost.
+        unitCost: totalCost / baseShortfall,
+        referenceType: 'manufacturing_work_order',
+        referenceId: woId,
+        reason: 'إنتاج تام تلقائي',
+        note: `أمر إنتاج تلقائي #${woId} لفاتورة S-${saleId}`,
+        createdBy: auth.userId,
+        moneyDigits,
       });
-
-      await trx
-        .insertInto('stock_movements')
-        .values({
-          product_id: item.productId,
-          movement_type: 'manufacturing_production',
-          // Do not re-round the book amount coarser than itself: totalCost is
-          // already at book precision and is also written to the work order
-          // that the GL posts. A toFixed(2) here would make the movement
-          // disagree with the journal for 3dp tenants.
-          unit_cost: totalCost / baseShortfall,
-          total_cost: totalCost,
-          qty: baseShortfall,
-          before_qty: fgStockChange.scopeBefore,
-          after_qty: fgStockChange.scopeAfter,
-          reason: 'إنتاج تام تلقائي',
-          note: `أمر إنتاج تلقائي #${woId} لفاتورة S-${saleId}`,
-          reference_type: 'manufacturing_work_order',
-          reference_id: woId,
-          branch_id: branchId,
-          location_id: locationId,
-          created_by: auth.userId,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-        })
-        .execute();
 
       await valueStockReceipt(trx, scope.tenantId, item.productId, fgStockChange.globalAfter, baseShortfall, totalCost);
       await trx

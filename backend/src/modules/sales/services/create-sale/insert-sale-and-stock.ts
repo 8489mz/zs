@@ -1,6 +1,6 @@
 import { sql } from '../../../../database/kysely';
 import { AppError } from '../../../../common/errors/app-error';
-import { applyStockDelta } from '../../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../../common/utils/stock-movement-writer';
 import { roundMoney } from '../../../accounting/engines/money-minor-units.engine';
 import { allocateSaleFromImportLots } from '../../../import-sales/helpers/import-lot-allocation.helper';
 import { offlineSaleTimestamps } from '../../../cash-drawer/helpers/cash-drawer.helper';
@@ -408,7 +408,7 @@ export class InsertSaleAndStockService {
       }
 
       for (const alloc of allocations) {
-        const stockChange = await applyStockDelta(trx, {
+        await recordStockMovement(trx, {
           productId: item.productId,
           delta: -alloc.qty,
           branchId: alloc.branchId,
@@ -418,28 +418,18 @@ export class InsertSaleAndStockService {
           errorCode: 'INSUFFICIENT_STOCK',
           errorMessage: `Insufficient stock for ${item.productName}`,
           allowNegative: allowNegativeStockSales,
+          movementType: 'sale',
+          referenceType: 'sale',
+          referenceId: id,
+          // INV-SALE-MOVEMENT-UNIT-COST: frozen line cost, same value as sale_items.cost_price
+          unitCost: item.costPrice,
+          reason: 'sale',
+          note: `Sale S-${id}`,
+          createdBy: auth.userId,
+          moneyDigits,
+          // INV-SALE-MOVEMENT-UNIT-COST: total_cost stays NULL (A7 omitTotalCost).
+          omitTotalCost: true,
         });
-
-        await trx
-          .insertInto('stock_movements')
-          .values({
-            product_id: item.productId,
-            movement_type: 'sale',
-            qty: -alloc.qty,
-            before_qty: stockChange.scopeBefore,
-            after_qty: stockChange.scopeAfter,
-            unit_cost: item.costPrice, // INV-SALE-MOVEMENT-UNIT-COST: frozen line cost, same value as sale_items.cost_price
-            reason: 'sale',
-            note: `Sale S-${id}`,
-            reference_type: 'sale',
-            reference_id: id,
-            branch_id: alloc.branchId,
-            location_id: alloc.locationId,
-            created_by: auth.userId,
-            tenant_id: scope.tenantId,
-            account_id: scope.accountId,
-          } as any)
-          .execute();
 
         await trx
           .insertInto('sale_line_stock_allocations')
@@ -571,7 +561,7 @@ export class InsertSaleAndStockService {
             }
 
             for (const alloc of modAllocations) {
-              const modStockChange = await applyStockDelta(trx, {
+              await recordStockMovement(trx, {
                 productId: rawModProductId,
                 delta: -alloc.qty,
                 branchId: alloc.branchId,
@@ -581,29 +571,18 @@ export class InsertSaleAndStockService {
                 errorCode: 'INSUFFICIENT_MODIFIER_STOCK',
                 errorMessage: `Insufficient stock for modifier ${mod.name}`,
                 allowNegative: allowNegativeStockSales,
+                movementType: 'sale',
+                referenceType: 'sale',
+                referenceId: id,
+                // INV-SALE-MOVEMENT-UNIT-COST: per-stock-unit WAC = frozen per-serving cost / consumption rate (qty counts stock units).
+                unitCost: Number((Number(mod.costPrice || 0) / Number(mod.consumptionQty || 1)).toFixed(6)),
+                reason: 'sale_modifier',
+                note: `Sale S-${id} (${item.productName})`,
+                createdBy: auth.userId,
+                moneyDigits,
+                // INV-SALE-MOVEMENT-UNIT-COST: total_cost stays NULL (A7 omitTotalCost).
+                omitTotalCost: true,
               });
-
-              await trx
-                .insertInto('stock_movements')
-                .values({
-                  product_id: rawModProductId,
-                  movement_type: 'sale',
-                  qty: -alloc.qty,
-                  before_qty: modStockChange.scopeBefore,
-                  after_qty: modStockChange.scopeAfter,
-                  // INV-SALE-MOVEMENT-UNIT-COST: per-stock-unit WAC = frozen per-serving cost / consumption rate (qty counts stock units).
-                  unit_cost: Number((Number(mod.costPrice || 0) / Number(mod.consumptionQty || 1)).toFixed(6)),
-                  reason: 'sale_modifier',
-                  note: `Sale S-${id} (${item.productName})`,
-                  reference_type: 'sale',
-                  reference_id: id,
-                  branch_id: alloc.branchId,
-                  location_id: alloc.locationId,
-                  created_by: auth.userId,
-                  tenant_id: scope.tenantId,
-                  account_id: scope.accountId,
-                } as any)
-                .execute();
 
               await trx
                 .insertInto('sale_line_stock_allocations')

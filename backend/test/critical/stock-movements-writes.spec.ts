@@ -34,7 +34,7 @@ import * as path from 'path';
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const BACKEND_SRC = path.join(REPO_ROOT, 'backend', 'src');
 const DOC_PATH = path.join(REPO_ROOT, 'docs', 'STOCK_MOVEMENTS_WRITES.md');
-const PINNED_WRITE_COUNT = 49;
+const PINNED_WRITE_COUNT = 37;
 
 type Kind = 'WRITE-insert' | 'WRITE-delete' | 'WRITE-update' | 'READ' | 'OTHER';
 
@@ -154,8 +154,8 @@ async function main(): Promise<void> {
   assert.ok(fs.existsSync(DOC_PATH), 'docs/STOCK_MOVEMENTS_WRITES.md must exist');
   const doc = fs.readFileSync(DOC_PATH, 'utf8');
   assert.ok(
-    doc.includes('Total business writes: **49**'),
-    'docs/STOCK_MOVEMENTS_WRITES.md must state the pinned total of 49',
+    doc.includes('Total business writes: **37**'),
+    'docs/STOCK_MOVEMENTS_WRITES.md must state the pinned total of 37',
   );
   for (const site of sites) {
     assert.ok(

@@ -169,15 +169,15 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 358);
-    assert.equal(chain.length, 358);
+    assert.equal(specs.length, 361);
+    assert.equal(chain.length, 361);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-presales-order-details-line-total.spec.ts'));
     assert.equal(
       specs[specs.indexOf('test/critical/van-presales-order-details-line-total.spec.ts') + 1],
       'test/critical/van-portal-sale-rep-attribution-f20.spec.ts',
     );
-    console.log('3. evidence spec wired into both critical lists (358 = 358, identical order), passed');
+    console.log('3. evidence spec wired into both critical lists (361 = 361, identical order), passed');
   }
 
   console.log('van-presales-order-details-line-total: all cases passed');

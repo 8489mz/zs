@@ -8,12 +8,13 @@
 - Re-scanned at HEAD `34c72dfc4` (Phase 1 A4, INV-PHASE1-A4-OPENING-BALANCES-LEDGER): −3 writes — the three opening-balance sites (fashion `:853`, catalog-write `:662`, settings-import-products `:282`) now go through the unified row-writer (`recordStockMovement`); the "no ledger balance call at all" set is closed. The products insert in each site now seeds `stock_qty: 0` and the ledger sets the global (a preset would double the stock — see the A4 spec). Total 68 → 65. 6 callers migrated so far; the rest still write their own rows.
 - Re-scanned at HEAD `63e7f1298` (Phase 1 A5, INV-PHASE1-A5-WRITER-MODES): −1 write — `recordBinMovement` (`warehouse-bins.service.ts:202`) is folded into the writer: it now only delegates to the new row-only mode (`recordStockMovementRow`), so its own insert is gone; the writer's single shared insert (`insertMovementRow`) is the one insert all modes funnel through (the A0 spec pins exactly one direct write in the writer file). The writer also gains the set mode (`recordStockMovementSet`, nextQty — count :638 + suppliers-stock :225) and the two-leg mode (`recordStockRelocation` — QA :348/:360); no caller migrates in A5, so all other rows stand unchanged. Total 65 → 64. 6 callers migrated so far; the rest still write their own rows.
 - Re-scanned at HEAD `684fc3235` (Phase 1 A6, INV-PHASE1-A6-TRANSFERS-WRITER): −15 writes — the fifteen inventory-transfer sites (inventory-transfer.service.ts:298/:328/:336/:515/:521/:563/:656/:661/:726/:855/:860/:932/:942/:1035/:1040) now go through the unified row-writer (`recordStockMovement`); the writer's single shared insert is already counted, so the pin drops by the full 15. The 11 no-cost rows now store unit_cost/total_cost 0/0 instead of NULL (pinned in the A6 spec); the 4 cost-carrying rows are unchanged. Total 64 → 49. 21 callers migrated so far; the rest still write their own rows.
-- Total business writes: **49**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
+- Re-scanned at HEAD `d9429a229` (Phase 1 A7, INV-PHASE1-A7-SALES-WRITER): −12 writes — the twelve sales sites (food-waste `:199/:307`, insert-sale-and-stock `:424/:587`, cancel-sale `:253/:286`, update-sale `:412/:451/:1127/:1261`, sales-restaurant-and-serials `:610/:642`) now go through the unified row-writer (`recordStockMovement`); the writer's single shared insert is already counted, so the pin drops by the full 12. The 8 no-cost rows now store unit_cost/total_cost 0/0 instead of NULL (pinned in the 3 A7 specs); the 4 cost-carrying rows keep cost exactly — the sale rows keep total_cost NULL via the writer's new `omitTotalCost` flag (INV-SALE-MOVEMENT-UNIT-COST), and the auto-produce sale row carries the post-production WAC (production re-blends products.cost_price before the line is costed). The writer's shared insert re-lines `:191` → `:214` (omitTotalCost branch). Total 49 → 37. 33 callers migrated so far; the rest still write their own rows.
+- Total business writes: **37**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
 - The ledger (`applyStockDelta` in `backend/src/common/utils/location-stock-ledger.ts`) updates balances; each caller still writes its own `stock_movements` row. That split is the risk this inventory exists to close in Phase 1 (single writer).
 - `paired` below is file-level (YES if the same file calls `applyStockDelta` anywhere) — deterministic and reproducible. It does NOT prove the ledger call and the row happen in the same branch: see the notes, especially the archive residual.
 - FIXED ASYMMETRY (catalog archive, INV-STOCK-MOVEMENTS-ARCHIVE-ROW): `toggleProductArchive` used to call `applyStockDelta` for the residual global stock (`-remainingGlobal`) with NO `stock_movements` row for it. It now writes the row at line 364, mirroring the sibling deduct rows (same type, reason, reference, cost, posting call) — before_qty remainingGlobal, after_qty 0, qty -remainingGlobal. A zero residual writes no row.
 - Resolves the map's UNVERIFIED maintenance path: `maintenance/maintenance/ticket-parts.slice.ts:154,305` and `maintenance/maintenance/delete-ticket.slice.ts:121` are all real inserts (maintenance_consumption / maintenance_return), listed below.
-- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 49 and every `file:line` below must be listed.
+- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 37 and every `file:line` below must be listed.
 
 ## Per-module totals
 
@@ -26,11 +27,10 @@
 - `manufacturing`: 5
 - `purchases`: 6
 - `returns`: 3
-- `sales`: 12
 - `settings`: 5
 - `tradein`: 1
 
-## All 49 writes
+## All 37 writes
 
 | file:line | kind | movement_type | paired (file calls applyStockDelta) | notes |
 |---|---|---|---|---|
@@ -64,25 +64,13 @@
 | backend/src/modules/returns/returns-purchase-return.service.ts:460 | insert | purchase_return | yes |  |
 | backend/src/modules/returns/returns-sale-return.service.ts:367 | insert | sale_return | yes |  |
 | backend/src/modules/returns/returns-sale-return.service.ts:380 | insert | sale_return | yes |  |
-| backend/src/modules/sales/services/create-sale/insert-sale-and-stock.ts:424 | insert | sale | yes |  |
-| backend/src/modules/sales/services/create-sale/insert-sale-and-stock.ts:587 | insert | sale | yes | Modifier leg (was :1714 before the INV-SALE-MOVEMENT-UNIT-COST +1 line); now stores unit_cost (per-stock-unit WAC). |
-| backend/src/modules/sales/services/restaurant-food-waste.service.ts:199 | insert | damaged | yes |  |
-| backend/src/modules/sales/services/restaurant-food-waste.service.ts:307 | insert | damaged | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts:412 | insert | sale_edit_reversal | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts:451 | insert | sale_edit_reversal | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts:1127 | insert | sale_edit | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel/update-sale.service.ts:1261 | insert | sale_edit | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel/cancel-sale.service.ts:253 | insert | sale_cancel | yes |  |
-| backend/src/modules/sales/services/sales-edit-and-cancel/cancel-sale.service.ts:286 | insert | sale_cancel | yes |  |
-| backend/src/modules/sales/services/sales-restaurant-and-serials.service.ts:610 | insert | manufacturing_consumption | yes |  |
-| backend/src/modules/sales/services/sales-restaurant-and-serials.service.ts:642 | insert | manufacturing_production | yes |  |
 | backend/src/modules/settings/services/demo-data/settings-demo-data-wipe.ts:187 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
 | backend/src/modules/settings/services/demo-data/settings-demo-data-wipe.ts:370 | delete | (delete) | no | Demo reset (deleteFrom), not a ledger movement. |
 | backend/src/modules/settings/services/settings-demo-data-wipe-tables.ts:281 | delete | (delete) | no | Tenant wipe/demo reset (deleteFrom), not a ledger movement. |
 | backend/src/modules/settings/services/settings-import/settings-import-suppliers-stock.ts:225 | insert | opening_stock | no | Opening stock on import: see above. Moved here from settings-import.service.ts:1067 in the #116 split. |
 | backend/src/modules/settings/settings/settings-locations-admin.ts:179 | delete | (delete) | yes | Location delete cleanup (deleteFrom), not a ledger movement. Phase 1 A1: now in a transaction (was :173, flag no). |
 | backend/src/modules/tradein/tradein.service.ts:401 | insert | tradein_in | yes |  |
-| backend/src/common/utils/stock-movement-writer.ts:191 | insert | expr: row.movementType | yes | Phase 1 A0 unified writer (INV-PHASE1-A0-ROW-WRITER) + A5 modes (INV-PHASE1-A5-WRITER-MODES): the ONE shared insert (insertMovementRow) every mode funnels through — delta (recordStockMovement), set (recordStockMovementSet), two-leg (recordStockRelocation, two rows), row-only (recordStockMovementRow). Runs the ledger call, then writes the row(s) from the returned before/after with total_cost = roundMoney(abs(delta) * unitCost, moneyDigits) (signedTotal flag only for the suppliers-stock re-set). The one insert all callers converge on (A6–A9). |
+| backend/src/common/utils/stock-movement-writer.ts:214 | insert | expr: row.movementType | yes | Phase 1 A0 unified writer (INV-PHASE1-A0-ROW-WRITER) + A5 modes (INV-PHASE1-A5-WRITER-MODES) + A7 omitTotalCost (INV-PHASE1-A7-SALES-WRITER): the ONE shared insert (insertMovementRow) every mode funnels through — delta (recordStockMovement), set (recordStockMovementSet), two-leg (recordStockRelocation, two rows), row-only (recordStockMovementRow). Runs the ledger call, then writes the row(s) from the returned before/after with total_cost = roundMoney(abs(delta) * unitCost, moneyDigits) (signedTotal flag only for the suppliers-stock re-set; omitTotalCost only for the sale rows, which store total_cost NULL). The one insert all callers converge on (A6–A9). |
 
 ## Reverse asymmetry (screening only, not proven violations)
 
