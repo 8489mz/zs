@@ -45,16 +45,8 @@ export async function resolvePosTripAttribution(
   } else {
     const linkValues = [String(auth.username || '').trim()].filter((value) => value.length > 0);
     const [actingUser, repRows] = await Promise.all([
-      dbConn
-        .selectFrom('users')
-        .selectAll()
-        .where('id', '=', Number(auth.userId))
-        .executeTakeFirst(),
-      dbConn
-        .selectFrom('delivery_representatives')
-        .selectAll()
-        .where('tenant_id', '=', tenantId)
-        .execute(),
+      dbConn.selectFrom('users').selectAll().where('id', '=', Number(auth.userId)).executeTakeFirst(),
+      dbConn.selectFrom('delivery_representatives').selectAll().where('tenant_id', '=', tenantId).execute(),
     ]);
     for (const value of [actingUser?.phone, actingUser?.username]) {
       const trimmed = String(value || '').trim();

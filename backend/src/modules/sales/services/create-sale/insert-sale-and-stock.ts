@@ -525,9 +525,7 @@ export class InsertSaleAndStockService {
       for (const alloc of allocations) {
         const effectiveAllocLocationId = alloc.locationId ?? normalized.locationId;
         const needsImportLotCheck =
-          importLotProductIds.has(numericProductId) ||
-          !effectiveAllocLocationId ||
-          !(Number(alloc.qty) > 0);
+          importLotProductIds.has(numericProductId) || !effectiveAllocLocationId || !(Number(alloc.qty) > 0);
         if (!needsImportLotCheck) continue;
         const lotAllocation = await allocateSaleFromImportLots(trx, {
           tenantId: scope.tenantId,

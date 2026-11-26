@@ -365,7 +365,9 @@ export class SalesQueryService {
     const [sale, items, payments, linkedReturns] = await Promise.all([
       this.db
         .selectFrom('sales as s')
-        .leftJoin('customers as c', (j) => j.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
+        .leftJoin('customers as c', (j) =>
+          j.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'),
+        )
         .leftJoin('branches as b', (j) => j.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'))
         .leftJoin('stock_locations as l', (j) =>
           j.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'),
@@ -467,16 +469,12 @@ export class SalesQueryService {
 
     if (!sale) throw new AppError('Sale not found', 'SALE_NOT_FOUND', 404);
 
-    const [mappedSale] = await this.hydrateSales(
-      [sale as unknown as Record<string, unknown>],
-      auth,
-      {
-        skipLinkedReturns: options?.skipLinkedReturns,
-        prefetchedItems: items as unknown as Array<Record<string, unknown>>,
-        prefetchedPayments: payments as unknown as Array<Record<string, unknown>>,
-        prefetchedLinkedReturns: linkedReturns as unknown as Array<Record<string, unknown>>,
-      },
-    );
+    const [mappedSale] = await this.hydrateSales([sale as unknown as Record<string, unknown>], auth, {
+      skipLinkedReturns: options?.skipLinkedReturns,
+      prefetchedItems: items as unknown as Array<Record<string, unknown>>,
+      prefetchedPayments: payments as unknown as Array<Record<string, unknown>>,
+      prefetchedLinkedReturns: linkedReturns as unknown as Array<Record<string, unknown>>,
+    });
     return { sale: mappedSale, scope };
   }
 

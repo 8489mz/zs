@@ -501,9 +501,7 @@ export class PostSaleService {
       });
     }
 
-    const uncheckedAccountIds = lines
-      .map((line) => line.accountId)
-      .filter((id) => id > 0 && !activeById.has(id));
+    const uncheckedAccountIds = lines.map((line) => line.accountId).filter((id) => id > 0 && !activeById.has(id));
     if (uncheckedAccountIds.length > 0) {
       const extraMap = await this.getActiveAccountMap(queryable, scope.tenantId, uncheckedAccountIds);
       for (const [id, active] of extraMap.entries()) {
