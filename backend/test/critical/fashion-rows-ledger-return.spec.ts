@@ -501,8 +501,8 @@ async function main(): Promise<void> {
     const writerCalls = source.match(/recordStockMovement\(trx/g) ?? [];
     assert.equal(
       writerCalls.length,
-      4,
-      `expected exactly 4 recordStockMovement(trx, …) calls, found ${writerCalls.length}`,
+      5,
+      `expected exactly 5 recordStockMovement(trx, …) calls, found ${writerCalls.length}`,
     );
     assert.ok(
       !source.includes('before_qty: prevTargetStock'),
@@ -523,8 +523,8 @@ async function main(): Promise<void> {
       'the fashion file must import the ledger-module row-writer',
     );
     assert.ok(
-      source.includes('import { applyStockDelta }'),
-      'the applyStockDelta import stays — the :583 zeroing path still calls it',
+      !source.includes('applyStockDelta('),
+      'after phase1 A9, the fashion zeroing path also routes through recordStockMovement',
     );
     console.log('  4. source pins: passed');
 

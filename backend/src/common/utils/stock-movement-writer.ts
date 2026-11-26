@@ -310,7 +310,7 @@ async function insertMovementRow(
       branch_id: row.branchId,
       location_id: row.locationId,
       created_by: row.createdBy,
-      import_receipt_id: row.importReceiptId,
+      ...(row.importReceiptId != null ? { import_receipt_id: row.importReceiptId } : {}),
     })
     .returning('id')
     .executeTakeFirst();

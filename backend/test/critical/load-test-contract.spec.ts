@@ -161,17 +161,27 @@ function testBodiesMatchDtos(): void {
   }
 }
 
+function expandDecoratorValues(raw: string | undefined): string[] {
+  if (!raw) return [''];
+  return raw
+    .replace(/[[\]'"]/g, '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s, idx, arr) => s.length > 0 || arr.length === 1);
+}
+
 /** LTC-2 — كل مسار يُنادى موجود في متحكّم. */
 function testRoutesExist(): void {
-  const controllers: Array<{ prefix: string; source: string }> = [];
+  const controllers: Array<{ prefixes: string[]; source: string }> = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
       else if (entry.name.endsWith('.controller.ts')) {
         const source = readFileSync(full, 'utf8');
-        const prefix = /@Controller\('([^']*)'\)/.exec(source)?.[1] ?? '';
-        controllers.push({ prefix, source });
+        const match = /@Controller\(\s*(\[[^\]]*\]|['"][^'"]*['"])\s*\)/.exec(source);
+        const prefixes = match ? expandDecoratorValues(match[1]) : [''];
+        controllers.push({ prefixes, source });
       }
     }
   };
@@ -179,12 +189,15 @@ function testRoutesExist(): void {
 
   const declared = new Set<string>();
   for (const controller of controllers) {
-    for (const match of controller.source.matchAll(/@(?:Get|Post|Put|Patch|Delete)\('([^']*)'\)/g)) {
-      const path = [controller.prefix, match[1]].filter(Boolean).join('/');
-      declared.add(path.replace(/:[^/]+/g, ':p'));
-    }
-    for (const _ of controller.source.matchAll(/@(?:Get|Post|Put|Patch|Delete)\(\)/g)) {
-      declared.add(controller.prefix);
+    for (const match of controller.source.matchAll(
+      /@(?:Get|Post|Put|Patch|Delete)\(\s*(\[[^\]]*\]|['"][^'"]*['"])?\s*\)/g,
+    )) {
+      for (const prefix of controller.prefixes) {
+        for (const subPath of expandDecoratorValues(match[1])) {
+          const path = [prefix, subPath].filter(Boolean).join('/');
+          declared.add(path.replace(/:[^/]+/g, ':p'));
+        }
+      }
     }
   }
 

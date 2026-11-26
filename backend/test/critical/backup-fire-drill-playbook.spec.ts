@@ -165,8 +165,16 @@ async function main(): Promise<void> {
   );
 
   // 5. The health endpoints exist and the deploy workflow probes both.
+  const controllerMatch = healthController.match(/@Controller\(\s*(\[[^\]]*\]|['"][^'"]*['"])\s*\)/);
+  const controllerPrefixes = controllerMatch
+    ? controllerMatch[1]
+        .replace(/[[\]'"]/g, '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
   assert.ok(
-    healthController.includes("@Controller(['health', 'api/health'])"),
+    controllerPrefixes.includes('health') && controllerPrefixes.includes('api/health'),
     'health controller must serve health + api/health',
   );
   assert.ok(healthController.includes("@Get('live')"), 'health controller must define a live endpoint');

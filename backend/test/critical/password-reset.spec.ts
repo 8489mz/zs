@@ -146,7 +146,13 @@ function runRouteShape(): void {
   assert.equal(Reflect.getMetadata(PATH_METADATA, proto.requestPasswordReset), 'password-reset/request');
   assert.equal(Reflect.getMetadata(PATH_METADATA, proto.validatePasswordResetToken), 'password-reset/validate');
   assert.equal(Reflect.getMetadata(PATH_METADATA, proto.confirmPasswordReset), 'password-reset/confirm');
-  assert.equal(Reflect.getMetadata(PATH_METADATA, SessionsController), 'api/auth');
+  const controllerPath = Reflect.getMetadata(PATH_METADATA, SessionsController);
+  assert.ok(
+    Array.isArray(controllerPath)
+      ? controllerPath.includes('api/auth') && controllerPath.includes('api/v1/auth')
+      : controllerPath === 'api/auth',
+    `SessionsController must serve api/auth (got ${JSON.stringify(controllerPath)})`,
+  );
 
   // الجار المحروس: لو سقط الحارس عن تغيير كلمة المرور صار أي مجهول يغيّرها.
   const changePasswordGuards = (Reflect.getMetadata(GUARDS_METADATA, proto.changePassword) || []).map(

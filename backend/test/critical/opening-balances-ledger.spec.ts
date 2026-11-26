@@ -815,8 +815,8 @@ async function main(): Promise<void> {
     const writerCalls = (source: string): number => (source.match(/recordStockMovement\(trx/g) ?? []).length;
     assert.equal(
       writerCalls(fashion),
-      4,
-      `expected 4 recordStockMovement calls in the fashion file, found ${writerCalls(fashion)}`,
+      5,
+      `expected 5 recordStockMovement calls in the fashion file, found ${writerCalls(fashion)}`,
     );
     assert.equal(
       writerCalls(write),
@@ -838,7 +838,7 @@ async function main(): Promise<void> {
       'settings-import-products must not insert product_location_stock directly anymore',
     );
     const directRows = (source: string): number => (source.match(/insertInto\('stock_movements'\)/g) ?? []).length;
-    assert.equal(directRows(fashion), 1, 'the fashion file keeps only its :554 zeroing-deduct row (A6–A9 scope)');
+    assert.equal(directRows(fashion), 0, 'after phase1 A9, the fashion file routes all movements through the writer');
     assert.equal(directRows(write), 0, 'catalog-write must not hand-write a stock_movements row anymore');
     assert.equal(
       directRows(importProducts),
@@ -846,7 +846,7 @@ async function main(): Promise<void> {
       'settings-import-products must not hand-write a stock_movements row anymore',
     );
     const totals = (source: string): number => (source.match(/stockMovementTotal\(/g) ?? []).length;
-    assert.equal(totals(fashion), 1, 'the fashion file keeps only its zeroing-deduct stockMovementTotal call');
+    assert.equal(totals(fashion), 0, 'after phase1 A9, the fashion file computes no stockMovementTotal directly');
     assert.equal(totals(write), 0, 'catalog-write must not compute the opening total directly anymore');
     assert.equal(
       totals(importProducts),
