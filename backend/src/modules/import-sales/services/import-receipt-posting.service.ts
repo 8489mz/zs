@@ -5,7 +5,8 @@ import { Kysely, Transaction, Selectable, Updateable } from 'kysely';
 import { Database, ImportShipmentItemTable, ImportShipmentTable } from '../../../database/database.types';
 import { groupImportReceipts, requireImportNumber } from '../import-inventory-cost.engine';
 import { revalueStockReturn, valueStockReceipt } from '../../accounting/inventory-valuation';
-import { applyStockDelta, lockStockProducts } from '../../../common/utils/location-stock-ledger';
+import { lockStockProducts } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { calculateLandedCostBreakdown } from '../engines/import-landed-cost.engine';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
@@ -324,9 +325,33 @@ export class ImportReceiptPostingService {
       const accountId = accountByProduct.get(group.productId);
       if (!accountId) throw new BadRequestException('حساب الصنف غير صالح');
       if (group.quantity > 0) {
-        const stock = await applyStockDelta(trx, {
-          tenantId, accountId, productId: group.productId, delta: group.quantity, allowNegative: true,
-          locationId: Number(receiptLocationId), disableAutoDrain: true,
+        // Phase 1 A10: the row goes through recordStockMovement
+        // (full-precision mode) — the total is computed from the FULL
+        // value / qty (totalUnitCost), not the 6dp stored unit: the
+        // group value is already book-rounded (groupImportReceipts
+        // rounds it once at book digits), so roundMoney(qty x
+        // value/qty) reproduces it exactly at any qty (BF2/BF2b), while
+        // the 6dp unit diverges on most lines at container quantities.
+        // The stored unit stays the 6dp value, exactly as today.
+        const stock = await recordStockMovement(trx, {
+          tenantId,
+          accountId,
+          productId: group.productId,
+          delta: group.quantity,
+          allowNegative: true,
+          locationId: Number(receiptLocationId),
+          disableAutoDrain: true,
+          movementType: 'import_receipt',
+          unitCost: Number((group.value / group.quantity).toFixed(6)),
+          totalUnitCost: group.value / group.quantity,
+          moneyDigits: digits,
+          referenceType: 'import_inventory_receipt',
+          referenceId: receipt.id,
+          importReceiptId: receipt.id,
+          reason: 'استلام شحنة استيراد',
+          note: `شحنة استيراد #${shipmentId}`,
+          createdBy: userId,
+          branchId: null,
         });
         // globalBefore is a cached product counter. globalAfter is reconciled by the ledger
         // from locked location balances (including its legacy unassigned-stock policy).
@@ -336,14 +361,6 @@ export class ImportReceiptPostingService {
         // it; id is the global primary key, so the old account_id
         // predicate on the write was vestigial.
         await valueStockReceipt(trx, tenantId, group.productId, stock.globalAfter, group.quantity, group.value);
-        await trx.insertInto('stock_movements').values({
-          tenant_id: tenantId, account_id: accountId, product_id: group.productId,
-          movement_type: 'import_receipt', qty: group.quantity, before_qty: stock.scopeBefore, after_qty: stock.scopeAfter,
-          unit_cost: Number((group.value / group.quantity).toFixed(6)), total_cost: Number(group.value.toFixed(4)),
-          reason: 'استلام شحنة استيراد', note: `شحنة استيراد #${shipmentId}`,
-          reference_type: 'import_inventory_receipt', reference_id: receipt.id, import_receipt_id: receipt.id,
-          created_by: userId, branch_id: null, location_id: Number(receiptLocationId),
-        }).execute();
       }
       if (group.shortageExpense > 0) {
         await trx.insertInto('expenses').values({
@@ -690,23 +707,38 @@ export class ImportReceiptPostingService {
         await lockStockProducts(trx, { tenantId, accountId: accountByProduct.get(productId)!, productIds: [productId] });
       }
 
+      // Phase 1 A10: book digits, resolved fail-closed on this trx
+      // handle — the reversal groups are built from the ORIGINAL rows'
+      // stored totals (already book-digit values after :339 migrates),
+      // so the writer's roundMoney(qty x value/qty) reproduces each
+      // reversal total exactly (BF3: 0/2M).
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
       for (const group of groups.values()) {
-        const stock = await applyStockDelta(trx, {
-          tenantId, accountId: group.accountId, productId: group.productId, delta: -group.quantity,
-          allowNegative: false, locationId: group.locationId, disableAutoDrain: true,
+        // Phase 1 A10: the row goes through recordStockMovement
+        // (full-precision mode) — same totalUnitCost shape as :339.
+        const stock = await recordStockMovement(trx, {
+          tenantId,
+          accountId: group.accountId,
+          productId: group.productId,
+          delta: -group.quantity,
+          allowNegative: false,
+          locationId: group.locationId,
+          disableAutoDrain: true,
+          movementType: 'import_receipt_reversal',
+          unitCost: Number((group.value / group.quantity).toFixed(6)),
+          totalUnitCost: group.value / group.quantity,
+          moneyDigits: digits,
+          referenceType: 'import_inventory_receipt',
+          referenceId: receiptId,
+          importReceiptId: receiptId,
+          reason: 'عكس استلام شحنة استيراد',
+          note: `عكس سند استلام #${receiptId} - شحنة استيراد #${shipmentId}`,
+          createdBy: userId,
+          branchId: null,
         });
         // The WAC un-blend mirrors valueStockReceipt: the delta's
         // corrected globalAfter already includes this deduction.
         await revalueStockReturn(trx, tenantId, group.productId, stock.globalAfter, group.quantity, group.value);
-        await trx.insertInto('stock_movements').values({
-          tenant_id: tenantId, account_id: group.accountId, product_id: group.productId,
-          movement_type: 'import_receipt_reversal', qty: -group.quantity,
-          before_qty: stock.scopeBefore, after_qty: stock.scopeAfter,
-          unit_cost: Number((group.value / group.quantity).toFixed(6)), total_cost: Number(group.value.toFixed(4)),
-          reason: 'عكس استلام شحنة استيراد', note: `عكس سند استلام #${receiptId} - شحنة استيراد #${shipmentId}`,
-          reference_type: 'import_inventory_receipt', reference_id: receiptId, import_receipt_id: receiptId,
-          created_by: userId, branch_id: null, location_id: group.locationId,
-        }).execute();
       }
 
       for (const lot of lots) {

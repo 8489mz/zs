@@ -21,6 +21,7 @@
     "src/modules/hr/services/hr-employees.service.ts": 1103,
     "src/modules/import-sales/services/import-commercial.service.ts": 1093,
     "src/modules/import-sales/services/import-projects-partners.service.ts": 1016,
+    "src/modules/import-sales/services/import-receipt-posting.service.ts": 1018,
     "src/modules/manufacturing/services/manufacturing.service.ts": 1102,
     "src/common/utils/location-stock-ledger.ts": 1074
   }

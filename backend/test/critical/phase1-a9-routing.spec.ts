@@ -76,7 +76,7 @@ static routing pins over the migrated files:
    total, agreeing with the signed journal leg.
 6. Rollback: a failed run leaves ZERO movement rows and untouched
    balances — the writer runs inside the same transaction.
-7. The critical lists: 366 = 366, identical order, last entries the
+7. The critical lists: 369 = 369, identical order, last entries the
    three A9 specs (the A8 specs' 363 pins are updated in this package
    the same way A8 updated A7's).
 */
@@ -537,7 +537,7 @@ async function main(): Promise<void> {
       }
     }
 
-    // 7. The critical lists: 366 = 366, identical order, last entries
+    // 7. The critical lists: 369 = 369, identical order, last entries
     //    the three A9 specs.
     {
       const specs = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
@@ -547,14 +547,17 @@ async function main(): Promise<void> {
       };
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 366);
-      assert.equal(chain.length, 366);
+      assert.equal(specs.length, 369);
+      assert.equal(chain.length, 369);
       assert.deepEqual(chain, specs);
       assert.equal(specs[362], 'test/critical/purchases-writer.spec.ts');
       assert.equal(specs[363], 'test/critical/phase1-a9-routing.spec.ts');
       assert.equal(specs[364], 'test/critical/phase1-a9-inventory-writer.spec.ts');
       assert.equal(specs[365], 'test/critical/phase1-a9-services-writer.spec.ts');
-      console.log('  evidence specs wired into both critical lists (366 = 366, identical order), passed');
+      assert.equal(specs[366], 'test/critical/phase1-a10-rounding.spec.ts');
+      assert.equal(specs[367], 'test/critical/phase1-a10-purchases-writer.spec.ts');
+      assert.equal(specs[368], 'test/critical/phase1-a10-import-writer.spec.ts');
+      console.log('  evidence specs wired into both critical lists (369 = 369, identical order), passed');
     }
   } finally {
     await db.destroy();

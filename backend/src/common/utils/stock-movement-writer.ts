@@ -61,7 +61,9 @@ import {
  *   Callers that want NO row (delta-0 location provisioning) keep calling
  *   applyStockDelta directly. Never extend applyStockDelta to write rows:
  *   its 63 callers depend on it NOT writing one.
- * - total_cost = roundMoney(|delta| * unitCost, moneyDigits), the book rounding.
+ * - total_cost = roundMoney(|delta| * (totalUnitCost ?? unitCost),
+ *   moneyDigits) + freightShare, the book rounding (A10: the bare unit
+ *   defaults to the stored unitCost; the freight share defaults to 0).
  *   unitCost is taken as given (default 0); the writer never looks up
  *   product.cost_price. moneyDigits is a caller-supplied param (P2 pattern,
  *   like the trial-balance engine): the writer never queries settings or
@@ -84,8 +86,34 @@ import {
  * shared insert stores total_cost NULL instead of the computed total.
  * The default path is unchanged; no other mode gets the flag; A10 does
  * not decide it (it is the absence of a total, not a rounding spelling).
- * It also serves A9's import-preorder 'sale' row later (the same NULL
- * shape).
+ * Phase 1 A10 — cost-rounding unification (INV-PHASE1-A10-ROUNDING-UNIFICATION).
+ * The A0 total (roundMoney(|delta| * unitCost)) could not reproduce five
+ * sites' stored totals, so they stayed hand-written (A8/A9 deferrals):
+ * GRN/create store a COMPOSITE total (bare line total at book digits +
+ * the exact integer-minor-unit freight share); receive-goods stores its
+ * total from the FULL repeating-decimal effective unit; receipt-posting
+ * stores the book-rounded group value with a 6dp stored unit. The shared
+ * insert gains two optional params (delta mode only, plus totalUnitCost
+ * on the row mode so the signed spelling composes with it):
+ * - totalUnitCost?: the unit the TOTAL is computed from, when it differs
+ *   from the stored unitCost (full-precision effective unit / value/qty).
+ *   The stored unit_cost column keeps unitCost verbatim (the A0 "stored
+ *   as given" contract). This is NOT an override: the total is still
+ *   computed by the writer from (delta x unit) at book digits.
+ * - freightShare?: an exact minor-unit addend (landed-cost share). The
+ *   addition is NOT re-rounded — exactly the old `stockMovementTotal(...)
+ *   + freight` expression.
+ * recordStockMovement returns totalCost (the computed total, null when
+ * omitTotalCost), so GRN's journal sums the same number the row stores.
+ * DECISION (the A5 open question): the signedTotal spelling SURVIVES —
+ * it is not a rounding variant but the journal-agreement sign for the
+ * suppliers-stock re-set, where a decrease stores a NEGATIVE total
+ * agreeing with its signed journal leg (INV-GL-INVENTORY-VALUE); the
+ * sign is load-bearing for the WAC pool direction. Removing it would
+ * change a posted amount. Unification covers ROUNDING spellings only.
+ * After A10 the total computation exists in exactly ONE place
+ * (insertMovementRow); stockMovementTotal is the same computation by
+ * definition for its two remaining non-row callers.
  */
 
 export type RecordStockMovementParams = StockDeltaParams & {
@@ -95,6 +123,22 @@ export type RecordStockMovementParams = StockDeltaParams & {
   reason?: string;
   note?: string;
   unitCost?: number;
+  /**
+   * Phase 1 A10: the unit the TOTAL is computed from, when it differs from
+   * the stored unitCost (receive-goods' full-precision effective unit;
+   * receipt-posting's value / qty at full precision). The stored unit_cost
+   * column keeps unitCost verbatim (the A0 "stored as given" contract).
+   * This is NOT an override: the total is still computed by the writer
+   * from (delta x unit) at book digits.
+   */
+  totalUnitCost?: number;
+  /**
+   * Phase 1 A10: an exact minor-unit addend (GRN/create landed-cost
+   * share, integer minor units via allocateLandedCosts). The addition is
+   * NOT re-rounded — exactly the old `stockMovementTotal(...) + freight`
+   * expression. Default 0.
+   */
+  freightShare?: number;
   createdBy?: number | null;
   /** Tenant book digits (2 or 3), resolved by the caller via the P2 pattern. */
   moneyDigits: 2 | 3;
@@ -110,6 +154,8 @@ export type RecordStockMovementParams = StockDeltaParams & {
 
 export type RecordStockMovementResult = StockDeltaResult & {
   movementId: number;
+  /** Phase 1 A10: the total the row stores (null when omitTotalCost). */
+  totalCost: number | null;
 };
 
 export type RecordStockMovementSetParams = StockSetParams & {
@@ -172,6 +218,13 @@ export type RecordStockMovementRowParams = {
   reason?: string;
   note?: string;
   unitCost?: number;
+  /**
+   * Phase 1 A10: the unit the TOTAL is computed from, when it differs
+   * from the stored unitCost. Only the row mode takes it besides the
+   * delta mode — so the signedTotal spelling composes with the unified
+   * computation (the suppliers-stock re-set is a row-mode caller).
+   */
+  totalUnitCost?: number;
   createdBy?: number | null;
   /** Tenant book digits (2 or 3), resolved by the caller via the P2 pattern. */
   moneyDigits: 2 | 3;
@@ -201,6 +254,10 @@ type MovementRowValues = {
   beforeQty: number;
   afterQty: number;
   unitCost: number;
+  /** Phase 1 A10: the unit the total is computed from (default: unitCost). */
+  totalUnitCost?: number;
+  /** Phase 1 A10: an exact minor-unit addend (default 0, not re-rounded). */
+  freightShare?: number;
   moneyDigits: 2 | 3;
   signedTotal?: boolean;
   /** Phase 1 A7: store total_cost NULL instead of the computed total. */
@@ -220,10 +277,20 @@ type MovementRowValues = {
  * Every mode funnels its row(s) through here so the total_cost computation
  * and the row shape exist exactly once.
  */
-async function insertMovementRow(trx: Kysely<Database>, row: MovementRowValues): Promise<number> {
+async function insertMovementRow(
+  trx: Kysely<Database>,
+  row: MovementRowValues,
+): Promise<{ id: number; totalCost: number | null }> {
+  // A10: the total computation exists in exactly ONE place. The total unit
+  // defaults to the stored unit; the freight share defaults to 0 and is
+  // added WITHOUT re-rounding (the old `stockMovementTotal(...) + freight`
+  // expression). signedTotal composes with totalUnitCost (the row mode's
+  // signed site passes both).
+  const totalUnit = row.totalUnitCost ?? row.unitCost;
   const totalCost = row.omitTotalCost
     ? null
-    : roundMoney((row.signedTotal ? row.delta : Math.abs(row.delta)) * row.unitCost, row.moneyDigits);
+    : roundMoney((row.signedTotal ? row.delta : Math.abs(row.delta)) * totalUnit, row.moneyDigits) +
+      (row.freightShare ?? 0);
   const inserted = await trx
     .insertInto('stock_movements')
     .values({
@@ -250,7 +317,7 @@ async function insertMovementRow(trx: Kysely<Database>, row: MovementRowValues):
   if (!inserted?.id) {
     throw new AppError('Failed to capture stock movement ID for stock posting', 'MOVEMENT_INSERT_FAILED', 500);
   }
-  return Number(inserted.id);
+  return { id: Number(inserted.id), totalCost };
 }
 
 export async function recordStockMovement(
@@ -261,7 +328,7 @@ export async function recordStockMovement(
   const unitCost = Number(params.unitCost ?? 0);
   // applyStockDelta already threw unless tenant/account scope is present, so
   // these are non-empty strings here; the fallback only satisfies the type.
-  const movementId = await insertMovementRow(trx, {
+  const { id: movementId, totalCost } = await insertMovementRow(trx, {
     tenantId: params.tenantId ?? '',
     accountId: params.accountId ?? '',
     productId: params.productId,
@@ -270,6 +337,8 @@ export async function recordStockMovement(
     beforeQty: change.scopeBefore,
     afterQty: change.scopeAfter,
     unitCost,
+    totalUnitCost: params.totalUnitCost,
+    freightShare: params.freightShare,
     moneyDigits: params.moneyDigits,
     reason: params.reason ?? params.movementType,
     note: params.note ?? '',
@@ -281,7 +350,7 @@ export async function recordStockMovement(
     importReceiptId: params.importReceiptId ?? null,
     omitTotalCost: params.omitTotalCost,
   });
-  return { ...change, movementId };
+  return { ...change, movementId, totalCost };
 }
 
 export async function recordStockMovementSet(
@@ -292,7 +361,7 @@ export async function recordStockMovementSet(
   const actualDelta = roundQty3dp(change.scopeAfter - change.scopeBefore);
   const unitCost = Number(params.unitCost ?? 0);
   // setScopedStockQty already threw unless tenant/account scope is present.
-  const movementId = await insertMovementRow(trx, {
+  const { id: movementId } = await insertMovementRow(trx, {
     tenantId: params.tenantId ?? '',
     accountId: params.accountId ?? '',
     productId: params.productId,
@@ -326,7 +395,7 @@ export async function recordStockRelocation(
   const receiveMovementType = params.receiveMovementType ?? 'transfer_receive';
   // relocateStockBetweenLocations already threw unless tenant/account scope
   // is present, so these are non-empty strings here.
-  const sendMovementId = await insertMovementRow(trx, {
+  const { id: sendMovementId } = await insertMovementRow(trx, {
     tenantId: params.tenantId ?? '',
     accountId: params.accountId ?? '',
     productId: params.productId,
@@ -345,7 +414,7 @@ export async function recordStockRelocation(
     createdBy: params.createdBy ?? null,
     importReceiptId: params.importReceiptId ?? null,
   });
-  const receiveMovementId = await insertMovementRow(trx, {
+  const { id: receiveMovementId } = await insertMovementRow(trx, {
     tenantId: params.tenantId ?? '',
     accountId: params.accountId ?? '',
     productId: params.productId,
@@ -372,7 +441,7 @@ export async function recordStockMovementRow(
   params: RecordStockMovementRowParams,
 ): Promise<number> {
   const unitCost = Number(params.unitCost ?? 0);
-  return insertMovementRow(trx, {
+  const { id } = await insertMovementRow(trx, {
     tenantId: params.tenantId,
     accountId: params.accountId,
     productId: params.productId,
@@ -381,6 +450,7 @@ export async function recordStockMovementRow(
     beforeQty: params.beforeQty,
     afterQty: params.afterQty,
     unitCost,
+    totalUnitCost: params.totalUnitCost,
     moneyDigits: params.moneyDigits,
     signedTotal: params.signedTotal,
     omitTotalCost: params.omitTotalCost,
@@ -393,4 +463,5 @@ export async function recordStockMovementRow(
     createdBy: params.createdBy ?? null,
     importReceiptId: params.importReceiptId ?? null,
   });
+  return id;
 }

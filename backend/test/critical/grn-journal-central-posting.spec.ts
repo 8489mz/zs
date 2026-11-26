@@ -147,7 +147,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       coa_document_id bigint, over_received_qty numeric NOT NULL DEFAULT 0, notes text, created_at timestamptz DEFAULT '2026-10-01');
     CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint,
       movement_type text, qty numeric, before_qty numeric, after_qty numeric, unit_cost numeric, total_cost numeric,
-      reason text, note text, reference_type text, reference_id bigint, branch_id bigint, location_id bigint, created_by bigint);
+      reason text, note text, reference_type text, reference_id bigint, branch_id bigint, location_id bigint, created_by bigint, import_receipt_id bigint);
     CREATE TABLE product_serials (id bigserial PRIMARY KEY, tenant_id text, account_id text, serial_number text,
       imei_2 text, status text, product_id bigint, purchase_id bigint, purchase_item_id bigint,
       location_id bigint, branch_id bigint, updated_at timestamptz);
@@ -447,7 +447,10 @@ async function main(): Promise<void> {
       'utf8',
     );
     assert.ok(serviceSource.includes('postDomainJournal'), 'postGoodsReceipt posts through the central boundary');
-    assert.ok(serviceSource.includes('stockMovementTotal'), 'movement total uses the single book-digits computation');
+    // Phase 1 A10: the GRN composite total moved into the writer — the
+    // movement total now uses the writer's single book-digits computation
+    // (totalUnitCost + freightShare), so the direct helper call retires here.
+    assert.ok(serviceSource.includes('recordStockMovement'), 'movement total goes through the single writer computation');
     assert.ok(!serviceSource.includes('JRN-TMP-GRN'), 'no direct temporary-number journal insert remains');
     assert.ok(serviceSource.includes('INV-GRN-JOURNAL-CENTRAL-POSTING'), 'postGoodsReceipt names the invariant');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');

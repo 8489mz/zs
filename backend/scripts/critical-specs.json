@@ -365,6 +365,9 @@
     "test/critical/purchases-writer.spec.ts",
     "test/critical/phase1-a9-routing.spec.ts",
     "test/critical/phase1-a9-inventory-writer.spec.ts",
-    "test/critical/phase1-a9-services-writer.spec.ts"
+    "test/critical/phase1-a9-services-writer.spec.ts",
+    "test/critical/phase1-a10-rounding.spec.ts",
+    "test/critical/phase1-a10-purchases-writer.spec.ts",
+    "test/critical/phase1-a10-import-writer.spec.ts"
   ]
 }

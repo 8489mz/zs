@@ -121,10 +121,10 @@ async function main(): Promise<void> {
   // 3. The reset calls the ledger helper, and the three dead files
   //    keep their ledger path — maintenance and tradein now route
   //    through the row-writer (Phase 1 A9: recordStockMovement runs
-  //    the delta through applyStockDelta internally), while the
-  //    import-sales files keep the direct ledger call (receipt
-  //    posting is A10-deferred; preorders keeps its ledger call at
-  //    :591 with the row in row-only mode).
+  //    the delta through applyStockDelta internally), and receipt
+  //    posting joins them (Phase 1 A10: its two sites migrate onto
+  //    recordStockMovement); preorders keeps its ledger call at :594
+  //    with the row in row-only mode.
   const demoSrc = fs.readFileSync(DEMO_DATA, 'utf8');
   assert.ok(
     demoSrc.includes('resetTenantStockToZero(trx, tenantId)'),
@@ -144,9 +144,9 @@ async function main(): Promise<void> {
   );
   assert.ok(
     read('backend/src/modules/import-sales/services/import-receipt-posting.service.ts').includes(
-      'applyStockDelta(trx,',
+      'recordStockMovement(trx,',
     ),
-    'import receipt posting must still route stock through applyStockDelta',
+    'import receipt posting must still route stock through the row-writer',
   );
   assert.ok(
     read('backend/src/modules/import-sales/services/import-container-preorders.service.ts').includes(

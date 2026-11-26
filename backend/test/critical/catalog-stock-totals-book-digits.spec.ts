@@ -291,7 +291,10 @@ async function main(): Promise<void> {
   // the identical roundMoney total at book digits, so the book-digits
   // property now lives in the writer, pinned by the A9 routing spec);
   // the single remaining call is the posting amount at posting :90,
-  // not a movement-row total.
+  // not a movement-row total. Phase 1 A10 moved the last
+  // stockMovementTotal call in a movement-row context (the GRN composite)
+  // into the writer's composite mode; the single remaining call stays
+  // the posting amount at posting :90.
   {
     const serviceFiles = [
       'catalog-product.service.ts',
@@ -318,10 +321,7 @@ async function main(): Promise<void> {
       assert.ok(!source.includes('roundCurrency'), `no roundCurrency helper may remain in ${serviceFiles[index]}`);
     }
     const helperCalls = sources.flatMap((source) => source.match(/stockMovementTotal\(/g) ?? []);
-    assert.ok(
-      helperCalls.length >= 1,
-      `expected at least 1 stockMovementTotal call site, found ${helperCalls.length}`,
-    );
+    assert.ok(helperCalls.length >= 1, `expected at least 1 stockMovementTotal call site, found ${helperCalls.length}`);
   }
 
   console.log('catalog-stock-totals-book-digits: all cases passed');

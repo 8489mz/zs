@@ -14,24 +14,31 @@ MIGRATED (this package):
   restore only reverses the quantity, so the WAC after an edit blends
   from the PRE-edit cost, not from a revalued one.
 
-DEFERRED to A10 (cost-rounding unification) — pinned in §4 with the
-REAL engines, and by the existing critical specs that pin their totals
+MIGRATED in A10 (cost-rounding unification —
+INV-PHASE1-A10-ROUNDING-UNIFICATION): the writer gained the
+composite-total mode (totalUnitCost + freightShare), and the three
+sites now route through it (phase1-a10-purchases-writer.spec.ts
+drives the real services). §4 keeps the same concrete inputs and now
+asserts the new modes REPRODUCE the stored totals. A totalCost
+override param was NOT the answer (it would let the writer stamp a
+total it did not compute); the composite mode computes the total from
+(delta x totalUnit) at book digits plus the exact freight share.
+- GRN :301 stored stockMovementTotal(accepted, lineUnitCost) + freight,
+  a COMPOSITE total — now totalUnitCost: lineUnitCost,
+  freightShare: allocatedFreight.
+- create :708 stored roundMoney(net*qty) + freight — the same composite,
+  now totalUnitCost: baseUnitCost, freightShare: allocatedFreight.
+- receive-goods :247 stored roundMoney(effectiveUnitCost * qty) from the
+  FULL repeating-decimal division — now totalUnitCost: effectiveUnitCost.
+The existing critical specs that pin their totals
 (grn-freight-allocation, grn-journal-central-posting,
-purchase-landed-cost-at-receipt). The writer computes
-roundMoney(|delta| * unitCost) from the unit cost it is handed, but:
-- GRN :301 stores stockMovementTotal(accepted, lineUnitCost) + freight,
-  a COMPOSITE total the writer cannot reproduce from one unit cost.
-- create :708 stores roundMoney(net*qty) + freight — the same composite.
-- receive-goods :247 stores roundMoney(effectiveUnitCost * qty) from the
-  FULL repeating-decimal division; the writer would see the 6dp unit.
-A totalCost override param is NOT the answer (it would let the writer
-stamp a total it did not compute); A10 adds a composite-total mode.
+purchase-landed-cost-at-receipt) stay green in the A10 loop.
 
 WHAT THIS PINS, driving the REAL cancelPurchase / updatePurchase on
 PGlite (facade construction copied from purchase-cancel-wac-recompute):
 0. The routing itself: cancel + update hold ZERO direct
-   insertInto('stock_movements') (1 + 2 writer calls), while the 3
-   deferred files still hold exactly 1 direct insert each.
+   insertInto('stock_movements') (1 + 2 writer calls), and the 3
+   A10-migrated files now hold ZERO direct inserts (1 writer call each).
 1. cancelPurchase: exactly 1 row, 0/0 costs, exact before/after;
    stock 30 -> 20, WAC 17 -> 20 (cancel-only revalue), supplier 110 -> 0.
 2. updatePurchase: exactly 2 rows (restore -10 + apply +6), both 0/0;
@@ -40,8 +47,9 @@ PGlite (facade construction copied from purchase-cancel-wac-recompute):
 3. Rollback: an edit whose apply leg fails (unknown product) leaves
    ZERO movement rows and untouched balances — the writer shares the
    edit's transaction.
-4. The deferral arithmetic: concrete inputs where the writer's total
-   diverges from the stored total by a full minor unit.
+4. The A10 proof: the same concrete inputs, now asserting the new
+   modes REPRODUCE the stored totals (the plain-writer totals are kept
+   as the contrast — the reason the deferral existed at all).
 */
 
 import 'reflect-metadata';
@@ -58,6 +66,7 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { PurchasesWriteService } from '../../src/modules/purchases/services/purchases-write.service';
 import { PurchasesFinanceService } from '../../src/modules/purchases/services/purchases-finance.service';
+import { recordStockMovement } from '../../src/common/utils/stock-movement-writer';
 import { roundMoney } from '../../src/modules/accounting/engines/money-minor-units.engine';
 import { purchaseReceiptBaseUnitCost } from '../../src/modules/purchases/engines/purchase-receipt-cost.engine';
 import { stockMovementTotal } from '../../src/modules/catalog/engines/stock-movement-total.engine';
@@ -503,8 +512,8 @@ function assertZeroCost(row: PurchaseMovementRow, what: string): void {
 
 async function main(): Promise<void> {
   // §0 — the routing pin: cancel + update hold ZERO direct inserts
-  // (1 + 2 writer calls), while the 3 deferred files still hold exactly
-  // 1 direct insert each. (Pre-migration this fails: 1 + 2 inserts, 0 calls.)
+  // (1 + 2 writer calls), and the 3 A10-migrated files hold ZERO direct
+  // inserts (1 writer call each).
   {
     const cancel = SRC('modules/purchases/services/purchases-write-cancel.service.ts');
     const update = SRC('modules/purchases/services/purchases-write-update.service.ts');
@@ -514,19 +523,22 @@ async function main(): Promise<void> {
     assert.equal(countWriterCalls(update), 2, 'update must call recordStockMovement exactly twice (restore + apply)');
     assert.equal(
       countDirectInserts(SRC('modules/purchases/services/goods-receipt-post.service.ts')),
-      1,
-      'GRN stays hand-written in A8 (deferred to A10)',
+      0,
+      'GRN migrated in A10 (composite mode)',
     );
+    assert.equal(countWriterCalls(SRC('modules/purchases/services/goods-receipt-post.service.ts')), 1);
     assert.equal(
       countDirectInserts(SRC('modules/purchases/services/purchases-write-create.service.ts')),
-      1,
-      'create stays hand-written in A8 (deferred to A10)',
+      0,
+      'create migrated in A10 (composite mode)',
     );
+    assert.equal(countWriterCalls(SRC('modules/purchases/services/purchases-write-create.service.ts')), 1);
     assert.equal(
       countDirectInserts(SRC('modules/purchases/services/purchases-write-receive-goods.service.ts')),
-      1,
-      'receive-goods stays hand-written in A8 (deferred to A10)',
+      0,
+      'receive-goods migrated in A10 (full-precision mode)',
     );
+    assert.equal(countWriterCalls(SRC('modules/purchases/services/purchases-write-receive-goods.service.ts')), 1);
   }
 
   // §1 — cancel: 30 @ 17, cancel 10 @ 11.
@@ -649,17 +661,19 @@ async function main(): Promise<void> {
     }
   }
 
-  // §4 — the deferral arithmetic, with the REAL engines. A plain writer
-  // call cannot reproduce these stored totals, so the 3 sites stay
-  // hand-written until A10 adds a composite-total mode.
+  // §4 — the A10 proof, with the REAL engines and the same concrete
+  // inputs as the A8 deferral. The plain writer still diverges (the
+  // contrast, kept); the new modes, driven through the REAL writer on
+  // this spec's own harness, REPRODUCE the stored totals.
   {
     // GRN composite: stored = roundMoney(3 * 33.375) + freight 1 = 101.13;
-    // the writer would see the landed unit 33.375 + 1/3 rounded to 6dp and
-    // book roundMoney(3 * 33.708333) = 101.12 — a full minor unit short.
+    // the plain writer would see the landed unit 33.375 + 1/3 rounded to
+    // 6dp and book roundMoney(3 * 33.708333) = 101.12 — a full minor unit
+    // short.
     const grnStored = stockMovementTotal(3, 33.375, 2) + 1;
     const grnWriter = roundMoney(3 * Number((33.375 + 1 / 3).toFixed(6)), 2);
     assert.equal(Math.round(grnStored * 100), 10113, 'GRN stored total is 101.13');
-    assert.equal(Math.round(grnWriter * 100), 10112, 'GRN writer total would be 101.12');
+    assert.equal(Math.round(grnWriter * 100), 10112, 'GRN plain-writer total would be 101.12');
     assert.notEqual(
       Math.round(grnStored * 100),
       Math.round(grnWriter * 100),
@@ -667,17 +681,65 @@ async function main(): Promise<void> {
     );
     // Receive-goods repeating decimal: the effective unit cost is
     // 33.33 / 12 / 1.1 = 2.524999...; the stored total rounds the FULL
-    // product (2.52) while the writer rounds the 6dp unit (2.53).
+    // product (2.52) while the plain writer rounds the 6dp unit (2.53).
     const effective = purchaseReceiptBaseUnitCost(33.33, 12, 10, true);
     const receiveStored = roundMoney(effective * 1, 2);
     const receiveWriter = roundMoney(Number(effective.toFixed(6)) * 1, 2);
     assert.equal(Math.round(receiveStored * 100), 252, 'receive stored total is 2.52');
-    assert.equal(Math.round(receiveWriter * 100), 253, 'receive writer total would be 2.53');
+    assert.equal(Math.round(receiveWriter * 100), 253, 'receive plain-writer total would be 2.53');
     assert.notEqual(
       Math.round(receiveStored * 100),
       Math.round(receiveWriter * 100),
       'the repeating-decimal receive total diverges from the plain-writer total',
     );
+    // The new modes, through the real writer: composite 101.13 and
+    // full-precision 2.52 — the stored totals, not the plain ones.
+    const { db } = await makeDb();
+    try {
+      await seedCurrency(db, 'EGP');
+      await seedCancelFixture(db);
+      const grnResult = await db.transaction().execute(async (trx) => {
+        return recordStockMovement(trx, {
+          productId: 10,
+          delta: 3,
+          branchId: null,
+          locationId: null,
+          tenantId: 't1',
+          accountId: 'a1',
+          movementType: 'goods_receipt',
+          unitCost: Number((33.375 + 1 / 3).toFixed(6)),
+          totalUnitCost: 33.375,
+          freightShare: 1,
+          moneyDigits: 2,
+          referenceType: 'goods_receipt',
+          referenceId: 1,
+          reason: 'goods_receipt',
+          createdBy: 1,
+        } as never);
+      });
+      assert.equal(Number(grnResult.totalCost), 101.13, 'composite mode reproduces the stored 101.13');
+      const receiveResult = await db.transaction().execute(async (trx) => {
+        return recordStockMovement(trx, {
+          productId: 10,
+          delta: 1,
+          branchId: null,
+          locationId: null,
+          tenantId: 't1',
+          accountId: 'a1',
+          movementType: 'purchase_receipt',
+          unitCost: Number(effective.toFixed(6)),
+          totalUnitCost: effective,
+          moneyDigits: 2,
+          referenceType: 'purchase',
+          referenceId: 1,
+          reason: 'purchase_receipt',
+          createdBy: 1,
+        } as never);
+      });
+      assert.equal(Number(receiveResult.totalCost), 2.52, 'full-precision mode reproduces the stored 2.52');
+    } finally {
+      await db.destroy();
+    }
   }
 
   // §5 — wiring: both critical lists carry 363 specs in identical
@@ -690,8 +752,8 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 366);
-    assert.equal(chain.length, 366);
+    assert.equal(specs.length, 369);
+    assert.equal(chain.length, 369);
     assert.deepEqual(chain, specs);
     assert.equal(specs[358], 'test/critical/sales-writer-create.spec.ts');
     assert.equal(specs[359], 'test/critical/sales-writer-cancel-edit.spec.ts');
@@ -701,7 +763,10 @@ async function main(): Promise<void> {
     assert.equal(specs[363], 'test/critical/phase1-a9-routing.spec.ts');
     assert.equal(specs[364], 'test/critical/phase1-a9-inventory-writer.spec.ts');
     assert.equal(specs[365], 'test/critical/phase1-a9-services-writer.spec.ts');
-    console.log('  evidence specs wired into both critical lists (366 = 366, identical order), passed');
+    assert.equal(specs[366], 'test/critical/phase1-a10-rounding.spec.ts');
+    assert.equal(specs[367], 'test/critical/phase1-a10-purchases-writer.spec.ts');
+    assert.equal(specs[368], 'test/critical/phase1-a10-import-writer.spec.ts');
+    console.log('  evidence specs wired into both critical lists (369 = 369, identical order), passed');
   }
 }
 

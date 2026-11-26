@@ -13,13 +13,14 @@ import { AppError } from '../../../common/errors/app-error';
 import { purchaseReceiptBaseUnitCost } from '../engines/purchase-receipt-cost.engine';
 import { advancePurchaseOrderReceipt } from '../engines/purchase-order-receipt.engine';
 import { valueStockReceipt } from '../../accounting/inventory-valuation';
-import { applyStockDelta, lockStockProducts } from '../../../common/utils/location-stock-ledger';
+import { lockStockProducts } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { Database } from '../../../database/database.types';
 import { calculatePurchaseStockIncrease } from '../helpers/purchases-write.helper';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { PurchasesFinanceService } from './purchases-finance.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export interface PurchasesWriteReceiveGoodsDeps {
   db: Kysely<Database>;
@@ -218,13 +219,30 @@ export class PurchasesWriteReceiveGoodsService {
         const itemLocationId = item.location_id ?? purchase.location_id;
         const branchId = purchase.branch_id;
 
-        const stockChange = await applyStockDelta(trx, {
+        // Phase 1 A10: the row goes through recordStockMovement
+        // (full-precision mode) — the total is computed from the FULL
+        // repeating-decimal effective unit (totalUnitCost), not the 6dp
+        // stored unit: roundMoney(effectiveUnitCost x increasedQty) books
+        // 2.52 where the 6dp unit would book 2.53 (A8 §4). moneyDigits is
+        // resolved once here (it was inline in the old total expression).
+        // The stored unit stays the 6dp effective unit, exactly as today.
+        const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+        const stockChange = await recordStockMovement(trx, {
           productId: Number(item.product_id),
           delta: increasedQty,
           branchId: branchId ? Number(branchId) : undefined,
           locationId: itemLocationId ? Number(itemLocationId) : undefined,
           tenantId: scope.tenantId,
           accountId: scope.accountId,
+          movementType: 'purchase_receipt',
+          unitCost: Number(effectiveUnitCost.toFixed(6)),
+          totalUnitCost: effectiveUnitCost,
+          moneyDigits,
+          referenceType: 'purchase',
+          referenceId: purchaseId,
+          reason: 'purchase_receipt',
+          note: `استلام بضاعة لأمر شراء PUR-${purchaseId}`,
+          createdBy: auth.userId,
         });
 
         // INV-WAC-SINGLE-WRITER: every receipt blends through the one
@@ -242,31 +260,6 @@ export class PurchasesWriteReceiveGoodsService {
             increasedQty * effectiveUnitCost,
           );
         }
-
-        await trx
-          .insertInto('stock_movements')
-          .values({
-            product_id: item.product_id,
-            movement_type: 'purchase_receipt',
-            qty: increasedQty,
-            before_qty: stockChange.scopeBefore,
-            after_qty: stockChange.scopeAfter,
-            unit_cost: Number(effectiveUnitCost.toFixed(6)),
-            total_cost: roundMoney(
-              effectiveUnitCost * increasedQty,
-              currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)),
-            ),
-            reason: 'purchase_receipt',
-            note: `استلام بضاعة لأمر شراء PUR-${purchaseId}`,
-            reference_type: 'purchase',
-            reference_id: purchaseId,
-            branch_id: branchId ? Number(branchId) : undefined,
-            location_id: itemLocationId ? Number(itemLocationId) : undefined,
-            created_by: auth.userId,
-            tenant_id: scope.tenantId,
-            account_id: scope.accountId,
-          } as any)
-          .execute();
       }
 
       // INV-PO-RECEIVED-QUANTITY-ADVANCE: reflect this receipt on its

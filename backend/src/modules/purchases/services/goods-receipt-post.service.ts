@@ -3,7 +3,8 @@ import { type Kysely, sql } from '../../../database/kysely';
 import { type Database } from '../../../database/database.types';
 import { type AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
-import { applyStockDelta, lockStockProducts } from '../../../common/utils/location-stock-ledger';
+import { lockStockProducts } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { upsertInventoryBatchFromReceipt } from '../helpers/inventory-batch-receipt.helper';
 import { allocateLandedCosts } from '../engines/landed-cost-allocation.engine';
 import { valueStockReceipt } from '../../accounting/inventory-valuation';
@@ -12,7 +13,6 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { type AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { advancePurchaseOrderReceipt } from '../engines/purchase-order-receipt.engine';
-import { stockMovementTotal } from '../../catalog/engines/stock-movement-total.engine';
 
 /**
  * GoodsReceiptPostService — slice S2 of the goods-receipt split.
@@ -242,14 +242,18 @@ export class GoodsReceiptPostService {
           const allocatedFreight = freightByLineId.get(Number(line.id)) || 0;
           const landedUnitCost =
             allocatedFreight > 0 ? Number((lineUnitCost + allocatedFreight / accepted).toFixed(6)) : lineUnitCost;
-          const landedLineTotal = stockMovementTotal(accepted, lineUnitCost, moneyDigits) + allocatedFreight;
-          totalGrniAmount += landedLineTotal;
 
           // Route stock through the shared ledger helper instead of writing the two balance tables
           // by hand. Doing it by hand skipped the canonical lock order (products BEFORE
           // product_location_stock), which deadlocked against concurrent sales, and produced
           // stock_movements rows whose before/after balances were hardcoded 0 / accepted.
-          const stockChange = await applyStockDelta(trx, {
+          // Phase 1 A10: the row goes through recordStockMovement (composite
+          // mode) — the bare line total at book digits plus the exact
+          // freight share, computed once by the writer. The returned
+          // totalCost IS the landed line total, so the GRNI journal below
+          // (the sum of these totals) can never diverge from the stored
+          // movement totals by rounding (INV-GRN-JOURNAL-CENTRAL-POSTING).
+          const stockChange = await recordStockMovement(trx, {
             productId: Number(line.productId),
             delta: accepted,
             branchId: targetBranchId,
@@ -257,7 +261,20 @@ export class GoodsReceiptPostService {
             tenantId: scope.tenantId,
             accountId: scope.accountId || scope.tenantId,
             allowNegative: true, // a receipt only adds; never reject it on a negative-stock rule
+            movementType: 'goods_receipt',
+            unitCost: landedUnitCost,
+            totalUnitCost: lineUnitCost,
+            freightShare: allocatedFreight,
+            moneyDigits,
+            referenceType: 'goods_receipt',
+            referenceId: grn.id,
+            reason: 'goods_receipt',
+            note: `إذن استلام مخزني GRN - ${grn.docNo}`,
+            createdBy: auth.userId,
           });
+          // The writer always computes a total here (omitTotalCost is not
+          // set); the ?? 0 only satisfies the type.
+          totalGrniAmount += stockChange.totalCost ?? 0;
 
           // Moving average cost on receipt. Without this, goods arriving at a new price never
           // updated products.cost_price, so COGS kept using a stale cost indefinitely.
@@ -295,35 +312,6 @@ export class GoodsReceiptPostService {
               .where('tenant_id', '=', scope.tenantId)
               .execute();
           }
-
-          // Record formal stock movement with the real running balances.
-          await trx
-            .insertInto('stock_movements')
-            .values({
-              tenant_id: scope.tenantId,
-              account_id: scope.accountId || scope.tenantId,
-              product_id: line.productId,
-              movement_type: 'goods_receipt',
-              qty: accepted,
-              before_qty: stockChange.scopeBefore,
-              after_qty: stockChange.scopeAfter,
-              unit_cost: landedUnitCost,
-              // INV-GRN-JOURNAL-CENTRAL-POSTING: the stored movement total
-              // is the single book-digits computation (stockMovementTotal
-              // plus the line's allocated freight), so it can never
-              // diverge from the posted GRNI leg by rounding. The old
-              // toFixed(4) stored 100.125 for a 2dp tenant while the
-              // journal leg rounded to 100.13.
-              total_cost: landedLineTotal,
-              reason: 'goods_receipt',
-              note: `إذن استلام مخزني GRN - ${grn.docNo}`,
-              reference_type: 'goods_receipt',
-              reference_id: grn.id,
-              branch_id: targetBranchId,
-              location_id: targetLocationId,
-              created_by: auth.userId,
-            })
-            .execute();
 
           const drug = await trx
             .selectFrom('pharmacy_drugs')

@@ -26,7 +26,8 @@ import {
   CLIENT_BUSINESS_DATE_FUTURE_DAYS,
 } from '../../../common/utils/client-date-bounds.util';
 import { ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
-import { applyStockDelta, lockStockProducts } from '../../../common/utils/location-stock-ledger';
+import { lockStockProducts } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { Database } from '../../../database/database.types';
 import { UpsertPurchaseDto } from '../dto/upsert-purchase.dto';
 import {
@@ -674,15 +675,6 @@ export class PurchasesWriteCreateService {
           // batch. Its amount is expensed by postPurchase instead.
           if (!isPurchaseOrderOnly && !item.isService) {
             const { increasedQty } = calculatePurchaseStockIncrease(item.qty, item.unitMultiplier, 0);
-            const stockChange = await applyStockDelta(trx, {
-              productId: item.productId,
-              delta: increasedQty,
-              branchId,
-              locationId: itemLocationId,
-              tenantId: scope.tenantId,
-              accountId: scope.accountId,
-            });
-
             // Inventory cost is per base stock unit, not per purchased carton.
             const baseUnitCost = netPurchaseUnitCost / item.unitMultiplier;
             // INV-LANDED-COST-ALLOCATION: freight carried on the invoice
@@ -690,6 +682,33 @@ export class PurchasesWriteCreateService {
             // landed cost instead of the bare item cost.
             const landedBaseUnitCost =
               allocatedFreight > 0 && increasedQty > 0 ? baseUnitCost + allocatedFreight / increasedQty : baseUnitCost;
+            // Phase 1 A10: the row goes through recordStockMovement
+            // (composite mode) — the bare total at book digits plus the
+            // exact freight share, computed once by the writer. The total
+            // is computed from the BARE base unit (totalUnitCost), not
+            // the landed 6dp unit: roundMoney(increasedQty x baseUnit)
+            // equals roundMoney(netUnit x qty) (BF1, 2M lines), so the
+            // stored total is identical to the old spelling to the
+            // piastre, and the stored unit stays the landed 6dp unit.
+            const stockChange = await recordStockMovement(trx, {
+              productId: item.productId,
+              delta: increasedQty,
+              branchId,
+              locationId: itemLocationId,
+              tenantId: scope.tenantId,
+              accountId: scope.accountId,
+              movementType: 'purchase',
+              unitCost: Number(landedBaseUnitCost.toFixed(6)),
+              totalUnitCost: baseUnitCost,
+              freightShare: allocatedFreight,
+              moneyDigits,
+              referenceType: 'purchase',
+              referenceId: id,
+              reason: 'purchase',
+              note: `فاتورة شراء PUR-${id}`,
+              createdBy: auth.userId,
+            });
+
             // INV-WAC-SINGLE-WRITER: every receipt blends through the one
             // writer (quantity recovery + algebraic blend + write). A
             // zero-quantity line writes nothing: no receipt to blend and
@@ -704,28 +723,6 @@ export class PurchasesWriteCreateService {
                 increasedQty * landedBaseUnitCost,
               );
             }
-            await trx
-              .insertInto('stock_movements')
-              .values({
-                product_id: item.productId,
-                movement_type: 'purchase',
-                qty: increasedQty,
-                unit_cost: Number(landedBaseUnitCost.toFixed(6)),
-                total_cost: roundMoney(netPurchaseUnitCost * item.qty, moneyDigits) + allocatedFreight,
-                before_qty: stockChange.scopeBefore,
-                after_qty: stockChange.scopeAfter,
-                reason: 'purchase',
-                note: `فاتورة شراء PUR-${id}`,
-                reference_type: 'purchase',
-                reference_id: id,
-                branch_id: branchId,
-                location_id: itemLocationId,
-                created_by: auth.userId,
-                tenant_id: scope.tenantId,
-                account_id: scope.accountId,
-              })
-              .execute();
-
             const batchNo = item.batchNumber ? String(item.batchNumber).trim() : '';
             const expiryDate = item.expiryDate ? String(item.expiryDate).trim() : '';
             const drug = await trx
