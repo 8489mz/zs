@@ -263,9 +263,8 @@
 - Imported by (de-facto door today):
   - `backend/src/modules/storefront/engines/store-public-url.engine` — 5 statement(s), from ai-copilot (1), saas-admin (2), tenant-subscription (2)
   - `backend/src/modules/storefront/storefront-media.service` — 4 statement(s), from catalog (4)
-  - `backend/src/modules/storefront/storefront-slug-resolution` — 1 statement(s), from sales (1)
   - `backend/src/modules/storefront/storefront.service` — 5 statement(s), from catalog (5)
-- Intended door: the Nest module file plus the 4 file(s) above.
+- Intended door: the Nest module file plus the 3 file(s) above.
 
 ### backend/tax-integration
 

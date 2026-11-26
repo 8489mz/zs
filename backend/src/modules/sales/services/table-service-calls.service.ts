@@ -3,7 +3,7 @@ import { Kysely } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { CreateTableServiceCallDto } from '../dto/table-service-call.dto';
-import { findTenantByStorefrontSlug } from '../../storefront/storefront-slug-resolution';
+import { findTenantByStorefrontSlug } from '../../../common/utils/storefront-slug-resolution';
 
 @Injectable()
 export class TableServiceCallsService {

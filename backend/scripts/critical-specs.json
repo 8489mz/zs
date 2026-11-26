@@ -370,6 +370,7 @@
     "test/critical/phase1-a10-purchases-writer.spec.ts",
     "test/critical/phase1-a10-import-writer.spec.ts",
     "test/critical/phase1-b1-reports-sales.spec.ts",
-    "test/critical/phase1-b2-sales-settings.spec.ts"
+    "test/critical/phase1-b2-sales-settings.spec.ts",
+    "test/critical/phase1-b3-sales-storefront.spec.ts"
   ]
 }

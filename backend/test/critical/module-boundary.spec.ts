@@ -165,6 +165,19 @@
  * bidirectional list. The single-store property is preserved: the
  * cache is moved, never duplicated.
  *
+ * B3 (sales|storefront decoupling): the tenant slug lookup moves to
+ * shared — backend/src/common/utils/storefront-slug-resolution.ts
+ * (byte-identical move of the whole file) — so sales no longer imports
+ * from the storefront module at all. sales->storefront 1 -> 0 (edge
+ * gone), storefront->sales stays 7 (module DI + SalesService/KdsService
+ * + restaurant-rule users, one-way, not a cycle). Backend total pin
+ * 759 -> 758 and backend edge pin 70 -> 69 (= the B3 edge delta −1,
+ * no other growth); the sales|storefront pair leaves the bidirectional
+ * list. The storefront-slug-resolution door row is retired
+ * (docs/MODULE_DOORS.md drops its line; storefront door table 4 -> 3
+ * files); the doors spec needs no change. The single-source property
+ * is preserved: the lookup is moved, never duplicated.
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -244,7 +257,6 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'sales->reports': 1,
   'sales->returns': 4,
   'sales->settings': 4,
-  'sales->storefront': 1,
   'sales->tax-integration': 3,
   'services->accounting': 4,
   'sessions->activation': 2,
@@ -326,7 +338,6 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = [
   'accounting|purchases',
   'delivery-reps|sales',
   'returns|sales',
-  'sales|storefront',
 ];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
   'accounting|treasury',
@@ -344,7 +355,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
 ];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 759;
+const PINNED_BACKEND_TOTAL = 758;
 const PINNED_FRONTEND_TOTAL = 138;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
@@ -588,7 +599,7 @@ async function main(): Promise<void> {
   );
 
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
-  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 70, 'pinned backend edge table must list 70 edges');
+  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 69, 'pinned backend edge table must list 69 edges');
   const backend = scanBackend();
   assert.ok(
     backend.total >= BACKEND_TOTAL_FLOOR,
