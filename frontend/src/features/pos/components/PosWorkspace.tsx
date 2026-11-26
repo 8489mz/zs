@@ -9,7 +9,7 @@ import { PosWorkspaceConfirmDialogsSection } from '@/features/pos/components/pos
 import { PosWorkspaceAuxDialogs1 } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs1';
 import { PosWorkspaceAuxDialogs2 } from '@/features/pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs2';
 import { printOrderCupLabels } from '@/lib/pos-printing/cup-label';
-import { salesApi } from '@/features/sales/api/sales.api';
+import { salesApi } from '@/features/sales';
 import { getPostSalePrintMode, getSelectedCustomerName, printCurrentPosDraft } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { isPosModalOpen } from '@/features/pos/lib/pos-keyboard-safety';
 import { posApi } from '@/features/pos/api/pos.api';

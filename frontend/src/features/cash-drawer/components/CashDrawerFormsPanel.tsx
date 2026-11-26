@@ -7,7 +7,7 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import type { Branch, CashierShift, Location } from '@/types/domain';
 import type { CloseShiftValues, MovementValues, OpenShiftValues } from '@/features/cash-drawer/hooks/useCashDrawerPageController';
-import { getOfflineSalesQueue } from '@/features/pos/lib/pos-offline-sync';
+import { getOfflineSalesQueue } from '@/features/pos';
 import { PaymentChannelRow } from '@/features/cash-drawer/components/cash-drawer-forms/PaymentChannelRow';
 import type { DetailChannel } from '@/features/cash-drawer/components/cash-drawer-forms/PaymentChannelRow';
 import { CashDrawerOpenForm, type MutationLike } from '@/features/cash-drawer/components/cash-drawer-forms/CashDrawerOpenForm';

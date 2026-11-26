@@ -6,7 +6,7 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { formatCurrency } from '@/lib/format';
 import { formatDateTime, formatSalePaymentText } from '@/lib/pos-printing/shared';
 import { printPostedSaleReceipt } from '@/lib/pos-printing';
-import { salesApi } from '@/features/sales/api/sales.api';
+import { salesApi } from '@/features/sales';
 import type { AppSettings, Sale } from '@/types/domain';
 
 interface PosRecentSalesReprintModalProps {

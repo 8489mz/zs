@@ -5,10 +5,13 @@ export { posApi } from '@/features/pos/api/pos.api';
 export { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
 export { getProductPrice } from '@/features/pos/lib/pos.domain';
 export { getPosTerminalCode } from '@/features/pos/lib/pos-offline-sync';
+export { getOfflineSalesQueue } from '@/features/pos/lib/pos-offline-sync';
 export { getPosAvailability, isPosAvailable } from '@/features/pos/lib/pos-availability';
 export type { PosDisabledReason, PosSettingsLike } from '@/features/pos/lib/pos-availability';
-export { broadcastSignageOffersUpdate, subscribeSignageOffersUpdate } from '@/features/pos/lib/pos-customer-display-bridge';
+export {
+  broadcastSignageOffersUpdate,
+  subscribeSignageOffersUpdate,
+} from '@/features/pos/lib/pos-customer-display-bridge';
 export { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 export { clearCatalogStorage } from '@/features/pos/lib/pos-catalog-storage';
 export { clearPosWorkspaceStorage } from '@/features/pos/lib/pos.persistence';
-
