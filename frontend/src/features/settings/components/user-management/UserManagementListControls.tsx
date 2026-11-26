@@ -3,7 +3,7 @@ import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
 import { USER_ROLE_TEMPLATES } from '@/features/settings/components/user-management.shared';
 import type { UserBulkAction } from '@/features/settings/hooks/useUserManagementController';
-import { isPlatformAdmin } from '@/app/router/access';
+import { isPlatformAdmin } from '@/shared/system/runtime-environment';
 import { useAuthStore } from '@/stores/auth-store';
 import { resolveCurrentVertical } from '@/shared/verticals/vertical-scope';
 

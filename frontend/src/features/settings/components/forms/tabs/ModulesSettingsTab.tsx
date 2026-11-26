@@ -7,7 +7,7 @@ import { FormSection } from '@/shared/components/form-section';
 import { LightbulbIcon, XIcon, CheckIcon, StarIcon, ChevronDownIcon } from '@/shared/components/icons/AppIcons';
 import { useHasFeature } from '@/shared/hooks/use-permission';
 import { useAuthStore } from '@/stores/auth-store';
-import { isDesktopOfflineApp, canManagePlatformModules } from '@/app/router/access';
+import { isDesktopOfflineApp, canManagePlatformModules } from '@/shared/system/runtime-environment';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { MAINTENANCE_PROFILES, getMaintenanceProfile, type MaintenanceProfileKey } from '@/features/maintenance/constants/maintenance-profiles';
 import { IndustryModeSelectorCard } from '@/features/settings/components/workspace-sections/IndustryModeSelectorCard';

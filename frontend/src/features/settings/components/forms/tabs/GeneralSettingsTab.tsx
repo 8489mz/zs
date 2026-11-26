@@ -5,7 +5,7 @@ import type { SettingsFormInput, SettingsFormOutput } from '@/features/settings/
 import type { Branch, Location } from '@/types/domain';
 import { applyAccentColorToDocument } from '@/lib/theme';
 import { useAuthStore } from '@/stores/auth-store';
-import { isPlatformAdmin } from '@/app/router/access';
+import { isPlatformAdmin } from '@/shared/system/runtime-environment';
 import { getPillarBadgeInfo } from './general-settings-tab/general-settings-tab-shared';
 import { GeneralSettingsBrand } from './general-settings-tab/general-settings-brand';
 import { GeneralSettingsBranchStock } from './general-settings-tab/general-settings-branch-stock';

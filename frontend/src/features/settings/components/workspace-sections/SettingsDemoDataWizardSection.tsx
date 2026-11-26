@@ -5,7 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { demoDataApi, type SeedDemoDataResult } from '@/features/settings/api/demo-data.api';
 import { clearCatalogStorage, clearPosWorkspaceStorage } from '@/features/pos';
 import { useAuthStore } from '@/stores/auth-store';
-import { isPlatformAdmin } from '@/app/router/access';
+import { isPlatformAdmin } from '@/shared/system/runtime-environment';
 import { SettingsDemoDataWizardQuickstart } from './settings-demo-data-wizard-section/settings-demo-data-wizard-quickstart';
 import { SettingsDemoDataWizardHero } from './settings-demo-data-wizard-section/settings-demo-data-wizard-hero';
 import { SettingsDemoDataWizardNotification } from './settings-demo-data-wizard-section/settings-demo-data-wizard-notification';

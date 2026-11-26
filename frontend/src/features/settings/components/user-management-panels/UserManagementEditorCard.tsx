@@ -4,7 +4,7 @@ import type { Branch } from '@/types/domain';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
 import { PASSWORD_MIN_LENGTH_HINT } from '@/config/security';
 import { useAuthStore } from '@/stores/auth-store';
-import { isPlatformAdmin } from '@/app/router/access';
+import { isPlatformAdmin } from '@/shared/system/runtime-environment';
 import type { ManagedUserRecord } from '@/features/settings/api/settings.api';
 import { formatDateTime } from '@/features/settings/components/user-management.shared';
 import { resolveCurrentVertical } from '@/shared/verticals/vertical-scope';
