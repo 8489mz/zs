@@ -13,6 +13,13 @@ export function useProductsQuery() {
   return useQuery({ queryKey: queryKeys.products, queryFn: async () => (await productsApi.listAll()).products });
 }
 
+export function useMarketplaceProductsQuery() {
+  return useQuery({
+    queryKey: ['marketplace-products-selector'],
+    queryFn: () => productsApi.listPage({ pageSize: 150 }),
+  });
+}
+
 export function useSalesQuery() {
   return useQuery({ queryKey: queryKeys.sales, queryFn: salesApi.list });
 }

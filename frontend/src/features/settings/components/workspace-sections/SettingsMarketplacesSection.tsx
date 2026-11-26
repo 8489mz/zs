@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { productsApi } from '@/features/products';
+import { useMarketplaceProductsQuery } from '@/shared/hooks/use-catalog-queries';
 import {
   CheckIcon,
   AlertTriangleIcon,
@@ -80,10 +79,7 @@ export const SettingsMarketplacesSection: React.FC = () => {
     testResult, setTestResult, saveSuccess, saveMutation, testMutation,
   } = useMarketplaceConfigs();
 
-  const productsQuery = useQuery({
-    queryKey: ['marketplace-products-selector'],
-    queryFn: () => productsApi.listPage({ pageSize: 150 }),
-  });
+  const productsQuery = useMarketplaceProductsQuery();
   const inboundModals = useMarketplaceInboundModals({ inboundShipmentsQuery });
   const { setShowInboundModal, setPrintFnskuModal } = inboundModals;
 

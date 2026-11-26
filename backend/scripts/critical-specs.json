@@ -380,6 +380,7 @@
     "test/critical/phase1-f2-feature-public-indices.spec.ts",
     "test/critical/phase1-f3-feature-boundary-legs.spec.ts",
     "test/critical/phase1-f4-settings-access-door.spec.ts",
-    "test/critical/phase1-f5a-audit-settings.spec.ts"
+    "test/critical/phase1-f5a-audit-settings.spec.ts",
+    "test/critical/phase1-f5b-products-settings.spec.ts"
   ]
 }
