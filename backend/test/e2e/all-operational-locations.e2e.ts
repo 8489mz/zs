@@ -567,7 +567,11 @@ async function runTest() {
   } finally {
     console.log(`[Cleanup] Attempting to delete isolated tenant: ${newTenantId}`);
     try {
-      await superAdminClient.post(`/api/saas-admin/tenants/${newTenantId}/delete`, {}, 201);
+      await superAdminClient.post(
+        `/api/saas-admin/tenants/${newTenantId}/delete`,
+        { superAdminPassword: devPassword },
+        201,
+      );
       console.log(`✅ Tenant ${newTenantId} deleted.`);
     } catch (e: any) {
       // Expected: FK constraints in test DB (audit_logs, stock_movements, accounting_settings) prevent clean deletion

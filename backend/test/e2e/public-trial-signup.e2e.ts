@@ -4,6 +4,7 @@ import { E2EClient } from './e2e-utils';
 async function main(): Promise<void> {
   const admin = new E2EClient();
   const visitor = new E2EClient();
+  const superAdminPassword = process.env.E2E_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || '';
   await admin.login();
 
   const suffix = String(Date.now());
@@ -34,7 +35,7 @@ async function main(): Promise<void> {
   } finally {
     const found = await admin.get(`/api/saas-admin/tenants?search=${encodeURIComponent(email)}`);
     for (const tenant of found.tenants || []) {
-      await admin.post(`/api/saas-admin/tenants/${tenant.id}/delete`, {});
+      await admin.post(`/api/saas-admin/tenants/${tenant.id}/delete`, { superAdminPassword });
     }
   }
 

@@ -219,7 +219,7 @@ async function main() {
 
   // Cleanup
   console.log(`Cleaning up tenant ${tenantId}`);
-  await superAdminClient.post(`/api/saas-admin/tenants/${tenantId}/delete`, {});
+  await superAdminClient.post(`/api/saas-admin/tenants/${tenantId}/delete`, { superAdminPassword: devPassword });
 
   console.log('Quick Transfer Tests Passed!');
 }

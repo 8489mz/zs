@@ -5,11 +5,10 @@ async function main() {
   const saasAdmin = new E2EClient();
   const newTenantOwner = new E2EClient();
 
+  const superAdminPassword = process.env.E2E_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || '';
+
   // Use the isolated E2E platform administrator prepared by the test harness.
-  await saasAdmin.login(
-    process.env.E2E_USERNAME || process.env.DEFAULT_ADMIN_USERNAME || 'owner',
-    process.env.E2E_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || '',
-  );
+  await saasAdmin.login(process.env.E2E_USERNAME || process.env.DEFAULT_ADMIN_USERNAME || 'owner', superAdminPassword);
 
   // 4. Create Trial Tenant
   const uniqueStr = Date.now().toString();
@@ -198,7 +197,7 @@ async function main() {
 
     // 13. Delete Tenant (isolated cleanup)
     console.log('Deleting isolated tenant...');
-    const deleteRes = await saasAdmin.post(`/api/saas-admin/tenants/${tenantId}/delete`, {});
+    const deleteRes = await saasAdmin.post(`/api/saas-admin/tenants/${tenantId}/delete`, { superAdminPassword });
     assert.ok(deleteRes.ok, 'Delete tenant should succeed');
     deleted = true;
 
@@ -215,7 +214,7 @@ async function main() {
   } finally {
     if (!deleted) {
       try {
-        await saasAdmin.post(`/api/saas-admin/tenants/${tenantId}/delete`, {});
+        await saasAdmin.post(`/api/saas-admin/tenants/${tenantId}/delete`, { superAdminPassword });
       } catch (cleanupError) {
         console.error('Could not remove the temporary SaaS tenant after test failure:', cleanupError);
       }
