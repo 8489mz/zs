@@ -375,6 +375,7 @@
     "test/critical/phase1-b4-accounting-hr.spec.ts",
     "test/critical/phase1-b5-accounting-manufacturing.spec.ts",
     "test/critical/phase1-b6-accounting-purchases.spec.ts",
-    "test/critical/phase1-b7-returns-sales.spec.ts"
+    "test/critical/phase1-b7-returns-sales.spec.ts",
+    "test/critical/phase1-b8-delivery-reps-sales.spec.ts"
   ]
 }

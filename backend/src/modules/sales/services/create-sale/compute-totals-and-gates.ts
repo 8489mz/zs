@@ -1,9 +1,6 @@
 import { AppError } from '../../../../common/errors/app-error';
 import { computeInvoiceTotals } from '../../../../common/utils/invoice-totals';
-import {
-  getCashDiscountPercent,
-  getVanRepDiscountCapPercent,
-} from '../../../delivery-reps/rep-target/rep-settings.slice';
+import { getCashDiscountPercent, getVanRepDiscountCapPercent } from '../../../../common/utils/rep-settings.slice';
 import { allocateInvoiceDiscount } from '../../engines/invoice-discount.engine';
 import { resolveSaleServiceCharge } from '../../engines/sale-service-charge.engine';
 import { resolveSaleTaxRate } from '../../engines/sale-tax-rate.engine';

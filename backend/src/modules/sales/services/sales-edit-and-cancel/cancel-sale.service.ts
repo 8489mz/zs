@@ -11,7 +11,7 @@ import {
   roundSaleResidual,
 } from '../../helpers/sales-write.helper';
 import { assertSaleNotZatcaSigned } from '../../../tax-integration/services/zatca/zatca-invoice-status';
-import { negateContribution, tripSaleContribution } from '../../../delivery-reps/van-trip-counters.engine';
+import { negateContribution, tripSaleContribution } from '../../../../common/utils/van-trip-counters.engine';
 import { restoreImportLotsFromCancelledSale } from '../../../import-sales/helpers/import-lot-allocation.helper';
 import { sql } from '../../../../database/kysely';
 import { type SalesEditAndCancelDeps, applyTripCounterDelta, lockOpenTripRow } from './sales-edit-and-cancel-types';

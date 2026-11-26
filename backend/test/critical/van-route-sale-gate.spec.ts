@@ -1016,10 +1016,7 @@ async function main(): Promise<void> {
   // before the transaction opens on each, and the shared predicate
   // is the history transpose (empty serving set = first sale).
   {
-    const gate = readFileSync(
-      resolve(__dirname, '../../src/modules/delivery-reps/services/van-collections-and-swaps/rep-route-gate.ts'),
-      'utf8',
-    );
+    const gate = readFileSync(resolve(__dirname, '../../src/common/utils/rep-route-gate.ts'), 'utf8');
     assert.ok(gate.includes("'CUSTOMER_NOT_ON_REP_ROUTE'"), 'shared gate names the refusal code');
     assert.ok(gate.includes('serving.size === 0'), 'empty serving set (no history anywhere) allows the first sale');
     assert.ok(gate.includes('serving.has(Number(repId))'), 'own served customer allows the sale');
@@ -1032,7 +1029,7 @@ async function main(): Promise<void> {
     );
     assert.ok(fieldSlice.includes('assertRouteGate'), 'field sale calls the route gate');
     assert.ok(
-      fieldSlice.includes("import { assertRouteGate } from '../van-collections-and-swaps/rep-route-gate'"),
+      fieldSlice.includes("import { assertRouteGate } from '../../../../common/utils/rep-route-gate'"),
       'field sale calls the gate from the shared gate module (moved at the Batch 3 merge so the slice stays at its size baseline; the refusal code itself is pinned on the gate file above)',
     );
     const posGate = readFileSync(
@@ -1059,8 +1056,8 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 376);
-    assert.equal(chain.length, 376);
+    assert.equal(specs.length, 377);
+    assert.equal(chain.length, 377);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-route-sale-gate.spec.ts'));
     console.log('  wiring (349 specs, identical order) passed');

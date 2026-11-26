@@ -838,7 +838,11 @@ async function main(): Promise<void> {
       'settings-import-products must not insert product_location_stock directly anymore',
     );
     const directRows = (source: string): number => (source.match(/insertInto\('stock_movements'\)/g) ?? []).length;
-    assert.equal(directRows(fashion), 0, 'after phase1 A9, the fashion file routes all movements through the writer');
+    assert.equal(
+      directRows(fashion),
+      0,
+      'the fashion file must not hand-write a stock_movements row anymore (A9 converged the :554 zeroing-deduct row onto the writer)',
+    );
     assert.equal(directRows(write), 0, 'catalog-write must not hand-write a stock_movements row anymore');
     assert.equal(
       directRows(importProducts),
@@ -846,7 +850,11 @@ async function main(): Promise<void> {
       'settings-import-products must not hand-write a stock_movements row anymore',
     );
     const totals = (source: string): number => (source.match(/stockMovementTotal\(/g) ?? []).length;
-    assert.equal(totals(fashion), 0, 'after phase1 A9, the fashion file computes no stockMovementTotal directly');
+    assert.equal(
+      totals(fashion),
+      0,
+      'the fashion file must not compute the opening total directly anymore (A9 converged the zeroing-deduct total into the writer)',
+    );
     assert.equal(totals(write), 0, 'catalog-write must not compute the opening total directly anymore');
     assert.equal(
       totals(importProducts),
@@ -887,11 +895,11 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 376);
-    assert.equal(chain.length, 376);
+    assert.equal(specs.length, 377);
+    assert.equal(chain.length, 377);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/opening-balances-ledger.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-b8-delivery-reps-sales.spec.ts');
     console.log('  8. evidence spec wired into both critical lists (373 = 373, identical order), passed');
   }
 

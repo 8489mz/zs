@@ -250,6 +250,27 @@
  * runtime), and the single-source property is preserved: the type +
  * the port are moved, never duplicated.
  *
+ * B8 (delivery-reps|sales decoupling, the LAST pair): the three
+ * near-pure helper modules move whole to shared — van-trip-counters
+ * .engine.ts (137 lines, zero imports), rep-settings.slice.ts (210
+ * lines, zero imports), rep-route-gate.ts (145 lines, one import:
+ * AppError from common) — so sales no longer imports from the
+ * delivery-reps module at all. All 11 consumers re-point at the
+ * shared home (8 sales files + rep-target.engine.ts +
+ * rep-scoped-reads.slice.ts + execute-field-sale-internal.ts), plus
+ * the two critical specs that import the helpers directly. The
+ * single-source property is preserved: one cap (F1a), one route rule
+ * (F3), one attribution (F7) — the helpers are moved, never
+ * duplicated. delivery-reps->sales stays 9 (module DI + service
+ * injection, one-way, not a cycle). Backend total pin 746 -> 738 and
+ * backend edge pin 64 -> 63 (= the B8 edge delta −1, no other
+ * growth); the delivery-reps|sales pair leaves the bidirectional
+ * list — the backend list is EMPTY (no bidirectional pairs remain).
+ * The van-trip-counters door row retires (docs/MODULE_DOORS.md
+ * delivery-reps section drops the row; intended door "plus the 3
+ * file(s) above" -> "plus the 2 file(s) above"); the doors spec
+ * needs no change.
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -320,7 +341,6 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'saas-admin->storefront': 2,
   'sales->accounting': 67,
   'sales->cash-drawer': 5,
-  'sales->delivery-reps': 8,
   'sales->import-sales': 4,
   'sales->reports': 1,
   'sales->settings': 4,
@@ -399,7 +419,7 @@ const PINNED_FRONTEND_EDGES: Record<string, number> = {
   'updates->settings': 1,
 };
 
-const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = ['delivery-reps|sales'];
+const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = [];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
   'accounting|treasury',
   'accounts|purchases',
@@ -416,7 +436,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
 ];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 746;
+const PINNED_BACKEND_TOTAL = 738;
 const PINNED_FRONTEND_TOTAL = 138;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
@@ -660,7 +680,7 @@ async function main(): Promise<void> {
   );
 
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
-  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 64, 'pinned backend edge table must list 64 edges');
+  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 63, 'pinned backend edge table must list 63 edges');
   const backend = scanBackend();
   assert.ok(
     backend.total >= BACKEND_TOTAL_FLOOR,

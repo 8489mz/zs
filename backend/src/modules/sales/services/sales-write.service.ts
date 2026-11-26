@@ -25,7 +25,7 @@ import { HeldSaleDto } from '../dto/held-sale.dto';
 import { PosAuditEventDto } from '../dto/pos-audit-event.dto';
 import { UpsertSaleDto, SalesOrderConversionRelease } from '../dto/upsert-sale.dto';
 import { calculateAllowedSaleUnitPrice } from '../helpers/sales-write.helper';
-import { type TripSaleContribution } from '../../delivery-reps/van-trip-counters.engine';
+import { type TripSaleContribution } from '../../../common/utils/van-trip-counters.engine';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { SalesAuthorizationService } from './sales-authorization.service';
 import { SalesFinanceService } from './sales-finance.service';

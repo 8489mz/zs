@@ -5,7 +5,7 @@ import { roundMoney } from '../../../accounting/engines/money-minor-units.engine
 import { allocateSaleFromImportLots } from '../../../import-sales/helpers/import-lot-allocation.helper';
 import { offlineSaleTimestamps } from '../../../cash-drawer/helpers/cash-drawer.helper';
 import { computeSaleAllocationLegs, resolvePostedSalePaymentChannel } from '../../helpers/sales-write.helper';
-import { tripSaleContribution } from '../../../delivery-reps/van-trip-counters.engine';
+import { tripSaleContribution } from '../../../../common/utils/van-trip-counters.engine';
 import { applyTripCounterDelta, lockOpenTripRow } from '../sales-edit-and-cancel/sales-edit-and-cancel-types';
 import type { CreateSaleContext, CreateSaleDeps } from './create-sale-types';
 

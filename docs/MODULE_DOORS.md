@@ -101,8 +101,7 @@
 - Imported by (de-facto door today):
   - `backend/src/modules/delivery-reps/services/van-common.util` — 3 statement(s), from import-sales (1), partners (1), purchases (1)
   - `backend/src/modules/delivery-reps/van-routes-schedule.util` — 1 statement(s), from partners (1)
-  - `backend/src/modules/delivery-reps/van-trip-counters.engine` — 2 statement(s), from sales (2)
-- Intended door: the Nest module file plus the 3 file(s) above.
+- Intended door: the Nest module file plus the 2 file(s) above.
 
 ### backend/gcc-shipping
 

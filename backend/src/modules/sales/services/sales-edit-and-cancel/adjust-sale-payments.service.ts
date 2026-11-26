@@ -7,7 +7,7 @@ import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary'
 import { AuditService } from '../../../../core/audit/audit.service';
 import { AdjustSalePaymentsDto } from '../../dto/adjust-sale-payments.dto';
 import { assertSaleNotZatcaSigned } from '../../../tax-integration/services/zatca/zatca-invoice-status';
-import { diffContributions, tripSaleContribution } from '../../../delivery-reps/van-trip-counters.engine';
+import { diffContributions, tripSaleContribution } from '../../../../common/utils/van-trip-counters.engine';
 import { currencyMoneyDigits, roundMoney } from '../../../accounting/engines/money-minor-units.engine';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { AccountingPostingService } from '../../../accounting/accounting-posting.service';

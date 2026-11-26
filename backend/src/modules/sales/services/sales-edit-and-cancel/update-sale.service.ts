@@ -8,7 +8,7 @@ import { allocateInvoiceDiscount } from '../../engines/invoice-discount.engine';
 import { resolveSaleTaxRate } from '../../engines/sale-tax-rate.engine';
 import { resolveSaleServiceCharge } from '../../engines/sale-service-charge.engine';
 import { assertSaleNotZatcaSigned } from '../../../tax-integration/services/zatca/zatca-invoice-status';
-import { diffContributions, tripSaleContribution } from '../../../delivery-reps/van-trip-counters.engine';
+import { diffContributions, tripSaleContribution } from '../../../../common/utils/van-trip-counters.engine';
 import { allocateSaleFromImportLots, restoreImportLotsFromCancelledSale } from '../../../import-sales/helpers/import-lot-allocation.helper';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../../accounting/engines/money-minor-units.engine';

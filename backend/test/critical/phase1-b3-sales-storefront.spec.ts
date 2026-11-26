@@ -299,12 +299,12 @@ async function main(): Promise<void> {
     'module-boundary frontend table must keep its own sales->storefront edge at 1 (untouched)',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 746;'),
-    'module-boundary must re-pin the backend total 750 -> 746',
+    boundary.includes('const PINNED_BACKEND_TOTAL = 738;'),
+    'module-boundary must re-pin the backend total 746 -> 738',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 64,'),
-    'module-boundary must re-pin the backend edge table 65 -> 64 edges',
+    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
+    'module-boundary must re-pin the backend edge table 64 -> 63 edges',
   );
 
   // 6. The doors doc retires the slug-resolution door row.
@@ -323,7 +323,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-B3-SALES-STOREFRONT-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B3 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-B7-RETURNS-SALES-DECOUPLED/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-B8-DELIVERY-REPS-SALES-DECOUPLED/g) || []).length;
   assert.equal(
     guardCount,
     1,
@@ -332,16 +332,16 @@ async function main(): Promise<void> {
 
   // 8. The B1/B2 specs re-pin their boundary assertions to the B3 numbers.
   const b1 = fs.readFileSync(B1_SPEC, 'utf8');
-  assert.ok(b1.includes('const PINNED_BACKEND_TOTAL = 746;'), 'B1 spec must re-pin the backend total 750 -> 746');
+  assert.ok(b1.includes('const PINNED_BACKEND_TOTAL = 738;'), 'B1 spec must re-pin the backend total 746 -> 738');
   assert.ok(
-    b1.includes('Object.keys(PINNED_BACKEND_EDGES).length, 64,'),
-    'B1 spec must re-pin the backend edge table 65 -> 64 edges',
+    b1.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
+    'B1 spec must re-pin the backend edge table 64 -> 63 edges',
   );
   const b2 = fs.readFileSync(B2_SPEC, 'utf8');
-  assert.ok(b2.includes('const PINNED_BACKEND_TOTAL = 746;'), 'B2 spec must re-pin the backend total 750 -> 746');
+  assert.ok(b2.includes('const PINNED_BACKEND_TOTAL = 738;'), 'B2 spec must re-pin the backend total 746 -> 738');
   assert.ok(
-    b2.includes('Object.keys(PINNED_BACKEND_EDGES).length, 64,'),
-    'B2 spec must re-pin the backend edge table 65 -> 64 edges',
+    b2.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
+    'B2 spec must re-pin the backend edge table 64 -> 63 edges',
   );
 
   // 9. Wiring: both critical lists carry 375 specs in identical order, this spec last.
@@ -354,25 +354,25 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 376);
-  assert.equal(chain.length, 376);
+  assert.equal(specs.length, 377);
+  assert.equal(chain.length, 377);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 375 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b8-delivery-reps-sales.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-b8-delivery-reps-sales.spec.ts');
   assert.ok(
-    b1.includes('assert.equal(specs.length, 376);') && b1.includes('assert.equal(chain.length, 376);'),
+    b1.includes('assert.equal(specs.length, 377);') && b1.includes('assert.equal(chain.length, 377);'),
     'B1 spec wiring must re-pin to 375',
   );
   assert.ok(
-    b1.includes("specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts'"),
+    b1.includes("specs[specs.length - 1], 'test/critical/phase1-b8-delivery-reps-sales.spec.ts'"),
     'B1 spec last-entry must re-pin to the B7 spec',
   );
   assert.ok(
-    b2.includes('assert.equal(specs.length, 376);') && b2.includes('assert.equal(chain.length, 376);'),
+    b2.includes('assert.equal(specs.length, 377);') && b2.includes('assert.equal(chain.length, 377);'),
     'B2 spec wiring must re-pin to 375',
   );
   assert.ok(
-    b2.includes("specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts'"),
+    b2.includes("specs[specs.length - 1], 'test/critical/phase1-b8-delivery-reps-sales.spec.ts'"),
     'B2 spec last-entry must re-pin to the B7 spec',
   );
 

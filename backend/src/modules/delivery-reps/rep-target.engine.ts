@@ -59,7 +59,7 @@ export {
   REP_PERMISSION_LEGACY,
   parseRepPermissions,
   loadRepPermissions,
-} from './rep-target/rep-settings.slice';
+} from '../../common/utils/rep-settings.slice';
 export {
   hasGpsCoordinates,
   aggregateCustomerBalancesByRep,

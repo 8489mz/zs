@@ -3,7 +3,7 @@ import type { Kysely } from '../../../../database/kysely';
 import type { Database } from '../../../../database/database.types';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import type { SalesAuthorizationService } from '../sales-authorization.service';
-import { assertRepRouteForSale } from '../../../delivery-reps/services/van-collections-and-swaps/rep-route-gate';
+import { assertRepRouteForSale } from '../../../../common/utils/rep-route-gate';
 
 /**
  * F3 (trial problem 3, 2026-11-21, test10k): the POS side of the

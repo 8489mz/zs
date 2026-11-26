@@ -523,8 +523,12 @@ async function main(): Promise<void> {
       'the fashion file must import the ledger-module row-writer',
     );
     assert.ok(
-      !source.includes('applyStockDelta('),
-      'after phase1 A9, the fashion zeroing path also routes through recordStockMovement',
+      source.includes('delta: -qtyToDeduct'),
+      'the zeroing path still deducts through the row-writer (A9: recordStockMovement, no raw applyStockDelta)',
+    );
+    assert.ok(
+      !source.includes('applyStockDelta'),
+      'the fashion file must not call applyStockDelta directly anymore (A9 converged the zeroing path onto the writer)',
     );
     console.log('  4. source pins: passed');
 
@@ -535,11 +539,11 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 376);
-    assert.equal(chain.length, 376);
+    assert.equal(specs.length, 377);
+    assert.equal(chain.length, 377);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/opening-balances-ledger.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-b7-returns-sales.spec.ts');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-b8-delivery-reps-sales.spec.ts');
     console.log('  5. evidence spec wired into both critical lists (373 = 373, identical order), passed');
   }
 

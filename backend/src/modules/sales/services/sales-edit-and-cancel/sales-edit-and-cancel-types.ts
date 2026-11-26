@@ -5,7 +5,7 @@ import { AuditService } from '../../../../core/audit/audit.service';
 import { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import { Database } from '../../../../database/database.types';
 import { TransactionHelper } from '../../../../database/helpers/transaction.helper';
-import { type TripSaleContribution } from '../../../delivery-reps/van-trip-counters.engine';
+import { type TripSaleContribution } from '../../../../common/utils/van-trip-counters.engine';
 import { AccountingPostingService } from '../../../accounting/accounting-posting.service';
 import { SalesAuthorizationService } from '../sales-authorization.service';
 import { SalesFinanceService } from '../sales-finance.service';

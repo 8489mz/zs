@@ -1,4 +1,4 @@
-import { AppError } from '../../../../common/errors/app-error';
+import { AppError } from '../errors/app-error';
 
 /**
  * F3 (trial problem 3, 2026-11-21, test10k): a rep sold to a customer

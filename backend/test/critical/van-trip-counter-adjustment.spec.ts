@@ -32,7 +32,7 @@ import {
   diffContributions,
   negateContribution,
   tripSaleContribution,
-} from '../../src/modules/delivery-reps/van-trip-counters.engine';
+} from '../../src/common/utils/van-trip-counters.engine';
 
 function testContributionTable(): void {
   const cases: Array<

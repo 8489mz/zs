@@ -4,7 +4,7 @@ import { AppError } from '../../../../common/errors/app-error';
 import { assertBusinessAccountingDate } from '../../../accounting/accounting-boundaries';
 import { evaluateCreditLimitCheck, evaluateFieldCardPayment } from '../../van-trip-reconciliation.engine';
 import { resolveVanMoneyAuditActor } from '../van-common.util';
-import { assertRouteGate } from '../van-collections-and-swaps/rep-route-gate';
+import { assertRouteGate } from '../../../../common/utils/rep-route-gate';
 import {
   extractCoordinatesFromCustomerLocation,
   evaluateGeofenceCompliance,
