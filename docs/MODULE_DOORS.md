@@ -233,8 +233,7 @@
   - `backend/src/modules/sales/services/restaurant-advanced-fnb.service` — 1 statement(s), from storefront (1)
   - `backend/src/modules/sales/services/sales-authorization.service` — 1 statement(s), from returns (1)
   - `backend/src/modules/sales/services/sales-finance.service` — 3 statement(s), from delivery-reps (3)
-  - `backend/src/modules/sales/services/sales-write.service` — 1 statement(s), from settings (1)
-- Intended door: the Nest module file plus the 13 file(s) above.
+- Intended door: the Nest module file plus the 12 file(s) above.
 
 ### backend/services
 

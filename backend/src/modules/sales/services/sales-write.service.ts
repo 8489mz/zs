@@ -10,6 +10,10 @@ import {
   previewConsumableStockQty,
 } from '../../../common/utils/location-stock-ledger';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import {
+  invalidateTenantSettingsMapCache,
+  tenantSettingsMapCache,
+} from '../../../common/utils/tenant-settings-map-cache';
 import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -365,15 +369,14 @@ export class SalesWriteService {
     'restaurant_service_charge_rate',
     'invoiceNumberingScheme',
   ];
-  private static readonly tenantSettingsMapCache = new Map<string, { map: Map<string, any>; expiresAt: number }>();
   private static readonly SETTINGS_MAP_CACHE_TTL_MS = 60_000; // 60s TTL
 
+  // Phase 1 B2: the settings-map cache store moved to the shared layer
+  // (src/common/utils/tenant-settings-map-cache.ts) so settings no longer
+  // imports this service. This static stays as a one-line delegation: 50
+  // critical specs call it as their test-isolation reset for the cache.
   public static invalidateSettingsCache(tenantId?: string): void {
-    if (tenantId) {
-      SalesWriteService.tenantSettingsMapCache.delete(tenantId);
-    } else {
-      SalesWriteService.tenantSettingsMapCache.clear();
-    }
+    invalidateTenantSettingsMapCache(tenantId);
   }
 
   private async getTenantSettingsMap(
@@ -381,7 +384,7 @@ export class SalesWriteService {
     tenantId: string,
   ): Promise<Map<string, any>> {
     const now = Date.now();
-    const cached = SalesWriteService.tenantSettingsMapCache.get(tenantId);
+    const cached = tenantSettingsMapCache.get(tenantId);
     if (cached && cached.expiresAt > now) {
       return cached.map;
     }
@@ -402,7 +405,7 @@ export class SalesWriteService {
       }
     }
 
-    SalesWriteService.tenantSettingsMapCache.set(tenantId, {
+    tenantSettingsMapCache.set(tenantId, {
       map,
       expiresAt: now + SalesWriteService.SETTINGS_MAP_CACHE_TTL_MS,
     });

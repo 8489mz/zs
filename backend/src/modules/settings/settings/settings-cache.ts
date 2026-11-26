@@ -1,5 +1,5 @@
 import { sql } from '../../../database/kysely';
-import { SalesWriteService } from '../../sales/services/sales-write.service';
+import { invalidateTenantSettingsMapCache } from '../../../common/utils/tenant-settings-map-cache';
 import { requireTenantScope, type TenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { invalidateTenantTimezoneCache } from '../../../common/utils/tenant-timezone.util';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -27,7 +27,7 @@ export class SettingsCache {
     } else {
       this._settingsCache.clear();
     }
-    SalesWriteService.invalidateSettingsCache(tenantId);
+    invalidateTenantSettingsMapCache(tenantId);
     // `settings.timezone` له كاش منفصل عمره 5 دقائق داخل `tenant-timezone.util`،
     // وهو مصدر `work_date` للحضور. بدون إبطاله هنا يظل تغيير المنطقة الزمنية بلا
     // أثر حتى تنتهي المهلة — وقرب منتصف الليل يُكتب الحضور بيوم خاطئ.

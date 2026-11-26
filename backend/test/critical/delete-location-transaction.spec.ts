@@ -332,12 +332,12 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 370);
-    assert.equal(chain.length, 370);
+    assert.equal(specs.length, 371);
+    assert.equal(chain.length, 371);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/delete-location-transaction.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-b1-reports-sales.spec.ts');
-    console.log('  evidence spec wired into both critical lists (370 = 370, identical order), passed');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-b2-sales-settings.spec.ts');
+    console.log('  evidence spec wired into both critical lists (371 = 371, identical order), passed');
   }
 
   console.log('Delete location transaction tests passed');

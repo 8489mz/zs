@@ -151,6 +151,20 @@
  * moved, never duplicated. B8 re-derives its delivery-reps|sales
  * grounding numbers live (they shift by the same 2 statements).
  *
+ * B2 (sales|settings decoupling): the settings-map cache store moves
+ * to shared — backend/src/common/utils/tenant-settings-map-cache.ts
+ * (the Map + the one invalidate function) — so settings no longer
+ * imports SalesWriteService at all. settings->sales 1 -> 0 (edge
+ * gone), sales->settings stays 4 (module DI + the 3 WhatsApp gateway
+ * users, one-way, not a cycle). The sales static
+ * `invalidateSettingsCache` stays as a one-line delegation to the
+ * shared invalidator: 50 critical specs call it as their
+ * test-isolation reset, so removing it would break 50 specs. Backend
+ * total pin 760 -> 759 and backend edge pin 71 -> 70 (= the B2 edge
+ * delta −1, no other growth); the sales|settings pair leaves the
+ * bidirectional list. The single-store property is preserved: the
+ * cache is moved, never duplicated.
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -237,7 +251,6 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'settings->accounting': 14,
   'settings->ai-copilot': 2,
   'settings->catalog': 3,
-  'settings->sales': 1,
   'storefront->accounting': 25,
   'storefront->sales': 7,
   'storefront->settings': 8,
@@ -313,7 +326,6 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = [
   'accounting|purchases',
   'delivery-reps|sales',
   'returns|sales',
-  'sales|settings',
   'sales|storefront',
 ];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
@@ -332,7 +344,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
 ];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 760;
+const PINNED_BACKEND_TOTAL = 759;
 const PINNED_FRONTEND_TOTAL = 138;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
@@ -576,7 +588,7 @@ async function main(): Promise<void> {
   );
 
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
-  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 71, 'pinned backend edge table must list 71 edges');
+  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 70, 'pinned backend edge table must list 70 edges');
   const backend = scanBackend();
   assert.ok(
     backend.total >= BACKEND_TOTAL_FLOOR,

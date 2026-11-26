@@ -738,15 +738,15 @@ async function main(): Promise<void> {
       };
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 370);
-      assert.equal(chain.length, 370);
+      assert.equal(specs.length, 371);
+      assert.equal(chain.length, 371);
       assert.deepEqual(chain, specs);
       assert.equal(specs[358], 'test/critical/sales-writer-create.spec.ts');
       assert.equal(specs[359], 'test/critical/sales-writer-cancel-edit.spec.ts');
       assert.equal(specs[360], 'test/critical/sales-writer-food-waste.spec.ts');
       assert.equal(specs[361], 'test/critical/manufacturing-writer.spec.ts');
       assert.equal(specs[362], 'test/critical/purchases-writer.spec.ts');
-      console.log('  evidence specs wired into both critical lists (370 = 370, identical order), passed');
+      console.log('  evidence specs wired into both critical lists (371 = 371, identical order), passed');
     }
     console.log('  block 5 (source pins + wiring) passed');
   }

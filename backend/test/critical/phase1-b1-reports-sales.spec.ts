@@ -219,12 +219,12 @@ async function main(): Promise<void> {
     'module-boundary must re-pin delivery-reps->sales 11 -> 9',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 760;'),
-    'module-boundary must re-pin the backend total 764 -> 760',
+    boundary.includes('const PINNED_BACKEND_TOTAL = 759;'),
+    'module-boundary backend total is now 759 (B1 pinned 760; B2 re-pins 760 -> 759)',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 71,'),
-    'module-boundary must re-pin the backend edge table 73 -> 71 edges',
+    boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 70,'),
+    'module-boundary backend edge table is now 70 (B1 pinned 71; B2 re-pins 71 -> 70)',
   );
   assert.ok(
     !boundary.includes("'purchases->catalog':"),
@@ -288,13 +288,13 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 370);
-  assert.equal(chain.length, 370);
+  assert.equal(specs.length, 371);
+  assert.equal(chain.length, 371);
   assert.deepEqual(chain, specs, 'critical lists must agree in identical order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b1-reports-sales.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-b2-sales-settings.spec.ts');
   assert.ok(specs.includes('test/critical/phase1-b1-reports-sales.spec.ts'));
 
-  console.log('phase1 B1 reports|sales decoupling checks passed (370 specs wired, pair gone, SQL identical)');
+  console.log('phase1 B1 reports|sales decoupling checks passed (371 specs wired, pair gone, SQL identical)');
 }
 
 main().catch((error) => {
