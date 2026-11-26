@@ -1242,8 +1242,8 @@ async function main(): Promise<void> {
     const chain = String(pkg.scripts['test:critical:serial'])
       .split(' && ')
       .map((x) => x.replace(/^ts-node /, ''));
-    assert.equal(list.length, 383);
-    assert.equal(chain.length, 383);
+    assert.equal(list.length, 384);
+    assert.equal(chain.length, 384);
     assert.deepEqual(list, chain);
     assert.ok(list.includes('test/critical/van-field-noncash-evidence.spec.ts'));
     const idx = list.indexOf('test/critical/van-field-noncash-evidence.spec.ts');

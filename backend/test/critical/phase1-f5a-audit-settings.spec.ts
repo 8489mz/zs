@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 /*
  * Phase 1 F5a — break the audit|settings frontend circular pair
- * (INV-PHASE1-F5C-ACCOUNTS-PURCHASES-DECOUPLED).
+ * (INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED).
  *
  * Grounding §7 row 1 / §8 F5a (phase1-f0-grounding.md), re-derived live
  * at 1546158a5: audit|settings, module-boundary counts 1/1, ZERO deep
@@ -52,7 +52,7 @@ import * as path from 'node:path';
  *   ('audit|settings' gone). Backend pins unmoved (63 / 736, total 738).
  * - Feature-boundary baseline stays 70, import-layer baseline stays
  *   152 (no deep string and no app-layer string moves).
- * - Wiring: both critical lists carry 383 specs in identical order,
+ * - Wiring: both critical lists carry 384 specs in identical order,
  *   the F5b spec last.
  *
  * Notes: the stale cosmetic string in the F2 spec ("379 specs wired"
@@ -243,16 +243,16 @@ async function main(): Promise<void> {
     'module-boundary must still pin the backend total 738',
   );
   assert.ok(
-    boundary.includes('const PINNED_FRONTEND_TOTAL = 134;'),
-    'module-boundary must pin the frontend total 134 after F5a',
+    boundary.includes('const PINNED_FRONTEND_TOTAL = 132;'),
+    'module-boundary must pin the frontend total 132 after F5a',
   );
   assert.ok(
     boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
     'module-boundary must still pin 63 backend edges',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 53,'),
-    'module-boundary must pin 53 frontend edges after F5a',
+    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 52,'),
+    'module-boundary must pin 52 frontend edges after F5a',
   );
   assert.ok(!boundary.includes("'settings->audit'"), 'the settings->audit edge must be gone from the edge table');
   assert.ok(!boundary.includes("'reports->audit'"), 'the reports->audit edge must be gone from the edge table');
@@ -262,19 +262,19 @@ async function main(): Promise<void> {
   );
   assert.ok(!boundary.includes("'audit|settings'"), 'the audit|settings pair must be gone from the pair list');
   const featureBaseline = JSON.parse(fs.readFileSync(FEATURE_BOUNDARY_BASELINE, 'utf8')) as string[];
-  assert.equal(featureBaseline.length, 69, 'feature-boundary baseline must stay exactly 69 after F5a');
+  assert.equal(featureBaseline.length, 67, 'feature-boundary baseline must stay exactly 67 after F5a');
   const importBaseline = JSON.parse(fs.readFileSync(IMPORT_LAYER_BASELINE, 'utf8')) as string[];
   assert.equal(importBaseline.length, 152, 'import-layer baseline must stay exactly 152 after F5a');
 
   // 3. The INV entry exists exactly once in both places (never quote another INV id literally).
   const invariants = fs.readFileSync(INVARIANTS, 'utf8');
-  const invCount = (invariants.match(/INV-PHASE1-F5C-ACCOUNTS-PURCHASES-DECOUPLED/g) || []).length;
+  const invCount = (invariants.match(/INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F5a INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F5C-ACCOUNTS-PURCHASES-DECOUPLED/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F5a INV exactly once');
 
-  // 4. Wiring: both critical lists carry 383 specs in identical order, the F5b spec last.
+  // 4. Wiring: both critical lists carry 384 specs in identical order, the F5b spec last.
   const specsJson = JSON.parse(fs.readFileSync(CRITICAL_JSON, 'utf8')) as { specs: string[] };
   const specs = specsJson.specs;
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')) as {
@@ -284,11 +284,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 383);
-  assert.equal(chain.length, 383);
-  assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 383 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5c-accounts-purchases.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5c-accounts-purchases.spec.ts');
+  assert.equal(specs.length, 384);
+  assert.equal(chain.length, 384);
+  assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 384 specs in order');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5d-maintenance-products.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5d-maintenance-products.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -304,11 +304,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 383);') && src.includes('assert.equal(chain.length, 383);'),
+      src.includes('assert.equal(specs.length, 384);') && src.includes('assert.equal(chain.length, 384);'),
       `${label} spec wiring must re-pin to 381`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5c-accounts-purchases.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5d-maintenance-products.spec.ts'"),
       `${label} spec last-entry must re-pin to the F5a spec`,
     );
   }
@@ -352,13 +352,13 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F5C-ACCOUNTS-PURCHASES-DECOUPLED/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED/g)'),
       `${label} spec guard assertion must re-pin to the F5a INV`,
     );
   }
 
   console.log(
-    'phase1 F5a audit|settings checks passed (shared-code move to shared/utils, settings->audit and reports->audit gone, pairs 12->11, edges 55 / statements 136, 383 specs wired)',
+    'phase1 F5a audit|settings checks passed (shared-code move to shared/utils, settings->audit and reports->audit gone, pairs 12->11, edges 55 / statements 136, 384 specs wired)',
   );
 }
 

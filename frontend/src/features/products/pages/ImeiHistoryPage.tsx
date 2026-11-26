@@ -5,10 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
 import { useAppToolbar } from '@/stores/toolbar-store';
-import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
-import { getMaintenanceProfile } from '@/features/maintenance/constants/maintenance-profiles';
+import { useImeiMaintenanceQuery, useMaintenanceProfile } from '@/shared/hooks/use-catalog-queries';
 import { productSerialsApi, type ProductSerialItem } from '../api/product-serials.api';
-import { maintenanceApi, type MaintenanceListPageResponse } from '@/features/maintenance/api/maintenance.api';
 import { tradeInApi, type TradeInListPageResponse } from '@/features/tradein/api/tradein.api';
 import type { MaintenanceTicket } from '@/types/domain-models/maintenance';
 import type { TradeInTransaction } from '@/types/domain-models/tradein';
@@ -109,8 +107,7 @@ const statusMap: Record<string, { label: string; bg: string; border: string; col
 
 export function ImeiHistoryPage() {
   const { t: __t } = useTranslation();
-  const settingsQuery = useSettingsQuery();
-  const profile = getMaintenanceProfile(settingsQuery.data?.maintenanceProfile);
+  const profile = useMaintenanceProfile();
 
   const [searchInput, setSearchInput] = useState('');
   const [activeSerial, setActiveSerial] = useState('');
@@ -132,14 +129,7 @@ export function ImeiHistoryPage() {
     enabled: Boolean(activeSerial),
   });
 
-  const { data: maintenanceData } = useQuery<MaintenanceListPageResponse>({
-    queryKey: ['imei-history-maintenance', activeSerial],
-    queryFn: () =>
-      activeSerial
-        ? maintenanceApi.list({ q: activeSerial })
-        : Promise.resolve({ tickets: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }),
-    enabled: Boolean(activeSerial),
-  });
+  const { data: maintenanceData } = useImeiMaintenanceQuery(activeSerial);
 
   const { data: tradeinData } = useQuery<TradeInListPageResponse>({
     queryKey: ['imei-history-tradein', activeSerial],

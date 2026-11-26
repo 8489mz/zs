@@ -40,8 +40,6 @@
   "pos/pages/DigitalSignagePage.tsx imports @/features/products/api/products.api",
   "products/components/ProductUnitsEditor.tsx imports @/features/pos/lib/pos.domain",
   "products/components/ScalePluExportModal.tsx imports @/features/pos/lib/weighted-barcode",
-  "products/pages/ImeiHistoryPage.tsx imports @/features/maintenance/api/maintenance.api",
-  "products/pages/ImeiHistoryPage.tsx imports @/features/maintenance/constants/maintenance-profiles",
   "products/pages/ImeiHistoryPage.tsx imports @/features/tradein/api/tradein.api",
   "products/utils/product-mappers.tsx imports @/features/pos/lib/pos.domain",
   "purchases/components/PurchaseProductQuickCreateModal.tsx imports @/features/products/components/NewProductForm",

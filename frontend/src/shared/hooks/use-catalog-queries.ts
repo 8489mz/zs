@@ -6,6 +6,8 @@ import { purchasesApi } from '@/features/purchases/api/purchases.api';
 import { customersApi } from '@/features/customers/api/customers.api';
 import { suppliersApi } from '@/features/suppliers/api/suppliers.api';
 import { settingsApi } from '@/features/settings/api/settings.api';
+import { maintenanceApi, type MaintenanceListPageResponse } from '@/features/maintenance/api/maintenance.api';
+import { getMaintenanceProfile } from '@/features/maintenance/constants/maintenance-profiles';
 import type { Purchase } from '@/types/domain';
 
 const referenceStaleTime = 60_000;
@@ -34,6 +36,22 @@ export function usePurchaseDetailQuery(purchaseId: string) {
     queryKey: queryKeys.purchaseDetail(purchaseId),
     queryFn: () => purchasesApi.getById(purchaseId),
     staleTime: 60 * 1000,
+  });
+}
+
+export function useMaintenanceProfile() {
+  const settingsQuery = useSettingsQuery();
+  return getMaintenanceProfile(settingsQuery.data?.maintenanceProfile);
+}
+
+export function useImeiMaintenanceQuery(activeSerial: string) {
+  return useQuery<MaintenanceListPageResponse>({
+    queryKey: ['imei-history-maintenance', activeSerial],
+    queryFn: () =>
+      activeSerial
+        ? maintenanceApi.list({ q: activeSerial })
+        : Promise.resolve({ tickets: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }),
+    enabled: Boolean(activeSerial),
   });
 }
 

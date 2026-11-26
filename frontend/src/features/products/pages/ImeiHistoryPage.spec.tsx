@@ -17,7 +17,7 @@
  *   "no data recorded" state, never an availability claim.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { describe, it, expect, vi } from 'vitest';
 import { ImeiHistoryPage } from './ImeiHistoryPage';
 
@@ -36,12 +36,6 @@ vi.mock('@/features/products/api/product-serials.api', () => ({
   },
 }));
 
-vi.mock('@/features/maintenance/api/maintenance.api', () => ({
-  maintenanceApi: {
-    list: (...args: Parameters<typeof mockMaintenanceList>) => mockMaintenanceList(...args),
-  },
-}));
-
 vi.mock('@/features/tradein/api/tradein.api', () => ({
   tradeInApi: {
     list: (...args: Parameters<typeof mockTradeInList>) => mockTradeInList(...args),
@@ -50,6 +44,16 @@ vi.mock('@/features/tradein/api/tradein.api', () => ({
 
 vi.mock('@/shared/hooks/use-catalog-queries', () => ({
   useSettingsQuery: () => ({ data: { maintenanceProfile: 'mobile' } }),
+  useMaintenanceProfile: () => ({ shortTitle: 'موبايل وتابلت', serialLabel: 'السيريال / IMEI 1' }),
+  useImeiMaintenanceQuery: (serial: string) =>
+    useQuery({
+      queryKey: ['imei-history-maintenance', serial],
+      queryFn: () =>
+        serial
+          ? mockMaintenanceList({ q: serial })
+          : Promise.resolve({ tickets: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }),
+      enabled: Boolean(serial),
+    }),
 }));
 
 const emptyPage = { tickets: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } };

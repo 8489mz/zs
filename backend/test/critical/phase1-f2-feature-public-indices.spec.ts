@@ -25,7 +25,7 @@ import * as path from 'node:path';
  * feature-boundary-check 74 accepted legacy violations, 0 new).
  *
  * Consequences, all re-pinned in this package:
- * - Wiring: both critical lists carry 383 specs in identical order,
+ * - Wiring: both critical lists carry 384 specs in identical order,
  *   the F5a spec last.
  *
  * F2-REPAIR (2026-11-26): CI on e7077ed63 failed the frontend
@@ -427,16 +427,16 @@ async function main(): Promise<void> {
     'module-boundary must still pin the backend total 738',
   );
   assert.ok(
-    boundary.includes('const PINNED_FRONTEND_TOTAL = 134;'),
-    'module-boundary must still pin the frontend total 134',
+    boundary.includes('const PINNED_FRONTEND_TOTAL = 132;'),
+    'module-boundary must still pin the frontend total 132',
   );
   assert.ok(
     boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
     'module-boundary must still pin 63 backend edges',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 53,'),
-    'module-boundary must still pin 53 frontend edges',
+    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 52,'),
+    'module-boundary must still pin 52 frontend edges',
   );
 
   // 4. The INV entry exists exactly once in both places (never quote another INV id literally).
@@ -444,10 +444,10 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F2-FEATURE-PUBLIC-INDICES/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F2 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F5C-ACCOUNTS-PURCHASES-DECOUPLED/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F2 INV exactly once');
 
-  // 5. Wiring: both critical lists carry 383 specs in identical order, the F4 spec last.
+  // 5. Wiring: both critical lists carry 384 specs in identical order, the F4 spec last.
   const specsJson = JSON.parse(fs.readFileSync(CRITICAL_JSON, 'utf8')) as { specs: string[] };
   const specs = specsJson.specs;
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')) as {
@@ -457,11 +457,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 383);
-  assert.equal(chain.length, 383);
+  assert.equal(specs.length, 384);
+  assert.equal(chain.length, 384);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 378 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5c-accounts-purchases.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5c-accounts-purchases.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5d-maintenance-products.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5d-maintenance-products.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -474,11 +474,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 383);') && src.includes('assert.equal(chain.length, 383);'),
+      src.includes('assert.equal(specs.length, 384);') && src.includes('assert.equal(chain.length, 384);'),
       `${label} spec wiring must re-pin to 378`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5c-accounts-purchases.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5d-maintenance-products.spec.ts'"),
       `${label} spec last-entry must re-pin to the F2 spec`,
     );
   }
@@ -519,7 +519,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F5C-ACCOUNTS-PURCHASES-DECOUPLED/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED/g)'),
       `${label} spec guard assertion must re-pin to the F2 INV`,
     );
   }

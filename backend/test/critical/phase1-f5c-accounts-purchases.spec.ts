@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 /*
  * Phase 1 F5c — break the accounts|purchases frontend circular pair
- * (INV-PHASE1-F5C-ACCOUNTS-PURCHASES-DECOUPLED).
+ * (INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED).
  *
  * Grounding §7 row 3 / §8 F5c (phase1-f0-grounding.md), re-derived live
  * at 797ee49bf: accounts|purchases, module-boundary counts 1/1, ONE deep
@@ -62,8 +62,8 @@ import * as path from 'node:path';
  *   purchase-items-expandable string is gone — hand-shrunk by exactly
  *   that one string, F3 precedent); import-layer baseline stays 152
  *   (no app-layer string moves in this package).
- * - Wiring: both critical lists carry 383 specs in identical order,
- *   this spec last.
+ * - Wiring: both critical lists carry 384 specs in identical order,
+ *   the F5d spec last.
  *
  * Notes: the stale cosmetic string in the F2 spec ("379 specs wired"
  * in its console.log) is pre-existing since F3 and is NOT an
@@ -218,16 +218,16 @@ async function main(): Promise<void> {
     'module-boundary must still pin the backend total 738',
   );
   assert.ok(
-    boundary.includes('const PINNED_FRONTEND_TOTAL = 134;'),
-    'module-boundary must pin the frontend total 134 after F5c',
+    boundary.includes('const PINNED_FRONTEND_TOTAL = 132;'),
+    'module-boundary must pin the frontend total 132 after F5c',
   );
   assert.ok(
     boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
     'module-boundary must still pin 63 backend edges',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 53,'),
-    'module-boundary must pin 53 frontend edges after F5c',
+    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 52,'),
+    'module-boundary must pin 52 frontend edges after F5c',
   );
   assert.ok(
     !boundary.includes("'accounts->purchases'"),
@@ -239,7 +239,7 @@ async function main(): Promise<void> {
   );
   assert.ok(!boundary.includes("'accounts|purchases'"), 'the accounts|purchases pair must be gone from the pair list');
   const featureBaseline = JSON.parse(fs.readFileSync(FEATURE_BOUNDARY_BASELINE, 'utf8')) as string[];
-  assert.equal(featureBaseline.length, 69, 'feature-boundary baseline must shrink to exactly 69 after F5c');
+  assert.equal(featureBaseline.length, 67, 'feature-boundary baseline must shrink to exactly 67 after F5c');
   assert.ok(
     !featureBaseline.some((entry) => entry.includes('purchase-items-expandable')),
     'the deep purchase-items-expandable string must be gone from the feature-boundary baseline',
@@ -249,13 +249,13 @@ async function main(): Promise<void> {
 
   // 3. The INV entry exists exactly once in both places (never quote another INV id literally).
   const invariants = fs.readFileSync(INVARIANTS, 'utf8');
-  const invCount = (invariants.match(/INV-PHASE1-F5C-ACCOUNTS-PURCHASES-DECOUPLED/g) || []).length;
+  const invCount = (invariants.match(/INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F5c INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F5C-ACCOUNTS-PURCHASES-DECOUPLED/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F5c INV exactly once');
 
-  // 4. Wiring: both critical lists carry 383 specs in identical order, this spec last.
+  // 4. Wiring: both critical lists carry 384 specs in identical order, the F5d spec last.
   const specsJson = JSON.parse(fs.readFileSync(CRITICAL_JSON, 'utf8')) as { specs: string[] };
   const specs = specsJson.specs;
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')) as {
@@ -265,11 +265,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 383);
-  assert.equal(chain.length, 383);
-  assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 383 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5c-accounts-purchases.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5c-accounts-purchases.spec.ts');
+  assert.equal(specs.length, 384);
+  assert.equal(chain.length, 384);
+  assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 384 specs in order');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5d-maintenance-products.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5d-maintenance-products.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -287,11 +287,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 383);') && src.includes('assert.equal(chain.length, 383);'),
+      src.includes('assert.equal(specs.length, 384);') && src.includes('assert.equal(chain.length, 384);'),
       `${label} spec wiring must re-pin to 383`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5c-accounts-purchases.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5d-maintenance-products.spec.ts'"),
       `${label} spec last-entry must re-pin to the F5c spec`,
     );
   }
@@ -337,13 +337,13 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F5C-ACCOUNTS-PURCHASES-DECOUPLED/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED/g)'),
       `${label} spec guard assertion must re-pin to the F5c INV`,
     );
   }
 
   console.log(
-    'phase1 F5c accounts|purchases checks passed (purchase detail via shared catalog hook, accounts->purchases gone, pairs 10->9, edges 53 / statements 134, 383 specs wired)',
+    'phase1 F5c accounts|purchases checks passed (purchase detail via shared catalog hook, accounts->purchases gone, pairs 10->9, edges 53 / statements 134, 384 specs wired)',
   );
 }
 

@@ -382,6 +382,7 @@
     "test/critical/phase1-f4-settings-access-door.spec.ts",
     "test/critical/phase1-f5a-audit-settings.spec.ts",
     "test/critical/phase1-f5b-products-settings.spec.ts",
-    "test/critical/phase1-f5c-accounts-purchases.spec.ts"
+    "test/critical/phase1-f5c-accounts-purchases.spec.ts",
+    "test/critical/phase1-f5d-maintenance-products.spec.ts"
   ]
 }
