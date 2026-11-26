@@ -300,8 +300,6 @@ export class CreateSaleService {
     const transactionDurationMs = Date.now() - txStartedAt;
 
     const postReadsStartedAt = Date.now();
-    await this.audit.log('إنشاء فاتورة بيع', `تم إنشاء الفاتورة S-${saleId} بواسطة ${auth.username}`, auth);
-
     // Non-blocking auto WhatsApp invoice notification
     if (this.whatsappService) {
       void this.whatsappService.sendInvoiceNotification(saleId, auth, { autoOnly: true }).catch((err) => {
@@ -309,7 +307,10 @@ export class CreateSaleService {
       });
     }
 
-    const sale = await this.query.getSaleById(saleId, auth);
+    const [, sale] = await Promise.all([
+      this.audit.log('إنشاء فاتورة بيع', `تم إنشاء الفاتورة S-${saleId} بواسطة ${auth.username}`, auth),
+      this.query.getSaleById(saleId, auth, { skipLinkedReturns: true }),
+    ]);
     const postTransactionReadsDurationMs = Date.now() - postReadsStartedAt;
     const totalRequestDurationMs = Date.now() - requestStartedAt;
 

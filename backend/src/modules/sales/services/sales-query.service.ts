@@ -238,53 +238,67 @@ export class SalesQueryService {
   private async hydrateSales(
     sales: Array<Record<string, unknown>>,
     auth: AuthContext,
+    options?: {
+      skipLinkedReturns?: boolean;
+      prefetchedItems?: Array<Record<string, unknown>>;
+      prefetchedPayments?: Array<Record<string, unknown>>;
+      prefetchedLinkedReturns?: Array<Record<string, unknown>>;
+    },
   ): Promise<Array<Record<string, unknown>>> {
     const saleIds = sales.map((sale) => Number(sale.id)).filter((id) => Number.isFinite(id) && id > 0);
     if (!saleIds.length) return [];
 
     const [items, payments, linkedReturns] = await Promise.all([
-      this.db
-        .selectFrom('sale_items')
-        .select([
-          'id',
-          'sale_id',
-          'product_id',
-          'product_name',
-          'product_name_en',
-          'qty',
-          'unit_price',
-          'line_total',
-          'line_discount',
-          'net_line_total',
-          'allocated_tax',
-          'unit_name',
-          'unit_multiplier',
-          'cost_price',
-          'price_type',
-          'modifiers',
-          'serials',
-        ])
-        .where('sale_id', 'in', saleIds)
-        .where(this.tenantPredicate(auth))
-        .orderBy('sale_id', 'asc')
-        .orderBy('id', 'asc')
-        .execute(),
-      this.db
-        .selectFrom('sale_payments')
-        .select(['id', 'sale_id', 'payment_channel', 'amount'])
-        .where('sale_id', 'in', saleIds)
-        .where(this.tenantPredicate(auth))
-        .orderBy('sale_id', 'asc')
-        .orderBy('id', 'asc')
-        .execute(),
-      this.db
-        .selectFrom('return_documents')
-        .select(['id', 'doc_no', 'invoice_id', 'total', 'created_at', 'settlement_mode', 'refund_method'])
-        .where('invoice_id', 'in', saleIds)
-        .where('return_type', '=', 'sale')
-        .where(this.tenantPredicate(auth))
-        .orderBy('id', 'desc')
-        .execute(),
+      options?.prefetchedItems
+        ? Promise.resolve(options.prefetchedItems)
+        : this.db
+            .selectFrom('sale_items')
+            .select([
+              'id',
+              'sale_id',
+              'product_id',
+              'product_name',
+              'product_name_en',
+              'qty',
+              'unit_price',
+              'line_total',
+              'line_discount',
+              'net_line_total',
+              'allocated_tax',
+              'unit_name',
+              'unit_multiplier',
+              'cost_price',
+              'price_type',
+              'modifiers',
+              'serials',
+            ])
+            .where('sale_id', 'in', saleIds)
+            .where(this.tenantPredicate(auth))
+            .orderBy('sale_id', 'asc')
+            .orderBy('id', 'asc')
+            .execute(),
+      options?.prefetchedPayments
+        ? Promise.resolve(options.prefetchedPayments)
+        : this.db
+            .selectFrom('sale_payments')
+            .select(['id', 'sale_id', 'payment_channel', 'amount'])
+            .where('sale_id', 'in', saleIds)
+            .where(this.tenantPredicate(auth))
+            .orderBy('sale_id', 'asc')
+            .orderBy('id', 'asc')
+            .execute(),
+      options?.skipLinkedReturns
+        ? Promise.resolve([])
+        : options?.prefetchedLinkedReturns
+          ? Promise.resolve(options.prefetchedLinkedReturns)
+          : this.db
+              .selectFrom('return_documents')
+              .select(['id', 'doc_no', 'invoice_id', 'total', 'created_at', 'settlement_mode', 'refund_method'])
+              .where('invoice_id', 'in', saleIds)
+              .where('return_type', '=', 'sale')
+              .where(this.tenantPredicate(auth))
+              .orderBy('id', 'desc')
+              .execute(),
     ]);
 
     const canViewCostPrice =
@@ -340,72 +354,129 @@ export class SalesQueryService {
     };
   }
 
-  async getSaleById(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
+  async getSaleById(
+    id: number,
+    auth: AuthContext,
+    options?: { skipLinkedReturns?: boolean },
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     this.authz.assertCanViewSales(auth);
 
-    const sale = await this.db
-      .selectFrom('sales as s')
-      .leftJoin('customers as c', (j) => j.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('branches as b', (j) => j.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('stock_locations as l', (j) =>
-        j.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'),
-      )
-      .leftJoin('users as u', (j) => j.onRef('u.id', '=', 's.created_by').onRef('u.tenant_id', '=', 's.tenant_id'))
-      .leftJoin('delivery_representatives as dr', (j) =>
-        j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'),
-      )
-      .select([
-        's.id',
-        's.doc_no',
-        's.customer_id',
-        'c.name as customer_name_ref',
-        'c.phone as customer_phone_ref',
-        'c.address as customer_address_ref',
-        's.customer_name',
-        's.customer_phone',
-        's.customer_address',
-        's.payment_type',
-        's.payment_channel',
-        's.subtotal',
-        's.discount',
-        's.tax_rate',
-        's.tax_amount',
-        's.prices_include_tax',
-        's.total',
-        's.paid_amount',
-        's.tendered_amount',
-        's.change_amount',
-        's.store_credit_used',
-        's.delivery_fee',
-        's.status',
-        's.note',
-        's.table_number',
-        's.order_type',
-        's.branch_id',
-        's.location_id',
-        's.created_by as created_by_id',
-        's.created_at',
-        'b.name as branch_name',
-        'l.name as location_name',
-        'u.username as created_by_name',
-        'u.username as created_by_username',
-        's.delivery_rep_id',
-        'dr.name as delivery_rep_name',
-        // INV-REST-COD-UNPAID-POST-TRUTH (T12-H1): same read as the
-        // list query above — getSaleById must return the stored
-        // collection_status or every sale renders prepaid.
-        's.collection_status',
-        's.delivery_status',
-        's.delivery_fee_mode',
-      ])
-      .where('s.id', '=', id)
-      .where(this.tenantPredicate(auth, 's'))
-      .executeTakeFirst();
+    const [sale, items, payments, linkedReturns] = await Promise.all([
+      this.db
+        .selectFrom('sales as s')
+        .leftJoin('customers as c', (j) => j.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
+        .leftJoin('branches as b', (j) => j.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'))
+        .leftJoin('stock_locations as l', (j) =>
+          j.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'),
+        )
+        .leftJoin('users as u', (j) => j.onRef('u.id', '=', 's.created_by').onRef('u.tenant_id', '=', 's.tenant_id'))
+        .leftJoin('delivery_representatives as dr', (j) =>
+          j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'),
+        )
+        .select([
+          's.id',
+          's.doc_no',
+          's.customer_id',
+          'c.name as customer_name_ref',
+          'c.phone as customer_phone_ref',
+          'c.address as customer_address_ref',
+          's.customer_name',
+          's.customer_phone',
+          's.customer_address',
+          's.payment_type',
+          's.payment_channel',
+          's.subtotal',
+          's.discount',
+          's.tax_rate',
+          's.tax_amount',
+          's.prices_include_tax',
+          's.total',
+          's.paid_amount',
+          's.tendered_amount',
+          's.change_amount',
+          's.store_credit_used',
+          's.delivery_fee',
+          's.status',
+          's.note',
+          's.table_number',
+          's.order_type',
+          's.branch_id',
+          's.location_id',
+          's.created_by as created_by_id',
+          's.created_at',
+          'b.name as branch_name',
+          'l.name as location_name',
+          'u.username as created_by_name',
+          'u.username as created_by_username',
+          's.delivery_rep_id',
+          'dr.name as delivery_rep_name',
+          // INV-REST-COD-UNPAID-POST-TRUTH (T12-H1): same read as the
+          // list query above — getSaleById must return the stored
+          // collection_status or every sale renders prepaid.
+          's.collection_status',
+          's.delivery_status',
+          's.delivery_fee_mode',
+        ])
+        .where('s.id', '=', id)
+        .where(this.tenantPredicate(auth, 's'))
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('sale_items')
+        .select([
+          'id',
+          'sale_id',
+          'product_id',
+          'product_name',
+          'product_name_en',
+          'qty',
+          'unit_price',
+          'line_total',
+          'line_discount',
+          'net_line_total',
+          'allocated_tax',
+          'unit_name',
+          'unit_multiplier',
+          'cost_price',
+          'price_type',
+          'modifiers',
+          'serials',
+        ])
+        .where('sale_id', '=', id)
+        .where(this.tenantPredicate(auth))
+        .orderBy('id', 'asc')
+        .execute(),
+      this.db
+        .selectFrom('sale_payments')
+        .select(['id', 'sale_id', 'payment_channel', 'amount'])
+        .where('sale_id', '=', id)
+        .where(this.tenantPredicate(auth))
+        .orderBy('id', 'asc')
+        .execute(),
+      options?.skipLinkedReturns
+        ? Promise.resolve([])
+        : this.db
+            .selectFrom('return_documents')
+            .select(['id', 'doc_no', 'invoice_id', 'total', 'created_at', 'settlement_mode', 'refund_method'])
+            .where('invoice_id', '=', id)
+            .where('return_type', '=', 'sale')
+            .where(this.tenantPredicate(auth))
+            .orderBy('id', 'desc')
+            .execute(),
+    ]);
 
     if (!sale) throw new AppError('Sale not found', 'SALE_NOT_FOUND', 404);
 
-    const [mappedSale] = await this.hydrateSales([sale as unknown as Record<string, unknown>], auth);
+    const [mappedSale] = await this.hydrateSales(
+      [sale as unknown as Record<string, unknown>],
+      auth,
+      {
+        skipLinkedReturns: options?.skipLinkedReturns,
+        prefetchedItems: items as unknown as Array<Record<string, unknown>>,
+        prefetchedPayments: payments as unknown as Array<Record<string, unknown>>,
+        prefetchedLinkedReturns: linkedReturns as unknown as Array<Record<string, unknown>>,
+      },
+    );
     return { sale: mappedSale, scope };
   }
 

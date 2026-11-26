@@ -32,7 +32,41 @@ export type PriceListContext = {
   name: string;
 } | null;
 
+export type PriceListItemSnapshot = {
+  min_quantity: unknown;
+  fixed_price: unknown;
+  discount_percent: unknown;
+};
+
 type Queryable = Kysely<Database> | Transaction<Database>;
+
+export async function prefetchPriceListItemsByProduct(
+  queryable: Queryable,
+  tenantId: string,
+  priceListId: number,
+  productIds: number[],
+): Promise<Map<number, PriceListItemSnapshot[]>> {
+  const uniqueIds = Array.from(new Set(productIds.map(Number).filter((id) => Number.isFinite(id) && id > 0)));
+  const byProduct = new Map<number, PriceListItemSnapshot[]>();
+  if (!uniqueIds.length || !(priceListId > 0)) return byProduct;
+
+  const rows = await queryable
+    .selectFrom('price_list_items')
+    .select(['product_id', 'min_quantity', 'fixed_price', 'discount_percent'])
+    .where('tenant_id', '=', tenantId)
+    .where('price_list_id', '=', priceListId)
+    .where('product_id', 'in', uniqueIds)
+    .orderBy('min_quantity', 'desc')
+    .execute();
+
+  for (const row of rows) {
+    const pid = Number(row.product_id);
+    const bucket = byProduct.get(pid);
+    if (bucket) bucket.push(row);
+    else byProduct.set(pid, [row]);
+  }
+  return byProduct;
+}
 
 export async function resolvePriceListContext(
   queryable: Queryable,
@@ -97,7 +131,11 @@ export async function resolveListEffectivePrice(
   productId: number,
   quantity: number,
   basePrice: number,
-  options?: { paymentTerms?: 'cash' | 'credit' },
+  options?: {
+    paymentTerms?: 'cash' | 'credit';
+    prefetchedCreditPrice?: number | null;
+    prefetchedListItems?: PriceListItemSnapshot[];
+  },
   moneyDigits?: MoneyDigits,
 ): Promise<{
   effectivePrice: number;
@@ -113,14 +151,20 @@ export async function resolveListEffectivePrice(
   // base and pass paymentTerms 'cash' for wholesale-typed customers,
   // so the wholesale-beats-credit precedence survives this branch.
   if (options?.paymentTerms === 'credit') {
-    const prod = await queryable
-      .selectFrom('products')
-      .select(['credit_price'])
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', productId)
-      .executeTakeFirst();
-    if (prod?.credit_price != null && Number(prod.credit_price) > 0) {
-      basePrice = Number(prod.credit_price);
+    if (options.prefetchedCreditPrice !== undefined) {
+      if (options.prefetchedCreditPrice != null && Number(options.prefetchedCreditPrice) > 0) {
+        basePrice = Number(options.prefetchedCreditPrice);
+      }
+    } else {
+      const prod = await queryable
+        .selectFrom('products')
+        .select(['credit_price'])
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', productId)
+        .executeTakeFirst();
+      if (prod?.credit_price != null && Number(prod.credit_price) > 0) {
+        basePrice = Number(prod.credit_price);
+      }
     }
   }
 
@@ -134,15 +178,18 @@ export async function resolveListEffectivePrice(
   }
 
   // The highest-minimum-quantity item matching this product wins.
-  const specificItem = await queryable
-    .selectFrom('price_list_items')
-    .selectAll()
-    .where('tenant_id', '=', tenantId)
-    .where('price_list_id', '=', context.priceListId)
-    .where('product_id', '=', productId)
-    .where('min_quantity', '<=', quantity)
-    .orderBy('min_quantity', 'desc')
-    .executeTakeFirst();
+  const specificItem =
+    options?.prefetchedListItems !== undefined
+      ? options.prefetchedListItems.find((entry) => Number(entry.min_quantity ?? 0) <= quantity)
+      : await queryable
+          .selectFrom('price_list_items')
+          .selectAll()
+          .where('tenant_id', '=', tenantId)
+          .where('price_list_id', '=', context.priceListId)
+          .where('product_id', '=', productId)
+          .where('min_quantity', '<=', quantity)
+          .orderBy('min_quantity', 'desc')
+          .executeTakeFirst();
 
   if (specificItem) {
     if (specificItem.fixed_price != null && Number(specificItem.fixed_price) >= 0) {

@@ -131,8 +131,10 @@ export class AccountingTenantFoundationService {
     }
 
     let state = await this.readFoundationState(queryable, target.tenantId);
+    let didMutate = false;
 
     if (findMissingAccountCodes(state.accounts.map((row) => String(row.code || ''))).length > 0) {
+      didMutate = true;
       await this.seedStandardChart(queryable, target);
       state = await this.readFoundationState(queryable, target.tenantId);
       const stillMissing = findMissingAccountCodes(state.accounts.map((row) => String(row.code || '')));
@@ -145,6 +147,7 @@ export class AccountingTenantFoundationService {
     }
 
     if (findMissingSettingsColumns(state.settings).length > 0) {
+      didMutate = true;
       await this.writeSettingsMapping(queryable, target, state.accounts, !state.settings);
       const after = await this.readFoundationState(queryable, target.tenantId);
       const stillEmpty = findMissingSettingsColumns(after.settings);
@@ -156,8 +159,10 @@ export class AccountingTenantFoundationService {
       }
     }
 
-    // A transaction may roll back after seeding. Cache only changes already committed.
-    if (!(queryable as Transaction<Database>).isTransaction) {
+    // A transaction may roll back after seeding, so skip caching only when
+    // uncommitted mutations occurred inside a transaction. When didMutate is
+    // false, the foundation was already committed before this transaction began.
+    if (!didMutate || !(queryable as Transaction<Database>).isTransaction) {
       this.initializedTenants.add(target.tenantId);
     }
   }

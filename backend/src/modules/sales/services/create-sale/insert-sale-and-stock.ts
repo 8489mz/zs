@@ -267,6 +267,70 @@ export class InsertSaleAndStockService {
     const flatAddonCosts = await this.loadFlatAddonCosts(trx, scope.tenantId, preparedItems);
     const stockOrderedItems = [...preparedItems].sort((a, b) => Number(a.productId || 0) - Number(b.productId || 0));
 
+    // Batch-prefetch serial/pharmacy/batch/import-lot ownership once for all distinct
+    // products in the cart so standard retail items skip ~7 redundant N+1 queries per line.
+    const distinctProductIds = Array.from(
+      new Set(stockOrderedItems.map((entry) => Number(entry.productId || 0)).filter((pid) => pid > 0)),
+    );
+    const serialTrackedProductIds = new Set<number>();
+    const pharmacyTrackedProductIds = new Set<number>();
+    const inventoryBatchProductIds = new Set<number>();
+    const importLotProductIds = new Set<number>();
+
+    if (distinctProductIds.length > 0) {
+      const serialRows = await trx
+        .selectFrom('products')
+        .select('id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', 'in', distinctProductIds)
+        .where('track_serials', '=', true)
+        .execute();
+      for (const row of serialRows) serialTrackedProductIds.add(Number(row.id));
+
+      const drugRows = await trx
+        .selectFrom('pharmacy_drugs')
+        .select('product_id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('product_id', 'in', distinctProductIds)
+        .execute();
+      for (const row of drugRows) {
+        if (row.product_id != null) pharmacyTrackedProductIds.add(Number(row.product_id));
+      }
+
+      const pharmBatchRows = await trx
+        .selectFrom('pharmacy_batches')
+        .select('product_id')
+        .distinct()
+        .where('tenant_id', '=', scope.tenantId)
+        .where('product_id', 'in', distinctProductIds)
+        .execute();
+      for (const row of pharmBatchRows) {
+        if (row.product_id != null) pharmacyTrackedProductIds.add(Number(row.product_id));
+      }
+
+      const invBatchRows = await trx
+        .selectFrom('inventory_batches')
+        .select('product_id')
+        .distinct()
+        .where('tenant_id', '=', scope.tenantId)
+        .where('product_id', 'in', distinctProductIds)
+        .execute();
+      for (const row of invBatchRows) {
+        if (row.product_id != null) inventoryBatchProductIds.add(Number(row.product_id));
+      }
+
+      const importLotRows = await trx
+        .selectFrom('import_inventory_lots')
+        .select('product_id')
+        .distinct()
+        .where('tenant_id', '=', scope.tenantId)
+        .where('product_id', 'in', distinctProductIds)
+        .execute();
+      for (const row of importLotRows) {
+        if (row.product_id != null) importLotProductIds.add(Number(row.product_id));
+      }
+    }
+
     for (const item of stockOrderedItems) {
       const itemSerials = Array.isArray(item.serials) ? item.serials : [];
       const insertedLine = await trx
@@ -310,7 +374,10 @@ export class InsertSaleAndStockService {
         .executeTakeFirstOrThrow();
       const saleLineId = Number(insertedLine.id);
 
-      const claimedSerials = await this.claimSaleSerials(trx, item, id, saleLineId, scope.tenantId);
+      const claimedSerials =
+        itemSerials.length > 0 || serialTrackedProductIds.has(Number(item.productId))
+          ? await this.claimSaleSerials(trx, item, id, saleLineId, scope.tenantId)
+          : [];
       if (claimedSerials.length > 0)
         await trx
           .updateTable('sale_items')
@@ -446,22 +513,33 @@ export class InsertSaleAndStockService {
           .execute();
       }
 
-      await this.deductPharmacyBatchesFefo(trx, item.productId, allocations, scope, id, saleLineId);
+      const numericProductId = Number(item.productId);
+      if (pharmacyTrackedProductIds.has(numericProductId)) {
+        await this.deductPharmacyBatchesFefo(trx, item.productId, allocations, scope, id, saleLineId);
+      }
       // INV-VAN-GENERIC-FEFO: the generic ledger deducts the same
       // allocations when the pharmacy ledger does not own the product.
-      await this.deductInventoryBatchesFefo(trx, item.productId, allocations, scope, id, saleLineId);
+      if (inventoryBatchProductIds.has(numericProductId) || pharmacyTrackedProductIds.has(numericProductId)) {
+        await this.deductInventoryBatchesFefo(trx, item.productId, allocations, scope, id, saleLineId);
+      }
       for (const alloc of allocations) {
+        const effectiveAllocLocationId = alloc.locationId ?? normalized.locationId;
+        const needsImportLotCheck =
+          importLotProductIds.has(numericProductId) ||
+          !effectiveAllocLocationId ||
+          !(Number(alloc.qty) > 0);
+        if (!needsImportLotCheck) continue;
         const lotAllocation = await allocateSaleFromImportLots(trx, {
           tenantId: scope.tenantId,
           saleId: id,
-          locationId: alloc.locationId ?? normalized.locationId,
+          locationId: effectiveAllocLocationId,
           items: [
             {
               itemId: saleLineId,
               productId: item.productId,
               qty: alloc.qty,
               netUnitPrice: allocationByItem.get(item)!.netUnitPrice,
-              locationId: alloc.locationId ?? normalized.locationId,
+              locationId: effectiveAllocLocationId,
             },
           ],
         });

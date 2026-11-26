@@ -1,7 +1,11 @@
 import { sql } from '../../../../database/kysely';
 import { AppError } from '../../../../common/errors/app-error';
 import { getTenantTimezone } from '../../../../common/utils/tenant-timezone.util';
-import { resolveListEffectivePrice, resolvePriceListContext } from '../../engines/price-list-resolution.engine';
+import {
+  prefetchPriceListItemsByProduct,
+  resolveListEffectivePrice,
+  resolvePriceListContext,
+} from '../../engines/price-list-resolution.engine';
 import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice } from '../../helpers/sales-write.helper';
 import type { CreateSaleContext, CreateSaleDeps } from './create-sale-types';
 
@@ -130,6 +134,10 @@ export class PrepareSaleItemsService {
     const priceListContext = normalized.customerId
       ? await resolvePriceListContext(trx, scope.tenantId, normalized.customerId)
       : null;
+    const prefetchedListItemsByProduct =
+      priceListContext && productIds.length > 0
+        ? await prefetchPriceListItemsByProduct(trx, scope.tenantId, priceListContext.priceListId, productIds)
+        : null;
     // The engine's credit branch runs only for non-wholesale
     // customers on credit terms (wholesale beats credit).
     const enginePaymentTerms: 'cash' | 'credit' =
@@ -182,7 +190,13 @@ export class PrepareSaleItemsService {
         item.productId,
         item.qty,
         tierBasePrice,
-        { paymentTerms: enginePaymentTerms },
+        {
+          paymentTerms: enginePaymentTerms,
+          prefetchedCreditPrice: product.credit_price != null ? Number(product.credit_price) : null,
+          prefetchedListItems: prefetchedListItemsByProduct
+            ? prefetchedListItemsByProduct.get(item.productId) || []
+            : undefined,
+        },
         moneyDigits,
       );
       const listApplies = listPrice.appliedRule !== 'none';

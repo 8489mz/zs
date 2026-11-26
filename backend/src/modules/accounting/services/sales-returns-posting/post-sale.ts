@@ -242,56 +242,75 @@ export class PostSaleService {
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
     const customerPartnerId = sale.customer_id ? Number(sale.customer_id) : null;
 
-    const cashAccountId = await this.resolveAccountWithFallback(
-      queryable,
-      scope.tenantId,
-      settings.cash_account_id,
+    // Batch-resolve all sale posting accounts + fallback codes in one SQL query
+    // instead of 9 sequential resolveAccountWithFallback round-trips.
+    const configuredAccountIds = Array.from(
+      new Set(
+        [
+          settings.cash_account_id,
+          settings.bank_account_id,
+          settings.customer_receivable_account_id,
+          settings.sales_discount_account_id,
+          settings.sales_revenue_account_id,
+          settings.sales_tax_account_id,
+          settings.cogs_account_id,
+          settings.inventory_account_id,
+        ]
+          .map((id) => Number(id || 0))
+          .filter((id) => id > 0),
+      ),
+    );
+    const fallbackAccountCodes = [
       '1110',
-    );
-    const bankAccountId = await this.resolveAccountWithFallback(
-      queryable,
-      scope.tenantId,
-      settings.bank_account_id,
       '1120',
-    );
-    const customerAccountId = await this.resolveAccountWithFallback(
-      queryable,
-      scope.tenantId,
-      settings.customer_receivable_account_id,
       '1130',
-    );
-    const storeCreditAccountId =
-      storeCreditUsed > 0 ? await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '2150') : 0;
-    const salesDiscountAccountId = await this.resolveAccountWithFallback(
-      queryable,
-      scope.tenantId,
-      settings.sales_discount_account_id,
+      ...(storeCreditUsed > 0 ? ['2150'] : []),
       '4300',
-    );
-    const salesRevenueAccountId = await this.resolveAccountWithFallback(
-      queryable,
-      scope.tenantId,
-      settings.sales_revenue_account_id,
       '4100',
-    );
-    const salesTaxAccountId = await this.resolveAccountWithFallback(
-      queryable,
-      scope.tenantId,
-      settings.sales_tax_account_id,
       '2120',
-    );
-    const cogsAccountId = await this.resolveAccountWithFallback(
-      queryable,
-      scope.tenantId,
-      settings.cogs_account_id,
       '5100',
-    );
-    const inventoryAccountId = await this.resolveAccountWithFallback(
-      queryable,
-      scope.tenantId,
-      settings.inventory_account_id,
       '1140',
-    );
+    ];
+    const prefetchedAccounts = await queryable
+      .selectFrom('accounting_accounts')
+      .select(['id', 'code', 'is_active'])
+      .where('tenant_id', '=', scope.tenantId)
+      .where((eb) =>
+        configuredAccountIds.length > 0
+          ? eb.or([eb('id', 'in', configuredAccountIds), eb('code', 'in', fallbackAccountCodes)])
+          : eb('code', 'in', fallbackAccountCodes),
+      )
+      .execute();
+
+    const activeById = new Map<number, boolean>();
+    const activeIdByCode = new Map<string, number>();
+    for (const row of prefetchedAccounts) {
+      const id = Number(row.id);
+      const isActive = Boolean(row.is_active);
+      activeById.set(id, isActive);
+      if (isActive && row.code && !activeIdByCode.has(String(row.code))) {
+        activeIdByCode.set(String(row.code), id);
+      }
+    }
+    const resolvePrefetchedAccount = (configuredId: number | null | undefined, fallbackCode: string): number => {
+      const numericId = Number(configuredId || 0);
+      if (numericId > 0 && activeById.get(numericId) === true) {
+        return numericId;
+      }
+      const fallbackId = activeIdByCode.get(fallbackCode);
+      if (fallbackId) return fallbackId;
+      return numericId;
+    };
+
+    const cashAccountId = resolvePrefetchedAccount(settings.cash_account_id, '1110');
+    const bankAccountId = resolvePrefetchedAccount(settings.bank_account_id, '1120');
+    const customerAccountId = resolvePrefetchedAccount(settings.customer_receivable_account_id, '1130');
+    const storeCreditAccountId = storeCreditUsed > 0 ? resolvePrefetchedAccount(null, '2150') : 0;
+    const salesDiscountAccountId = resolvePrefetchedAccount(settings.sales_discount_account_id, '4300');
+    const salesRevenueAccountId = resolvePrefetchedAccount(settings.sales_revenue_account_id, '4100');
+    const salesTaxAccountId = resolvePrefetchedAccount(settings.sales_tax_account_id, '2120');
+    const cogsAccountId = resolvePrefetchedAccount(settings.cogs_account_id, '5100');
+    const inventoryAccountId = resolvePrefetchedAccount(settings.inventory_account_id, '1140');
 
     if (cashAmount > 0) {
       addBookLine({
@@ -482,16 +501,20 @@ export class PostSaleService {
       });
     }
 
-    const accountMap = await this.getActiveAccountMap(
-      queryable,
-      scope.tenantId,
-      lines.map((line) => line.accountId),
-    );
+    const uncheckedAccountIds = lines
+      .map((line) => line.accountId)
+      .filter((id) => id > 0 && !activeById.has(id));
+    if (uncheckedAccountIds.length > 0) {
+      const extraMap = await this.getActiveAccountMap(queryable, scope.tenantId, uncheckedAccountIds);
+      for (const [id, active] of extraMap.entries()) {
+        activeById.set(id, active);
+      }
+    }
     for (const line of lines) {
       if (!(line.accountId > 0)) throw new Error(`Invalid accounting setting account id while posting sale ${saleId}`);
-      if (!accountMap.has(line.accountId))
+      if (!activeById.has(line.accountId))
         throw new Error(`Configured account ${line.accountId} was not found while posting sale ${saleId}`);
-      if (!accountMap.get(line.accountId))
+      if (!activeById.get(line.accountId))
         throw new Error(`Configured account ${line.accountId} is inactive while posting sale ${saleId}`);
     }
 
