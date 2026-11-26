@@ -273,10 +273,13 @@ function checkWriters(): void {
     const lines = fs.readFileSync(file, 'utf8').split('\n');
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const isInsert =
+      const isDirectInsert =
         /insertInto\(\s*['"]stock_movements['"]/.test(line) ||
         (/insertInto\(\s*$/.test(line) && i + 1 < lines.length && /['"]stock_movements['"]/.test(lines[i + 1]));
-      if (!isInsert) continue;
+      const isWriterCall =
+        !/^\s*(?:export\s+)?(?:async\s+function|import)\b/.test(line) &&
+        /\brecordStockMovement(?:Row)?\s*\(/.test(line);
+      if (!isDirectInsert && !isWriterCall) continue;
       insertSites++;
       // Comment lines are stripped before the 2dp test: the restaurant
       // writer carries a comment that literally names toFixed(2) as
@@ -285,14 +288,18 @@ function checkWriters(): void {
         .slice(i, i + 45)
         .map((l) => l.split('//')[0])
         .join('\n');
-      if (!/unit_cost\s*:/.test(code)) {
-        if (/movement_type\s*:\s*'sale'/.test(code)) {
+      const hasUnitCost = isDirectInsert ? /unit_cost\s*:/.test(code) : /unitCost\s*:/.test(code);
+      const isSaleMovement = isDirectInsert
+        ? /movement_type\s*:\s*'sale'/.test(code)
+        : /movementType\s*:\s*'sale'/.test(code);
+      if (!hasUnitCost) {
+        if (isSaleMovement) {
           saleMovementFilesWithoutUnitCost.push(`${rel}:${i + 1}`);
         }
         continue;
       }
       unitCostSites++;
-      if (/movement_type\s*:\s*'sale'/.test(code)) {
+      if (isSaleMovement) {
         saleMovementFilesWithUnitCost.push(`${rel}:${i + 1}`);
       }
       assert.ok(!/toFixed\(2\)/.test(code), `${rel}:${i + 1} must not write unit_cost through toFixed(2)`);

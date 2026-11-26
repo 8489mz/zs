@@ -34,16 +34,34 @@ function readContracts() {
   return contracts;
 }
 
+function expandDecoratorValues(raw, fallback = '') {
+  if (!raw) return [fallback];
+  return raw
+    .replace(/[[\]'"]/g, '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 || fallback === '');
+}
+
 function readBackendRoutes() {
   const files = walk(backendDir, (file) => file.endsWith('.controller.ts'));
   const routes = [];
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');
-    const controllerMatch = source.match(/@Controller\(\s*['"]([^'"]*)['"]\s*\)/);
-    const prefix = controllerMatch?.[1] || '';
-    const routePattern = /@(Get|Post|Put|Delete)\(\s*['"]([^'"]*)['"]\s*\)/g;
+    const controllerMatch = source.match(/@Controller\(\s*(\[[^\]]*\]|['"][^'"]*['"])\s*\)/);
+    const prefixes = controllerMatch ? expandDecoratorValues(controllerMatch[1], '') : [''];
+    const routePattern = /@(Get|Post|Put|Delete)\(\s*(\[[^\]]*\]|['"][^'"]*['"])?\s*\)/g;
     for (const match of source.matchAll(routePattern)) {
-      routes.push({ file: path.relative(repoRoot, file), method: match[1].toUpperCase(), path: normalizePath(prefix, match[2]) });
+      const subPaths = expandDecoratorValues(match[2], '');
+      for (const prefix of prefixes) {
+        for (const subPath of subPaths) {
+          routes.push({
+            file: path.relative(repoRoot, file),
+            method: match[1].toUpperCase(),
+            path: normalizePath(prefix, subPath),
+          });
+        }
+      }
     }
   }
   return routes;
