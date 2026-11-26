@@ -376,6 +376,7 @@
     "test/critical/phase1-b5-accounting-manufacturing.spec.ts",
     "test/critical/phase1-b6-accounting-purchases.spec.ts",
     "test/critical/phase1-b7-returns-sales.spec.ts",
-    "test/critical/phase1-b8-delivery-reps-sales.spec.ts"
+    "test/critical/phase1-b8-delivery-reps-sales.spec.ts",
+    "test/critical/phase1-f2-feature-public-indices.spec.ts"
   ]
 }
