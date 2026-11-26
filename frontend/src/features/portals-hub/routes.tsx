@@ -10,5 +10,5 @@ export const portalsHubRouteModule: FeatureRouteModule = {
       ),
     },
   ],
-  navigation: [],
+  navigation: [{ key: 'portals-hub', label: 'مركز البوابات الرقمية', to: '/hub' }],
 };

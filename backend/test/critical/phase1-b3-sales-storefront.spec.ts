@@ -323,7 +323,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-B3-SALES-STOREFRONT-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B3 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F4-SETTINGS-ACCESS-DOOR/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F2-REPAIR-2-PORTALS-NAV/g) || []).length;
   assert.equal(
     guardCount,
     1,

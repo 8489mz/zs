@@ -1054,7 +1054,7 @@ async function main(): Promise<void> {
   assert.equal(new Set(invariantIds).size, invariantIds.length, 'invariant ids must be unique: no duplicated entry');
   assert.equal(
     invariantIds[invariantIds.length - 1],
-    'INV-PHASE1-F4-SETTINGS-ACCESS-DOOR',
+    'INV-PHASE1-F2-REPAIR-2-PORTALS-NAV',
     'the newest invariant entry must be the last INV- line',
   );
 
