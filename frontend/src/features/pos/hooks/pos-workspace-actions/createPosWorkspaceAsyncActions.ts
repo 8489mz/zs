@@ -327,13 +327,14 @@ export function createPosWorkspaceAsyncActions(
     // the instant createdSale resolves.
     if (params.settings?.posAutoPrintReceipt !== false) {
       const preStageMode = getPostSalePrintMode(params.settings || null);
+      const preStageBridgePageSize: 'A4' | 'receipt' = preStageMode === 'a4' ? 'A4' : 'receipt';
       const hasElectronSilent = typeof window !== 'undefined' && Boolean((window as any).electronPrinter?.printHtmlSilent);
       if (!hasElectronSilent) {
-        const preStagePrinter = resolveBridgePrinter(preStageMode === 'A4' ? 'document' : 'cashier', params.settings);
+        const preStagePrinter = resolveBridgePrinter(preStageMode === 'a4' ? 'document' : 'cashier', params.settings);
         if (preStagePrinter) {
           HardwareBridgeClient.warmPrinters?.({
             deviceName: preStagePrinter,
-            pageSize: preStageMode,
+            pageSize: preStageBridgePageSize,
             receiptWidthMm: params.settings?.receiptWidthMm === 58 ? 58 : 80,
           });
         }
@@ -349,7 +350,9 @@ export function createPosWorkspaceAsyncActions(
           && params.orderType === 'delivery'
             ? ('dual' as const)
             : undefined;
-        const selectedCustomer = (params.customers || []).find((c) => String(c.id) === String(effectiveCustomerId || ''));
+        const currentBranchName = (params.currentBranch as { id: string | number; name?: string } | null)?.name || '';
+        const currentLocationName = (params.currentLocation as { id: string | number; name?: string } | null)?.name || '';
+        const preStageTaxAmount = Number((params.totals as { taxAmount?: number }).taxAmount ?? 0);
         prestagePostedSaleReceipt(
           {
             id: '__ZS_PREBUILD_DOC_NO__',
@@ -357,11 +360,11 @@ export function createPosWorkspaceAsyncActions(
             status: 'posted',
             cart: params.cart,
             items: [],
-            customerName: selectedCustomer?.name || params.quickCustomerName || 'عميل نقدي',
-            customerPhone: params.quickCustomerPhone || selectedCustomer?.phone || '',
-            customerAddress: params.quickCustomerAddress || selectedCustomer?.address || '',
-            branchName: params.currentBranch?.name || '',
-            locationName: params.currentLocation?.name || '',
+            customerName: params.quickCustomerName || 'عميل نقدي',
+            customerPhone: params.quickCustomerPhone || '',
+            customerAddress: params.quickCustomerAddress || '',
+            branchName: currentBranchName,
+            locationName: currentLocationName,
             paymentType: effectivePaymentType,
             paymentChannel: effectivePaymentChannel,
             payments: [
@@ -369,12 +372,12 @@ export function createPosWorkspaceAsyncActions(
               ...(effectiveCardAmount > 0 ? [{ paymentChannel: 'card' as const, amount: effectiveCardAmount }] : []),
               ...(effectiveTransferAmount > 0 ? [{ paymentChannel: (params.paymentChannel === 'wallet' ? 'wallet' as const : 'instapay' as const), amount: effectiveTransferAmount }] : []),
             ],
-            subTotal: params.totals.subtotal,
+            subTotal: Number(params.totals.subTotal ?? 0),
             discount: Number(params.discount || 0),
             deliveryFee: params.totals.deliveryFee,
             serviceCharge: params.totals.serviceCharge,
             tipAmount: Number(params.tipAmount || 0),
-            taxAmount: params.totals.taxAmount,
+            taxAmount: preStageTaxAmount,
             total,
             paidAmount: effectivePaidAmount,
             tenderedAmount: preStageTendered,
@@ -496,11 +499,13 @@ export function createPosWorkspaceAsyncActions(
             ? ('dual' as const)
             : undefined;
         try {
-          void printPostedSaleReceipt(hydratedSale, {
+          void Promise.resolve(printPostedSaleReceipt(hydratedSale, {
             pageSize: postSalePrintMode,
             settings: params.settings || null,
             cashierName,
             ...(copyType ? { copyType } : {}),
+          })).catch((printErr) => {
+            console.error('Failed to auto-print POS receipt:', printErr);
           });
         } catch (printErr) {
           console.error('Failed to auto-print POS receipt:', printErr);

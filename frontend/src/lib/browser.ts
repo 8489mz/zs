@@ -228,8 +228,10 @@ function normalizeCachedSettings(raw: unknown): Partial<AppSettings> {
 }
 
 export function getCachedAppSettings(): Partial<AppSettings> {
+  const getQueryData = typeof queryClient?.getQueryData === 'function' ? queryClient.getQueryData.bind(queryClient) : null;
+  if (!getQueryData) return {};
   return normalizeCachedSettings(
-    queryClient.getQueryData(queryKeys.settings) ?? queryClient.getQueryData(queryKeys.posSettings)
+    getQueryData(queryKeys.settings) ?? getQueryData(queryKeys.posSettings)
   );
 }
 

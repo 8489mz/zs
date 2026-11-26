@@ -69,45 +69,63 @@ function createSaleInput(): CreatePosSaleInput {
 
 describe('usePosSaleMutation', () => {
   beforeEach(() => {
+    invalidateSalesDomainMock.mockReset();
+    createSaleMock.mockReset();
     useAuthStore.setState({
       tenant: { id: 'test-tenant', accountId: 'test-account' } as any,
       user: { tenantId: 'test-tenant', accountId: 'test-account' } as any,
     });
   });
 
-  it('uses the shared sales invalidation flow with dashboard freshness on success', async () => {
-    createSaleMock.mockResolvedValueOnce({ id: 'sale-42' });
-    invalidateSalesDomainMock.mockResolvedValueOnce(undefined);
+  it('uses the shared sales invalidation flow with dashboard freshness on success (deferred 180ms)', async () => {
+    vi.useFakeTimers();
+    try {
+      createSaleMock.mockResolvedValueOnce({ id: 'sale-42' });
+      invalidateSalesDomainMock.mockResolvedValueOnce(undefined);
 
-    const { queryClient, Wrapper } = createWrapper();
-    const { result } = renderHook(() => usePosSaleMutation(), { wrapper: Wrapper });
+      const { queryClient, Wrapper } = createWrapper();
+      const { result } = renderHook(() => usePosSaleMutation(), { wrapper: Wrapper });
 
-    await act(async () => {
-      await result.current.mutateAsync(createSaleInput());
-    });
+      await act(async () => {
+        await result.current.mutateAsync(createSaleInput());
+      });
 
-    expect(invalidateSalesDomainMock).toHaveBeenCalledWith(queryClient, {
-      saleId: 'sale-42',
-      includeDashboard: true,
-    });
+      expect(invalidateSalesDomainMock).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(180);
+      });
+
+      expect(invalidateSalesDomainMock).toHaveBeenCalledWith(queryClient, {
+        saleId: 'sale-42',
+        includeDashboard: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('confirms a committed sale without waiting for active query refetches', async () => {
-    createSaleMock.mockResolvedValueOnce({ id: 'sale-43' });
-    let finishRefresh: (() => void) | undefined;
-    invalidateSalesDomainMock.mockReturnValueOnce(new Promise<void>((resolve) => {
-      finishRefresh = resolve;
-    }));
-
-    const { Wrapper } = createWrapper();
-    const { result } = renderHook(() => usePosSaleMutation(), { wrapper: Wrapper });
+    vi.useFakeTimers();
     try {
+      createSaleMock.mockResolvedValueOnce({ id: 'sale-43' });
+      let finishRefresh: (() => void) | undefined;
+      invalidateSalesDomainMock.mockReturnValueOnce(new Promise<void>((resolve) => {
+        finishRefresh = resolve;
+      }));
+
+      const { Wrapper } = createWrapper();
+      const { result } = renderHook(() => usePosSaleMutation(), { wrapper: Wrapper });
       await act(async () => {
         await expect(result.current.mutateAsync(createSaleInput())).resolves.toEqual({ id: 'sale-43' });
       });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(180);
+      });
       expect(invalidateSalesDomainMock).toHaveBeenCalledOnce();
-    } finally {
       finishRefresh?.();
+    } finally {
+      vi.useRealTimers();
     }
   });
 

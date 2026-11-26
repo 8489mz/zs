@@ -307,6 +307,7 @@ export interface AppSettings {
   requireCashierShiftForSales?: boolean;
   requirePasswordOnShiftOpen?: boolean;
   posKitchenPrinterEnabled?: boolean;
+  posAutoPrintReceipt?: boolean;
   posCashDrawerPrinterEnabled?: boolean;
   posKitchenPrinterAuto?: boolean;
   posAutoPrintKitchenReceipt?: boolean;

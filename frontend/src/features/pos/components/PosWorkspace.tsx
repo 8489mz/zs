@@ -612,7 +612,7 @@ export function PosWorkspace() {
     }
     HardwareBridgeClient.warmPrinters?.({
       printers: configuredPrinters,
-      pageSize: getPostSalePrintMode(settings || null),
+      pageSize: getPostSalePrintMode(settings || null) === 'a4' ? 'A4' : 'receipt',
       receiptWidthMm: settings?.receiptWidthMm === 58 ? 58 : 80,
     });
     return () => {
