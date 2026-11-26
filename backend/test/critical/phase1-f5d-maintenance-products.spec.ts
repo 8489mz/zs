@@ -102,6 +102,14 @@ import * as path from 'node:path';
  * §4 coupling line ('57 edges / 133 statements') is a stale
  * historical note (already wrong about the live pins before F5a:
  * backend 71/652, posting 79) that no package maintains — left as-is.
+ *
+ * REPAIR (F5d-REPAIR, 2026-11-27): the spec mock shape above
+ * changed — the useQuery-backed useImeiMaintenanceQuery mock tripped
+ * the page-composition check (ci-fast #491 on the F5d commit), so the
+ * spec now mocks the maintenance api client and lets the REAL feature
+ * hook run (importOriginal, only settings + profile overridden).
+ * Section 1 assertions below pin the new shape; the F5d record above
+ * stays as F5d's own history.
  */
 
 const REPO_ROOT = path.join(__dirname, '../../..');
@@ -257,29 +265,30 @@ async function main(): Promise<void> {
     'the products index must still re-export productsApi (public surface unchanged)',
   );
   const imeiSpec = fs.readFileSync(IMEI_SPEC, 'utf8');
-  assert.ok(
-    imeiSpec.includes('useMaintenanceProfile: () => ({ shortTitle:'),
-    'the page spec mock must provide useMaintenanceProfile',
-  );
+  assert.ok(imeiSpec.includes('useMaintenanceProfile: () =>'), 'the page spec mock must provide useMaintenanceProfile');
   assert.ok(
     imeiSpec.includes("serialLabel: 'السيريال / IMEI 1'"),
     'the page spec mock must return the real mobile serialLabel',
   );
   assert.ok(
-    imeiSpec.includes('useImeiMaintenanceQuery: (serial: string) =>'),
-    'the page spec mock must provide useImeiMaintenanceQuery',
+    imeiSpec.includes("vi.mock('@/features/maintenance/api/maintenance.api'"),
+    'the page spec must mock the maintenance api so the REAL feature hook runs (data access lives in the hook)',
   );
   assert.ok(
-    imeiSpec.includes("queryKey: ['imei-history-maintenance', serial],"),
-    'the page spec mock must keep the imei-history-maintenance queryKey',
+    imeiSpec.includes('mockMaintenanceList(...args)'),
+    'the page spec maintenance.api mock must drive the list from mockMaintenanceList',
   );
   assert.ok(
-    imeiSpec.includes('mockMaintenanceList({ q: serial })'),
-    'the page spec mock must drive the maintenance query from mockMaintenanceList',
+    imeiSpec.includes('importOriginal'),
+    'the page spec hooks mock must keep the real hooks via importOriginal (only settings + profile overridden)',
   );
   assert.ok(
-    !imeiSpec.includes("vi.mock('@/features/maintenance/api/maintenance.api'"),
-    'the page spec must drop the dead maintenance.api vi.mock (nothing imports that module anymore)',
+    !imeiSpec.includes('useImeiMaintenanceQuery:'),
+    'the page spec must NOT re-implement useImeiMaintenanceQuery — the real feature hook runs',
+  );
+  assert.ok(
+    !imeiSpec.includes('useQuery('),
+    'the page spec must contain no direct React Query call (the page-composition check forbids it in page files, specs included)',
   );
 
   // 2. The module-boundary pins move: frontend edges 53 -> 52,
@@ -330,7 +339,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F5d INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F5E-ACCOUNTING-TREASURY-DECOUPLED/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5D-REPAIR-IMEI-SPEC-HOOKS/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F5d INV exactly once');
 
   // 4. Wiring: both critical lists carry 384 specs in identical order, this spec last.
@@ -417,7 +426,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F5E-ACCOUNTING-TREASURY-DECOUPLED/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5D-REPAIR-IMEI-SPEC-HOOKS/g)'),
       `${label} spec guard assertion must re-pin to the F5d INV`,
     );
   }

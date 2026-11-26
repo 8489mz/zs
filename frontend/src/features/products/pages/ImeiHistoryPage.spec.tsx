@@ -17,7 +17,7 @@
  *   "no data recorded" state, never an availability claim.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi } from 'vitest';
 import { ImeiHistoryPage } from './ImeiHistoryPage';
 
@@ -42,19 +42,28 @@ vi.mock('@/features/tradein/api/tradein.api', () => ({
   },
 }));
 
-vi.mock('@/shared/hooks/use-catalog-queries', () => ({
-  useSettingsQuery: () => ({ data: { maintenanceProfile: 'mobile' } }),
-  useMaintenanceProfile: () => ({ shortTitle: 'موبايل وتابلت', serialLabel: 'السيريال / IMEI 1' }),
-  useImeiMaintenanceQuery: (serial: string) =>
-    useQuery({
-      queryKey: ['imei-history-maintenance', serial],
-      queryFn: () =>
-        serial
-          ? mockMaintenanceList({ q: serial })
-          : Promise.resolve({ tickets: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }),
-      enabled: Boolean(serial),
-    }),
+// The maintenance data flows through the REAL feature hook
+// (useImeiMaintenanceQuery) — only its API client is mocked. The hook
+// must not be re-implemented here with a direct query call: the page-composition
+// check forbids direct React Query calls in page files, specs included.
+vi.mock('@/features/maintenance/api/maintenance.api', () => ({
+  maintenanceApi: {
+    list: (...args: Parameters<typeof mockMaintenanceList>) => mockMaintenanceList(...args),
+  },
 }));
+
+vi.mock('@/shared/hooks/use-catalog-queries', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/hooks/use-catalog-queries')>();
+  return {
+    ...actual,
+    useSettingsQuery: () =>
+      ({ data: { maintenanceProfile: 'mobile' } }) as unknown as ReturnType<typeof actual.useSettingsQuery>,
+    useMaintenanceProfile: () =>
+      ({ shortTitle: 'موبايل وتابلت', serialLabel: 'السيريال / IMEI 1' }) as unknown as ReturnType<
+        typeof actual.useMaintenanceProfile
+      >,
+  };
+});
 
 const emptyPage = { tickets: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } };
 const emptyTradeins = { transactions: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } };
