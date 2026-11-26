@@ -51,14 +51,12 @@ import { AppError } from '../../../common/errors/app-error';
 import { InventoryScopeService } from '../../inventory/services/inventory-scope.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { StorefrontMediaService } from '../../storefront/storefront-media.service';
-import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
 import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import {
   assertFashionExpectedStock,
   assertFashionRemovedStockSafe,
   fashionLocationAccessMode,
 } from '../engines/fashion-stock-safety.engine';
-import { stockMovementTotal } from '../engines/stock-movement-total.engine';
 import { normalizeArabicSearch } from '../../../common/utils/arabic-search.util';
 import { MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { NormalizedUpsertProduct, SaveFashionGroupDto, UpsertProductDto } from '../dto/upsert-product.dto';
@@ -528,13 +526,14 @@ export class CatalogProductFashionService {
                 if (qtyToDeduct <= 0) continue;
 
                 const rawLocId = ls.location_id != null && Number(ls.location_id) > 0 ? Number(ls.location_id) : null;
-                const effectiveLocId =
-                  rawLocId ||
-                  (removedProduct.default_location_id
-                    ? Number(removedProduct.default_location_id)
-                    : fallbackWarehouseId);
 
-                await applyStockDelta(trx, {
+                // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the zeroing
+                // deduct goes through the row-writer, so the row stamps
+                // the ledger's location balances (scopeBefore/scopeAfter)
+                // and the ledger call's rawLocId — the location the balance
+                // actually moved in — instead of the effectiveLocId guess
+                // (A3 precedent; same shape as the archive loop leg).
+                const movement = await recordStockMovement(trx, {
                   productId: removedId,
                   locationId: rawLocId,
                   branchId: ls.branch_id ? Number(ls.branch_id) : undefined,
@@ -543,37 +542,22 @@ export class CatalogProductFashionService {
                   accountId: actor.accountId,
                   disableAutoDrain: true,
                   allowNegative: true,
+                  movementType: 'deduct',
+                  referenceType: 'inventory_adjustment',
+                  referenceId: removedId,
+                  reason: 'fashion_matrix_adjustment',
+                  note: `تسوية وتصفير رصيد المقاس الملغي (${removedProduct.name || removedProduct.size}) عند تعديل الموديل`,
+                  unitCost: Number(removedProduct.cost_price || 0),
+                  moneyDigits: bookDigits,
+                  createdBy: actor.userId,
                 });
 
                 removedProduct.stock_qty = Number(
                   Math.max(0, Number(removedProduct.stock_qty || 0) - qtyToDeduct).toFixed(3),
                 ) as any;
 
-                const unitCost = Number(removedProduct.cost_price || 0);
-                const insertedMovement = await trx
-                  .insertInto('stock_movements')
-                  .values({
-                    product_id: removedId,
-                    movement_type: 'deduct',
-                    qty: -qtyToDeduct,
-                    before_qty: qtyToDeduct,
-                    after_qty: 0,
-                    unit_cost: unitCost,
-                    total_cost: stockMovementTotal(qtyToDeduct, unitCost, bookDigits),
-                    reason: 'fashion_matrix_adjustment',
-                    note: `تسوية وتصفير رصيد المقاس الملغي (${removedProduct.name || removedProduct.size}) عند تعديل الموديل`,
-                    reference_type: 'inventory_adjustment',
-                    reference_id: removedId,
-                    location_id: effectiveLocId || null,
-                    branch_id: ls.branch_id ? Number(ls.branch_id) : undefined,
-                    created_by: actor.userId,
-                    ...this.tenantFields(actor),
-                  } as any)
-                  .returning('id')
-                  .executeTakeFirst();
-
-                if (insertedMovement?.id && this.accountingPosting) {
-                  await this.accountingPosting.postInventoryAdjustment(trx, Number(insertedMovement.id), actor);
+                if (movement.movementId && this.accountingPosting) {
+                  await this.accountingPosting.postInventoryAdjustment(trx, movement.movementId, actor);
                 }
               }
             }

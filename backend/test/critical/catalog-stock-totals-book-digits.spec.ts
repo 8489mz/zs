@@ -88,7 +88,7 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<D
     CREATE TABLE accounting_fiscal_periods (id bigserial PRIMARY KEY, tenant_id text, fiscal_year_id bigint, name text, period_number int, start_date date, end_date date, status text, closed_at timestamptz, closed_by bigint, closing_notes text, updated_at timestamptz);
     CREATE TABLE journal_entries (id bigserial PRIMARY KEY, tenant_id text, account_id text, entry_no text, dedup_key text, entry_date date, description text, source_type text, source_id bigint, status text, branch_id bigint, location_id bigint, created_by bigint, posted_by bigint, posted_at timestamptz, reversal_of_entry_id bigint, reversed_by_entry_id bigint, updated_at timestamptz);
     CREATE TABLE journal_entry_lines (id bigserial PRIMARY KEY, tenant_id text, journal_entry_id bigint, account_id bigint, cost_center_id bigint, description text, debit numeric, credit numeric, partner_type text, partner_id bigint, branch_id bigint, location_id bigint);
-    CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, movement_type text, qty numeric, before_qty numeric, after_qty numeric, unit_cost numeric, total_cost numeric, reason text, note text, reference_type text, reference_id bigint, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW());
+    CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, movement_type text, qty numeric, before_qty numeric, after_qty numeric, unit_cost numeric, total_cost numeric, reason text, note text, reference_type text, reference_id bigint, branch_id bigint, location_id bigint, created_by bigint, import_receipt_id bigint, created_at timestamptz DEFAULT NOW());
     INSERT INTO accounting_settings VALUES (1, 't1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 40, NULL, NULL, NULL, NOW());
     INSERT INTO accounting_accounts VALUES
       (40, 't1', '1140', 'مخزون', 'Inventory', 'asset', true, false, NULL, true, false, false, false, true),
@@ -285,11 +285,13 @@ async function main(): Promise<void> {
   // The book-digits pin now spans the whole split (catalog-product split
   // 2026-11-16): facade + types module + all 8 slices. The toFixed(2) /
   // roundCurrency bans apply to every file; the stockMovementTotal call
-  // sites are counted across all files (5 total: archive 3, fashion 1,
-  // posting 1, write 0). The archive count was already 3 (the residual
-  // fix added a third call site without updating this comment); fashion
-  // fell 5 → 2 when A3 moved the consolidation legs + stock edit into
-  // the writer, then 2 → 1 when A4 moved the opening balance in.
+  // sites are counted across all files (1 total: archive 0, fashion 0,
+  // posting 1, write 0). Phase 1 A9 moved the last movement-row call
+  // sites into the writer (archive 3, fashion 1 — the writer computes
+  // the identical roundMoney total at book digits, so the book-digits
+  // property now lives in the writer, pinned by the A9 routing spec);
+  // the single remaining call is the posting amount at posting :90,
+  // not a movement-row total.
   {
     const serviceFiles = [
       'catalog-product.service.ts',
@@ -317,8 +319,8 @@ async function main(): Promise<void> {
     }
     const helperCalls = sources.flatMap((source) => source.match(/stockMovementTotal\(/g) ?? []);
     assert.ok(
-      helperCalls.length >= 5,
-      `expected at least 5 stockMovementTotal call sites, found ${helperCalls.length}`,
+      helperCalls.length >= 1,
+      `expected at least 1 stockMovementTotal call site, found ${helperCalls.length}`,
     );
   }
 

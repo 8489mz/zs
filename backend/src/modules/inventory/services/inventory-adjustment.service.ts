@@ -23,7 +23,8 @@ import { IdempotencyService } from '../../../core/idempotency/idempotency.servic
 import { idempotencyStorage } from '../../../core/idempotency/idempotency.context';
 import { syncImportLotsOnStockDeduction } from '../../import-sales/helpers/import-lot-allocation.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { recordStockMovementRow } from '../../../common/utils/stock-movement-writer';
 
 @Injectable()
 export class InventoryAdjustmentService {
@@ -250,34 +251,33 @@ export class InventoryAdjustmentService {
       if (movementQty < 0.001) throw new AppError('Adjustment did not change stock', 'STOCK_ADJUSTMENT_NO_CHANGE', 400);
       // Source movement and GL must represent the same tenant-currency minor units.
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
-      const totalCost = roundMoney(movementQty * unitCost, moneyDigits);
 
-      const insertedMovement = await trx
-        .insertInto('stock_movements')
-        .values({
-          product_id: payload.productId,
-          movement_type: payload.actionType,
-          qty: signedDelta,
-          before_qty: stockChange.scopeBefore,
-          after_qty: stockChange.scopeAfter,
-          reason: payload.reason,
-          note: payload.note || '',
-          reference_type: 'inventory_adjustment',
-          reference_id: payload.productId,
-          branch_id: effectiveBranchId,
-          location_id: payload.locationId ?? null,
-          created_by: auth.userId,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-          unit_cost: unitCost,
-          total_cost: totalCost,
-        } as any)
-        .returning('id')
-        .executeTakeFirst();
-
-      if (!insertedMovement?.id) {
-        throw new AppError('Failed to capture stock movement ID for accounting', 'MOVEMENT_INSERT_FAILED', 500);
-      }
+      // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the row goes through
+      // the row-writer in row-only mode — it is stamped from the carried
+      // signedDelta / stockChange, and the no-change guard above still
+      // throws after the ledger call but before the row, so a no-change
+      // run rolls back exactly as before. The writer computes the total
+      // as roundMoney(|signedDelta| * unitCost, moneyDigits), the same
+      // expression the old totalCost used, and throws MOVEMENT_INSERT_FAILED
+      // itself when the insert captures no id.
+      const movementId = await recordStockMovementRow(trx, {
+        productId: payload.productId,
+        branchId: effectiveBranchId,
+        locationId: payload.locationId ?? null,
+        tenantId: scope.tenantId,
+        accountId: scope.accountId,
+        movementType: payload.actionType,
+        delta: signedDelta,
+        beforeQty: stockChange.scopeBefore,
+        afterQty: stockChange.scopeAfter,
+        referenceType: 'inventory_adjustment',
+        referenceId: payload.productId,
+        reason: payload.reason,
+        note: payload.note || '',
+        unitCost,
+        moneyDigits,
+        createdBy: auth.userId,
+      });
 
       if (signedDelta < -0.0001) {
         await syncImportLotsOnStockDeduction(trx, {
@@ -289,13 +289,9 @@ export class InventoryAdjustmentService {
         });
       }
 
-      const posting = await this.accountingPosting.postInventoryAdjustment(trx, insertedMovement.id, auth);
+      const posting = await this.accountingPosting.postInventoryAdjustment(trx, movementId, auth);
       if (posting.hasFinancialImpact && !posting.journalEntryId) {
-        throw new AppError(
-          `Inventory adjustment ${insertedMovement.id} has no journal entry`,
-          'LEDGER_POSTING_MISSING',
-          500,
-        );
+        throw new AppError(`Inventory adjustment ${movementId} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
       }
       // before/after stay the ledger's raw scoped quantities: the
       // movement chain and the frontend cache patch (scopeAfter is

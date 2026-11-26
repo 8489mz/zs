@@ -6,7 +6,11 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
 import { boundedPage } from '../../../common/utils/bounded-page';
-import { applyStockDelta, lockStockProducts, previewAssignedLocationOnHandQty, previewAssignedLocationStockQty, previewConsumableStockQty, setScopedStockQty } from '../../../common/utils/location-stock-ledger';
+import { lockStockProducts, previewAssignedLocationOnHandQty, previewAssignedLocationStockQty, previewConsumableStockQty, setScopedStockQty } from '../../../common/utils/location-stock-ledger';
+import {
+  recordStockMovement,
+  recordStockMovementRow,
+} from '../../../common/utils/stock-movement-writer';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { Database } from '../../../database/database.types';
@@ -635,12 +639,36 @@ export class InventoryCountService {
             // damage record, and the journal all follow the actual delta.
             const actualDelta = Number((stockChange.scopeAfter - stockChange.scopeBefore).toFixed(3));
             const totalCost = roundMoney(Math.abs(actualDelta) * unitCost, moneyDigits);
-            await trx.insertInto('stock_movements').values({
-              ...buildStockCountPostingMovement(item, sessionId, auth.userId, actualDelta),
-              before_qty: stockChange.scopeBefore, after_qty: stockChange.scopeAfter,
-              branch_id: session.branch_id, location_id: session.location_id,
-              unit_cost: unitCost, total_cost: totalCost, ...this.tenantFields(auth),
-            }).execute();
+            // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the row goes
+            // through the row-writer in row-only mode. The movement type
+            // is only known AFTER the setter (buildStockCountPostingMovement
+            // decides gain/loss from the post-setter actualDelta), and the
+            // set mode needs movementType upfront and always writes a row —
+            // so the set mode cannot express this site (see the writer
+            // header). The identity fields still come from the helper; the
+            // writer stamps scopeBefore/scopeAfter, the same override the
+            // old row applied. The local totalCost stays: it feeds the
+            // damaged_stock_records insert below, and equals the writer's
+            // roundMoney(|actualDelta| * unitCost, moneyDigits).
+            const movement = buildStockCountPostingMovement(item, sessionId, auth.userId, actualDelta);
+            await recordStockMovementRow(trx, {
+              productId: Number(item.product_id),
+              branchId: session.branch_id,
+              locationId: session.location_id,
+              tenantId: tenantScope.tenantId,
+              accountId: tenantScope.accountId,
+              movementType: movement.movement_type,
+              delta: actualDelta,
+              beforeQty: stockChange.scopeBefore,
+              afterQty: stockChange.scopeAfter,
+              referenceType: movement.reference_type,
+              referenceId: movement.reference_id,
+              reason: movement.reason,
+              note: movement.note,
+              unitCost,
+              moneyDigits,
+              createdBy: auth.userId,
+            });
             if (actualDelta < -0.0001) {
               await syncImportLotsOnStockDeduction(trx, {
                 tenantId: tenantScope.tenantId,
@@ -812,19 +840,33 @@ export class InventoryCountService {
         batch_tracking: JSON.stringify(trace.batchTracking),
       } as any).where('id', '=', Number(insertedDamage.id)).where(this.tenantPredicate(auth)).execute();
 
-      const stockChange = await applyStockDelta(trx, { productId: payload.productId, delta: -damageQty, branchId: location.branchId, locationId: location.id, tenantId: tenantScope.tenantId, accountId: tenantScope.accountId, errorCode: 'INSUFFICIENT_STOCK', errorMessage: 'Cannot mark more damaged stock than current stock', disableAutoDrain: true });
-
-      await trx.insertInto('stock_movements').values({
-         ...writeModels.stockMovement,
-         before_qty: stockChange.scopeBefore,
-         after_qty: stockChange.scopeAfter,
-         branch_id: location.branchId ?? null,
-         location_id: location.id,
-         reference_id: insertedDamage.id,
-         unit_cost: unitCost,
-         total_cost: totalCost,
-         ...this.tenantFields(auth)
-      }).execute();
+      // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the damaged deduct
+      // goes through the row-writer; the row stamps the ledger's
+      // scopeBefore/scopeAfter (the same override the old row applied
+      // over the write-model's available-basis before/after), keeps the
+      // write-model's identity fields (type 'damaged', reason, note,
+      // reference 'damaged_stock' / the damage record id), and the
+      // writer computes roundMoney(damageQty * unitCost, moneyDigits) —
+      // the same totalCost the damaged record below still uses.
+      await recordStockMovement(trx, {
+        productId: payload.productId,
+        delta: -damageQty,
+        branchId: location.branchId,
+        locationId: location.id,
+        tenantId: tenantScope.tenantId,
+        accountId: tenantScope.accountId,
+        errorCode: 'INSUFFICIENT_STOCK',
+        errorMessage: 'Cannot mark more damaged stock than current stock',
+        disableAutoDrain: true,
+        movementType: 'damaged',
+        referenceType: 'damaged_stock',
+        referenceId: Number(insertedDamage.id),
+        reason: writeModels.stockMovement.reason,
+        note: writeModels.stockMovement.note,
+        unitCost,
+        moneyDigits,
+        createdBy: auth.userId,
+      });
 
       await syncImportLotsOnStockDeduction(trx, {
         tenantId: tenantScope.tenantId,

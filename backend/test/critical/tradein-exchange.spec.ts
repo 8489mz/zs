@@ -165,7 +165,7 @@ const FIXTURE_DDL = `
     created_by INTEGER,
     tenant_id TEXT NOT NULL,
     account_id TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    import_receipt_id BIGINT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
   CREATE TABLE product_serials (
     id SERIAL PRIMARY KEY,

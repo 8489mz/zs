@@ -3,7 +3,7 @@ import { AppError } from '../../../../common/errors/app-error';
 import { setScopedStockQty } from '../../../../common/utils/location-stock-ledger';
 import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
-import { stockMovementTotal } from '../../../catalog/engines/stock-movement-total.engine';
+import { recordStockMovementRow } from '../../../../common/utils/stock-movement-writer';
 import {
   MAX_IMPORT_ROWS_PER_REQUEST,
   cleanString,
@@ -218,31 +218,34 @@ export class SettingsImportSuppliersStock {
         // INV-GL-INVENTORY-VALUE: the opening-stock re-set posts the same
         // Dr 1140 / Cr 3100 journal (mirrored on a decrease) as a new
         // product's opening stock, so GL inventory tracks the stock value.
+        // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the row goes through
+        // the row-writer in row-only mode with signedTotal — the set mode
+        // cannot express this site because the zero-skip above (no row
+        // when actualDelta === 0) is decided AFTER the setter, while the
+        // set mode always writes a row. The writer's signed total is
+        // roundMoney(actualDelta * unitCost, moneyDigits), the same
+        // SIGNED stockMovementTotal expression the old row used.
         const openingDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
         const openingUnitCost = Number(product.cost_price || 0);
-        const openingTotal = stockMovementTotal(actualDelta, openingUnitCost, openingDigits);
-        const insertedMovement = await trx
-          .insertInto('stock_movements')
-          .values({
-            product_id: Number(product.id),
-            movement_type: 'opening_stock',
-            qty: actualDelta,
-            before_qty: stockChange.scopeBefore,
-            after_qty: stockChange.scopeAfter,
-            unit_cost: openingUnitCost,
-            total_cost: openingTotal,
-            reason: 'inventory_adjustment',
-            note: 'تسوية مخزون',
-            reference_type: 'product',
-            reference_id: product.id,
-            tenant_id: scope.tenantId,
-            created_by: actor.userId,
-            branch_id: branchId,
-            location_id: locationId,
-            ...this.tenantFields(actor),
-          })
-          .returning('id')
-          .executeTakeFirstOrThrow();
+        const movementId = await recordStockMovementRow(trx, {
+          productId: Number(product.id),
+          branchId,
+          locationId,
+          tenantId: scope.tenantId,
+          accountId: scope.accountId,
+          movementType: 'opening_stock',
+          delta: actualDelta,
+          beforeQty: stockChange.scopeBefore,
+          afterQty: stockChange.scopeAfter,
+          referenceType: 'product',
+          referenceId: product.id,
+          reason: 'inventory_adjustment',
+          note: 'تسوية مخزون',
+          unitCost: openingUnitCost,
+          moneyDigits: openingDigits,
+          signedTotal: true,
+          createdBy: actor.userId,
+        });
         await this.postImportedOpeningStock(trx, {
           productId: Number(product.id),
           signedQty: actualDelta,
@@ -250,7 +253,7 @@ export class SettingsImportSuppliersStock {
           locationId,
           branchId,
           sourceType: 'import_opening_stock',
-          sourceId: Number(insertedMovement.id),
+          sourceId: movementId,
           actor,
         });
         updated += 1;

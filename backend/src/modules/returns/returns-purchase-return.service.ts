@@ -8,11 +8,8 @@ import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { type TenantScope } from '../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../common/errors/app-error';
 import { ensureReturnQtyWithinLimit } from '../../common/utils/financial-integrity';
-import {
-  applyStockDelta,
-  lockStockProducts,
-  previewConsumableStockQty,
-} from '../../common/utils/location-stock-ledger';
+import { lockStockProducts, previewConsumableStockQty } from '../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../common/utils/stock-movement-writer';
 import {
   buildPurchaseReturnLine,
   calculateReturnDocumentTotal,
@@ -431,17 +428,13 @@ export class ReturnsPurchaseReturnService {
         throw new AppError('الصنف ليس دواءً مسجلاً بتشغيلة', 'PURCHASE_RETURN_BATCH_NOT_APPLICABLE', 400);
       }
 
-      const stockChange = await applyStockDelta(trx, {
-        productId: requestItem.productId,
-        delta: -preparedLine.stockDelta,
-        branchId: purchase.branch_id,
-        locationId: itemLocationId,
-        tenantId: scope.tenantId,
-        accountId: scope.accountId,
-        errorCode: 'PURCHASE_RETURN_STOCK_INVALID',
-        errorMessage: 'Invalid stock for purchase return',
-        disableAutoDrain: true,
-      });
+      // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the original-cost
+      // computation does not depend on the ledger result, so it moves
+      // BEFORE the writer call (the writer needs unitCost upfront);
+      // revalueStockReturn below then uses the returned globalAfter.
+      // The writer's total is roundMoney(stockDelta * perBaseUnit,
+      // moneyDigits) — the same roundBookMoney expression (an alias
+      // for roundMoney) the old row used.
       // INV-PURCHASE-RETURN-ORIGINAL-COST: cost the return at the ORIGINAL
       // purchase line's net cost, not the current product WAC. The return is
       // lot-identified (purchase_item_id, plus serial/batch provenance where
@@ -456,26 +449,25 @@ export class ReturnsPurchaseReturnService {
         taxRate: (purchase as any).tax_rate,
         pricesIncludeTax: (purchase as any).prices_include_tax,
       });
-      await trx
-        .insertInto('stock_movements')
-        .values({
-          product_id: requestItem.productId,
-          movement_type: 'purchase_return',
-          qty: -preparedLine.stockDelta,
-          before_qty: stockChange.scopeBefore,
-          after_qty: stockChange.scopeAfter,
-          unit_cost: originalCost.perBaseUnit,
-          total_cost: roundBookMoney(preparedLine.stockDelta * originalCost.perBaseUnit, moneyDigits),
-          reason: 'purchase_return',
-          note: 'purchase return PUR-' + String(purchase.id),
-          reference_type: 'purchase_return',
-          reference_id: Number(payload.invoiceId),
-          branch_id: purchase.branch_id,
-          location_id: itemLocationId,
-          created_by: auth.userId,
-          ...this.tenantFields(auth),
-        })
-        .execute();
+      const movement = await recordStockMovement(trx, {
+        productId: requestItem.productId,
+        delta: -preparedLine.stockDelta,
+        branchId: purchase.branch_id,
+        locationId: itemLocationId,
+        tenantId: scope.tenantId,
+        accountId: scope.accountId,
+        errorCode: 'PURCHASE_RETURN_STOCK_INVALID',
+        errorMessage: 'Invalid stock for purchase return',
+        disableAutoDrain: true,
+        movementType: 'purchase_return',
+        referenceType: 'purchase_return',
+        referenceId: Number(payload.invoiceId),
+        reason: 'purchase_return',
+        note: 'purchase return PUR-' + String(purchase.id),
+        unitCost: originalCost.perBaseUnit,
+        moneyDigits,
+        createdBy: auth.userId,
+      });
       // INV-PURCHASE-RETURN-WAC-RECOMPUTE: the return leaves at the
       // ORIGINAL cost, so re-blend the remaining pool at that cost in
       // the SAME transaction. Without this, the GL inventory leg
@@ -492,7 +484,7 @@ export class ReturnsPurchaseReturnService {
         trx,
         scope.tenantId,
         requestItem.productId,
-        stockChange.globalAfter,
+        movement.globalAfter,
         preparedLine.stockDelta,
         roundBookMoney(preparedLine.qty * originalCost.perSoldUnit, moneyDigits),
       );

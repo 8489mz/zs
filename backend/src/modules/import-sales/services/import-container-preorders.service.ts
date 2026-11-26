@@ -7,6 +7,9 @@ import { Database } from '../../../database/database.types';
 import { CreateContainerPreorderDto, ConvertPreorderToSaleDto, RefundImportPreorderDto } from '../dto/import-sales.dto';
 import { allocateSaleFromImportLots, calculateImportSaleCost } from '../helpers/import-lot-allocation.helper';
 import { applyStockDelta, lockStockProducts } from '../../../common/utils/location-stock-ledger';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { recordStockMovementRow } from '../../../common/utils/stock-movement-writer';
 
 /**
  * ImportContainerPreordersService — slice S12 of the import-sales split.
@@ -747,25 +750,34 @@ export class ImportContainerPreordersService {
         .execute();
 
       if (product) {
-        await trx
-          .insertInto('stock_movements')
-          .values({
-            tenant_id: tenantId,
-            account_id: (product as any).account_id || tenantId,
-            product_id: preorder.product_id,
-            branch_id: branchId,
-            location_id: locationId,
-            movement_type: 'sale',
-            qty: -qty,
-            before_qty: stockDelta?.scopeBefore ?? null,
-            after_qty: stockDelta?.scopeAfter ?? null,
-            unit_cost: unitCostEgp,
-            reference_type: 'sale',
-            reference_id: saleId,
-            note: `صرف مخزني لتحويل حجز حاوية مسبق #${docNo}`,
-            created_by: userId,
-          } as any)
-          .execute();
+        // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the sale row goes
+        // through the row-writer in row-only mode — the ledger call ran
+        // 160 lines above (the sale insert + lot allocation sit between
+        // it and the row), so the row is stamped from the carried
+        // stockDelta. total_cost stays NULL (omitTotalCost): the same
+        // NULL shape as the A7 sale rows, and the writer defaults the
+        // missing reason to movementType 'sale'. stockDelta is
+        // non-null here: the apply above either returned or threw, and
+        // product is the same const tested in both blocks.
+        const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx as any, tenantId));
+        await recordStockMovementRow(trx as any, {
+          productId: Number(preorder.product_id),
+          branchId,
+          locationId,
+          tenantId,
+          accountId: (product as any).account_id || tenantId,
+          movementType: 'sale',
+          delta: -qty,
+          beforeQty: stockDelta!.scopeBefore,
+          afterQty: stockDelta!.scopeAfter,
+          referenceType: 'sale',
+          referenceId: saleId,
+          note: `صرف مخزني لتحويل حجز حاوية مسبق #${docNo}`,
+          unitCost: unitCostEgp,
+          moneyDigits,
+          omitTotalCost: true,
+          createdBy: userId,
+        });
       }
 
       if (balanceDue > 0 && preorder.customer_id) {

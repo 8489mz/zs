@@ -362,6 +362,9 @@
     "test/critical/sales-writer-cancel-edit.spec.ts",
     "test/critical/sales-writer-food-waste.spec.ts",
     "test/critical/manufacturing-writer.spec.ts",
-    "test/critical/purchases-writer.spec.ts"
+    "test/critical/purchases-writer.spec.ts",
+    "test/critical/phase1-a9-routing.spec.ts",
+    "test/critical/phase1-a9-inventory-writer.spec.ts",
+    "test/critical/phase1-a9-services-writer.spec.ts"
   ]
 }

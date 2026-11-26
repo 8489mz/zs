@@ -32,9 +32,16 @@ import {
  * Phase 1 A5 — writer modes (INV-PHASE1-A5-WRITER-MODES). The A0 delta mode could
  * not cover the four sites whose balance step is not an applyStockDelta call, so
  * the writer gained three modes (A6–A9 migrate the callers onto them):
- * - recordStockMovementSet: wraps setScopedStockQty (nextQty) — the count
- *   (:638) and suppliers-stock (:225) shape. The row carries qty = actualDelta
- *   (scopeAfter - scopeBefore, 3dp) with before/after from the change.
+ * - recordStockMovementSet: wraps setScopedStockQty (nextQty). The row carries
+ *   qty = actualDelta (scopeAfter - scopeBefore, 3dp) with before/after from
+ *   the change. Phase 1 A9 found it does NOT fit the two sites it was written
+ *   for — the count (:638) and suppliers-stock (:225) — because both decide
+ *   the row AFTER the setter: :638's movement_type comes from the post-setter
+ *   actualDelta, and :225 skips the row entirely when actualDelta === 0,
+ *   while the set mode needs movementType upfront and always writes a row.
+ *   Both keep their setScopedStockQty call and stamp the row from its return
+ *   via recordStockMovementRow instead; the set mode stays for callers whose
+ *   movement type and row decision are known before the setter runs.
  * - recordStockRelocation: wraps relocateStockBetweenLocations once, then writes
  *   TWO rows — send + receive — the QA (:348/:360) shape. No new applyStockDelta
  *   call: the move is already ledger-routed.
@@ -171,6 +178,13 @@ export type RecordStockMovementRowParams = {
   importReceiptId?: number | null;
   /** See RecordStockMovementSetParams.signedTotal. Default false. */
   signedTotal?: boolean;
+  /**
+   * Phase 1 A9: store total_cost NULL instead of the computed total.
+   * Only the import-preorder 'sale' row uses it (the same NULL shape as
+   * the A7 sale rows — the A7 flag foreseen serving it here).
+   * Default false (the A0 contract).
+   */
+  omitTotalCost?: boolean;
 };
 
 /** Quantities are 3dp throughout; only money rounds, at book digits. */
@@ -369,6 +383,7 @@ export async function recordStockMovementRow(
     unitCost,
     moneyDigits: params.moneyDigits,
     signedTotal: params.signedTotal,
+    omitTotalCost: params.omitTotalCost,
     reason: params.reason ?? params.movementType,
     note: params.note ?? '',
     referenceType: params.referenceType,

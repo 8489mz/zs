@@ -151,7 +151,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       allocated_tax numeric, cost_price numeric, sale_item_id bigint, purchase_item_id bigint);
     CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint,
       movement_type text, qty numeric, before_qty numeric, after_qty numeric, unit_cost numeric, total_cost numeric,
-      reason text, note text, reference_type text, reference_id bigint, branch_id bigint, location_id bigint, created_by bigint);
+      reason text, note text, reference_type text, reference_id bigint, branch_id bigint, location_id bigint, created_by bigint, import_receipt_id bigint);
     CREATE TABLE product_serials (id bigserial PRIMARY KEY, tenant_id text, account_id text, serial_number text,
       imei_2 text, status text, product_id bigint, purchase_id bigint, purchase_item_id bigint,
       location_id bigint, branch_id bigint, updated_at timestamptz);
@@ -419,9 +419,14 @@ async function main(): Promise<void> {
     const createBody = serviceSource.slice(createStart);
     // The call is wrapped across lines by Prettier (args one per line);
     // \s allows the newlines while still pinning the exact arg order.
+    // Phase 1 A9: the corrected globalAfter now comes from the writer's
+    // return (movement.globalAfter) instead of the old stockChange
+    // variable — the ledger call lives inside recordStockMovement now,
+    // so stockChange no longer exists; the value is the same corrected
+    // globalAfter, in the same transaction.
     assert.match(
       createBody,
-      /revalueStockReturn\(\s*trx,\s*scope\.tenantId,\s*requestItem\.productId,\s*stockChange\.globalAfter,\s*preparedLine\.stockDelta/,
+      /revalueStockReturn\(\s*trx,\s*scope\.tenantId,\s*requestItem\.productId,\s*movement\.globalAfter,\s*preparedLine\.stockDelta/,
       'creation must re-blend WAC from the corrected globalAfter in the same transaction',
     );
     assert.ok(

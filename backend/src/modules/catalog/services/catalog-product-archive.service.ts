@@ -43,8 +43,8 @@ import { AppError } from '../../../common/errors/app-error';
 import { InventoryScopeService } from '../../inventory/services/inventory-scope.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement, recordStockMovementRow } from '../../../common/utils/stock-movement-writer';
 import { assertFashionRemovedStockSafe } from '../engines/fashion-stock-safety.engine';
-import { stockMovementTotal } from '../engines/stock-movement-total.engine';
 import { MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { ProductRow, ProductWriteExecutor, ProductOfferColumnCapabilities } from './catalog-product-types';
 
@@ -259,10 +259,15 @@ export class CatalogProductArchiveService {
                 if (qtyToDeduct <= 0) continue;
 
                 const rawLocId = ls.location_id != null && Number(ls.location_id) > 0 ? Number(ls.location_id) : null;
-                const effectiveLocId =
-                  rawLocId || (product.default_location_id ? Number(product.default_location_id) : fallbackLocationId);
 
-                await applyStockDelta(trx, {
+                // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the deduct
+                // goes through the row-writer, so the row stamps the
+                // ledger's location balances (scopeBefore/scopeAfter) and
+                // the ledger call's rawLocId — the location the balance
+                // actually moved in — instead of the effectiveLocId guess
+                // (A3 precedent: the old row claimed a fallback location
+                // while the balance moved in the unassigned pool).
+                const movement = await recordStockMovement(trx, {
                   productId: Number(product.id),
                   locationId: rawLocId,
                   branchId: ls.branch_id ? Number(ls.branch_id) : undefined,
@@ -271,32 +276,18 @@ export class CatalogProductArchiveService {
                   accountId: actor.accountId,
                   disableAutoDrain: true,
                   allowNegative: true,
+                  movementType: 'deduct',
+                  referenceType: 'inventory_adjustment',
+                  referenceId: product.id,
+                  reason: 'archive_stock_zeroing',
+                  note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
+                  unitCost,
+                  moneyDigits: bookDigits,
+                  createdBy: actor.userId,
                 });
 
-                const insertedMovement = await trx
-                  .insertInto('stock_movements')
-                  .values({
-                    product_id: product.id,
-                    movement_type: 'deduct',
-                    qty: -qtyToDeduct,
-                    before_qty: qtyToDeduct,
-                    after_qty: 0,
-                    unit_cost: unitCost,
-                    total_cost: stockMovementTotal(qtyToDeduct, unitCost, bookDigits),
-                    reason: 'archive_stock_zeroing',
-                    note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
-                    reference_type: 'inventory_adjustment',
-                    reference_id: product.id,
-                    location_id: effectiveLocId || null,
-                    branch_id: ls.branch_id ? Number(ls.branch_id) : undefined,
-                    created_by: actor.userId,
-                    ...this.tenantFields(actor),
-                  } as any)
-                  .returning('id')
-                  .executeTakeFirst();
-
-                if (insertedMovement?.id && this.accountingPosting) {
-                  await this.accountingPosting.postInventoryAdjustment(trx, Number(insertedMovement.id), actor);
+                if (movement.movementId && this.accountingPosting) {
+                  await this.accountingPosting.postInventoryAdjustment(trx, movement.movementId, actor);
                 }
               }
             } else {
@@ -305,6 +296,15 @@ export class CatalogProductArchiveService {
                 ? Number(product.default_location_id)
                 : fallbackLocationId;
 
+              // Phase 1 A9: the ledger call stays, and the row goes
+              // through the row-writer in row-only mode. The row's
+              // before/after are the GLOBAL basis (globalQty → 0): this
+              // branch runs when no location row exists, so the ledger's
+              // location scope starts at 0 and goes to -globalQty, while
+              // the pinned row describes the global stock being
+              // eliminated (the residual spec pins before_qty =
+              // globalQty, after_qty = 0). recordStockMovement would
+              // stamp the location scope (0 → -globalQty) and break it.
               await applyStockDelta(trx, {
                 productId: Number(product.id),
                 locationId: effectiveLocId || null,
@@ -314,30 +314,26 @@ export class CatalogProductArchiveService {
                 disableAutoDrain: true,
                 allowNegative: true,
               });
+              const movementId = await recordStockMovementRow(trx, {
+                productId: Number(product.id),
+                locationId: effectiveLocId || null,
+                delta: -globalQty,
+                beforeQty: globalQty,
+                afterQty: 0,
+                tenantId: this.tenantId(actor),
+                accountId: this.tenantFields(actor).account_id,
+                movementType: 'deduct',
+                referenceType: 'inventory_adjustment',
+                referenceId: product.id,
+                reason: 'archive_stock_zeroing',
+                note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
+                unitCost,
+                moneyDigits: bookDigits,
+                createdBy: actor.userId,
+              });
 
-              const insertedMovement = await trx
-                .insertInto('stock_movements')
-                .values({
-                  product_id: product.id,
-                  movement_type: 'deduct',
-                  qty: -globalQty,
-                  before_qty: globalQty,
-                  after_qty: 0,
-                  unit_cost: unitCost,
-                  total_cost: stockMovementTotal(globalQty, unitCost, bookDigits),
-                  reason: 'archive_stock_zeroing',
-                  note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
-                  reference_type: 'inventory_adjustment',
-                  reference_id: product.id,
-                  location_id: effectiveLocId || null,
-                  created_by: actor.userId,
-                  ...this.tenantFields(actor),
-                } as any)
-                .returning('id')
-                .executeTakeFirst();
-
-              if (insertedMovement?.id && this.accountingPosting) {
-                await this.accountingPosting.postInventoryAdjustment(trx, Number(insertedMovement.id), actor);
+              if (movementId && this.accountingPosting) {
+                await this.accountingPosting.postInventoryAdjustment(trx, movementId, actor);
               }
             }
 
@@ -345,6 +341,14 @@ export class CatalogProductArchiveService {
               const sumDeducted = locStocks.reduce((sum, ls) => sum + Math.max(0, Number(ls.qty || 0)), 0);
               const remainingGlobal = Number(product.stock_qty || 0) - sumDeducted;
               if (Math.abs(remainingGlobal) > 0.0001) {
+                // Phase 1 A9: the ledger call stays, and the row goes
+                // through the row-writer in row-only mode. The row's
+                // before/after are the GLOBAL basis (remainingGlobal → 0):
+                // the residual eliminates historical drift between the
+                // global counter and the location sum, so the ledger's
+                // fallback-location scope (0 → -remainingGlobal) is not
+                // what the pinned row describes (the residual spec pins
+                // before_qty = remainingGlobal, after_qty = 0).
                 await applyStockDelta(trx, {
                   productId: Number(product.id),
                   locationId: fallbackLocationId || null,
@@ -355,34 +359,26 @@ export class CatalogProductArchiveService {
                   allowNegative: true,
                 });
 
-                // INV-STOCK-MOVEMENTS-ARCHIVE-ROW: the residual deduct
-                // moves a real balance, so it writes its own row,
-                // mirroring the sibling deduct rows above (same type,
-                // reason, reference, cost and posting call). Before
-                // this row the balance moved with no audit trail.
-                const insertedMovement = await trx
-                  .insertInto('stock_movements')
-                  .values({
-                    product_id: product.id,
-                    movement_type: 'deduct',
-                    qty: -remainingGlobal,
-                    before_qty: remainingGlobal,
-                    after_qty: 0,
-                    unit_cost: unitCost,
-                    total_cost: stockMovementTotal(remainingGlobal, unitCost, bookDigits),
-                    reason: 'archive_stock_zeroing',
-                    note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
-                    reference_type: 'inventory_adjustment',
-                    reference_id: product.id,
-                    location_id: fallbackLocationId || null,
-                    created_by: actor.userId,
-                    ...this.tenantFields(actor),
-                  } as any)
-                  .returning('id')
-                  .executeTakeFirst();
+                const movementId = await recordStockMovementRow(trx, {
+                  productId: Number(product.id),
+                  locationId: fallbackLocationId || null,
+                  delta: -remainingGlobal,
+                  beforeQty: remainingGlobal,
+                  afterQty: 0,
+                  tenantId: this.tenantId(actor),
+                  accountId: this.tenantFields(actor).account_id,
+                  movementType: 'deduct',
+                  referenceType: 'inventory_adjustment',
+                  referenceId: product.id,
+                  reason: 'archive_stock_zeroing',
+                  note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
+                  unitCost,
+                  moneyDigits: bookDigits,
+                  createdBy: actor.userId,
+                });
 
-                if (insertedMovement?.id && this.accountingPosting) {
-                  await this.accountingPosting.postInventoryAdjustment(trx, Number(insertedMovement.id), actor);
+                if (movementId && this.accountingPosting) {
+                  await this.accountingPosting.postInventoryAdjustment(trx, movementId, actor);
                 }
               }
             }

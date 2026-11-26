@@ -119,24 +119,28 @@ async function main(): Promise<void> {
   }
 
   // 3. The reset calls the ledger helper, and the three dead files
-  //    keep their applyStockDelta path (maintenance, tradein) or
-  //    their slices do (import-sales, maintenance — #66 split).
+  //    keep their ledger path — maintenance and tradein now route
+  //    through the row-writer (Phase 1 A9: recordStockMovement runs
+  //    the delta through applyStockDelta internally), while the
+  //    import-sales files keep the direct ledger call (receipt
+  //    posting is A10-deferred; preorders keeps its ledger call at
+  //    :591 with the row in row-only mode).
   const demoSrc = fs.readFileSync(DEMO_DATA, 'utf8');
   assert.ok(
     demoSrc.includes('resetTenantStockToZero(trx, tenantId)'),
     'resetStockBalances must call the ledger reset helper',
   );
   assert.ok(
-    read('backend/src/modules/maintenance/maintenance/ticket-parts.slice.ts').includes('applyStockDelta(trx,'),
-    'maintenance ticket parts must still route stock through applyStockDelta',
+    read('backend/src/modules/maintenance/maintenance/ticket-parts.slice.ts').includes('recordStockMovement(trx,'),
+    'maintenance ticket parts must still route stock through the row-writer',
   );
   assert.ok(
-    read('backend/src/modules/maintenance/maintenance/delete-ticket.slice.ts').includes('applyStockDelta(trx,'),
-    'maintenance delete ticket must still route stock through applyStockDelta',
+    read('backend/src/modules/maintenance/maintenance/delete-ticket.slice.ts').includes('recordStockMovement(trx,'),
+    'maintenance delete ticket must still route stock through the row-writer',
   );
   assert.ok(
-    read('backend/src/modules/tradein/tradein.service.ts').includes('applyStockDelta(trx,'),
-    'tradein must still route stock through applyStockDelta',
+    read('backend/src/modules/tradein/tradein.service.ts').includes('recordStockMovement(trx,'),
+    'tradein must still route stock through the row-writer',
   );
   assert.ok(
     read('backend/src/modules/import-sales/services/import-receipt-posting.service.ts').includes(

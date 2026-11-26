@@ -358,7 +358,7 @@ async function main(): Promise<void> {
         created_by INTEGER,
         tenant_id TEXT NOT NULL,
         account_id TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        import_receipt_id BIGINT, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
       CREATE TABLE branches (
         id INTEGER PRIMARY KEY,

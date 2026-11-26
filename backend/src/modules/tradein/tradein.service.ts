@@ -7,7 +7,7 @@ import { AppError } from '../../common/errors/app-error';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { TransactionHelper } from '../../database/helpers/transaction.helper';
-import { applyStockDelta } from '../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../common/utils/stock-movement-writer';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { UpsertTradeInDto } from './dto/upsert-tradein.dto';
@@ -388,7 +388,15 @@ export class TradeInService {
           .where('tenant_id', '=', scope.tenantId)
           .where('id', '=', Number(targetProductId))
           .execute();
-        const stockChange = await applyStockDelta(trx, {
+        // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the trade-in receipt
+        // goes through the row-writer first, then valueStockReceipt uses
+        // the returned globalAfter — same transaction, so a throw still
+        // rolls the row back. agreed is validated via toMinorUnits above
+        // (it throws when it exceeds minor-unit precision), so the
+        // writer's roundMoney(1 * agreed, moneyDigits) == agreed and the
+        // stored total is unchanged.
+        const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+        const movement = await recordStockMovement(trx, {
           productId: Number(targetProductId),
           delta: 1,
           branchId: payload.branchId ?? null,
@@ -396,29 +404,16 @@ export class TradeInService {
           tenantId: scope.tenantId,
           accountId: scope.accountId,
           allowNegative: false,
+          movementType: 'tradein_in',
+          referenceType: 'trade_in',
+          referenceId: txnId,
+          reason: 'شراء جهاز مستعمل',
+          note: `شراء مستعمل إيصال ${docNo}`,
+          unitCost: agreed,
+          moneyDigits,
+          createdBy: auth.userId ? Number(auth.userId) : null,
         });
-        await trx
-          .insertInto('stock_movements')
-          .values({
-            product_id: Number(targetProductId),
-            movement_type: 'tradein_in',
-            qty: 1,
-            before_qty: stockChange.scopeBefore,
-            after_qty: stockChange.scopeAfter,
-            unit_cost: agreed,
-            total_cost: agreed,
-            reason: 'شراء جهاز مستعمل',
-            note: `شراء مستعمل إيصال ${docNo}`,
-            reference_type: 'trade_in',
-            reference_id: txnId,
-            branch_id: payload.branchId ?? null,
-            location_id: payload.locationId ?? null,
-            created_by: auth.userId ? Number(auth.userId) : null,
-            tenant_id: scope.tenantId,
-            account_id: scope.accountId,
-          } as any)
-          .execute();
-        await valueStockReceipt(trx, scope.tenantId, Number(targetProductId), stockChange.globalAfter, 1, agreed);
+        await valueStockReceipt(trx, scope.tenantId, Number(targetProductId), movement.globalAfter, 1, agreed);
         await trx
           .updateTable('trade_in_transactions')
           .set({ created_product_id: Number(targetProductId) })

@@ -9,7 +9,8 @@ import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { type TenantScope } from '../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../common/errors/app-error';
 import { ensureReturnQtyWithinLimit } from '../../common/utils/financial-integrity';
-import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
+import { lockStockProducts } from '../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../common/utils/stock-movement-writer';
 import { buildSaleReturnLine, calculateReturnDocumentTotal } from './helpers/returns-write.helper';
 import { Database } from '../../database/database.types';
 import { CreateReturnDto } from './dto/create-return.dto';
@@ -362,9 +363,15 @@ export class ReturnsSaleReturnService {
                 }
                 const branchId = locData.branch_id ?? sale.branch_id;
 
-               const stockChange = await applyStockDelta(trx, { productId: requestItem.productId, delta: returnToThis, branchId: branchId, locationId: alloc.location_id, tenantId: scope.tenantId, accountId: scope.accountId, allowNegative: true, disableAutoDrain: true });
-               await valueStockReceipt(trx, scope.tenantId, requestItem.productId, stockChange.globalAfter, returnToThis, returnedUnitCost * returnToThis);
-               await trx.insertInto('stock_movements').values({ product_id: requestItem.productId, movement_type: 'sale_return', qty: returnToThis, before_qty: stockChange.scopeBefore, after_qty: stockChange.scopeAfter, unit_cost: returnedUnitCost, total_cost: roundBookMoney(returnedUnitCost * returnToThis, moneyDigits), reason: 'sale_return', note: 'sale return S-' + String(sale.id), reference_type: 'sale_return', reference_id: Number(payload.invoiceId), branch_id: branchId, location_id: alloc.location_id, created_by: auth.userId, ...this.tenantFields(auth) }).execute();
+               // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the alloc
+               // leg goes through the row-writer first, then
+               // valueStockReceipt uses the returned globalAfter — same
+               // transaction, so a throw still rolls the row back. The
+               // writer's total is roundMoney(returnedUnitCost *
+               // returnToThis, moneyDigits), the same roundBookMoney
+               // expression (an alias for roundMoney) the old row used.
+               const movement = await recordStockMovement(trx, { productId: requestItem.productId, delta: returnToThis, branchId: branchId, locationId: alloc.location_id, tenantId: scope.tenantId, accountId: scope.accountId, allowNegative: true, disableAutoDrain: true, movementType: 'sale_return', referenceType: 'sale_return', referenceId: Number(payload.invoiceId), reason: 'sale_return', note: 'sale return S-' + String(sale.id), unitCost: returnedUnitCost, moneyDigits, createdBy: auth.userId });
+               await valueStockReceipt(trx, scope.tenantId, requestItem.productId, movement.globalAfter, returnToThis, returnedUnitCost * returnToThis);
             }
          }
 
@@ -375,9 +382,11 @@ export class ReturnsSaleReturnService {
            throw new AppError('توزيع مخزون البيع الأصلي غير مكتمل؛ يلزم تسوية المخزن قبل المرتجع', 'SALE_RETURN_STOCK_ALLOCATION_RECONCILIATION_REQUIRED', 409);
          }
       } else {
-         const stockChange = await applyStockDelta(trx, { productId: requestItem.productId, delta: preparedLine.stockDelta, branchId: sale.branch_id, locationId: sale.location_id, tenantId: scope.tenantId, accountId: scope.accountId, allowNegative: true, disableAutoDrain: true });
-         await valueStockReceipt(trx, scope.tenantId, requestItem.productId, stockChange.globalAfter, preparedLine.stockDelta, returnedUnitCost * preparedLine.stockDelta);
-         await trx.insertInto('stock_movements').values({ product_id: requestItem.productId, movement_type: 'sale_return', qty: preparedLine.stockDelta, before_qty: stockChange.scopeBefore, after_qty: stockChange.scopeAfter, unit_cost: returnedUnitCost, total_cost: roundBookMoney(returnedUnitCost * preparedLine.stockDelta, moneyDigits), reason: 'sale_return', note: 'sale return S-' + String(sale.id), reference_type: 'sale_return', reference_id: Number(payload.invoiceId), branch_id: sale.branch_id, location_id: sale.location_id, created_by: auth.userId, ...this.tenantFields(auth) }).execute();
+         // Phase 1 A9: same writer routing as the alloc leg above
+         // (writer first, then valueStockReceipt on the returned
+         // globalAfter).
+         const movement = await recordStockMovement(trx, { productId: requestItem.productId, delta: preparedLine.stockDelta, branchId: sale.branch_id, locationId: sale.location_id, tenantId: scope.tenantId, accountId: scope.accountId, allowNegative: true, disableAutoDrain: true, movementType: 'sale_return', referenceType: 'sale_return', referenceId: Number(payload.invoiceId), reason: 'sale_return', note: 'sale return S-' + String(sale.id), unitCost: returnedUnitCost, moneyDigits, createdBy: auth.userId });
+         await valueStockReceipt(trx, scope.tenantId, requestItem.productId, movement.globalAfter, preparedLine.stockDelta, returnedUnitCost * preparedLine.stockDelta);
       }
 
       } // End restock path. Prepared meals remain consumed and must never create stock.

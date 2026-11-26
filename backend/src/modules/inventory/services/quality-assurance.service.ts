@@ -19,7 +19,9 @@ import {
   shouldTriggerNCR,
   suggestNCRSeverity,
 } from '../engines/quality-control.engine';
-import { relocateStockBetweenLocations } from '../../../common/utils/location-stock-ledger';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { recordStockRelocation } from '../../../common/utils/stock-movement-writer';
 
 @Injectable()
 export class QualityAssuranceService {
@@ -287,6 +289,10 @@ export class QualityAssuranceService {
     }
     if (lines.length === 0) return;
 
+    // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): book digits resolve
+    // once per release (the tenant is constant across the loop) for the
+    // row-writer's per-leg total.
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
     let remaining = Number(dto.acceptedQty);
     for (const line of lines) {
       if (remaining <= 0) break;
@@ -322,7 +328,14 @@ export class QualityAssuranceService {
       const fromBranchId = quarantineLocation.branch_id != null ? Number(quarantineLocation.branch_id) : null;
       const toBranchId = targetLocation.branch_id != null ? Number(targetLocation.branch_id) : null;
       const unitCost = line.landed_unit_cost != null ? Number(line.landed_unit_cost) : Number(line.unit_cost || 0);
-      const moved = await relocateStockBetweenLocations(trx, {
+      // Phase 1 A9: the quarantine release goes through the row-writer's
+      // relocation mode — one ledger move, two rows (transfer_send /
+      // transfer_receive, the classified location-only transfer types
+      // the WAC flow engine expects, reason 'quarantine_release').
+      // The .toFixed(6) total spelling retires here (A5 decision:
+      // 0.333 x 3 books 1.00 at book digits); the writer computes
+      // roundMoney(releaseQty * unitCost, moneyDigits) per leg.
+      await recordStockRelocation(trx, {
         productId: Number(dto.productId),
         qty: releaseQty,
         fromBranchId,
@@ -331,43 +344,14 @@ export class QualityAssuranceService {
         toLocationId: targetLocationId,
         tenantId,
         accountId,
-      });
-      const movementBase = {
-        tenant_id: tenantId,
-        account_id: accountId,
-        product_id: Number(dto.productId),
-        unit_cost: unitCost,
-        total_cost: Number((releaseQty * unitCost).toFixed(6)),
+        referenceType: 'goods_receipt',
+        referenceId: Number(grn.id),
         reason: 'quarantine_release',
         note: `إفراج حجر صحي من إذن الاستلام ${grn.doc_no} — سطر ${line.id}`,
-        reference_type: 'goods_receipt',
-        reference_id: Number(grn.id),
-        created_by: userId,
-      };
-      await trx
-        .insertInto('stock_movements')
-        .values({
-          ...movementBase,
-          movement_type: 'transfer_send',
-          qty: -releaseQty,
-          before_qty: moved.sourceBefore,
-          after_qty: moved.sourceAfter,
-          branch_id: fromBranchId,
-          location_id: quarantineLocationId,
-        })
-        .execute();
-      await trx
-        .insertInto('stock_movements')
-        .values({
-          ...movementBase,
-          movement_type: 'transfer_receive',
-          qty: releaseQty,
-          before_qty: moved.targetBefore,
-          after_qty: moved.targetAfter,
-          branch_id: toBranchId,
-          location_id: targetLocationId,
-        })
-        .execute();
+        unitCost,
+        moneyDigits,
+        createdBy: userId,
+      });
       remaining = Number((remaining - releaseQty).toFixed(3));
     }
     if (remaining > 0) {

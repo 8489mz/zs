@@ -10,7 +10,7 @@ import { postMaintenanceJournal } from '../maintenance-accounting';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { valueStockReceipt } from '../../accounting/inventory-valuation';
-import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { AddTicketPartDto } from '../dto/update-ticket-status.dto';
 
 export class TicketPartsSlice {
@@ -119,7 +119,26 @@ export class TicketPartsSlice {
         .returning('id')
         .executeTakeFirst();
 
-      const stockChange = await applyStockDelta(trx, {
+      // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the product read +
+      // unit cost do not depend on the ledger result, so they move
+      // BEFORE the writer call (the writer needs unitCost upfront);
+      // the part-row unit_cost update keeps its place after the row.
+      // moneyDigits resolves once and feeds both the stockValue
+      // computation and the writer; the writer's total is the same
+      // roundMoney(unitCost * deductQty, moneyDigits).
+      const product = await trx
+        .selectFrom('products')
+        .select('cost_price')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', '=', payload.productId)
+        .executeTakeFirstOrThrow();
+      const unitCost = Number(product.cost_price);
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      const stockValue = roundMoney(unitCost * deductQty, moneyDigits);
+      if (!Number.isFinite(stockValue) || unitCost < 0) {
+        throw new AppError('Maintenance stock cost is invalid', 'MAINTENANCE_STOCK_COST_INVALID', 422);
+      }
+      const movement = await recordStockMovement(trx, {
         productId: payload.productId,
         delta: -deductQty,
         branchId: targetBranchId,
@@ -128,50 +147,21 @@ export class TicketPartsSlice {
         accountId: scope.accountId,
         errorCode: 'INSUFFICIENT_STOCK',
         errorMessage: `الرصيد غير كافٍ لصرف قطعة الغيار ${payload.productName.trim()}`,
+        movementType: 'maintenance_consumption',
+        referenceType: 'maintenance_ticket',
+        referenceId: ticketId,
+        reason: 'صرف قطعة غيار لتذكرة صيانة',
+        note: `تذكرة صيانة #${ticketId} - قطعة: ${payload.productName.trim()}`,
+        unitCost,
+        moneyDigits,
+        createdBy: auth.userId ? Number(auth.userId) : null,
       });
-
-      const product = await trx
-        .selectFrom('products')
-        .select('cost_price')
-        .where('tenant_id', '=', scope.tenantId)
-        .where('id', '=', payload.productId)
-        .executeTakeFirstOrThrow();
-      const unitCost = Number(product.cost_price);
-      const stockValue = roundMoney(
-        unitCost * deductQty,
-        currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)),
-      );
-      if (!Number.isFinite(stockValue) || unitCost < 0) {
-        throw new AppError('Maintenance stock cost is invalid', 'MAINTENANCE_STOCK_COST_INVALID', 422);
-      }
       await trx
         .updateTable('maintenance_ticket_parts')
         .set({ unit_cost: unitCost })
         .where('tenant_id', '=', scope.tenantId)
         .where('id', '=', Number(partRes?.id))
         .execute();
-      const movement = await trx
-        .insertInto('stock_movements')
-        .values({
-          product_id: payload.productId,
-          movement_type: 'maintenance_consumption',
-          qty: -deductQty,
-          before_qty: stockChange.scopeBefore,
-          after_qty: stockChange.scopeAfter,
-          reason: 'صرف قطعة غيار لتذكرة صيانة',
-          note: `تذكرة صيانة #${ticketId} - قطعة: ${payload.productName.trim()}`,
-          reference_type: 'maintenance_ticket',
-          reference_id: ticketId,
-          unit_cost: unitCost,
-          total_cost: stockValue,
-          branch_id: targetBranchId,
-          location_id: targetLocationId,
-          created_by: auth.userId ? Number(auth.userId) : null,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-        } as any)
-        .returning('id')
-        .executeTakeFirstOrThrow();
       if (stockValue > 0) {
         await postMaintenanceJournal(
           trx,
@@ -179,7 +169,7 @@ export class TicketPartsSlice {
           this.accountingPosting,
           auth,
           'maintenance_part_issue',
-          Number(movement.id),
+          movement.movementId,
           targetBranchId,
           targetLocationId,
           [
@@ -274,7 +264,18 @@ export class TicketPartsSlice {
         }
       }
 
-      const stockChange = await applyStockDelta(trx, {
+      // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the return goes
+      // through the row-writer first, then valueStockReceipt uses the
+      // returned globalAfter — same transaction, so a throw still rolls
+      // the row back. moneyDigits resolves once and feeds both the
+      // stockValue computation and the writer; the writer's total is
+      // the same roundMoney(unit_cost * returnQty, moneyDigits).
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      const stockValue = roundMoney(Number(part.unit_cost) * returnQty, moneyDigits);
+      if (!Number.isFinite(stockValue) || Number(part.unit_cost) < 0) {
+        throw new AppError('Historical part cost is invalid', 'MAINTENANCE_STOCK_COST_INVALID', 422);
+      }
+      const movement = await recordStockMovement(trx, {
         productId: Number(part.product_id),
         delta: returnQty,
         branchId: targetBranchId,
@@ -282,47 +283,25 @@ export class TicketPartsSlice {
         tenantId: scope.tenantId,
         accountId: scope.accountId,
         allowNegative: true,
+        movementType: 'maintenance_return',
+        referenceType: 'maintenance_ticket',
+        referenceId: ticketId,
+        reason: 'إلغاء صرف قطعة غيار من تذكرة صيانة',
+        note: `إلغاء من تذكرة صيانة #${ticketId}`,
+        unitCost: Number(part.unit_cost),
+        moneyDigits,
+        createdBy: auth.userId ? Number(auth.userId) : null,
       });
-
-      const stockValue = roundMoney(
-        Number(part.unit_cost) * returnQty,
-        currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)),
-      );
-      if (!Number.isFinite(stockValue) || Number(part.unit_cost) < 0) {
-        throw new AppError('Historical part cost is invalid', 'MAINTENANCE_STOCK_COST_INVALID', 422);
-      }
       // A return restores inventory at its historical consumed cost, not the
       // current price of any later purchases; refresh WAC under product lock.
       await valueStockReceipt(
         trx,
         scope.tenantId,
         Number(part.product_id),
-        stockChange.globalAfter,
+        movement.globalAfter,
         returnQty,
         stockValue,
       );
-      const movement = await trx
-        .insertInto('stock_movements')
-        .values({
-          product_id: Number(part.product_id),
-          movement_type: 'maintenance_return',
-          qty: returnQty,
-          before_qty: stockChange.scopeBefore,
-          after_qty: stockChange.scopeAfter,
-          reason: 'إلغاء صرف قطعة غيار من تذكرة صيانة',
-          note: `إلغاء من تذكرة صيانة #${ticketId}`,
-          unit_cost: Number(part.unit_cost),
-          total_cost: stockValue,
-          reference_type: 'maintenance_ticket',
-          reference_id: ticketId,
-          branch_id: targetBranchId,
-          location_id: targetLocationId,
-          created_by: auth.userId ? Number(auth.userId) : null,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-        } as any)
-        .returning('id')
-        .executeTakeFirstOrThrow();
       if (stockValue > 0) {
         await postMaintenanceJournal(
           trx,
@@ -330,7 +309,7 @@ export class TicketPartsSlice {
           this.accountingPosting,
           auth,
           'maintenance_part_return',
-          Number(movement.id),
+          movement.movementId,
           targetBranchId,
           targetLocationId,
           [

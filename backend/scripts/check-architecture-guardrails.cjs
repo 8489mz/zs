@@ -220,9 +220,15 @@ const serviceRequirements = [
   // consumable preview (previewConsumableStockQty), pinned by
   // inventory-adjustment-single-basis.spec.ts:334. Both tokens are real calls.
   ['src/modules/inventory/services/inventory-adjustment.service.ts', ['applyStockDelta', 'previewConsumableStockQty']],
+  // Phase 1 A9: the count service no longer calls applyStockDelta
+  // directly — its damaged path goes through the row-writer
+  // (recordStockMovement, which runs the delta through applyStockDelta
+  // internally) and its count path through setScopedStockQty. The
+  // requirement keeps its intent (the count service must integrate
+  // with the ledger) with the writer token in place of the direct one.
   [
     'src/modules/inventory/services/inventory-count.service.ts',
-    ['applyStockDelta', 'setScopedStockQty', 'previewAssignedLocationStockQty'],
+    ['recordStockMovement', 'setScopedStockQty', 'previewAssignedLocationStockQty'],
   ],
   ['src/modules/inventory/services/inventory-transfer.service.ts', ['applyStockDelta']],
   ['src/modules/settings/services/settings-import.service.ts', ['applyStockDelta']],
@@ -237,12 +243,17 @@ for (const [relPath, patterns] of serviceRequirements) {
 }
 
 const inventoryCountSource = read('src/modules/inventory/services/inventory-count.service.ts');
+// Phase 1 A9: the count rows go through the row-writer, so the stamp
+// is spelled in the writer's camelCase params (branchId / locationId);
+// the writer stamps them as the branch_id / location_id columns —
+// the B1/B2 count cases in the A9 inventory spec pin the stamped
+// values on the written rows.
 assert(
-  inventoryCountSource.includes('branch_id: session.branch_id'),
+  inventoryCountSource.includes('branchId: session.branch_id'),
   'Stock count posting must stamp branch_id on stock movements',
 );
 assert(
-  inventoryCountSource.includes('location_id: session.location_id'),
+  inventoryCountSource.includes('locationId: session.location_id'),
   'Stock count posting must stamp location_id on stock movements',
 );
 
