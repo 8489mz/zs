@@ -450,7 +450,10 @@ async function main(): Promise<void> {
     // Phase 1 A10: the GRN composite total moved into the writer — the
     // movement total now uses the writer's single book-digits computation
     // (totalUnitCost + freightShare), so the direct helper call retires here.
-    assert.ok(serviceSource.includes('recordStockMovement'), 'movement total goes through the single writer computation');
+    assert.ok(
+      serviceSource.includes('recordStockMovement'),
+      'movement total goes through the single writer computation',
+    );
     assert.ok(!serviceSource.includes('JRN-TMP-GRN'), 'no direct temporary-number journal insert remains');
     assert.ok(serviceSource.includes('INV-GRN-JOURNAL-CENTRAL-POSTING'), 'postGoodsReceipt names the invariant');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');

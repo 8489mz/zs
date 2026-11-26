@@ -94,7 +94,7 @@ import { recordStockMovement, recordStockMovementRow } from '../../src/common/ut
  *    exactly as A0 (total from unitCost, returned totalCost set).
  * 8. Rollback: a throw after the writer leaves no row and balances
  *    unchanged — the writer runs inside the caller's transaction.
- * 9. Wiring: both critical lists carry 369 specs in identical order,
+ * 9. Wiring: both critical lists carry 370 specs in identical order,
  *    with the three A10 specs last.
  */
 
@@ -444,7 +444,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // §9 — wiring: both critical lists carry 369 specs in identical
+  // §9 — wiring: both critical lists carry 370 specs in identical
   // order, with the three A10 specs last.
   {
     const specs = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../scripts/critical-specs.json'), 'utf8'))
@@ -454,13 +454,13 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 369);
-    assert.equal(chain.length, 369);
+    assert.equal(specs.length, 370);
+    assert.equal(chain.length, 370);
     assert.deepEqual(chain, specs);
     assert.equal(specs[366], 'test/critical/phase1-a10-rounding.spec.ts');
     assert.equal(specs[367], 'test/critical/phase1-a10-purchases-writer.spec.ts');
     assert.equal(specs[368], 'test/critical/phase1-a10-import-writer.spec.ts');
-    console.log('  evidence specs wired into both critical lists (369 = 369, identical order), passed');
+    console.log('  evidence specs wired into both critical lists (370 = 370, identical order), passed');
   }
 }
 

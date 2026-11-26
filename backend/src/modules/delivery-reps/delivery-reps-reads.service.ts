@@ -21,7 +21,7 @@ import { AppError } from '../../common/errors/app-error';
 import { boundedPage } from '../../common/utils/bounded-page';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
-import { discountedSaleSql } from '../sales/helpers/sales-discount-filter.helper';
+import { discountedSaleSql } from '../../common/utils/sales-discount-filter.helper';
 import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { getBusinessDayBounds } from '../reports/helpers/reports-range.helper';
 // INV-VAN-PROFIT-REP-REPORTING: the lifetime per-day due reuses P1's

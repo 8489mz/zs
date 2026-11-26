@@ -11,10 +11,13 @@
  * Fail-first: the heading matcher is self-checked against a sample
  * document below (present heading found, absent heading not found).
  * INV-MODULE-DOORS-REVIEW-CLEANUP (2026-11-18): the 8 helper/util files
- * once flagged REVIEW are resolved — all 8 are confirmed public doors
- * (docs/MODULE_DOORS.md section 4 records the per-door reason) — so this
- * spec also asserts the document contains no REVIEW flag at all and names
- * each of the 8 resolved files as a confirmed public door.
+ * once flagged REVIEW are resolved — 7 are confirmed public doors
+ * (docs/MODULE_DOORS.md section 4 records the per-door reason) and the
+ * 8th (the sales discount-filter helper) was retired by Phase 1 B1,
+ * which moved it to the shared layer (src/common/utils), so it is no
+ * longer a cross-module door — so this spec also asserts the document
+ * contains no REVIEW flag at all and names each of the 7 resolved
+ * files as a confirmed public door.
  */
 
 import { strict as assert } from 'node:assert';
@@ -127,8 +130,10 @@ async function main(): Promise<void> {
     'docs/MODULE_DOORS.md must state the pinned foundation-service cap',
   );
 
-  // 5. No REVIEW flag remains: the 8 Phase 1 doors are resolved, each
-  // recorded as a confirmed public door in section 4 of the document.
+  // 5. No REVIEW flag remains: the 7 remaining Phase 1 doors are resolved, each
+  // recorded as a confirmed public door in section 4 of the document
+  // (the 8th door, the sales discount-filter helper, was retired by
+  // Phase 1 B1, which moved it to src/common/utils).
   assert.ok(
     !doc.includes('REVIEW'),
     'docs/MODULE_DOORS.md must not contain any REVIEW flag: all 8 Phase 1 doors are resolved',
@@ -144,7 +149,6 @@ async function main(): Promise<void> {
     'backend/src/modules/purchases/helpers/purchases-write.helper',
     'backend/src/modules/reports/helpers/reports-range.helper',
     'backend/src/modules/sales/helpers/restaurant-modifier-contract.helper',
-    'backend/src/modules/sales/helpers/sales-discount-filter.helper',
     'backend/src/modules/sales/helpers/sales-write.helper',
   ];
   for (const door of resolvedDoors) {

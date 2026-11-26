@@ -131,6 +131,26 @@
  * sales + reports). New bidirectional pair reports|sales (sales->
  * reports: 1 already pinned).
  *
+ * B1 (reports|sales decoupling): the F13 edge is reversed by moving
+ * the predicate itself to shared — backend/src/common/utils/
+ * sales-discount-filter.helper.ts, byte-identical SQL — so reports
+ * no longer reads sales at all. reports->sales 1 -> 0 (edge gone),
+ * delivery-reps->sales 11 -> 9 (its two discountedSaleSql imports
+ * now point at shared, which the scanner does not count as an edge),
+ * sales->reports stays 1 (one-way, not a cycle). STALE-PIN REPAIR
+ * found by the live re-derivation: purchases->catalog was pinned 1
+ * but is 0 live — the word catalog occurs nowhere in the purchases
+ * module, and it was already 0 at A9 (d3ee3ee8d); the edge died in
+ * an A-group writer migration that never re-pinned it. A dead edge
+ * (0 statements) is removed from the table, unlike the live-but-
+ * below-pin edges (contracting, import-sales), which stay pinned.
+ * Backend total pin 764 -> 760 and backend edge pin 73 -> 71 (=
+ * the B1 edge delta −1 plus the stale-pin removal −1, no other
+ * growth); the reports|sales pair leaves the bidirectional list.
+ * The F13 single-source property is preserved: the predicate is
+ * moved, never duplicated. B8 re-derives its delivery-reps|sales
+ * grounding numbers live (they shift by the same 2 statements).
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -168,7 +188,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'delivery-reps->accounting': 107,
   'delivery-reps->cash-drawer': 6,
   'delivery-reps->reports': 1,
-  'delivery-reps->sales': 11,
+  'delivery-reps->sales': 9,
   'delivery-reps->settings': 2,
   'hr->accounting': 29,
   'hr->cash-drawer': 4,
@@ -191,13 +211,11 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'public->tenant-subscription': 2,
   'purchases->accounting': 70,
   'purchases->approvals': 2,
-  'purchases->catalog': 1,
   'purchases->delivery-reps': 1,
   'purchases->inventory': 1,
   'purchases->sales': 1,
   'purchases->settings': 2,
   'reports->accounting': 18,
-  'reports->sales': 1,
   'returns->accounting': 26,
   'returns->import-sales': 1,
   'returns->sales': 5,
@@ -294,7 +312,6 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = [
   'accounting|manufacturing',
   'accounting|purchases',
   'delivery-reps|sales',
-  'reports|sales',
   'returns|sales',
   'sales|settings',
   'sales|storefront',
@@ -315,7 +332,7 @@ const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [
 ];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 764;
+const PINNED_BACKEND_TOTAL = 760;
 const PINNED_FRONTEND_TOTAL = 138;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;
@@ -559,7 +576,7 @@ async function main(): Promise<void> {
   );
 
   // 1. Backend ratchet: no new edge, no edge may grow, totals pinned.
-  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 73, 'pinned backend edge table must list 73 edges');
+  assert.equal(Object.keys(PINNED_BACKEND_EDGES).length, 71, 'pinned backend edge table must list 71 edges');
   const backend = scanBackend();
   assert.ok(
     backend.total >= BACKEND_TOTAL_FLOOR,

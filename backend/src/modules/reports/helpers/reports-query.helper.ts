@@ -1,6 +1,6 @@
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
 import { getPagination, parseRange, resolveTenantDayRange } from './reports-range.helper';
-import { discountedReturnInvoiceSql, discountedSaleSql } from '../../sales/helpers/sales-discount-filter.helper';
+import { discountedReturnInvoiceSql, discountedSaleSql } from '../../../common/utils/sales-discount-filter.helper';
 import { sql } from '../../../database/kysely';
 
 export function applyReportScopeFilter<T extends object>(

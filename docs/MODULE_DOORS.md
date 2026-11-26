@@ -226,7 +226,6 @@
   - `backend/src/modules/sales/engines/price-list-resolution.engine` — 1 statement(s), from delivery-reps (1)
   - `backend/src/modules/sales/engines/sale-tax-rate.engine` — 4 statement(s), from delivery-reps (1), maritime-freight (3)
   - `backend/src/modules/sales/helpers/restaurant-modifier-contract.helper` — 1 statement(s), from storefront (1)
-  - `backend/src/modules/sales/helpers/sales-discount-filter.helper` — 2 statement(s), from delivery-reps (2)
   - `backend/src/modules/sales/helpers/sales-write.helper` — 2 statement(s), from delivery-reps (2)
   - `backend/src/modules/sales/sales.module` — 2 statement(s), from delivery-reps (1), storefront (1)
   - `backend/src/modules/sales/sales.service` — 3 statement(s), from delivery-reps (1), storefront (2)
@@ -235,7 +234,7 @@
   - `backend/src/modules/sales/services/sales-authorization.service` — 1 statement(s), from returns (1)
   - `backend/src/modules/sales/services/sales-finance.service` — 3 statement(s), from delivery-reps (3)
   - `backend/src/modules/sales/services/sales-write.service` — 1 statement(s), from settings (1)
-- Intended door: the Nest module file plus the 14 file(s) above.
+- Intended door: the Nest module file plus the 13 file(s) above.
 
 ### backend/services
 
@@ -610,11 +609,11 @@
 - `tradein`
 - `updates`
 
-Flagged imported files total: 0 — all 8 resolved in Phase 1 (see section 4); no flag remains in this document.
+Flagged imported files total: 0 — 7 of the 8 resolved in Phase 1 (see section 4); the 8th (the sales discount-filter helper) was retired by Phase 1 B1, which moved it to the shared layer (src/common/utils), so it is no longer a cross-module door; no flag remains in this document.
 
 ## 4. Phase 1 door resolution (2026-11-18)
 
-Phase 1 decision: KEEP PUBLIC for all 8 doors. No file moved, no import re-pointed, no behaviour changed. Grounding re-verified at HEAD 35cdf065c: the cross-module statement counts below still match this document exactly (same static import scan as the header — comments stripped, non-spec source files only). The flag itself was raised by file path alone (every flagged file lives under a `helpers/` folder); it was never a coupling finding — the already-public accounting engines (for example money-minor-units.engine, 190 statements) were never flagged, and none of the 8 imports below is a wrong-owner import.
+Phase 1 decision: KEEP PUBLIC for the 7 remaining doors. (The 8th door, `backend/src/modules/sales/helpers/sales-discount-filter.helper`, was retired by Phase 1 B1, 2026-11-26: the file moved to `backend/src/common/utils/sales-discount-filter.helper.ts` to break the reports|sales pair, so it is no longer a module door. Its §4 row below is removed; the sales door table loses its line, 14 -> 13 files.) No file moved, no import re-pointed, no behaviour changed at the 2026-11-18 decision itself. Grounding re-verified at HEAD 35cdf065c (before the B1 retirement noted above): the cross-module statement counts below still match this document exactly (same static import scan as the header — comments stripped, non-spec source files only). The flag itself was raised by file path alone (every flagged file lives under a `helpers/` folder); it was never a coupling finding — the already-public accounting engines (for example money-minor-units.engine, 190 statements) were never flagged, and none of the imports below is a wrong-owner import.
 
 | Door (owning module) | Cross-module importers (statements, verified) | What it is | Verdict and reason |
 | --- | --- | --- | --- |
@@ -624,5 +623,4 @@ Phase 1 decision: KEEP PUBLIC for all 8 doors. No file moved, no import re-point
 | `backend/src/modules/purchases/helpers/purchases-write.helper` | accounting (2) | Pure purchase-line math: normalize items, allocate the invoice discount, subtotal, partition line totals, stock delta calculations | KEEP PUBLIC — both accounting importers use partitionPurchaseLineTotals for posting; purchases is the canonical place for purchase line math |
 | `backend/src/modules/reports/helpers/reports-range.helper` | delivery-reps (1), sales (1) | Pure date-range, business-day bounds, pagination and scope-filter utilities | KEEP PUBLIC — generic report-range utility owned by reports; the two outside callers need exactly this |
 | `backend/src/modules/sales/helpers/restaurant-modifier-contract.helper` | storefront (1) | Pure restaurant modifier price/contract enforcement (resolve prices, enforce group rules) | KEEP PUBLIC — the online order path carries the same modifier contract as the POS sale path; sales defines the contract |
-| `backend/src/modules/sales/helpers/sales-discount-filter.helper` | delivery-reps (2) | Single pure SQL-fragment builder for the discounted-sale filter | KEEP PUBLIC — van field sales are sales and use the same discount filter; sales is the correct owner |
 | `backend/src/modules/sales/helpers/sales-write.helper` | delivery-reps (2) | Pure sale-write math: prepared sale items, below-floor detection, conversion recovery, residual rounding, store-credit calculations, offer helpers | KEEP PUBLIC — van field sales import the offer helpers (isOfferActive, pickBestApplicableOffer); sales is the correct owner |

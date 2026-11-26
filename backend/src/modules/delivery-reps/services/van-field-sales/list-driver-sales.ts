@@ -1,6 +1,6 @@
 import { Kysely, sql } from '../../../../database/kysely';
 import { Database } from '../../../../database/database.types';
-import { discountedSaleSql } from '../../../sales/helpers/sales-discount-filter.helper';
+import { discountedSaleSql } from '../../../../common/utils/sales-discount-filter.helper';
 import { normalizeCustomerCode } from '../van-common.util';
 import type { ListDriverSalesFilters } from './van-field-sales-types';
 
