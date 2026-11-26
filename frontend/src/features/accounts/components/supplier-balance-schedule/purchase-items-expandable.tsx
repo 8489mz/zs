@@ -1,17 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '@/app/query-keys';
-import { purchasesApi } from '@/features/purchases/api/purchases.api';
+import { usePurchaseDetailQuery } from '@/shared/hooks/use-catalog-queries';
 import { formatCurrency } from '@/lib/format';
-import type { Purchase } from '@/types/domain';
 
 export function PurchaseItemsExpandable({ purchaseId, onSelectAmount }: { purchaseId: string; onSelectAmount?: (amount: number, invoiceDocNo: string) => void }) {
   const { t } = useTranslation();
-  const { data: purchase, isLoading, error } = useQuery<Purchase>({
-    queryKey: queryKeys.purchaseDetail(purchaseId),
-    queryFn: () => purchasesApi.getById(purchaseId),
-    staleTime: 60 * 1000,
-  });
+  const { data: purchase, isLoading, error } = usePurchaseDetailQuery(purchaseId);
 
   if (isLoading) {
     return (

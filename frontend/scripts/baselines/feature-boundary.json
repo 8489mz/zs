@@ -3,7 +3,6 @@
   "accounts/components/CustomerBalanceInvoicesCard.tsx imports @/features/sales/api/sales.api",
   "accounts/components/PaymentForms.tsx imports @/features/customers/constants/customer-profiles",
   "accounts/components/PaymentForms.tsx imports @/features/maritime-freight/api/maritime-freight.api",
-  "accounts/components/supplier-balance-schedule/purchase-items-expandable.tsx imports @/features/purchases/api/purchases.api",
   "activation/components/onboarding/IndustryPresetsGrid.tsx imports @/features/settings/components/modular-configurator/modular-presets",
   "activation/components/onboarding/ModulesConfiguratorGrid.tsx imports @/features/settings/components/modular-configurator/modular-presets",
   "activation/components/onboarding/OnboardingHeader.tsx imports @/features/settings/components/modular-configurator/modular-presets",

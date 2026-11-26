@@ -6,6 +6,7 @@ import { purchasesApi } from '@/features/purchases/api/purchases.api';
 import { customersApi } from '@/features/customers/api/customers.api';
 import { suppliersApi } from '@/features/suppliers/api/suppliers.api';
 import { settingsApi } from '@/features/settings/api/settings.api';
+import type { Purchase } from '@/types/domain';
 
 const referenceStaleTime = 60_000;
 
@@ -26,6 +27,14 @@ export function useSalesQuery() {
 
 export function usePurchasesQuery() {
   return useQuery({ queryKey: queryKeys.purchases, queryFn: purchasesApi.list });
+}
+
+export function usePurchaseDetailQuery(purchaseId: string) {
+  return useQuery<Purchase>({
+    queryKey: queryKeys.purchaseDetail(purchaseId),
+    queryFn: () => purchasesApi.getById(purchaseId),
+    staleTime: 60 * 1000,
+  });
 }
 
 export function useCustomersQuery() {
