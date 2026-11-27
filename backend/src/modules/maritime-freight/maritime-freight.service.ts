@@ -237,6 +237,7 @@ export class MaritimeFreightService {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ): Promise<number> {
     // INV-FX-RATE-RESOLUTION-SINGLE-RESOLVER: one shared resolver for
     // every maritime path. The base currency is now derived strictly
@@ -244,7 +245,19 @@ export class MaritimeFreightService {
     // closed instead of silently defaulting to EGP. The read still
     // uses this.db, exactly as before — callers inside a transaction
     // see committed rates only.
-    return resolveFxRate(this.db, tenantId, currency, { suppliedRate });
+    // INV-FX-MARITIME-CLOSE-ASOF: close-time conversions resolve at
+    // the document date. Precedence is supplied rate > asOf > live:
+    // a caller-supplied contractual rate is an explicit rate choice
+    // and stands; asOf applies only when the rate is resolved from
+    // history/live. The resolver itself forbids supplied+asOf
+    // together, so the kernel picks one before calling it.
+    if (suppliedRate !== undefined) {
+      return resolveFxRate(this.db, tenantId, currency, { suppliedRate });
+    }
+    if (asOf !== undefined) {
+      return resolveFxRate(this.db, tenantId, currency, { asOf });
+    }
+    return resolveFxRate(this.db, tenantId, currency);
   }
 
   async resolveAutoQuoteExchangeRate(tenantId: string, bidCurrency: string): Promise<number> {

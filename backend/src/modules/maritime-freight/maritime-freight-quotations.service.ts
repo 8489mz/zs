@@ -48,6 +48,7 @@ export interface MaritimeFreightQuotationsDeps {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ) => Promise<number>;
 }
 
@@ -58,6 +59,7 @@ export class MaritimeFreightQuotationsService {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ) => Promise<number>;
 
   constructor(deps: MaritimeFreightQuotationsDeps) {

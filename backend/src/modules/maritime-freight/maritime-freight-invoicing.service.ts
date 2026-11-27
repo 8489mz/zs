@@ -60,6 +60,7 @@ export interface MaritimeFreightInvoicingDeps {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ) => Promise<number>;
   resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
@@ -74,6 +75,7 @@ export class MaritimeFreightInvoicingService {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ) => Promise<number>;
   private readonly resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   private readonly assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
@@ -188,7 +190,8 @@ export class MaritimeFreightInvoicingService {
       throw new BadRequestException('يجب تحديد مبلغ صالح للفاتورة أكبر من صفر');
     }
 
-    const exchangeRate = await this.resolveFreightExchangeRate(tenantId, dto?.currency, dto?.exchangeRate);
+    const entryDate = new Date();
+    const exchangeRate = await this.resolveFreightExchangeRate(tenantId, dto?.currency, dto?.exchangeRate, entryDate);
     // INV-MARITIME-JOB-JOURNAL-FX-CONVERSION: convert at the base
     // currency's book digits through the shared engine; the rate
     // already comes from the shared resolver above.
@@ -209,7 +212,6 @@ export class MaritimeFreightInvoicingService {
       );
     }
 
-    const entryDate = new Date();
     const fxSuffix = exchangeRate !== 1 ? ` (${invoiceAmount} ${dto?.currency || 'USD'} @ ${exchangeRate})` : '';
     const desc =
       (dto?.notes || `فاتورة مبيعات خدمات ملاحية - العملية #${job.job_number} (${job.customer_name})`) + fxSuffix;
@@ -336,7 +338,8 @@ export class MaritimeFreightInvoicingService {
       throw new BadRequestException('يجب تحديد مبلغ صالح للمصروف أكبر من صفر');
     }
 
-    const exchangeRate = await this.resolveFreightExchangeRate(tenantId, dto.currency, dto.exchangeRate);
+    const entryDate = new Date();
+    const exchangeRate = await this.resolveFreightExchangeRate(tenantId, dto.currency, dto.exchangeRate, entryDate);
     // INV-MARITIME-JOB-JOURNAL-FX-CONVERSION: convert at the base
     // currency's book digits through the shared engine; the rate
     // already comes from the shared resolver above.
@@ -396,7 +399,6 @@ export class MaritimeFreightInvoicingService {
       );
     }
 
-    const entryDate = new Date();
     const fxSuffix = exchangeRate !== 1 ? ` (${amount} ${dto?.currency || 'USD'} @ ${exchangeRate})` : '';
     const desc =
       (dto.description ||

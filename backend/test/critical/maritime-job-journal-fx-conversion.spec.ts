@@ -79,6 +79,7 @@ async function main(): Promise<void> {
     await pg.exec(`
       CREATE TABLE settings (tenant_id text, key text, value text);
       CREATE TABLE currency_exchange_rates (id bigserial PRIMARY KEY, tenant_id text, currency_code text, exchange_rate numeric, is_base boolean);
+      CREATE TABLE currency_exchange_rate_history (id bigserial PRIMARY KEY, tenant_id text, currency_code text, exchange_rate numeric, is_base boolean, effective_from timestamptz, created_at timestamptz);
       CREATE TABLE accounting_accounts (id bigint PRIMARY KEY, tenant_id text, code text, is_active boolean);
       CREATE TABLE accounting_settings (id bigint PRIMARY KEY, tenant_id text, lock_date_all date, lock_date_non_adviser date, lock_date_tax date);
       CREATE TABLE accounting_fiscal_periods (id bigserial PRIMARY KEY, tenant_id text, status text, start_date date, end_date date);
@@ -93,6 +94,10 @@ async function main(): Promise<void> {
       CREATE TABLE maritime_inland_trucking_trips (id bigserial PRIMARY KEY, tenant_id text, job_id text);
       INSERT INTO settings VALUES ('t1','currency','KWD');
       INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ('t1','KWD',1,true),('t1','USD',48.5,false);
+      -- INV-FX-MARITIME-CLOSE-ASOF: the sales invoice / expense
+      -- voucher resolve at their entry moment from the append-only
+      -- history (migration 0270 backfill: one row per live rate).
+      INSERT INTO currency_exchange_rate_history (tenant_id, currency_code, exchange_rate, is_base, effective_from) VALUES ('t1','USD',48.5,false,'2020-01-01 00:00:00+00');
       INSERT INTO accounting_accounts VALUES (10,'t1','1130',true),(20,'t1','4200',true),(30,'t1','6400',true),(40,'t1','2110',true);
       INSERT INTO accounting_settings VALUES (1,'t1',NULL,NULL,NULL);
       INSERT INTO maritime_jobs VALUES (1,'t1','JOB-1','Acme',NULL,'open',NULL,0,0,0,0,NULL);

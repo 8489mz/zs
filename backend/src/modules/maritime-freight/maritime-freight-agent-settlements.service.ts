@@ -45,6 +45,7 @@ export interface MaritimeFreightAgentSettlementsDeps {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ) => Promise<number>;
 }
 
@@ -55,6 +56,7 @@ export class MaritimeFreightAgentSettlementsService {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ) => Promise<number>;
 
   constructor(deps: MaritimeFreightAgentSettlementsDeps) {
@@ -100,7 +102,7 @@ export class MaritimeFreightAgentSettlementsService {
     // only for the tenant base currency, a supplied positive rate,
     // or the registered rate — fail closed when none exists.
     const currency = dto.currency || 'USD';
-    const rate = await this.resolveFreightExchangeRate(tenantId, currency, dto.exchangeRate);
+    const rate = await this.resolveFreightExchangeRate(tenantId, currency, dto.exchangeRate, new Date());
     // INV-MARITIME-AGENT-SETTLEMENT-RECORD-INTEGRITY: the local
     // equivalent converts at the tenant's book digits through the
     // shared engine -- the raw float product stored 4856.0625 for a

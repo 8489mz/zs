@@ -76,6 +76,7 @@ export interface MaritimeFreightCarrierInvoicesDeps {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ) => Promise<number>;
   resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
@@ -91,6 +92,7 @@ export class MaritimeFreightCarrierInvoicesService {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ) => Promise<number>;
   private readonly resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   private readonly assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
@@ -168,7 +170,12 @@ export class MaritimeFreightCarrierInvoicesService {
       );
     }
 
-    const exchangeRate = await this.resolveFreightExchangeRate(tenantId, params.currency, params.exchangeRate);
+    const exchangeRate = await this.resolveFreightExchangeRate(
+      tenantId,
+      params.currency,
+      params.exchangeRate,
+      params.entryDate,
+    );
     // INV-MARITIME-CARRIER-INVOICE-FX-CONVERSION: convert at the base
     // currency's book digits through the shared engine; the rate
     // already comes from the shared resolver above.
@@ -353,7 +360,8 @@ export class MaritimeFreightCarrierInvoicesService {
       throw new BadRequestException('يجب إدخال رقم فاتورة الخط الملاحي');
     }
     const currency = (dto.currency || 'USD').trim().toUpperCase();
-    const exchangeRate = await this.resolveFreightExchangeRate(tenantId, currency, dto.exchangeRate);
+    const entryDate = dto.invoiceDate ? new Date(dto.invoiceDate) : new Date();
+    const exchangeRate = await this.resolveFreightExchangeRate(tenantId, currency, dto.exchangeRate, entryDate);
 
     // 1. Audit against rate card
     const auditPreview = await this.previewCarrierInvoiceAudit(auth, jobId, {
@@ -376,7 +384,6 @@ export class MaritimeFreightCarrierInvoicesService {
     const overrideApprovedAt: Date | null = null;
     const overrideReason: string | null = null;
 
-    const entryDate = dto.invoiceDate ? new Date(dto.invoiceDate) : new Date();
     const shouldPostJournal = ['matched', 'undercharge', 'no_contract'].includes(auditStatus);
 
     // INV-MARITIME-CARRIER-INVOICE-NUMBER-UNIQUE: there is NO unique
@@ -585,7 +592,8 @@ export class MaritimeFreightCarrierInvoicesService {
         const invCurrency = String(invoice.currency || 'USD')
           .trim()
           .toUpperCase();
-        const fxRate = await this.resolveFreightExchangeRate(tenantId, invCurrency);
+        const invoiceDate = invoice.invoice_date ? new Date(invoice.invoice_date) : new Date();
+        const fxRate = await this.resolveFreightExchangeRate(tenantId, invCurrency, undefined, invoiceDate);
 
         entryId = await this.postCarrierInvoiceJournal(trx, tenantId, {
           job,
@@ -595,7 +603,7 @@ export class MaritimeFreightCarrierInvoicesService {
           totalAmount: Number(invoice.total_invoiced_amount),
           currency: invCurrency,
           exchangeRate: fxRate,
-          entryDate: invoice.invoice_date ? new Date(invoice.invoice_date) : new Date(),
+          entryDate: invoiceDate,
           descriptionSuffix: '(معتمدة بتجاوز مالي)',
           userId: auth.userId,
         });

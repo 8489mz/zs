@@ -63,6 +63,7 @@ export interface MaritimeFreightJobsCoreDeps {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ) => Promise<number>;
   resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
@@ -78,6 +79,7 @@ export class MaritimeFreightJobsCoreService {
     tenantId: string,
     currency: string | undefined,
     suppliedRate?: number,
+    asOf?: Date | string,
   ) => Promise<number>;
   private readonly resolveAccountId: (tenantId: string, code: string, fallbackCode?: string) => Promise<number | null>;
   private readonly assertMaritimeJournalPeriodOpen: (trx: any, tenantId: string, entryDate: Date) => Promise<void>;
@@ -148,7 +150,8 @@ export class MaritimeFreightJobsCoreService {
     let chargeCostsBase = 0;
     for (const charge of invoicedCharges) {
       chargeCostsBase +=
-        Number(charge.cost_amount || 0) * (await this.resolveFreightExchangeRate(tenantId, charge.currency));
+        Number(charge.cost_amount || 0) *
+        (await this.resolveFreightExchangeRate(tenantId, charge.currency, undefined, new Date()));
     }
     if (chargeCostsBase > billed + 0.01) {
       throw new BadRequestException('لا يمكن إغلاق الشحنة: تكاليف بنود التشغيل تتجاوز الفواتير المرحلة للعميل');

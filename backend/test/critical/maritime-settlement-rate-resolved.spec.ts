@@ -45,9 +45,14 @@ async function main(): Promise<void> {
     await pg.exec(`
       CREATE TABLE settings (tenant_id text, key text, value text);
       CREATE TABLE currency_exchange_rates (id bigserial PRIMARY KEY, tenant_id text, currency_code text, exchange_rate numeric, is_base boolean);
+      CREATE TABLE currency_exchange_rate_history (id bigserial PRIMARY KEY, tenant_id text, currency_code text, exchange_rate numeric, is_base boolean, effective_from timestamptz, created_at timestamptz);
       CREATE TABLE maritime_agent_settlements (id bigserial PRIMARY KEY, tenant_id text, agent_id text, agent_name text, job_id text, job_number text, settlement_type text, currency text, amount numeric, profit_share_percent numeric, local_equivalent_amount numeric, exchange_rate numeric, reference_number text, status text, notes text);
       INSERT INTO settings VALUES ('t1','currency','EGP');
       INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ('t1','EGP',1,true),('t1','USD',48,false);
+      -- INV-FX-MARITIME-CLOSE-ASOF: the settlement resolves at its
+      -- creation moment from the append-only history (migration 0270
+      -- backfill: one row per live rate).
+      INSERT INTO currency_exchange_rate_history (tenant_id, currency_code, exchange_rate, is_base, effective_from) VALUES ('t1','EGP',1,true,'2020-01-01 00:00:00+00'),('t1','USD',48,false,'2020-01-01 00:00:00+00');
     `);
 
     const base = { agentName: 'Agent', settlementType: 'debit_note', amount: 100 };
@@ -69,8 +74,16 @@ async function main(): Promise<void> {
     assert.equal(omittedCurrency.currency, 'USD');
     assert.equal(Number(omittedCurrency.exchange_rate), 48);
 
+    // INV-FX-MARITIME-CLOSE-ASOF: the settlement resolves at its
+    // creation moment from history, so "no rate registered" means
+    // neither a live row nor a history row — and the fail-closed
+    // message is the as-of one.
     await pg.exec(`DELETE FROM currency_exchange_rates WHERE tenant_id = 't1' AND currency_code = 'USD'`);
-    await assert.rejects(service.createAgentSettlement(auth, { ...base, currency: 'USD' } as never), /سعر صرف/);
+    await pg.exec(`DELETE FROM currency_exchange_rate_history WHERE tenant_id = 't1' AND currency_code = 'USD'`);
+    await assert.rejects(
+      service.createAgentSettlement(auth, { ...base, currency: 'USD' } as never),
+      /سعر صرف|No exchange rate was registered/,
+    );
     await assert.rejects(
       service.createAgentSettlement(auth, { ...base, currency: 'USD', exchangeRate: 0 } as never),
       /سعر الصرف/,
