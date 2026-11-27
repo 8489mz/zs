@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { PosRecentSalesReprintModal } from './PosRecentSalesReprintModal';
 import * as posPrinting from '@/lib/pos-printing';
-import { salesApi } from '@/features/sales';
+import { salesApi } from '@/shared/api/sales.api';
 import type { Sale } from '@/types/domain';
 
 const mockLastSale: Sale = {

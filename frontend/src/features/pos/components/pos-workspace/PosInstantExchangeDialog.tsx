@@ -7,7 +7,7 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { toast } from '@/shared/components/system-alert';
 import { AlertTriangleIcon, ReceiptIcon } from '@/shared/components/icons/AppIcons';
 import { posApi } from '@/features/pos/api/pos.api';
-import { salesApi } from '@/features/sales';
+import { salesApi } from '@/shared/api/sales.api';
 import { getNormalizedInvoiceSearchTerms, matchesSaleDocNo } from '@/features/pos/lib/pos-barcode-normalizer';
 import { normalizeExchangeReturnSerials } from './pos-exchange-serial-validation';
 import { invalidateSalesDomain } from '@/app/query-invalidation';

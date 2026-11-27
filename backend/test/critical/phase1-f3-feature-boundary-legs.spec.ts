@@ -171,6 +171,9 @@ async function main(): Promise<void> {
     panel.includes('getOfflineSalesQueue().length'),
     'CashDrawerFormsPanel must still read the offline queue length (drawer pending count)',
   );
+  // NOTE (F5h): F5h later broke the pos|sales pair by moving sales.api
+  // whole to shared, so the three pos files import salesApi from the
+  // shared home now, not through the sales public index anymore.
   for (const [label, file] of [
     ['PosWorkspace', POS_WORKSPACE],
     ['PosRecentSalesReprintModal', REPRINT_MODAL],
@@ -178,8 +181,8 @@ async function main(): Promise<void> {
   ] as const) {
     const src = stripComments(fs.readFileSync(file, 'utf8'));
     assert.ok(
-      src.includes("import { salesApi } from '@/features/sales';"),
-      `${label} must import salesApi through the sales public index`,
+      src.includes("import { salesApi } from '@/shared/api/sales.api';"),
+      `${label} must import salesApi from the shared api client after F5h (sales.api moved to shared)`,
     );
     assert.ok(!src.includes('@/features/sales/api/sales.api'), `${label} must not import sales.api deep anymore`);
   }
@@ -224,44 +227,46 @@ async function main(): Promise<void> {
   // and both pair lists stay exactly where F2 left them.
   // NOTE (F5f): F5f later broke the cash-drawer|pos pair by moving the
   // shift-receipt module to shared, so the pair assertion below is now
-  // the gone-form; the pos|sales pair still stays pinned (F5h not done).
+  // the gone-form.
+  // NOTE (F5h): F5h later broke the pos|sales pair by moving sales.api
+  // whole to shared, so its pair assertion below is now the gone-form too.
   const boundary = fs.readFileSync(BOUNDARY_SPEC, 'utf8');
   assert.ok(
     boundary.includes('const PINNED_BACKEND_TOTAL = 738;'),
     'module-boundary must still pin the backend total 738',
   );
   assert.ok(
-    boundary.includes('const PINNED_FRONTEND_TOTAL = 128;'),
-    'module-boundary must still pin the frontend total 128',
+    boundary.includes('const PINNED_FRONTEND_TOTAL = 125;'),
+    'module-boundary must still pin the frontend total 125',
   );
   assert.ok(
     boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
     'module-boundary must still pin 63 backend edges',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 49,'),
-    'module-boundary must still pin 49 frontend edges',
+    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 48,'),
+    'module-boundary must still pin 48 frontend edges',
   );
   assert.ok(
     boundary.includes("'cash-drawer->pos': 2,"),
     'module-boundary must still pin cash-drawer->pos at 2 (bare index import still counts)',
   );
   assert.ok(
-    boundary.includes("'pos->sales': 3,"),
-    'module-boundary must still pin pos->sales at 3 (bare index imports still count)',
+    !boundary.includes("'pos->sales': 3,"),
+    'pos->sales edge must be gone after F5h (sales.api moved to shared)',
   );
   assert.ok(
     !boundary.includes("'cash-drawer|pos',"),
     'cash-drawer|pos pair must be gone after F5f (receipt module moved to shared)',
   );
-  assert.ok(boundary.includes("'pos|sales',"), 'pos|sales pair must stay pinned');
+  assert.ok(!boundary.includes("'pos|sales',"), 'pos|sales pair must be gone after F5h (sales.api moved to shared)');
 
   // 4. The INV entry exists exactly once in both places (never quote another INV id literally).
   const invariants = fs.readFileSync(INVARIANTS, 'utf8');
   const invCount = (invariants.match(/INV-PHASE1-F3-FEATURE-BOUNDARY-LEGS/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F3 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F5G-CUSTOMERS-SALES-DECOUPLED/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5H-POS-SALES-DECOUPLED/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F3 INV exactly once');
 
   // 5. Wiring: both critical lists carry 384 specs in identical order, the F4 spec last.
@@ -274,11 +279,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 387);
-  assert.equal(chain.length, 387);
+  assert.equal(specs.length, 388);
+  assert.equal(chain.length, 388);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 379 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5g-customers-sales.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5g-customers-sales.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5h-pos-sales.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5h-pos-sales.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -292,11 +297,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 387);') && src.includes('assert.equal(chain.length, 387);'),
+      src.includes('assert.equal(specs.length, 388);') && src.includes('assert.equal(chain.length, 388);'),
       `${label} spec wiring must re-pin to 379`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5g-customers-sales.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5h-pos-sales.spec.ts'"),
       `${label} spec last-entry must re-pin to the F3 spec`,
     );
   }
@@ -338,7 +343,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F5G-CUSTOMERS-SALES-DECOUPLED/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5H-POS-SALES-DECOUPLED/g)'),
       `${label} spec guard assertion must re-pin to the F3 INV`,
     );
   }
