@@ -7,6 +7,17 @@ import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import * as tls from 'tls';
 import nodemailer from 'nodemailer';
 
+/*
+ * The nested connection-test shape the only caller sends
+ * (MaritimeSettingsTab -> TestMailConnectionDto): { smtp, imap } with
+ * host/port/secure/user/password each. INV-PHASE1-D-M3-MAIL-NESTED
+ * maps it into the flat override path in testConnection below.
+ */
+export type NestedMailTestPayload = {
+  smtp?: { host?: string; port?: number; secure?: boolean; user?: string; password?: string };
+  imap?: { host?: string; port?: number; secure?: boolean; user?: string; password?: string };
+};
+
 export interface MaritimeMailConfig {
   outgoingProvider: 'outlook' | 'gmail' | 'custom';
   smtpHost: string;
@@ -266,27 +277,49 @@ export class MaritimeMailService {
     }
   }
 
-  async testConnection(auth: AuthContext, customDto?: Partial<MaritimeMailConfig>) {
+  async testConnection(auth: AuthContext, customDto?: Partial<MaritimeMailConfig> & NestedMailTestPayload) {
     const { tenantId } = requireTenantScope(auth);
     const savedConfig = await this.getRawMailConfig(tenantId);
     const isMasked = (str?: string) => !str || str.includes('•') || str === '••••••••••••';
 
-    const config: MaritimeMailConfig = {
-      outgoingProvider: customDto?.outgoingProvider || savedConfig?.outgoingProvider || 'outlook',
-      smtpHost: customDto?.smtpHost || savedConfig?.smtpHost || 'smtp.office365.com',
-      smtpPort: Number(customDto?.smtpPort || savedConfig?.smtpPort || 587),
-      smtpSecure: Boolean(customDto?.smtpSecure ?? savedConfig?.smtpSecure ?? false),
-      smtpUser: customDto?.smtpUser !== undefined ? customDto.smtpUser : savedConfig?.smtpUser || '',
-      smtpPassword: isMasked(customDto?.smtpPassword) ? savedConfig?.smtpPassword || '' : customDto?.smtpPassword,
-      fromName: customDto?.fromName || savedConfig?.fromName || 'إدارة الشحن',
-      fromEmail: customDto?.fromEmail || savedConfig?.fromEmail || customDto?.smtpUser || '',
+    // INV-PHASE1-D-M3-MAIL-NESTED: the only caller (MaritimeSettingsTab)
+    // sends NESTED { smtp, imap }; the override path below reads FLAT
+    // fields only, so a nested-only payload tested the SAVED config.
+    // Map the nested values into the flat slots (nested wins when both
+    // are present — it is the form's live values; ?? keeps an explicit
+    // nested false/'' from falling through to the flat value). The rest
+    // of the function is untouched, including the masked-password
+    // fallback and the saved-config fallback.
+    const flat: Partial<MaritimeMailConfig> = {
+      ...customDto,
+      smtpHost: customDto?.smtp?.host ?? customDto?.smtpHost,
+      smtpPort: customDto?.smtp?.port ?? customDto?.smtpPort,
+      smtpSecure: customDto?.smtp?.secure ?? customDto?.smtpSecure,
+      smtpUser: customDto?.smtp?.user ?? customDto?.smtpUser,
+      smtpPassword: customDto?.smtp?.password ?? customDto?.smtpPassword,
+      imapHost: customDto?.imap?.host ?? customDto?.imapHost,
+      imapPort: customDto?.imap?.port ?? customDto?.imapPort,
+      imapSecure: customDto?.imap?.secure ?? customDto?.imapSecure,
+      imapUser: customDto?.imap?.user ?? customDto?.imapUser,
+      imapPassword: customDto?.imap?.password ?? customDto?.imapPassword,
+    };
 
-      incomingProvider: customDto?.incomingProvider || savedConfig?.incomingProvider || 'outlook',
-      imapHost: customDto?.imapHost || savedConfig?.imapHost || 'outlook.office365.com',
-      imapPort: Number(customDto?.imapPort || savedConfig?.imapPort || 993),
-      imapSecure: Boolean(customDto?.imapSecure ?? savedConfig?.imapSecure ?? true),
-      imapUser: customDto?.imapUser !== undefined ? customDto.imapUser : savedConfig?.imapUser || '',
-      imapPassword: isMasked(customDto?.imapPassword) ? savedConfig?.imapPassword || '' : customDto?.imapPassword,
+    const config: MaritimeMailConfig = {
+      outgoingProvider: flat.outgoingProvider || savedConfig?.outgoingProvider || 'outlook',
+      smtpHost: flat.smtpHost || savedConfig?.smtpHost || 'smtp.office365.com',
+      smtpPort: Number(flat.smtpPort || savedConfig?.smtpPort || 587),
+      smtpSecure: Boolean(flat.smtpSecure ?? savedConfig?.smtpSecure ?? false),
+      smtpUser: flat.smtpUser !== undefined ? flat.smtpUser : savedConfig?.smtpUser || '',
+      smtpPassword: isMasked(flat.smtpPassword) ? savedConfig?.smtpPassword || '' : flat.smtpPassword,
+      fromName: flat.fromName || savedConfig?.fromName || 'إدارة الشحن',
+      fromEmail: flat.fromEmail || savedConfig?.fromEmail || flat.smtpUser || '',
+
+      incomingProvider: flat.incomingProvider || savedConfig?.incomingProvider || 'outlook',
+      imapHost: flat.imapHost || savedConfig?.imapHost || 'outlook.office365.com',
+      imapPort: Number(flat.imapPort || savedConfig?.imapPort || 993),
+      imapSecure: Boolean(flat.imapSecure ?? savedConfig?.imapSecure ?? true),
+      imapUser: flat.imapUser !== undefined ? flat.imapUser : savedConfig?.imapUser || '',
+      imapPassword: isMasked(flat.imapPassword) ? savedConfig?.imapPassword || '' : flat.imapPassword,
 
       autoReadInboundBids: true,
     };
