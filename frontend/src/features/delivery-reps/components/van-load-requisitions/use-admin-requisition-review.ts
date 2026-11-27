@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import {useEffect, useState, type Dispatch, type SetStateAction} from 'react';
 import { toast } from '@/shared/components/system-alert';
 import type { DriverAvailableProduct, VanLoadRequisitionRecord } from '../../api/van-sales.api';
 import type { AdminReviewLine } from './van-load-requisitions-admin-types';

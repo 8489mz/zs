@@ -232,7 +232,7 @@ async function main(): Promise<void> {
   // whole to shared, so its pair assertion below is now the gone-form too.
   const boundary = fs.readFileSync(BOUNDARY_SPEC, 'utf8');
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 738;'),
+    boundary.includes('const PINNED_BACKEND_TOTAL = 740;'),
     'module-boundary must still pin the backend total 738',
   );
   assert.ok(
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F3-FEATURE-BOUNDARY-LEGS/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F3 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-BATCH-REPAIR-DISCOUNT-I18N-KEYS/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-EVAL-P3-VAN-WRITER/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F3 INV exactly once');
 
   // 5. Wiring: both critical lists carry 384 specs in identical order, the F4 spec last.
@@ -279,11 +279,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 402);
-  assert.equal(chain.length, 402);
+  assert.equal(specs.length, 405);
+  assert.equal(chain.length, 405);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 379 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-eval-p3-van-writer.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-eval-p3-van-writer.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -297,11 +297,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 402);') && src.includes('assert.equal(chain.length, 402);'),
+      src.includes('assert.equal(specs.length, 405);') && src.includes('assert.equal(chain.length, 405);'),
       `${label} spec wiring must re-pin to 379`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-eval-p3-van-writer.spec.ts'"),
       `${label} spec last-entry must re-pin to the F3 spec`,
     );
   }
@@ -343,7 +343,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-BATCH-REPAIR-DISCOUNT-I18N-KEYS/g)'),
+      src.includes('guard.match(/INV-PHASE1-EVAL-P3-VAN-WRITER/g)'),
       `${label} spec guard assertion must re-pin to the F3 INV`,
     );
   }

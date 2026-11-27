@@ -1,5 +1,4 @@
-import { useCallback } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import {useCallback, type Dispatch, type SetStateAction} from 'react';
 import { systemConfirm, toast } from '@/shared/components/system-alert';
 import type {
   DriverAvailableProduct,

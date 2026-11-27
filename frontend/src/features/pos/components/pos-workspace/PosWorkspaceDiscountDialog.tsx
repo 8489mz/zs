@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-﻿import { ActionConfirmDialog } from '@/shared/components/action-confirm-dialog';
+import { ActionConfirmDialog } from '@/shared/components/action-confirm-dialog';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 
 interface PosWorkspaceDiscountDialogProps {

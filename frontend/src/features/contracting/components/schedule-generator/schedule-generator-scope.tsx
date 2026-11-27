@@ -1,8 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { CustomSelect } from '@/shared/ui/custom-select';
-import { MODULAR_TRADES, SCOPE_OPTIONS } from './schedule-generator-data';
-import type { ProjectScope } from './schedule-generator-data';
+import {MODULAR_TRADES, SCOPE_OPTIONS, type ProjectScope} from './schedule-generator-data';
 import type { Dispatch, SetStateAction } from 'react';
 
 interface ScheduleGeneratorScopeProps {

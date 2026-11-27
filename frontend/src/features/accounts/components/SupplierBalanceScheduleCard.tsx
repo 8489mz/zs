@@ -14,8 +14,12 @@ import { readSupplierInstapayAddress } from '@/features/accounts/contracts';
 import { formatCurrency } from '@/lib/format';
 import type { Supplier, SupplierLedgerEntry } from '@/types/domain';
 import { todayIso, summarize, extractPurchaseId } from './supplier-balance-schedule/supplier-schedule-helpers';
-import { normalizeStatusForFilter } from './supplier-balance-schedule/supplier-schedule-types';
-import type { LedgerFilter, ScheduleFilter, SupplierSubTab } from './supplier-balance-schedule/supplier-schedule-types';
+import {
+  normalizeStatusForFilter,
+  type LedgerFilter,
+  type ScheduleFilter,
+  type SupplierSubTab,
+} from './supplier-balance-schedule/supplier-schedule-types';
 import { SupplierLedgerTab } from './supplier-balance-schedule/supplier-ledger-tab';
 import { SupplierScheduleTab } from './supplier-balance-schedule/supplier-schedule-tab';
 import { SupplierPaymentModal } from './supplier-balance-schedule/supplier-payment-modal';

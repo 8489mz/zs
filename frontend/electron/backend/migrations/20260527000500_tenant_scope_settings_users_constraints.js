@@ -48,6 +48,6 @@ exports.migration = {
             await (0, kysely_1.sql) `CREATE UNIQUE INDEX IF NOT EXISTS products_tenant_barcode_uidx ON products (tenant_id, lower(barcode)) WHERE barcode IS NOT NULL AND barcode <> '' AND is_active = true`.execute(db);
         }
     },
-    async down(db) { },
+    async down(_db) { },
 };
 //# sourceMappingURL=20260527000500_tenant_scope_settings_users_constraints.js.map

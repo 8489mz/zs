@@ -31,6 +31,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { VatDeclarationPage } from '@/features/sales/pages/VatDeclarationPage';
 import { ApiError } from '@/lib/http';
+import { todayLocalDateKey } from '@/lib/format';
 
 // The api module is mocked through a hoisted factory only: this spec file
 // must NOT import the api layer at all (the page-composition check scans
@@ -44,9 +45,13 @@ vi.mock('@/features/sales/api/vat-declaration.api', () => ({
 const getDeclarationMock = apiMocks.getDeclaration;
 
 function currentMonthRange(): { from: string; to: string } {
+  // Local calendar parts, exactly like the page's own period (it uses
+  // todayLocalDateKey): the old spelling rendered a local-midnight Date
+  // as UTC, so in Cairo (UTC+2) Nov 1 came out as Oct 31 and the spec
+  // failed locally while passing in CI (UTC).
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  const from = todayLocalDateKey(new Date(now.getFullYear(), now.getMonth(), 1));
+  const to = todayLocalDateKey(new Date(now.getFullYear(), now.getMonth() + 1, 0));
   return { from, to };
 }
 

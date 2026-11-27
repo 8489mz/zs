@@ -345,7 +345,7 @@ export function HrPayrollPage() {
     else if (activeRunTab === 'weekly') targetFreq = 'weekly';
     else if (activeRunTab === 'daily') targetFreq = 'daily';
 
-    let sDate = `${targetMonth}-01`;
+    const sDate = `${targetMonth}-01`;
     let eDate = `${targetMonth}-${String(lastDay).padStart(2, '0')}`;
     if (targetFreq === 'biweekly') {
       eDate = `${targetMonth}-15`;

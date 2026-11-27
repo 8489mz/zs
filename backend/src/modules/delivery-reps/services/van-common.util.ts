@@ -1,6 +1,8 @@
 import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
-import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
+import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { formatDailyDocumentNumber, getDailyDocumentPrefix } from '../../../common/utils/document-number.util';
 import { getTenantTimezone, formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
 import { AppError } from '../../../common/errors/app-error';
@@ -34,14 +36,21 @@ export interface MoveVanStockParams {
 
 /**
  * Single entry point for every van stock movement.
- * Routing through applyStockDelta restores the canonical lock order
- * (products before product_location_stock) and keeps the perpetual inventory ledger consistent.
+ * Phase 1 eval P3 (INV-PHASE1-EVAL-P3-VAN-WRITER): routes through the
+ * unified writer (recordStockMovement), which runs the ledger call
+ * (applyStockDelta — the canonical lock order, products before
+ * product_location_stock) and writes the row from the returned
+ * before/after. The total now books at book digits via the writer's
+ * roundMoney(|delta| * unitCost, moneyDigits) instead of the old
+ * four-decimal fixed-point spelling; moneyDigits resolves here with
+ * the P2 pattern the van slices already use.
  */
 export async function moveVanStock(
   trx: Kysely<Database>,
   params: MoveVanStockParams,
 ): Promise<{ scopeBefore: number; scopeAfter: number }> {
-  const change = await applyStockDelta(trx, {
+  const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, params.tenantId));
+  const change = await recordStockMovement(trx, {
     productId: params.productId,
     delta: params.delta,
     branchId: params.branchId ?? null,
@@ -51,29 +60,15 @@ export async function moveVanStock(
     skipGlobalUpdate: params.skipGlobalUpdate,
     errorCode: 'INSUFFICIENT_VAN_STOCK',
     errorMessage: 'رصيد غير كافٍ لتنفيذ حركة سيارة التوزيع',
+    movementType: params.movementType,
+    referenceType: params.referenceType,
+    referenceId: params.referenceId,
+    reason: params.movementType,
+    note: params.note,
+    unitCost: params.unitCost ?? 0,
+    createdBy: params.userId ?? null,
+    moneyDigits,
   });
-
-  await trx
-    .insertInto('stock_movements')
-    .values({
-      tenant_id: params.tenantId,
-      account_id: params.accountId,
-      product_id: params.productId,
-      movement_type: params.movementType,
-      qty: params.delta,
-      before_qty: change.scopeBefore,
-      after_qty: change.scopeAfter,
-      unit_cost: params.unitCost ?? 0,
-      total_cost: Number((Math.abs(params.delta) * (params.unitCost ?? 0)).toFixed(4)),
-      reason: params.movementType,
-      note: params.note,
-      reference_type: params.referenceType,
-      reference_id: params.referenceId,
-      branch_id: params.branchId ?? null,
-      location_id: params.locationId,
-      created_by: params.userId ?? null,
-    })
-    .execute();
 
   return { scopeBefore: change.scopeBefore, scopeAfter: change.scopeAfter };
 }

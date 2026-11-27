@@ -2,8 +2,11 @@
 // Owns the TSP optimization state, handleRunRouteOptimization and handleApplyOptimalRoute.
 
 import { useState } from 'react';
-import { vanSalesApi } from '@/features/delivery-reps/api/van-sales.api';
-import type { VanCustomerItineraryItem, RouteOptimizationResult } from '@/features/delivery-reps/api/van-sales.api';
+import {
+  vanSalesApi,
+  type VanCustomerItineraryItem,
+  type RouteOptimizationResult,
+} from '@/features/delivery-reps/api/van-sales.api';
 import { toast } from '@/shared/components/system-alert';
 
 interface UseVanItineraryOptimizeParams {

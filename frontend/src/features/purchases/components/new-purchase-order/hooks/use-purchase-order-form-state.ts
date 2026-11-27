@@ -1,18 +1,17 @@
-import { useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import {useRef, useState, type Dispatch, type SetStateAction} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePurchaseComposerCatalog } from '@/features/purchases/hooks/usePurchaseComposerCatalog';
 import { useAuthStore } from '@/stores/auth-store';
 import { useTranslation } from '../../../utils/i18n-purchase-prototype';
-import type {
-  DocumentStatus,
-  InlineMessageTone,
-  PrototypeLine,
-  QuickCreateState,
-  ValidationErrors,
+import {
+  type DocumentStatus,
+  type InlineMessageTone,
+  type PrototypeLine,
+  type QuickCreateState,
+  type ValidationErrors,
+  PURCHASE_DRAFT_STORAGE_KEY,
 } from '../newPurchaseOrder.types';
-import { PURCHASE_DRAFT_STORAGE_KEY } from '../newPurchaseOrder.types';
 import { addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
 
 export interface PurchaseOrderDraftUi {

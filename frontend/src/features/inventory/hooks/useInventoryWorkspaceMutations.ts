@@ -1,6 +1,5 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query';
-import { useRef } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import {useRef, type Dispatch, type SetStateAction} from 'react';
 import { invalidateInventoryDomain } from '@/app/query-invalidation';
 import { inventoryApi } from '@/features/inventory/api/inventory.api';
 import { withIdempotency, checkIdempotencyStatus } from '@/lib/idempotency';

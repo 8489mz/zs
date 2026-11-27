@@ -33,10 +33,9 @@ import { DailyAttendanceTable } from '@/features/hr/components/attendance/DailyA
 import { ManualAttendanceModal } from '@/features/hr/components/attendance/ManualAttendanceModal';
 import { PdcChequeActionModal } from '@/features/accounting/components/PdcChequeActionModal';
 import { ManualJournalEntryDialog } from '@/features/accounting/components/ManualJournalEntryDialog';
-import { CreatePayrollRunModal } from '@/features/hr/components/payroll/CreatePayrollRunModal';
+import {CreatePayrollRunModal, type PayrollDraft} from '@/features/hr/components/payroll/CreatePayrollRunModal';
 import type { HrAttendanceRecord } from '@/types/domain';
 import type { PdcCheque } from '@/features/accounting/api/accounting.api';
-import type { PayrollDraft } from '@/features/hr/components/payroll/CreatePayrollRunModal';
 
 const FROZEN_SERVER_TIME = '2026-04-08T21:30:00.000Z';
 

@@ -99,17 +99,17 @@ export function SettingsDiagnosticsSection({
   };
 
   const handleClearCache = async () => {
-    // @ts-ignore
+    // @ts-expect-error window.electronRuntime is exposed by the Electron preload with no TS types
     if (window.electronRuntime?.clearAppCache) {
       setIsClearingCache(true);
       try {
-        // @ts-ignore
+        // @ts-expect-error window.electronRuntime is exposed by the Electron preload with no TS types
         const res = await window.electronRuntime.clearAppCache();
         if (res.ok) {
           systemAlert('تم مسح كاش النظام بنجاح. سيتم الآن إعادة تشغيل البرنامج لتحسين الأداء.');
-          // @ts-ignore
+          // @ts-expect-error window.electronRuntime is exposed by the Electron preload with no TS types
           if (window.electronRuntime.switchToStandalone) {
-             // @ts-ignore
+             // @ts-expect-error window.electronRuntime is exposed by the Electron preload with no TS types
              window.electronRuntime.switchToStandalone(); // This reloads the app gracefully
           } else {
              window.location.reload();

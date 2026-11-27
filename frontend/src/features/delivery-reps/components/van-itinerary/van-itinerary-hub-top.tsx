@@ -2,8 +2,7 @@
 // Hub header + capsules + timer bar (own useTranslation). The facade renders it inside the
 // hub div and passes selectedCustomerForHub + visit/timer values as props.
 
-import React from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import React, {type Dispatch, type SetStateAction} from 'react';
 import { useTranslation } from 'react-i18next';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import {

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-﻿import { FormSection } from '@/shared/components/form-section';
+import { FormSection } from '@/shared/components/form-section';
 import { countText, money } from '@/features/hr/pages/reports/hr-reports.helpers';
 
 type Props = {

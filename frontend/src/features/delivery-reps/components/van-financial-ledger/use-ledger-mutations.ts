@@ -1,5 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
-import type { QueryClient } from '@tanstack/react-query';
+import {useMutation, useQuery, type QueryClient} from '@tanstack/react-query';
 import type { Dispatch, SetStateAction } from 'react';
 import { toast } from '@/shared/components/system-alert';
 import { vanSalesApi, type VanRepFinancialSettlementItem } from '../../api/van-sales.api';

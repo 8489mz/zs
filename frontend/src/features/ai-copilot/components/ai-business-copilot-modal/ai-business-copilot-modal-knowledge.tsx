@@ -1,7 +1,4 @@
-import { RefreshCwIcon } from '@/shared/components/icons/AppIcons';
-import { PlusCircleIcon } from '@/shared/components/icons/AppIcons';
-import { FileTextIcon } from '@/shared/components/icons/AppIcons';
-import { TrashIcon } from '@/shared/components/icons/AppIcons';
+import {RefreshCwIcon, PlusCircleIcon, FileTextIcon, TrashIcon} from '@/shared/components/icons/AppIcons';
 import { useTranslation } from 'react-i18next';
 import type { UseMutationResult } from '@tanstack/react-query';
 import type { KnowledgeSource } from './ai-business-copilot-modal-shared';

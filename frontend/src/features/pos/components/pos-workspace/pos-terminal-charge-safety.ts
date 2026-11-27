@@ -8,7 +8,7 @@ export function shouldTryAlternateTerminalCharge(chargeRequestIssued: boolean): 
 
 /** An already approved card transaction must not be silently detached from the POS cart. */
 export function canChangePaymentAfterTerminalApproval(authCode?: string | null, rrn?: string | null): boolean {
-  return !Boolean(String(authCode || '').trim() || String(rrn || '').trim());
+  return !(String(authCode || '').trim() || String(rrn || '').trim());
 }
 
 /*

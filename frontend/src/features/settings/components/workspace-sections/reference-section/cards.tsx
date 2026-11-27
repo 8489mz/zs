@@ -40,7 +40,9 @@ export function BranchReferenceCard(props: {
   const tenant = useAuthStore((s) => s.tenant);
   const vertical = resolveCurrentVertical(tenant);
   const isSuperAdmin = user?.role === 'super_admin';
-  const hasMultiBranch = useHasFeature('multi_branch') || useHasFeature('branches') || isSuperAdmin;
+  const hasMultiBranchFeature = useHasFeature('multi_branch');
+  const hasBranchesFeature = useHasFeature('branches');
+  const hasMultiBranch = hasMultiBranchFeature || hasBranchesFeature || isSuperAdmin;
   const isBranchLimitReached = !hasMultiBranch && branches.length >= 1;
 
   const branchTitle = vertical === 'maritime'

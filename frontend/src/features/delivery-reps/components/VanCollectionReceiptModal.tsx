@@ -23,9 +23,9 @@ export const VanCollectionReceiptModal: React.FC<VanCollectionReceiptModalProps>
   storeName,
 }) => {
   const { t } = useTranslation();
-  if (!receipt) return null;
+  const [targetPhone, setTargetPhone] = useState(receipt?.customerPhone || '');
 
-  const [targetPhone, setTargetPhone] = useState(receipt.customerPhone || '');
+  if (!receipt) return null;
 
   const handlePrint = () => {
     try {

@@ -45,8 +45,8 @@ export function applyPosLineTransfer(
   target: PosItem[],
   items: PosLineTransferItem[],
 ): { source: PosItem[]; target: PosItem[] } {
-  let nextSource = [...source];
-  let nextTarget = [...target];
+  const nextSource = [...source];
+  const nextTarget = [...target];
   for (const item of items) {
     const moveQty = Number(item.qty || 0);
     if (moveQty <= 0) continue;

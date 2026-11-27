@@ -9,8 +9,7 @@
 // PosTerminalTestResult stays NON-exported here (S6 D1: S6's hook carries its own local copy;
 // structural typing makes the hook return assignable to the card's testResult prop).
 import { useTranslation } from 'react-i18next';
-import { memo } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import {memo, type Dispatch, type SetStateAction} from 'react';
 import { FormSection } from '@/shared/components/form-section';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { iconBadgeStyle, premiumCheckboxInputStyle, fieldControlStyle } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-shared';

@@ -4,8 +4,7 @@ import { Button } from '@/shared/ui/button';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { BoxesIcon, Trash2Icon } from '@/shared/components/icons/AppIcons';
 import type { DriverAvailableProduct } from '../../hooks/useDriverLoadRequisition';
-import { CompactStepper } from './LoadRequisitionTypes';
-import type { RequisitionLineItem } from './LoadRequisitionTypes';
+import {CompactStepper, type RequisitionLineItem} from './LoadRequisitionTypes';
 
 export interface LoadRequisitionSelectedTabProps {
   activeViewTab: 'catalog' | 'selected';

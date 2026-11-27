@@ -1,14 +1,13 @@
-import { useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
-import type {
-  DocumentStatus,
-  InlineMessageTone,
-  PrototypeLine,
-  PurchasePrototypeDraft,
-  ValidationErrors,
-  ValidationRowErrors,
+import {useRef, useState, type Dispatch, type SetStateAction} from 'react';
+import {
+  type DocumentStatus,
+  type InlineMessageTone,
+  type PrototypeLine,
+  type PurchasePrototypeDraft,
+  type ValidationErrors,
+  type ValidationRowErrors,
+  PURCHASE_DRAFT_STORAGE_KEY,
 } from '../newPurchaseOrder.types';
-import { PURCHASE_DRAFT_STORAGE_KEY } from '../newPurchaseOrder.types';
 
 // S3 — draft sub-hook, moved from useNewPurchaseOrderController (L260-397).
 // The facade calls S3 before S2, so the S2 catalog lists and setters are NOT

@@ -1,4 +1,9 @@
-import type { SuspectFlag } from '@/features/returns/lib/returns-anomaly-detector';
+import {
+  type SuspectFlag,
+  detectReturnsAnomalies,
+  type AnalyzedReturnRecord,
+  type CashierRiskMetric,
+} from '@/features/returns/lib/returns-anomaly-detector';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormSection } from '@/shared/components/form-section';
@@ -12,11 +17,6 @@ import {
 } from '@/shared/components/icons/AppIcons';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
-import {
-  detectReturnsAnomalies,
-  type AnalyzedReturnRecord,
-  type CashierRiskMetric,
-} from '@/features/returns/lib/returns-anomaly-detector';
 import {
   exportAnomalyReportExcel,
   printAnomalyReport,

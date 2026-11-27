@@ -674,7 +674,7 @@ export function refineProductMatte(
   for (let i = 0; i < guide.length; i++) {
     guide[i] = luminance(rgb[i * 4], rgb[i * 4 + 1], rgb[i * 4 + 2]) / 255;
   }
-  let alpha = guidedFilter(guide, fullMatte, width, height, 2, 0.01);
+  const alpha = guidedFilter(guide, fullMatte, width, height, 2, 0.01);
 
   // 5) تنعيم خفيف جداً على الحافة فقط (1 بكسل)
   const blurred = boxBlurFloat(alpha, width, height, 1);

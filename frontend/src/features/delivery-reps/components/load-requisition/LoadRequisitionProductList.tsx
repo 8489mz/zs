@@ -3,8 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { PlusIcon } from '@/shared/components/icons/AppIcons';
 import type { DriverAvailableProduct } from '../../hooks/useDriverLoadRequisition';
-import { CompactStepper } from './LoadRequisitionTypes';
-import type { RequisitionLineItem } from './LoadRequisitionTypes';
+import {CompactStepper, type RequisitionLineItem} from './LoadRequisitionTypes';
 
 export interface LoadRequisitionProductListProps {
   items: DriverAvailableProduct[];

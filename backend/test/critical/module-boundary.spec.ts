@@ -271,6 +271,17 @@
  * file(s) above" -> "plus the 2 file(s) above"); the doors spec
  * needs no change.
  *
+ * Eval P3 (van-writer): delivery-reps->accounting 107 -> 109:
+ * moveVanStock newly imports tenantBaseCurrency + currencyMoneyDigits
+ * from accounting — the same two P2-pattern statements the van slices
+ * already state for the same lookup (resolve the tenant base currency,
+ * then book digits from it), applied to the last direct writer for the
+ * first time. Backend total pin 738 -> 740 (= the edge delta, no other
+ * growth); posting 97 / foundation 20 unchanged. Deliberate new
+ * coupling, not a pure move: the van stock entry point now reads the
+ * accounting currency helpers, which is the point of the package (one
+ * book-digits rule, all writers). No new edge, no new pair.
+ *
  * Floors: the scan must still find >= 600 backend / >= 100 frontend
  * statements and >= 60 / >= 45 edges. A floor exists so a broken
  * scanner fails loudly instead of passing vacuously; a phase that
@@ -305,7 +316,7 @@ const PINNED_BACKEND_EDGES: Record<string, number> = {
   'catalog->inventory': 7,
   'catalog->storefront': 9,
   'contracting->accounting': 21,
-  'delivery-reps->accounting': 107,
+  'delivery-reps->accounting': 109,
   'delivery-reps->cash-drawer': 6,
   'delivery-reps->reports': 1,
   'delivery-reps->sales': 9,
@@ -413,7 +424,7 @@ const PINNED_BACKEND_BIDIRECTIONAL_PAIRS: string[] = [];
 const PINNED_FRONTEND_BIDIRECTIONAL_PAIRS: string[] = [];
 const PINNED_POSTING_EXTERNAL = 98;
 const PINNED_FOUNDATION_EXTERNAL = 20;
-const PINNED_BACKEND_TOTAL = 738;
+const PINNED_BACKEND_TOTAL = 740;
 const PINNED_FRONTEND_TOTAL = 105;
 const BACKEND_TOTAL_FLOOR = 600;
 const FRONTEND_TOTAL_FLOOR = 100;

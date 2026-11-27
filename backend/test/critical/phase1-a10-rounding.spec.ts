@@ -68,15 +68,17 @@ import { recordStockMovement, recordStockMovementRow } from '../../src/common/ut
  * - What retires: the GRN stockMovementTotal call, the create/receive
  *   roundMoney calls, the receipt-posting toFixed(4) totals. The
  *   toFixed(6) stored-unit spellings STAY (the unit column's 6dp
- *   precision is not a total spelling); moveVanStock's .toFixed(4) stays
- *   (van template, not a migration target).
+ *   precision is not a total spelling); moveVanStock's .toFixed(4)
+ *   retired later (eval P3, INV-PHASE1-EVAL-P3-VAN-WRITER — the van
+ *   template finally migrated to the writer, 0 inserts, 1 call).
  *
  * WHAT THIS PINS, driving the REAL writer on PGlite (harness copied
  * from stock-movement-writer.spec.ts, no mocks):
  * 0. Routing: the 5 files hold ZERO direct inserts (1 writer call each;
  *    receipt-posting 2); the writer holds exactly one direct insert;
- *    moveVanStock keeps its 1 (not a target); the new params exist on
- *    the delta mode and the shared insert computes with them.
+ *    moveVanStock holds ZERO inserts and 1 writer call (eval P3
+ *    migrated the template — it keeps its 1 no longer); the new params
+ *    exist on the delta mode and the shared insert computes with them.
  * 1. Composite (GRN concrete): 3 x 33.375 + freight 1 books 101.13
  *    with unit 33.708333; the returned totalCost is 101.13.
  * 2. Full-precision receive: 33.33 / 12 / 1.1 x 1 books 2.52 (not 2.53),
@@ -179,7 +181,8 @@ function baseParams(overrides: Record<string, unknown> = {}): Record<string, unk
 async function main(): Promise<void> {
   // §0 — the routing pin: the 5 deferred files hold ZERO direct inserts
   // (1 writer call each; receipt-posting 2), the writer holds exactly
-  // one, and moveVanStock keeps its 1 (template, not a target).
+  // one, and moveVanStock holds ZERO inserts and 1 writer call (eval P3
+  // migrated the template — it keeps its 1 no longer).
   // (Pre-migration this fails: 1 + 1 + 1 + 2 inserts, 0 calls.)
   {
     const grn = SRC('modules/purchases/services/goods-receipt-post.service.ts');
@@ -197,7 +200,8 @@ async function main(): Promise<void> {
     assert.equal(countDirectInserts(receipt), 0, 'receipt-posting must hold zero direct stock_movements inserts');
     assert.equal(countWriterCalls(receipt), 2, 'receipt-posting must call recordStockMovement exactly twice');
     assert.equal(countDirectInserts(writer), 1, 'the writer holds exactly one direct insert (the shared insert)');
-    assert.equal(countDirectInserts(van), 1, 'moveVanStock keeps its 1 insert (template, not a migration target)');
+    assert.equal(countDirectInserts(van), 0, 'moveVanStock holds zero direct inserts (migrated by eval P3)');
+    assert.equal(countWriterCalls(van), 1, 'moveVanStock calls recordStockMovement exactly once (eval P3)');
     assert.ok(writer.includes('totalUnitCost?: number'), 'the delta mode takes totalUnitCost');
     assert.ok(writer.includes('freightShare?: number'), 'the delta mode takes freightShare');
     assert.ok(
@@ -454,8 +458,8 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 402);
-    assert.equal(chain.length, 402);
+    assert.equal(specs.length, 405);
+    assert.equal(chain.length, 405);
     assert.deepEqual(chain, specs);
     assert.equal(specs[367], 'test/critical/phase1-a10-rounding.spec.ts');
     assert.equal(specs[368], 'test/critical/phase1-a10-purchases-writer.spec.ts');

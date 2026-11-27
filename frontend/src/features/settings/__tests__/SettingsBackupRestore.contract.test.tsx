@@ -1,7 +1,6 @@
-import { renderHook, act } from '@testing-library/react';
+import {renderHook, act, render} from '@testing-library/react';
 import { useSettingsAdminWorkspace } from '../hooks/useSettingsAdminWorkspace';
 import { settingsApi } from '../api/settings.api';
-import { render } from '@testing-library/react';
 import { SettingsBackupImportSection } from '../components/workspace-sections/SettingsBackupImportSection';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';

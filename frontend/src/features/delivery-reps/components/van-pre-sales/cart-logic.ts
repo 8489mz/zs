@@ -17,8 +17,7 @@
  * indent — the hook body sits at the same nesting level as the component
  * body was). 1 roundMoney site (L580) moves byte-identical.
  */
-import { useMemo } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import {useMemo, type Dispatch, type SetStateAction} from 'react';
 import type { PreSalesCartLine } from './van-pre-sales-types';
 import type { PreSalesCatalogItem } from '../../api/van-sales.api';
 import { calculateItemPrice } from './calculate-item-price';

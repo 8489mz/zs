@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
-import type { RefObject } from 'react';
+import {useCallback, useEffect, useRef, type RefObject} from 'react';
 import { listenToHardwareBarcode } from '@/shared/utils/hardware-scanner';
 import { isPosModalOpen } from '@/features/pos/lib/pos-keyboard-safety';
 

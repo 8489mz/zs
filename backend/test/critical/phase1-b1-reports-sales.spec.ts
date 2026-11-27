@@ -219,7 +219,7 @@ async function main(): Promise<void> {
     'module-boundary must re-pin delivery-reps->sales 11 -> 9',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 738;'),
+    boundary.includes('const PINNED_BACKEND_TOTAL = 740;'),
     'module-boundary backend total is now 746 (B1 pinned 760; B2 re-pinned 760 -> 759; B3 re-pinned 759 -> 758; B4 re-pinned 758 -> 756; B5 re-pins 756 -> 752; B6 re-pins 752 -> 750; B7 re-pins 750 -> 746; B8 re-pins 746 -> 738)',
   );
   assert.ok(
@@ -288,10 +288,10 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 402);
-  assert.equal(chain.length, 402);
+  assert.equal(specs.length, 405);
+  assert.equal(chain.length, 405);
   assert.deepEqual(chain, specs, 'critical lists must agree in identical order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-eval-p3-van-writer.spec.ts');
   assert.ok(specs.includes('test/critical/phase1-b1-reports-sales.spec.ts'));
 
   console.log('phase1 B1 reports|sales decoupling checks passed (375 specs wired, pair gone, SQL identical)');

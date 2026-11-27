@@ -23,9 +23,10 @@ export function UserManagementQuickActions({
   onCopyPermissions: () => void;
 }) {
   const { t } = useTranslation();
+  const tenant = useAuthStore((s) => s.tenant);
+
   if (setupMode) return null;
 
-  const tenant = useAuthStore((s) => s.tenant);
   const vertical = resolveCurrentVertical(tenant);
   const isMaritime = vertical === 'maritime';
   const isContracting = vertical === 'contracting';

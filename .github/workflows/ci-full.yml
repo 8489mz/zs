@@ -99,6 +99,13 @@ jobs:
       - name: Build frontend (type-check + bundle)
         run: npm run build
         working-directory: frontend
+      # Phase 1 eval P1 (INV-PHASE1-EVAL-P1-FRONTEND-LINT): frontend lint
+      # runs here too, mirroring the backend lint step in this same file
+      # (L8) — the fast-stage step in ci.yml catches it in minutes, this
+      # one keeps the full run honest when the fast job is skipped.
+      - name: Frontend lint
+        run: npm run lint
+        working-directory: frontend
       - name: Frontend architecture and contract guards
         run: |
           npm run qa:functional

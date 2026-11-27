@@ -25,10 +25,20 @@ export const VanSalesReceiptModal: React.FC<VanSalesReceiptModalProps> = ({
   storeName,
 }) => {
   const { t } = useTranslation();
-  if (!receipt) return null;
-
-  const [targetPhone, setTargetPhone] = React.useState(receipt.customerPhone || '');
+  const [targetPhone, setTargetPhone] = React.useState(receipt?.customerPhone || '');
   const [isBluetoothPrinting, setIsBluetoothPrinting] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!receipt) return;
+    if (receipt.autoShareWhatsApp && targetPhone.trim()) {
+      const timer = setTimeout(() => {
+        handleWhatsAppShare();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  if (!receipt) return null;
 
   const handleBluetoothEscPosPrint = async () => {
     setIsBluetoothPrinting(true);
@@ -112,15 +122,6 @@ export const VanSalesReceiptModal: React.FC<VanSalesReceiptModalProps> = ({
     window.open(`https://wa.me/${target}?text=${encodeURIComponent(message)}`, '_blank');
     toast.info('تم فتح تطبيق الواتساب لمشاركة الإيصال');
   };
-
-  React.useEffect(() => {
-    if (receipt.autoShareWhatsApp && targetPhone.trim()) {
-      const timer = setTimeout(() => {
-        handleWhatsAppShare();
-      }, 350);
-      return () => clearTimeout(timer);
-    }
-  }, []);
 
   return (
     <StandardDialog

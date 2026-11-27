@@ -4,8 +4,7 @@ import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import type { CustomerEligibleSale, CustomerEligibleSaleItem, VanStockItem } from '../../api/van-sales.api';
-import { RETURN_REASONS } from './van-collection-types';
-import type { CustomerOption } from './van-collection-types';
+import {RETURN_REASONS, type CustomerOption} from './van-collection-types';
 import type { Dispatch, SetStateAction } from 'react';
 
 export interface CollectionReturnFormProps {

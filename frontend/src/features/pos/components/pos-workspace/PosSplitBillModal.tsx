@@ -325,7 +325,7 @@ export function PosSplitBillModal({ open, pos, initialManagerPin, onClose, onSpl
         .trim();
 
       // Ensure we have enough unpaid bills to distribute to
-      let currentBills = [...prev];
+      const currentBills = [...prev];
       while (currentBills.filter((b) => !b.isPaid).length < partsCount) {
         const nextIdx = currentBills.length + 1;
         currentBills.push({

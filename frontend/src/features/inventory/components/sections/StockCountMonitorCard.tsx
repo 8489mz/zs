@@ -129,7 +129,7 @@ export function StockCountMonitorCard({
   );
 
   const overallStats = useMemo(() => {
-    let total = stockCountSessions.length;
+    const total = stockCountSessions.length;
     let draft = 0;
     let posted = 0;
     for (const session of stockCountSessions) {

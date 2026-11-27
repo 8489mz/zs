@@ -25,9 +25,9 @@ export function SubmitSupplierBidModal({
   submitting,
 }: SubmitSupplierBidModalProps) {
   const { t } = useTranslation();
-  if (!isOpen || !activeRfq) return null;
-
   const { currencySymbol } = useSystemCurrency();
+
+  if (!isOpen || !activeRfq) return null;
 
   return (
     <StandardDialog

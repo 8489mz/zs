@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Fragment } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import {Fragment, type Dispatch, type SetStateAction} from 'react';
 import type { TenderItem } from './tender-page-types';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { getTextDirection } from '@/lib/arabic-normalization';

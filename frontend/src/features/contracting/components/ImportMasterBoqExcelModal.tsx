@@ -196,7 +196,7 @@ export function ImportMasterBoqExcelModal({
 
       // 1. Identify header row (scan first 10 rows)
       let headerRowIdx = 0;
-      let colIndices = {
+      const colIndices = {
         code: -1,
         trade: -1,
         name: -1,
@@ -244,7 +244,7 @@ export function ImportMasterBoqExcelModal({
         let code = String(row[colIndices.code] || '').trim();
         const rawTrade = String(row[colIndices.trade] || '').trim();
         let name = String(row[colIndices.name] || '').trim();
-        let desc = colIndices.desc !== -1 ? String(row[colIndices.desc] || '').trim() : '';
+        const desc = colIndices.desc !== -1 ? String(row[colIndices.desc] || '').trim() : '';
         const unit = String(row[colIndices.unit] || 'm3').trim() || 'm3';
         const cost = parseNumber(row[colIndices.cost]);
         const price = parseNumber(row[colIndices.price]);

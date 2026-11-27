@@ -7,8 +7,7 @@
 // trip data as a prop.
 import { useTranslation } from 'react-i18next';
 import React, { useState, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import type { QueryClient } from '@tanstack/react-query';
+import {useMutation, type QueryClient} from '@tanstack/react-query';
 import { vanSalesApi, VanActiveTripResponse } from '@/features/delivery-reps/api/van-sales.api';
 import { DriverPortalUser } from '@/shared/api/delivery-reps.api';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';

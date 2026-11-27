@@ -1,5 +1,4 @@
-import React from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import React, {type Dispatch, type SetStateAction} from 'react';
 import type { TFunction } from 'i18next';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import type { TenderItem, TenderItemComponent } from './tender-estimator.types';

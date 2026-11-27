@@ -34,8 +34,7 @@ module, which re-exports it.
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import type { PropsWithChildren } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import {type PropsWithChildren, useCallback, useEffect, useState} from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalsWorkspacePage } from '@/features/approvals/pages/ApprovalsWorkspacePage';
 import type { ApprovalRule } from '@/features/approvals/hooks/useApprovalsWorkspace';

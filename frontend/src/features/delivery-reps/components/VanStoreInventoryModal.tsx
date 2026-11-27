@@ -20,13 +20,13 @@ export const VanStoreInventoryModal: React.FC<VanStoreInventoryModalProps> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
-  if (!customer) return null;
-
   const [items, setItems] = useState<Array<{ productName: string; qtyOnShelf: number; expiryDate?: string }>>([]);
   const [productNameInput, setProductNameInput] = useState('');
   const [qtyInput, setQtyInput] = useState(1);
   const [expiryInput, setExpiryInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!customer) return null;
 
   const handleAddItem = () => {
     const name = productNameInput.trim();

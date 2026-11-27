@@ -57,7 +57,7 @@ test.describe('POS Performance Profiling', () => {
       }
 
       // Wait for cart to update
-      await page.waitForFunction((count) => {
+      await page.waitForFunction(() => {
         const items = document.querySelectorAll('.pos-cart-line-item');
         // or check if total updated
         return items.length > 0;

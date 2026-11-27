@@ -21,10 +21,6 @@ export function OwnerCompanionPage() {
   const hasReportsFeature = useHasFeature('reports') || isPlatformAdminUser;
   const canViewReports = useHasAnyPermission('reports') || isPlatformAdminUser;
 
-  if (!hasReportsFeature || !canViewReports) {
-    return <Navigate to={findWorkspaceFallbackRoute(user, navigationItems) || '/pos'} replace />;
-  }
-
   const tenant = useAuthStore((state) => state.tenant);
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleTimeString('ar-EG'));
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -55,7 +51,12 @@ export function OwnerCompanionPage() {
     queryKey: ['owner-companion-overview', todayStr],
     queryFn: () => dashboardApi.overview(todayStr, todayStr),
     refetchInterval: 30000, // auto-refresh every 30s
+    enabled: hasReportsFeature && canViewReports,
   });
+
+  if (!hasReportsFeature || !canViewReports) {
+    return <Navigate to={findWorkspaceFallbackRoute(user, navigationItems) || '/pos'} replace />;
+  }
 
   const handleManualRefresh = () => {
     refetch();

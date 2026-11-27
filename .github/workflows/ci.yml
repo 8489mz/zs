@@ -171,6 +171,12 @@ jobs:
       - name: Frontend typecheck
         run: npm run typecheck
         working-directory: frontend
+      # Phase 1 eval P1 (INV-PHASE1-EVAL-P1-FRONTEND-LINT): frontend lint
+      # runs in the fast stage so a lint error fails the job in minutes,
+      # mirroring the backend lint step (L8). It must stay after typecheck.
+      - name: Frontend lint
+        run: npm run lint
+        working-directory: frontend
       - name: Frontend architecture and contract guards
         run: |
           npm run qa:functional

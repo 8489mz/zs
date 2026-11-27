@@ -156,19 +156,12 @@ class PostgresManager {
   }
 
   startServer() {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, _reject) => {
       console.log('Starting PostgreSQL runtime.');
       
       const pgCtlExe = path.join(this.postgresBinDir, 'pg_ctl.exe');
       const logFile = path.join(this.postgresLogsDir, 'postgresql.log');
       
-      const args = [
-        '-D', this.postgresDataDir,
-        '-l', logFile,
-        '-o', `-p ${this.dbPort} -h 127.0.0.1`,
-        'start'
-      ];
-
       try {
         execSync(`"${pgCtlExe}" -D "${this.postgresDataDir}" -l "${logFile}" -o "-p ${this.dbPort} -h 127.0.0.1" start`, { stdio: 'ignore' });
         resolve();
@@ -227,7 +220,7 @@ class PostgresManager {
               if (String(error.message).includes('different PostgreSQL cluster')) throw error;
             }
           }
-        } catch (err) {
+        } catch {
           // Port is open but server is still initializing
         }
       }

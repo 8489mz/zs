@@ -35,11 +35,11 @@ export async function verifyLicense(machineId: string, providedKey: string): Pro
  * Interface to the Electron preload script.
  */
 export async function getHardwareId(): Promise<string> {
-  // @ts-ignore
+  // @ts-expect-error window.electronAPI is exposed by the Electron preload with no TS types
   if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.getHardwareId) {
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
-        // @ts-ignore
+        // @ts-expect-error window.electronAPI is exposed by the Electron preload with no TS types
         const id = await window.electronAPI.getHardwareId();
         if (id && typeof id === 'string' && id.trim().length > 3) {
           return id.trim();

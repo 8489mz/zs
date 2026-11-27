@@ -75,7 +75,7 @@ function logRenderer(msg) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
     fs.appendFileSync(path.join(logsDir, 'renderer.log'), `[${new Date().toISOString()}] ${msg}\n`, 'utf8');
-  } catch (_) {}
+  } catch {}
 }
 
 function cleanupDesktopLogs() {
@@ -165,7 +165,7 @@ const getDisplayDimensions = () => {
         height: Math.max(700, primaryDisplay.workAreaSize.height)
       };
     }
-  } catch (e) {}
+  } catch {}
   return { width: 1280, height: 800 };
 };
 
@@ -229,7 +229,7 @@ const tryRevealApp = () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.setFullScreen(true);
         }
-      } catch (e) {}
+      } catch {}
     });
   }
 
@@ -240,7 +240,7 @@ const tryRevealApp = () => {
           loadingWindow.destroy();
           loadingWindow = null;
         }
-      } catch (e) {}
+      } catch {}
     }, 80);
   }
 };
@@ -776,7 +776,7 @@ app.whenReady().then(async () => {
     if (!fsLib.existsSync(compileCacheDir)) {
       fsLib.mkdirSync(compileCacheDir, { recursive: true });
     }
-  } catch (err) {}
+  } catch {}
 
   // Provide environment variables for the backend
   const backendEnv = {
@@ -919,7 +919,7 @@ app.whenReady().then(async () => {
     isForceClosing = true;
     try {
       await cleanShutdown();
-    } catch (e) {}
+    } catch {}
     app.exit(0);
   });
 
@@ -1179,7 +1179,7 @@ app.whenReady().then(async () => {
             const res = await electronNet.fetch(`${currentConfig.serverUrl}/api/runtime/health`, { signal: controller.signal });
             clearTimeout(timeoutId);
             if (res.ok && (await res.json()).runtimeMode === 'lan_server') return resolve(true);
-          } catch (err) {}
+          } catch {}
           setTimeout(pingLan, 1000);
         };
         pingLan();

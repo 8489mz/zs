@@ -5,16 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { Button } from '@/shared/ui/button';
 import { formatCurrency, formatDateOnly } from '@/lib/format';
-import {
-  CalendarIcon,
-  CheckIcon,
-  Trash2Icon,
-} from '@/shared/components/icons/AppIcons';
+import {CalendarIcon, CheckIcon, Trash2Icon, AppIcons} from '@/shared/components/icons/AppIcons';
 import { crmApi, type CrmDeal, type DealStage, type CrmActivity } from '../api/crm.api';
 import { STAGES, PRIORITIES, ACTIVITY_LABELS } from './CrmConstants';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
-import { AppIcons } from '@/shared/components/icons/AppIcons';
 
 export interface CrmDealDetailModalProps {
   dealId: number | null;

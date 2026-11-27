@@ -15,9 +15,8 @@
  * restoreHeldSnapshot sets priceHeldAt.
  */
 
-import type { PosDraftSnapshot } from '@/features/pos/hooks/usePosWorkspace';
+import type {type PosDraftSnapshot, type PaymentChannel, type PaymentType} from '@/features/pos/hooks/usePosWorkspace';
 import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
-import type { PaymentChannel, PaymentType } from '@/features/pos/hooks/usePosWorkspace';
 
 export const HELD_SNAPSHOT_VERSION = 1;
 

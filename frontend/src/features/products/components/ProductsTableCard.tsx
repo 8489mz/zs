@@ -9,8 +9,7 @@ import { guessProductIcon } from '@/features/products/lib/product-smart-matcher'
 import { invalidateCatalogDomain } from '@/app/query-invalidation';
 
 import { useProductIconSettings } from '@/shared/components/icons/product-icon-theme';
-import { groupProducts } from './products-table-card/products-table-card-shared';
-import type { ProductGroup } from './products-table-card/products-table-card-shared';
+import {groupProducts, type ProductGroup} from './products-table-card/products-table-card-shared';
 import { ProductsTableCardHeader } from './products-table-card/products-table-card-header';
 import { ProductsTableCardAutoAssignMessage } from './products-table-card/products-table-card-auto-assign-message';
 import { ProductsTableCardToolbar } from './products-table-card/products-table-card-toolbar';

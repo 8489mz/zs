@@ -2,8 +2,7 @@
 // 8 action tiles + today-visit summary (own useTranslation). The facade renders it inside the
 // hub div and passes the hub customer + modal setters + visit callbacks as props.
 
-import React from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import React, {type Dispatch, type SetStateAction} from 'react';
 import { useTranslation } from 'react-i18next';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import {

@@ -4,9 +4,12 @@ import { ContainerAutopsyModal } from '../ContainerAutopsyModal';
 import { ContainerPreordersModal } from '../ContainerPreordersModal';
 import { StandardDialog } from '@/shared/components/StandardDialog';
 import { formatCurrency } from '@/lib/format';
-import { receivingInspectionErrorMessage, lateExpenseAllocationSummary } from '../api/shipments.api';
+import {
+  receivingInspectionErrorMessage,
+  lateExpenseAllocationSummary,
+  type ShipmentDetails,
+} from '../api/shipments.api';
 import { toast } from '@/shared/components/system-alert';
-import type { ShipmentDetails } from '../api/shipments.api';
 import type { Location } from '@/types/domain';
 
 export interface ShipmentDetailsModalsProps {

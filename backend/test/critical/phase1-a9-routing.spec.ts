@@ -61,10 +61,10 @@ WHAT THIS PINS, driving the REAL writer functions on PGlite plus
 static routing pins over the migrated files:
 0. The routing itself: the 12 migrated files hold ZERO direct
    insertInto('stock_movements') and the expected writer-call counts;
-   the writer file still holds exactly one direct insert; the only
-   direct insert left in modules is moveVanStock (the template,
-   never a migration target) — A10 migrated the 5 deferred sites
-   (3 purchases + 2 receipt-posting), so the deferred set is empty.
+   the writer file still holds exactly one direct insert; the deferred
+   set is empty — A10 migrated the 5 deferred sites (3 purchases + 2
+   receipt-posting), and eval P3 migrated the last one, moveVanStock
+   (the template), so NO direct insert remains in modules.
    (Pre-migration this fails: 24 direct inserts.)
 1. Delta mode: one row with the exact fields, balances moved.
 2. Row-only global-basis (archive :319 shape): the row stamps the
@@ -194,8 +194,8 @@ async function rows(db: Kysely<Database>): Promise<Row[]> {
 async function main(): Promise<void> {
   // 0. Routing: zero direct inserts in the 12 migrated files, with the
   //    expected writer-call counts; the writer keeps exactly one insert;
-  //    the only direct insert left is moveVanStock (A10 migrated the
-  //    deferred set).
+  //    the deferred set is empty (A10 migrated the 5 deferred sites,
+  //    eval P3 migrated moveVanStock — no direct insert remains).
   {
     const migrated: Array<{ file: string; delta: number; row: number; relocation: number }> = [
       { file: 'modules/catalog/services/catalog-product-archive.service.ts', delta: 1, row: 2, relocation: 0 },
@@ -231,10 +231,10 @@ async function main(): Promise<void> {
       writer.includes('omitTotalCost: params.omitTotalCost'),
       'recordStockMovementRow forwards omitTotalCost to the shared insert (A9)',
     );
-    // Deferred set, pinned: A10 migrated all 5 deferred sites, so the
-    // only direct insert left in modules is moveVanStock (the template,
-    // never a migration target). The 5 files stay listed so the pin
-    // still covers them (each must hold zero).
+    // Deferred set, pinned: A10 migrated the 5 deferred sites and eval
+    // P3 migrated moveVanStock, so NO direct insert remains in modules.
+    // The 5 files stay listed so the pin still covers them (each must
+    // hold zero) plus the van file's one writer call.
     const deferred = [
       'modules/purchases/services/goods-receipt-post.service.ts',
       'modules/purchases/services/purchases-write-create.service.ts',
@@ -244,12 +244,17 @@ async function main(): Promise<void> {
     ];
     let remaining = 0;
     for (const f of deferred) remaining += countDirectInserts(read(f));
-    assert.equal(remaining, 1, 'exactly 1 direct insert remains (moveVanStock only)');
+    assert.equal(remaining, 0, 'exactly 0 direct inserts remain (moveVanStock migrated by eval P3)');
     assert.equal(countDirectInserts(read('modules/purchases/services/goods-receipt-post.service.ts')), 0);
     assert.equal(countDirectInserts(read('modules/purchases/services/purchases-write-create.service.ts')), 0);
     assert.equal(countDirectInserts(read('modules/purchases/services/purchases-write-receive-goods.service.ts')), 0);
     assert.equal(countDirectInserts(read('modules/import-sales/services/import-receipt-posting.service.ts')), 0);
-    assert.equal(countDirectInserts(read('modules/delivery-reps/services/van-common.util.ts')), 1);
+    assert.equal(countDirectInserts(read('modules/delivery-reps/services/van-common.util.ts')), 0);
+    assert.equal(
+      countCalls(read('modules/delivery-reps/services/van-common.util.ts'), 'recordStockMovement'),
+      1,
+      'moveVanStock calls recordStockMovement exactly once (eval P3)',
+    );
     console.log('  routing pins (12 files, writer, deferred set) passed');
   }
 
@@ -553,8 +558,8 @@ async function main(): Promise<void> {
       };
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 402);
-      assert.equal(chain.length, 402);
+      assert.equal(specs.length, 405);
+      assert.equal(chain.length, 405);
       assert.deepEqual(chain, specs);
       assert.equal(specs[363], 'test/critical/purchases-writer.spec.ts');
       assert.equal(specs[364], 'test/critical/phase1-a9-routing.spec.ts');

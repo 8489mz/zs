@@ -313,7 +313,7 @@ async function main(): Promise<void> {
     'module-boundary must no longer list the accounting|purchases pair',
   );
   assert.ok(
-    boundary.includes('const PINNED_BACKEND_TOTAL = 738;'),
+    boundary.includes('const PINNED_BACKEND_TOTAL = 740;'),
     'module-boundary backend total is now 746 (B5 pinned 752; B6 re-pins 752 -> 750; B7 re-pins 750 -> 746; B8 re-pins 746 -> 738)',
   );
   assert.ok(
@@ -351,7 +351,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-B6-ACCOUNTING-PURCHASES-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B6 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-BATCH-REPAIR-DISCOUNT-I18N-KEYS/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-EVAL-P3-VAN-WRITER/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the B7 INV exactly once');
 
   // 9. The B1/B2/B3/B4/B5 specs re-pin their boundary assertions to the B6 numbers.
@@ -364,7 +364,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('const PINNED_BACKEND_TOTAL = 738;'),
+      src.includes('const PINNED_BACKEND_TOTAL = 740;'),
       `${label} spec must re-pin the backend total 746 -> 738`,
     );
     assert.ok(
@@ -383,11 +383,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 402);
-  assert.equal(chain.length, 402);
+  assert.equal(specs.length, 405);
+  assert.equal(chain.length, 405);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 375 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-eval-p3-van-writer.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-eval-p3-van-writer.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -397,11 +397,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 402);') && src.includes('assert.equal(chain.length, 402);'),
+      src.includes('assert.equal(specs.length, 405);') && src.includes('assert.equal(chain.length, 405);'),
       `${label} spec wiring must re-pin to 375`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-eval-p3-van-writer.spec.ts'"),
       `${label} spec last-entry must re-pin to the B7 spec`,
     );
   }
@@ -441,7 +441,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-BATCH-REPAIR-DISCOUNT-I18N-KEYS/g)'),
+      src.includes('guard.match(/INV-PHASE1-EVAL-P3-VAN-WRITER/g)'),
       `${label} spec guard assertion must re-pin to the B7 INV`,
     );
   }

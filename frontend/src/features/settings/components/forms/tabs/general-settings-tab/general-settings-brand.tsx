@@ -1,11 +1,10 @@
 import { BrandAvatarAndTitlePreview } from './brand-avatar-and-title-preview';
 import { readFileAsDataUrl, RequiredField } from '@/features/settings/components/forms/settings-forms.shared';
 import { ShieldCheckIcon } from '@/shared/components/icons/AppIcons';
-import { getIndustrySummary } from './general-settings-tab-shared';
+import {getIndustrySummary, type getPillarBadgeInfo} from './general-settings-tab-shared';
 import type { useTranslation } from 'react-i18next';
 import type { UseFormReturn } from 'react-hook-form';
 import type { SettingsFormInput, SettingsFormOutput } from '@/features/settings/schemas/settings.schema';
-import type { getPillarBadgeInfo } from './general-settings-tab-shared';
 
 export interface GeneralSettingsBrandProps {
   t: ReturnType<typeof useTranslation>['t'];

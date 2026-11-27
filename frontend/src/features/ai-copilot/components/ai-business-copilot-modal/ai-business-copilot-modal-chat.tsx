@@ -1,15 +1,15 @@
-import { SlidersIcon } from '@/shared/components/icons/AppIcons';
-import { ChevronUpIcon } from '@/shared/components/icons/AppIcons';
-import { ChevronDownIcon } from '@/shared/components/icons/AppIcons';
+import {SlidersIcon, ChevronUpIcon, ChevronDownIcon, RefreshCwIcon} from '@/shared/components/icons/AppIcons';
 import { AiRobotIcon } from '@/shared/ui/AiRobotIcon';
-import { RefreshCwIcon } from '@/shared/components/icons/AppIcons';
 import { useTranslation } from 'react-i18next';
 import { renderFormattedContent } from './ai-business-copilot-modal-formatted-content';
-import { QUICK_SUGGESTIONS, QUICK_SUGGESTIONS_EN } from './ai-business-copilot-modal-shared';
-import type { Message, ReasoningStep } from './ai-business-copilot-modal-shared';
+import {
+  QUICK_SUGGESTIONS,
+  QUICK_SUGGESTIONS_EN,
+  type Message,
+  type ReasoningStep,
+} from './ai-business-copilot-modal-shared';
 import type { UseMutationResult } from '@tanstack/react-query';
-import type { RefObject } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type {type RefObject, type Dispatch, type SetStateAction} from 'react';
 
 export interface AiBusinessCopilotModalChatProps {
   activeTab: 'chat' | 'knowledge';

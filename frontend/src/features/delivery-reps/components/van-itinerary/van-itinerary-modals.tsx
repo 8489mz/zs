@@ -2,8 +2,7 @@
 // Negative-visit + route-optimization StandardDialogs (own useTranslation each). The facade
 // renders both inside the root div and passes the hook returns as props.
 
-import React from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import React, {type Dispatch, type SetStateAction} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';

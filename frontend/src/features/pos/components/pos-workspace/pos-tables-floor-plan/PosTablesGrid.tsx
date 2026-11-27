@@ -387,14 +387,14 @@ export function PosTablesGrid({
                               fontWeight: 800,
                               padding: '2px 6px',
                               borderRadius: '4px',
-                              backgroundColor: Boolean(occupied?.guestCheckPrintedAt || (hasLiveCart && isCurrentCheckPrinted)) ? '#fff7ed' : '#f1f5f9',
-                              color: Boolean(occupied?.guestCheckPrintedAt || (hasLiveCart && isCurrentCheckPrinted)) ? '#c2410c' : '#170e5e',
-                              border: Boolean(occupied?.guestCheckPrintedAt || (hasLiveCart && isCurrentCheckPrinted)) ? '1px solid #fed7aa' : '1px solid #cbd5e1',
+                              backgroundColor: occupied?.guestCheckPrintedAt || (hasLiveCart && isCurrentCheckPrinted) ? '#fff7ed' : '#f1f5f9',
+                              color: occupied?.guestCheckPrintedAt || (hasLiveCart && isCurrentCheckPrinted) ? '#c2410c' : '#170e5e',
+                              border: occupied?.guestCheckPrintedAt || (hasLiveCart && isCurrentCheckPrinted) ? '1px solid #fed7aa' : '1px solid #cbd5e1',
                               cursor: 'pointer',
                             }}
                             title={__t('pos.pos_workspace.pos_tables_floor_plan_dialog.s67', __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s67', "طباعة شيك حساب الطاولة غير المسدد للزبون"))}
                           >
-                            {Boolean(occupied?.guestCheckPrintedAt || (hasLiveCart && isCurrentCheckPrinted)) ? __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s68', __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s68', "إعادة طباعة الشيك")) : __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s69', __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s69', "طباعة شيك"))}
+                            {occupied?.guestCheckPrintedAt || (hasLiveCart && isCurrentCheckPrinted) ? __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s68', __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s68', "إعادة طباعة الشيك")) : __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s69', __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s69', "طباعة شيك"))}
                           </button>
                         )}
                       </div>

@@ -29,7 +29,7 @@ export function initStorefrontPixels(config: PixelConfig) {
     if (!window.fbq) {
       const n: any = (window.fbq = function () {
         // eslint-disable-next-line prefer-rest-params
-        n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+        if (n.callMethod) n.callMethod(...arguments); else n.queue.push(arguments);
       });
       if (!window._fbq) window._fbq = n;
       n.push = n;
@@ -100,7 +100,7 @@ export function initStorefrontPixels(config: PixelConfig) {
     if (!window.snaptr) {
       const tr: any = (window.snaptr = function () {
         // eslint-disable-next-line prefer-rest-params
-        tr.handleRequest ? tr.handleRequest.apply(tr, arguments) : tr.queue.push(arguments);
+        if (tr.handleRequest) tr.handleRequest(...arguments); else tr.queue.push(arguments);
       });
       tr.queue = [];
       const s = document.createElement('script');

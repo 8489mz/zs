@@ -1,5 +1,4 @@
-import { addDays } from './schedule-generator-data';
-import type { GeneratedTaskPreview } from './schedule-generator-data';
+import {addDays, type GeneratedTaskPreview} from './schedule-generator-data';
 
 export function generateSchedulePreview(params: { selectedTrades: string[]; includeBasement: boolean; floorsCount: number; includeRoof: boolean; startDate: string; concreteDaysPerFloor: number; masonryDaysPerFloor: number; plasterPrepDays: number; plasterFillDays: number }): GeneratedTaskPreview[] {
   const { selectedTrades, includeBasement, floorsCount, includeRoof, startDate, concreteDaysPerFloor, masonryDaysPerFloor, plasterPrepDays, plasterFillDays } = params;

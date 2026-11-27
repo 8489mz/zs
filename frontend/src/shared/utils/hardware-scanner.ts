@@ -13,7 +13,7 @@ export function isSunmiDevice(): boolean {
   if (typeof window === 'undefined') return false;
 
   // 1. Android POS Lite / Sunmi bridge injected objects
-  if (Boolean((window as any).__sunmi_hooked || (window as any).SunmiPrinter || (window as any).SunmiScanner)) {
+  if ((window as any).__sunmi_hooked || (window as any).SunmiPrinter || (window as any).SunmiScanner) {
     return true;
   }
 
@@ -35,7 +35,7 @@ export function isHardwareScannerDevice(): boolean {
   if (isSunmiDevice()) return true;
 
   // 2. Generic Android POS or custom native bridge
-  if (Boolean((window as any).AndroidPOS || (window as any).AndroidBridge || (window as any).HardwareScannerBridge)) {
+  if ((window as any).AndroidPOS || (window as any).AndroidBridge || (window as any).HardwareScannerBridge) {
     return true;
   }
 

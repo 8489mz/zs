@@ -7,8 +7,7 @@ import { SearchIcon, XIcon } from '@/shared/components/icons/AppIcons';
 import { AppNavIcon } from '@/shared/layout/nav-icons';
 import type { ContextMenuTarget } from '@/shared/layout/SidebarContextMenu';
 import type { NavigationItemDefinition } from '@/app/router/types';
-import { activeIconTone, defaultIconTone } from '@/shared/layout/app-shell/app-shell-types';
-import type { SidebarGroupDefinition } from '@/shared/layout/app-shell/app-shell-types';
+import {activeIconTone, defaultIconTone, type SidebarGroupDefinition} from '@/shared/layout/app-shell/app-shell-types';
 import { AppShellNavItem } from '@/shared/layout/app-shell/app-shell-nav-item';
 
 export type SidebarContextMenuState = {

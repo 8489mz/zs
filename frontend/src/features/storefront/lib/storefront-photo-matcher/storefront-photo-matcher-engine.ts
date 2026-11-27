@@ -1,7 +1,11 @@
-import { cleanArabic } from './storefront-photo-matcher-shared';
+import {
+  cleanArabic,
+  type SemanticPhotoRule,
+  type ProductPhotoSource,
+  type ResolvedProductPhoto,
+} from './storefront-photo-matcher-shared';
 import { SEMANTIC_PHOTO_RULES } from './storefront-photo-matcher-rules';
 import { generatePremiumProductSvg } from './storefront-photo-matcher-svg';
-import type { SemanticPhotoRule, ProductPhotoSource, ResolvedProductPhoto } from './storefront-photo-matcher-shared';
 
 const photoCache = new Map<string, string>();
 

@@ -1,9 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Fragment } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import {Fragment, type Dispatch, type SetStateAction} from 'react';
 import { formatCurrency, formatDateOnly } from '@/lib/format';
-import { FILTER_OPTIONS } from './supplier-schedule-types';
-import type { ScheduleFilter } from './supplier-schedule-types';
+import {FILTER_OPTIONS, type ScheduleFilter} from './supplier-schedule-types';
 import { formatDateTime, statusClass, statusLabel } from './supplier-schedule-helpers';
 import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';

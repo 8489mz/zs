@@ -1,14 +1,13 @@
-import { useEffect } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import {useEffect, type Dispatch, type SetStateAction} from 'react';
 import { useAppToolbar } from '@/stores/toolbar-store';
 import type { useTranslation } from '../../../utils/i18n-purchase-prototype';
-import type {
-  DocumentStatus,
-  InlineMessageTone,
-  PrototypeLine,
-  PurchasePrototypeDraft,
+import {
+  type DocumentStatus,
+  type InlineMessageTone,
+  type PrototypeLine,
+  type PurchasePrototypeDraft,
+  PURCHASE_DRAFT_STORAGE_KEY,
 } from '../newPurchaseOrder.types';
-import { PURCHASE_DRAFT_STORAGE_KEY } from '../newPurchaseOrder.types';
 import type { DraftCatalog, DraftCatalogSetters } from './use-purchase-order-draft';
 import type { PurchaseOrderDraftUi } from './use-purchase-order-form-state';
 

@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import {Fragment, type ReactElement} from 'react';
 import { Button } from '@/shared/ui/button';
 import { FileTextIcon, LayersIcon } from '@/shared/components/icons/AppIcons';
 import { formatCurrency } from '@/lib/format';
@@ -6,10 +6,8 @@ import { displayProductName } from '../../utils/product-submit.utils';
 import { getProductLocationDisplayName } from '../../utils/product-location.utils';
 import { ProductsMatrixView } from '../ProductsMatrixView';
 import { ProductThumbnail } from './products-table-card-thumbnail';
-import { variantLabel, deriveBaseName } from './products-table-card-shared';
-import type { ReactElement } from 'react';
+import {variantLabel, deriveBaseName, type ProductGroup} from './products-table-card-shared';
 import type { Product } from '@/types/domain';
-import type { ProductGroup } from './products-table-card-shared';
 import type { ProductIconSettings } from '@/shared/components/icons/product-icon-theme';
 import type { useTranslation } from 'react-i18next';
 

@@ -8,8 +8,7 @@
  * supplier in the payment options, the workspace renders the form from
  * that list, and the form preselects the deep-linked supplier.
  */
-import { render, screen } from '@testing-library/react';
-import { renderHook } from '@testing-library/react';
+import {render, screen, renderHook} from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';

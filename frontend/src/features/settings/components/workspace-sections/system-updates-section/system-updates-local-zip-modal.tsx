@@ -1,7 +1,6 @@
 import { Button } from '@/shared/ui/button';
 import { DialogShell } from '@/shared/components/dialog-shell';
-import { XIcon } from '@/shared/components/icons/AppIcons';
-import { CheckIcon } from '@/shared/components/icons/AppIcons';
+import {XIcon, CheckIcon} from '@/shared/components/icons/AppIcons';
 import { useTranslation } from 'react-i18next';
 import type { Dispatch, SetStateAction } from 'react';
 

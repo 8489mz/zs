@@ -1,6 +1,6 @@
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { XIcon } from '@/shared/components/icons/AppIcons';
-import { memo, useState, useEffect } from 'react';
+import {memo, useState, useEffect, type RefObject} from 'react';
 import { usePosUiCustomization } from '@/features/pos/hooks/usePosUiCustomization';
 import { createPortal } from 'react-dom';
 import { QueryFeedback } from '@/shared/components/query-feedback';
@@ -18,7 +18,6 @@ import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/
 import type { PosSaleMode } from '@/features/pos/lib/pos-sale-mode';
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
-import type { RefObject } from 'react';
 
 interface PosWorkspaceMainContentProps {
   pos: PosWorkspaceState;

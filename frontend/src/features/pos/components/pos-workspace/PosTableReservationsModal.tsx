@@ -18,8 +18,7 @@ import {
   SlidersIcon,
   TrashIcon,
 } from '@/shared/components/icons/AppIcons';
-import { toast } from '@/shared/components/system-alert';
-import { systemConfirm } from '@/shared/components/system-alert';
+import {toast, systemConfirm} from '@/shared/components/system-alert';
 import { todayLocalDateKey } from '@/lib/format';
 
 interface PosTableReservationsModalProps {

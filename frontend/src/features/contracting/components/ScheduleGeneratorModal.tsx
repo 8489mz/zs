@@ -5,8 +5,12 @@ import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { contractingApi } from '../api/contracting.api';
 import { toast } from '@/shared/components/system-alert';
 import { todayLocalDateKey } from '@/lib/format';
-import { addDays, PRESET_TRADE_MAP } from './schedule-generator/schedule-generator-data';
-import type { GeneratedTaskPreview, ProjectScope } from './schedule-generator/schedule-generator-data';
+import {
+  addDays,
+  PRESET_TRADE_MAP,
+  type GeneratedTaskPreview,
+  type ProjectScope,
+} from './schedule-generator/schedule-generator-data';
 import { generateSchedulePreview } from './schedule-generator/schedule-generator-preview';
 import { ScheduleGeneratorExcel } from './schedule-generator/schedule-generator-excel';
 import { ScheduleGeneratorScope } from './schedule-generator/schedule-generator-scope';

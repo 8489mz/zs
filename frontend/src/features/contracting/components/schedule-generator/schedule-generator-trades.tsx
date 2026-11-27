@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { MODULAR_TRADES, PRESET_TRADE_MAP } from './schedule-generator-data';
+import {MODULAR_TRADES, PRESET_TRADE_MAP, type ProjectScope} from './schedule-generator-data';
 import type { Dispatch, SetStateAction } from 'react';
-import type { ProjectScope } from './schedule-generator-data';
 
 interface ScheduleGeneratorTradesProps {
   setSelectedTrades: Dispatch<SetStateAction<string[]>>;

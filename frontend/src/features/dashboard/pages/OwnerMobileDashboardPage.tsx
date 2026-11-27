@@ -1,11 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useMemo } from 'react';
-import { Navigate } from 'react-router-dom';
+import {Navigate, Link} from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '@/features/dashboard/api/dashboard.api';
 import { cashDrawerApi } from '@/lib/api/cash-drawer';
 import { formatCurrency, todayLocalDateKey } from '@/lib/format';
-import { Link } from 'react-router-dom';
 import { SmartphoneIcon, ShoppingCartIcon, BarChartIcon, FileTextIcon, RefreshCwIcon, AlertTriangleIcon } from '@/shared/components/icons/AppIcons';
 import { useHasAnyPermission, useHasFeature } from '@/shared/hooks/use-permission';
 import { useAuthStore } from '@/stores/auth-store';
@@ -40,10 +39,6 @@ export function OwnerMobileDashboardPage() {
   const hasReportsFeature = useHasFeature('reports') || isPlatformAdminUser;
   const canViewReports = useHasAnyPermission('reports') || isPlatformAdminUser;
 
-  if (!hasReportsFeature || !canViewReports) {
-    return <Navigate to={findWorkspaceFallbackRoute(user, navigationItems) || '/pos'} replace />;
-  }
-
   const [range, setRange] = useState<TimeRange>('today');
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
   const { from, to } = useMemo(() => getRangeDates(range), [range]);
@@ -56,6 +51,7 @@ export function OwnerMobileDashboardPage() {
       return res;
     },
     refetchInterval: 30000, // Live auto-poll every 30s
+    enabled: hasReportsFeature && canViewReports,
   });
 
   const shiftsQuery = useQuery({
@@ -65,6 +61,7 @@ export function OwnerMobileDashboardPage() {
       return res.rows || [];
     },
     refetchInterval: 30000,
+    enabled: hasReportsFeature && canViewReports,
   });
 
   const overview = overviewQuery.data;
@@ -77,6 +74,10 @@ export function OwnerMobileDashboardPage() {
       return sum + expected;
     }, 0);
   }, [openShifts]);
+
+  if (!hasReportsFeature || !canViewReports) {
+    return <Navigate to={findWorkspaceFallbackRoute(user, navigationItems) || '/pos'} replace />;
+  }
 
   const overviewData = overview as any;
   const netSales = Number(overviewData?.profitSummary?.netSales || overviewData?.moneyInsight?.total || 0);

@@ -2,8 +2,7 @@
 // Owns the negative-visit modal state, openNegativeVisitModal, handleSubmitNegativeVisit and getReasonLabel.
 
 import { useState } from 'react';
-import { vanSalesApi } from '@/features/delivery-reps/api/van-sales.api';
-import type { VanCustomerItineraryItem } from '@/features/delivery-reps/api/van-sales.api';
+import {vanSalesApi, type VanCustomerItineraryItem} from '@/features/delivery-reps/api/van-sales.api';
 import { toast } from '@/shared/components/system-alert';
 
 interface UseVanItineraryNegativeVisitParams {

@@ -134,28 +134,20 @@ export function DashboardPage() {
   const tenant = useAuthStore((s) => s.tenant);
   const isPlatformAdminUser = isPlatformAdmin(user);
 
-  // Smart Pillar Redirects: Direct Contracting & Maritime tenants to their domain dashboards
-  if (tenant?.activityType === 'contracting' || tenant?.pillar === 'contracting') {
-    return <Navigate to="/contracting" replace />;
-  }
-
-  if (tenant?.activityType === 'maritime_freight' || tenant?.pillar === 'maritime_freight') {
-    return <Navigate to="/maritime" replace />;
-  }
-
   const hasReportsFeature = useHasFeature('reports') || isPlatformAdminUser;
-
-  if (!hasReportsFeature) {
-    return <Navigate to="/pos" replace />;
-  }
-
-  const overview = useDashboardOverview();
   // F12 (trial problem 15): the decision center and the manager
   // alerts are supervisor surfaces — a rep/cashier holds 'dashboard'
   // but not 'reports', and the cashier default deliberately excludes
   // 'reports'. Without it the secondary queries never fire and the
   // decision grid is not rendered at all (no misleading empty state).
   const canSeeManagerReports = useHasAnyPermission('reports');
+  // No dashboard fetch for users who are redirected away below
+  // (contracting / maritime pillars, or no reports feature).
+  const canLoadDashboard =
+    tenant?.activityType !== 'contracting' && tenant?.pillar !== 'contracting' &&
+    tenant?.activityType !== 'maritime_freight' && tenant?.pillar !== 'maritime_freight' &&
+    hasReportsFeature;
+  const overview = useDashboardOverview(canLoadDashboard);
   // Let the first dashboard response render before running secondary report queries.
   const showSecondaryReports = Boolean(overview.data) && canSeeManagerReports;
   const managerActions = useManagerActions(30, showSecondaryReports);
@@ -175,6 +167,19 @@ export function DashboardPage() {
       setIsRefreshing(false);
     }
   }, [overview, managerOverview]);
+
+  // Smart Pillar Redirects: Direct Contracting & Maritime tenants to their domain dashboards
+  if (tenant?.activityType === 'contracting' || tenant?.pillar === 'contracting') {
+    return <Navigate to="/contracting" replace />;
+  }
+
+  if (tenant?.activityType === 'maritime_freight' || tenant?.pillar === 'maritime_freight') {
+    return <Navigate to="/maritime" replace />;
+  }
+
+  if (!hasReportsFeature) {
+    return <Navigate to="/pos" replace />;
+  }
 
   if (overview.isLoading && !overview.data) {
     return <DashboardSkeleton />;

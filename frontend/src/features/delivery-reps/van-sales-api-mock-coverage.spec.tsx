@@ -65,11 +65,11 @@ function overrideKeys(source: string): string[] {
   const openAt = block.indexOf('vanSalesApi: {');
   expect(openAt).toBeGreaterThanOrEqual(0);
   const body = block.slice(openAt);
-  const closeAt = body.search(/\n    \},/);
+  const closeAt = body.search(/\n {4}\},/);
   expect(closeAt).toBeGreaterThanOrEqual(0);
   const keys: string[] = [];
   for (const line of body.slice(0, closeAt).split('\n')) {
-    const match = /^      ([A-Za-z_$][\w$]*)\s*:/.exec(line);
+    const match = /^ {6}([A-Za-z_$][\w$]*)\s*:/.exec(line);
     if (match) keys.push(match[1]);
   }
   return keys;

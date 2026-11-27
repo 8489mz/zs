@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'dev-dist/**', 'node_modules/**', 'vite.config.js', 'scripts/**'],
+    ignores: ['dist/**', 'dev-dist/**', 'node_modules/**', 'android/**', 'vite.config.js', 'scripts/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -38,6 +38,35 @@ export default tseslint.config(
       'no-empty': 'off',
       'no-useless-escape': 'off',
       'max-lines': ['warn', { max: 360, skipBlankLines: true, skipComments: true }],
+    },
+  },
+  {
+    // Electron main-process code is Node/CommonJS by design (main.cjs,
+    // preload.cjs, backend migrations): `require` is the module system
+    // there, not a style violation — and `require`/`process`/`__dirname`
+    // are real Node globals, not undefined names. Same relaxations as
+    // src (unused vars warn with `_` ignored, empty `catch {}` blocks
+    // are deliberate best-effort swallows), plus Node globals.
+    files: ['electron/**/*.{js,cjs}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-empty': 'off',
+    },
+  },
+  {
+    // The Electron unit test uses Vitest globals (describe/it/expect).
+    files: ['electron/__tests__/**/*.{js,cjs}'],
+    languageOptions: {
+      globals: {
+        ...globals.vitest,
+      },
     },
   },
   {

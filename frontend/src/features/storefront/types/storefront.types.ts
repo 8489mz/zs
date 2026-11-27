@@ -461,7 +461,7 @@ export interface CreateCouponPayload {
   endDate?: string | null;
 }
 
-export interface UpdateCouponPayload extends Partial<CreateCouponPayload> {}
+export type UpdateCouponPayload = Partial<CreateCouponPayload>;
 
 export interface ValidateCouponResponse {
   ok: boolean;
@@ -494,7 +494,7 @@ export interface CreateDeliveryZonePayload {
   sortOrder?: number;
 }
 
-export interface UpdateDeliveryZonePayload extends Partial<CreateDeliveryZonePayload> {}
+export type UpdateDeliveryZonePayload = Partial<CreateDeliveryZonePayload>;
 
 export interface AbandonedCartRecord {
   id: number;

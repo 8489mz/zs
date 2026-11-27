@@ -1,5 +1,4 @@
-import { lazy, Suspense } from 'react';
-import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import {lazy, Suspense, type Dispatch, type ReactNode, type SetStateAction} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { GlobalAppToolbar } from '@/shared/layout/GlobalAppToolbar';

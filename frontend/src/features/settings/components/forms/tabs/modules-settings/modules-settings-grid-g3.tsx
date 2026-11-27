@@ -2,8 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { MaintenanceWrenchIcon, PharmacyCrossIcon, VariantsLayersIcon, WrenchServiceIcon, ScaleIcon, EnterpriseIcon, LockIcon, premiumCardTextStyle, premiumCheckboxInputStyle } from './modules-settings-icons';
 import type { UseFormReturn } from 'react-hook-form';
 import type { SettingsFormInput, SettingsFormOutput } from '@/features/settings/schemas/settings.schema';
-import type { CSSProperties } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type {type CSSProperties, type Dispatch, type SetStateAction} from 'react';
 
 interface ModulesSettingsGridG3Props {
   isContractingVertical: boolean;

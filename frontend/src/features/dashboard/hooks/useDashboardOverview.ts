@@ -44,7 +44,7 @@ function storeOverview(data: DashboardOverviewPayload): void {
   }
 }
 
-export function useDashboardOverview() {
+export function useDashboardOverview(enabled = true) {
   const range = useMemo(() => {
     const reference = new Date();
     reference.setHours(23, 59, 59, 999);
@@ -58,6 +58,7 @@ export function useDashboardOverview() {
       storeOverview(data);
       return data;
     },
+    enabled,
     // Instant zero-delay initial paint from cache, while automatically validating fresh data in background
     placeholderData: (previousData) => previousData ?? getStoredOverview(),
     staleTime: 30_000,

@@ -29,8 +29,8 @@ import {
   getCustomerNameValidation,
   getDynamicPhoneValidation,
   parseKuwaitAddress,
+  type StorefrontCheckoutModalProps,
 } from '@/features/storefront/components/storefront-checkout/storefront-checkout-helpers';
-import type { StorefrontCheckoutModalProps } from '@/features/storefront/components/storefront-checkout/storefront-checkout-helpers';
 export {
   COUNTRY_OPTIONS,
   KUWAIT_POPULAR_AREAS,

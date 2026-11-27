@@ -169,8 +169,13 @@ export class OfflineReleasesCheck {
 
     const rows = await this.db.selectFrom('offline_releases').selectAll().execute();
 
-    const isDev = process.env.NODE_ENV !== 'production' && process.env.APP_MODE !== 'SELF_CONTAINED';
-
+    // The activation code is NEVER returned in the history, even in
+    // dev: the history is a public response (controller GET history
+    // and checkForUpdate's `releases`), and the code itself is only
+    // needed by the admin provisioning surface and the apply
+    // validation, which read the stored row directly.
+    // requiresPasscode stays so clients know a code is required,
+    // without learning it.
     const mapped = rows.map((r) => ({
       id: r.id,
       version: r.version,
@@ -178,7 +183,6 @@ export class OfflineReleasesCheck {
       patchUrl: r.patch_url,
       promotedAt: r.promoted_at || r.created_at,
       requiresPasscode: r.requires_passcode ?? true,
-      passcode: isDev ? (r.passcode ?? undefined) : undefined,
     }));
 
     return mapped.sort((a, b) => compareSemver(b.version, a.version));

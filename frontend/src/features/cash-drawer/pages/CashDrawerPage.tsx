@@ -24,16 +24,14 @@ export function CashDrawerPage() {
   const { user } = useAuthStore();
   const { data: settings } = useSettingsQuery();
   const [searchParams, setSearchParams] = useSearchParams();
-  
-  if (settings?.posModuleEnabled === false && !isPlatformAdmin(user)) {
-    return <Navigate to="/treasury" replace />;
-  }
+  const isPosModuleDisabled = settings?.posModuleEnabled === false && !isPlatformAdmin(user);
   
   const [activeForm, setActiveForm] = useState<'open' | 'movement' | 'close' | null>(null);
   const controller = useCashDrawerPageController();
   const hasAutoOpenedRef = useRef(false);
 
   useEffect(() => {
+    if (isPosModuleDisabled) return;
     const action = searchParams.get('action');
     if (!action) {
       hasAutoOpenedRef.current = false;
@@ -71,6 +69,7 @@ export function CashDrawerPage() {
     }
   }, [
     searchParams,
+    isPosModuleDisabled,
     controller.myOpenShift?.id,
     controller.openOptions,
     controller.isManagerReviewer,
@@ -78,6 +77,10 @@ export function CashDrawerPage() {
     controller.closeForm,
     controller.movementForm,
   ]);
+
+  if (isPosModuleDisabled) {
+    return <Navigate to="/treasury" replace />;
+  }
 
   const handleOpenForm = (form: 'open' | 'movement' | 'close') => {
     controller.openMutation.reset();

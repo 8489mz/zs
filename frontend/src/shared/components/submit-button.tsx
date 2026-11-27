@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import type { ButtonHTMLAttributes, ReactNode, CSSProperties } from 'react';
+import {useState, useEffect, useRef, type ButtonHTMLAttributes, type ReactNode, type CSSProperties} from 'react';
 import { Button } from '@/shared/ui/button';
 import { CheckIcon } from '@/shared/components/icons/AppIcons';
 

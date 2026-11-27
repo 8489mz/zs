@@ -5,21 +5,21 @@ import type { useCreatePurchaseMutation } from '@/features/purchases/hooks/useCr
 import type { usePurchaseComposerCatalog } from '@/features/purchases/hooks/usePurchaseComposerCatalog';
 import type { useTranslation } from '../../../utils/i18n-purchase-prototype';
 import { addDaysLocalDateKey, todayLocalDateKey } from '@/lib/format';
-import type {
-  AddressOption,
-  ContactOption,
-  CostCenterOption,
-  DocumentStatus,
-  InlineMessageTone,
-  ProductOption,
-  ProjectOption,
-  PrototypeLine,
-  PurchasePrototypeDraft,
-  SupplierOption,
-  ValidationErrors,
-  WarehouseOption,
+import {
+  type AddressOption,
+  type ContactOption,
+  type CostCenterOption,
+  type DocumentStatus,
+  type InlineMessageTone,
+  type ProductOption,
+  type ProjectOption,
+  type PrototypeLine,
+  type PurchasePrototypeDraft,
+  type SupplierOption,
+  type ValidationErrors,
+  type WarehouseOption,
+  PURCHASE_DRAFT_STORAGE_KEY,
 } from '../newPurchaseOrder.types';
-import { PURCHASE_DRAFT_STORAGE_KEY } from '../newPurchaseOrder.types';
 
 // S8 — submit sub-hook, moved from useNewPurchaseOrderController (L1080-1269).
 // Carries the file's ONLY invariant line (landed-cost allocation, L1162).

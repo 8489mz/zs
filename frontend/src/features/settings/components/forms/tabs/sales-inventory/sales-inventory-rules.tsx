@@ -2,8 +2,7 @@
 // The facade keeps the isRetailCommerce gate + render and passes form, disabled, settings and flags as props;
 // the facade calls useSalesInventoryRulesState() once and passes its returns as props.
 
-import { useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import {useState, type Dispatch, type SetStateAction} from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormSection } from '@/shared/components/form-section';
 import { CustomSelect } from '@/shared/ui/custom-select';

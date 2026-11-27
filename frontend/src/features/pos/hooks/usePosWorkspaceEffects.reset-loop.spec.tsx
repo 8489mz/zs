@@ -23,8 +23,7 @@
  * code every case PASSES. */
 import { QueryClientProvider, useMutation } from '@tanstack/react-query';
 import { act, render, waitFor } from '@testing-library/react';
-import type { PropsWithChildren } from 'react';
-import { useState } from 'react';
+import {type PropsWithChildren, useState} from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { usePosWorkspaceEffects } from './usePosWorkspaceEffects';
 import { createTestQueryClient } from '@/test/test-query-client';

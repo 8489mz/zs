@@ -19,8 +19,6 @@ export const VanTradeSurveyModal: React.FC<VanTradeSurveyModalProps> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
-  if (!customer) return null;
-
   const [surveyType, setSurveyType] = useState<'cooler_inspection' | 'competitor_survey'>('cooler_inspection');
   const [assetId, setAssetId] = useState('');
   const [assetCondition, setAssetCondition] = useState('good');
@@ -33,6 +31,8 @@ export const VanTradeSurveyModal: React.FC<VanTradeSurveyModalProps> = ({
   const [competitorOffers, setCompetitorOffers] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!customer) return null;
 
   const handleSubmit = async () => {
     setIsSubmitting(true);

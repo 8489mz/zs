@@ -15,8 +15,7 @@
  * from the workspace hook and the submit actions alike.
  */
 
-import { roundMoneyValue } from '@/shared/utils/money';
-import type { MoneyDigits } from '@/shared/utils/money';
+import {roundMoneyValue, type MoneyDigits} from '@/shared/utils/money';
 
 export interface PosPaymentLegs {
   cashAmount?: number | null;
