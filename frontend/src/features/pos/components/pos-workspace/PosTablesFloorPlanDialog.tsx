@@ -5,7 +5,7 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
-import { settingsApi } from '@/features/settings/api/settings.api';
+import { settingsApi } from '@/shared/api/settings.api';
 import {
   storefrontApi,
   loadOnlineOrderIntoPosCart,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { posApi } from '@/features/pos/api/pos.api';
-import { settingsApi } from '@/features/settings';
+import { settingsApi } from '@/shared/api/settings.api';
 import { printKitchenTicket } from '@/lib/pos-printing/kitchen';
 import { toast } from '@/shared/components/system-alert';
 import { tableCallsApi, type TableServiceCall } from '@/shared/api/table-calls.api';

@@ -302,16 +302,16 @@ async function main(): Promise<void> {
     'module-boundary must still pin the backend total 738',
   );
   assert.ok(
-    boundary.includes('const PINNED_FRONTEND_TOTAL = 125;'),
-    'module-boundary must pin the frontend total 125 after F5d',
+    boundary.includes('const PINNED_FRONTEND_TOTAL = 122;'),
+    'module-boundary must pin the frontend total 122 after F5d',
   );
   assert.ok(
     boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
     'module-boundary must still pin 63 backend edges',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 48,'),
-    'module-boundary must pin 48 frontend edges after F5d',
+    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 47,'),
+    'module-boundary must pin 47 frontend edges after F5d',
   );
   assert.ok(
     !boundary.includes("'products->maintenance'"),
@@ -326,7 +326,7 @@ async function main(): Promise<void> {
     'the maintenance|products pair must be gone from the pair list',
   );
   const featureBaseline = JSON.parse(fs.readFileSync(FEATURE_BOUNDARY_BASELINE, 'utf8')) as string[];
-  assert.equal(featureBaseline.length, 65, 'feature-boundary baseline must shrink to exactly 65 after F5d');
+  assert.equal(featureBaseline.length, 64, 'feature-boundary baseline must shrink to exactly 64 after F5d');
   assert.ok(
     !featureBaseline.some((entry) => entry.includes('ImeiHistoryPage') && entry.includes('@/features/maintenance')),
     'the deep ImeiHistoryPage maintenance strings must be gone from the feature-boundary baseline',
@@ -339,7 +339,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F5D-MAINTENANCE-PRODUCTS-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F5d INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F5H-POS-SALES-DECOUPLED/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5I-POS-SETTINGS-DECOUPLED/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F5d INV exactly once');
 
   // 4. Wiring: both critical lists carry 384 specs in identical order, this spec last.
@@ -352,11 +352,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 388);
-  assert.equal(chain.length, 388);
+  assert.equal(specs.length, 389);
+  assert.equal(chain.length, 389);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 384 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5h-pos-sales.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5h-pos-sales.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5i-pos-settings.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5i-pos-settings.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -375,11 +375,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 388);') && src.includes('assert.equal(chain.length, 388);'),
+      src.includes('assert.equal(specs.length, 389);') && src.includes('assert.equal(chain.length, 389);'),
       `${label} spec wiring must re-pin to 384`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5h-pos-sales.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5i-pos-settings.spec.ts'"),
       `${label} spec last-entry must re-pin to the F5d spec`,
     );
   }
@@ -426,7 +426,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F5H-POS-SALES-DECOUPLED/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5I-POS-SETTINGS-DECOUPLED/g)'),
       `${label} spec guard assertion must re-pin to the F5d INV`,
     );
   }

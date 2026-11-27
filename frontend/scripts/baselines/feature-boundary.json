@@ -33,7 +33,6 @@
   "pos/components/pos-workspace/PosOnlineOrdersModal.tsx imports @/features/storefront/components/ConvertDeliveryModal",
   "pos/components/pos-workspace/PosOnlineOrdersModal.tsx imports @/features/storefront/lib/storefront-pos-loader",
   "pos/components/pos-workspace/PosOnlineOrdersModal.tsx imports @/features/storefront/types/storefront.types",
-  "pos/components/pos-workspace/PosTablesFloorPlanDialog.tsx imports @/features/settings/api/settings.api",
   "pos/components/pos-workspace/PosWorkspaceHeader.tsx imports @/features/storefront/api/storefront.api",
   "pos/components/pos-workspace/pos-workspace/PosWorkspaceAuxDialogs1.tsx imports @/features/products/components/SerialLookupModal",
   "pos/hooks/pos-workspace-actions/createPosWorkspaceAsyncActions.ts imports @/features/storefront/api/storefront.api",
