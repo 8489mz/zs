@@ -217,6 +217,25 @@ export class MaritimeFreightJobCloseService {
       if (dto.etd !== undefined) updatePayload.etd = dto.etd || null;
       if (dto.eta !== undefined) updatePayload.eta = dto.eta || null;
       if (dto.portCutOff !== undefined) updatePayload.port_cut_off = dto.portCutOff || null;
+      // INV-PHASE1-D-M1-JOB-FIELDS: the 9 fields the three job cards
+      // PUT (JobConsolidationTab, JobEgyptianAciCard,
+      // JobExportCutoffsCard) were silently dropped — the service
+      // updated only updated_at while the UI toasted success. Wired
+      // through with the same values the caller sends, no
+      // transformation. isConsolidation -> is_consolidation_master
+      // (the column createJob already writes from
+      // dto.isConsolidationMaster); the toggle-off design (master
+      // with children) stays a separate question — this is the field
+      // passthrough only, so false persists as false.
+      if (dto.isConsolidation !== undefined) updatePayload.is_consolidation_master = dto.isConsolidation;
+      if (dto.acidNumber !== undefined) updatePayload.acid_number = dto.acidNumber || null;
+      if (dto.acidIssueDate !== undefined) updatePayload.acid_issue_date = dto.acidIssueDate || null;
+      if (dto.acidExpiryDate !== undefined) updatePayload.acid_expiry_date = dto.acidExpiryDate || null;
+      if (dto.foreignExporterId !== undefined) updatePayload.foreign_exporter_id = dto.foreignExporterId || null;
+      if (dto.importerTaxId !== undefined) updatePayload.importer_tax_id = dto.importerTaxId || null;
+      if (dto.siCutoffDate !== undefined) updatePayload.si_cutoff_date = dto.siCutoffDate || null;
+      if (dto.vgmCutoffDate !== undefined) updatePayload.vgm_cutoff_date = dto.vgmCutoffDate || null;
+      if (dto.portCutoffDate !== undefined) updatePayload.port_cutoff_date = dto.portCutoffDate || null;
       if (dto.blType !== undefined) updatePayload.bl_type = dto.blType;
       if (dto.mblNumber !== undefined) updatePayload.mbl_number = dto.mblNumber?.trim().toUpperCase() || null;
       if (dto.hblNumber !== undefined) updatePayload.hbl_number = dto.hblNumber || null;
