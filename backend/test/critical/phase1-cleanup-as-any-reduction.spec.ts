@@ -66,7 +66,7 @@ import * as path from 'node:path';
  * frontend proof is owed for them. The regression loop covers the
  * specs of the touched backend files.
  *
- * Wiring: both critical lists carry 401 specs in identical order,
+ * Wiring: both critical lists carry 402 specs in identical order,
  * this spec last.
  *
  * Notes: the stale cosmetic string in the F2 spec ("379 specs wired"
@@ -196,10 +196,10 @@ function main(): void {
   const invCount = (invariants.match(/INV-PHASE1-CLEANUP-AS-ANY-REDUCTION/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the cleanup INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-CLEANUP-AS-ANY-REDUCTION/g) || []).length;
-  assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the cleanup INV exactly once');
+  const guardCount = (guard.match(/INV-SHIFT-CLOSE-DISCOUNT-SUMMARY/g) || []).length;
+  assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the P1 discount-summary INV exactly once');
 
-  // 4. Wiring: both critical lists carry 401 specs in identical order, this spec last.
+  // 4. Wiring: both critical lists carry 402 specs in identical order, this spec last.
   const specsJson = JSON.parse(fs.readFileSync(CRITICAL_JSON, 'utf8')) as { specs: string[] };
   const specs = specsJson.specs;
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')) as {
@@ -211,7 +211,7 @@ function main(): void {
     .filter((part) => part.endsWith('.spec.ts'));
   assert.equal(specs.length, 402);
   assert.equal(chain.length, 402);
-  assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 401 specs in order');
+  assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 402 specs in order');
   assert.equal(specs[specs.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
   assert.equal(chain[chain.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
   for (const [label, specPath] of [
@@ -250,7 +250,7 @@ function main(): void {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
       src.includes('assert.equal(specs.length, 402);') && src.includes('assert.equal(chain.length, 402);'),
-      `${label} spec wiring must re-pin to 401`,
+      `${label} spec wiring must re-pin to 402`,
     );
     assert.ok(
       src.includes("specs[specs.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts'"),
@@ -275,10 +275,10 @@ function main(): void {
   const staleFePins: string[] = [];
   const staleBaseline: string[] = [];
   const prevName = 'phase1-discount-fix-line-' + 'amount.spec.ts';
-  const prevInv = 'INV-POS-LINE-' + 'DISCOUNT-AMOUNT';
-  const staleSpecs = 'specs.length, 40' + '0';
-  const staleChain = 'chain.length, 40' + '0';
-  const staleList = 'list.length, 40' + '0';
+  const prevInv = 'INV-PHASE1-' + 'CLEANUP-AS-ANY-REDUCTION';
+  const staleSpecs = 'specs.length, 40' + '1';
+  const staleChain = 'chain.length, 40' + '1';
+  const staleList = 'list.length, 40' + '1';
   const staleFeTotal = "'const PINNED_FRONTEND_TOTAL = 11" + "1;'";
   const staleFeTotalAfter = "'module-boundary must pin the frontend total 11" + '1 after ';
   const staleFeTotalStill = "'module-boundary must still pin the frontend total 11" + "1'";
@@ -318,7 +318,7 @@ function main(): void {
 
   // 6. The guard tail holds ONLY the newest id, so this package re-pins the
   // B3/B4/B5/B6/B7/B8/F2/F3/F4/F5a/F5b/F5c/F5d/F5e/F5f/F5g/F5h/F5i/F5h-REPAIR/F5j/F5h-REPAIR-2/F5k/F5j-REPAIR/F5l/F5l-REPAIR/D-M1/D-M3/D-D10a/discount-fix specs'
-  // guard assertions to the cleanup INV; their invariants-file assertions
+  // guard assertions to the P1 discount-summary INV; their invariants-file assertions
   // still pin their own id (each line stays in
   // ARCHITECTURE_INVARIANTS.md exactly once).
   for (const [label, specPath] of [
@@ -354,12 +354,12 @@ function main(): void {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-CLEANUP-AS-ANY-REDUCTION/g)'),
+      src.includes('guard.match(/INV-SHIFT-CLOSE-DISCOUNT-SUMMARY/g)'),
       `${label} spec guard assertion must re-pin to the cleanup INV`,
     );
   }
 
-  console.log('phase1 cleanup as-any-reduction checks passed (ceiling pinned, 401 specs wired)');
+  console.log('phase1 cleanup as-any-reduction checks passed (ceiling pinned, 402 specs wired)');
 }
 
 main();

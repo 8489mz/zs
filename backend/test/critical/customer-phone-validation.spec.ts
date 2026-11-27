@@ -354,11 +354,7 @@ async function main(): Promise<void> {
     try {
       const slice = buildSlice(db);
       const created: any = await slice.createCustomer(payload('عميل للتعديل', '01012345678'), adminAuth);
-      const res: any = await slice.updateCustomer(
-        Number(created.id),
-        payload('عميل للتعديل', '   '),
-        adminAuth,
-      );
+      const res: any = await slice.updateCustomer(Number(created.id), payload('عميل للتعديل', '   '), adminAuth);
       assert.equal(res.ok, true, 'blank phone on update must not block');
       assert.equal(await storedPhone(db, Number(created.id)), '01012345678', 'existing phone is kept');
       assert.equal(res.phoneWarning, undefined, 'kept phone must not warn');
@@ -374,11 +370,7 @@ async function main(): Promise<void> {
     try {
       const slice = buildSlice(db);
       const created: any = await slice.createCustomer(payload('عميل للتعديل', '01012345678'), adminAuth);
-      const res: any = await slice.updateCustomer(
-        Number(created.id),
-        payload('عميل للتعديل', '12345'),
-        adminAuth,
-      );
+      const res: any = await slice.updateCustomer(Number(created.id), payload('عميل للتعديل', '12345'), adminAuth);
       assert.equal(res.ok, true, 'malformed phone on update must not block');
       assert.equal(await storedPhone(db, Number(created.id)), '01012345678', 'existing phone is kept');
       assert.equal(warningCode(res), 'CUSTOMER_PHONE_INVALID');

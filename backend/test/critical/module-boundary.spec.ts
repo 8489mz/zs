@@ -296,7 +296,10 @@ const FRONTEND_FEATURES = path.join(REPO_ROOT, 'frontend', 'src', 'features');
 const PINNED_BACKEND_EDGES: Record<string, number> = {
   'ai-copilot->storefront': 1,
   'approvals->settings': 2,
-  'cash-drawer->accounting': 12,
+  // P1 batch (2026-11-27): 12 -> 13 — the shift-close discount-summary
+  // helper (cash-drawer) imports roundMoney from the accounting money
+  // engine; deliberate re-pin, the ratchet still caps this edge at 13.
+  'cash-drawer->accounting': 13,
   'cash-drawer->settings': 3,
   'catalog->accounting': 15,
   'catalog->inventory': 7,

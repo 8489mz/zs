@@ -486,7 +486,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F5J-INVENTORY-PRODUCTS-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F5j INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-CLEANUP-AS-ANY-REDUCTION/g) || []).length;
+  const guardCount = (guard.match(/INV-SHIFT-CLOSE-DISCOUNT-SUMMARY/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F5j INV exactly once');
 
   // 4. Wiring: both critical lists carry 391 specs in identical order, this spec last.
@@ -622,7 +622,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-CLEANUP-AS-ANY-REDUCTION/g)'),
+      src.includes('guard.match(/INV-SHIFT-CLOSE-DISCOUNT-SUMMARY/g)'),
       `${label} spec guard assertion must re-pin to the F5j INV`,
     );
   }

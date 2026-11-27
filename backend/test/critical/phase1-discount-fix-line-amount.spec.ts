@@ -236,7 +236,7 @@ function main(): void {
     'the F1b entry must carry the in-place correction pointing at the new entry',
   );
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-CLEANUP-AS-ANY-REDUCTION/g) || []).length;
+  const guardCount = (guard.match(/INV-SHIFT-CLOSE-DISCOUNT-SUMMARY/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the discount-fix INV exactly once');
 
   // 4. Wiring: both critical lists carry 400 specs in identical order, this spec last.
@@ -392,7 +392,7 @@ function main(): void {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-CLEANUP-AS-ANY-REDUCTION/g)'),
+      src.includes('guard.match(/INV-SHIFT-CLOSE-DISCOUNT-SUMMARY/g)'),
       `${label} spec guard assertion must re-pin to the discount-fix INV`,
     );
   }

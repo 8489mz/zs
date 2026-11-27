@@ -296,7 +296,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-B4-ACCOUNTING-HR-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B4 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-CLEANUP-AS-ANY-REDUCTION/g) || []).length;
+  const guardCount = (guard.match(/INV-SHIFT-CLOSE-DISCOUNT-SUMMARY/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the B7 INV exactly once');
 
   // 9. The B1/B2/B3 specs re-pin their boundary assertions to the B4 numbers.
