@@ -454,8 +454,8 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 399);
-    assert.equal(chain.length, 399);
+    assert.equal(specs.length, 400);
+    assert.equal(chain.length, 400);
     assert.deepEqual(chain, specs);
     assert.equal(specs[366], 'test/critical/phase1-a10-rounding.spec.ts');
     assert.equal(specs[367], 'test/critical/phase1-a10-purchases-writer.spec.ts');

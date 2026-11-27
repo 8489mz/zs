@@ -47,32 +47,15 @@ export function calcCartLineDiscount(item: PosCartLineLike): number {
   return Math.min(entered, Math.max(0, gross));
 }
 
-/* F1b (van trial problem 21): the cart line-discount INPUT takes a
- * percent of the line gross, not an amount — typing 50 on a 24.00
- * line is a 12.00 discount, not the clamped 24.00. The stored
- * lineDiscount stays an AMOUNT (the backend contract:
- * compute-totals-and-gates sums it as money); these helpers only
- * translate at the input boundary. The percent-to-amount conversion
- * is unrounded, like calcCartLineDiscount above: the caller rounds
- * at book digits (updatePosItemLineDiscount does). */
+/* clampDiscountPercent (F1b): clamps a typed invoice-discount percent
+ * to 0–100 — the invoice % field in PosCheckoutDiscountStrip /
+ * pos-cart-totals converts it to an amount. The cart line-discount
+ * input takes an AMOUNT (INV-POS-LINE-DISCOUNT-AMOUNT, 2026-11-27),
+ * not a percent, so no line input uses this helper. */
 export function clampDiscountPercent(percent: unknown): number {
   const p = Number(percent);
   if (!Number.isFinite(p) || p <= 0) return 0;
   return Math.min(p, 100);
-}
-
-export function calcLineDiscountAmountFromPercent(item: PosCartLineLike, percent: unknown): number {
-  const gross = calcCartLineTotal(item);
-  return (clampDiscountPercent(percent) / 100) * Math.max(0, gross);
-}
-
-/** The stored line discount expressed as a percent of the line gross
- * (0 when there is no discount or no gross) — the value the percent
- * input displays. */
-export function calcLineDiscountPercent(item: PosCartLineLike): number {
-  const gross = calcCartLineTotal(item);
-  if (gross <= 0) return 0;
-  return (calcCartLineDiscount(item) / gross) * 100;
 }
 
 /** Net line total: gross minus the line's own discount, matching the

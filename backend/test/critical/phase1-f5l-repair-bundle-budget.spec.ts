@@ -296,7 +296,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F5L-REPAIR-BUNDLE-BUDGET/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F5l-REPAIR INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-D-D10A-SERIALS-PAYLOAD/g) || []).length;
+  const guardCount = (guard.match(/INV-POS-LINE-DISCOUNT-AMOUNT/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F5l-REPAIR INV exactly once');
 
   // 5. Wiring: both critical lists carry 398 specs in identical order,
@@ -310,11 +310,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 399);
-  assert.equal(chain.length, 399);
+  assert.equal(specs.length, 400);
+  assert.equal(chain.length, 400);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 398 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-d-d10a-serials-payload.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-d-d10a-serials-payload.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-discount-fix-line-amount.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-discount-fix-line-amount.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -347,11 +347,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 399);') && src.includes('assert.equal(chain.length, 399);'),
+      src.includes('assert.equal(specs.length, 400);') && src.includes('assert.equal(chain.length, 400);'),
       `${label} spec wiring must re-pin to 398`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-d-d10a-serials-payload.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-discount-fix-line-amount.spec.ts'"),
       `${label} spec last-entry must re-pin to the F5l-REPAIR spec`,
     );
     // B1/B2 never carry a chain-form last-entry (they predate the chain
@@ -359,7 +359,7 @@ async function main(): Promise<void> {
     // the §6 stale-scan); every later spec must re-pin it too.
     if (label !== 'B1' && label !== 'B2') {
       assert.ok(
-        src.includes("chain[chain.length - 1], 'test/critical/phase1-d-d10a-serials-payload.spec.ts'"),
+        src.includes("chain[chain.length - 1], 'test/critical/phase1-discount-fix-line-amount.spec.ts'"),
         `${label} spec last-entry must re-pin to the F5l-REPAIR spec (chain form)`,
       );
     }
@@ -458,7 +458,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-D-D10A-SERIALS-PAYLOAD/g)'),
+      src.includes('guard.match(/INV-POS-LINE-DISCOUNT-AMOUNT/g)'),
       `${label} spec guard assertion must re-pin to the F5l-REPAIR INV`,
     );
   }

@@ -82,12 +82,13 @@ describe('PosCartItemsList', () => {
     expect(noteButtons.length).toBe(cart.length);
   });
 
-  /* INV-POS-LINE-DISCOUNT + F1b (van trial problem 21): the row shows
-   * the net total for a discounted line (24 - 12 = 12) and the
-   * per-line discount input takes a PERCENT of the line gross — the
-   * stored lineDiscount stays an amount. Typing 50 on a 24.00 line
-   * reports a 12.00 amount, never the clamped 24.00. Without the
-   * handler the input is not rendered at all. */
+  /* INV-POS-LINE-DISCOUNT + INV-POS-LINE-DISCOUNT-AMOUNT (2026-11-27):
+   * the row shows the net total for a discounted line (24 - 12 = 12)
+   * and the per-line discount input takes an AMOUNT — the stored
+   * lineDiscount, shown as-is. Typing 25 on a 24.00 line reports
+   * 25.00 (the handler clamps it to the 24.00 gross); the input
+   * never converts to or from a percent. Without the handler the
+   * input is not rendered at all. */
   it('shows the net line total and reports the per-line discount input', () => {
     const onLineDiscountChange = vi.fn();
     const discountedCart: PosItem[] = [
@@ -108,12 +109,11 @@ describe('PosCartItemsList', () => {
     );
 
     const discountInput = screen.getByLabelText(/خصم الصنف/) as HTMLInputElement;
-    expect(discountInput.value).toBe('50');
-    // Typing 25 reports 25% of the 24.00 line as a 6.00 amount — the
-    // old amount input would have reported 25. (50 typed -> 12.00 is
-    // pinned at the helper level in pos-modifier-totals.spec.ts.)
+    expect(discountInput.value).toBe('12');
+    // Typing 25 reports the typed AMOUNT 25.00 — a percent input
+    // would have reported 25% of the 24.00 line as 6.00.
     fireEvent.change(discountInput, { target: { value: '25' } });
-    expect(onLineDiscountChange).toHaveBeenCalledWith('line-1', 6);
+    expect(onLineDiscountChange).toHaveBeenCalledWith('line-1', 25);
   });
 
   it('does not render the per-line discount input without the handler', () => {
@@ -159,13 +159,13 @@ describe('PosCartItemsList', () => {
     expect(input).toBeInTheDocument();
     expect(input.classList.contains('no-spin-arrows')).toBe(true);
 
-    // Changing value calls the handler with the PERCENT converted to
-    // an amount: 25% of the 100.00 first line is 25.00.
+    // Changing value calls the handler with the typed AMOUNT: 25 on
+    // the 100.00 first line is 25.00.
     fireEvent.change(input, { target: { value: '25' } });
     expect(onLineDiscountChange).toHaveBeenCalledWith(cart[0].lineKey, 25);
 
-    // The second row proves the conversion is a percent, not the
-    // typed amount: 25% of the 300.00 second line is 75.00. Blur the
+    // The second row proves the value is an amount, not a percent:
+    // 25 on the 300.00 second line is 25.00, not 25% (75.00). Blur the
     // first input first — the panel closes an undiscounted row's
     // input on blur, and the second row only opens once the first is
     // closed.
@@ -174,7 +174,7 @@ describe('PosCartItemsList', () => {
     fireEvent.click(reopenedAddButtons[1]);
     const secondInput = screen.getByLabelText(/خصم الصنف/) as HTMLInputElement;
     fireEvent.change(secondInput, { target: { value: '25' } });
-    expect(onLineDiscountChange).toHaveBeenCalledWith(cart[1].lineKey, 75);
+    expect(onLineDiscountChange).toHaveBeenCalledWith(cart[1].lineKey, 25);
 
     const qtyInputs = screen.getAllByLabelText(/الكمية/) as HTMLInputElement[];
     expect(qtyInputs[0].classList.contains('no-spin-arrows')).toBe(true);

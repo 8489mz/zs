@@ -9,7 +9,7 @@ import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import type { Product } from '@/types/domain';
 import type { PosCartPanelProps } from './posCartPanel.types';
-import { calcCartLineDiscount, calcCartLineNetTotal, calcLineDiscountAmountFromPercent, calcLineDiscountPercent, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { calcCartLineDiscount, calcCartLineNetTotal, calcCartLineTotal, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
 
 const PosCartItemRow = memo(function PosCartItemRow({
   item,
@@ -43,10 +43,6 @@ const PosCartItemRow = memo(function PosCartItemRow({
    * visible rows summing above the shown total. */
   const lineTotal = calcCartLineNetTotal(item);
   const lineDiscount = calcCartLineDiscount(item);
-  /* F1b (van trial problem 21): the input takes a PERCENT of the line
-   * gross — the percent the stored amount represents. The stored
-   * lineDiscount stays an amount (the backend contract). */
-  const lineDiscountPercent = calcLineDiscountPercent(item);
   const [isEditingDiscount, setIsEditingDiscount] = useState(false);
   const hasLineDiscount = lineDiscount > 0;
   /* R5-A (INV-REST-TOTALS-TRUTH-2, M19): the line total already
@@ -389,16 +385,12 @@ const PosCartItemRow = memo(function PosCartItemRow({
         >
           {formatCurrencyWithCode(lineTotal)}
         </strong>
-        {/* F1b (van trial problem 21): per-line discount as a PERCENT
-          * of the line gross for this line only — the clothes-shop
-          * case: one clearance piece in a 4-piece sale. Shown only
-          * where the panel passes the handler (the POS cart);
-          * disabled without the discount permission, same lock as the
-          * header discount. The typed percent is converted to an
-          * amount before it reaches the handler, so the stored
-          * lineDiscount and the posted payload stay amounts (the
-          * backend contract); setLineDiscount rounds the amount at
-          * book digits and clamps it to the line gross. */}
+        {/* INV-POS-LINE-DISCOUNT: per-line TOTAL discount (amount) for
+          * this line only — the clothes-shop case: one clearance piece
+          * in a 4-piece sale. Shown only where the panel passes the
+          * handler (the POS cart); disabled without the discount
+          * permission, same lock as the header discount. The action
+          * clamps the amount to the line gross at book digits. */}
         {typeof onLineDiscountChange === 'function' && (
           hasLineDiscount || isEditingDiscount ? (
             <span
@@ -428,10 +420,10 @@ const PosCartItemRow = memo(function PosCartItemRow({
                 type="number"
                 className="pos-cart-discount-input no-spin-arrows"
                 aria-label={t('pos.line_discount', 'خصم الصنف')}
-                value={lineDiscountPercent > 0 ? lineDiscountPercent.toFixed(2).replace(/\.00$/, '') : ''}
+                value={Number(item.lineDiscount || 0) > 0 ? String(item.lineDiscount) : ''}
                 placeholder="0"
                 min={0}
-                max={100}
+                max={calcCartLineTotal(item)}
                 step="0.01"
                 disabled={!canApplyDiscount}
                 autoFocus={isEditingDiscount}
@@ -448,7 +440,7 @@ const PosCartItemRow = memo(function PosCartItemRow({
                 }}
                 onChange={(event) => {
                   const parsed = Number(event.target.value);
-                  onLineDiscountChange(item.lineKey, calcLineDiscountAmountFromPercent(item, Number.isFinite(parsed) ? parsed : 0));
+                  onLineDiscountChange(item.lineKey, Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
                 }}
                 style={{
                   width: '42px',
@@ -468,9 +460,6 @@ const PosCartItemRow = memo(function PosCartItemRow({
                   outline: 'none',
                 }}
               />
-              <span style={{ fontSize: '10px', color: hasLineDiscount ? '#047857' : '#64748b', fontWeight: 700, userSelect: 'none' }}>
-                %
-              </span>
               {hasLineDiscount && (
                 <button
                   type="button"

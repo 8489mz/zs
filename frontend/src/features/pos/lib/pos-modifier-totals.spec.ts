@@ -4,7 +4,7 @@
  * on screen and on the receipt while the posted sale charged the full amount. */
 
 import { describe, it, expect } from 'vitest';
-import { calcModifiersTotal, calcCartLineDiscount, calcCartLineNetTotal, calcCartLineTotal, calcLineDiscountAmountFromPercent, calcLineDiscountPercent, buildCustomerDisplayItems } from './pos-modifier-totals';
+import { calcModifiersTotal, calcCartLineDiscount, calcCartLineNetTotal, calcCartLineTotal, buildCustomerDisplayItems } from './pos-modifier-totals';
 
 describe('pos-modifier-totals (R-B8)', () => {
   describe('calcModifiersTotal', () => {
@@ -155,45 +155,12 @@ describe('pos-modifier-totals line discount (INV-POS-LINE-DISCOUNT)', () => {
   });
 });
 
-/* F1b (van trial problem 21): the cart line-discount input takes a
- * PERCENT of the line gross, not an amount. Trial pin: typing 50 on
- * a 24.00 line is a 12.00 discount — the old amount input clamped
- * the 50 to the full 24.00 and zeroed the line. The stored
- * lineDiscount stays an AMOUNT (the backend contract); only the
- * input interprets keystrokes as a percent. */
-describe('pos-modifier-totals line discount percent (F1b)', () => {
-  describe('calcLineDiscountAmountFromPercent', () => {
-    it('pins the trial case: 50% of a 24.00 line is 12.00, not the clamped 24.00', () => {
-      expect(calcLineDiscountAmountFromPercent({ qty: 1, price: 24 }, 50)).toBe(12);
-    });
-
-    it('returns 0 at 0% and the whole gross at 100%', () => {
-      expect(calcLineDiscountAmountFromPercent({ qty: 1, price: 24 }, 0)).toBe(0);
-      expect(calcLineDiscountAmountFromPercent({ qty: 1, price: 24 }, 100)).toBe(24);
-    });
-
-    it('clamps a percent above 100 to the whole gross and a negative percent to 0', () => {
-      expect(calcLineDiscountAmountFromPercent({ qty: 1, price: 24 }, 150)).toBe(24);
-      expect(calcLineDiscountAmountFromPercent({ qty: 1, price: 24 }, -5)).toBe(0);
-    });
-
-    it('counts modifiers toward the gross the percent divides', () => {
-      expect(calcLineDiscountAmountFromPercent({ qty: 1, price: 100, modifiers: [{ price: 20, qty: 1 }] }, 50)).toBe(60);
-    });
-
-    it('scales with quantity: 50% of 2 x 24.00 is 24.00', () => {
-      expect(calcLineDiscountAmountFromPercent({ qty: 2, price: 24 }, 50)).toBe(24);
-    });
-  });
-
-  describe('calcLineDiscountPercent', () => {
-    it('converts the stored amount back to its percent of the line gross', () => {
-      expect(calcLineDiscountPercent({ qty: 1, price: 24, lineDiscount: 12 })).toBe(50);
-    });
-
-    it('returns 0 for no discount or a zero gross', () => {
-      expect(calcLineDiscountPercent({ qty: 1, price: 24 })).toBe(0);
-      expect(calcLineDiscountPercent({ qty: 0, price: 24, lineDiscount: 5 })).toBe(0);
-    });
-  });
-});
+/* INV-POS-LINE-DISCOUNT-AMOUNT (2026-11-27): the percent helpers
+ * calcLineDiscountAmountFromPercent / calcLineDiscountPercent are
+ * REMOVED — the cart line-discount input takes an AMOUNT again, so
+ * they have no remaining callers. clampDiscountPercent stays: the
+ * invoice % field still uses it (pos-cart-totals.ts). The amount
+ * behaviour of the input itself is pinned in
+ * PosCartItemsList.spec.tsx (shows 12.00, typing 25 reports 25.00);
+ * the above-gross clamp is pinned at the handler level in
+ * pos-domain-cart-add (updatePosItemLineDiscount). */

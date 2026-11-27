@@ -582,11 +582,11 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 399);
-    assert.equal(chain.length, 399);
+    assert.equal(specs.length, 400);
+    assert.equal(chain.length, 400);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/dto-settings.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-d-d10a-serials-payload.spec.ts');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-discount-fix-line-amount.spec.ts');
     console.log('  evidence spec wired into both critical lists (373 = 373, identical order), passed');
   }
 
