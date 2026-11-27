@@ -11,7 +11,8 @@ import {
 } from '@/shared/components/icons/AppIcons';
 import { buildQrSvg } from '@/lib/qrcode';
 import { buildStorePublicUrl } from '@/lib/store-public-url';
-import { useSettingsQuery, useStorefrontAdminSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { useStorefrontAdminSettingsQuery } from '@/shared/hooks/use-storefront-admin-settings-query';
 
 interface TableQrPrintDialogProps {
   open: boolean;

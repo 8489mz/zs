@@ -9,7 +9,6 @@ import { settingsApi } from '@/features/settings/api/settings.api';
 import { maintenanceApi, type MaintenanceListPageResponse } from '@/features/maintenance/api/maintenance.api';
 import { getMaintenanceProfile } from '@/features/maintenance/constants/maintenance-profiles';
 import { costCentersApi } from '@/features/accounting/api/cost-centers.api';
-import { storefrontApi } from '@/features/storefront/api/storefront.api';
 import type { Purchase } from '@/types/domain';
 
 const referenceStaleTime = 60_000;
@@ -107,12 +106,4 @@ export function useBranchesQuery() {
 
 export function useLocationsQuery() {
   return useQuery({ queryKey: queryKeys.settingsLocations, queryFn: settingsApi.locations, staleTime: referenceStaleTime });
-}
-
-export function useStorefrontAdminSettingsQuery(options?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: ['storefront-admin-settings'],
-    queryFn: storefrontApi.getSettings,
-    enabled: options?.enabled ?? true,
-  });
 }

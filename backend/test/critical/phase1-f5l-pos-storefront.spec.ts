@@ -142,12 +142,13 @@ import * as path from 'node:path';
  * byte-identical. Direct '@/shared/lib/', '@/shared/components/' and
  * '@/shared/api/' imports from features are established practice (F5f
  * receipt, F5h/F5i apis, F5j modal/utils, F5k bridge).
- * New shared hook (use-catalog-queries.ts, 109L — well under the cap):
+ * New shared hook (use-storefront-admin-settings-query.ts, 11L — well
+ * under the cap; F5l-REPAIR moved it out of use-catalog-queries.ts:
+ * the storefrontApi import in the startup-reachable catalog queries
+ * dragged 14 files into the entry chunk — ci-full #323):
  * useStorefrontAdminSettingsQuery(options?: { enabled?: boolean }) —
- * the dialog's query carried VERBATIM; the file already imports feature
- * api clients directly (productsApi, salesApi, purchasesApi…), so the
- * hook imports storefrontApi from '@/features/storefront/api/
- * storefront.api' in the file's established style. The other three
+ * the dialog's query carried VERBATIM; the hook imports storefrontApi
+ * from '@/features/storefront/api/storefront.api'. The other three
  * users of the same queryKey (StorefrontPaymentGatewaysManager,
  * StorefrontSettingsTab, MerchantOnlineOrdersPage) keep their own
  * inline useQuery — out of scope (FIX SCOPE RULE: only the dialog's
@@ -281,7 +282,7 @@ const SHARED_QR_DIALOG = path.join(SHARED_COMPONENTS, 'TableQrPrintDialog.tsx');
 const OLD_QR_DIALOG = path.join(FEATURES, 'pos', 'components', 'pos-workspace', 'TableQrPrintDialog.tsx');
 const SHARED_FNB_API = path.join(SHARED_API, 'restaurant-advanced-fnb.api.ts');
 const OLD_FNB_API = path.join(FEATURES, 'pos', 'api', 'restaurant-advanced-fnb.api.ts');
-const SHARED_CATALOG_QUERIES = path.join(SHARED_HOOKS, 'use-catalog-queries.ts');
+const SHARED_STOREFRONT_ADMIN_SETTINGS_QUERY = path.join(SHARED_HOOKS, 'use-storefront-admin-settings-query.ts');
 const POS_INDEX = path.join(FEATURES, 'pos', 'index.ts');
 const STOREFRONT_INDEX = path.join(FEATURES, 'storefront', 'index.ts');
 const POS_ONLINE_ORDERS_MODAL = path.join(FEATURES, 'pos', 'components', 'pos-workspace', 'PosOnlineOrdersModal.tsx');
@@ -566,22 +567,28 @@ async function main(): Promise<void> {
   assert.ok(oldFnbApi.includes('RestaurantDriveThruOrder'), 'the fnb api shim must re-export RestaurantDriveThruOrder');
   assert.ok(oldFnbApi.includes('RestaurantUpsellRule'), 'the fnb api shim must re-export RestaurantUpsellRule');
   assert.ok(oldFnbApi.includes('TableLayout'), 'the fnb api shim must re-export TableLayout');
-  const catalogQueries = fs.readFileSync(SHARED_CATALOG_QUERIES, 'utf8');
+  // F5l-REPAIR: the hook moved OUT of use-catalog-queries.ts into its
+  // own file (the storefrontApi import in the startup-reachable catalog
+  // queries dragged 14 files into the entry chunk — ci-full #323).
+  // Same strings, new home (F3-spec-flip precedent).
+  const storefrontAdminSettingsQuery = fs.readFileSync(SHARED_STOREFRONT_ADMIN_SETTINGS_QUERY, 'utf8');
   assert.ok(
-    catalogQueries.includes('export function useStorefrontAdminSettingsQuery(options?: { enabled?: boolean }) {'),
-    'the shared catalog queries must define useStorefrontAdminSettingsQuery with the enabled option',
+    storefrontAdminSettingsQuery.includes(
+      'export function useStorefrontAdminSettingsQuery(options?: { enabled?: boolean }) {',
+    ),
+    'the new hook file must define useStorefrontAdminSettingsQuery with the enabled option',
   );
   assert.ok(
-    catalogQueries.includes("queryKey: ['storefront-admin-settings'],"),
-    'the shared hook must carry the dialog queryKey verbatim',
+    storefrontAdminSettingsQuery.includes("queryKey: ['storefront-admin-settings'],"),
+    'the moved hook must carry the dialog queryKey verbatim',
   );
   assert.ok(
-    catalogQueries.includes('queryFn: storefrontApi.getSettings,'),
-    'the shared hook must carry the dialog queryFn verbatim',
+    storefrontAdminSettingsQuery.includes('queryFn: storefrontApi.getSettings,'),
+    'the moved hook must carry the dialog queryFn verbatim',
   );
   assert.ok(
-    catalogQueries.includes("import { storefrontApi } from '@/features/storefront/api/storefront.api';"),
-    'the shared hook must import storefrontApi from its feature home (the file’s established style)',
+    storefrontAdminSettingsQuery.includes("import { storefrontApi } from '@/features/storefront/api/storefront.api';"),
+    'the moved hook must import storefrontApi from its feature home (the file’s established style)',
   );
   const posIndex = fs.readFileSync(POS_INDEX, 'utf8');
   assert.ok(
@@ -717,7 +724,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F5L-POS-STOREFRONT-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F5l INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-D-M3-MAIL-NESTED/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5L-REPAIR-BUNDLE-BUDGET/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F5l INV exactly once');
 
   // 4. Wiring: both critical lists carry 395 specs in identical order, this spec last.
@@ -730,11 +737,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 397);
-  assert.equal(chain.length, 397);
+  assert.equal(specs.length, 398);
+  assert.equal(chain.length, 398);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 395 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-d-m3-mail-nested.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-d-m3-mail-nested.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5l-repair-bundle-budget.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5l-repair-bundle-budget.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -764,11 +771,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 397);') && src.includes('assert.equal(chain.length, 397);'),
+      src.includes('assert.equal(specs.length, 398);') && src.includes('assert.equal(chain.length, 398);'),
       `${label} spec wiring must re-pin to 395`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-d-m3-mail-nested.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5l-repair-bundle-budget.spec.ts'"),
       `${label} spec last-entry must re-pin to the F5l spec`,
     );
   }
@@ -863,7 +870,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-D-M3-MAIL-NESTED/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5L-REPAIR-BUNDLE-BUDGET/g)'),
       `${label} spec guard assertion must re-pin to the F5l INV`,
     );
   }
