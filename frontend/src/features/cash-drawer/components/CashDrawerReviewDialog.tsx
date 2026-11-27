@@ -433,11 +433,11 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
                 color: '#0f172a',
               }}
             >
-              <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s72', "إجمالي خصومات الوردية:")}</strong> {formatMoney(Number(shift.shiftDiscountTotal || 0), bookDigits)}</span>
+              <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s85', "إجمالي خصومات الوردية:")}</strong> {formatMoney(Number(shift.shiftDiscountTotal || 0), bookDigits)}</span>
               <span style={{ color: '#94a3b8' }}>|</span>
-              <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s73', "نسبة الخصم من إجمالي المبيعات:")}</strong> {Number(shift.shiftDiscountPercent || 0)}%</span>
+              <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s86', "نسبة الخصم من إجمالي المبيعات:")}</strong> {Number(shift.shiftDiscountPercent || 0)}%</span>
               <span style={{ color: '#94a3b8' }}>|</span>
-              <span style={{ color: '#64748b' }}>{t('cash_drawer.cash_drawer_review_dialog.s74', "إجمالي المبيعات (قبل الخصم):")} {formatMoney(Number(shift.shiftDiscountGrossTotal || 0), bookDigits)}</span>
+              <span style={{ color: '#64748b' }}>{t('cash_drawer.cash_drawer_review_dialog.s87', "إجمالي المبيعات (قبل الخصم):")} {formatMoney(Number(shift.shiftDiscountGrossTotal || 0), bookDigits)}</span>
             </div>
 
             {/* 3. SECTION 1: Cash Drawer Reconciliation (جرد ومطابقة نقدية الدرج - الكاش الفعلي) */}

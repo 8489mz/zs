@@ -11571,7 +11571,10 @@
       "s45": "Quantity Difference",
       "s73": "Supervisor's Note for Approval (Optional)",
       "s74": "Write a short note for review...",
-      "s79": "Final Closing Approval"
+      "s79": "Final Closing Approval",
+      "s85": "Total shift discounts:",
+      "s86": "Discount % of gross sales:",
+      "s87": "Gross sales (before discount):"
     },
     "cash_drawer_shifts_card": {
       "s2": "Cash Sales:",
