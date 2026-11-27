@@ -10,7 +10,7 @@ import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { formatCurrency } from '@/lib/format';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { Button } from '@/shared/ui/button';
-import { printZReport } from '@/features/cash-drawer/utils/cash-drawer-receipt';
+import { printZReport } from '@/shared/utils/cash-drawer-receipt';
 import { PrinterIcon } from '@/shared/components/icons/AppIcons';
 import { SubmitButton } from '@/shared/components/submit-button';
 import { CashIcon } from './cash-drawer-form-icons';

@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/shared/ui/button';
 import { ChevronDownIcon, PrinterIcon, SlidersIcon, LockIcon } from '@/shared/components/icons/AppIcons';
 import { cashDrawerApi } from '@/lib/api/cash-drawer';
-import { printXReport } from '@/features/cash-drawer';
+import { printXReport } from '@/shared/utils/cash-drawer-receipt';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import type { AppSettings } from '@/types/domain';
 

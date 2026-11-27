@@ -18,7 +18,7 @@ import {
   CheckCircleIcon,
   LayersIcon,
 } from '@/shared/components/icons/AppIcons';
-import { printCashDrawerShiftReceipt } from '@/features/cash-drawer/utils/cash-drawer-receipt';
+import { printCashDrawerShiftReceipt } from '@/shared/utils/cash-drawer-receipt';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits } from '@/shared/utils/money';

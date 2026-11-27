@@ -384,6 +384,7 @@
     "test/critical/phase1-f5b-products-settings.spec.ts",
     "test/critical/phase1-f5c-accounts-purchases.spec.ts",
     "test/critical/phase1-f5d-maintenance-products.spec.ts",
-    "test/critical/phase1-f5e-accounting-treasury.spec.ts"
+    "test/critical/phase1-f5e-accounting-treasury.spec.ts",
+    "test/critical/phase1-f5f-cash-drawer-pos.spec.ts"
   ]
 }

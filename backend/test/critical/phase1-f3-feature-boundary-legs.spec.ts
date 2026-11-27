@@ -222,22 +222,25 @@ async function main(): Promise<void> {
   // index still counts as a statement on the same edge (grounding §7
   // note), so the backend total, the frontend total, both edge tables
   // and both pair lists stay exactly where F2 left them.
+  // NOTE (F5f): F5f later broke the cash-drawer|pos pair by moving the
+  // shift-receipt module to shared, so the pair assertion below is now
+  // the gone-form; the pos|sales pair still stays pinned (F5h not done).
   const boundary = fs.readFileSync(BOUNDARY_SPEC, 'utf8');
   assert.ok(
     boundary.includes('const PINNED_BACKEND_TOTAL = 738;'),
     'module-boundary must still pin the backend total 738',
   );
   assert.ok(
-    boundary.includes('const PINNED_FRONTEND_TOTAL = 131;'),
-    'module-boundary must still pin the frontend total 131',
+    boundary.includes('const PINNED_FRONTEND_TOTAL = 130;'),
+    'module-boundary must still pin the frontend total 130',
   );
   assert.ok(
     boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
     'module-boundary must still pin 63 backend edges',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 51,'),
-    'module-boundary must still pin 51 frontend edges',
+    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 50,'),
+    'module-boundary must still pin 50 frontend edges',
   );
   assert.ok(
     boundary.includes("'cash-drawer->pos': 2,"),
@@ -247,7 +250,10 @@ async function main(): Promise<void> {
     boundary.includes("'pos->sales': 3,"),
     'module-boundary must still pin pos->sales at 3 (bare index imports still count)',
   );
-  assert.ok(boundary.includes("'cash-drawer|pos',"), 'cash-drawer|pos pair must stay pinned');
+  assert.ok(
+    !boundary.includes("'cash-drawer|pos',"),
+    'cash-drawer|pos pair must be gone after F5f (receipt module moved to shared)',
+  );
   assert.ok(boundary.includes("'pos|sales',"), 'pos|sales pair must stay pinned');
 
   // 4. The INV entry exists exactly once in both places (never quote another INV id literally).
@@ -255,7 +261,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F3-FEATURE-BOUNDARY-LEGS/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F3 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F5D-REPAIR-IMEI-SPEC-HOOKS/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5F-CASH-DRAWER-POS-DECOUPLED/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F3 INV exactly once');
 
   // 5. Wiring: both critical lists carry 384 specs in identical order, the F4 spec last.
@@ -268,11 +274,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 385);
-  assert.equal(chain.length, 385);
+  assert.equal(specs.length, 386);
+  assert.equal(chain.length, 386);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 379 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5e-accounting-treasury.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5e-accounting-treasury.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5f-cash-drawer-pos.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5f-cash-drawer-pos.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -286,11 +292,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 385);') && src.includes('assert.equal(chain.length, 385);'),
+      src.includes('assert.equal(specs.length, 386);') && src.includes('assert.equal(chain.length, 386);'),
       `${label} spec wiring must re-pin to 379`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5e-accounting-treasury.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5f-cash-drawer-pos.spec.ts'"),
       `${label} spec last-entry must re-pin to the F3 spec`,
     );
   }
@@ -332,7 +338,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F5D-REPAIR-IMEI-SPEC-HOOKS/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5F-CASH-DRAWER-POS-DECOUPLED/g)'),
       `${label} spec guard assertion must re-pin to the F3 INV`,
     );
   }

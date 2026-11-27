@@ -20,7 +20,7 @@ import { QueryFeedback } from '@/shared/components/query-feedback';
 import { PaginationControls } from '@/shared/components/pagination-controls';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
-import { printCashDrawerShiftReceipt } from '@/features/cash-drawer/utils/cash-drawer-receipt';
+import { printCashDrawerShiftReceipt } from '@/shared/utils/cash-drawer-receipt';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import type { CashierShift } from '@/types/domain';
