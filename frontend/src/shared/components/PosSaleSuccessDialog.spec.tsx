@@ -10,7 +10,7 @@ const { mockIsAvailable, mockKickDrawer } = vi.hoisted(() => ({
   mockKickDrawer: vi.fn(),
 }));
 
-vi.mock('@/features/pos/lib/hardware-bridge-client', () => ({
+vi.mock('@/shared/lib/hardware-bridge-client', () => ({
   HardwareBridgeClient: {
     isAvailable: mockIsAvailable,
     kickDrawer: mockKickDrawer,

@@ -506,27 +506,25 @@ async function main(): Promise<void> {
     'DigitalSignagePage must keep its products import (the surviving direction, via the F5j shim)',
   );
 
-  // 2. The module-boundary pins move: frontend edges 46 -> 45,
-  // statements 116 -> 111, pairs 2 -> 1 ('pos|products' gone);
-  // the backend pins do not move. The feature-boundary baseline
-  // shrinks 63 -> 60 (exactly the 3 deep products->pos strings
-  // removed); the import-layer baseline stays 152.
+  // 2. F5l moves the module-boundary pins: frontend edges 44,
+  // statements 105, pairs 0 (the pos|storefront pair is gone); the
+  // backend pins do not move. Baselines 57 / 152.
   const boundary = fs.readFileSync(BOUNDARY_SPEC, 'utf8');
   assert.ok(
     boundary.includes('const PINNED_BACKEND_TOTAL = 738;'),
     'module-boundary must still pin the backend total 738',
   );
   assert.ok(
-    boundary.includes('const PINNED_FRONTEND_TOTAL = 111;'),
-    'module-boundary must pin the frontend total 111 after F5k',
+    boundary.includes('const PINNED_FRONTEND_TOTAL = 105;'),
+    'module-boundary must still pin the frontend total 105',
   );
   assert.ok(
     boundary.includes('Object.keys(PINNED_BACKEND_EDGES).length, 63,'),
     'module-boundary must still pin 63 backend edges',
   );
   assert.ok(
-    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 45,'),
-    'module-boundary must pin 45 frontend edges after F5k',
+    boundary.includes('Object.keys(PINNED_FRONTEND_EDGES).length, 44,'),
+    'module-boundary must still pin 44 frontend edges',
   );
   assert.ok(
     !boundary.includes("'products->pos': 5,"),
@@ -538,11 +536,11 @@ async function main(): Promise<void> {
   );
   assert.ok(!boundary.includes("'pos|products'"), 'the pos|products pair must be gone from the pair list');
   assert.ok(
-    boundary.includes("'pos|storefront'"),
-    'the pos|storefront pair must stay pinned (the last pair, F5l owns it)',
+    !boundary.includes("'pos|storefront'"),
+    'the pos|storefront pair must be gone from the pair list (F5l broke it — flipped from stay-pinned)',
   );
   const featureBaseline = JSON.parse(fs.readFileSync(FEATURE_BOUNDARY_BASELINE, 'utf8')) as string[];
-  assert.equal(featureBaseline.length, 60, 'feature-boundary baseline must shrink to exactly 60 after F5k');
+  assert.equal(featureBaseline.length, 57, 'feature-boundary baseline must stay exactly 57 after F5l');
   assert.ok(
     !featureBaseline.includes('products/components/ProductUnitsEditor.tsx imports @/features/pos/lib/pos.domain'),
     'feature-boundary baseline must not contain the removed ProductUnitsEditor string',
@@ -575,7 +573,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-F5K-POS-PRODUCTS-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the F5k INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F5J-REPAIR-EXPIRY-SPEC-IMPORT/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5L-POS-STOREFRONT-DECOUPLED/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the F5k INV exactly once');
 
   // 4. Wiring: both critical lists carry 393 specs in identical order, this spec last.
@@ -588,11 +586,11 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 394);
-  assert.equal(chain.length, 394);
+  assert.equal(specs.length, 395);
+  assert.equal(chain.length, 395);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 393 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5j-repair-expiry-spec-import.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5j-repair-expiry-spec-import.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5l-pos-storefront.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5l-pos-storefront.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -620,11 +618,11 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 394);') && src.includes('assert.equal(chain.length, 394);'),
+      src.includes('assert.equal(specs.length, 395);') && src.includes('assert.equal(chain.length, 395);'),
       `${label} spec wiring must re-pin to 393`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5j-repair-expiry-spec-import.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-f5l-pos-storefront.spec.ts'"),
       `${label} spec last-entry must re-pin to the F5k spec`,
     );
   }
@@ -733,7 +731,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-PHASE1-F5J-REPAIR-EXPIRY-SPEC-IMPORT/g)'),
+      src.includes('guard.match(/INV-PHASE1-F5L-POS-STOREFRONT-DECOUPLED/g)'),
       `${label} spec guard assertion must re-pin to the F5k INV`,
     );
   }

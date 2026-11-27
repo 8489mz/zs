@@ -17,7 +17,7 @@ import type { StorefrontMidBanner } from '../types/storefront.types';
 import {
   CheckIcon,
 } from '@/shared/components/icons/AppIcons';
-import { TableQrPrintDialog } from '@/features/pos';
+import { TableQrPrintDialog } from '@/shared/components/TableQrPrintDialog';
 import { StorefrontPixelTrackingCard } from './storefront-settings/StorefrontPixelTrackingCard';
 import { StorefrontMidBannersCard } from './storefront-settings/StorefrontMidBannersCard';
 import { StorefrontOperationsCard } from './storefront-settings/StorefrontOperationsCard';

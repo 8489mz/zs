@@ -617,8 +617,8 @@ async function main(): Promise<void> {
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 394);
-      assert.equal(chain.length, 394);
+      assert.equal(specs.length, 395);
+      assert.equal(chain.length, 395);
       assert.deepEqual(chain, specs);
       assert.ok(specs.includes('test/critical/van-portal-sale-rep-attribution-f20.spec.ts'));
       // No last-entry assertion: the last slot belongs to whichever spec was wired most recently (P3 appended migration-0339-idempotent after F20); presence above + count + order already prove the wiring.

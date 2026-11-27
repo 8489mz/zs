@@ -54,9 +54,6 @@
   "settings/components/workspace-sections/marketplaces/marketplace-onboarding.tsx imports @/features/storefront/api/marketplace-sync.api",
   "settings/components/workspace-sections/marketplaces/marketplace-settlements.tsx imports @/features/storefront/api/marketplace-sync.api",
   "settings/components/workspace-sections/marketplaces/marketplace-tools.tsx imports @/features/storefront/api/marketplace-sync.api",
-  "storefront/lib/storefront-pos-loader.ts imports @/features/pos/lib/pos.persistence",
-  "storefront/lib/storefront-pos-loader.ts imports @/features/pos/types/pos.types",
-  "storefront/pages/merchant-online-orders/merchant-orders-pos-success-dialog.tsx imports @/features/pos/components/pos-workspace/PosSaleSuccessDialog",
   "tradein/components/TradeInDisclaimerModal.tsx imports @/features/maintenance/constants/maintenance-profiles",
   "tradein/pages/TradeInPage.tsx imports @/features/maintenance/constants/maintenance-profiles"
 ]

@@ -2,7 +2,7 @@ import { useStorefrontLang } from '@/i18n';
 import { useState, useId } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { storefrontApi } from '../api/storefront.api';
-import { restaurantAdvancedFnbApi } from '@/features/pos';
+import { restaurantAdvancedFnbApi } from '@/shared/api/restaurant-advanced-fnb.api';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
 import { toast } from '@/shared/components/system-alert';

@@ -1,4 +1,4 @@
-import { PosSaleSuccessDialog } from '@/features/pos/components/pos-workspace/PosSaleSuccessDialog';
+import { PosSaleSuccessDialog } from '@/shared/components/PosSaleSuccessDialog';
 import { printPostedSaleReceipt } from '@/lib/pos-printing';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Sale } from '@/types/domain';

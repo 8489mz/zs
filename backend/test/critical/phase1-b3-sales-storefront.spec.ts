@@ -323,7 +323,7 @@ async function main(): Promise<void> {
   const invCount = (invariants.match(/INV-PHASE1-B3-SALES-STOREFRONT-DECOUPLED/g) || []).length;
   assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the B3 INV exactly once');
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-PHASE1-F5J-REPAIR-EXPIRY-SPEC-IMPORT/g) || []).length;
+  const guardCount = (guard.match(/INV-PHASE1-F5L-POS-STOREFRONT-DECOUPLED/g) || []).length;
   assert.equal(
     guardCount,
     1,
@@ -354,25 +354,25 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 394);
-  assert.equal(chain.length, 394);
+  assert.equal(specs.length, 395);
+  assert.equal(chain.length, 395);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 375 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5j-repair-expiry-spec-import.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5j-repair-expiry-spec-import.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5l-pos-storefront.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-f5l-pos-storefront.spec.ts');
   assert.ok(
-    b1.includes('assert.equal(specs.length, 394);') && b1.includes('assert.equal(chain.length, 394);'),
+    b1.includes('assert.equal(specs.length, 395);') && b1.includes('assert.equal(chain.length, 395);'),
     'B1 spec wiring must re-pin to 375',
   );
   assert.ok(
-    b1.includes("specs[specs.length - 1], 'test/critical/phase1-f5j-repair-expiry-spec-import.spec.ts'"),
+    b1.includes("specs[specs.length - 1], 'test/critical/phase1-f5l-pos-storefront.spec.ts'"),
     'B1 spec last-entry must re-pin to the B7 spec',
   );
   assert.ok(
-    b2.includes('assert.equal(specs.length, 394);') && b2.includes('assert.equal(chain.length, 394);'),
+    b2.includes('assert.equal(specs.length, 395);') && b2.includes('assert.equal(chain.length, 395);'),
     'B2 spec wiring must re-pin to 375',
   );
   assert.ok(
-    b2.includes("specs[specs.length - 1], 'test/critical/phase1-f5j-repair-expiry-spec-import.spec.ts'"),
+    b2.includes("specs[specs.length - 1], 'test/critical/phase1-f5l-pos-storefront.spec.ts'"),
     'B2 spec last-entry must re-pin to the B7 spec',
   );
 
