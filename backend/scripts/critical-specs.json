@@ -404,6 +404,7 @@
     "test/critical/phase1-cleanup-as-any-reduction.spec.ts",
     "test/critical/phase1-eval-p1-frontend-lint.spec.ts",
     "test/critical/phase1-eval-p2-dev-passcode.spec.ts",
-    "test/critical/phase1-eval-p3-van-writer.spec.ts"
+    "test/critical/phase1-eval-p3-van-writer.spec.ts",
+    "test/critical/phase1-eval-repair-type-imports.spec.ts"
   ]
 }

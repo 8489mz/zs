@@ -2,7 +2,7 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
 import { CheckCircleIcon, ShoppingCartIcon, BarChartIcon, PackageIcon } from '@/shared/components/icons/AppIcons';
 import type { useTranslation } from 'react-i18next';
-import type {type SeedDemoDataResult, type DemoActivitySummary} from '@/features/settings/api/demo-data.api';
+import type {SeedDemoDataResult, DemoActivitySummary} from '@/features/settings/api/demo-data.api';
 import type { useNavigate } from 'react-router-dom';
 
 export interface SettingsDemoDataWizardSuccessDialogProps {

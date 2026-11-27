@@ -2,7 +2,7 @@ import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { recordStockMovement } from '../../../common/utils/stock-movement-writer';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { formatDailyDocumentNumber, getDailyDocumentPrefix } from '../../../common/utils/document-number.util';
 import { getTenantTimezone, formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
 import { AppError } from '../../../common/errors/app-error';
@@ -365,7 +365,6 @@ import {
   CustomerRepBalanceBreakdown,
   CustomerRepLedgerEntryInput,
 } from '../rep-target.engine';
-import { type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 /**
  * Format customer code consistently as C-XXXX (e.g. C-0001, C-04185).

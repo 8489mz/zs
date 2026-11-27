@@ -1,7 +1,7 @@
 import { Button } from '@/shared/ui/button';
 import { ShieldCheckIcon, RefreshCwIcon } from '@/shared/components/icons/AppIcons';
 import type { useTranslation } from 'react-i18next';
-import type {type DemoDataStatusResponse, type DemoActivitySummary} from '@/features/settings/api/demo-data.api';
+import type {DemoDataStatusResponse, DemoActivitySummary} from '@/features/settings/api/demo-data.api';
 
 export interface SettingsDemoDataWizardConfigProps {
   t: ReturnType<typeof useTranslation>['t'];

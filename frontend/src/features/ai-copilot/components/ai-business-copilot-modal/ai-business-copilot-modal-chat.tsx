@@ -9,7 +9,7 @@ import {
   type ReasoningStep,
 } from './ai-business-copilot-modal-shared';
 import type { UseMutationResult } from '@tanstack/react-query';
-import type {type RefObject, type Dispatch, type SetStateAction} from 'react';
+import type {RefObject, Dispatch, SetStateAction} from 'react';
 
 export interface AiBusinessCopilotModalChatProps {
   activeTab: 'chat' | 'knowledge';
