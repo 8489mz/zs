@@ -354,13 +354,13 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 401);
-  assert.equal(chain.length, 401);
+  assert.equal(specs.length, 402);
+  assert.equal(chain.length, 402);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 375 specs in order');
   assert.equal(specs[specs.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
   assert.equal(chain[chain.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
   assert.ok(
-    b1.includes('assert.equal(specs.length, 401);') && b1.includes('assert.equal(chain.length, 401);'),
+    b1.includes('assert.equal(specs.length, 402);') && b1.includes('assert.equal(chain.length, 402);'),
     'B1 spec wiring must re-pin to 375',
   );
   assert.ok(
@@ -368,7 +368,7 @@ async function main(): Promise<void> {
     'B1 spec last-entry must re-pin to the B7 spec',
   );
   assert.ok(
-    b2.includes('assert.equal(specs.length, 401);') && b2.includes('assert.equal(chain.length, 401);'),
+    b2.includes('assert.equal(specs.length, 402);') && b2.includes('assert.equal(chain.length, 402);'),
     'B2 spec wiring must re-pin to 375',
   );
   assert.ok(

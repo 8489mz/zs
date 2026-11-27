@@ -5,6 +5,10 @@ import {
   computeShiftCustomerCollectionsByChannel,
   type ShiftCustomerCollectionsByChannel,
 } from './helpers/shift-customer-collections.helper';
+import {
+  computeShiftDiscountSummary as buildShiftDiscountSummary,
+  type ShiftDiscountSummary,
+} from './helpers/shift-discount-summary.helper';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { type TenantScope } from '../../core/auth/utils/tenant-boundary';
 import { Database } from '../../database/database.types';
@@ -360,6 +364,55 @@ export class CashDrawerComputeService {
       walletOperationCount: Number(row.wallet_operation_count || 0),
       instapayOperationCount: Number(row.instapay_operation_count || 0),
     };
+  }
+
+  /**
+   * INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: the discounts the cashier made
+   * over the shift's posted sales — header discount (manual + loyalty)
+   * plus per-line discounts — as a % of gross sales. DISPLAY-ONLY:
+   * it never feeds expected cash, any gate, or any total. It is a
+   * SEPARATE query from computeShiftSalesBreakdown on purpose: the
+   * breakdown query may only reference columns every drawer fixture
+   * carries, and the discount sums need sales.subtotal / sales.discount
+   * plus sale_items.line_discount. The F8 system cash discount
+   * (sales.system_cash_discount_amount) is deliberately NOT selected:
+   * it is automatic, not made by the cashier. Returns are not in the
+   * sum: only posted sales are aggregated (same attribution key as
+   * the breakdown — INV-SHIFT-SALE-CASH-ATTRIBUTION).
+   */
+  async computeShiftDiscountSummary(
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<ShiftDiscountSummary> {
+    const openerId = Number(shift.opened_by || 0);
+    const scope = this.scope(auth);
+    const bookDigits = digits ?? currencyMoneyDigits(await tenantBaseCurrency(queryable ?? this.db, scope.tenantId));
+    const empty: ShiftDiscountSummary = { discountTotal: 0, grossSalesTotal: 0, discountPercent: 0 };
+    if (!(openerId > 0) || !shift.created_at) return empty;
+    const result = await sql<{
+      header_discount_total?: number | string | null;
+      net_subtotal?: number | string | null;
+      line_discount_total?: number | string | null;
+    }>`
+      with shift_sales as (
+        select s.id, coalesce(s.subtotal, 0) as subtotal, coalesce(s.discount, 0) as discount
+        from sales s
+        where s.tenant_id = ${scope.tenantId} and s.status = 'posted' and ${this.shiftSaleCashAttribution(scope.tenantId, shift, openerId)}
+      )
+      select coalesce(sum(discount), 0) as header_discount_total,
+             coalesce(sum(subtotal), 0) as net_subtotal,
+             coalesce((select sum(coalesce(si.line_discount, 0)) from sale_items si where si.tenant_id = ${scope.tenantId} and si.sale_id in (select id from shift_sales)), 0) as line_discount_total
+      from shift_sales
+    `.execute(queryable ?? this.db);
+    const row = result.rows?.[0] || {};
+    return buildShiftDiscountSummary({
+      headerDiscountTotal: Number(row.header_discount_total || 0),
+      lineDiscountTotal: Number(row.line_discount_total || 0),
+      grossSalesTotal: Number(row.net_subtotal || 0) + Number(row.line_discount_total || 0),
+      digits: bookDigits,
+    });
   }
 
   async computeShiftSaleReturnTotals(

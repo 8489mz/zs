@@ -348,8 +348,8 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 401);
-    assert.equal(chain.length, 401);
+    assert.equal(specs.length, 402);
+    assert.equal(chain.length, 402);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/dto-hr.spec.ts'));
     assert.ok(specs.includes('test/critical/dto-tax-approvals.spec.ts'));

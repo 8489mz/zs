@@ -406,20 +406,20 @@ async function main(): Promise<void> {
       };
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 401);
-      assert.equal(chain.length, 401);
+      assert.equal(specs.length, 402);
+      assert.equal(chain.length, 402);
       assert.deepEqual(chain, specs);
-      assert.equal(specs[358], 'test/critical/sales-writer-create.spec.ts');
-      assert.equal(specs[359], 'test/critical/sales-writer-cancel-edit.spec.ts');
-      assert.equal(specs[360], 'test/critical/sales-writer-food-waste.spec.ts');
-      assert.equal(specs[361], 'test/critical/manufacturing-writer.spec.ts');
-      assert.equal(specs[362], 'test/critical/purchases-writer.spec.ts');
-      assert.equal(specs[363], 'test/critical/phase1-a9-routing.spec.ts');
-      assert.equal(specs[364], 'test/critical/phase1-a9-inventory-writer.spec.ts');
-      assert.equal(specs[365], 'test/critical/phase1-a9-services-writer.spec.ts');
-      assert.equal(specs[366], 'test/critical/phase1-a10-rounding.spec.ts');
-      assert.equal(specs[367], 'test/critical/phase1-a10-purchases-writer.spec.ts');
-      assert.equal(specs[368], 'test/critical/phase1-a10-import-writer.spec.ts');
+      assert.equal(specs[359], 'test/critical/sales-writer-create.spec.ts');
+      assert.equal(specs[360], 'test/critical/sales-writer-cancel-edit.spec.ts');
+      assert.equal(specs[361], 'test/critical/sales-writer-food-waste.spec.ts');
+      assert.equal(specs[362], 'test/critical/manufacturing-writer.spec.ts');
+      assert.equal(specs[363], 'test/critical/purchases-writer.spec.ts');
+      assert.equal(specs[364], 'test/critical/phase1-a9-routing.spec.ts');
+      assert.equal(specs[365], 'test/critical/phase1-a9-inventory-writer.spec.ts');
+      assert.equal(specs[366], 'test/critical/phase1-a9-services-writer.spec.ts');
+      assert.equal(specs[367], 'test/critical/phase1-a10-rounding.spec.ts');
+      assert.equal(specs[368], 'test/critical/phase1-a10-purchases-writer.spec.ts');
+      assert.equal(specs[369], 'test/critical/phase1-a10-import-writer.spec.ts');
       console.log('  evidence specs wired into both critical lists (373 = 373, identical order), passed');
     }
   } finally {

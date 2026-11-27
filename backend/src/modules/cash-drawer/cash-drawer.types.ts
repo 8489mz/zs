@@ -19,6 +19,12 @@ export type ShiftRow = {
   net_store_sales_total?: number | string | null;
   shift_sales_total?: number | string | null;
   tip_sales_total?: number | string | null;
+  // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: hydrated by hydrateShiftRow
+  // from computeShiftDiscountSummary; 0 on rows the query cannot
+  // reach (computed live, never stored).
+  shiftDiscountTotal?: number | string | null;
+  shiftDiscountGrossTotal?: number | string | null;
+  shiftDiscountPercent?: number | string | null;
   sale_count?: number | string | null;
   mixed_sale_count?: number | string | null;
   card_operation_count?: number | string | null;

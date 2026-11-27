@@ -190,4 +190,127 @@ describe('generateCashDrawerSettlementReceiptHtml', () => {
     expect(html).not.toContain('نقدية فواتير ملغاة');
     expect(html).toContain('600.00');
   });
+
+  it('shows the shift discount summary: total discounts and % of gross sales (INV-SHIFT-CLOSE-DISCOUNT-SUMMARY)', () => {
+    const shift: CashierShift = {
+      id: '13',
+      docNo: 'SHIFT-13',
+      branchId: '1',
+      branchName: 'الفرع الرئيسي',
+      locationId: '1',
+      locationName: 'نقطة 1',
+      openedById: '2',
+      openedByName: 'سيد',
+      createdAt: '2026-08-28T22:00:00.000Z',
+      closedAt: '2026-08-28T22:30:00.000Z',
+      cashSalesTotal: 625.8,
+      cardSalesTotal: 200,
+      walletSalesTotal: 0,
+      instapaySalesTotal: 0,
+      creditSalesTotal: 0,
+      deliverySalesTotal: 0,
+      deliveryFeeTotal: 0,
+      freelanceDeliveryFeeTotal: 0,
+      storeDeliveryFeeTotal: 0,
+      netStoreSalesTotal: 825.8,
+      shiftSalesTotal: 825.8,
+      saleCount: 2,
+      mixedSalesCount: 0,
+      cardOperationCount: 1,
+      walletOperationCount: 0,
+      instapayOperationCount: 0,
+      cashDrawerMovementTotal: 0,
+      cashDrawerCashInTotal: 0,
+      cashDrawerDeliveryCashInTotal: 0,
+      cashDrawerManualCashInTotal: 0,
+      cashDrawerCashOutTotal: 0,
+      supplierPaymentsTotal: 0,
+      expensesTotal: 0,
+      serviceCashTotal: 0,
+      serviceCardTotal: 0,
+      serviceTotal: 0,
+      saleReturnCashRefundTotal: 0,
+      saleReturnCardRefundTotal: 0,
+      saleReturnTotal: 0,
+      shiftDiscountTotal: 15,
+      shiftDiscountGrossTotal: 840.8,
+      shiftDiscountPercent: 1.784,
+      openingCash: 100,
+      openingNote: '',
+      status: 'closed',
+      expectedCash: 725.8,
+      countedCash: 725.8,
+      variance: 0,
+      declaredCash: 725.8,
+      movementItems: [],
+    };
+
+    const html = generateCashDrawerSettlementReceiptHtml(shift, 'محل الاختبار');
+
+    expect(html).toContain('إجمالي خصومات الوردية');
+    expect(html).toContain('15.00');
+    expect(html).toContain('(1.784%)');
+    expect(html).toContain('إجمالي المبيعات قبل الخصم');
+    expect(html).toContain('840.80');
+  });
+
+  it('omits the discount summary lines when the shift has no discounts (INV-SHIFT-CLOSE-DISCOUNT-SUMMARY)', () => {
+    const shift: CashierShift = {
+      id: '14',
+      docNo: 'SHIFT-14',
+      branchId: '1',
+      branchName: 'الفرع الرئيسي',
+      locationId: '1',
+      locationName: 'نقطة 1',
+      openedById: '2',
+      openedByName: 'سيد',
+      createdAt: '2026-08-28T22:00:00.000Z',
+      closedAt: '2026-08-28T22:30:00.000Z',
+      cashSalesTotal: 100,
+      cardSalesTotal: 0,
+      walletSalesTotal: 0,
+      instapaySalesTotal: 0,
+      creditSalesTotal: 0,
+      deliverySalesTotal: 0,
+      deliveryFeeTotal: 0,
+      freelanceDeliveryFeeTotal: 0,
+      storeDeliveryFeeTotal: 0,
+      netStoreSalesTotal: 100,
+      shiftSalesTotal: 100,
+      saleCount: 1,
+      mixedSalesCount: 0,
+      cardOperationCount: 0,
+      walletOperationCount: 0,
+      instapayOperationCount: 0,
+      cashDrawerMovementTotal: 0,
+      cashDrawerCashInTotal: 0,
+      cashDrawerDeliveryCashInTotal: 0,
+      cashDrawerManualCashInTotal: 0,
+      cashDrawerCashOutTotal: 0,
+      supplierPaymentsTotal: 0,
+      expensesTotal: 0,
+      serviceCashTotal: 0,
+      serviceCardTotal: 0,
+      serviceTotal: 0,
+      saleReturnCashRefundTotal: 0,
+      saleReturnCardRefundTotal: 0,
+      saleReturnTotal: 0,
+      shiftDiscountTotal: 0,
+      shiftDiscountGrossTotal: 0,
+      shiftDiscountPercent: 0,
+      openingCash: 100,
+      openingNote: '',
+      status: 'closed',
+      expectedCash: 200,
+      countedCash: 200,
+      variance: 0,
+      declaredCash: 200,
+      movementItems: [],
+    };
+
+    const html = generateCashDrawerSettlementReceiptHtml(shift, 'محل الاختبار');
+
+    expect(html).not.toContain('إجمالي خصومات الوردية');
+    expect(html).not.toContain('إجمالي المبيعات قبل الخصم');
+  });
 });

@@ -19,10 +19,28 @@ WHAT IS DRIVEN: the real closeCashierShift + reviewCashierShiftClose
 real sales breakdown. A cash sale 625.80 + a card sale 200.00 inside
 one shift, opening cash 100, counted cash 725.80 at close.
 
+WHAT THIS PINS (INV-SHIFT-CLOSE-DISCOUNT-SUMMARY, added 2026-11-27):
+the same listed row carries the shift-close discount summary — total
+discounts the cashier made (header discount + per-line discounts)
+and their % of GROSS sales (subtotal + line discounts). Sale 1
+carries header discount 10.00 + line discounts 3.00 + 2.00 on a
+subtotal of 635.80 (gross 640.80); sale 2 carries none. The F8 system
+cash discount (20.00 on sale 1) is automatic, not made by the
+cashier, and must NOT move the total. The pure helper is pinned
+directly (3dp rounding, gross 0 -> 0%) and through the real listing.
+An open shift with no discounts shows 0 / 0 / 0%.
+
 NOT DRIVEN: the frontend card (it renders whatever the listing
 returns; this package gives it the real figures — the spec
 recomputes the card's own difference formula from the returned row
 fields); live-Postgres acceptance (deferred by written decision).
+
+HARNESS REPAIR (2026-11-27, this package): the spec was unwired and
+had not run since the I20 open-tables check landed — closeCashierShift
+now reads held_sales (findOpenTablesBlockingClose), so the harness
+gains a minimal held_sales table mirroring the migration set, plus
+the sale_items table the discount summary needs. Without them the
+real close path cannot run at all.
 */
 
 import 'reflect-metadata';
@@ -35,6 +53,7 @@ import { TransactionHelper } from '../../src/database/helpers/transaction.helper
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { CashDrawerService } from '../../src/modules/cash-drawer/cash-drawer.service';
+import { computeShiftDiscountSummary } from '../../src/modules/cash-drawer/helpers/shift-discount-summary.helper';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
@@ -81,17 +100,19 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE journal_entries (id bigserial PRIMARY KEY, tenant_id text, account_id text, entry_no text, dedup_key text, entry_date date, description text, source_type text, source_id bigint, status text, branch_id bigint, location_id bigint, created_by bigint, posted_by bigint, posted_at timestamptz, reversal_of_entry_id bigint, reversed_by_entry_id bigint, cancelled_by bigint, cancelled_at timestamptz, cancel_reason text, cash_flow_category text, updated_at timestamptz);
     CREATE TABLE journal_entry_lines (id bigserial PRIMARY KEY, tenant_id text, journal_entry_id bigint, account_id bigint, cost_center_id bigint, description text, debit numeric, credit numeric, partner_type text, partner_id bigint, branch_id bigint, location_id bigint, is_reconciled boolean DEFAULT false);
     CREATE TABLE accounting_posting_failures (id bigserial PRIMARY KEY, tenant_id text, source_type text, source_id bigint, resolved_at timestamptz, last_attempt_at timestamptz);
-    CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text, account_id text, doc_no text, customer_id bigint, customer_name text, payment_type text, payment_channel text, subtotal numeric DEFAULT 0, discount numeric DEFAULT 0, delivery_fee numeric DEFAULT 0, delivery_fee_mode text, service_charge numeric DEFAULT 0, tip_amount numeric DEFAULT 0, tax_rate numeric DEFAULT 0, tax_amount numeric DEFAULT 0, prices_include_tax boolean DEFAULT false, total numeric DEFAULT 0, paid_amount numeric DEFAULT 0, applied_amount numeric DEFAULT 0, tendered_amount numeric DEFAULT 0, change_amount numeric DEFAULT 0, store_credit_used numeric DEFAULT 0, note text, status text, collection_status text, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW(), updated_at timestamptz);
+    CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text, account_id text, doc_no text, customer_id bigint, customer_name text, payment_type text, payment_channel text, subtotal numeric DEFAULT 0, discount numeric DEFAULT 0, system_cash_discount_amount numeric DEFAULT 0, delivery_fee numeric DEFAULT 0, delivery_fee_mode text, service_charge numeric DEFAULT 0, tip_amount numeric DEFAULT 0, tax_rate numeric DEFAULT 0, tax_amount numeric DEFAULT 0, prices_include_tax boolean DEFAULT false, total numeric DEFAULT 0, paid_amount numeric DEFAULT 0, applied_amount numeric DEFAULT 0, tendered_amount numeric DEFAULT 0, change_amount numeric DEFAULT 0, store_credit_used numeric DEFAULT 0, note text, status text, collection_status text, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW(), updated_at timestamptz);
+    CREATE TABLE sale_items (id bigserial PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, line_discount numeric DEFAULT 0);
+    CREATE TABLE held_sales (id bigserial PRIMARY KEY, tenant_id text, table_number text, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW());
     CREATE TABLE sale_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, payment_channel text, amount numeric, applied_amount numeric, tendered_amount numeric, change_amount numeric, card_rrn text, card_auth_code text, terminal_id text, terminal_auth_code text, terminal_rrn text, card_scheme text, card_last_four text);
     CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, doc_no text, note text, return_type text, invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT '2026-10-02');
     CREATE TABLE services (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, service_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric);
     CREATE TABLE supplier_payments (id bigint PRIMARY KEY, tenant_id text, supplier_id bigint, created_by bigint, payment_date timestamptz, created_at timestamptz, branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
     CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text);
     CREATE TABLE customer_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
-    CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text);
+    CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text, cancelled_at timestamptz);
     CREATE TABLE treasury_transactions (id bigserial PRIMARY KEY, tenant_id text, account_id text, txn_type text, amount numeric, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, payment_channel text, return_document_id bigint, request_key text, created_at timestamptz DEFAULT NOW());
     CREATE TABLE delivery_representatives (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, vehicle_plate text, van_location_id bigint, is_van_rep boolean DEFAULT false, updated_at timestamptz DEFAULT NOW());
-    CREATE TABLE cashier_shifts (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, opened_by bigint, status text, branch_id bigint, location_id bigint, opening_cash numeric, opening_note text, expected_cash numeric, counted_cash numeric, variance numeric, close_note text, closed_by bigint, created_at timestamptz DEFAULT NOW(), closed_at timestamptz, updated_at timestamptz, variance_resolution text, variance_journal_entry_id bigint, variance_charged_to_user_id bigint, variance_approved_by bigint, variance_approved_at timestamptz);
+    CREATE TABLE cashier_shifts (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, opened_by bigint, status text, branch_id bigint, location_id bigint, opening_cash numeric, opening_note text, expected_cash numeric, counted_cash numeric, variance numeric, close_note text, closed_by bigint, created_at timestamptz DEFAULT NOW(), closed_at timestamptz, updated_at timestamptz, terminal_code text, variance_resolution text, variance_journal_entry_id bigint, variance_charged_to_user_id bigint, variance_approved_by bigint, variance_approved_at timestamptz);
   `);
   return { pg, db };
 }
@@ -208,6 +229,11 @@ async function main(): Promise<void> {
 
     // Shift 1: opening cash 100; a cash sale 625.80 and a card sale
     // 200.00 inside the shift window, both posted by the opener.
+    // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: sale 1 carries header
+    // discount 10.00 + line discounts 3.00 + 2.00 on subtotal
+    // 635.80 (gross 640.80), plus an F8 system cash discount of
+    // 20.00 that must NOT count (automatic, not the cashier's).
+    // Sale 2 carries no discount (subtotal 200.00, gross 200.00).
     await anyDb
       .insertInto('cashier_shifts')
       .values({
@@ -233,10 +259,21 @@ async function main(): Promise<void> {
         status: 'posted',
         created_by: 2,
         created_at: '2026-01-01T10:00:00.000Z',
+        subtotal: 635.8,
+        discount: 10,
+        system_cash_discount_amount: 20,
         total: 625.8,
         paid_amount: 625.8,
         payment_channel: 'cash',
       })
+      .execute();
+    await anyDb
+      .insertInto('sale_items')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 1, line_discount: 3 })
+      .execute();
+    await anyDb
+      .insertInto('sale_items')
+      .values({ tenant_id: TENANT, account_id: ACCOUNT, sale_id: 1, line_discount: 2 })
       .execute();
     await anyDb
       .insertInto('sale_payments')
@@ -251,6 +288,8 @@ async function main(): Promise<void> {
         status: 'posted',
         created_by: 2,
         created_at: '2026-01-01T11:00:00.000Z',
+        subtotal: 200,
+        discount: 0,
         total: 200,
         paid_amount: 200,
         payment_channel: 'card',
@@ -286,6 +325,13 @@ async function main(): Promise<void> {
     assert.equal(pendingRow.cashSalesTotal, 625.8);
     assert.equal(pendingRow.cardSalesTotal, 200);
     assert.equal(pendingRow.saleCount, 2);
+    // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: header 10.00 + lines
+    // 3.00 + 2.00 = 15.00; gross 640.80 + 200.00 = 840.80;
+    // 15.00 / 840.80 = 1.784% at 3dp. The 20.00 F8 system cash
+    // discount on sale 1 must not move any of these figures.
+    assert.equal(pendingRow.shiftDiscountTotal, 15);
+    assert.equal(pendingRow.shiftDiscountGrossTotal, 840.8);
+    assert.equal(pendingRow.shiftDiscountPercent, 1.784);
     assert.equal(pendingRow.expectedCash, 725.8);
     assert.equal(pendingRow.countedCash, 725.8);
     assert.equal(pendingRow.variance, 0);
@@ -293,13 +339,17 @@ async function main(): Promise<void> {
 
     // Case 2 — closed: after manager review the same row keeps the
     // real sales and the correct difference (0, not +625.80).
-    await drawer.reviewCashierShiftClose(1, { note: 'reviewed' }, managerAuth);
+    // (The review API takes an explicit decision since I22.)
+    await drawer.reviewCashierShiftClose(1, { decision: 'approve', note: 'reviewed' }, managerAuth);
     const closedRow = await listRow(drawer, 1);
     assert.equal(closedRow.status, 'closed');
     assert.equal(closedRow.shiftSalesTotal, 825.8);
     assert.equal(closedRow.cashSalesTotal, 625.8);
     assert.equal(closedRow.cardSalesTotal, 200);
     assert.equal(closedRow.saleCount, 2);
+    assert.equal(closedRow.shiftDiscountTotal, 15);
+    assert.equal(closedRow.shiftDiscountGrossTotal, 840.8);
+    assert.equal(closedRow.shiftDiscountPercent, 1.784);
     assert.equal(closedRow.expectedCash, 725.8);
     assert.equal(closedRow.countedCash, 725.8);
     assert.equal(closedRow.variance, 0);
@@ -345,6 +395,26 @@ async function main(): Promise<void> {
     assert.equal(openRow.status, 'open');
     assert.equal(openRow.shiftSalesTotal, 50);
     assert.equal(openRow.cashSalesTotal, 50);
+    // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: no discounts on this shift —
+    // gross 0 means the % is 0, not NaN.
+    assert.equal(openRow.shiftDiscountTotal, 0);
+    assert.equal(openRow.shiftDiscountGrossTotal, 0);
+    assert.equal(openRow.shiftDiscountPercent, 0);
+
+    // Pure helper, pinned directly (same numbers as shift 1's sale 1,
+    // plus the gross-0 and 2dp cases).
+    assert.deepEqual(
+      computeShiftDiscountSummary({ headerDiscountTotal: 10, lineDiscountTotal: 5, grossSalesTotal: 640.8, digits: 3 }),
+      { discountTotal: 15, grossSalesTotal: 640.8, discountPercent: 2.341 },
+    );
+    assert.deepEqual(
+      computeShiftDiscountSummary({ headerDiscountTotal: 0, lineDiscountTotal: 0, grossSalesTotal: 0, digits: 3 }),
+      { discountTotal: 0, grossSalesTotal: 0, discountPercent: 0 },
+    );
+    assert.deepEqual(
+      computeShiftDiscountSummary({ headerDiscountTotal: 1, lineDiscountTotal: 0, grossSalesTotal: 3, digits: 2 }),
+      { discountTotal: 1, grossSalesTotal: 3, discountPercent: 33.33 },
+    );
 
     console.log('Closed-shift row sales tests passed');
   } finally {

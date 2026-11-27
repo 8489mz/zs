@@ -2,6 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely } from '../../database/kysely';
 import type { CashDrawerMovementType } from './helpers/cash-drawer.helper';
 import { type ShiftCustomerCollectionsByChannel } from './helpers/shift-customer-collections.helper';
+import { type ShiftDiscountSummary } from './helpers/shift-discount-summary.helper';
 import type {
   ShiftRow,
   ShiftServiceBreakdown,
@@ -58,6 +59,7 @@ export class CashDrawerService {
       scope: this.scope.bind(this),
       computeShiftAttributedSaleCash: this.computeShiftAttributedSaleCash.bind(this),
       computeShiftSalesBreakdown: this.computeShiftSalesBreakdown.bind(this),
+      computeShiftDiscountSummary: this.computeShiftDiscountSummary.bind(this),
       computeShiftServiceBreakdown: this.computeShiftServiceBreakdown.bind(this),
       computeShiftCashDrawerMovements: this.computeShiftCashDrawerMovements.bind(this),
       computeShiftSaleReturnTotals: this.computeShiftSaleReturnTotals.bind(this),
@@ -223,6 +225,15 @@ export class CashDrawerService {
     digits?: MoneyDigits,
   ): Promise<ShiftSalesBreakdown> {
     return this.compute.computeShiftSalesBreakdown(shift, auth, queryable, digits);
+  }
+
+  private async computeShiftDiscountSummary(
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ): Promise<ShiftDiscountSummary> {
+    return this.compute.computeShiftDiscountSummary(shift, auth, queryable, digits);
   }
 
   private async computeShiftSaleReturnTotals(

@@ -264,6 +264,7 @@
     "test/critical/cash-drawer-expected-cash-precision.spec.ts",
     "test/critical/cash-drawer-movement-types.spec.ts",
     "test/critical/closed-shift-post-close-refresh.spec.ts",
+    "test/critical/closed-shift-row-sales.spec.ts",
     "test/critical/drawer-disbursement-gate-boundary.spec.ts",
     "test/critical/expected-cash-single-window.spec.ts",
     "test/critical/manager-pin-drawer.spec.ts",

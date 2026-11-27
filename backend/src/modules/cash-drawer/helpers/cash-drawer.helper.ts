@@ -47,6 +47,10 @@ type CashDrawerShiftSource = {
   customerCollectionsTotal?: number | string | null;
   customerCollectionsByChannel?: ShiftCustomerCollectionsByChannel | null;
   cancelledSaleCashTotal?: number | string | null;
+  // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: hydrated by hydrateShiftRow.
+  shiftDiscountTotal?: number | string | null;
+  shiftDiscountGrossTotal?: number | string | null;
+  shiftDiscountPercent?: number | string | null;
   terminal_code?: string | null;
   opening_cash?: number | string | null;
   opening_note?: string | null;
@@ -329,6 +333,11 @@ export function mapCashDrawerShiftRow(row: CashDrawerShiftSource): CashDrawerMap
     netStoreSalesTotal: Number(row.net_store_sales_total || 0),
     shiftSalesTotal: Number(row.shift_sales_total || 0),
     tipSalesTotal: Number(row.tip_sales_total || 0),
+    // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: hydrated by hydrateShiftRow;
+    // 0 on rows the summary query cannot reach.
+    shiftDiscountTotal: Number(row.shiftDiscountTotal || 0),
+    shiftDiscountGrossTotal: Number(row.shiftDiscountGrossTotal || 0),
+    shiftDiscountPercent: Number(row.shiftDiscountPercent || 0),
     saleCount: Number(row.sale_count || 0),
     mixedSalesCount: Number(row.mixed_sale_count || 0),
     cardOperationCount: Number(row.card_operation_count || 0),

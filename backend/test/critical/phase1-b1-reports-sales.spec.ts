@@ -288,8 +288,8 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 401);
-  assert.equal(chain.length, 401);
+  assert.equal(specs.length, 402);
+  assert.equal(chain.length, 402);
   assert.deepEqual(chain, specs, 'critical lists must agree in identical order');
   assert.equal(specs[specs.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
   assert.ok(specs.includes('test/critical/phase1-b1-reports-sales.spec.ts'));

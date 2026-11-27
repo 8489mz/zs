@@ -10,6 +10,7 @@ import {
   isDrawerCashTender,
 } from './helpers/cash-drawer.helper';
 import { type ShiftCustomerCollectionsByChannel } from './helpers/shift-customer-collections.helper';
+import { type ShiftDiscountSummary } from './helpers/shift-discount-summary.helper';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { type TenantScope } from '../../core/auth/utils/tenant-boundary';
 import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
@@ -69,6 +70,15 @@ export interface CashDrawerReadsDeps {
     queryable?: Kysely<Database>,
     digits?: MoneyDigits,
   ) => Promise<ShiftSalesBreakdown>;
+  // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: display-only discount summary
+  // (header + per-line over posted sales, % of gross). Bound facade
+  // delegate, like the other compute helpers.
+  computeShiftDiscountSummary: (
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ) => Promise<ShiftDiscountSummary>;
   computeShiftServiceBreakdown: (
     shift: ShiftRow,
     auth: AuthContext,
@@ -155,6 +165,12 @@ export class CashDrawerReadsService {
     queryable?: Kysely<Database>,
     digits?: MoneyDigits,
   ) => Promise<ShiftSalesBreakdown>;
+  private readonly computeShiftDiscountSummary: (
+    shift: ShiftRow,
+    auth: AuthContext,
+    queryable?: Kysely<Database>,
+    digits?: MoneyDigits,
+  ) => Promise<ShiftDiscountSummary>;
   private readonly computeShiftServiceBreakdown: (
     shift: ShiftRow,
     auth: AuthContext,
@@ -219,6 +235,7 @@ export class CashDrawerReadsService {
     this.scope = deps.scope;
     this.computeShiftAttributedSaleCash = deps.computeShiftAttributedSaleCash;
     this.computeShiftSalesBreakdown = deps.computeShiftSalesBreakdown;
+    this.computeShiftDiscountSummary = deps.computeShiftDiscountSummary;
     this.computeShiftServiceBreakdown = deps.computeShiftServiceBreakdown;
     this.computeShiftCashDrawerMovements = deps.computeShiftCashDrawerMovements;
     this.computeShiftSaleReturnTotals = deps.computeShiftSaleReturnTotals;
@@ -463,6 +480,7 @@ export class CashDrawerReadsService {
     const shiftId = Number(row.id || 0);
     if (!(shiftId > 0)) return row;
     const salesBreakdown = await this.computeShiftSalesBreakdown(row, auth);
+    const discountSummary = await this.computeShiftDiscountSummary(row, auth);
     const serviceBreakdown = await this.computeShiftServiceBreakdown(row, auth);
     const movements = await this.computeShiftCashDrawerMovements(shiftId, auth);
     const saleReturnTotals = await this.computeShiftSaleReturnTotals(row, auth);
@@ -495,6 +513,11 @@ export class CashDrawerReadsService {
       net_store_sales_total: salesBreakdown.netStoreSalesTotal,
       shift_sales_total: salesBreakdown.shiftSalesTotal,
       tip_sales_total: salesBreakdown.tipSalesTotal,
+      // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: display-only; the close
+      // table and the printed receipt read these three fields.
+      shiftDiscountTotal: discountSummary.discountTotal,
+      shiftDiscountGrossTotal: discountSummary.grossSalesTotal,
+      shiftDiscountPercent: discountSummary.discountPercent,
       sale_count: salesBreakdown.saleCount,
       mixed_sale_count: salesBreakdown.mixedSalesCount,
       card_operation_count: salesBreakdown.cardOperationCount,
@@ -556,6 +579,12 @@ export class CashDrawerReadsService {
         instapaySalesTotal: 0,
         creditSalesTotal: 0,
         shiftSalesTotal: 0,
+        // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: blinded for the cashier
+        // viewer exactly like the other sales figures — the summary
+        // is the manager's review figure.
+        shiftDiscountTotal: 0,
+        shiftDiscountGrossTotal: 0,
+        shiftDiscountPercent: 0,
         cashDrawerMovementTotal: 0,
         cashDrawerCashInTotal: 0,
         cashDrawerDeliveryCashInTotal: 0,

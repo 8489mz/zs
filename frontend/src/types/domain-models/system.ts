@@ -105,6 +105,13 @@ export interface CashierShift {
   netStoreSalesTotal?: number;
   shiftSalesTotal?: number;
   tipSalesTotal?: number;
+  // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: discounts the cashier made
+  // (header + per-line) over the shift's posted sales, the gross
+  // sales they are a % of, and that %. Optional: rows that predate
+  // the package carry no values and render as 0.
+  shiftDiscountTotal?: number;
+  shiftDiscountGrossTotal?: number;
+  shiftDiscountPercent?: number;
   saleCount?: number;
   mixedSalesCount?: number;
   cardOperationCount?: number;

@@ -157,3 +157,32 @@ describe('CashDrawerReviewDialog zero-difference handling (INV-CLOSE-REVIEW-ZERO
     expect(approveButton()).toBeEnabled();
   });
 });
+
+describe('CashDrawerReviewDialog discount summary (INV-SHIFT-CLOSE-DISCOUNT-SUMMARY)', () => {
+  it('shows the total discounts and their % of gross sales, display-only', () => {
+    const shift = makeShift({
+      shiftDiscountTotal: 15,
+      shiftDiscountGrossTotal: 840.8,
+      shiftDiscountPercent: 1.784,
+    });
+    renderDialog(shift, '');
+
+    expect(document.body.textContent).toContain('إجمالي خصومات الوردية:');
+    expect(document.body.textContent).toContain('15.00');
+    expect(document.body.textContent).toContain('1.784%');
+    expect(document.body.textContent).toContain('840.80');
+  });
+
+  it('shows 0.00 and 0% on a shift with no discounts, and blocks nothing', () => {
+    const shift = makeShift({
+      shiftDiscountTotal: 0,
+      shiftDiscountGrossTotal: 0,
+      shiftDiscountPercent: 0,
+    });
+    renderDialog(shift, '');
+
+    expect(document.body.textContent).toContain('إجمالي خصومات الوردية:');
+    expect(document.body.textContent).toContain('0%');
+    expect(approveButton()).toBeEnabled();
+  });
+});

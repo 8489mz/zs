@@ -42,6 +42,13 @@ export function generateCashDrawerSettlementReceiptHtml(
 
   const shiftSalesTotal = Number(shift.shiftSalesTotal || 0);
   const tipSalesTotal = Number(shift.tipSalesTotal || 0);
+  // INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: display-only — the discounts
+  // the cashier made (header + per-line) and their % of gross sales.
+  // The F8 system cash discount is never in these fields (the server
+  // does not feed it in), and returns are not in the sum.
+  const discountTotal = Number(shift.shiftDiscountTotal || 0);
+  const discountGrossTotal = Number(shift.shiftDiscountGrossTotal || 0);
+  const discountPercent = Number(shift.shiftDiscountPercent || 0);
   const freelanceFee = Number(shift.freelanceDeliveryFeeTotal || 0);
   const netStoreSales = Number(shift.netStoreSalesTotal || Math.max(0, shiftSalesTotal - freelanceFee));
 
@@ -202,6 +209,15 @@ export function generateCashDrawerSettlementReceiptHtml(
         <div style="display: flex; justify-content: space-between; font-size: 9px; margin-top: 3px; padding: 2px 4px; background: #f8fafc; border: 1px dashed #475569; border-radius: 3px;">
           <span><strong>إكراميات مستحقة للعمالة (Tips):</strong></span>
           <strong>${formatCurrency(tipSalesTotal)}</strong>
+        </div>` : ''}
+        ${discountTotal > 0 ? `
+        <div style="display: flex; justify-content: space-between; font-size: 9px; margin-top: 3px; padding: 2px 4px; background: #f8fafc; border: 1px dashed #475569; border-radius: 3px;">
+          <span><strong>إجمالي خصومات الوردية:</strong></span>
+          <strong>${formatCurrency(discountTotal)} (${discountPercent}%)</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 9px; margin-top: 1px; color: #333;">
+          <span>إجمالي المبيعات قبل الخصم:</span>
+          <span>${formatCurrency(discountGrossTotal)}</span>
         </div>` : ''}
       </div>
 

@@ -415,6 +415,31 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
               </div>
             </div>
 
+            {/* INV-SHIFT-CLOSE-DISCOUNT-SUMMARY: display-only discount
+                summary — the total discounts the cashier made (header
+                discount + per-line discounts) and their % of gross
+                sales. It never feeds any gate, variance, or total. */}
+            <div
+              style={{
+                padding: compactView ? '6px 12px' : '10px 16px',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '4px 12px',
+                fontSize: compactView ? '0.8rem' : '0.85rem',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                color: '#0f172a',
+              }}
+            >
+              <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s72', "إجمالي خصومات الوردية:")}</strong> {formatMoney(Number(shift.shiftDiscountTotal || 0), bookDigits)}</span>
+              <span style={{ color: '#94a3b8' }}>|</span>
+              <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s73', "نسبة الخصم من إجمالي المبيعات:")}</strong> {Number(shift.shiftDiscountPercent || 0)}%</span>
+              <span style={{ color: '#94a3b8' }}>|</span>
+              <span style={{ color: '#64748b' }}>{t('cash_drawer.cash_drawer_review_dialog.s74', "إجمالي المبيعات (قبل الخصم):")} {formatMoney(Number(shift.shiftDiscountGrossTotal || 0), bookDigits)}</span>
+            </div>
+
             {/* 3. SECTION 1: Cash Drawer Reconciliation (جرد ومطابقة نقدية الدرج - الكاش الفعلي) */}
             <div style={{
               background: '#ffffff',

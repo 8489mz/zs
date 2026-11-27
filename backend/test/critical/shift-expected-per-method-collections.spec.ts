@@ -119,6 +119,7 @@ async function main() {
         delivery_rep_id bigint, delivery_status text, collection_status text, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(),
         pos_terminal_code varchar(32));
       CREATE TABLE sale_payments (id bigint PRIMARY KEY, sale_id bigint, payment_channel text, amount numeric, applied_amount numeric, tendered_amount numeric, change_amount numeric, tenant_id text, account_id text);
+    CREATE TABLE sale_items (id bigserial PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, line_discount numeric DEFAULT 0);
       CREATE TABLE services (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, amount numeric, payment_channel text, created_by bigint, created_at timestamptz DEFAULT now(), branch_id bigint, location_id bigint);
       CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, account_id text, doc_no text, return_type text, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, created_by bigint, created_at timestamptz DEFAULT now(), branch_id bigint, location_id bigint, note text);
       CREATE TABLE treasury_transactions (id bigint PRIMARY KEY, tenant_id text, account_id text, txn_type text, amount numeric, note text, reference_type text, reference_id bigint, return_document_id bigint, branch_id bigint, location_id bigint, created_by bigint, payment_channel text, created_at timestamptz DEFAULT now(), request_key text);

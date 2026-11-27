@@ -285,8 +285,8 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 401);
-  assert.equal(chain.length, 401);
+  assert.equal(specs.length, 402);
+  assert.equal(chain.length, 402);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 385 specs in order');
   assert.equal(specs[specs.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
   assert.equal(chain[chain.length - 1], 'test/critical/phase1-cleanup-as-any-reduction.spec.ts');
@@ -309,7 +309,7 @@ async function main(): Promise<void> {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 401);') && src.includes('assert.equal(chain.length, 401);'),
+      src.includes('assert.equal(specs.length, 402);') && src.includes('assert.equal(chain.length, 402);'),
       `${label} spec wiring must re-pin to 385`,
     );
     assert.ok(
