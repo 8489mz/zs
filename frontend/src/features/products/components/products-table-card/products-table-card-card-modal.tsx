@@ -1,4 +1,4 @@
-import { ProductCardModal } from '../ProductCardModal';
+import { ProductCardModal } from '@/shared/components/ProductCardModal';
 import { getProductLocationDisplayName } from '../../utils/product-location.utils';
 import type { Product } from '@/types/domain';
 

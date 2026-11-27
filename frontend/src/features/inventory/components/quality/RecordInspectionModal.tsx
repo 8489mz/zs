@@ -3,7 +3,7 @@ import { useState, useEffect, type FC, type FormEvent } from 'react';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { toast } from '@/shared/components/system-alert';
-import { productsApi } from '@/features/products';
+import { productsApi } from '@/shared/api/products.api';
 import {
   qualityAssuranceApi,
   type QCPointRecord,

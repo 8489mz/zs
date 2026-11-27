@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/app/query-keys';
-import { productsApi, type ProductsListParams } from '@/features/products/api/products.api';
+import { productsApi, type ProductsListParams } from '@/shared/api/products.api';
 import { buildInventorySummary, filterInventoryRows, type InventoryStatusFilter } from '@/features/inventory/utils/inventory-mappers';
 
 export function useInventoryPage(

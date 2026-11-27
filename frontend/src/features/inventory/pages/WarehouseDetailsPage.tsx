@@ -7,7 +7,7 @@ import { FormSection } from '@/shared/components/form-section';
 import { StatsGrid } from '@/shared/components/stats-grid';
 import { Button } from '@/shared/ui/button';
 import { ClipboardIcon, TruckIcon, PlusCircleIcon, LayersIcon } from '@/shared/components/icons/AppIcons';
-import { ProductCardModal } from '@/features/products';
+import { ProductCardModal } from '@/shared/components/ProductCardModal';
 import { useInventoryActionCatalog } from '@/features/inventory/hooks/useInventoryActionCatalog';
 import { catalogApi } from '@/shared/api/catalog';
 import { AssignProductsModal } from '../components/AssignProductsModal';

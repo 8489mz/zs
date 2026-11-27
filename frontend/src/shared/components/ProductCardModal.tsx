@@ -22,7 +22,7 @@ import {
   evaluateProductExpiryStatus,
   getProductExpiryDate,
   productExpiryAlertLabel,
-} from '../utils/product-expiry.utils';
+} from '@/shared/utils/product-expiry.utils';
 import { downloadExcelFile, escapeHtml, printHtmlDocument } from '@/lib/browser';
 import { inventoryApi } from '@/shared/api/inventory.api';
 import type { Product, StockMovementRecord } from '@/types/domain';

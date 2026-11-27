@@ -22,7 +22,6 @@
   "delivery-reps/components/VanSaleNewInvoiceModal.tsx imports @/features/customers/api/customers.api",
   "delivery-reps/components/VanSaleNewInvoiceModal.tsx imports @/features/products/api/products.api",
   "delivery-reps/components/VanSaleNewInvoiceModal.tsx imports @/features/sales/api/sales.api",
-  "inventory/hooks/useInventoryPage.ts imports @/features/products/api/products.api",
   "inventory/pages/InventoryBatchesPage.tsx imports @/features/pharmacy/api/pharmacy.api",
   "inventory/pages/InventoryBatchesPage.tsx imports @/features/pharmacy/types/pharmacy.types",
   "maritime-freight/components/CreateInquiryModal.tsx imports @/features/customers/api/customers.api",
