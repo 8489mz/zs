@@ -177,7 +177,7 @@ describe('package-3 whole-tree ratchet', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('the spec-file keeps still exist (old-value contrast + fixture range)', () => {
+  it('the spec-file keeps: compliance contrast still exists, VAT old-value lines are gone (eval P1 TZ fix)', () => {
     const compliance = fs.readFileSync(
       path.join(FRONTEND_SRC, 'features/import-sales/import-compliance-hs-aci.spec.tsx'),
       'utf8',
@@ -187,6 +187,11 @@ describe('package-3 whole-tree ratchet', () => {
       path.join(FRONTEND_SRC, 'features/sales/pages/VatDeclarationPage.spec.tsx'),
       'utf8',
     );
-    expect(countPatterns(vat)).toBe(2);
+    // The VAT spec's 2 old-value lines are gone by design: eval P1 converted
+    // its currentMonthRange() to todayLocalDateKey, because the UTC slice
+    // keyed Nov 1 as Oct 31 in Cairo (a real TZ bug, not a contrast fixture
+    // any more). Pinning 0 here guards against the old spelling coming back
+    // into the VAT spec.
+    expect(countPatterns(vat)).toBe(0);
   });
 });
