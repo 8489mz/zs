@@ -27,7 +27,7 @@ vi.mock('react-i18next', async (importOriginal) => {
   };
 });
 
-vi.mock('@/features/sales', () => ({
+vi.mock('@/shared/api/sales.api', () => ({
   salesApi: {
     listPage: mocks.listPage,
   },
