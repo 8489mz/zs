@@ -169,7 +169,11 @@ export class CatalogController {
     @Body() payload: AddProductSerialsDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    return this.catalogService.addProductSerials(id, payload?.items || [], req.authContext!);
+    // INV-PHASE1-D-D10A-SERIALS-PAYLOAD: the only caller
+    // (product-serials.api addSerials) sends {serials}; reading items
+    // only added 0 serials with a success response. Items first,
+    // serials as fallback.
+    return this.catalogService.addProductSerials(id, payload?.items ?? payload?.serials ?? [], req.authContext!);
   }
 
   @Post(['products/:id/toggle-archive', 'v1/products/:id/toggle-archive'])
