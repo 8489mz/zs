@@ -77,40 +77,53 @@ export class CustomerCrudSlice {
   }
 
   /**
-   * F4 (trial problem 4): a POS "add customer" created a fake
-   * customer ("عميل وهمي للاختبار", 01000000000) because the phone
-   * was never required or checked. The phone is now REQUIRED and
-   * must pass the codebase's established validator,
-   * validateAndNormalizePhone (the same rule users.service.ts
-   * enforces with INVALID_PHONE); the stored value is the
-   * validator's normalized national number, so the existing
-   * duplicate detection (generatePhoneSearchVariants) keeps working.
-   * The format pattern alone accepts 01000000000, so a minimal
-   * placeholder guard refuses numbers whose subscriber digits
-   * (past the 3-digit trunk prefix) are all identical — the
-   * codebase already treats 01000000000 / 0000000000 as
-   * placeholders (migration 2040000000019, saas-admin.service.ts).
-   * Duplicates are NOT refused here: a phone already held by
-   * another customer still creates the customer and still returns
-   * phoneWarning (standing decision 2026-11-06: warn but ALLOW).
+   * F4 (trial problem 4), warn-not-block (user-approved 2026-11-27):
+   * a POS "add customer" once created a fake customer ("عميل وهمي
+   * للاختبار", 01000000000) because the phone was never required or
+   * checked. The first fix made the phone REQUIRED and threw on a
+   * missing, malformed, or placeholder phone — but that gate blocked
+   * real work (POS quick-create by name only, and editing an
+   * existing customer until a valid phone was entered). The phone
+   * NEVER blocks now: the same checks still run (the codebase's
+   * established validateAndNormalizePhone, plus the minimal
+   * placeholder guard for numbers whose subscriber digits past the
+   * 3-digit trunk prefix are all identical), but a failure only
+   * returns a phoneWarning alongside the phone to store — empty
+   * phone stores '' (customers.phone is NOT NULL), an invalid or
+   * placeholder phone stores the raw trimmed value (no data is
+   * lost), a valid phone stores the normalized national number.
+   * The shared validator is untouched: users.service.ts keeps
+   * enforcing INVALID_PHONE. Callers decide what to do with the
+   * warning (create stores it; update keeps the existing phone on
+   * a warned value instead of overwriting a good number).
    */
-  private validateCustomerPhone(raw: unknown): string {
+  private validateCustomerPhone(raw: unknown): { phone: string; warning?: Record<string, unknown> } {
     const trimmed = String(raw || '').trim();
-    if (!trimmed) throw new AppError('Customer phone is required', 'CUSTOMER_PHONE_REQUIRED', 400);
+    if (!trimmed) {
+      return {
+        phone: '',
+        warning: { message: 'لم يتم إدخال رقم هاتف لهذا العميل', code: 'CUSTOMER_PHONE_MISSING' },
+      };
+    }
     const result = validateAndNormalizePhone(trimmed);
     if (!result.isValid) {
-      throw new AppError(result.error || 'Invalid phone number', 'INVALID_PHONE', 400);
+      return {
+        phone: trimmed,
+        warning: { message: result.error || 'رقم الهاتف غير صحيح', code: 'CUSTOMER_PHONE_INVALID' },
+      };
     }
     const digits = result.nationalNumber.replace(/\D/g, '');
     const subscriber = digits.slice(3);
     if (subscriber.length >= 4 && [...subscriber].every((d) => d === subscriber[0])) {
-      throw new AppError(
-        'Customer phone looks like a placeholder number, enter a real mobile number',
-        'CUSTOMER_PHONE_PLACEHOLDER',
-        400,
-      );
+      return {
+        phone: trimmed,
+        warning: {
+          message: 'رقم الهاتف يبدو رقماً وهمياً، أدخل رقم هاتف حقيقياً',
+          code: 'CUSTOMER_PHONE_PLACEHOLDER',
+        },
+      };
     }
-    return result.nationalNumber;
+    return { phone: result.nationalNumber };
   }
 
   /**
@@ -146,7 +159,9 @@ export class CustomerCrudSlice {
     if (!name) throw new AppError('Customer name is required', 'CUSTOMER_NAME_REQUIRED', 400);
     if (await this.customerNameExists(name, actor))
       throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
-    const phone = this.validateCustomerPhone(payload.phone);
+    // F4 warn-not-block: a missing / malformed / placeholder phone
+    // never refuses the create; it only returns a phoneWarning.
+    const { phone, warning: phoneWarning } = this.validateCustomerPhone(payload.phone);
     // INV-VAN-PRICE-LIST-WIRING: an unknown or foreign list id is
     // refused before anything is written; an inactive list id is
     // stored (assignment preserved for reactivation).
@@ -202,19 +217,27 @@ export class CustomerCrudSlice {
     await this.audit.log('إضافة عميل', `تم إضافة العميل ${name} [${customerCode}] بواسطة ${actor.username}`, actor);
 
     const listing = await this.listCustomers({}, actor);
-    const duplicate = await this.findCustomerByPhone(phone, actor, Number(inserted.id));
+    // No duplicate lookup for an empty phone: two phone-less
+    // customers are not duplicates of each other. A format warning
+    // (missing / invalid / placeholder) wins over a duplicate
+    // warning — it describes the value just stored.
+    const duplicate = phone ? await this.findCustomerByPhone(phone, actor, Number(inserted.id)) : null;
     return {
       ok: true,
       id: String(inserted.id),
       customers: listing.customers,
-      ...(duplicate ? { phoneWarning: this.buildDuplicatePhoneWarning(duplicate) } : {}),
+      ...(phoneWarning
+        ? { phoneWarning }
+        : duplicate
+          ? { phoneWarning: this.buildDuplicatePhoneWarning(duplicate) }
+          : {}),
     };
   }
 
   async updateCustomer(id: number, payload: UpsertCustomerDto, actor: AuthContext): Promise<Record<string, unknown>> {
     const existing = await this.db
       .selectFrom('customers')
-      .select(['id', 'balance', 'store_credit_balance'])
+      .select(['id', 'phone', 'balance', 'store_credit_balance'])
       .where('id', '=', id)
       .where('is_active', '=', true)
       .where(this.tenantPredicate(actor))
@@ -226,7 +249,26 @@ export class CustomerCrudSlice {
     if (!name) throw new AppError('Customer name is required', 'CUSTOMER_NAME_REQUIRED', 400);
     if (await this.customerNameExists(name, actor, id))
       throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
-    const phone = this.validateCustomerPhone(payload.phone);
+    // F4 warn-not-block: an empty / missing phone in the payload keeps
+    // the existing stored phone; an invalid / placeholder phone warns
+    // and keeps it too (a bad value never overwrites a good number).
+    // Only a valid new phone is stored.
+    const trimmedPhone = String(payload.phone || '').trim();
+    let phone: string;
+    let phoneWarning: Record<string, unknown> | undefined;
+    let phoneChanged = false;
+    if (!trimmedPhone) {
+      phone = existing.phone || '';
+    } else {
+      const checked = this.validateCustomerPhone(payload.phone);
+      if (checked.warning) {
+        phone = existing.phone || '';
+        phoneWarning = checked.warning;
+      } else {
+        phone = checked.phone;
+        phoneChanged = phone !== (existing.phone || '');
+      }
+    }
 
     const requestedBalance = Number(payload.balance ?? existing.balance ?? 0);
     if (Math.abs(Number(existing.balance || 0) - requestedBalance) > 0.0001) {
@@ -282,11 +324,19 @@ export class CustomerCrudSlice {
 
     await this.audit.log('تعديل عميل', `تم تحديث العميل #${id} بواسطة ${actor.username}`, actor);
     const listing = await this.listCustomers({}, actor);
-    const duplicate = await this.findCustomerByPhone(phone, actor, id);
+    // The duplicate check runs only when the phone actually changed:
+    // an edit that keeps the existing phone must not newly warn about
+    // a duplicate the customer already had. A format warning wins
+    // over a duplicate warning.
+    const duplicate = phoneChanged ? await this.findCustomerByPhone(phone, actor, id) : null;
     return {
       ok: true,
       customers: listing.customers,
-      ...(duplicate ? { phoneWarning: this.buildDuplicatePhoneWarning(duplicate) } : {}),
+      ...(phoneWarning
+        ? { phoneWarning }
+        : duplicate
+          ? { phoneWarning: this.buildDuplicatePhoneWarning(duplicate) }
+          : {}),
     };
   }
 
