@@ -112,10 +112,14 @@ export class ComputeTotalsAndGatesService {
     // enforces it; POS never did, so a rep posted 8% (4% line + 4%
     // invoice, Z-261121-16629) and 50% (25% + 25%, Z-261121-16630)
     // with no supervisor PIN. The cap applies ONLY when the seller
-    // is a delivery rep — the acting user linked to a
-    // delivery_representatives row, by the same phone/username link
-    // resolveRepLinkedUserId uses in reverse (rep.phone matches the
-    // user's phone or username). Ordinary cashiers keep their tier
+    // is a delivery rep WITH an active trip — the acting user linked
+    // to a delivery_representatives row, by the same phone/username
+    // link resolveRepLinkedUserId uses in reverse (rep.phone matches
+    // the user's phone or username), AND ctx.vanTripAttribution
+    // non-null (resolvePosTripAttribution found the rep's open trip).
+    // A rep-linked seller with NO open trip is doing a plain retail
+    // counter sale: the cap does not apply and the sale posts
+    // without a PIN. Ordinary cashiers keep their tier
     // behaviour above, and the admin bypass stays exactly as it is
     // (INV-POS-ADMIN-DISCOUNT-AUTHORITY). The combined percent is
     // (line discounts + invoice discount) / gross subtotal — the
@@ -131,7 +135,19 @@ export class ComputeTotalsAndGatesService {
     // 403 below. The zero-discount guard keeps discount-free sales
     // (the hot path) free of the two link lookups.
     const isAdminSellerForRepCap = auth.role === 'admin' || auth.role === 'super_admin';
-    if (!isAdminSellerForRepCap && !this.authz.hasPermission(auth, '*') && unapprovedDiscount > 0.0001) {
+    // F1a trip scope: ctx.vanTripAttribution is non-null exactly
+    // when the seller is a linked rep with an ACTIVE van trip
+    // (resolved pre-transaction by resolvePosTripAttribution). The
+    // cap binds rep/trip sales only, so the condition sits on the
+    // outer guard — an unattributed sale skips the two link lookups
+    // below entirely, like the zero-discount guard keeps
+    // discount-free sales off them.
+    if (
+      !isAdminSellerForRepCap &&
+      !this.authz.hasPermission(auth, '*') &&
+      unapprovedDiscount > 0.0001 &&
+      ctx.vanTripAttribution !== null
+    ) {
       // The rep link is the acting user's identifiers: the username
       // is in memory, the phone comes from the users row. Either
       // leg may match a delivery_representatives phone. Both reads

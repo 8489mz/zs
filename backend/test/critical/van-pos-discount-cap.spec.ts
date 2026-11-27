@@ -12,16 +12,30 @@
  * THE RULE: in the POS create-sale path, when the seller is a
  * delivery rep (acting user linked to a delivery_representatives
  * row, by the same phone/username link resolveRepLinkedUserId uses
- * in reverse), the COMBINED discount — line discounts + invoice
- * discount, over the gross subtotal, the portal's
+ * in reverse) AND the sale is a rep/trip sale — the attribution
+ * resolvePosTripAttribution returns non-null, i.e. the rep has an
+ * ACTIVE van trip — the COMBINED discount — line discounts +
+ * invoice discount, over the gross subtotal, the portal's
  * combinedDiscountPercent definition — must respect the tenant cap
  * from getVanRepDiscountCapPercent (default 5%) unless a supervisor
  * override is approved through the existing manager-PIN path.
  * Above the cap without an approved PIN the sale is refused with
  * COMBINED_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN (403).
- * Exactly on the cap posts. Ordinary non-rep cashiers keep their
- * tier behaviour, and the admin bypass is unchanged
- * (INV-POS-ADMIN-DISCOUNT-AUTHORITY).
+ * Exactly on the cap posts. A rep-linked seller with NO open trip
+ * is doing a plain retail counter sale: the cap does NOT apply and
+ * the sale posts without a PIN (cases (i), (j)). Ordinary non-rep
+ * cashiers keep their tier behaviour, and the admin bypass is
+ * unchanged (INV-POS-ADMIN-DISCOUNT-AUTHORITY).
+ *
+ * KNOWN EDGE (recorded, not fixed here): the attribution is
+ * resolved even for a walk-in sale with no customer, and the stamp
+ * does not need a customer either (only the ROUTE gate needs one) —
+ * so a rep-linked cashier WITH an open trip doing a walk-in counter
+ * sale is still capped AND the sale is stamped with the trip, its
+ * counters moving. Case (c) pins both halves: exactly 5% posts AND
+ * its van_trip_id is the open trip. The pre-transaction race (a trip
+ * settling between the gate and the insert) likewise leaves the cap
+ * applied but the sale unattributed — the conservative direction.
  *
  * HOW THIS IS DRIVEN: the real SalesWriteService.createSale on
  * PGlite, reusing the discount-tiers harness (schema + services).
@@ -138,7 +152,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE manufacturing_boms (id bigint PRIMARY KEY, tenant_id text, product_id bigint, is_active boolean DEFAULT true);
     CREATE TABLE manufacturing_bom_lines (id bigint PRIMARY KEY, tenant_id text, bom_id bigint, component_product_id bigint);
     CREATE TABLE delivery_representatives (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, vehicle_plate text, van_location_id bigint, is_van_rep boolean DEFAULT false, updated_at timestamptz DEFAULT NOW());
-    CREATE TABLE van_sales_trips (id bigserial PRIMARY KEY, tenant_id text, account_id text, rep_id bigint, vehicle_id bigint, start_odometer numeric, van_location_id bigint, source_warehouse_id bigint, status text, settlement_status text, loaded_amount numeric DEFAULT 0, sales_amount numeric DEFAULT 0, cash_collected numeric DEFAULT 0, credit_sales numeric DEFAULT 0, returns_amount numeric DEFAULT 0, variance numeric DEFAULT 0, notes text, opened_at timestamptz, updated_at timestamptz);
+    CREATE TABLE van_sales_trips (id bigserial PRIMARY KEY, tenant_id text, account_id text, rep_id bigint, vehicle_id bigint, start_odometer numeric, van_location_id bigint, source_warehouse_id bigint, status text, settlement_status text, loaded_amount numeric DEFAULT 0, sales_amount numeric DEFAULT 0, cash_collected numeric DEFAULT 0, credit_sales numeric DEFAULT 0, total_instapay_sales numeric DEFAULT 0, returns_amount numeric DEFAULT 0, variance numeric DEFAULT 0, notes text, opened_at timestamptz, updated_at timestamptz);
     CREATE TABLE van_field_visits (id bigserial PRIMARY KEY, tenant_id text, account_id text, trip_id bigint, rep_id bigint, customer_id bigint, visit_type text, sale_id bigint, gps_lat numeric, gps_lng numeric, notes text, visited_at timestamptz, created_at timestamptz DEFAULT NOW());
     CREATE TABLE fleet_vehicles (id bigint PRIMARY KEY, tenant_id text, assigned_rep_id bigint, van_location_id bigint, current_odometer numeric);
     CREATE TABLE pos_audit_events (id bigserial PRIMARY KEY, tenant_id text, account_id text, event_type text, user_id bigint, sale_id bigint, product_id bigint, amount numeric, reason text, metadata jsonb, created_at timestamptz DEFAULT NOW());
@@ -314,6 +328,25 @@ async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Pr
     .execute();
 }
 
+// An ACTIVE van trip for the rep: makes resolvePosTripAttribution
+// return non-null, i.e. the sale is a rep/trip sale and the cap
+// applies. Cases WITHOUT this seed are plain retail counter sales.
+async function seedOpenTrip(db: Kysely<Database>, id: number, repId: number): Promise<void> {
+  await (db as any)
+    .insertInto('van_sales_trips')
+    .values({ id, tenant_id: TENANT, account_id: ACCOUNT, rep_id: repId, status: 'open' })
+    .execute();
+}
+
+async function saleTripId(db: Kysely<Database>, saleId: number): Promise<unknown> {
+  const row = await (db as any)
+    .selectFrom('sales')
+    .select(['van_trip_id'])
+    .where('id', '=', saleId)
+    .executeTakeFirstOrThrow();
+  return row.van_trip_id;
+}
+
 function buildServices(db: Kysely<Database>): {
   sales: SalesWriteService;
   drawer: CashDrawerService;
@@ -381,14 +414,15 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<void
 }
 
 async function main(): Promise<void> {
-  // (a) Trial invoice Z-261121-16629: rep, 4% line + 4% invoice = 8%
-  // combined, no PIN — refused by the cap.
+  // (a) Trial invoice Z-261121-16629: rep WITH an open trip, 4% line
+  // + 4% invoice = 8% combined, no PIN — refused by the cap.
   {
     const { pg, db } = await makeDb();
     try {
       SalesWriteService.invalidateSettingsCache(TENANT);
       await seedFoundation(db);
       await seedShift(db, 1, 4);
+      await seedOpenTrip(db, 1, 10);
       const { sales } = buildServices(db);
       await expectCode(
         sales.createSale(salePayload(4, 4), repAuth),
@@ -400,14 +434,15 @@ async function main(): Promise<void> {
     console.log('  rep 8% combined without PIN is refused passed');
   }
 
-  // (b) Trial invoice Z-261121-16630: rep, 25% + 25% = 50% combined,
-  // no PIN — refused by the cap.
+  // (b) Trial invoice Z-261121-16630: rep WITH an open trip, 25% +
+  // 25% = 50% combined, no PIN — refused by the cap.
   {
     const { pg, db } = await makeDb();
     try {
       SalesWriteService.invalidateSettingsCache(TENANT);
       await seedFoundation(db);
       await seedShift(db, 1, 4);
+      await seedOpenTrip(db, 1, 10);
       const { sales } = buildServices(db);
       await expectCode(
         sales.createSale(salePayload(25, 25), repAuth),
@@ -419,29 +454,40 @@ async function main(): Promise<void> {
     console.log('  rep 50% combined without PIN is refused passed');
   }
 
-  // (c) Exactly on the cap: rep, 2.5% line + 2.5% invoice = 5% — posts.
+  // (c) Exactly on the cap: rep WITH an open trip, 2.5% line + 2.5%
+  // invoice = 5% — posts. The sale has no customer, yet it IS
+  // stamped with the open trip (the stamp needs no customer — only
+  // the route gate does) and the trip counters move.
   {
     const { pg, db } = await makeDb();
     try {
       SalesWriteService.invalidateSettingsCache(TENANT);
       await seedFoundation(db);
       await seedShift(db, 1, 4);
+      await seedOpenTrip(db, 1, 10);
       const { sales } = buildServices(db);
       const created: any = await sales.createSale(salePayload(2.5, 2.5), repAuth);
       assert.ok(Number(created?.sale?.id) > 0, 'exactly-5% combined must create the sale');
+      assert.equal(
+        Number(await saleTripId(db, Number(created?.sale?.id))),
+        1,
+        'walk-in sale with an open trip is stamped with the trip',
+      );
     } finally {
       await db.destroy();
     }
     console.log('  rep exactly 5% combined posts passed');
   }
 
-  // (d) Above the cap WITH the supervisor PIN — allowed.
+  // (d) Above the cap WITH the supervisor PIN — allowed (rep WITH
+  // an open trip).
   {
     const { pg, db } = await makeDb();
     try {
       SalesWriteService.invalidateSettingsCache(TENANT);
       await seedFoundation(db);
       await seedShift(db, 1, 4);
+      await seedOpenTrip(db, 1, 10);
       const { sales } = buildServices(db);
       const created: any = await sales.createSale(salePayload(4, 4, MANAGER_PIN), repAuth);
       assert.ok(Number(created?.sale?.id) > 0, 'above-cap sale with supervisor PIN must create the sale');
@@ -486,13 +532,15 @@ async function main(): Promise<void> {
     console.log('  non-rep cashier 8% combined still posts passed');
   }
 
-  // (g) Rep linked by username only: 8% combined, no PIN — refused.
+  // (g) Rep linked by username only, WITH an open trip: 8% combined,
+  // no PIN — refused.
   {
     const { pg, db } = await makeDb();
     try {
       SalesWriteService.invalidateSettingsCache(TENANT);
       await seedFoundation(db);
       await seedShift(db, 1, 5);
+      await seedOpenTrip(db, 1, 11);
       const { sales } = buildServices(db);
       await expectCode(
         sales.createSale(salePayload(4, 4), repByUsernameAuth),
@@ -504,15 +552,16 @@ async function main(): Promise<void> {
     console.log('  username-linked rep 8% combined without PIN is refused passed');
   }
 
-  // (h) A wrong supervisor PIN does not approve the override: rep,
-  // 8% combined, wrong PIN — refused with the cap code (not a
-  // manager-auth code: the cap is the condition being refused).
+  // (h) A wrong supervisor PIN does not approve the override: rep
+  // WITH an open trip, 8% combined, wrong PIN — refused with the cap
+  // code (not a manager-auth code: the cap is the condition being refused).
   {
     const { pg, db } = await makeDb();
     try {
       SalesWriteService.invalidateSettingsCache(TENANT);
       await seedFoundation(db);
       await seedShift(db, 1, 4);
+      await seedOpenTrip(db, 1, 10);
       const { sales } = buildServices(db);
       await expectCode(
         sales.createSale(salePayload(4, 4, '9999'), repAuth),
@@ -522,6 +571,54 @@ async function main(): Promise<void> {
       await db.destroy();
     }
     console.log('  rep 8% combined with wrong PIN is refused passed');
+  }
+
+  // (i) THE SCOPE CHANGE: rep-linked seller with NO open trip doing
+  // a plain retail counter sale — 8% combined, no PIN — POSTS. The
+  // cap binds rep/trip sales only, not the rep's counter sales.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      SalesWriteService.invalidateSettingsCache(TENANT);
+      await seedFoundation(db);
+      await seedShift(db, 1, 4);
+      const { sales } = buildServices(db);
+      const created: any = await sales.createSale(salePayload(4, 4), repAuth);
+      assert.ok(Number(created?.sale?.id) > 0, 'rep with no open trip must post the retail sale without a PIN');
+      assert.equal(
+        await saleTripId(db, Number(created?.sale?.id)),
+        null,
+        'retail sale with no trip posts unattributed',
+      );
+    } finally {
+      await db.destroy();
+    }
+    console.log('  rep with no open trip posts retail sale without PIN passed');
+  }
+
+  // (j) Same scope change through the other link leg: rep linked by
+  // username only, NO open trip — 8% combined, no PIN — posts.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      SalesWriteService.invalidateSettingsCache(TENANT);
+      await seedFoundation(db);
+      await seedShift(db, 1, 5);
+      const { sales } = buildServices(db);
+      const created: any = await sales.createSale(salePayload(4, 4), repByUsernameAuth);
+      assert.ok(
+        Number(created?.sale?.id) > 0,
+        'username-linked rep with no open trip must post the retail sale without a PIN',
+      );
+      assert.equal(
+        await saleTripId(db, Number(created?.sale?.id)),
+        null,
+        'retail sale with no trip posts unattributed',
+      );
+    } finally {
+      await db.destroy();
+    }
+    console.log('  username-linked rep with no open trip posts retail sale without PIN passed');
   }
 
   console.log('van-pos-discount-cap: OK');
