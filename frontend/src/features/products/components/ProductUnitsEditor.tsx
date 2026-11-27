@@ -3,7 +3,7 @@ import { XIcon } from '@/shared/components/icons/AppIcons';
 import type { ProductUnit } from '@/types/domain';
 import { Button } from '@/shared/ui/button';
 import { UnitCombobox } from '@/shared/components/UnitCombobox';
-import { normalizeUnitName } from '@/features/pos/lib/pos.domain';
+import { normalizeUnitName } from '@/shared/utils/unit-name';
 
 function nextEmptyUnit(): ProductUnit {
   return {

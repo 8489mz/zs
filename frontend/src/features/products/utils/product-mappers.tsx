@@ -3,7 +3,7 @@ import { formatCurrency } from '@/lib/format';
 import type { Product } from '@/types/domain';
 import { getProductLocationDisplayName } from './product-location.utils';
 import { FileTextIcon } from '@/shared/components/icons/AppIcons';
-import { normalizeUnitName } from '@/features/pos/lib/pos.domain';
+import { normalizeUnitName } from '@/shared/utils/unit-name';
 
 export function matchProductSearch(product: Product, search: string, categoryName = '', supplierName = '') {
   const q = search.trim().toLowerCase();

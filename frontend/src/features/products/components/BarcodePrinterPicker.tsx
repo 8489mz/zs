@@ -5,7 +5,7 @@ import { Field } from '@/shared/ui/field';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
-import { HardwareBridgeClient } from '@/features/pos';
+import { HardwareBridgeClient } from '@/shared/lib/hardware-bridge-client';
 import { settingsApi } from '@/features/settings';
 import { useAuthStore } from '@/stores/auth-store';
 import {

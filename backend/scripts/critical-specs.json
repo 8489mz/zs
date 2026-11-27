@@ -391,6 +391,7 @@
     "test/critical/phase1-f5i-pos-settings.spec.ts",
     "test/critical/phase1-f5h-repair-sales-envelope-check.spec.ts",
     "test/critical/phase1-f5j-inventory-products.spec.ts",
-    "test/critical/phase1-f5h-repair-2-dialog-spec-mock.spec.ts"
+    "test/critical/phase1-f5h-repair-2-dialog-spec-mock.spec.ts",
+    "test/critical/phase1-f5k-pos-products.spec.ts"
   ]
 }

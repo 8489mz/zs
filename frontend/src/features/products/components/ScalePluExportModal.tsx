@@ -10,7 +10,7 @@ import { downloadExcelFile, triggerDownload } from '@/lib/browser';
 import { formatCurrency } from '@/lib/format';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { productsApi } from '@/features/products/api/products.api';
-import { getWeightedBarcodeConfig, getScaleExportItemCode, buildSampleScaleBarcode } from '@/features/pos/lib/weighted-barcode';
+import { getWeightedBarcodeConfig, getScaleExportItemCode, buildSampleScaleBarcode } from '@/shared/lib/weighted-barcode';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import type { Product } from '@/types/domain';
 

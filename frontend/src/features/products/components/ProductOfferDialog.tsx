@@ -6,7 +6,7 @@ import { productsApi } from '@/features/products/api/products.api';
 import { bomsApi } from '@/shared/api/boms.api';
 import { extractCreatedEntityId } from '@/lib/api/extract-created-entity-id';
 import { invalidateCatalogDomain } from '@/app/query-invalidation';
-import { broadcastSignageOffersUpdate } from '@/features/pos';
+import { broadcastSignageOffersUpdate } from '@/shared/lib/pos-customer-display-bridge';
 import type { Product, ProductOffer } from '@/types/domain';
 import { buildUpdatePayload, normalizeCustomerPrices, toProductFormValues } from '@/features/products/components/workspace-sections/product-workspace.utils';
 import { normalizeProductUnits } from '@/features/products/components/ProductUnitsEditor';
