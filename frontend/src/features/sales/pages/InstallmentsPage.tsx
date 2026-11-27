@@ -11,7 +11,7 @@ import {
   type InstallmentPlanItem,
   type CustomerInstallmentItem,
 } from '@/features/sales/api/installments.api';
-import { customersApi } from '@/features/customers/api/customers.api';
+import { useCustomersListInstallmentsQuery } from '@/shared/hooks/use-catalog-queries';
 import { openWhatsAppChat, formatInstallmentReminderMessage } from '@/lib/whatsapp';
 import { InstallmentsScheduleTable } from '../components/InstallmentsScheduleTable';
 import { InstallmentPlansTable } from '../components/InstallmentPlansTable';
@@ -48,13 +48,7 @@ export function InstallmentsPage() {
     queryFn: installmentsApi.getMetrics,
   });
 
-  const customersQuery = useQuery({
-    queryKey: ['customers-list-installments'],
-    queryFn: async () => {
-      const res = await customersApi.list();
-      return res || [];
-    },
-  });
+  const customersQuery = useCustomersListInstallmentsQuery();
 
   const scheduleQuery = useQuery({
     queryKey: ['installments-schedule', scheduleStatusFilter, searchQuery],

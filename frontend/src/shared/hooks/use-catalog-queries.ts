@@ -64,6 +64,16 @@ export function useCustomersQuery() {
   return useQuery({ queryKey: queryKeys.customers, queryFn: customersApi.list });
 }
 
+export function useCustomersListInstallmentsQuery() {
+  return useQuery({
+    queryKey: ['customers-list-installments'],
+    queryFn: async () => {
+      const res = await customersApi.list();
+      return res || [];
+    },
+  });
+}
+
 export function useSuppliersQuery() {
   return useQuery({ queryKey: queryKeys.suppliers, queryFn: suppliersApi.list, staleTime: referenceStaleTime });
 }

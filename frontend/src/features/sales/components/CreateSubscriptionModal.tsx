@@ -7,7 +7,8 @@ import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { toast } from '@/shared/components/system-alert';
 import { PlusIcon, Trash2Icon } from '@/shared/components/icons/AppIcons';
-import { customersApi, type Customer } from '@/features/customers';
+import { customersApi } from '@/shared/api/customers.api';
+import type { Customer } from '@/types/domain';
 import { commercialSubscriptionsApi, type CreateSubscriptionPayload } from '../api/commercial-subscriptions.api';
 
 interface CreateSubscriptionModalProps {
