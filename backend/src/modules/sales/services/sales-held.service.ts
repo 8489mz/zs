@@ -247,12 +247,12 @@ export class HeldSalesService {
           price_type: payload.priceType === 'wholesale' ? 'wholesale' : 'retail',
           branch_id: payload.branchId ? Number(payload.branchId) : null,
           location_id: payload.locationId ? Number(payload.locationId) : null,
-          delivery_rep_id: (payload as any).deliveryRepId ? Number((payload as any).deliveryRepId) : null,
+          delivery_rep_id: payload.deliveryRepId ? Number(payload.deliveryRepId) : null,
           /* INV-REST-HOLD-RECALL-TRUTH (R5-B): persist the stated
            * collection status whenever the hold names one — the old code
            * stored it only when a rep was set, so a prepaid_online order
            * with no rep yet came back as COD. */
-          collection_status: (payload as any).collectionStatus ? String((payload as any).collectionStatus) : null,
+          collection_status: payload.collectionStatus ? String(payload.collectionStatus) : null,
           /* INV-REST-HOLD-RECALL-TRUTH (R5-B, 0310 columns): the header
            * fields the old hold dropped. */
           tip_amount: Number(payload.tipAmount || 0),
@@ -317,7 +317,7 @@ export class HeldSalesService {
             modifiers: JSON.stringify(finalModifiers),
             tenant_id: scope.tenantId,
             account_id: scope.accountId,
-          } as any)
+          })
           .execute();
       }
 

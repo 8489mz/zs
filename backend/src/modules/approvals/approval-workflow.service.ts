@@ -113,7 +113,7 @@ export class ApprovalWorkflowService {
         approver_user_id: dto.approverUserId ?? null,
         notes: dto.notes ?? null,
         is_active: true,
-      } as any)
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
 
@@ -141,7 +141,7 @@ export class ApprovalWorkflowService {
         .selectFrom('approval_rules')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .forUpdate()
         .executeTakeFirst();
       if (!current) throw new NotFoundException('قاعدة الموافقة غير موجودة.');
@@ -168,7 +168,7 @@ export class ApprovalWorkflowService {
         .updateTable('approval_rules')
         .set(updateData)
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .returningAll()
         .executeTakeFirstOrThrow();
     });
@@ -195,16 +195,12 @@ export class ApprovalWorkflowService {
         .selectFrom('approval_rules')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .forUpdate()
         .executeTakeFirst();
       if (!current) throw new NotFoundException('قاعدة الموافقة غير موجودة.');
       await this.assertNoPendingRequests(trx, tenantId, current.module);
-      await trx
-        .deleteFrom('approval_rules')
-        .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
-        .execute();
+      await trx.deleteFrom('approval_rules').where('tenant_id', '=', tenantId).where('id', '=', id).execute();
     });
     return { ok: true };
   }
@@ -266,7 +262,7 @@ export class ApprovalWorkflowService {
         requested_by: auth.userId || 0,
         requested_by_name: auth.username || 'مستخدم النظام',
         notes: params.notes || null,
-      } as any)
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
 
@@ -282,7 +278,7 @@ export class ApprovalWorkflowService {
         action_by_name: auth.username || 'مستخدم النظام',
         action_role: auth.role || 'user',
         notes: `تم إنشاء طلب اعتماد للمستوى 1 من إجمالي ${maxTier} مستويات.`,
-      } as any)
+      })
       .execute();
 
     return {
@@ -380,7 +376,7 @@ export class ApprovalWorkflowService {
       .selectFrom('approval_requests')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!request) throw new NotFoundException('طلب الاعتماد غير موجود.');
@@ -413,7 +409,7 @@ export class ApprovalWorkflowService {
         .selectFrom('approval_requests')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .forUpdate()
         .executeTakeFirst();
       if (!request) throw new NotFoundException('طلب الاعتماد غير موجود.');
@@ -456,7 +452,7 @@ export class ApprovalWorkflowService {
           notes:
             (notes || `تمت الموافقة على المستوى ${currentTier}.`) +
             (soloOverride ? ` — اعتماد منفرد بقرار إداري — صاحب الطلب ${auth.username} اعتمد مستنده بنفسه` : ''),
-        } as any)
+        })
         .execute();
       await trx
         .updateTable('approval_requests')
@@ -464,9 +460,9 @@ export class ApprovalWorkflowService {
           status: final ? 'approved' : 'pending',
           current_tier: final ? currentTier : currentTier + 1,
           updated_at: sql`NOW()`,
-        } as any)
+        })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', request.id as any)
+        .where('id', '=', request.id)
         .execute();
       return {
         ok: true,
@@ -487,7 +483,7 @@ export class ApprovalWorkflowService {
         .selectFrom('approval_requests')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .forUpdate()
         .executeTakeFirst();
       if (!request) throw new NotFoundException('طلب الاعتماد غير موجود.');
@@ -519,13 +515,13 @@ export class ApprovalWorkflowService {
           notes:
             reason.trim() +
             (soloOverride ? ` — رفض منفرد بقرار إداري — صاحب الطلب ${auth.username} رفض مستنده بنفسه` : ''),
-        } as any)
+        })
         .execute();
       await trx
         .updateTable('approval_requests')
-        .set({ status: 'rejected', updated_at: sql`NOW()` } as any)
+        .set({ status: 'rejected', updated_at: sql`NOW()` })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', request.id as any)
+        .where('id', '=', request.id)
         .execute();
       return { ok: true, status: 'rejected' };
     });

@@ -261,7 +261,7 @@ export class MaritimeFreightQuotationsService {
             updated_at: sql`NOW()`,
           })
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', dto.inquiryId as any)
+          .where('id', '=', dto.inquiryId)
           .execute();
       }
 
@@ -297,7 +297,7 @@ export class MaritimeFreightQuotationsService {
       .updateTable('maritime_quotations')
       .set({ status, updated_at: sql`NOW()` })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 

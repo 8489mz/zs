@@ -176,7 +176,7 @@ export class GoodsReceiptBillService {
               // full GRNI journal — including the freight — instead of
               // stranding it in 2125.
               const acceptedQty = Number(line.accepted_qty);
-              const allocated = Number((line as any).allocated_landed_cost || 0);
+              const allocated = Number(line.allocated_landed_cost || 0);
               return {
                 id: Number(line.id),
                 acceptedQty,

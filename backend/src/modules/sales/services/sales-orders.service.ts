@@ -25,7 +25,7 @@ export class SalesOrdersService {
     // conversion recovery never runs against an undefined service.
     idempotency?: IdempotencyService,
   ) {
-    this.idempotency = idempotency ?? new IdempotencyService(db as any);
+    this.idempotency = idempotency ?? new IdempotencyService(db);
   }
 
   private readonly idempotency: IdempotencyService;

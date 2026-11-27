@@ -42,7 +42,7 @@ export class VanRepFinancialLedgerService {
   }
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   private get ledgerDeps(): VanRepFinancialLedgerDeps {

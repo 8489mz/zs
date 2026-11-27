@@ -436,7 +436,7 @@ export class StorefrontCustomerOrdersService {
     // what the customer owes or ordered).
     const updateContractItems = dto.items.map((item) => ({
       productId: Number(item.productId),
-      modifiers: this.normalizeOnlineOrderModifiers((item as any).modifiers),
+      modifiers: this.normalizeOnlineOrderModifiers(item.modifiers),
     }));
     await this.enforceOnlineOrderModifierContract(updateContractItems, tenant);
     for (const [itemIndex, item] of dto.items.entries()) {

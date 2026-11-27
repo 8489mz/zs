@@ -133,8 +133,8 @@ export class SaasAdminPlanMutations {
       const normalized = normalizeIndustryProfileKey(dto.activityType);
       updateData.activity_type = normalized;
       const patch = this.provisioning.getIndustrySettingsPatch(normalized);
-      const targetPlan = dto.planId !== undefined ? dto.planId : (tenant as any).plan_id;
-      const targetExtra = dto.extraFeatures !== undefined ? dto.extraFeatures : (tenant as any).extra_features;
+      const targetPlan = dto.planId !== undefined ? dto.planId : tenant.plan_id;
+      const targetExtra = dto.extraFeatures !== undefined ? dto.extraFeatures : tenant.extra_features;
       const isOmni =
         isOmnichannelPlanId(targetPlan) || (Array.isArray(targetExtra) && targetExtra.includes('storefront'));
       const isEnterprise =
@@ -172,8 +172,8 @@ export class SaasAdminPlanMutations {
     if (Object.keys(updateData).length > 0) {
       await this.db.updateTable('tenants').set(updateData).where('id', '=', id).execute();
 
-      const effectivePlanId = dto.planId !== undefined ? dto.planId : (tenant as any).plan_id;
-      const effectiveExtra = dto.extraFeatures !== undefined ? dto.extraFeatures : (tenant as any).extra_features;
+      const effectivePlanId = dto.planId !== undefined ? dto.planId : tenant.plan_id;
+      const effectiveExtra = dto.extraFeatures !== undefined ? dto.extraFeatures : tenant.extra_features;
       await this.syncTenantModuleSettingsForPlan(id, effectivePlanId, effectiveExtra);
       if (effectivePlanId) {
         await this.syncTenantSubscriptionPlan(id, effectivePlanId);
@@ -191,8 +191,8 @@ export class SaasAdminPlanMutations {
       // sync — it is the writer of the module switches the override drives
       // (posModuleEnabled / requireCashierShiftForSales), and create-sale
       // reads the RAW settings rows, not the getSettings safety net.
-      const effectivePlanId = (tenant as any).plan_id;
-      const effectiveExtra = (tenant as any).extra_features;
+      const effectivePlanId = tenant.plan_id;
+      const effectiveExtra = tenant.extra_features;
       await this.syncTenantModuleSettingsForPlan(id, effectivePlanId, effectiveExtra);
       this.authCache.invalidateTenant(id);
       this.settingsService.invalidateSettingsCache(id);

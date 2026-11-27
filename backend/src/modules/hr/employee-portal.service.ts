@@ -56,7 +56,7 @@ export class EmployeePortalService {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -108,7 +108,7 @@ export class EmployeePortalService {
 
     // INV-PORTAL-TENANT-STATUS-ENFORCED: the token is stateless, so
     // every request re-checks the tenant status, not just the row.
-    await assertPortalTenantAllowed(this.db as any, this.authCache, tenantId);
+    await assertPortalTenantAllowed(this.db, this.authCache, tenantId);
 
     // INV-PORTAL-DEFAULT-PIN-FORCED-CHANGE: the flag is re-derived from the
     // live stored hash on every request, never trusted from the token. A
@@ -370,7 +370,7 @@ export class EmployeePortalService {
 
     // INV-PORTAL-TENANT-STATUS-ENFORCED: no fresh login for a
     // suspended / expired / trial-expired tenant, even with a valid PIN.
-    await assertPortalTenantAllowed(this.db as any, this.authCache, String(matched.tenant_id));
+    await assertPortalTenantAllowed(this.db, this.authCache, String(matched.tenant_id));
 
     // INV-PORTAL-DEFAULT-PIN-FORCED-CHANGE: a PIN that is still the public
     // default must be changed at first login. Detection is a real password

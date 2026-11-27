@@ -135,7 +135,7 @@ export class MaritimeFreightJobCloseService {
         .selectFrom('maritime_jobs')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .forUpdate()
         .executeTakeFirst();
 
@@ -250,7 +250,7 @@ export class MaritimeFreightJobCloseService {
         .updateTable('maritime_jobs')
         .set(updatePayload)
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .returningAll()
         .execute();
 
@@ -269,7 +269,7 @@ export class MaritimeFreightJobCloseService {
       // the parent can never drift from its line items. Editing a
       // parent directly (no parent_job_id) leaves its totals as
       // edited until the next child change re-derives them.
-      if ((updatedJob as any)?.parent_job_id) {
+      if (updatedJob?.parent_job_id) {
         await this.syncConsolidationParentTotals(trx, tenantId, (updatedJob as any).parent_job_id);
       }
 
@@ -475,7 +475,7 @@ export class MaritimeFreightJobCloseService {
       .selectFrom('maritime_jobs')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', String(jobId) as any)
+      .where('id', '=', String(jobId))
       .executeTakeFirst();
 
     if (!job) throw new NotFoundException('Job not found');
@@ -513,7 +513,7 @@ export class MaritimeFreightJobCloseService {
         updated_at: sql`NOW()`,
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', String(jobId) as any)
+      .where('id', '=', String(jobId))
       .returningAll()
       .execute();
 
@@ -583,7 +583,7 @@ export class MaritimeFreightJobCloseService {
         is_tax: false,
         description_ar: '',
         sort_order: Number(code),
-      } as any)
+      })
       .onConflict((oc: any) => oc.columns(['tenant_id', 'code']).doNothing())
       .execute();
     const created = await queryable
@@ -648,7 +648,7 @@ export class MaritimeFreightJobCloseService {
       .selectFrom('maritime_jobs')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', String(jobId) as any)
+      .where('id', '=', String(jobId))
       .executeTakeFirst();
     if (!job) throw new NotFoundException('Job not found');
     const baseCurrency = await tenantBaseCurrency(queryable, tenantId);
@@ -770,7 +770,7 @@ export class MaritimeFreightJobCloseService {
       .selectFrom('maritime_cargo_insurances')
       .select(['id', 'policy_number', 'premium_amount', 'currency', 'status'])
       .where('tenant_id', '=', tenantId)
-      .where('job_id', '=', String(jobId) as any)
+      .where('job_id', '=', String(jobId))
       .execute();
     for (const policy of policies) {
       if (String(policy.status) !== 'active') continue;
@@ -810,7 +810,7 @@ export class MaritimeFreightJobCloseService {
         .selectFrom('maritime_jobs')
         .select(['client_invoiced_total', 'carrier_cost_total', 'other_costs_total'])
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', String(jobId) as any)
+        .where('id', '=', String(jobId))
         .executeTakeFirstOrThrow();
       const newOther = roundMoney(Number(fresh.other_costs_total || 0) + postedCosts, digits);
       const newNet = roundMoney(
@@ -821,7 +821,7 @@ export class MaritimeFreightJobCloseService {
         .updateTable('maritime_jobs')
         .set({ other_costs_total: newOther, net_profit: newNet, updated_at: sql`NOW()` })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', String(jobId) as any)
+        .where('id', '=', String(jobId))
         .execute();
     }
 

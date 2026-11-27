@@ -70,7 +70,7 @@ export class MaritimeFreightConsolidationDocumentsService {
       .selectFrom('maritime_jobs')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', String(parentJobId) as any)
+      .where('id', '=', String(parentJobId))
       .executeTakeFirst();
 
     if (!parentJob) throw new NotFoundException('Parent Master Job not found');
@@ -109,7 +109,7 @@ export class MaritimeFreightConsolidationDocumentsService {
       .selectFrom('maritime_job_documents')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('job_id', '=', String(jobId) as any)
+      .where('job_id', '=', String(jobId))
       .orderBy('id', 'desc')
       .execute();
   }
@@ -141,8 +141,8 @@ export class MaritimeFreightConsolidationDocumentsService {
     await this.db
       .deleteFrom('maritime_job_documents')
       .where('tenant_id', '=', tenantId)
-      .where('job_id', '=', String(jobId) as any)
-      .where('id', '=', String(docId) as any)
+      .where('job_id', '=', String(jobId))
+      .where('id', '=', String(docId))
       .execute();
 
     return { success: true };

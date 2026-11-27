@@ -402,7 +402,7 @@ export class ImportClosureAuditService {
         .updateTable('import_projects')
         .set({
           status: 'closed',
-          closure_data: closureData as any,
+          closure_data: closureData,
           closure_date: new Date(),
           closed_by: userId,
           updated_at: sql`NOW()`,
@@ -450,12 +450,12 @@ export class ImportClosureAuditService {
         state: String(p.status || ''),
         projectId: String(p.id),
         shipmentId: null,
-        amountEgp: num((p as any).allocated_capital),
+        amountEgp: num(p.allocated_capital),
         amountForeign: null,
-        currency: String((p as any).budget_currency || '') || null,
+        currency: String(p.budget_currency || '') || null,
         journalEntryNo: null,
         journalMatched: null,
-        createdAt: (p as any).created_at,
+        createdAt: p.created_at,
       });
     }
 
@@ -475,7 +475,7 @@ export class ImportClosureAuditService {
         currency: String(pi.currency || '') || null,
         journalEntryNo: null,
         journalMatched: null,
-        createdAt: (pi as any).created_at,
+        createdAt: pi.created_at,
       });
     }
 
@@ -496,7 +496,7 @@ export class ImportClosureAuditService {
         currency: null,
         journalEntryNo: null,
         journalMatched: null,
-        createdAt: (s as any).created_at,
+        createdAt: s.created_at,
       });
     }
 
@@ -597,7 +597,7 @@ export class ImportClosureAuditService {
         currency: null,
         journalEntryNo: null,
         journalMatched: null,
-        createdAt: (po as any).created_at,
+        createdAt: po.created_at,
       });
     }
 
@@ -704,7 +704,7 @@ export class ImportClosureAuditService {
 
     const todayStr = await resolveBusinessDateKey(this.db, tenantId, new Date());
     for (const dep of pendingDeposits) {
-      if (dep.expected_return_date && (dep.expected_return_date as any) < todayStr) {
+      if (dep.expected_return_date && dep.expected_return_date < todayStr) {
         exceptions.push({
           tenant_id: tenantId,
           exception_type: 'container_deposit_overdue',

@@ -8,7 +8,7 @@ export class WarehouseCatalogSlice {
   constructor(private readonly db: Kysely<Database>) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
   /**
    * Resolves the primary warehouse location for Pre-Sales booking.

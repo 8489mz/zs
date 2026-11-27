@@ -147,7 +147,7 @@ export async function moveDirectTrackedStock(
             supplier_name: batch.supplier_name,
             status: 'active',
             notes: `نقل مخزون فوري TR-${transferId}`,
-          } as any)
+          })
           .execute();
       }
       batchTracking.push({
@@ -247,7 +247,7 @@ export async function moveDirectTrackedStock(
             supplier_name: batch.supplier_name,
             status: 'active',
             notes: `نقل مخزون فوري TR-${transferId}`,
-          } as any)
+          })
           .execute();
       }
       batchTracking.push({

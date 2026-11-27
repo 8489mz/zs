@@ -36,7 +36,7 @@ export class ChequesStatsSlice {
     in7DaysDate.setUTCDate(in7DaysDate.getUTCDate() + 7);
     const in7Days = `${in7DaysDate.getUTCFullYear()}-${String(in7DaysDate.getUTCMonth() + 1).padStart(2, '0')}-${String(in7DaysDate.getUTCDate()).padStart(2, '0')}`;
 
-    const rows = await (this.db as any)
+    const rows = await this.db
       .selectFrom('accounting_cheques')
       .where('tenant_id', '=', tenantId)
       .select(['type', 'status', 'amount', 'base_amount', 'currency', 'due_date'])

@@ -161,8 +161,8 @@ export class VanSalesDriverTripsSettleSlice {
       userId: supervisorId ?? 0,
       sessionId: 'supervisor-pin-settlement',
       username: String(pinVerification.supervisorName || 'supervisor'),
-      role: (pinVerification.supervisorRole || 'supervisor') as any,
-      permissions: ['deliveryReps', 'sales', 'inventory', 'accounting'] as any,
+      role: pinVerification.supervisorRole || 'supervisor',
+      permissions: ['deliveryReps', 'sales', 'inventory', 'accounting'],
       tenantId: driver.tenantId,
       accountId: driver.accountId,
     };

@@ -89,13 +89,13 @@ export class CancelSaleService {
       const postCloseCancelShiftId = postCloseCancel && cancelOriginalShift ? Number(cancelOriginalShift.id) : null;
       // Same immutability as the edit path: cancelling a signed invoice
       // would reverse books the signed attestation still describes.
-      assertSaleNotZatcaSigned((sale as any).zatca_status);
+      assertSaleNotZatcaSigned(sale.zatca_status);
       // A field sale's trip counters were raised at creation time and
       // must be reversed with the cancellation. Lock the trip row now
       // (before any stock work, the order settleTrip uses); the
       // reversal itself runs below, after the cancellation guards. A
       // settled trip's counters are history and stay untouched.
-      const tripId = Number((sale as any).van_trip_id || 0) || null;
+      const tripId = Number(sale.van_trip_id || 0) || null;
       const tripOpen = tripId ? await lockOpenTripRow(trx, scope.tenantId, tripId) : false;
       const existingReturn = await trx
         .selectFrom('return_documents')
@@ -161,7 +161,7 @@ export class CancelSaleService {
           .where('tenant_id', '=', scope.tenantId)
           .execute();
         let oldLedgerCredit: number | null = null;
-        if (String((sale as any).payment_channel || '').toLowerCase() === 'mixed') {
+        if (String(sale.payment_channel || '').toLowerCase() === 'mixed') {
           const ledgerRow = await trx
             .selectFrom('customer_ledger')
             .select('amount')
@@ -171,13 +171,13 @@ export class CancelSaleService {
             .where('tenant_id', '=', scope.tenantId)
             .orderBy('id', 'desc')
             .executeTakeFirst();
-          oldLedgerCredit = ledgerRow ? Number((ledgerRow as any).amount || 0) : null;
+          oldLedgerCredit = ledgerRow ? Number(ledgerRow.amount || 0) : null;
         }
         const oldContribution = tripSaleContribution({
-          total: (sale as any).total,
-          paidAmount: (sale as any).paid_amount,
-          paymentChannel: (sale as any).payment_channel,
-          payments: paymentRows as any,
+          total: sale.total,
+          paidAmount: sale.paid_amount,
+          paymentChannel: sale.payment_channel,
+          payments: paymentRows,
           ledgerCreditAmount: oldLedgerCredit ?? undefined,
         });
         await applyTripCounterDelta(trx, scope.tenantId, tripId, negateContribution(oldContribution));
@@ -444,7 +444,7 @@ export class CancelSaleService {
 
             await trx
               .updateTable('customers')
-              .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` } as any)
+              .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` })
               .where('id', '=', customerId)
               .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
               .execute();
@@ -461,7 +461,7 @@ export class CancelSaleService {
                 sale_id: saleId,
                 notes: `خصم ${clawbackDelta} نقطة ولاء مكتسبة بسبب إلغاء الفاتورة S-${saleId}`,
                 created_at: sql`NOW()`,
-              } as any)
+              })
               .execute();
           }
         }
@@ -500,7 +500,7 @@ export class CancelSaleService {
 
             await trx
               .updateTable('customers')
-              .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` } as any)
+              .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` })
               .where('id', '=', customerId)
               .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
               .execute();
@@ -517,7 +517,7 @@ export class CancelSaleService {
                 sale_id: saleId,
                 notes: `رد ${refundDelta} نقطة ولاء مستبدلة سابقاً بسبب إلغاء الفاتورة S-${saleId}`,
                 created_at: sql`NOW()`,
-              } as any)
+              })
               .execute();
           }
         }

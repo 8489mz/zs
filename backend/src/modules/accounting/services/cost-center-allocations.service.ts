@@ -129,7 +129,7 @@ export class CostCenterAllocationsService {
         'cc.code as cost_center_code',
       ])
       .where('ccas.tenant_id', '=', tenantId)
-      .where('ccas.allocation_id', 'in', allocationIds as any)
+      .where('ccas.allocation_id', 'in', allocationIds)
       .execute();
 
     const splitsMap = new Map<string, any[]>();
@@ -174,7 +174,7 @@ export class CostCenterAllocationsService {
       );
       const created = await trx
         .insertInto('cost_center_allocations')
-        .values({ tenant_id: tenantId, code, name, description: dto.description || null, is_active: true } as any)
+        .values({ tenant_id: tenantId, code, name, description: dto.description || null, is_active: true })
         .returningAll()
         .executeTakeFirstOrThrow();
       await trx
@@ -186,7 +186,7 @@ export class CostCenterAllocationsService {
             cost_center_id: String(split.costCenterId),
             percentage: split.percentage,
             notes: split.notes,
-          })) as any,
+          })),
         )
         .execute();
       return { ok: true, allocationId: created.id };
@@ -207,7 +207,7 @@ export class CostCenterAllocationsService {
         .selectFrom('cost_center_allocations')
         .select('id')
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .forUpdate()
         .executeTakeFirst();
       if (!existing) throw new NotFoundException('مصفوفة التوزيع غير موجودة.');
@@ -218,9 +218,9 @@ export class CostCenterAllocationsService {
       );
       await trx
         .updateTable('cost_center_allocations')
-        .set({ code, name, description: dto.description || null, updated_at: sql`NOW()` } as any)
+        .set({ code, name, description: dto.description || null, updated_at: sql`NOW()` })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .execute();
       await trx
         .deleteFrom('cost_center_allocation_splits')
@@ -236,7 +236,7 @@ export class CostCenterAllocationsService {
             cost_center_id: String(split.costCenterId),
             percentage: split.percentage,
             notes: split.notes,
-          })) as any,
+          })),
         )
         .execute();
       return { ok: true };
@@ -248,7 +248,7 @@ export class CostCenterAllocationsService {
     const deleted = await this.db
       .deleteFrom('cost_center_allocations')
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .executeTakeFirst();
 
@@ -262,7 +262,7 @@ export class CostCenterAllocationsService {
       .selectFrom('cost_center_allocations')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', allocationId as any)
+      .where('id', '=', allocationId)
       .executeTakeFirst();
 
     if (!allocation) throw new NotFoundException('مصفوفة التوزيع غير موجودة.');
@@ -274,7 +274,7 @@ export class CostCenterAllocationsService {
       )
       .select(['ccas.cost_center_id', 'ccas.percentage', 'cc.name as cost_center_name', 'cc.code as cost_center_code'])
       .where('ccas.tenant_id', '=', tenantId)
-      .where('ccas.allocation_id', '=', allocationId as any)
+      .where('ccas.allocation_id', '=', allocationId)
       .execute();
 
     if (!Number.isFinite(totalAmount) || Math.abs(totalAmount) > Number.MAX_SAFE_INTEGER / 100) {

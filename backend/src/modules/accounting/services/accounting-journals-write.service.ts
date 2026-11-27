@@ -563,7 +563,7 @@ export class AccountingJournalsWriteService {
 
       await trx
         .updateTable('journal_entries')
-        .set({ entry_no: officialEntryNo, updated_at: sql`NOW()` } as any)
+        .set({ entry_no: officialEntryNo, updated_at: sql`NOW()` })
         .where('id', '=', revId)
         .where('tenant_id', '=', scope.tenantId)
         .execute();
@@ -583,10 +583,7 @@ export class AccountingJournalsWriteService {
         location_id: l.location_id,
       }));
 
-      await trx
-        .insertInto('journal_entry_lines')
-        .values(reversalLines as any)
-        .execute();
+      await trx.insertInto('journal_entry_lines').values(reversalLines).execute();
 
       // Keep both posted entries in the ledger so their financial effects offset.
       await trx
@@ -594,7 +591,7 @@ export class AccountingJournalsWriteService {
         .set({
           reversed_by_entry_id: revId,
           updated_at: sql`NOW()`,
-        } as any)
+        })
         .where('id', '=', entry.id)
         .where('tenant_id', '=', scope.tenantId)
         .execute();
@@ -663,7 +660,7 @@ export class AccountingJournalsWriteService {
 
       await trx
         .updateTable('journal_entries')
-        .set({ entry_no: formatJournalEntryNo(draftJournalNo), updated_at: sql`NOW()` } as any)
+        .set({ entry_no: formatJournalEntryNo(draftJournalNo), updated_at: sql`NOW()` })
         .where('id', '=', Number(entry.id))
         .where('tenant_id', '=', scope.tenantId)
         .execute();
@@ -683,7 +680,7 @@ export class AccountingJournalsWriteService {
             partner_id: line.partnerId,
             branch_id: line.branchId,
             location_id: line.locationId,
-          } as any)
+          })
           .execute();
       }
 
@@ -716,7 +713,7 @@ export class AccountingJournalsWriteService {
       }
       return {
         accountId: Number(line.accountId || 0),
-        costCenterId: line.costCenterId ? Number(line.costCenterId) : (null as any),
+        costCenterId: line.costCenterId ? Number(line.costCenterId) : null,
         description: String(line.description || '').trim(),
         debit,
         credit,
@@ -782,7 +779,7 @@ export class AccountingJournalsWriteService {
         return { ok: false, message: 'Rounding difference account 7290 is missing or inactive.' };
       normalized.push({
         accountId: Number(roundingAccount.id),
-        costCenterId: null as any,
+        costCenterId: null,
         description: 'Rounding difference',
         debit: difference < 0 ? Math.abs(difference) : 0,
         credit: difference > 0 ? difference : 0,

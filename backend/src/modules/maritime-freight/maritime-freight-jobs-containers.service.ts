@@ -281,7 +281,7 @@ export class MaritimeFreightJobsContainersService {
         .selectFrom('maritime_containers')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', containerId as any)
+        .where('id', '=', containerId)
         .forUpdate()
         .executeTakeFirst();
 
@@ -413,7 +413,7 @@ export class MaritimeFreightJobsContainersService {
           .selectFrom('maritime_jobs')
           .select('status')
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', container.job_id as any)
+          .where('id', '=', container.job_id)
           .executeTakeFirst();
         if (job?.status === 'completed') {
           throw new BadRequestException('أعد فتح الشحنة وفوتر غرامة التأخير الجديدة قبل تعديل الحاوية');
@@ -435,7 +435,7 @@ export class MaritimeFreightJobsContainersService {
         .updateTable('maritime_containers')
         .set(updatePayload)
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', containerId as any)
+        .where('id', '=', containerId)
         .returningAll()
         .execute();
 
@@ -474,7 +474,7 @@ export class MaritimeFreightJobsContainersService {
         .selectFrom('maritime_jobs')
         .select('id')
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', String(dto.jobId) as any)
+        .where('id', '=', String(dto.jobId))
         .forUpdate()
         .executeTakeFirst();
       if (!job) throw new NotFoundException('Shipment Job not found');

@@ -282,7 +282,7 @@ export class InventoryCountService {
           counted_serials: JSON.stringify(item.countedSerials || []),
           batch_counts: JSON.stringify(item.batchCounts || []),
           ...this.tenantFields(auth),
-        } as any).execute();
+        }).execute();
       }
 
       // Idempotency: commit inside the EXACT SAME business transaction (CORE-004)

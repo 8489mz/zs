@@ -432,7 +432,7 @@ export class IdempotencyService {
       status: record.status,
       documentId: record.document_id ?? null,
       responsePayload,
-      updatedAt: new Date(record.updated_at as any),
+      updatedAt: new Date(record.updated_at),
     };
   }
 }

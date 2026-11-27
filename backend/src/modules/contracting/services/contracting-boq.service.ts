@@ -56,7 +56,7 @@ export class ContractingBoqService {
       .selectFrom('contracting_boq_items')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('item_code', 'asc')
       .execute();
 
@@ -93,7 +93,7 @@ export class ContractingBoqService {
       .selectFrom('contracting_boq_items')
       .select('id')
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('item_code', '=', finalCode)
       .executeTakeFirst();
 
@@ -105,7 +105,7 @@ export class ContractingBoqService {
           .selectFrom('contracting_boq_items')
           .select('id')
           .where('tenant_id', '=', tenantId)
-          .where('project_id', '=', projectId as any)
+          .where('project_id', '=', projectId)
           .where('item_code', '=', finalCode)
           .executeTakeFirst()
       ) {
@@ -118,7 +118,7 @@ export class ContractingBoqService {
       .insertInto('contracting_boq_items')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
+        project_id: projectId,
         item_code: finalCode,
         description: dto.description.trim(),
         category: dto.category || 'general',
@@ -162,7 +162,7 @@ export class ContractingBoqService {
       .selectFrom('contracting_projects')
       .select('id')
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', projectId as any)
+      .where('id', '=', projectId)
       .executeTakeFirst();
 
     if (!project) {
@@ -174,7 +174,7 @@ export class ContractingBoqService {
       .selectFrom('contracting_boq_items')
       .select('item_code')
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .execute();
     const existingCodes = new Set(existing.map((e) => e.item_code.toUpperCase()));
 
@@ -197,7 +197,7 @@ export class ContractingBoqService {
         .insertInto('contracting_boq_items')
         .values({
           tenant_id: tenantId,
-          project_id: projectId as any,
+          project_id: projectId,
           item_code: itemCode,
           description: (dto.description || `بند عمل ${itemCode}`).trim(),
           category: dto.category || 'general',
@@ -229,7 +229,7 @@ export class ContractingBoqService {
       .selectFrom('contracting_boq_items')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!existing) {
@@ -256,7 +256,7 @@ export class ContractingBoqService {
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -281,11 +281,7 @@ export class ContractingBoqService {
 
   async deleteBoqItem(auth: AuthContext, id: string) {
     const { tenantId } = requireTenantScope(auth);
-    await this.db
-      .deleteFrom('contracting_boq_items')
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
-      .execute();
+    await this.db.deleteFrom('contracting_boq_items').where('tenant_id', '=', tenantId).where('id', '=', id).execute();
 
     return { success: true };
   }
@@ -296,7 +292,7 @@ export class ContractingBoqService {
       .selectFrom('contracting_change_orders')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('created_at', 'desc')
       .execute();
   }
@@ -314,7 +310,7 @@ export class ContractingBoqService {
         .insertInto('contracting_change_orders')
         .values({
           tenant_id: tenantId,
-          project_id: projectId as any,
+          project_id: projectId,
           change_order_number: tempNumber,
           title: dto.title.trim(),
           reason: dto.reason || 'client_request',
@@ -348,7 +344,7 @@ export class ContractingBoqService {
       .selectFrom('contracting_change_orders')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!co) {
@@ -365,7 +361,7 @@ export class ContractingBoqService {
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -406,11 +402,11 @@ export class ContractingBoqService {
 
   async getCostSnapshots(auth: AuthContext, projectId: string) {
     const { tenantId } = requireTenantScope(auth);
-    const rows = await (this.db as any)
+    const rows = await this.db
       .selectFrom('contracting_cost_snapshots')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('created_at', 'desc')
       .execute();
 
@@ -446,11 +442,11 @@ export class ContractingBoqService {
       0,
     );
 
-    const [inserted] = await (this.db as any)
+    const [inserted] = await this.db
       .insertInto('contracting_cost_snapshots')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
+        project_id: projectId,
         snapshot_name: dto.snapshotName.trim(),
         total_budget_cost: totalBudgetCost,
         total_contract_value: totalContractValue || project.contractValue,

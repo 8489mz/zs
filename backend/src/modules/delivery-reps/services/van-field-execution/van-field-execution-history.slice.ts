@@ -44,7 +44,7 @@ export class VanFieldExecutionHistorySlice {
     let directVisits: any[] = [];
     if (!filters?.noSaleOnly) {
       const linkedSaleIds = rows.map((r) => r.sale_id).filter(Boolean);
-      let sq = (this.db as any)
+      let sq = this.db
         .selectFrom('sales as s')
         .leftJoin('customers as c', (join: any) =>
           join.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'),
@@ -124,7 +124,7 @@ export class VanFieldExecutionHistorySlice {
     // exactly like the visits above. Only rows with a van_trip_id
     // count: a plain customer payment has none and is not a field
     // collection.
-    let collectionsQuery = (this.db as any)
+    let collectionsQuery = this.db
       .selectFrom('customer_payments')
       .select(sql<number>`coalesce(sum(amount), 0)`.as('total'))
       .where('tenant_id', '=', tenantId)
@@ -142,7 +142,7 @@ export class VanFieldExecutionHistorySlice {
     const collectionsRow = await collectionsQuery.executeTakeFirst();
     const metrics = {
       ...FmcgVisitExecutionEngine.calculateStrikeRateMetrics(allVisits, moneyDigits),
-      totalCollectionsAmount: roundMoney(Number((collectionsRow as any)?.total || 0), moneyDigits),
+      totalCollectionsAmount: roundMoney(Number(collectionsRow?.total || 0), moneyDigits),
     };
 
     return {

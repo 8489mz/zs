@@ -520,7 +520,7 @@ export class PaymentAllocationService {
           const newPaid = roundMoney(currentPaid + allocAmount, digits);
           await trx
             .updateTable('sales')
-            .set({ paid_amount: newPaid, updated_at: sql`NOW()` } as any)
+            .set({ paid_amount: newPaid, updated_at: sql`NOW()` })
             .where('id', '=', item.invoiceId)
             .where('tenant_id', '=', scope.tenantId)
             .execute();
@@ -570,7 +570,7 @@ export class PaymentAllocationService {
           const newPaid = roundMoney(currentPaid + allocAmount, digits);
           await trx
             .updateTable('purchases')
-            .set({ paid_amount: newPaid, updated_at: sql`NOW()` } as any)
+            .set({ paid_amount: newPaid, updated_at: sql`NOW()` })
             .where('id', '=', item.invoiceId)
             .where('tenant_id', '=', scope.tenantId)
             .execute();
@@ -596,7 +596,7 @@ export class PaymentAllocationService {
             allocation_date: todayTenantDate(await getTenantTimezone(trx, scope.tenantId), new Date()),
             notes: dto.notes || '',
             created_by: userId,
-          } as any)
+          })
           .execute();
       }
 

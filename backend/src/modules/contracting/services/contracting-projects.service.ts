@@ -72,7 +72,7 @@ export class ContractingProjectsService {
       .selectFrom('contracting_projects')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!p) {
@@ -89,7 +89,7 @@ export class ContractingProjectsService {
     // 1. Resolve client name if clientId is provided (independent of the code).
     let clientName = dto.clientName || '';
     if (dto.clientId && !clientName) {
-      const client = await (this.db as any)
+      const client = await this.db
         .selectFrom('customers')
         .select('name')
         .where('tenant_id', '=', tenantId)
@@ -107,7 +107,7 @@ export class ContractingProjectsService {
       if (!costCenterId) {
         try {
           const ccCode = `CC-${projectCode}`;
-          const existingCc = await (this.db as any)
+          const existingCc = await this.db
             .selectFrom('cost_centers')
             .select('id')
             .where('tenant_id', '=', tenantId)
@@ -118,7 +118,7 @@ export class ContractingProjectsService {
             costCenterId = Number(existingCc.id);
           } else {
             const ccName = `مشروع: ${dto.name.trim()}`;
-            const [insertedCc] = await (this.db as any)
+            const [insertedCc] = await this.db
               .insertInto('cost_centers')
               .values({
                 tenant_id: tenantId,
@@ -228,7 +228,7 @@ export class ContractingProjectsService {
       .selectFrom('contracting_projects')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!existing) {
@@ -245,7 +245,7 @@ export class ContractingProjectsService {
     if (dto.clientName !== undefined) {
       updatePayload.client_name = dto.clientName ? dto.clientName.trim() : '';
     } else if (dto.clientId) {
-      const client = await (this.db as any)
+      const client = await this.db
         .selectFrom('customers')
         .select('name')
         .where('tenant_id', '=', tenantId)
@@ -261,7 +261,7 @@ export class ContractingProjectsService {
         .selectFrom('contracting_change_orders')
         .select(sql<number>`COALESCE(SUM(cost_impact), 0)`.as('sum'))
         .where('tenant_id', '=', tenantId)
-        .where('project_id', '=', id as any)
+        .where('project_id', '=', id)
         .where('status', '=', 'approved')
         .executeTakeFirst();
       updatePayload.revised_contract_value = Number(dto.contractValue) + Number(coSum?.sum || 0);
@@ -311,7 +311,7 @@ export class ContractingProjectsService {
       .updateTable('contracting_projects')
       .set(updatePayload)
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -324,7 +324,7 @@ export class ContractingProjectsService {
       .selectFrom('contracting_projects')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!existing) {
@@ -361,8 +361,8 @@ export class ContractingProjectsService {
         project_manager: existing.project_manager,
         location_address: existing.location_address,
         notes: `مراجعة تفاوضية ${nextRev} للعطاء الأصلي [${existing.code}]`,
-        revision_number: nextRev as any,
-        original_tender_id: ((existing as any).original_tender_id || existing.id) as any,
+        revision_number: nextRev,
+        original_tender_id: (existing as any).original_tender_id || existing.id,
       } as any)
       .returningAll()
       .execute();
@@ -372,7 +372,7 @@ export class ContractingProjectsService {
       .selectFrom('contracting_boq_items')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', id as any)
+      .where('project_id', '=', id)
       .execute();
 
     for (const item of originalBoqItems) {
@@ -382,7 +382,7 @@ export class ContractingProjectsService {
         .insertInto('contracting_boq_items')
         .values({
           tenant_id: tenantId,
-          project_id: cloned.id as any,
+          project_id: cloned.id,
           item_code: item.item_code,
           description: item.description,
           category: item.category,
@@ -407,7 +407,7 @@ export class ContractingProjectsService {
       .selectFrom('contracting_projects')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!existing) {
@@ -424,7 +424,7 @@ export class ContractingProjectsService {
         updated_at: new Date(),
       } as any)
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -437,7 +437,7 @@ export class ContractingProjectsService {
       .selectFrom('contracting_projects')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!existing) {
@@ -460,9 +460,9 @@ export class ContractingProjectsService {
 
     const [updated] = await this.db
       .updateTable('contracting_projects')
-      .set(updatePayload as any)
+      .set(updatePayload)
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -476,7 +476,7 @@ export class ContractingProjectsService {
       .selectFrom('contracting_invoices')
       .select('id')
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', id as any)
+      .where('project_id', '=', id)
       .where('status', 'in', ['approved', 'paid'])
       .executeTakeFirst();
 
@@ -484,11 +484,7 @@ export class ContractingProjectsService {
       throw new BadRequestException('لا يمكن حذف هذا المشروع لوجود مستخلصات معتمدة مسجلة عليه.');
     }
 
-    await this.db
-      .deleteFrom('contracting_projects')
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
-      .execute();
+    await this.db.deleteFrom('contracting_projects').where('tenant_id', '=', tenantId).where('id', '=', id).execute();
 
     return { success: true, message: 'تم حذف المشروع وجميع بنوده بنجاح' };
   }

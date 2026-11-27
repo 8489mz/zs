@@ -496,9 +496,9 @@ export class CatalogProductFashionService {
 
               const targetPrior = byId.get(targetId);
               if (targetPrior) {
-                targetPrior.stock_qty = Number(targetLeg.globalAfter.toFixed(3)) as any;
+                targetPrior.stock_qty = Number(targetLeg.globalAfter.toFixed(3));
               }
-              removedProduct.stock_qty = Number(Math.max(0, removedLeg.globalAfter).toFixed(3)) as any;
+              removedProduct.stock_qty = Number(Math.max(0, removedLeg.globalAfter).toFixed(3));
             }
           }
         } else {
@@ -554,7 +554,7 @@ export class CatalogProductFashionService {
 
                 removedProduct.stock_qty = Number(
                   Math.max(0, Number(removedProduct.stock_qty || 0) - qtyToDeduct).toFixed(3),
-                ) as any;
+                );
 
                 if (movement.movementId && this.accountingPosting) {
                   await this.accountingPosting.postInventoryAdjustment(trx, movement.movementId, actor);
@@ -816,7 +816,7 @@ export class CatalogProductFashionService {
                   : null,
               catalog_updated_at: sql`NOW()`,
               ...this.tenantFields(actor),
-            } as any)
+            })
             .returning('id')
             .executeTakeFirstOrThrow();
           const productId = Number(inserted.id);

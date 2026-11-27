@@ -10,7 +10,7 @@ export class RepScopedReadsSlice {
   constructor(private readonly deps: VanCollectionsAndSwapsDeps) {}
 
   private get anyDb(): any {
-    return this.deps.db as any;
+    return this.deps.db;
   }
 
   /**
@@ -29,7 +29,7 @@ export class RepScopedReadsSlice {
     if (!trip) {
       throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
     }
-    if (Number((trip as any).rep_id) !== Number(repId)) {
+    if (Number(trip.rep_id) !== Number(repId)) {
       throw new AppError('غير مصرح لك بالاطلاع على بيانات رحلة مندوب آخر', 'FORBIDDEN', 403);
     }
   }
@@ -48,7 +48,7 @@ export class RepScopedReadsSlice {
     const ids = new Set<number>();
     const collect = (rows: any[]): void => {
       for (const row of rows || []) {
-        const id = Number((row as any).customer_id ?? (row as any).customerId);
+        const id = Number(row.customer_id ?? row.customerId);
         if (Number.isInteger(id) && id > 0) ids.add(id);
       }
     };

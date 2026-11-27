@@ -55,8 +55,8 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
       },
       10 * 60 * 1000,
     );
-    if (typeof (intervalTimer as any)?.unref === 'function') {
-      (intervalTimer as any).unref();
+    if (typeof intervalTimer?.unref === 'function') {
+      intervalTimer.unref();
     }
   }
 
@@ -87,7 +87,7 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
           AND completed_at IS NOT NULL
           AND completed_at < NOW() - MAKE_INTERVAL(days => ${cutoffDays})
       `.execute(this.db);
-      const count = Number((res as any).numAffectedRows || 0);
+      const count = Number(res.numAffectedRows || 0);
       results.oldExecutionsCleaned = count;
       if (count > 0) this.logger.log(`Cleaned ${count} old operation_executions (>${cutoffDays} days).`);
     } catch (err) {
@@ -100,7 +100,7 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
         DELETE FROM auth_rate_limits
         WHERE reset_at < NOW() - INTERVAL '1 hour'
       `.execute(this.db);
-      const count = Number((res as any).numAffectedRows || 0);
+      const count = Number(res.numAffectedRows || 0);
       results.staleRateLimitsCleaned = count;
       if (count > 0) this.logger.log(`Cleaned ${count} stale rate-limit rows.`);
     } catch (err) {
@@ -114,7 +114,7 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
         WHERE created_at < NOW() - INTERVAL '30 days'
           AND recovered = false
       `.execute(this.db);
-      const count = Number((res as any).numAffectedRows || 0);
+      const count = Number(res.numAffectedRows || 0);
       results.staleAbandonedCartsCleaned = count;
       if (count > 0) this.logger.log(`Cleaned ${count} stale abandoned carts (>30 days).`);
     } catch (err) {
@@ -268,7 +268,7 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
         DELETE FROM audit_logs
         WHERE created_at < NOW() - MAKE_INTERVAL(days => ${cutoffDays})
       `.execute(this.db);
-      const count = Number((res as any).numAffectedRows || 0);
+      const count = Number(res.numAffectedRows || 0);
       results.oldAuditLogsCleaned = count;
       if (count > 0) this.logger.log(`Cleaned ${count} old audit_logs (>${cutoffDays} days).`);
     } catch (err) {

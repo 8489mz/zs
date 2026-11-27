@@ -37,7 +37,7 @@ export class VanFieldExecutionVisitsSlice {
     if (!visit) {
       throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
     }
-    if (Number((visit as any).rep_id) !== Number(repId)) {
+    if (Number(visit.rep_id) !== Number(repId)) {
       throw new AppError('هذه الزيارة تخص مندوباً آخر، لا يمكنك التعديل عليها', 'REP_VISIT_NOT_OWNED', 403);
     }
     return visit;
@@ -57,7 +57,7 @@ export class VanFieldExecutionVisitsSlice {
     // Runs before the customer and scope reads, so a GPS-less attempt
     // is refused without learning anything about the customer.
     if (!hasGpsCoordinates(payload.latitude, payload.longitude)) {
-      const repFlags = await loadRepPermissions(this.db as any, tenantId, repId);
+      const repFlags = await loadRepPermissions(this.db, tenantId, repId);
       if (repFlags.require_gps_on_visit) {
         throw new AppError(
           'إحداثيات GPS مطلوبة لتسجيل الزيارة الميدانية (require_gps_on_visit مفعّل لهذا المندوب) ولم يتم إرسالها',
@@ -102,7 +102,7 @@ export class VanFieldExecutionVisitsSlice {
       if (!trip) {
         throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
       }
-      if (Number((trip as any).rep_id) !== Number(repId)) {
+      if (Number(trip.rep_id) !== Number(repId)) {
         throw new AppError('هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل زيارة عليها', 'REP_TRIP_NOT_OWNED', 403);
       }
       tripOwned = true;
@@ -304,20 +304,20 @@ export class VanFieldExecutionVisitsSlice {
       if (!verifiedSale) {
         throw new AppError('الفاتورة غير موجودة', 'SALE_NOT_FOUND', 404);
       }
-      if (Number((verifiedSale as any).customer_id) !== Number((visit as any).customer_id)) {
+      if (Number(verifiedSale.customer_id) !== Number(visit.customer_id)) {
         throw new AppError('الفاتورة لا تخص هذا العميل', 'VISIT_SALE_CUSTOMER_MISMATCH', 400);
       }
       if (
-        (verifiedSale as any).delivery_rep_id != null &&
+        verifiedSale.delivery_rep_id != null &&
         repId != null &&
-        Number((verifiedSale as any).delivery_rep_id) !== Number(repId)
+        Number(verifiedSale.delivery_rep_id) !== Number(repId)
       ) {
         throw new AppError('الفاتورة تخص مندوباً آخر، لا يمكنك ربطها بزيارتك', 'REP_SALE_NOT_OWNED', 403);
       }
       if (
-        (visit as any).trip_id != null &&
-        (verifiedSale as any).van_trip_id != null &&
-        Number((verifiedSale as any).van_trip_id) !== Number((visit as any).trip_id)
+        visit.trip_id != null &&
+        verifiedSale.van_trip_id != null &&
+        Number(verifiedSale.van_trip_id) !== Number(visit.trip_id)
       ) {
         throw new AppError('الفاتورة ليست على رحلة هذه الزيارة', 'REP_SALE_NOT_OWNED', 403);
       }
@@ -330,7 +330,7 @@ export class VanFieldExecutionVisitsSlice {
     if (
       suppliedSaleAmount != null &&
       verifiedSale != null &&
-      Math.abs(Number(suppliedSaleAmount) - Number((verifiedSale as any).total)) > 0.01
+      Math.abs(Number(suppliedSaleAmount) - Number(verifiedSale.total)) > 0.01
     ) {
       throw new AppError('مبلغ البيع المرسل لا يطابق إجمالي الفاتورة المرتبطة', 'REP_VISIT_SALE_AMOUNT_MISMATCH', 403);
     }
@@ -348,25 +348,23 @@ export class VanFieldExecutionVisitsSlice {
 
     const suppliedCollectionAmount = payload?.collectionAmount;
     const saleCashPaid =
-      verifiedSale != null && (verifiedSale as any).payment_type === 'cash'
-        ? Number((verifiedSale as any).paid_amount || 0)
-        : 0;
+      verifiedSale != null && verifiedSale.payment_type === 'cash' ? Number(verifiedSale.paid_amount || 0) : 0;
     let fieldCollectionsSum: number | null = null;
     const readFieldCollectionsSum = async (): Promise<number> => {
       if (fieldCollectionsSum != null) return fieldCollectionsSum;
-      if (repId == null || (visit as any).trip_id == null) {
+      if (repId == null || visit.trip_id == null) {
         fieldCollectionsSum = 0;
         return 0;
       }
-      const row = await (this.db as any)
+      const row = await this.db
         .selectFrom('customer_payments')
         .select(sql<number>`coalesce(sum(amount), 0)`.as('total'))
         .where('tenant_id', '=', tenantId)
-        .where('van_trip_id', '=', (visit as any).trip_id)
+        .where('van_trip_id', '=', visit.trip_id)
         .where('rep_id', '=', repId)
-        .where('customer_id', '=', (visit as any).customer_id)
+        .where('customer_id', '=', visit.customer_id)
         .executeTakeFirst();
-      fieldCollectionsSum = Number((row as any)?.total || 0);
+      fieldCollectionsSum = Number(row?.total || 0);
       return fieldCollectionsSum;
     };
     if (suppliedCollectionAmount != null && Number(suppliedCollectionAmount) > 0) {
@@ -404,10 +402,10 @@ export class VanFieldExecutionVisitsSlice {
         check_out_at: checkOutAt.toISOString(),
         dwell_time_seconds: dwellSeconds,
         has_sale: hasSale,
-        sale_id: verifiedSale != null ? Number((verifiedSale as any).id) : visit.sale_id,
+        sale_id: verifiedSale != null ? Number(verifiedSale.id) : visit.sale_id,
         sale_amount:
           verifiedSale != null
-            ? Number((verifiedSale as any).total)
+            ? Number(verifiedSale.total)
             : payload?.saleAmount != null
               ? payload.saleAmount
               : visit.sale_amount,

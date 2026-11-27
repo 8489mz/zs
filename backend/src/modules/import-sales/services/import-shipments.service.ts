@@ -349,7 +349,7 @@ export class ImportShipmentsService {
       }
 
       let scopeAccountId = tenantId;
-      const rawShipmentSupplier = (shipment as any)?.supplier_id;
+      const rawShipmentSupplier = (shipment)?.supplier_id;
       if (rawShipmentSupplier) {
         const sup = await trx.selectFrom('suppliers').select('account_id')
           .where('tenant_id', '=', tenantId).where('id', '=', Number(rawShipmentSupplier)).executeTakeFirst();
@@ -360,7 +360,7 @@ export class ImportShipmentsService {
       // when the project chose a preset. A generic project gets
       // no category, no OEM map, no invented identifiers and no
       // markup; an unknown stored key fails closed.
-      const presetKey = (project as any)?.sector_preset;
+      const presetKey = (project)?.sector_preset;
       const preset = resolveSectorPreset(presetKey ? String(presetKey) : null);
       if (presetKey && String(presetKey).trim() && !preset) {
         throw new BadRequestException(
@@ -384,7 +384,7 @@ export class ImportShipmentsService {
               account_id: scopeAccountId,
               name: preset.categoryName,
               is_active: true,
-            } as any)
+            })
             .returning('id')
             .executeTakeFirst();
         }
@@ -397,7 +397,7 @@ export class ImportShipmentsService {
       // No silent || 50: the import needs a real rate — arrival
       // first, then the feasibility commercial rate — or it fails
       // closed, the same rule as every other money path.
-      const arrivalRate = Number((shipment as any).exchange_rate_at_arrival);
+      const arrivalRate = Number((shipment).exchange_rate_at_arrival);
       const feasRate = Number(feas?.exchangeRateCommercial);
       const exchangeRate =
         Number.isFinite(arrivalRate) && arrivalRate > 0
@@ -511,7 +511,7 @@ export class ImportShipmentsService {
                 reserved_qty: 0,
                 metadata,
                 catalog_updated_at: new Date(),
-              } as any)
+              })
               .returning(['id', 'name'])
               .executeTakeFirstOrThrow();
           }
@@ -612,7 +612,7 @@ export class ImportShipmentsService {
         .groupBy('cost_bucket')
         .execute();
       for (const row of foldedRows) {
-        foldedByBucket.set(String((row as any).cost_bucket || ''), Number((row as any).folded_total || 0));
+        foldedByBucket.set(String((row).cost_bucket || ''), Number((row).folded_total || 0));
       }
     }
     const rate = effective.exchangeRateAtArrival;
@@ -760,14 +760,14 @@ export class ImportShipmentsService {
       for (const [input, column] of payeeFields) {
         if (dto[input] !== undefined) {
           const supplierId = Number(dto[input]);
-          if (supplierId !== Number((shipment as any)[column])) {
+          if (supplierId !== Number((shipment)[column])) {
             const supplier = await trx.selectFrom('suppliers').select('id')
               .where('tenant_id', '=', tenantId).where('id', '=', supplierId).executeTakeFirst();
             if (!supplier) {
               throw new BadRequestException(`مورد بند التكلفة (${input}) غير موجود في هذه المنشأة؛ حدد مورداً حقيقياً قبل الترحيل. [IMPORT_COMPONENT_PAYEE_REQUIRED]`);
             }
           }
-          (payload as any)[column] = supplierId;
+          (payload)[column] = supplierId;
         }
       }
       if (dto.unallocableCostReason !== undefined) payload.unallocable_cost_reason = dto.unallocableCostReason || null;
@@ -800,11 +800,11 @@ export class ImportShipmentsService {
           (dto.vatRatePercent !== undefined && numOrZero(dto.vatRatePercent) !== numOrZero(shipment.vat_rate_percent)) ||
           (dto.insuranceCostUsd !== undefined && numOrZero(dto.insuranceCostUsd) !== numOrZero(shipment.insurance_cost_usd)) ||
           (dto.exchangeRateAtArrival !== undefined && (storedRate === null || numOrZero(dto.exchangeRateAtArrival) !== storedRate)) ||
-          (dto.freightSupplierId !== undefined && numOrZero(dto.freightSupplierId) !== numOrZero((shipment as any).freight_supplier_id)) ||
-          (dto.customsSupplierId !== undefined && numOrZero(dto.customsSupplierId) !== numOrZero((shipment as any).customs_supplier_id)) ||
-          (dto.transportSupplierId !== undefined && numOrZero(dto.transportSupplierId) !== numOrZero((shipment as any).transport_supplier_id)) ||
-          (dto.demurrageSupplierId !== undefined && numOrZero(dto.demurrageSupplierId) !== numOrZero((shipment as any).demurrage_supplier_id)) ||
-          (dto.unallocableCostReason !== undefined && String(dto.unallocableCostReason ?? '').trim() !== String((shipment as any).unallocable_cost_reason ?? '').trim());
+          (dto.freightSupplierId !== undefined && numOrZero(dto.freightSupplierId) !== numOrZero((shipment).freight_supplier_id)) ||
+          (dto.customsSupplierId !== undefined && numOrZero(dto.customsSupplierId) !== numOrZero((shipment).customs_supplier_id)) ||
+          (dto.transportSupplierId !== undefined && numOrZero(dto.transportSupplierId) !== numOrZero((shipment).transport_supplier_id)) ||
+          (dto.demurrageSupplierId !== undefined && numOrZero(dto.demurrageSupplierId) !== numOrZero((shipment).demurrage_supplier_id)) ||
+          (dto.unallocableCostReason !== undefined && String(dto.unallocableCostReason ?? '').trim() !== String((shipment).unallocable_cost_reason ?? '').trim());
         if (dto.status === 'Arrived' || costTouched) {
           if (dto.status === 'Arrived') {
             // The arrival rate keeps precedence over the payee
@@ -823,11 +823,11 @@ export class ImportShipmentsService {
             internalTransportCostEgp: dto.internalTransportCostEgp !== undefined ? numOrZero(dto.internalTransportCostEgp) : numOrZero(shipment.internal_transport_cost_egp),
             actualDemurrageFees: dto.actualDemurrageFees !== undefined ? numOrZero(dto.actualDemurrageFees) : numOrZero(shipment.actual_demurrage_fees),
             exchangeRateAtArrival: dto.exchangeRateAtArrival !== undefined ? numOrZero(dto.exchangeRateAtArrival) : storedRate,
-            freightSupplierId: dto.freightSupplierId !== undefined ? numOrZero(dto.freightSupplierId) : numOrZero((shipment as any).freight_supplier_id),
-            customsSupplierId: dto.customsSupplierId !== undefined ? numOrZero(dto.customsSupplierId) : numOrZero((shipment as any).customs_supplier_id),
-            transportSupplierId: dto.transportSupplierId !== undefined ? numOrZero(dto.transportSupplierId) : numOrZero((shipment as any).transport_supplier_id),
-            demurrageSupplierId: dto.demurrageSupplierId !== undefined ? numOrZero(dto.demurrageSupplierId) : numOrZero((shipment as any).demurrage_supplier_id),
-            unallocableCostReason: dto.unallocableCostReason !== undefined ? String(dto.unallocableCostReason ?? '').trim() : String((shipment as any).unallocable_cost_reason ?? '').trim(),
+            freightSupplierId: dto.freightSupplierId !== undefined ? numOrZero(dto.freightSupplierId) : numOrZero((shipment).freight_supplier_id),
+            customsSupplierId: dto.customsSupplierId !== undefined ? numOrZero(dto.customsSupplierId) : numOrZero((shipment).customs_supplier_id),
+            transportSupplierId: dto.transportSupplierId !== undefined ? numOrZero(dto.transportSupplierId) : numOrZero((shipment).transport_supplier_id),
+            demurrageSupplierId: dto.demurrageSupplierId !== undefined ? numOrZero(dto.demurrageSupplierId) : numOrZero((shipment).demurrage_supplier_id),
+            unallocableCostReason: dto.unallocableCostReason !== undefined ? String(dto.unallocableCostReason ?? '').trim() : String((shipment).unallocable_cost_reason ?? '').trim(),
             customsDutyRatePercent: dto.customsDutyRatePercent !== undefined ? numOrZero(dto.customsDutyRatePercent) : numOrZero(shipment.customs_duty_rate_percent),
             vatRatePercent: dto.vatRatePercent !== undefined ? numOrZero(dto.vatRatePercent) : numOrZero(shipment.vat_rate_percent),
             insuranceCostUsd: dto.insuranceCostUsd !== undefined ? numOrZero(dto.insuranceCostUsd) : numOrZero(shipment.insurance_cost_usd),
@@ -872,7 +872,7 @@ export class ImportShipmentsService {
           if (submitted !== undefined && !unchanged) {
             this.assertShipmentEditable(state);
           }
-          delete (payload as any)[column];
+          delete (payload)[column];
         }
         // INV-IMPORT-FORM4-CLEARANCE-GATE: the funding type
         // freezes with the posted receipt too — the gate decision
@@ -881,7 +881,7 @@ export class ImportShipmentsService {
         // frozenFields above: funding_type joins the
         // ImportShipmentTable type at merge.)
         if (dto.fundingType !== undefined) {
-          const storedFundingType = (shipment as any).funding_type || 'bank_transfer';
+          const storedFundingType = (shipment).funding_type || 'bank_transfer';
           if (dto.fundingType !== storedFundingType) {
             this.assertShipmentEditable(state);
           }
@@ -941,7 +941,7 @@ export class ImportShipmentsService {
       // against the broker advance. Post-receipt the buckets are
       // frozen above, so this floor only binds pre-receipt writes.
       const bucketFloorColumns = ['customs_cost_egp', 'actual_demurrage_fees', 'internal_transport_cost_egp'] as const;
-      const flooredBuckets = bucketFloorColumns.filter((column) => (payload as any)[column] !== undefined);
+      const flooredBuckets = bucketFloorColumns.filter((column) => (payload)[column] !== undefined);
       if (flooredBuckets.length > 0) {
         const foldedSums = await trx.selectFrom('import_broker_capitalizations')
           .select(['cost_bucket', sql<number>`coalesce(sum(amount_egp), 0)`.as('folded_total')])
@@ -950,7 +950,7 @@ export class ImportShipmentsService {
           .execute();
         for (const column of flooredBuckets) {
           const folded = Number(foldedSums.find((row) => row.cost_bucket === column)?.folded_total || 0);
-          if (Number((payload as any)[column]) < folded - 0.001) {
+          if (Number((payload)[column]) < folded - 0.001) {
             throw new BadRequestException(`لا يمكن تخفيض بند التكلفة (${column}) دون إجمالي مصروفات المخلص المرسملة فيه (${folded.toFixed(2)} ج.م). [IMPORT_BROKER_CAPITALIZATION_FLOOR]`);
           }
         }

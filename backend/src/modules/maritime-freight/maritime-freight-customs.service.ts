@@ -121,7 +121,7 @@ export class MaritimeFreightCustomsService {
       .selectFrom('maritime_customs_declarations')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('job_id', '=', jobId as any)
+      .where('job_id', '=', jobId)
       .orderBy('created_at', 'desc')
       .execute();
     return rows.map((r) => this.mapCustomsDeclarationRow(r));
@@ -133,7 +133,7 @@ export class MaritimeFreightCustomsService {
       .selectFrom('maritime_customs_declarations')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
     if (!declaration) throw new NotFoundException('البيان الجمركي غير موجود');
 
@@ -141,7 +141,7 @@ export class MaritimeFreightCustomsService {
       .selectFrom('maritime_customs_declaration_items')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('declaration_id', '=', id as any)
+      .where('declaration_id', '=', id)
       .execute();
 
     return {
@@ -158,7 +158,7 @@ export class MaritimeFreightCustomsService {
         .selectFrom('maritime_jobs')
         .select('id')
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', jobId as any)
+        .where('id', '=', jobId)
         .executeTakeFirst();
       if (!job) throw new NotFoundException('عملية الشحن غير موجودة');
 
@@ -194,7 +194,7 @@ export class MaritimeFreightCustomsService {
           currency: dto.currency || 'USD',
           notes: dto.notes || null,
           created_by: auth.userId ? Number(auth.userId) : null,
-        } as any)
+        })
         .returningAll()
         .executeTakeFirstOrThrow();
 
@@ -213,7 +213,7 @@ export class MaritimeFreightCustomsService {
             duty_rate_percent: item.dutyRatePercent,
             duty_amount: item.dutyAmount,
             notes: item.notes || null,
-          } as any)
+          })
           .returningAll()
           .executeTakeFirstOrThrow();
         insertedItems.push(itemRow);
@@ -234,7 +234,7 @@ export class MaritimeFreightCustomsService {
         .selectFrom('maritime_customs_declarations')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', declarationId as any)
+        .where('id', '=', declarationId)
         .forUpdate()
         .executeTakeFirst();
       if (!declaration) throw new NotFoundException('البيان الجمركي غير موجود');
@@ -257,7 +257,7 @@ export class MaritimeFreightCustomsService {
           duty_rate_percent: dutyRatePercent,
           duty_amount: dutyAmount,
           notes: dto.notes || null,
-        } as any)
+        })
         .returningAll()
         .executeTakeFirstOrThrow();
 
@@ -269,7 +269,7 @@ export class MaritimeFreightCustomsService {
           updated_at: sql`NOW()`,
         })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', declarationId as any)
+        .where('id', '=', declarationId)
         .execute();
 
       return this.mapCustomsItemRow(itemRow);
@@ -319,7 +319,7 @@ export class MaritimeFreightCustomsService {
       .selectFrom('maritime_jobs')
       .select(['cost_center_id', 'client_invoiced_total', 'carrier_cost_total', 'other_costs_total'])
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', declaration.job_id as any)
+      .where('id', '=', declaration.job_id)
       .executeTakeFirst();
     const description = `رسوم جمركية عند التخليص - البيان ${declaration.declaration_number || declaration.id}`;
     const entryId = await this.accountingPosting.postDomainJournal(trx, {
@@ -361,7 +361,7 @@ export class MaritimeFreightCustomsService {
         .updateTable('maritime_jobs')
         .set({ other_costs_total: newOther, net_profit: newNet, updated_at: sql`NOW()` })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', declaration.job_id as any)
+        .where('id', '=', declaration.job_id)
         .execute();
     }
     return entryId;
@@ -382,7 +382,7 @@ export class MaritimeFreightCustomsService {
         .selectFrom('maritime_customs_declarations')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .forUpdate()
         .executeTakeFirst();
       if (!declaration) throw new NotFoundException('البيان الجمركي غير موجود');
@@ -403,7 +403,7 @@ export class MaritimeFreightCustomsService {
         .updateTable('maritime_customs_declarations')
         .set(updatePayload)
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .returningAll()
         .execute();
 

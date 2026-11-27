@@ -75,14 +75,12 @@ export class PostSupplierAdvanceService {
       .where(sql<boolean>`sp.tenant_id = ${scope.tenantId}`)
       .executeTakeFirst();
     if (!payment) throw new AppError('Supplier advance payment not found', 'SUPPLIER_ADVANCE_NOT_FOUND', 404);
-    if ((payment as any).is_advance !== true)
+    if (payment.is_advance !== true)
       throw new AppError('Payment is not a supplier advance', 'SUPPLIER_ADVANCE_NOT_ADVANCE', 400);
 
     const amount = toBookMoney(applyAmount);
     if (!(amount > 0)) throw new AppError('Advance application must be positive', 'INVALID_AMOUNT', 400);
-    const outstanding = toBookMoney(
-      Number((payment as any).amount || 0) - Number((payment as any).applied_amount || 0),
-    );
+    const outstanding = toBookMoney(Number(payment.amount || 0) - Number(payment.applied_amount || 0));
     if (amount > outstanding + this.maxAllowedDifference(bookDigits)) {
       throw new AppError(
         `Advance application ${amount} exceeds the outstanding advance ${outstanding}`,
@@ -90,7 +88,7 @@ export class PostSupplierAdvanceService {
         400,
       );
     }
-    const payableBalance = toBookMoney((payment as any).supplier_balance || 0);
+    const payableBalance = toBookMoney(payment.supplier_balance || 0);
     if (amount > payableBalance + this.maxAllowedDifference(bookDigits)) {
       throw new AppError(
         `Advance application ${amount} exceeds the supplier payable balance ${payableBalance}`,
@@ -180,10 +178,10 @@ export class PostSupplierAdvanceService {
       lines: normalizedLines,
     });
 
-    const appliedAmount = toBookMoney(Number((payment as any).applied_amount || 0) + amount);
+    const appliedAmount = toBookMoney(Number(payment.applied_amount || 0) + amount);
     await queryable
       .updateTable('supplier_payments')
-      .set({ applied_amount: appliedAmount } as any)
+      .set({ applied_amount: appliedAmount })
       .where('id', '=', advancePaymentId)
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .execute();

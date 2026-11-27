@@ -34,7 +34,7 @@ export class VanPreSalesService {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   private s1Instance?: WarehouseCatalogSlice;

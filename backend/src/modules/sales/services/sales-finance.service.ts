@@ -104,7 +104,7 @@ export class SalesFinanceService {
         reference_id: referenceId,
         created_by: auth.userId,
         ...this.tenantFields(auth),
-      } as any)
+      })
       .execute();
   }
 
@@ -153,7 +153,7 @@ export class SalesFinanceService {
         reference_id: referenceId,
         created_by: auth.userId,
         ...this.tenantFields(auth),
-      } as any)
+      })
       .execute();
   }
 
@@ -179,7 +179,7 @@ export class SalesFinanceService {
         branch_id: branchId,
         location_id: locationId,
         ...this.tenantFields(auth),
-      } as any)
+      })
       .execute();
   }
 
@@ -219,7 +219,7 @@ export class SalesFinanceService {
         location_id: locationId || null,
         created_by: auth.userId,
         ...this.tenantFields(auth),
-      } as any)
+      })
       .execute();
   }
 
@@ -253,7 +253,7 @@ export class SalesFinanceService {
         branch_id: branchId || null,
         location_id: locationId || null,
         ...this.tenantFields(auth),
-      } as any)
+      })
       .execute();
   }
 }

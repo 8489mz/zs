@@ -124,7 +124,7 @@ export class PurchasesWriteSupplierPaymentsService {
          * supplier (a default of 0 would have blocked the already-live
          * advance flow for all of them). */
         if (isAdvance) {
-          const limit = (supplier as any).overdraft_limit == null ? null : Number((supplier as any).overdraft_limit);
+          const limit = supplier.overdraft_limit == null ? null : Number(supplier.overdraft_limit);
           if (limit != null) {
             const outstandingRow = await trx
               .selectFrom('supplier_payments')
@@ -195,7 +195,7 @@ export class PurchasesWriteSupplierPaymentsService {
             created_by: auth.userId,
             tenant_id: scope.tenantId,
             account_id: scope.accountId,
-          } as any)
+          })
           .returning('id')
           .executeTakeFirstOrThrow();
 
@@ -350,19 +350,18 @@ export class PurchasesWriteSupplierPaymentsService {
         .forUpdate()
         .executeTakeFirst();
       if (!payment) throw new AppError('Supplier advance payment not found', 'SUPPLIER_ADVANCE_NOT_FOUND', 404);
-      if ((payment as any).is_advance !== true)
+      if (payment.is_advance !== true)
         throw new AppError('Payment is not a supplier advance', 'SUPPLIER_ADVANCE_NOT_ADVANCE', 400);
       const supplier = await trx
         .selectFrom('suppliers')
         .select(['id', 'name', 'balance'])
-        .where('id', '=', Number((payment as any).supplier_id))
+        .where('id', '=', Number(payment.supplier_id))
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .forUpdate()
         .executeTakeFirst();
       if (!supplier) throw new AppError('Supplier not found', 'SUPPLIER_NOT_FOUND', 404);
       const outstanding =
-        Math.round((Number((payment as any).amount || 0) - Number((payment as any).applied_amount || 0)) * scale) /
-        scale;
+        Math.round((Number(payment.amount || 0) - Number(payment.applied_amount || 0)) * scale) / scale;
       if (amount > outstanding + 0.0001) {
         throw new AppError(
           `Advance application ${amount} exceeds the outstanding advance ${outstanding}`,
@@ -387,7 +386,7 @@ export class PurchasesWriteSupplierPaymentsService {
           .executeTakeFirst();
         if (
           !purchase ||
-          Number(purchase.supplier_id) !== Number((payment as any).supplier_id) ||
+          Number(purchase.supplier_id) !== Number(payment.supplier_id) ||
           purchase.status === 'cancelled'
         ) {
           throw new AppError(
@@ -411,14 +410,14 @@ export class PurchasesWriteSupplierPaymentsService {
           'LEDGER_POSTING_MISSING',
           500,
         );
-      const branchId = (payment as any).branch_id ? Number((payment as any).branch_id) : null;
-      const locationId = (payment as any).location_id ? Number((payment as any).location_id) : null;
+      const branchId = payment.branch_id ? Number(payment.branch_id) : null;
+      const locationId = payment.location_id ? Number(payment.location_id) : null;
       await this.financeService.addSupplierLedgerEntry(
         trx,
         Number(supplier.id),
         -amount,
         'supplier_advance_application',
-        `تطبيق دفعة مقدمة ${String((payment as any).doc_no || `ZPV-${advancePaymentId}`)} على مستحقات ${supplier.name}${purchaseId ? ` — فاتورة شراء #${purchaseId}` : ''}`,
+        `تطبيق دفعة مقدمة ${String(payment.doc_no || `ZPV-${advancePaymentId}`)} على مستحقات ${supplier.name}${purchaseId ? ` — فاتورة شراء #${purchaseId}` : ''}`,
         'supplier_payment',
         advancePaymentId,
         auth,
@@ -428,7 +427,7 @@ export class PurchasesWriteSupplierPaymentsService {
       await this.audit.logWithExecutor(
         trx,
         'تطبيق دفعة مقدمة لمورد',
-        `تم تطبيق ${amount} من الدفعة المقدمة ${String((payment as any).doc_no || `ZPV-${advancePaymentId}`)} على مستحقات ${supplier.name} بواسطة ${auth.username}`,
+        `تم تطبيق ${amount} من الدفعة المقدمة ${String(payment.doc_no || `ZPV-${advancePaymentId}`)} على مستحقات ${supplier.name} بواسطة ${auth.username}`,
         auth,
       );
       return {

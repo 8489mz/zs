@@ -80,7 +80,7 @@ export class PricingService {
         has_active_offer: row.hasActiveOffer,
         has_customer_price: row.hasCustomerPrice,
         ...this.tenantFields(actor),
-      } as any))).execute();
+      }))).execute();
       for (const row of sortedChangedRows) {
         await trx.updateTable('products').set({ retail_price: row.retailPriceAfter, wholesale_price: row.wholesalePriceAfter, updated_at: sql`NOW()` }).where('id', '=', row.productId).where(this.tenantPredicate(actor)).execute();
       }

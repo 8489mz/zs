@@ -270,7 +270,7 @@ export class SettingsDemoDataSeed {
           sku: p.sku || null,
           style_code: p.styleCode || null,
           item_type: 'product',
-          item_kind: (p.itemKind as any) || 'standard',
+          item_kind: (p.itemKind) || 'standard',
           color: p.color || null,
           size: p.size || null,
           category_id: catId,

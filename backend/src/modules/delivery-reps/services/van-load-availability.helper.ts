@@ -54,7 +54,7 @@ export function summarizeProductBalances(balances: any[]): Map<number, ProductBa
       byProduct.set(pid, entry);
     }
     const qty = Number(b.qty || 0);
-    const reserved = Number((b as any).reserved_qty || 0);
+    const reserved = Number(b.reserved_qty || 0);
     entry.locatedSum += qty;
     if (b.location_id == null && b.branch_id == null) {
       entry.unassignedQty += qty;

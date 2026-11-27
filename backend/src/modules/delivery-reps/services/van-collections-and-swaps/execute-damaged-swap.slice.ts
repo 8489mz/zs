@@ -9,7 +9,7 @@ export class ExecuteDamagedSwapSlice {
   constructor(private readonly deps: VanCollectionsAndSwapsDeps) {}
 
   private get anyDb(): any {
-    return this.deps.db as any;
+    return this.deps.db;
   }
 
   /**
@@ -94,7 +94,7 @@ export class ExecuteDamagedSwapSlice {
     let replayedSwap: any = null;
 
     await this.deps.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
       // Book digits resolved once on THIS transaction handle (D4).
       const bookDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
 

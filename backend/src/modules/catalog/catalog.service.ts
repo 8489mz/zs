@@ -78,7 +78,7 @@ export class CatalogService {
   }
 
   listProductSerials(productId: number, query: Record<string, unknown>, actor: AuthContext) {
-    return this.serialsService.listSerials(productId, query as any, actor);
+    return this.serialsService.listSerials(productId, query, actor);
   }
   addProductSerials(productId: number, items: ProductSerialItemInput[], actor: AuthContext) {
     return this.serialsService.addSerials(productId, items, actor);

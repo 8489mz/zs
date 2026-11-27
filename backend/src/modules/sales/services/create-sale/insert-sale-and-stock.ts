@@ -136,7 +136,7 @@ export class InsertSaleAndStockService {
         order_type: String(normalized.orderType || 'takeaway').trim(),
         dining_course: normalized.diningCourse || null,
         service_charge: normalized.serviceCharge || 0,
-        tip_amount: Number((normalized as any).tipAmount || 0),
+        tip_amount: Number(normalized.tipAmount || 0),
         guest_count: normalized.guestCount || 1,
         delivery_rep_id: attributedRepId,
         van_trip_id: vanTripId,
@@ -369,7 +369,7 @@ export class InsertSaleAndStockService {
           serials: itemSerials.length > 0 ? JSON.stringify(itemSerials) : '[]',
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
-        } as any)
+        })
         .returning('id')
         .executeTakeFirstOrThrow();
       const saleLineId = Number(insertedLine.id);

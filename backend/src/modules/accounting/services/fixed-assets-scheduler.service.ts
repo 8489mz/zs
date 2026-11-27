@@ -107,7 +107,7 @@ export class FixedAssetsSchedulerService implements OnApplicationBootstrap, OnMo
         mockActor,
       );
 
-      const hasFailures = Array.isArray((res as any)?.results) && (res as any).results.some((r: any) => r.error);
+      const hasFailures = Array.isArray(res?.results) && res.results.some((r: any) => r.error);
 
       // Save last run month ONLY when all assets succeeded without failure (ZS-056)
       if (!hasFailures) {
@@ -117,11 +117,11 @@ export class FixedAssetsSchedulerService implements OnApplicationBootstrap, OnMo
             tenant_id: tenantId,
             key: 'fixed_assets_last_auto_depreciate_month',
             value: yearMonth,
-          } as any)
+          })
           .onConflict((oc) =>
             oc.columns(['tenant_id', 'key'] as never).doUpdateSet({
               value: yearMonth,
-            } as any),
+            }),
           )
           .execute();
       } else {
@@ -178,11 +178,11 @@ export class FixedAssetsSchedulerService implements OnApplicationBootstrap, OnMo
         tenant_id: tenantId,
         key: 'fixed_assets_auto_depreciate_enabled',
         value: enabled ? 'true' : 'false',
-      } as any)
+      })
       .onConflict((oc) =>
         oc.columns(['tenant_id', 'key'] as never).doUpdateSet({
           value: enabled ? 'true' : 'false',
-        } as any),
+        }),
       )
       .execute();
 

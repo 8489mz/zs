@@ -68,7 +68,7 @@ export class ContractingIpcInvoicesService {
       .selectFrom('contracting_invoices')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('ipc_type', '=', type)
       .orderBy('sequence_order', 'asc')
       .execute();
@@ -80,7 +80,7 @@ export class ContractingIpcInvoicesService {
       .selectFrom('contracting_invoices')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!invoice) {
@@ -91,7 +91,7 @@ export class ContractingIpcInvoicesService {
       .selectFrom('contracting_invoice_items')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('invoice_id', '=', id as any)
+      .where('invoice_id', '=', id)
       .execute();
 
     const project = await this.db
@@ -115,7 +115,7 @@ export class ContractingIpcInvoicesService {
       .selectFrom('contracting_projects')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', projectId as any)
+      .where('id', '=', projectId)
       .executeTakeFirst();
 
     if (!project) {
@@ -128,7 +128,7 @@ export class ContractingIpcInvoicesService {
       .selectFrom('contracting_invoices')
       .select(sql<number>`count(*)::int`.as('count'))
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('ipc_type', '=', ipcType)
       .executeTakeFirst();
 
@@ -157,8 +157,8 @@ export class ContractingIpcInvoicesService {
       previousTotal += prevAmount;
 
       return {
-        boq_item_id: item.boqItemId ? (item.boqItemId as any) : null,
-        wir_id: item.wirId ? (item.wirId as any) : null,
+        boq_item_id: item.boqItemId ? item.boqItemId : null,
+        wir_id: item.wirId ? item.wirId : null,
         description: item.description.trim(),
         unit: item.unit || 'm3',
         unit_price: unitPrice,
@@ -174,7 +174,7 @@ export class ContractingIpcInvoicesService {
         variance_reason: item.varianceReason || null,
         progress_stage: item.progressStage || null,
         stage_weight_pct: item.stageWeightPct !== undefined ? Number(item.stageWeightPct) : null,
-        change_order_id: item.changeOrderId ? (item.changeOrderId as any) : null,
+        change_order_id: item.changeOrderId ? item.changeOrderId : null,
         notes: item.notes || null,
       };
     });
@@ -200,7 +200,7 @@ export class ContractingIpcInvoicesService {
     }
 
     if (subId && !subName) {
-      const subc = await (this.db as any)
+      const subc = await this.db
         .selectFrom('contracting_subcontractors')
         .select('name')
         .where('tenant_id', '=', tenantId)
@@ -220,7 +220,7 @@ export class ContractingIpcInvoicesService {
         sql<number>`coalesce(sum(retention_held_amount), 0)::float`.as('total_retention_held'),
       ])
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('ipc_type', '=', ipcType);
 
     if (subcontractId) {
@@ -241,7 +241,7 @@ export class ContractingIpcInvoicesService {
         .selectFrom('contracting_invoices')
         .select(['carried_forward_debit_out'])
         .where('tenant_id', '=', tenantId)
-        .where('project_id', '=', projectId as any)
+        .where('project_id', '=', projectId)
         .where('ipc_type', '=', ipcType)
         .orderBy('created_at', 'desc')
         .limit(1);
@@ -366,7 +366,7 @@ export class ContractingIpcInvoicesService {
       .insertInto('contracting_invoices')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
+        project_id: projectId,
         ipc_number: ipcNumber,
         ipc_type: ipcType,
         subcontractor_id: subId,
@@ -461,7 +461,7 @@ export class ContractingIpcInvoicesService {
       .selectFrom('contracting_invoices')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!invoice) {
@@ -474,22 +474,22 @@ export class ContractingIpcInvoicesService {
 
     // IPC GUARANTEE INTERLOCKING ENFORCEMENT:
     if (invoice.ipc_type === 'subcontractor' && invoice.subcontract_id) {
-      const subcontract = await (this.db as any)
+      const subcontract = await this.db
         .selectFrom('contracting_subcontracts')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', invoice.subcontract_id as any)
+        .where('id', '=', invoice.subcontract_id)
         .executeTakeFirst();
 
       if (subcontract) {
         const advTotal = Number(subcontract.advance_amount || 0);
-        const priorRecoveredRow = await (this.db as any)
+        const priorRecoveredRow = await this.db
           .selectFrom('contracting_invoices')
           .select(sql<number>`COALESCE(SUM(advance_recovery_amount), 0)::numeric`.as('recovered'))
           .where('tenant_id', '=', tenantId)
-          .where('subcontract_id', '=', invoice.subcontract_id as any)
+          .where('subcontract_id', '=', invoice.subcontract_id)
           .where('status', 'in', ['approved', 'paid'])
-          .where('id', '!=', invoice.id as any)
+          .where('id', '!=', invoice.id)
           .executeTakeFirst();
         const priorRecovered = Number(priorRecoveredRow?.recovered || 0);
         const unrecBalance = Math.max(0, advTotal - priorRecovered);
@@ -526,7 +526,7 @@ export class ContractingIpcInvoicesService {
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -535,7 +535,7 @@ export class ContractingIpcInvoicesService {
       .selectFrom('contracting_invoice_items')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('invoice_id', '=', id as any)
+      .where('invoice_id', '=', id)
       .execute();
 
     for (const item of items) {
@@ -547,7 +547,7 @@ export class ContractingIpcInvoicesService {
             updated_at: new Date(),
           })
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', item.boq_item_id as any)
+          .where('id', '=', item.boq_item_id)
           .execute();
       }
     }

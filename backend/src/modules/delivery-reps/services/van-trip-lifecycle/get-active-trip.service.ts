@@ -26,7 +26,7 @@ export class GetActiveTripService {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -481,7 +481,7 @@ export class GetActiveTripService {
         route: meta.route || '',
         // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: the rep cart prices by
         // customer type, so the type rides the trip customers payload.
-        customer_type: (c as any).customer_type || 'cash',
+        customer_type: c.customer_type || 'cash',
         assignedRepIds,
         locationUrl:
           meta.location_url ||
@@ -706,7 +706,7 @@ export class GetActiveTripService {
       vanLocationName: tripRow.vanLocationName,
       sourceWarehouseId: Number(tripRow.sourceWarehouseId),
       sourceWarehouseName: tripRow.sourceWarehouseName,
-      status: tripRow.status as any,
+      status: tripRow.status,
       openedAt: String(tripRow.openedAt),
       closedAt: tripRow.closedAt ? String(tripRow.closedAt) : undefined,
       loadedAmount: Number(tripRow.loadedAmount || 0),
@@ -714,9 +714,9 @@ export class GetActiveTripService {
       cashCollected: Number(tripRow.cashCollected || 0),
       creditSales: Number(tripRow.creditSales || 0),
       returnsAmount: Number(tripRow.returnsAmount || 0),
-      cashRefunds: Number((tripRow as any).cashRefunds || 0),
-      totalInstapaySales: Number((tripRow as any).totalInstapaySales || 0),
-      totalInstapayCollections: Number((tripRow as any).totalInstapayCollections || 0),
+      cashRefunds: Number(tripRow.cashRefunds || 0),
+      totalInstapaySales: Number(tripRow.totalInstapaySales || 0),
+      totalInstapayCollections: Number(tripRow.totalInstapayCollections || 0),
       variance: Number(tripRow.variance || 0),
       notes: tripRow.notes || '',
     };

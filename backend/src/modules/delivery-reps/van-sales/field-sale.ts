@@ -26,7 +26,7 @@ export class FieldSaleService {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**

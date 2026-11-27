@@ -171,7 +171,7 @@ export class MaritimeFreightAgentSettlementsService {
         updated_at: sql`NOW()`,
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', String(id) as any)
+      .where('id', '=', String(id))
       .returningAll()
       .execute();
 

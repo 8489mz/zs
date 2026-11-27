@@ -357,7 +357,7 @@ export class SettingsAdminService {
       }
       const nextBalance = fromMinorUnits(toMinorUnits(Number(row.ledger_balance || 0), bookDigits), bookDigits);
       if (nextBalance === currentBalance) continue;
-      await (db as any)
+      await db
         .updateTable(partnerTable)
         .set({ balance: nextBalance, updated_at: sql`NOW()` })
         .where('id', '=', Number(row.id))

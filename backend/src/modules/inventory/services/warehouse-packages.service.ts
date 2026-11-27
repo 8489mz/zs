@@ -71,7 +71,7 @@ export class WarehousePackagesService {
     // Check parent package if provided
     let parentPkg: any = null;
     if (dto.parentPackageId) {
-      parentPkg = await (this.db as any)
+      parentPkg = await this.db
         .selectFrom('warehouse_packages')
         .selectAll()
         .where('id', '=', dto.parentPackageId)
@@ -92,7 +92,7 @@ export class WarehousePackagesService {
     let packageNumber = dto.packageNumber;
     if (!packageNumber) {
       const prefix = dto.packageType === 'pallet' ? 'PAL' : 'BOX';
-      const countRes = await (this.db as any)
+      const countRes = await this.db
         .selectFrom('warehouse_packages')
         .select(sql<number>`COUNT(*)`.as('count'))
         .where('tenant_id', '=', tenantId)
@@ -121,7 +121,7 @@ export class WarehousePackagesService {
     const reserveItems = Array.from(reserveByProduct.entries()).map(([productId, qty]) => ({ productId, qty }));
 
     // Execute in transaction
-    await (this.db as any).transaction().execute(async (trx: any) => {
+    await this.db.transaction().execute(async (trx: any) => {
       // INV-WAREHOUSE-PACKAGE-STOCK-MOVEMENT: sealing stock is a
       // reservation through the canonical ledger, not a second stock.
       // The on-hand quantities do not move (no journal: this is a
@@ -203,7 +203,7 @@ export class WarehousePackagesService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    let query = (this.db as any)
+    let query = this.db
       .selectFrom('warehouse_packages as p')
       .leftJoin('warehouse_packages as parent', 'parent.id', 'p.parent_package_id')
       .select([
@@ -239,7 +239,7 @@ export class WarehousePackagesService {
     const packageIds = packages.map((p: any) => p.id);
     if (packageIds.length === 0) return [];
 
-    const itemsCounts = await (this.db as any)
+    const itemsCounts = await this.db
       .selectFrom('warehouse_package_items')
       .select(['package_id', sql<number>`COUNT(*)`.as('items_count'), sql<number>`SUM(quantity)`.as('total_qty')])
       .where('tenant_id', '=', tenantId)
@@ -247,7 +247,7 @@ export class WarehousePackagesService {
       .groupBy('package_id')
       .execute();
 
-    const childCounts = await (this.db as any)
+    const childCounts = await this.db
       .selectFrom('warehouse_packages')
       .select(['parent_package_id', sql<number>`COUNT(*)`.as('children_count')])
       .where('tenant_id', '=', tenantId)
@@ -277,7 +277,7 @@ export class WarehousePackagesService {
     const tenantId = scope.tenantId;
 
     // Search by ID or Package Number (Barcode)
-    const pkg = await (this.db as any)
+    const pkg = await this.db
       .selectFrom('warehouse_packages as p')
       .selectAll()
       .where('p.tenant_id', '=', tenantId)
@@ -307,7 +307,7 @@ export class WarehousePackagesService {
         .where('pi.tenant_id', '=', tenantId)
         .execute();
 
-      const children = await (this.db as any)
+      const children = await this.db
         .selectFrom('warehouse_packages')
         .selectAll()
         .where('parent_package_id', '=', packageRecord.id)
@@ -373,7 +373,7 @@ export class WarehousePackagesService {
       throw new BadRequestException(check.reason);
     }
 
-    await (this.db as any).transaction().execute(async (trx: any) => {
+    await this.db.transaction().execute(async (trx: any) => {
       // INV-WAREHOUSE-PACKAGE-STOCK-MOVEMENT: every release below runs
       // at the package's own location — the same location the pack
       // reserved at — in the same transaction as the item-row write,
@@ -463,7 +463,7 @@ export class WarehousePackagesService {
         if (!itemRow) {
           throw new NotFoundException('Package item not found');
         }
-        const itemQty = this.round3((itemRow as any).quantity);
+        const itemQty = this.round3(itemRow.quantity);
         // Partial unpack: release only the unpacked quantity and
         // shrink the row; a full unpack releases it all and deletes
         // the row. Either way the released quantity is exactly the
@@ -482,7 +482,7 @@ export class WarehousePackagesService {
           accountId: scope.accountId,
           branchId,
           locationId,
-          items: [{ productId: Number((itemRow as any).product_id), qty: releaseQty }],
+          items: [{ productId: Number(itemRow.product_id), qty: releaseQty }],
         });
         if (releaseQty < itemQty) {
           await trx
@@ -513,7 +513,7 @@ export class WarehousePackagesService {
     this.assertAccess(auth);
     const scope = requireTenantScope(auth);
 
-    await (this.db as any)
+    await this.db
       .updateTable('warehouse_packages')
       .set({ status: dto.status, updated_at: new Date() })
       .where('id', '=', id)

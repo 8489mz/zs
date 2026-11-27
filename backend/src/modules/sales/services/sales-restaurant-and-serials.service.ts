@@ -642,7 +642,7 @@ export class SalesRestaurantAndSerialsHelper {
       await valueStockReceipt(trx, scope.tenantId, item.productId, fgStockChange.globalAfter, baseShortfall, totalCost);
       await trx
         .updateTable('manufacturing_work_orders')
-        .set({ completed_at: new Date(), total_cost: totalCost } as any)
+        .set({ completed_at: new Date(), total_cost: totalCost })
         .where('tenant_id', '=', scope.tenantId)
         .where('id', '=', woId)
         .execute();
@@ -790,7 +790,7 @@ export class SalesRestaurantAndSerialsHelper {
             quantity: newQty,
             status: nextStatus,
             updated_at: sql`NOW()`,
-          } as any)
+          })
           .where('id', '=', Number(batch.id))
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .execute();
@@ -968,7 +968,7 @@ export class SalesRestaurantAndSerialsHelper {
             quantity: newQty,
             status: nextStatus,
             updated_at: sql`NOW()`,
-          } as any)
+          })
           .where('id', '=', Number(batch.id))
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .execute();

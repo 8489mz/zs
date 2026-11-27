@@ -19,7 +19,7 @@ export class TripAdminReadsService {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -55,7 +55,7 @@ export class TripAdminReadsService {
     return {
       ok: true,
       tripId,
-      businessDay: (trip as any).business_day ? normalizePgDateOnly((trip as any).business_day) : null,
+      businessDay: trip.business_day ? normalizePgDateOnly(trip.business_day) : null,
       timezone,
       days,
       totalDue: roundMoney(
@@ -140,7 +140,7 @@ export class TripAdminReadsService {
       vanLocationName: r.vanLocationName,
       sourceWarehouseId: Number(r.sourceWarehouseId),
       sourceWarehouseName: r.sourceWarehouseName,
-      status: r.status as any,
+      status: r.status,
       openedAt: String(r.openedAt),
       closedAt: r.closedAt ? String(r.closedAt) : undefined,
       loadedAmount: Number(r.loadedAmount || 0),
@@ -301,7 +301,7 @@ export class TripAdminReadsService {
         cashCollected: Number(trip.cashCollected || 0),
         creditSales: Number(trip.creditSales || 0),
         returnsAmount: Number(trip.returnsAmount || 0),
-        cashRefunds: Number((trip as any).cashRefunds || 0),
+        cashRefunds: Number(trip.cashRefunds || 0),
         variance: Number(trip.variance || 0),
       },
       pagination: {

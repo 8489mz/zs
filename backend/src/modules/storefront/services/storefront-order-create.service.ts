@@ -354,7 +354,7 @@ export class StorefrontOrderCreateService {
     // order row, no reservation and no coupon claim.
     const contractItems = dto.items.map((item) => ({
       productId: Number(item.productId),
-      modifiers: this.normalizeOnlineOrderModifiers((item as any).modifiers),
+      modifiers: this.normalizeOnlineOrderModifiers(item.modifiers),
     }));
     await this.enforceOnlineOrderModifierContract(contractItems, tenant);
 
@@ -776,7 +776,7 @@ export class StorefrontOrderCreateService {
               // stores '[]', never null: the column is JSONB NOT NULL
               // DEFAULT '[]', so an explicit null rolls the whole
               // order back on Postgres 23502 (INV-REST-KIOSK-OWN-CATALOG-TRUTH).
-              modifiers: (it as any).modifiers?.length ? JSON.stringify((it as any).modifiers) : '[]',
+              modifiers: it.modifiers?.length ? JSON.stringify(it.modifiers) : '[]',
             })
             .execute();
         }
@@ -813,7 +813,7 @@ export class StorefrontOrderCreateService {
           ),
         );
 
-        await (this.db as any)
+        await this.db
           .updateTable('storefront_abandoned_carts')
           .set({ recovered: true, updated_at: new Date() })
           .where(sql<boolean>`tenant_id = ${tenant.id}`)

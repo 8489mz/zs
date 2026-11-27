@@ -278,10 +278,7 @@ export class ProductSerialsService {
       notes: item.notes || null,
     }));
 
-    await db
-      .insertInto('product_serials')
-      .values(rowsToInsert as any)
-      .execute();
+    await db.insertInto('product_serials').values(rowsToInsert).execute();
 
     await this.audit.log(
       'إضافة سريالات أجهزة',

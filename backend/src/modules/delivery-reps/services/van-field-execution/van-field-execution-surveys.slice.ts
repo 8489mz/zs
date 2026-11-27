@@ -17,7 +17,7 @@ export class VanFieldExecutionSurveysSlice {
     if (!trip) {
       throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
     }
-    if (Number((trip as any).rep_id) !== Number(repId)) {
+    if (Number(trip.rep_id) !== Number(repId)) {
       throw new AppError('هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل زيارة عليها', 'REP_TRIP_NOT_OWNED', 403);
     }
   }
@@ -105,7 +105,7 @@ export class VanFieldExecutionSurveysSlice {
       if (!visit) {
         throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
       }
-      if (Number((visit as any).rep_id) !== Number(repId)) {
+      if (Number(visit.rep_id) !== Number(repId)) {
         throw new AppError('هذه الزيارة تخص مندوباً آخر، لا يمكنك تسجيل استبيان عليها', 'REP_VISIT_NOT_OWNED', 403);
       }
     }

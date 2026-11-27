@@ -76,7 +76,7 @@ export class PurchaseOrdersService {
       .where('account_id', '=', scope.accountId);
 
     if (query?.status && query.status !== 'all') {
-      qb = qb.where('status', '=', query.status as any);
+      qb = qb.where('status', '=', query.status);
     }
 
     if (query?.search?.trim()) {
@@ -369,7 +369,7 @@ export class PurchaseOrdersService {
           discount_amount: totals.discountAmount,
           total_amount: totals.totalAmount,
           expected_delivery_date: payload.expectedDeliveryDate
-            ? (payload.expectedDeliveryDate as any)
+            ? payload.expectedDeliveryDate
             : order.expected_delivery_date,
           notes: payload.notes !== undefined ? payload.notes : order.notes,
           terms_conditions: payload.termsConditions !== undefined ? payload.termsConditions : order.terms_conditions,
@@ -551,7 +551,7 @@ export class PurchaseOrdersService {
     };
 
     const res = await this.purchasesWrite.createPurchase(purchasePayload, auth, `purchase-order-conversion-${id}`);
-    const createdPurchaseId = Number((res as any)?.purchaseId || (res as any)?.purchase?.id || 0);
+    const createdPurchaseId = Number(res?.purchaseId || (res as any)?.purchase?.id || 0);
     if (!createdPurchaseId) throw new BadRequestException('لم يتم إنشاء فاتورة مشتريات صالحة');
 
     try {

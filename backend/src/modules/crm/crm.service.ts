@@ -64,7 +64,7 @@ export class CrmService {
   async listDeals(filters: DealQueryFilters, auth: AuthContext) {
     const scope = requireTenantScope(auth);
 
-    let query = (this.db as any)
+    let query = this.db
       .selectFrom('crm_deals as d')
       .leftJoin('users as u', 'd.assigned_user_id', 'u.id')
       .leftJoin('customers as c', 'd.customer_id', 'c.id')
@@ -137,7 +137,7 @@ export class CrmService {
   async getDeal(id: number, auth: AuthContext) {
     const scope = requireTenantScope(auth);
 
-    const deal = await (this.db as any)
+    const deal = await this.db
       .selectFrom('crm_deals as d')
       .leftJoin('users as u', 'd.assigned_user_id', 'u.id')
       .leftJoin('customers as c', 'd.customer_id', 'c.id')
@@ -151,7 +151,7 @@ export class CrmService {
       throw new NotFoundException('الفرصة البيعية غير موجودة.');
     }
 
-    const activities = await (this.db as any)
+    const activities = await this.db
       .selectFrom('crm_activities as a')
       .leftJoin('users as u', 'a.created_by', 'u.id')
       .select([
@@ -216,7 +216,7 @@ export class CrmService {
         currency: input.currency || 'EGP',
         probability: input.probability !== undefined ? Number(input.probability) : 50,
         stage: input.stage || 'new',
-        expected_close_date: expectedCloseDate as any,
+        expected_close_date: expectedCloseDate,
         contact_name: input.contactName ? String(input.contactName).trim() : null,
         contact_phone: input.contactPhone ? String(input.contactPhone).trim() : null,
         contact_email: input.contactEmail ? String(input.contactEmail).trim() : null,
@@ -228,7 +228,7 @@ export class CrmService {
         lost_reason: input.lostReason ? String(input.lostReason).trim() : null,
         notes: input.notes ? String(input.notes).trim() : null,
         created_by: auth.userId ? Number(auth.userId) : null,
-      } as any)
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
 
@@ -243,7 +243,7 @@ export class CrmService {
         activity_type: 'note',
         summary: 'تم إنشاء الفرصة البيعية في النظام.',
         created_by: auth.userId ? Number(auth.userId) : null,
-      } as any)
+      })
       .execute();
 
     return {
@@ -279,7 +279,7 @@ export class CrmService {
     if (input.currency !== undefined) updates.currency = String(input.currency).trim();
     if (input.probability !== undefined) updates.probability = Number(input.probability);
     if (input.expectedCloseDate !== undefined)
-      updates.expected_close_date = input.expectedCloseDate ? (input.expectedCloseDate as any) : null;
+      updates.expected_close_date = input.expectedCloseDate ? input.expectedCloseDate : null;
     if (input.contactName !== undefined)
       updates.contact_name = input.contactName ? String(input.contactName).trim() : null;
     if (input.contactPhone !== undefined)
@@ -298,7 +298,7 @@ export class CrmService {
 
     const updated = await this.db
       .updateTable('crm_deals')
-      .set(updates as any)
+      .set(updates)
       .where('id', '=', id)
       .where('tenant_id', '=', scope.tenantId)
       .returningAll()
@@ -323,7 +323,7 @@ export class CrmService {
           activity_type: 'stage_change',
           summary: `تم نقل المرحلة من [${stageLabels[existing.stage] || existing.stage}] إلى [${stageLabels[input.stage] || input.stage}].`,
           created_by: auth.userId ? Number(auth.userId) : null,
-        } as any)
+        })
         .execute();
     }
 
@@ -381,10 +381,10 @@ export class CrmService {
         deal_id: dealId,
         activity_type: input.activityType || 'note',
         summary: String(input.summary || '').trim(),
-        due_date: input.dueDate ? (input.dueDate as any) : null,
+        due_date: input.dueDate ? input.dueDate : null,
         is_completed: false,
         created_by: auth.userId ? Number(auth.userId) : null,
-      } as any)
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
 
@@ -417,7 +417,7 @@ export class CrmService {
 
     const updated = await this.db
       .updateTable('crm_activities')
-      .set({ is_completed: nextCompleted } as any)
+      .set({ is_completed: nextCompleted })
       .where('id', '=', activityId)
       .where('tenant_id', '=', scope.tenantId)
       .returningAll()
@@ -552,7 +552,7 @@ export class CrmService {
               store_credit_balance: 0,
               tax_number: '',
               is_active: true,
-            } as any)
+            })
             .returning(['id'])
             .executeTakeFirstOrThrow();
 
@@ -567,7 +567,7 @@ export class CrmService {
             stage: 'won',
             probability: 100,
             updated_at: sql`NOW()`,
-          } as any)
+          })
           .where('id', '=', dealId)
           .where('tenant_id', '=', scope.tenantId)
           .execute();
@@ -581,7 +581,7 @@ export class CrmService {
             activity_type: 'converted',
             summary: `تم تحويل الفرصة بنجاح إلى عميل مسجل برقم #${customerId} وتم وسم الصفقة كـ [تم التعاقد / فوز].`,
             created_by: auth.userId ? Number(auth.userId) : null,
-          } as any)
+          })
           .execute();
       }
 

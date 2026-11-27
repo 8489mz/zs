@@ -216,12 +216,12 @@ export class CatalogProductWriteService {
         minQty: Math.max(1, Number(offer.minQty || 1)),
         from: offer.from || null,
         to: offer.to || null,
-        bogoBuyQty: (offer as any).bogoBuyQty ? Number((offer as any).bogoBuyQty) : ((offer as any).bogo_buy_qty ? Number((offer as any).bogo_buy_qty) : null),
-        bogoGetQty: (offer as any).bogoGetQty ? Number((offer as any).bogoGetQty) : ((offer as any).bogo_get_qty ? Number((offer as any).bogo_get_qty) : null),
-        bogoDiscountPercent: (offer as any).bogoDiscountPercent != null ? Number((offer as any).bogoDiscountPercent) : ((offer as any).bogo_discount_percent != null ? Number((offer as any).bogo_discount_percent) : 100),
-        happyHourStart: (offer as any).happyHourStart || (offer as any).happy_hour_start || null,
-        happyHourEnd: (offer as any).happyHourEnd || (offer as any).happy_hour_end || null,
-        daysOfWeek: (offer as any).daysOfWeek || (offer as any).days_of_week || null,
+        bogoBuyQty: (offer).bogoBuyQty ? Number((offer).bogoBuyQty) : ((offer as any).bogo_buy_qty ? Number((offer as any).bogo_buy_qty) : null),
+        bogoGetQty: (offer).bogoGetQty ? Number((offer).bogoGetQty) : ((offer as any).bogo_get_qty ? Number((offer as any).bogo_get_qty) : null),
+        bogoDiscountPercent: (offer).bogoDiscountPercent != null ? Number((offer).bogoDiscountPercent) : ((offer as any).bogo_discount_percent != null ? Number((offer as any).bogo_discount_percent) : 100),
+        happyHourStart: (offer).happyHourStart || (offer as any).happy_hour_start || null,
+        happyHourEnd: (offer).happyHourEnd || (offer as any).happy_hour_end || null,
+        daysOfWeek: (offer).daysOfWeek || (offer as any).days_of_week || null,
       }))
       .filter((offer) => offer.value > 0 || offer.type === 'bogo');
 
@@ -483,7 +483,7 @@ export class CatalogProductWriteService {
 
     await db.updateTable('products').set({
       catalog_updated_at: sql`NOW()`,
-    } as any).where('id', '=', productId).where(this.tenantPredicate(actor)).execute();
+    }).where('id', '=', productId).where(this.tenantPredicate(actor)).execute();
   }
 
   async createProduct(payload: UpsertProductDto, actor: AuthContext): Promise<Record<string, unknown>> {
@@ -649,7 +649,7 @@ export class CatalogProductWriteService {
             is_active: true,
             catalog_updated_at: sql`NOW()`,
             ...this.tenantFields(actor),
-          } as any)
+          })
           .returning('id')
           .executeTakeFirstOrThrow();
         const productId = Number(result.id);
@@ -758,7 +758,7 @@ export class CatalogProductWriteService {
 
       await trx.updateTable('products').set({
         name: normalized.name,
-        name_en: normalized.nameEn !== undefined ? (normalized.nameEn || null) : (existing as any).name_en,
+        name_en: normalized.nameEn !== undefined ? (normalized.nameEn || null) : (existing).name_en,
         barcode: normalized.barcode || null,
         sku: payload.sku === undefined ? (existing.sku || null) : (normalized.sku || null),
         item_type: normalized.itemType === 'service' ? 'service' : normalized.itemType === 'raw_material' ? 'raw_material' : 'product',
@@ -773,9 +773,9 @@ export class CatalogProductWriteService {
         cost_price: normalized.costPrice,
         retail_price: normalized.retailPrice,
         wholesale_price: normalized.wholesalePrice,
-        half_wholesale_price: normalized.halfWholesalePrice === undefined ? (existing as any).half_wholesale_price : (normalized.halfWholesalePrice ?? null),
-        credit_price: normalized.creditPrice === undefined ? (existing as any).credit_price : (normalized.creditPrice ?? null),
-        consumer_price: normalized.consumerPrice === undefined ? (existing as any).consumer_price : (normalized.consumerPrice ?? null),
+        half_wholesale_price: normalized.halfWholesalePrice === undefined ? (existing).half_wholesale_price : (normalized.halfWholesalePrice ?? null),
+        credit_price: normalized.creditPrice === undefined ? (existing).credit_price : (normalized.creditPrice ?? null),
+        consumer_price: normalized.consumerPrice === undefined ? (existing).consumer_price : (normalized.consumerPrice ?? null),
         min_selling_price: normalized.minSellingPrice === undefined ? existing.min_selling_price : normalized.minSellingPrice,
         min_stock_qty: normalized.minStock,
         default_location_id: normalized.warehouseId || existing.default_location_id || null,
@@ -789,7 +789,7 @@ export class CatalogProductWriteService {
         ...(payload.isActive !== undefined ? { is_active: Boolean(payload.isActive) } : {}),
         catalog_updated_at: sql`NOW()`,
         updated_at: sql`NOW()`,
-      } as any).where('id', '=', id).where(this.tenantPredicate(actor)).execute();
+      }).where('id', '=', id).where(this.tenantPredicate(actor)).execute();
       await this.replaceProductRelations(trx, id, normalized, actor);
     });
 

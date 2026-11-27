@@ -142,7 +142,7 @@ export class StorefrontEngagementService {
     const cleanPhone = (dto.customerPhone || '').trim();
     if (!cleanPhone || cleanPhone.length < 6) return { ok: false };
 
-    const recent = await (this.db as any)
+    const recent = await this.db
       .selectFrom('storefront_abandoned_carts')
       .select(['id'])
       .where(sql<boolean>`tenant_id = ${tenant.id}`)
@@ -152,7 +152,7 @@ export class StorefrontEngagementService {
       .executeTakeFirst();
 
     if (recent) {
-      await (this.db as any)
+      await this.db
         .updateTable('storefront_abandoned_carts')
         .set({
           customer_name: dto.customerName || null,
@@ -167,7 +167,7 @@ export class StorefrontEngagementService {
       return { ok: true, cartId: recent.id };
     }
 
-    const inserted = await (this.db as any)
+    const inserted = await this.db
       .insertInto('storefront_abandoned_carts')
       .values({
         tenant_id: tenant.id,
@@ -186,7 +186,7 @@ export class StorefrontEngagementService {
 
   async listAbandonedCarts(actor: AuthContext) {
     const { tenantId } = requireTenantScope(actor);
-    const carts = await (this.db as any)
+    const carts = await this.db
       .selectFrom('storefront_abandoned_carts')
       .selectAll()
       .where(sql<boolean>`tenant_id = ${tenantId}`)
@@ -214,7 +214,7 @@ export class StorefrontEngagementService {
 
   async deleteAbandonedCart(id: number, actor: AuthContext) {
     const { tenantId } = requireTenantScope(actor);
-    await (this.db as any)
+    await this.db
       .deleteFrom('storefront_abandoned_carts')
       .where(sql<boolean>`tenant_id = ${tenantId}`)
       .where('id', '=', id)
@@ -259,7 +259,7 @@ export class StorefrontEngagementService {
       .where(sql<boolean>`tenant_id = ${tenantId} AND DATE(created_at AT TIME ZONE ${tenantTz}) = ${todayKey}`)
       .executeTakeFirst();
 
-    const cartStats = await (this.db as any)
+    const cartStats = await this.db
       .selectFrom('storefront_abandoned_carts')
       .select([
         sql<number>`COUNT(*)::int`.as('total_abandoned'),

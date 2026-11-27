@@ -129,7 +129,7 @@ export class ReportsService {
 
     // PERF-FIX: In production PostgreSQL, all 8 queries are pure SQL aggregates (0 raw rows pulled into Node).
     // For unit-test query builder mocks (e.g. FakeDb in reports-financial-summary.spec.ts), fallback to row evaluation.
-    if (typeof (this.db.selectFrom('sales') as any).groupBy !== 'function') {
+    if (typeof (this.db.selectFrom('sales')).groupBy !== 'function') {
       // INV-VAN-PROFIT-REP-REPORTING: rep filter on the sales query (row path mirrors the aggregate path).
       // F13: the discounted-only filter mirrors it on the same queries.
       const salesQuery = applyDiscountedOnlySalesFilter(applyDeliveryRepSalesFilter(applyReportScopeFilter(this.db.selectFrom('sales').select(['id', 'total', 'tax_amount', 'discount', 'delivery_fee', 'delivery_fee_mode', 'delivery_rep_id', 'branch_id', 'location_id', 'created_by', 'created_at']).where('status', '=', 'posted').where('created_at', '>=', fromDate!).where('created_at', '<=', toDate!).where(this.tenantPredicate(auth)), query), query), query);
@@ -156,14 +156,14 @@ export class ReportsService {
       // built from the same rows the payload totals come from, with
       // the same netting, so its points sum to the card totals.
       const rowPayload = buildReportSummaryPayload({
-        salesRows: salesRows as any,
-        servicesRows: rawServicesRows as any,
-        purchasesRows: purchasesRows as any,
-        expensesRows: expensesRows as any,
-        returnsRows: returnsRows as any,
-        treasuryRows: treasuryRows as any,
-        saleItemsRows: saleItemsRows as any,
-        returnedSaleItemsRows: returnedSaleItemsRows as any,
+        salesRows: salesRows,
+        servicesRows: rawServicesRows,
+        purchasesRows: purchasesRows,
+        expensesRows: expensesRows,
+        returnsRows: returnsRows,
+        treasuryRows: treasuryRows,
+        saleItemsRows: saleItemsRows,
+        returnedSaleItemsRows: returnedSaleItemsRows,
         topProductsLimit: 10,
         deliveryFeeMode,
         storeFleetCommissionRate,
@@ -173,11 +173,11 @@ export class ReportsService {
         toDate: toDate!,
         timezone,
         dayComponents: buildSeriesDayComponentsFromRows({
-          salesRows: salesRows as any,
-          servicesRows: rawServicesRows as any,
-          purchasesRows: purchasesRows as any,
-          returnsRows: returnsRows as any,
-          returnedSaleItemsRows: returnedSaleItemsRows as any,
+          salesRows: salesRows,
+          servicesRows: rawServicesRows,
+          purchasesRows: purchasesRows,
+          returnsRows: returnsRows,
+          returnedSaleItemsRows: returnedSaleItemsRows,
           timezone,
         }),
         netSalesTotal: rowPayload.sales.netSales,
@@ -309,7 +309,7 @@ export class ReportsService {
     const toDate = explicit.to ?? new Date(defaultRange.to);
 
     const salesRows = await applyReportScopeFilter(
-      (this.db as any)
+      (this.db)
         .selectFrom('sales as s')
         .leftJoin('delivery_representatives as dr', (j: any) =>
           j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'),
@@ -331,7 +331,7 @@ export class ReportsService {
     ).execute();
 
     const purchasesRows = await applyReportScopeFilter(
-      (this.db as any)
+      (this.db)
         .selectFrom('purchases as p')
         .leftJoin('suppliers as sup', (j: any) =>
           j.onRef('sup.id', '=', 'p.supplier_id').onRef('sup.tenant_id', '=', 'p.tenant_id'),

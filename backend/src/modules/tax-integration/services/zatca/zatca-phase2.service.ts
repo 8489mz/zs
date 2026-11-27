@@ -393,7 +393,7 @@ export class ZatcaPhase2Service {
         isActive: configuredTax?.isActive,
         companyName: identityByKey.get('companyName'),
         storeName: identityByKey.get('storeName'),
-        businessName: (tenantRow as any)?.business_name,
+        businessName: tenantRow?.business_name,
       });
 
       const invoiceData: ZatcaInvoiceData = {

@@ -92,7 +92,7 @@ export class UpdateSaleService {
       // A signed ZATCA invoice attests to these exact amounts and has
       // consumed an ICV; editing it would leave the attestation stale
       // and burn a second ICV on the replacement. Correct via credit note.
-      assertSaleNotZatcaSigned((sale as any).zatca_status);
+      assertSaleNotZatcaSigned((sale).zatca_status);
 
       // R4-C INV-REST-MODIFIER-CONTRACT-2: same pre-pass as createSale
       // — re-price modifiers from server truth and enforce group rules
@@ -108,7 +108,7 @@ export class UpdateSaleService {
       // stock work, the order settleTrip uses); the delta itself is
       // applied below, once the replacement rows exist. A settled
       // trip's counters are history and stay untouched.
-      const tripId = Number((sale as any).van_trip_id || 0) || null;
+      const tripId = Number((sale).van_trip_id || 0) || null;
       const tripOpen = tripId ? await lockOpenTripRow(trx, scope.tenantId, tripId) : false;
 
       // A cashier shift is a historical cash accountability period. A sale
@@ -536,7 +536,7 @@ export class UpdateSaleService {
 
             await trx
               .updateTable('customers')
-              .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` } as any)
+              .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` })
               .where('id', '=', customerId)
               .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
               .execute();
@@ -553,7 +553,7 @@ export class UpdateSaleService {
                 sale_id: saleId,
                 notes: `عكس ${clawbackDelta} نقطة ولاء مكتسبة بسبب تعديل الفاتورة S-${saleId}`,
                 created_at: sql`NOW()`,
-              } as any)
+              })
               .execute();
           }
         }
@@ -585,7 +585,7 @@ export class UpdateSaleService {
 
             await trx
               .updateTable('customers')
-              .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` } as any)
+              .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` })
               .where('id', '=', customerId)
               .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
               .execute();
@@ -602,7 +602,7 @@ export class UpdateSaleService {
                 sale_id: saleId,
                 notes: `رد ${refundDelta} نقطة ولاء مستبدلة سابقاً بسبب تعديل الفاتورة S-${saleId}`,
                 created_at: sql`NOW()`,
-              } as any)
+              })
               .execute();
           }
         }
@@ -683,7 +683,7 @@ export class UpdateSaleService {
         }
 
         const requiredQty = Number((Number(item.qty || 0) * Number(item.unitMultiplier || 1)).toFixed(3));
-        const canAllowNegative = allowNegativeStockSales || hasBOM || (product as any).item_type === 'service';
+        const canAllowNegative = allowNegativeStockSales || hasBOM || (product).item_type === 'service';
         if (!canAllowNegative && availableStockQty < requiredQty) {
           throw await this.buildInsufficientStockError(trx, {
             productId: item.productId,
@@ -700,19 +700,19 @@ export class UpdateSaleService {
         const preparedItem = buildPreparedSaleItem(
           { ...product, name: finalProductName, stock_qty: availableStockQty }, 
           item, 
-          { allowNegativeStockSales: allowNegativeStockSales || hasBOM || (product as any).item_type === 'service', moneyDigits }
+          { allowNegativeStockSales: allowNegativeStockSales || hasBOM || (product).item_type === 'service', moneyDigits }
         );
         subtotal += preparedItem.lineTotal;
         preparedItems.push({
           ...preparedItem,
-          isService: (product as any).item_type === 'service',
+          isService: (product).item_type === 'service',
           // INV-SALE-EDIT-COST-FLOOR: carry the floor inputs on the
           // rebuilt line so the edit floor check below can use them.
           // The pre-approved override is the edit's own allowed
           // (retail/offer) price, as at creation for non-system-approved
           // sales; updateSale has no approved-terms channel.
           effectiveAllowedUnitPrice: allowedUnitPrice,
-          minSellingPrice: Number((product as any).min_selling_price || 0),
+          minSellingPrice: Number((product).min_selling_price || 0),
         });
         
         if (hasBOM) {
@@ -757,7 +757,7 @@ export class UpdateSaleService {
       });
       if (recomputedEditServiceCharge !== null) normalized.serviceCharge = recomputedEditServiceCharge;
       const { taxAmount, total } = roundSaleInvoiceTotals(
-        computeInvoiceTotals(subtotal, normalized.discount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized as any).tipAmount || 0)),
+        computeInvoiceTotals(subtotal, normalized.discount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized).tipAmount || 0)),
         moneyDigits,
       );
       const { taxAmount: itemOnlyTaxAmount } = roundSaleInvoiceTotals(
@@ -810,10 +810,10 @@ export class UpdateSaleService {
       // re-derived from the stored legs below; otherwise the stored
       // payment_type stays exactly as recorded — including 'split' for
       // van split sales, which the old code collapsed to 'cash'.
-      const effectivePaymentType = isPartialCredit ? 'credit' : String((sale as any).payment_type || 'cash');
+      const effectivePaymentType = isPartialCredit ? 'credit' : String((sale).payment_type || 'cash');
       const effectivePaymentChannel = isPartialCredit
         ? resolvePostedSalePaymentChannel('credit', payments)
-        : String((sale as any).payment_channel || 'cash');
+        : String((sale).payment_channel || 'cash');
       // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: an edit that lowers the
       // total below the recorded payments cannot proceed — the stored
       // legs would overpay the new total and postSaleEdit's journal
@@ -876,7 +876,7 @@ export class UpdateSaleService {
         discount: normalized.discount,
         delivery_fee: normalized.deliveryFee,
         service_charge: normalized.serviceCharge || 0,
-        tip_amount: Number((normalized as any).tipAmount || 0),
+        tip_amount: Number((normalized).tipAmount || 0),
         tax_rate: normalized.taxRate,
         tax_amount: taxAmount,
         prices_include_tax: normalized.pricesIncludeTax,
@@ -904,18 +904,18 @@ export class UpdateSaleService {
       // delta, while the trip row is still locked by this transaction.
       if (tripOpen && tripId) {
         let oldLedgerCredit: number | null = null;
-        if (String((sale as any).payment_channel || '').toLowerCase() === 'mixed') {
+        if (String((sale).payment_channel || '').toLowerCase() === 'mixed') {
           const ledgerRow = await trx.selectFrom('customer_ledger').select('amount')
             .where('reference_type', '=', 'sale').where('reference_id', '=', saleId)
             .where('entry_type', '=', 'sale_credit').where('tenant_id', '=', scope.tenantId)
             .orderBy('id', 'desc').executeTakeFirst();
-          oldLedgerCredit = ledgerRow ? Number((ledgerRow as any).amount || 0) : null;
+          oldLedgerCredit = ledgerRow ? Number((ledgerRow).amount || 0) : null;
         }
         const oldContribution = tripSaleContribution({
-          total: (sale as any).total,
-          paidAmount: (sale as any).paid_amount,
-          paymentChannel: (sale as any).payment_channel,
-          payments: currentPayments as any,
+          total: (sale).total,
+          paidAmount: (sale).paid_amount,
+          paymentChannel: (sale).payment_channel,
+          payments: currentPayments,
           ledgerCreditAmount: oldLedgerCredit ?? undefined,
         });
         const newContribution = tripSaleContribution({
@@ -971,7 +971,7 @@ export class UpdateSaleService {
           ? `[اعتماد بيع تحت الحد: ${editFloorApproval.authorizedByName}; أصناف ${belowFloorProductIds.join(',')}]`
           : `[بيع تحت الحد: أصناف ${belowFloorProductIds.join(',')}]`;
         const editNote = normalized.note ? `${normalized.note} | ${floorTag}` : floorTag;
-        await trx.updateTable('sales').set({ note: editNote } as any)
+        await trx.updateTable('sales').set({ note: editNote })
           .where('id', '=', saleId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
       }
 
@@ -1003,7 +1003,7 @@ export class UpdateSaleService {
           serials: itemSerials.length > 0 ? JSON.stringify(itemSerials) : '[]',
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
-        } as any).returning('id').executeTakeFirstOrThrow();
+        }).returning('id').executeTakeFirstOrThrow();
         const saleLineId = Number(insertedLine.id);
 
         const claimedSerials = await this.claimSaleSerials(trx, item, saleId, saleLineId, scope.tenantId);

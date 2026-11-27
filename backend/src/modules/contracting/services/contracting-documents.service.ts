@@ -181,7 +181,7 @@ export class ContractingDocumentsService {
           review_status: 'for_review',
           issued_date: todayTenantDate(businessTz),
           created_by: auth.userId ? Number(auth.userId) : null,
-        } as any)
+        })
         .returningAll()
         .executeTakeFirstOrThrow();
 
@@ -242,7 +242,7 @@ export class ContractingDocumentsService {
           issued_date: todayTenantDate(businessTz),
           notes: dto.notes || null,
           created_by: auth.userId ? Number(auth.userId) : null,
-        } as any)
+        })
         .returningAll()
         .executeTakeFirstOrThrow();
 
@@ -331,7 +331,7 @@ export class ContractingDocumentsService {
         distribution_method: dto.distributionMethod || 'email',
         notes: dto.notes || null,
         created_by: auth.userId ? Number(auth.userId) : null,
-      } as any)
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
 
@@ -442,7 +442,7 @@ export class ContractingDocumentsService {
           prepared_by: dto.preparedBy || null,
           status: 'draft',
           created_by: auth.userId ? Number(auth.userId) : null,
-        } as any)
+        })
         .returning('id')
         .executeTakeFirstOrThrow();
 
@@ -483,7 +483,7 @@ export class ContractingDocumentsService {
         linked_rfi_id: dto.linkedRfiId || null,
         linked_change_order_id: dto.linkedChangeOrderId || null,
         notes: dto.notes || null,
-      } as any)
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
 
@@ -532,7 +532,7 @@ export class ContractingDocumentsService {
         'fl.updated_at',
       ])
       .where('fl.tenant_id', '=', tenantId)
-      .where('fl.project_id', '=', projectId as any)
+      .where('fl.project_id', '=', projectId)
       .orderBy('fl.log_date', 'desc')
       .execute();
 
@@ -572,8 +572,8 @@ export class ContractingDocumentsService {
       .insertInto('contracting_equipment_fuel_logs')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
-        equipment_id: dto.equipmentId ? (dto.equipmentId as any) : null,
+        project_id: projectId,
+        equipment_id: dto.equipmentId ? dto.equipmentId : null,
         equipment_name: dto.equipmentName,
         log_date: dto.logDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         start_meter_hours: startMeter,
@@ -582,7 +582,7 @@ export class ContractingDocumentsService {
         fuel_liters_added: fuelLiters,
         fuel_cost_total: fuelCost,
         driver_operator_name: dto.driverOperatorName || null,
-        boq_item_id: dto.boqItemId ? (dto.boqItemId as any) : null,
+        boq_item_id: dto.boqItemId ? dto.boqItemId : null,
         notes: dto.notes || null,
         created_at: new Date(),
         updated_at: new Date(),

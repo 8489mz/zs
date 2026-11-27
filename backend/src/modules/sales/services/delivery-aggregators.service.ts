@@ -443,7 +443,7 @@ export class DeliveryAggregatorsService {
           delivery_fee: deliveryFee,
           aggregator_commission: commissionAmount,
           net_payout: netPayout,
-          order_payload: dto as any,
+          order_payload: dto,
         })
         .returning('id')
         .executeTakeFirstOrThrow();

@@ -244,7 +244,7 @@ export class ManagerActionsService {
 
   private loadVanSuspicionAlerts(tenantId: string): Promise<ManagerActionVanSuspicionRow[]> {
     const cutoff = new Date(Date.now() - 48 * 3600 * 1000);
-    return (this.db as any)
+    return this.db
       .selectFrom('audit_logs')
       .select(['id', 'event_code', 'details', 'created_at'])
       .where('tenant_id', '=', tenantId)

@@ -123,7 +123,7 @@ export class ZatcaOnboardingService {
         environment: env,
         last_icv: 0,
         last_invoice_hash: 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMjRiMWUxMDhkNDQ3ZjhlNzY1ZmVhNGU3NDkyNDQ1NQ==',
-      } as any)
+      })
       .returning(['id', 'device_uuid', 'device_name', 'status', 'environment'])
       .executeTakeFirstOrThrow();
 
@@ -141,7 +141,7 @@ export class ZatcaOnboardingService {
     const egs = await this.db
       .selectFrom('zatca_egs_units')
       .selectAll()
-      .where('id', '=', String(dto.egsId) as any)
+      .where('id', '=', String(dto.egsId))
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
 
@@ -224,7 +224,7 @@ export class ZatcaOnboardingService {
     const egs = await this.db
       .selectFrom('zatca_egs_units')
       .selectAll()
-      .where('id', '=', String(egsId) as any)
+      .where('id', '=', String(egsId))
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
 

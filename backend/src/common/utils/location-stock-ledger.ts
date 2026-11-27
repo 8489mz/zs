@@ -196,10 +196,10 @@ async function loadLockedState(
     .where('product_id', '=', product.id)
     .where('tenant_id', '=', scope.tenantId)
     .where('account_id', '=', scope.accountId);
-  if (typeof (balancesQuery as any).orderBy === 'function') {
-    balancesQuery = (balancesQuery as any).orderBy('id', 'asc');
+  if (typeof balancesQuery.orderBy === 'function') {
+    balancesQuery = balancesQuery.orderBy('id', 'asc');
   }
-  const balances = await (balancesQuery as any).forUpdate().execute();
+  const balances = await balancesQuery.forUpdate().execute();
   return {
     scope,
     product: {
@@ -239,7 +239,7 @@ async function insertBalanceRow(
       reserved_qty: roundStockQty(reservedQty),
       tenant_id: scope.tenantId,
       account_id: scope.accountId,
-    } as any)
+    })
     .returning([
       'id',
       'product_id',
@@ -256,7 +256,7 @@ async function insertBalanceRow(
     branch_id: inserted.branch_id == null ? null : Number(inserted.branch_id),
     location_id: inserted.location_id == null ? null : Number(inserted.location_id),
     qty: inserted.qty,
-    reserved_qty: (inserted as any).reserved_qty ?? 0,
+    reserved_qty: inserted.reserved_qty ?? 0,
   };
 }
 

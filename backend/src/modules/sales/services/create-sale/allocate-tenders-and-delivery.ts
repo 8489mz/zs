@@ -73,7 +73,7 @@ export class AllocateTendersAndDeliveryService {
     // reads the post-allocation paidAmount.
     const suppressTenderFallback = shouldSuppressTenderFallback({
       orderType: normalized.orderType,
-      collectionStatus: (payload as any).collectionStatus,
+      collectionStatus: payload.collectionStatus,
       paymentType: normalized.paymentType,
     });
     // INV-REST-COD-COLLECTION-TRUTH (T11-D, D-T11-1): a delivery
@@ -90,8 +90,8 @@ export class AllocateTendersAndDeliveryService {
     // credit sales and explicit statuses keep the existing
     // inference exactly. The rep id is parsed here only; the
     // delivery block below still validates that the rep exists.
-    const rawCollectionStatusForTender = String((payload as any).collectionStatus || '').trim();
-    const tenderCourierRepId = Number((payload as any).deliveryRepId || 0);
+    const rawCollectionStatusForTender = String(payload.collectionStatus || '').trim();
+    const tenderCourierRepId = Number(payload.deliveryRepId || 0);
     const hasOnlineChannelTender = normalized.payments.some(
       (entry) => entry.paymentChannel === 'wallet' || entry.paymentChannel === 'instapay',
     );
@@ -192,16 +192,16 @@ export class AllocateTendersAndDeliveryService {
     let deliveryStatus: string | null = null;
     let collectionStatus: string | null = null;
     let resolvedDeliveryFeeMode: 'freelance_courier' | 'store_fleet' =
-      (payload as any).deliveryFeeMode === 'store_fleet'
+      payload.deliveryFeeMode === 'store_fleet'
         ? 'store_fleet'
-        : (payload as any).deliveryFeeMode === 'freelance_courier'
+        : payload.deliveryFeeMode === 'freelance_courier'
           ? 'freelance_courier'
           : (null as any);
 
     if (isDelivery) {
-      const rawRepId = (payload as any).deliveryRepId;
+      const rawRepId = payload.deliveryRepId;
       const parsedRepId = rawRepId ? Number(rawRepId) : 0;
-      const rawCollectionStatus = (payload as any).collectionStatus;
+      const rawCollectionStatus = payload.collectionStatus;
       const isCod = rawCollectionStatus === 'cod' || (!rawCollectionStatus && paidAmount + 0.0001 < collectibleTotal);
 
       if (isCod && (!parsedRepId || Number.isNaN(parsedRepId) || parsedRepId <= 0)) {
@@ -231,7 +231,7 @@ export class AllocateTendersAndDeliveryService {
         }
       }
 
-      deliveryStatus = (payload as any).deliveryStatus || 'pending';
+      deliveryStatus = payload.deliveryStatus || 'pending';
       const hasUnpaidAmount = paidAmount + 0.0001 < collectibleTotal;
       if (rawCollectionStatus && !['cod', 'prepaid_by_rep', 'prepaid_online'].includes(rawCollectionStatus)) {
         throw new AppError('حالة تحصيل الدليفري غير صالحة', 'DELIVERY_COLLECTION_STATUS_INVALID', 400);

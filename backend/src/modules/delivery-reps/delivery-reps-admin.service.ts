@@ -84,7 +84,7 @@ export class DeliveryRepsAdminService {
       .execute();
 
     const sanitized = reps.map((r) => {
-      const { pin_hash, pin_salt, ...rest } = r as any;
+      const { pin_hash, pin_salt, ...rest } = r;
       return {
         ...rest,
         // حالة وجود الرمز فقط كقيمة منطقية دون تسريب التجزئة (البند O20)
@@ -141,11 +141,11 @@ export class DeliveryRepsAdminService {
         rep_type: repType,
         is_van_rep: isVanRep,
         is_active: payload.isActive !== false,
-        permissions: permissions as any,
+        permissions: permissions,
         // M14: مندوب جديد يبدأ بنسخة PIN رقم 0 — لا رموز صادرة قبله أصلاً.
-        metadata: { ...((payload.metadata || {}) as Record<string, any>), pin_version: 0 } as any,
+        metadata: { ...((payload.metadata || {}) as Record<string, any>), pin_version: 0 },
         ...this.tenantFields(actor),
-      } as any)
+      })
       .returning(['id'])
       .execute();
 
@@ -173,14 +173,14 @@ export class DeliveryRepsAdminService {
     // M14: تغيير PIN من مسار الإدارة يرفع نسخة الـPIN أيضاً — وإلا بقيت
     // الرموز الصادرة تحت الـPIN القديم صالحة 30 يوماً. دمج metadata
     // يحفظ النسخة حتى لو أرسل المتصل metadata كاملة بدونها.
-    const currentPinVersion = repPinVersion((existing as any).metadata);
+    const currentPinVersion = repPinVersion(existing.metadata);
     const nextPinVersion = updatePinRecord ? currentPinVersion + 1 : currentPinVersion;
     const mergedMetadata =
       updatePinRecord || payload.metadata !== undefined
         ? withPinVersion(
             payload.metadata !== undefined
-              ? { ...parseMetadata((existing as any).metadata), ...(payload.metadata as Record<string, any>) }
-              : (existing as any).metadata,
+              ? { ...parseMetadata(existing.metadata), ...(payload.metadata as Record<string, any>) }
+              : existing.metadata,
             nextPinVersion,
           )
         : undefined;
@@ -221,10 +221,10 @@ export class DeliveryRepsAdminService {
         rep_type: payload.repType !== undefined ? payload.repType : undefined,
         is_van_rep: isVanRep !== undefined ? isVanRep : undefined,
         is_active: payload.isActive !== undefined ? payload.isActive : undefined,
-        ...(mergedPermissions !== undefined ? { permissions: mergedPermissions as any } : {}),
-        ...(mergedMetadata !== undefined ? { metadata: mergedMetadata as any } : {}),
+        ...(mergedPermissions !== undefined ? { permissions: mergedPermissions } : {}),
+        ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {}),
         updated_at: sql`NOW()`,
-      } as any)
+      })
       .where('id', '=', id)
       .where(this.tenantPredicate(actor))
       .execute();

@@ -149,7 +149,7 @@ export class ImportAccountResolversSlice {
       else if (role === 'payable') settingsAccountId = settings.supplier_payable_account_id;
       else if (role === 'receivable') settingsAccountId = settings.customer_receivable_account_id;
       else if (role === 'sales_revenue') settingsAccountId = settings.sales_revenue_account_id;
-      else if (role === 'clearing') settingsAccountId = (settings as any).clearing_account_id;
+      else if (role === 'clearing') settingsAccountId = settings.clearing_account_id;
       else if (role === 'bank') settingsAccountId = settings.bank_account_id || settings.cash_account_id;
     }
 
@@ -256,10 +256,10 @@ export class ImportAccountResolversSlice {
     if (spec.settingsKey) {
       const settings: any = await qb
         .selectFrom('accounting_settings')
-        .select(spec.settingsKey as any)
+        .select(spec.settingsKey)
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
-      const raw = settings ? Number((settings as any)[spec.settingsKey]) : NaN;
+      const raw = settings ? Number(settings[spec.settingsKey]) : NaN;
       if (Number.isSafeInteger(raw) && raw > 0) settingsId = raw;
     }
     const rows: any[] = await qb

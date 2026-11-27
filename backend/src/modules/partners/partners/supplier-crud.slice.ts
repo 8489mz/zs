@@ -186,7 +186,7 @@ export class SupplierCrudSlice {
           overdraft_limit: overdraftLimit ?? null,
           is_active: true,
           ...this.tenantFields(actor),
-        } as any)
+        })
         .returning('id')
         .executeTakeFirstOrThrow();
 

@@ -68,7 +68,7 @@ export function buildCustomerBalancesPayload(
   digits: MoneyDigits = 2,
 ) {
   const rows = filterCustomerBalanceRows(buildCustomerBalanceRows(customers, ledgerTotals, digits), query);
-  const paged = paginate(rows, query as any, 20);
+  const paged = paginate(rows, query, 20);
 
   return {
     customers: paged.rows,
@@ -84,7 +84,7 @@ export function buildSupplierBalancesPayload(
   digits: MoneyDigits = 2,
 ) {
   const rows = filterSupplierBalanceRows(buildSupplierBalanceRows(suppliers, ledgerTotals), query);
-  const paged = paginate(rows, query as any, 20);
+  const paged = paginate(rows, query, 20);
 
   return {
     suppliers: paged.rows,

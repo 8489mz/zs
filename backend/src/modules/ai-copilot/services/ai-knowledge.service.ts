@@ -177,7 +177,7 @@ export class AiKnowledgeService {
     const qLower = q.toLowerCase();
     const scored = rows.map((r) => {
       let sim = 0;
-      let emb = r.embedding as any;
+      let emb = r.embedding;
       if (typeof emb === 'string') {
         try {
           emb = JSON.parse(emb);

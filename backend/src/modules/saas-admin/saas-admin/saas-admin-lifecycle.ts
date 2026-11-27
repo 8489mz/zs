@@ -199,7 +199,7 @@ export class SaasAdminLifecycle {
     const trialEndsAt = currentEndsAt > now ? now : currentEndsAt;
     await this.db
       .updateTable('tenants')
-      .set({ status: 'expired', trial_ends_at: trialEndsAt, updated_at: now } as any)
+      .set({ status: 'expired', trial_ends_at: trialEndsAt, updated_at: now })
       .where('id', '=', tenant.id)
       .execute();
     this.authCache.invalidateTenant(tenant.id);
@@ -235,7 +235,7 @@ export class SaasAdminLifecycle {
         status: 'trial',
         trial_ends_at: nextTrialEnd,
         updated_at: now,
-      } as any)
+      })
       .where('id', '=', tenant.id)
       .execute();
     this.authCache.invalidateTenant(tenant.id);
@@ -259,7 +259,7 @@ export class SaasAdminLifecycle {
         failed_login_count: 0,
         locked_until: null,
         is_active: true,
-      } as any)
+      })
       .where('id', '=', owner.id)
       .execute();
 
@@ -299,7 +299,7 @@ export class SaasAdminLifecycle {
           failed_login_count: 0,
           locked_until: null,
           is_active: true,
-        } as any)
+        })
         .where('id', '=', owner.id)
         .execute();
 

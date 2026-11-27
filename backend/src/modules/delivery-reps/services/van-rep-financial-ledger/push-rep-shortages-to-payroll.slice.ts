@@ -9,7 +9,7 @@ export class PushRepShortagesToPayrollSlice {
   constructor(private readonly deps: VanRepFinancialLedgerDeps) {}
 
   private get anyDb(): any {
-    return this.deps.db as any;
+    return this.deps.db;
   }
 
   /**
@@ -115,10 +115,10 @@ export class PushRepShortagesToPayrollSlice {
         .executeTakeFirst();
       let effectiveDate = `${targetMonth}-01`;
       if (targetRunRow) {
-        const periodPassed = (targetRunRow as any).periodPassed === true;
+        const periodPassed = targetRunRow.periodPassed === true;
         if (!periodPassed) {
-          effectiveRunId = Number((targetRunRow as any).id);
-          effectiveDate = String((targetRunRow as any).startDate || `${targetMonth}-01`);
+          effectiveRunId = Number(targetRunRow.id);
+          effectiveDate = String(targetRunRow.startDate || `${targetMonth}-01`);
         } else {
           const followingRunRow = await trxAny
             .selectFrom('hr_payroll_runs')
@@ -129,18 +129,16 @@ export class PushRepShortagesToPayrollSlice {
             .orderBy('start_date', 'asc')
             .executeTakeFirst();
           if (followingRunRow) {
-            effectiveRunId = Number((followingRunRow as any).id);
-            effectiveMonth = String(
-              (followingRunRow as any).period_month || (followingRunRow as any).periodMonth || targetMonth,
-            );
-            effectiveDate = String((followingRunRow as any).startDate || `${effectiveMonth}-01`);
+            effectiveRunId = Number(followingRunRow.id);
+            effectiveMonth = String(followingRunRow.period_month || followingRunRow.periodMonth || targetMonth);
+            effectiveDate = String(followingRunRow.startDate || `${effectiveMonth}-01`);
             rolledForward = true;
           } else {
             // No following run exists yet: keep the target run, so
             // the deduction stays dated inside the target month and
             // the next run built picks it up (date <= range.to).
-            effectiveRunId = Number((targetRunRow as any).id);
-            effectiveDate = String((targetRunRow as any).startDate || `${targetMonth}-01`);
+            effectiveRunId = Number(targetRunRow.id);
+            effectiveDate = String(targetRunRow.startDate || `${targetMonth}-01`);
           }
         }
       }

@@ -19,7 +19,7 @@ export class VanRoutesSupervisorSlice {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   async getSupervisorRouteKpis(tenantId: string, dateFrom?: string, dateTo?: string) {

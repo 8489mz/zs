@@ -235,7 +235,7 @@ export class CustomerInstallmentsService {
           notes: dto.notes || '',
           branch_id: dto.branchId ? Number(dto.branchId) : null,
           created_by: auth.userId || null,
-        } as any)
+        })
         .returningAll()
         .executeTakeFirstOrThrow();
 
@@ -283,10 +283,7 @@ export class CustomerInstallmentsService {
         });
       }
 
-      await trx
-        .insertInto('customer_installments')
-        .values(installmentsToInsert as any)
-        .execute();
+      await trx.insertInto('customer_installments').values(installmentsToInsert).execute();
 
       // If there is finance interest, debit customer debt and post GL interest income
       if (interestAmount > 0) {
@@ -317,7 +314,7 @@ export class CustomerInstallmentsService {
             note: `دفعة مقدمة لخطة تقسيط #${planNumber}`,
             branch_id: dto.branchId ? Number(dto.branchId) : null,
             created_by: auth.userId || null,
-          } as any)
+          })
           .returning('id')
           .executeTakeFirstOrThrow();
 
@@ -734,7 +731,7 @@ export class CustomerInstallmentsService {
           note: `سداد قسط رقم ${installment.installment_number} لخطة ${plan?.plan_number || ''}`,
           branch_id: plan?.branch_id ? Number(plan.branch_id) : null,
           created_by: auth.userId || null,
-        } as any)
+        })
         .returning('id')
         .executeTakeFirstOrThrow();
 
@@ -761,7 +758,7 @@ export class CustomerInstallmentsService {
           receipt_no: receiptNo,
           notes: dto.notes || installment.notes,
           updated_at: new Date(),
-        } as any)
+        })
         .where('id', '=', Number(installmentId))
         .where('tenant_id', '=', scope.tenantId)
         .returningAll()

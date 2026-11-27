@@ -47,7 +47,7 @@ export class SettleTripService {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -393,7 +393,7 @@ export class SettleTripService {
         }
       } else {
         try {
-          effectivePerDay = parseSubmittedPerDayCash((lockedTrip as any).submitted_per_day_cash, bookDigits);
+          effectivePerDay = parseSubmittedPerDayCash(lockedTrip.submitted_per_day_cash, bookDigits);
         } catch (e: any) {
           throw new AppError(
             'تفصيل النقدية بالأيام المحفوظ غير صالح',
@@ -680,8 +680,8 @@ export class SettleTripService {
       // when its activity falls on exactly one tenant day; a
       // multi-day legacy trip keeps its open day (its split lives in
       // the per-day rows below, not on the trip).
-      const tripBusinessDay = (lockedTrip as any).business_day
-        ? normalizePgDateOnly((lockedTrip as any).business_day)
+      const tripBusinessDay = lockedTrip.business_day
+        ? normalizePgDateOnly(lockedTrip.business_day)
         : spannedDays.length === 1
           ? spannedDays[0].businessDay
           : '';
@@ -903,7 +903,7 @@ export class SettleTripService {
               businessDay:
                 spannedDays.length === 1
                   ? spannedDays[0].businessDay
-                  : normalizePgDateOnly((lockedTrip as any).business_day) || todayTenantDate(tenantTimezone),
+                  : normalizePgDateOnly(lockedTrip.business_day) || todayTenantDate(tenantTimezone),
               countedCash,
             },
           ];

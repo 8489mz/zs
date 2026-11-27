@@ -103,7 +103,7 @@ export class MaritimeFreightJobsMilestonesService {
       .selectFrom('maritime_jobs')
       .select(['transport_mode', 'milestone_status'])
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', jobId as any)
+      .where('id', '=', jobId)
       .executeTakeFirst();
     if (!job) throw new NotFoundException('Shipment Job not found');
     if (job.transport_mode === 'air') {
@@ -119,7 +119,7 @@ export class MaritimeFreightJobsMilestonesService {
         .selectFrom('maritime_containers')
         .select(['discharged_at'])
         .where('tenant_id', '=', tenantId)
-        .where('job_id', '=', jobId as any)
+        .where('job_id', '=', jobId)
         .execute();
       if (
         containers.some(
@@ -134,7 +134,7 @@ export class MaritimeFreightJobsMilestonesService {
         .selectFrom('maritime_jobs')
         .select('booking_number')
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', jobId as any)
+        .where('id', '=', jobId)
         .executeTakeFirst();
       await this.assertRoadProofOfDelivery(tenantId, jobId, roadJob?.booking_number);
     }
@@ -169,7 +169,7 @@ export class MaritimeFreightJobsMilestonesService {
         .selectFrom('maritime_containers')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('job_id', '=', jobId as any)
+        .where('job_id', '=', jobId)
         .execute();
 
       const now = new Date();
@@ -185,7 +185,7 @@ export class MaritimeFreightJobsMilestonesService {
               return_deadline: await resolveBusinessDateKey(this.db, tenantId, deadline),
               updated_at: sql`NOW()`,
             })
-            .where('id', '=', c.id as any)
+            .where('id', '=', c.id)
             .where('tenant_id', '=', tenantId)
             .execute();
         }
@@ -198,7 +198,7 @@ export class MaritimeFreightJobsMilestonesService {
         .updateTable('maritime_containers')
         .set({ gated_out_at: sql`NOW()`, updated_at: sql`NOW()` })
         .where('tenant_id', '=', tenantId)
-        .where('job_id', '=', jobId as any)
+        .where('job_id', '=', jobId)
         .where('gated_out_at', 'is', null)
         .execute();
     } else if (milestoneKey === 'DLVR') {
@@ -210,7 +210,7 @@ export class MaritimeFreightJobsMilestonesService {
         .selectFrom('maritime_containers')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('job_id', '=', jobId as any)
+        .where('job_id', '=', jobId)
         .execute();
       updatePayload.status = 'completed';
       for (const container of containers.filter((row) => !row.empty_returned_at)) {
@@ -231,7 +231,7 @@ export class MaritimeFreightJobsMilestonesService {
             updated_at: sql`NOW()`,
           })
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', container.id as any)
+          .where('id', '=', container.id)
           .execute();
       }
     }
@@ -249,7 +249,7 @@ export class MaritimeFreightJobsMilestonesService {
       .updateTable('maritime_jobs')
       .set(updatePayload)
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', jobId as any)
+      .where('id', '=', jobId)
       .returningAll()
       .execute();
 
@@ -261,7 +261,7 @@ export class MaritimeFreightJobsMilestonesService {
           .selectFrom('customers')
           .select(['phone'])
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', updatedJob.customer_id as any)
+          .where('id', '=', updatedJob.customer_id)
           .executeTakeFirst();
         customerPhone = cust?.phone || null;
       }
@@ -316,7 +316,7 @@ export class MaritimeFreightJobsMilestonesService {
         .selectFrom('maritime_customs_declarations')
         .select('id')
         .where('tenant_id', '=', tenantId)
-        .where('job_id', '=', jobId as any)
+        .where('job_id', '=', jobId)
         .where('status', '=', 'cleared')
         .executeTakeFirst();
       if (!cleared) {
@@ -357,7 +357,7 @@ export class MaritimeFreightJobsMilestonesService {
           .selectFrom('customers')
           .select(['phone'])
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', job.customer_id as any)
+          .where('id', '=', job.customer_id)
           .executeTakeFirst();
         phone = cust?.phone || null;
       }
@@ -480,7 +480,7 @@ export class MaritimeFreightJobsMilestonesService {
       jobId: job.id,
       jobNumber: job.job_number,
       customerName: job.customer_name,
-      customerPhone: (job as any).customer_phone || null,
+      customerPhone: job.customer_phone || null,
       milestoneKey,
       milestoneTitle: title,
       message,

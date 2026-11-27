@@ -53,7 +53,7 @@ export async function moveVanStock(
     errorMessage: 'رصيد غير كافٍ لتنفيذ حركة سيارة التوزيع',
   });
 
-  await (trx as any)
+  await trx
     .insertInto('stock_movements')
     .values({
       tenant_id: params.tenantId,
@@ -87,7 +87,7 @@ export async function getOrCreateVanLocation(
   tenantId: string,
   accountId: string,
 ): Promise<{ id: number; name: string }> {
-  const anyDb = db as any;
+  const anyDb = db;
   const rep = await anyDb
     .selectFrom('delivery_representatives')
     .select(['id', 'name', 'van_location_id', 'vehicle_plate'])
@@ -210,7 +210,7 @@ export async function listRepUsableWarehouseScope(
   ]);
   const sourceWarehouseIds = new Set<number>();
   for (const row of [...(tripSources || []), ...(reqSources || [])]) {
-    const id = Number((row as any).source_warehouse_id);
+    const id = Number(row.source_warehouse_id);
     if (Number.isInteger(id) && id > 0) sourceWarehouseIds.add(id);
   }
   const mostRecentRow = (tripSources || [])[0] || (reqSources || [])[0];

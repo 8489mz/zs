@@ -6,7 +6,7 @@ export class VanFleetDriversSlice {
   constructor(private readonly db: Kysely<Database>) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   async listVehicleDrivers(tenantId: string, vehicleId: number) {

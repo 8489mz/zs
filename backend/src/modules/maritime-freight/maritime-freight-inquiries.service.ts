@@ -170,7 +170,7 @@ export class MaritimeFreightInquiriesService {
       .selectFrom('maritime_inquiries')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!inquiry) throw new NotFoundException('Inquiry not found');
@@ -190,8 +190,8 @@ export class MaritimeFreightInquiriesService {
       polName: inquiry.pol_name,
       podCode: inquiry.pod_code,
       podName: inquiry.pod_name,
-      direction: inquiry.direction as any,
-      transportMode: (inquiry.transport_mode as any) || 'sea',
+      direction: inquiry.direction,
+      transportMode: inquiry.transport_mode || 'sea',
       airCargoType: inquiry.air_cargo_type || undefined,
       grossWeightKg: inquiry.gross_weight_kg ? Number(inquiry.gross_weight_kg) : undefined,
       volumetricWeightKg: inquiry.volumetric_weight_kg ? Number(inquiry.volumetric_weight_kg) : undefined,
@@ -208,7 +208,7 @@ export class MaritimeFreightInquiriesService {
       cargoNature: inquiry.cargo_nature,
       cargoReadyDate: inquiry.cargo_ready_date || undefined,
       targetFreeDays: inquiry.target_free_days,
-      paymentTerm: inquiry.payment_term as any,
+      paymentTerm: inquiry.payment_term,
       targetLineIds: targetLineIds || [],
       inquiryId: String(inquiry.id),
       customerId: inquiry.customer_id ? Number(inquiry.customer_id) : undefined,
@@ -226,7 +226,7 @@ export class MaritimeFreightInquiriesService {
         updated_at: sql`NOW()`,
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', inquiryId as any)
+      .where('id', '=', inquiryId)
       .execute();
 
     return rfq;
@@ -340,7 +340,7 @@ export class MaritimeFreightInquiriesService {
             updated_at: sql`NOW()`,
           })
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', dto.inquiryId as any)
+          .where('id', '=', dto.inquiryId)
           .execute();
       }
 
@@ -405,7 +405,7 @@ export class MaritimeFreightInquiriesService {
       .selectFrom('maritime_rfqs')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!rfq) {

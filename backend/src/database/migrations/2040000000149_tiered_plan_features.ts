@@ -229,7 +229,7 @@ export const migration = {
           name: plan.name,
           description: `نطاق ${plan.band} — مستوى ${plan.level}`,
           price: plan.priceAnnual,
-        } as any)
+        })
         .onConflict((oc) => oc.column('id').doNothing())
         .execute();
 
@@ -248,7 +248,7 @@ export const migration = {
           pricing_band: plan.band,
           pricing_level: plan.level,
           is_active: true,
-        } as any)
+        })
         .onConflict((oc) => oc.column('code').doNothing())
         .returning(['id'])
         .executeTakeFirst();

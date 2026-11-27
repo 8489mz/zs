@@ -311,7 +311,7 @@ export function parseHikvisionAcsEventResponse(jsonBody: string): {
   numOfMatches: number;
   responseStatusStrg: string;
 } {
-  const parsed = JSON.parse(jsonBody || '{}') as any;
+  const parsed = JSON.parse(jsonBody || '{}');
   const acs = parsed?.AcsEvent || parsed || {};
   const list: any[] = Array.isArray(acs.InfoList) ? acs.InfoList : [];
   const lines: string[] = [];
@@ -353,7 +353,7 @@ export function parseHikvisionWebhookPayload(rawBody: string): {
   }
 
   try {
-    const parsed = JSON.parse(jsonCandidate) as any;
+    const parsed = JSON.parse(jsonCandidate);
     const ev = parsed?.AccessControllerEvent || parsed?.AcsEvent || parsed || {};
     const serialNumber =
       String(parsed?.serialNumber || ev?.serialNo || ev?.deviceSerialNo || parsed?.macAddress || '').trim() || null;

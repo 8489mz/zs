@@ -165,26 +165,23 @@ export async function reconcileStockCountTrace(
       await trx
         .insertInto('product_serials')
         .values(
-          newSerials.map(
-            (serial) =>
-              ({
-                tenant_id: scope.tenantId,
-                account_id: scope.accountId,
-                product_id: input.productId,
-                serial_number: serial,
-                imei_2: null,
-                status: 'in_stock' as const,
-                branch_id: input.branchId,
-                location_id: input.locationId,
-                cost_price: input.unitCost,
-                purchase_id: null,
-                purchase_item_id: null,
-                sale_id: null,
-                sale_item_id: null,
-                warranty_end_date: null,
-                notes: `زيادة جرد جلسة ${input.sessionId} بند ${input.itemId}`,
-              }) as any,
-          ),
+          newSerials.map((serial) => ({
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+            product_id: input.productId,
+            serial_number: serial,
+            imei_2: null,
+            status: 'in_stock' as const,
+            branch_id: input.branchId,
+            location_id: input.locationId,
+            cost_price: input.unitCost,
+            purchase_id: null,
+            purchase_item_id: null,
+            sale_id: null,
+            sale_item_id: null,
+            warranty_end_date: null,
+            notes: `زيادة جرد جلسة ${input.sessionId} بند ${input.itemId}`,
+          })),
         )
         .execute();
     }
@@ -282,7 +279,7 @@ export async function reconcileStockCountTrace(
           supplier_name: null,
           status: 'active',
           notes: `زيادة جرد جلسة ${input.sessionId} بند ${input.itemId}`,
-        } as any)
+        })
         .execute();
     }
   } else if (batchCounts.length) {

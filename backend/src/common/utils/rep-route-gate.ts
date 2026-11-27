@@ -43,7 +43,7 @@ export async function listCustomerServingRepIds(
   const ids = new Set<number>();
   const collect = (rows: any[]): void => {
     for (const row of rows || []) {
-      const id = Number((row as any).rep_id ?? (row as any).repId ?? (row as any).delivery_rep_id);
+      const id = Number(row.rep_id ?? row.repId ?? row.delivery_rep_id);
       if (Number.isInteger(id) && id > 0) ids.add(id);
     }
   };

@@ -166,12 +166,12 @@ export class FiscalYearPeriodCloseService {
         .updateTable('accounting_fiscal_periods')
         .set({
           status: 'closed',
-          closed_at: sql`NOW()` as any,
+          closed_at: sql`NOW()`,
           closed_by: userId,
           closing_notes: dto?.notes ? String(dto.notes).trim() : null,
           // FP-8: اللقطة تُلتقط هنا، قبل رفع القفل — وهي ما يُستعاد عند إعادة الفتح.
-          previous_lock_date_all: previousLock as any,
-          updated_at: sql`NOW()` as any,
+          previous_lock_date_all: previousLock,
+          updated_at: sql`NOW()`,
         })
         .where('id', '=', period.id)
         .where('tenant_id', '=', tenantId)
@@ -181,7 +181,7 @@ export class FiscalYearPeriodCloseService {
         if (!previousLock || previousLock < endDateStr) {
           await trx
             .updateTable('accounting_settings')
-            .set({ lock_date_all: endDateStr as any, updated_at: sql`NOW()` as any })
+            .set({ lock_date_all: endDateStr, updated_at: sql`NOW()` })
             .where('tenant_id', '=', tenantId)
             .where('id', '=', 1)
             .execute();
@@ -192,13 +192,11 @@ export class FiscalYearPeriodCloseService {
           .values({
             id: 1,
             tenant_id: tenantId,
-            lock_date_all: endDateStr as any,
-            updated_at: sql`NOW()` as any,
-          } as any)
+            lock_date_all: endDateStr,
+            updated_at: sql`NOW()`,
+          })
           .onConflict((oc) =>
-            oc
-              .columns(['tenant_id', 'id'])
-              .doUpdateSet({ lock_date_all: endDateStr as any, updated_at: sql`NOW()` as any } as any),
+            oc.columns(['tenant_id', 'id']).doUpdateSet({ lock_date_all: endDateStr, updated_at: sql`NOW()` }),
           )
           .execute();
       }
@@ -298,10 +296,10 @@ export class FiscalYearPeriodCloseService {
           status: 'open',
           closed_at: null,
           closed_by: null,
-          closing_notes: sql`CONCAT(COALESCE(closing_notes, ''), ${reopenNote}::text)` as any,
+          closing_notes: sql`CONCAT(COALESCE(closing_notes, ''), ${reopenNote}::text)`,
           // اللقطة استُهلكت؛ إقفال لاحق يلتقط قيمة القفل السارية وقتها لا قيمة قديمة.
           previous_lock_date_all: null,
-          updated_at: sql`NOW()` as any,
+          updated_at: sql`NOW()`,
         })
         .where('id', '=', period.id)
         .where('tenant_id', '=', tenantId)
@@ -331,7 +329,7 @@ export class FiscalYearPeriodCloseService {
 
       await trx
         .updateTable('accounting_settings')
-        .set({ lock_date_all: newLock as any, updated_at: sql`NOW()` as any })
+        .set({ lock_date_all: newLock, updated_at: sql`NOW()` })
         .where('tenant_id', '=', tenantId)
         .where('id', '=', 1)
         .execute();

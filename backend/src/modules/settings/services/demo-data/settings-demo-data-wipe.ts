@@ -79,22 +79,22 @@ export class SettingsDemoDataWipe {
         .forUpdate()
         .execute();
       // 1. Delete stock transactions, movements, transfers, sessions, damages, allocations
-      await (trx as any)
+      await trx
         .deleteFrom('customer_installments')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
         .catch(() => undefined);
-      await (trx as any)
+      await trx
         .deleteFrom('customer_installment_plans')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
         .catch(() => undefined);
-      await (trx as any)
+      await trx
         .deleteFrom('quotation_items')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
         .catch(() => undefined);
-      await (trx as any)
+      await trx
         .deleteFrom('quotations')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
@@ -157,7 +157,7 @@ export class SettingsDemoDataWipe {
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute();
 
-      await (trx as any)
+      await trx
         .deleteFrom('van_sales_trips')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
@@ -192,17 +192,17 @@ export class SettingsDemoDataWipe {
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute();
 
-      await (trx as any)
+      await trx
         .deleteFrom('trade_in_transactions')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
         .catch(() => undefined);
-      await (trx as any)
+      await trx
         .deleteFrom('online_orders')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
         .catch(() => undefined);
-      await (trx as any)
+      await trx
         .deleteFrom('sale_line_stock_allocations')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
@@ -262,22 +262,22 @@ export class SettingsDemoDataWipe {
 
     await this.db.transaction().execute(async (trx) => {
       // 1. Operational tables
-      await (trx as any)
+      await trx
         .deleteFrom('customer_installments')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
         .catch(() => undefined);
-      await (trx as any)
+      await trx
         .deleteFrom('customer_installment_plans')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
         .catch(() => undefined);
-      await (trx as any)
+      await trx
         .deleteFrom('quotation_items')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
         .catch(() => undefined);
-      await (trx as any)
+      await trx
         .deleteFrom('quotations')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
@@ -340,7 +340,7 @@ export class SettingsDemoDataWipe {
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute();
 
-      await (trx as any)
+      await trx
         .deleteFrom('van_sales_trips')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
@@ -419,12 +419,12 @@ export class SettingsDemoDataWipe {
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
         .catch(() => undefined);
-      await (trx as any)
+      await trx
         .deleteFrom('import_shipment_items')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()
         .catch(() => undefined);
-      await (trx as any)
+      await trx
         .deleteFrom('import_shipments')
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .execute()

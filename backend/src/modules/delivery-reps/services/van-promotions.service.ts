@@ -253,7 +253,7 @@ export class VanPromotionsService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   async listPromotions(

@@ -593,46 +593,43 @@ export class DeliveryRepsReadsService {
     dueRows.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id - b.id);
     const dueByDay: DayBucket[] = bucketTripCashByDay(dueRows, timezone, bookDigits);
 
-    const invoiceDiscountsTotal = money((lifetimeRow as any)?.invoice_discounts_total);
-    const lineDiscountsTotal = money((lineDiscountsRow as any)?.line_discounts_total);
-    const actualSalesMtd = money((mtdRow as any)?.sales_total);
-    const actualCollectionsMtd = money((mtdCollectionsRow as any)?.collections_total);
+    const invoiceDiscountsTotal = money(lifetimeRow?.invoice_discounts_total);
+    const lineDiscountsTotal = money(lineDiscountsRow?.line_discounts_total);
+    const actualSalesMtd = money(mtdRow?.sales_total);
+    const actualCollectionsMtd = money(mtdCollectionsRow?.collections_total);
 
     return {
       ok: true,
       rep: { id: rep.id, name: rep.name },
       lifetime: {
-        salesCount: Number((lifetimeRow as any)?.sales_count || 0),
-        salesTotal: money((lifetimeRow as any)?.sales_total),
+        salesCount: Number(lifetimeRow?.sales_count || 0),
+        salesTotal: money(lifetimeRow?.sales_total),
         invoiceDiscountsTotal,
         lineDiscountsTotal,
         discountsTotal: roundMoney(invoiceDiscountsTotal + lineDiscountsTotal, bookDigits),
-        taxTotal: money((lifetimeRow as any)?.tax_total),
-        paidTotal: money((lifetimeRow as any)?.paid_total),
-        collectionsCount: Number((collectionsRow as any)?.collections_count || 0),
-        collectionsTotal: money((collectionsRow as any)?.collections_total),
-        returnsCount: Number((returnsRow as any)?.returns_count || 0),
-        returnsTotal: money((returnsRow as any)?.returns_total),
-        discountedInvoicesCount: Number((discountedRow as any)?.discounted_count || 0),
-        discountedInvoicesTotal: money((discountedRow as any)?.discounted_total),
+        taxTotal: money(lifetimeRow?.tax_total),
+        paidTotal: money(lifetimeRow?.paid_total),
+        collectionsCount: Number(collectionsRow?.collections_count || 0),
+        collectionsTotal: money(collectionsRow?.collections_total),
+        returnsCount: Number(returnsRow?.returns_count || 0),
+        returnsTotal: money(returnsRow?.returns_total),
+        discountedInvoicesCount: Number(discountedRow?.discounted_count || 0),
+        discountedInvoicesTotal: money(discountedRow?.discounted_total),
       },
       today: {
         businessDay: todayBounds.key,
-        salesCount: Number((todayRow as any)?.sales_count || 0),
-        salesTotal: money((todayRow as any)?.sales_total),
-        collectionsTotal: money((todayCollectionsRow as any)?.collections_total),
-        returnsTotal: money((todayReturnsRow as any)?.returns_total),
+        salesCount: Number(todayRow?.sales_count || 0),
+        salesTotal: money(todayRow?.sales_total),
+        collectionsTotal: money(todayCollectionsRow?.collections_total),
+        returnsTotal: money(todayReturnsRow?.returns_total),
       },
       currentTarget: currentTargetRow
         ? {
-            periodMonth: (currentTargetRow as any).period_month,
-            targetAmount: money((currentTargetRow as any).target_amount),
+            periodMonth: currentTargetRow.period_month,
+            targetAmount: money(currentTargetRow.target_amount),
             collectionTarget:
-              (currentTargetRow as any).collection_target == null
-                ? null
-                : money((currentTargetRow as any).collection_target),
-            visitsTarget:
-              (currentTargetRow as any).visits_target == null ? null : Number((currentTargetRow as any).visits_target),
+              currentTargetRow.collection_target == null ? null : money(currentTargetRow.collection_target),
+            visitsTarget: currentTargetRow.visits_target == null ? null : Number(currentTargetRow.visits_target),
             actualSalesMtd,
             actualCollectionsMtd,
           }

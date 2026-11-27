@@ -44,7 +44,7 @@ export class ConsolidatePreSalesOrdersSlice {
     }
 
     return await this.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
 
       const rep = await trxAny
         .selectFrom('delivery_representatives')
@@ -160,7 +160,7 @@ export class ConsolidatePreSalesOrdersSlice {
           Array.from(prodMap.entries()).map(([productId, qty]) => ({ productId, qty })),
         );
         if (itemsToRelease.length > 0) {
-          await releaseLocationStock(trx as any, {
+          await releaseLocationStock(trx, {
             tenantId,
             accountId,
             locationId: locId > 0 ? locId : null,

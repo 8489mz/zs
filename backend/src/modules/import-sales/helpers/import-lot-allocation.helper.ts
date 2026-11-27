@@ -226,7 +226,7 @@ export async function allocateSaleFromImportLots(
           allocation_type: 'sale',
           reversal_of_allocation_id: null,
           created_at: new Date(),
-        } as any)
+        })
         .execute();
 
       allocatedQty = Number((allocatedQty + allocQty).toFixed(4));
@@ -308,7 +308,7 @@ export async function restoreImportLotsFromCancelledSale(
         allocation_type: 'cancellation',
         reversal_of_allocation_id: alloc.id,
         created_at: new Date(),
-      } as any)
+      })
       .execute();
   }
 }
@@ -389,7 +389,7 @@ export async function restoreImportLotsFromSalesReturn(
         allocation_type: 'return',
         reversal_of_allocation_id: alloc.id,
         created_at: new Date(),
-      } as any)
+      })
       .execute();
 
     remainingReturnQty = Number((remainingReturnQty - restoreAmount).toFixed(4));
@@ -510,7 +510,7 @@ export async function transferImportLotLocation(
         receipt_date: lot.receipt_date,
         created_at: new Date(),
         updated_at: new Date(),
-      } as any)
+      })
       .execute();
   }
 }

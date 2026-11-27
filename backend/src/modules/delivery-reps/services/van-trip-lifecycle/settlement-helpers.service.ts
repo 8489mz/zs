@@ -204,7 +204,7 @@ export class SettlementHelpersService {
         request_key: params.businessDay
           ? `rep-remittance:trip:${tripId}:day:${params.businessDay}`
           : `rep-remittance:trip:${tripId}`,
-      } as any)
+      })
       .execute();
   }
 }

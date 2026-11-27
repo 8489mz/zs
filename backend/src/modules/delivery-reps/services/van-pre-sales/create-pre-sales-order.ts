@@ -15,7 +15,7 @@ import type { CreatePreSalesOrderDto, CreatePreSalesOrderResult } from './van-pr
 
 export class CreatePreSalesOrderSlice {
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   constructor(
@@ -117,7 +117,7 @@ export class CreatePreSalesOrderSlice {
     let totalDiscountAmount = 0;
 
     await this.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
       // Book digits resolved once on THIS transaction handle (D4):
       // every derived pre-sale price/total below rounds at book digits.
       const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
@@ -160,7 +160,7 @@ export class CreatePreSalesOrderSlice {
 
       for (const item of sortedItems) {
         const pid = Number(item.productId);
-        const qty = Number(item.qty ?? (item as any).quantity ?? 0);
+        const qty = Number(item.qty ?? item.quantity ?? 0);
         if (qty <= 0) continue;
 
         // Canonical Lock: Lock product row first
@@ -301,7 +301,7 @@ export class CreatePreSalesOrderSlice {
       }
 
       // Atomically reserve inventory at location and product level
-      await reserveLocationStock(trx as any, {
+      await reserveLocationStock(trx, {
         tenantId,
         accountId,
         locationId: warehouseLocId > 0 ? warehouseLocId : null,

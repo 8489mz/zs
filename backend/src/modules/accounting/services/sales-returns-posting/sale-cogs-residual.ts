@@ -111,7 +111,7 @@ export class SaleCogsResidualService {
       const id = Number(item.product_id || 0);
       if (id > 0) soldProductIds.add(id);
     }
-    const modifierLists = saleItems.map((item) => residualModifierList((item as any).modifiers));
+    const modifierLists = saleItems.map((item) => residualModifierList(item.modifiers));
     const productIds = new Set<number>(soldProductIds);
     for (const mods of modifierLists) {
       for (const mod of mods) {
@@ -141,7 +141,7 @@ export class SaleCogsResidualService {
       for (const item of saleItems) {
         const returned = qtySoldBySaleItemId.get(Number(item.id));
         if (!(returned! > 0)) continue;
-        const rawMultiplier = Number((item as any).unit_multiplier ?? 1);
+        const rawMultiplier = Number(item.unit_multiplier ?? 1);
         const multiplier = Number.isFinite(rawMultiplier) && rawMultiplier > 0 ? rawMultiplier : 1;
         const key = `${Number(item.product_id || 0)}|${Number(item.cost_price || 0)}`;
         restockedBaseByGroup.set(key, (restockedBaseByGroup.get(key) || 0) + returned! * multiplier);
@@ -160,7 +160,7 @@ export class SaleCogsResidualService {
         existing.qtySold += qtySold;
         return;
       }
-      const rawMultiplier = Number((item as any).unit_multiplier ?? 1);
+      const rawMultiplier = Number(item.unit_multiplier ?? 1);
       const multiplier = Number.isFinite(rawMultiplier) && rawMultiplier > 0 ? rawMultiplier : 1;
       grouped.set(key, {
         qtySold,

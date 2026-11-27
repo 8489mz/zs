@@ -213,7 +213,7 @@ export class ImportReceiptPostingService {
     }
     const foldedByBucket = new Map<string, number>();
     for (const row of foldedRows) {
-      const bucket = String((row as any).cost_bucket || '');
+      const bucket = String((row).cost_bucket || '');
       foldedByBucket.set(bucket, (foldedByBucket.get(bucket) || 0) + Number(row.amount_egp || 0));
     }
     // INV-IMPORT-LANDED-COST-DUTY-VAT: duty/VAT itemized on the
@@ -259,7 +259,7 @@ export class ImportReceiptPostingService {
       insurance: 'freight_supplier_id',
     };
     const overheadShares = apportionByBucketShares(payableOverhead, netWeights, digits);
-    const unallocableReason = typeof (shipment as any).unallocable_cost_reason === 'string'
+    const unallocableReason = typeof (shipment).unallocable_cost_reason === 'string'
       ? (shipment as any).unallocable_cost_reason.trim() : '';
     let clearingAccountId: number | null = null;
     const resolveComponentPayee = async (
@@ -394,7 +394,7 @@ export class ImportReceiptPostingService {
           unit_landed_cost_egp: unitLandedCost,
           status: 'active',
           receipt_date: await resolveBusinessDateKey(trx, tenantId, new Date()),
-        } as any)
+        })
         .execute();
     }
 

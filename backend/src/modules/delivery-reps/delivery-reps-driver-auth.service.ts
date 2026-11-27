@@ -186,7 +186,7 @@ export class DeliveryRepsDriverAuthService {
 
     // INV-PORTAL-TENANT-STATUS-ENFORCED: no fresh login for a
     // suspended / expired / trial-expired tenant, even with a valid PIN.
-    await assertPortalTenantAllowed(this.db as any, this.authCache, String(matchedRep.tenant_id));
+    await assertPortalTenantAllowed(this.db, this.authCache, String(matchedRep.tenant_id));
 
     // INV-DRIVER-PIN-FIRST-LOGIN-CHANGE: a PIN that is still the public
     // default must be changed at first login. Detection is a real password
@@ -205,7 +205,7 @@ export class DeliveryRepsDriverAuthService {
         phone: matchedRep.phone,
         // M14: الرمز يحمل نسخة الـPIN الحالية؛ أي تغيير PIN لاحق
         // يُبطل هذا الرمز عند التحقق (verifyDriverTokenCore).
-        [PORTAL_TOKEN_PIN_VERSION_CLAIM]: repPinVersion((matchedRep as any).metadata),
+        [PORTAL_TOKEN_PIN_VERSION_CLAIM]: repPinVersion(matchedRep.metadata),
       },
       PORTAL_TOKEN_TTL_MS,
     );
@@ -222,9 +222,9 @@ export class DeliveryRepsDriverAuthService {
         vehiclePlate: matchedRep.vehicle_plate,
         tenantId: matchedRep.tenant_id,
         tenantName,
-        isVanRep: Boolean((matchedRep as any).is_van_rep),
-        vanLocationId: (matchedRep as any).van_location_id || null,
-        permissions: (matchedRep as any).permissions || {},
+        isVanRep: Boolean(matchedRep.is_van_rep),
+        vanLocationId: matchedRep.van_location_id || null,
+        permissions: matchedRep.permissions || {},
       },
     };
   }
@@ -286,13 +286,13 @@ export class DeliveryRepsDriverAuthService {
     const record = await createPasswordRecord(newPin);
     // M14: رفع نسخة الـPIN مع تغييره، في نفس الكتابة — الرمز الجديد
     // يحمل النسخة الجديدة، والرموز القديمة تُرفض عند التحقق.
-    const nextPinVersion = repPinVersion((rep as any).metadata) + 1;
+    const nextPinVersion = repPinVersion(rep.metadata) + 1;
     await this.db
       .updateTable('delivery_representatives')
       .set({
         pin_hash: record.hash,
         pin_salt: record.salt,
-        metadata: withPinVersion((rep as any).metadata, nextPinVersion) as any,
+        metadata: withPinVersion(rep.metadata, nextPinVersion),
       })
       .where('id', '=', driver.repId)
       .where('tenant_id', '=', driver.tenantId)
@@ -336,9 +336,9 @@ export class DeliveryRepsDriverAuthService {
         vehiclePlate: rep.vehicle_plate,
         tenantId: rep.tenant_id,
         tenantName,
-        isVanRep: Boolean((rep as any).is_van_rep),
-        vanLocationId: (rep as any).van_location_id || null,
-        permissions: (rep as any).permissions || {},
+        isVanRep: Boolean(rep.is_van_rep),
+        vanLocationId: rep.van_location_id || null,
+        permissions: rep.permissions || {},
       },
     };
   }
@@ -417,11 +417,11 @@ export class DeliveryRepsDriverAuthService {
     // M14: نسخة الـPIN في الرمز أقدم من المخزنة تعني أن الـPIN تغيّر
     // بعد إصدار الرمز — الرمز مرفوض حتى لو كان توقيعه وعمره سليمين.
     // الرموز القديمة بلا حقل نسخة تُقرأ نسخة 0 (portalTokenPinVersion).
-    if (portalTokenPinVersion(payload) !== repPinVersion((rep as any).metadata)) {
+    if (portalTokenPinVersion(payload) !== repPinVersion(rep.metadata)) {
       throw new AppError('رمز الدخول غير صالح', 'INVALID_DRIVER_TOKEN', 401);
     }
 
-    const decision = await checkPortalTenantStatus(this.db as any, this.authCache, tenantId);
+    const decision = await checkPortalTenantStatus(this.db, this.authCache, tenantId);
     if (decision.blocked && !settleOnly) {
       throw new AppError(
         decision.message || 'تم إيقاف أو انتهاء اشتراك هذه النسخة.',

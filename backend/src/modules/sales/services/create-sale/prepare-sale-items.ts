@@ -268,7 +268,7 @@ export class PrepareSaleItemsService {
       }
 
       const requiredQty = Number((Number(item.qty || 0) * Number(item.unitMultiplier || 1)).toFixed(3));
-      const canAllowNegative = allowNegativeStockSales || hasBOM || (product as any).item_type === 'service';
+      const canAllowNegative = allowNegativeStockSales || hasBOM || product.item_type === 'service';
       if (!canAllowNegative && availableStockQty < requiredQty) {
         throw await this.buildInsufficientStockError(trx, {
           productId: item.productId,
@@ -286,7 +286,7 @@ export class PrepareSaleItemsService {
         { ...product, name: finalProductName, stock_qty: availableStockQty },
         item,
         {
-          allowNegativeStockSales: allowNegativeStockSales || hasBOM || (product as any).item_type === 'service',
+          allowNegativeStockSales: allowNegativeStockSales || hasBOM || product.item_type === 'service',
           moneyDigits,
         },
       );
@@ -294,7 +294,7 @@ export class PrepareSaleItemsService {
       subtotal += preparedItem.lineTotal;
       preparedItems.push({
         ...preparedItem,
-        isService: (product as any).item_type === 'service',
+        isService: product.item_type === 'service',
         effectiveAllowedUnitPrice,
       });
 

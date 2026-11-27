@@ -199,7 +199,7 @@ export const migration = {
           sell_offline: p.sellOffline,
           sector_feature_code: p.sectorFeatureCode,
           industry_profile_key: p.industryProfileKey,
-        } as any)
+        })
         .onConflict((oc) =>
           oc.column('preset_id').doUpdateSet((eb) => ({
             commercial_name: eb.ref('excluded.commercial_name'),

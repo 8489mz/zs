@@ -140,20 +140,20 @@ export class FiscalYearPeriodsService {
               .updateTable('journal_entries')
               .set({
                 entry_no: reversalEntryNo,
-                updated_at: sql`NOW()` as any,
-              } as any)
+                updated_at: sql`NOW()`,
+              })
               .where('id', '=', reversalEntryId)
               .where('tenant_id', '=', tenantId)
               .execute();
             await trx
               .updateTable('journal_entries')
-              .set({ reversed_by_entry_id: reversalEntryId, updated_at: sql`NOW()` } as any)
+              .set({ reversed_by_entry_id: reversalEntryId, updated_at: sql`NOW()` })
               .where('tenant_id', '=', tenantId)
               .where('id', '=', closingEntry.id)
               .execute();
             await trx
               .updateTable('journal_entries')
-              .set({ reversal_of_entry_id: closingEntry.id, updated_at: sql`NOW()` } as any)
+              .set({ reversal_of_entry_id: closingEntry.id, updated_at: sql`NOW()` })
               .where('tenant_id', '=', tenantId)
               .where('id', '=', reversalEntryId)
               .execute();
@@ -181,8 +181,8 @@ export class FiscalYearPeriodsService {
           closing_entry_id: null,
           closed_at: null,
           closed_by: null,
-          closing_notes: sql`CONCAT(COALESCE(closing_notes, ''), ${reopenLog}::text)` as any,
-          updated_at: sql`NOW()` as any,
+          closing_notes: sql`CONCAT(COALESCE(closing_notes, ''), ${reopenLog}::text)`,
+          updated_at: sql`NOW()`,
         })
         .where('id', '=', id)
         .where('tenant_id', '=', tenantId)
@@ -258,8 +258,8 @@ export class FiscalYearPeriodsService {
       period_number: period.periodNumber,
       name: period.name,
       code: period.code,
-      start_date: period.startDate as any,
-      end_date: period.endDate as any,
+      start_date: period.startDate,
+      end_date: period.endDate,
       status: 'open' as const,
       created_at: sql`NOW()` as any,
       updated_at: sql`NOW()` as any,
@@ -307,9 +307,9 @@ export class FiscalYearPeriodsService {
       ...p,
       start_date: this.formatDate(p.start_date),
       end_date: this.formatDate(p.end_date),
-      closed_at: p.closed_at ? new Date(p.closed_at as any).toISOString() : null,
-      created_at: p.created_at ? new Date(p.created_at as any).toISOString() : '',
-      updated_at: p.updated_at ? new Date(p.updated_at as any).toISOString() : '',
+      closed_at: p.closed_at ? new Date(p.closed_at).toISOString() : null,
+      created_at: p.created_at ? new Date(p.created_at).toISOString() : '',
+      updated_at: p.updated_at ? new Date(p.updated_at).toISOString() : '',
     })) as FiscalPeriodResponse[];
   }
 

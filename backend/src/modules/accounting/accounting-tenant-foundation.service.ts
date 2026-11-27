@@ -211,7 +211,7 @@ export class AccountingTenantFoundationService {
           is_tax: account.isTax,
           description_ar: '',
           sort_order: account.sortOrder,
-        } as any)
+        })
         .onConflict((oc) => oc.columns(['tenant_id', 'code']).doNothing())
         .execute();
     }
@@ -253,7 +253,7 @@ export class AccountingTenantFoundationService {
           id: 1,
           ...mapping,
           manufacturing_overhead_account_id: null,
-        } as any)
+        })
         .onConflict((oc) => oc.columns(['tenant_id', 'id']).doNothing())
         .execute();
       return;

@@ -438,7 +438,7 @@ export class VanSalesService {
   }
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   private async resolveSystemAuthContext(

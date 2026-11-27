@@ -76,7 +76,7 @@ export class PdcPostingService {
 
     if (!cheque) return { posted: false, journalEntryId: null };
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = pdcBookAmount(cheque as any, bookDigits);
+    const amount = pdcBookAmount(cheque, bookDigits);
     if (amount <= 0) return { posted: false, journalEntryId: null };
 
     const notesInSafeId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1122');
@@ -113,7 +113,7 @@ export class PdcPostingService {
         sourceId: chequeId,
         tenantId: scope.tenantId,
         accountId: scope.accountId,
-        entryDate: (cheque as any).last_action_date ? new Date((cheque as any).last_action_date) : cheque.issue_date ? new Date(cheque.issue_date) : new Date(),
+        entryDate: (cheque).last_action_date ? new Date((cheque).last_action_date) : cheque.issue_date ? new Date(cheque.issue_date) : new Date(),
         description: `قيد استلام ورقة قبض #${cheque.cheque_number} من ${cheque.partner_name}`,
         branchId: null,
         locationId: null,
@@ -151,7 +151,7 @@ export class PdcPostingService {
 
     if (!cheque) return { posted: false, journalEntryId: null };
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = pdcBookAmount(cheque as any, bookDigits);
+    const amount = pdcBookAmount(cheque, bookDigits);
     if (amount <= 0) return { posted: false, journalEntryId: null };
 
     const notesUnderCollId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1121');
@@ -186,7 +186,7 @@ export class PdcPostingService {
         sourceId: chequeId,
         tenantId: scope.tenantId,
         accountId: scope.accountId,
-        entryDate: (cheque as any).last_action_date ? new Date((cheque as any).last_action_date) : cheque.deposit_date ? new Date(cheque.deposit_date) : new Date(),
+        entryDate: (cheque).last_action_date ? new Date((cheque).last_action_date) : cheque.deposit_date ? new Date(cheque.deposit_date) : new Date(),
         description: `قيد إيداع ورقة قبض برسم التحصيل #${cheque.cheque_number}`,
         branchId: null,
         locationId: null,
@@ -224,7 +224,7 @@ export class PdcPostingService {
 
     if (!cheque) return { posted: false, journalEntryId: null };
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = pdcBookAmount(cheque as any, bookDigits);
+    const amount = pdcBookAmount(cheque, bookDigits);
     if (amount <= 0) return { posted: false, journalEntryId: null };
 
     // Debit Bank account
@@ -242,7 +242,7 @@ export class PdcPostingService {
       : await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1122');
 
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
-    const settlementAmount = toBookMoney((cheque as any).settlement_base_amount ?? amount);
+    const settlementAmount = toBookMoney((cheque).settlement_base_amount ?? amount);
     const bank = await queryable.selectFrom('accounting_accounts').select('id').where('tenant_id', '=', scope.tenantId).where('id', '=', debitBankId).where('is_active', '=', true).where('is_cash_bank', '=', true).executeTakeFirst();
     if (!bank) throw new AppError('Invalid cheque settlement bank', 'INVALID_CHEQUE_BANK', 400);
     const lines: JournalLineDraft[] = [];
@@ -281,7 +281,7 @@ export class PdcPostingService {
         sourceId: chequeId,
         tenantId: scope.tenantId,
         accountId: scope.accountId,
-        entryDate: (cheque as any).last_action_date ? new Date((cheque as any).last_action_date) : cheque.cleared_date ? new Date(cheque.cleared_date) : new Date(),
+        entryDate: (cheque).last_action_date ? new Date((cheque).last_action_date) : cheque.cleared_date ? new Date(cheque.cleared_date) : new Date(),
         description: `قيد تحصيل ورقة قبض #${cheque.cheque_number} بحساب البنك`,
         branchId: null,
         locationId: null,
@@ -319,7 +319,7 @@ export class PdcPostingService {
 
     if (!cheque) return { posted: false, journalEntryId: null };
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = pdcBookAmount(cheque as any, bookDigits);
+    const amount = pdcBookAmount(cheque, bookDigits);
     if (amount <= 0) return { posted: false, journalEntryId: null };
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -393,7 +393,7 @@ export class PdcPostingService {
         sourceId: chequeId,
         tenantId: scope.tenantId,
         accountId: scope.accountId,
-        entryDate: (cheque as any).last_action_date ? new Date((cheque as any).last_action_date) : cheque.bounced_date ? new Date(cheque.bounced_date) : new Date(),
+        entryDate: (cheque).last_action_date ? new Date((cheque).last_action_date) : cheque.bounced_date ? new Date(cheque.bounced_date) : new Date(),
         description: `قيد ارتداد ورقة قبض #${cheque.cheque_number} للعميل ${cheque.partner_name}`,
         branchId: null,
         locationId: null,
@@ -431,7 +431,7 @@ export class PdcPostingService {
 
     if (!cheque) return { posted: false, journalEntryId: null };
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = pdcBookAmount(cheque as any, bookDigits);
+    const amount = pdcBookAmount(cheque, bookDigits);
     if (amount <= 0) return { posted: false, journalEntryId: null };
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -470,7 +470,7 @@ export class PdcPostingService {
         sourceId: chequeId,
         tenantId: scope.tenantId,
         accountId: scope.accountId,
-        entryDate: (cheque as any).last_action_date ? new Date((cheque as any).last_action_date) : new Date(),
+        entryDate: (cheque).last_action_date ? new Date((cheque).last_action_date) : new Date(),
         description: `قيد تظهير ورقة قبض #${cheque.cheque_number} للمورد`,
         branchId: null,
         locationId: null,
@@ -508,7 +508,7 @@ export class PdcPostingService {
 
     if (!cheque) return { posted: false, journalEntryId: null };
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = pdcBookAmount(cheque as any, bookDigits);
+    const amount = pdcBookAmount(cheque, bookDigits);
     if (amount <= 0) return { posted: false, journalEntryId: null };
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -546,7 +546,7 @@ export class PdcPostingService {
         sourceId: chequeId,
         tenantId: scope.tenantId,
         accountId: scope.accountId,
-        entryDate: (cheque as any).last_action_date ? new Date((cheque as any).last_action_date) : cheque.issue_date ? new Date(cheque.issue_date) : new Date(),
+        entryDate: (cheque).last_action_date ? new Date((cheque).last_action_date) : cheque.issue_date ? new Date(cheque.issue_date) : new Date(),
         description: `قيد إصدار ورقة دفع #${cheque.cheque_number} للمورد ${cheque.partner_name}`,
         branchId: null,
         locationId: null,
@@ -584,7 +584,7 @@ export class PdcPostingService {
 
     if (!cheque) return { posted: false, journalEntryId: null };
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = pdcBookAmount(cheque as any, bookDigits);
+    const amount = pdcBookAmount(cheque, bookDigits);
     if (amount <= 0) return { posted: false, journalEntryId: null };
 
     const notesPayableId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2135');
@@ -597,7 +597,7 @@ export class PdcPostingService {
     }
 
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
-    const settlementAmount = toBookMoney((cheque as any).settlement_base_amount ?? amount);
+    const settlementAmount = toBookMoney((cheque).settlement_base_amount ?? amount);
     const bank = await queryable.selectFrom('accounting_accounts').select('id').where('tenant_id', '=', scope.tenantId).where('id', '=', bankId).where('is_active', '=', true).where('is_cash_bank', '=', true).executeTakeFirst();
     if (!bank) throw new AppError('Invalid cheque settlement bank', 'INVALID_CHEQUE_BANK', 400);
     const lines: JournalLineDraft[] = [];
@@ -636,7 +636,7 @@ export class PdcPostingService {
         sourceId: chequeId,
         tenantId: scope.tenantId,
         accountId: scope.accountId,
-        entryDate: (cheque as any).last_action_date ? new Date((cheque as any).last_action_date) : cheque.cleared_date ? new Date(cheque.cleared_date) : new Date(),
+        entryDate: (cheque).last_action_date ? new Date((cheque).last_action_date) : cheque.cleared_date ? new Date(cheque.cleared_date) : new Date(),
         description: `قيد صرف ورقة دفع #${cheque.cheque_number} من البنك`,
         branchId: null,
         locationId: null,
@@ -674,7 +674,7 @@ export class PdcPostingService {
 
     if (!cheque) return { posted: false, journalEntryId: null };
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = pdcBookAmount(cheque as any, bookDigits);
+    const amount = pdcBookAmount(cheque, bookDigits);
     if (amount <= 0) return { posted: false, journalEntryId: null };
 
     const notesPayableId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2135');
@@ -712,7 +712,7 @@ export class PdcPostingService {
         sourceId: chequeId,
         tenantId: scope.tenantId,
         accountId: scope.accountId,
-        entryDate: (cheque as any).last_action_date ? new Date((cheque as any).last_action_date) : cheque.bounced_date ? new Date(cheque.bounced_date) : new Date(),
+        entryDate: (cheque).last_action_date ? new Date((cheque).last_action_date) : cheque.bounced_date ? new Date(cheque.bounced_date) : new Date(),
         description: `قيد ارتداد ورقة دفع #${cheque.cheque_number} وإعادة المديونية للمورد ${cheque.partner_name}`,
         branchId: null,
         locationId: null,
@@ -766,7 +766,7 @@ export class PdcPostingService {
 
     if (!cheque || !cheque.journal_entry_id) return { posted: false, journalEntryId: null };
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = pdcBookAmount(cheque as any, bookDigits);
+    const amount = pdcBookAmount(cheque, bookDigits);
     if (amount <= 0) return { posted: false, journalEntryId: null };
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -835,7 +835,7 @@ export class PdcPostingService {
       sourceId: chequeId,
       tenantId: scope.tenantId,
       accountId: scope.accountId,
-      entryDate: (cheque as any).last_action_date ? new Date((cheque as any).last_action_date) : new Date(),
+      entryDate: (cheque).last_action_date ? new Date((cheque).last_action_date) : new Date(),
       description: `قيد ${actionText} شيك #${cheque.cheque_number} (${cheque.type === 'receivable' ? 'قبض' : 'دفع'}) لـ ${cheque.partner_name}`,
       reversalOfEntryId,
       branchId: null,
@@ -866,7 +866,7 @@ export class PdcPostingService {
 
     if (!cheque) return { posted: false, journalEntryId: null };
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
-    const amount = pdcBookAmount(cheque as any, bookDigits);
+    const amount = pdcBookAmount(cheque, bookDigits);
     if (amount <= 0) return { posted: false, journalEntryId: null };
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -947,7 +947,7 @@ export class PdcPostingService {
       sourceId: chequeId,
       tenantId: scope.tenantId,
       accountId: scope.accountId,
-      entryDate: (cheque as any).last_action_date ? new Date((cheque as any).last_action_date) : new Date(),
+      entryDate: (cheque).last_action_date ? new Date((cheque).last_action_date) : new Date(),
       description,
       branchId: null,
       locationId: null,

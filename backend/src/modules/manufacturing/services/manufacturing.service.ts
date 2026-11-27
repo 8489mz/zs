@@ -142,18 +142,15 @@ export class ManufacturingService {
 
       bomId = Number(bom.id);
 
-      const lines = payload.lines.map(
-        (line) =>
-          ({
-            bom_id: bomId,
-            component_product_id: line.componentProductId,
-            quantity: line.quantity,
-            unit_name: line.unitName,
-            unit_multiplier: line.unitMultiplier,
-            expected_cost: line.expectedCost,
-            waste_percentage: line.wastePercentage || 0,
-          }) as any,
-      );
+      const lines = payload.lines.map((line) => ({
+        bom_id: bomId,
+        component_product_id: line.componentProductId,
+        quantity: line.quantity,
+        unit_name: line.unitName,
+        unit_multiplier: line.unitMultiplier,
+        expected_cost: line.expectedCost,
+        waste_percentage: line.wastePercentage || 0,
+      }));
 
       await trx.insertInto('manufacturing_bom_lines').values(lines).execute();
     });
@@ -249,7 +246,7 @@ export class ManufacturingService {
           quantity: payload.quantity,
           expected_cost: totalExpectedCost,
           overhead_cost: overheadCost,
-        } as any)
+        })
         .where('id', '=', id)
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .execute();
@@ -261,18 +258,15 @@ export class ManufacturingService {
         )
         .execute();
 
-      const lines = payload.lines.map(
-        (line) =>
-          ({
-            bom_id: id,
-            component_product_id: line.componentProductId,
-            quantity: line.quantity,
-            unit_name: line.unitName,
-            unit_multiplier: line.unitMultiplier,
-            expected_cost: line.expectedCost,
-            waste_percentage: line.wastePercentage || 0,
-          }) as any,
-      );
+      const lines = payload.lines.map((line) => ({
+        bom_id: id,
+        component_product_id: line.componentProductId,
+        quantity: line.quantity,
+        unit_name: line.unitName,
+        unit_multiplier: line.unitMultiplier,
+        expected_cost: line.expectedCost,
+        waste_percentage: line.wastePercentage || 0,
+      }));
 
       await trx.insertInto('manufacturing_bom_lines').values(lines).execute();
     });
@@ -557,7 +551,7 @@ export class ManufacturingService {
               total_cost: opTotalCost,
               status: 'completed',
               notes: op.notes || null,
-            } as any)
+            })
             .execute();
         }
       }
@@ -633,7 +627,7 @@ export class ManufacturingService {
           produced_quantity: qtyToProduce,
           total_cost: totalCost,
           updated_at: sql`NOW()`,
-        } as any)
+        })
         .where('id', '=', id)
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .execute();
@@ -679,7 +673,7 @@ export class ManufacturingService {
           status: dto.status || 'active',
           notes: dto.notes ?? null,
           updated_at: sql`NOW()`,
-        } as any)
+        })
         .where('id', '=', id)
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .returningAll()
@@ -701,7 +695,7 @@ export class ManufacturingService {
         time_efficiency: dto.timeEfficiency ?? 100,
         status: dto.status || 'active',
         notes: dto.notes ?? null,
-      } as any)
+      })
       .returningAll()
       .executeTakeFirstOrThrow();
 
@@ -887,7 +881,7 @@ export class ManufacturingService {
             total_cost: 0,
             notes: payload.notes || null,
             created_by: auth.userId ? Number(auth.userId) : null,
-          } as any)
+          })
           .returning('id')
           .executeTakeFirstOrThrow();
 

@@ -28,7 +28,7 @@ export class QuotationsService {
     // instances in specs/harnesses get a real one over the same db.
     idempotency?: IdempotencyService,
   ) {
-    this.idempotency = idempotency ?? new IdempotencyService(db as any);
+    this.idempotency = idempotency ?? new IdempotencyService(db);
   }
 
   private readonly idempotency: IdempotencyService;
@@ -217,7 +217,7 @@ export class QuotationsService {
           tax_amount: dto.taxAmount !== undefined ? dto.taxAmount : existing.tax_amount,
           total_amount: dto.totalAmount !== undefined ? dto.totalAmount : existing.total_amount,
           valid_until: dto.validUntil ? new Date(dto.validUntil) : existing.valid_until,
-          status: (dto.status as any) || existing.status,
+          status: dto.status || existing.status,
           notes: dto.notes !== undefined ? dto.notes?.trim() || null : existing.notes,
           terms_conditions:
             dto.termsConditions !== undefined ? dto.termsConditions?.trim() || null : existing.terms_conditions,
@@ -329,7 +329,7 @@ export class QuotationsService {
       .updateTable('quotations')
       .set({ status: 'converting', updated_at: new Date() } as any)
       .where('id', '=', id)
-      .where(claimFilter as any)
+      .where(claimFilter)
       .where('tenant_id', '=', scope.tenantId)
       .returningAll()
       .executeTakeFirst();
@@ -453,7 +453,7 @@ export class QuotationsService {
         requestHash: idemHash,
       });
       if (reservation?.status === 'committed') {
-        const saleId = Number(reservation.documentId) || Number((reservation.responsePayload as any)?.saleId);
+        const saleId = Number(reservation.documentId) || Number(reservation.responsePayload?.saleId);
         if (!saleId) {
           throw new BadRequestException('تعذر تحديد فاتورة تحويل عرض السعر العالق؛ يلزم تدخل يدوي');
         }

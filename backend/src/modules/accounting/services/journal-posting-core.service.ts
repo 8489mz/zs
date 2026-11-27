@@ -517,7 +517,7 @@ export class JournalPostingCoreService {
     const entryId = Number(inserted.id);
     await queryable
       .updateTable('journal_entries')
-      .set({ entry_no: formatJournalEntryNo(journalNo), updated_at: sql`NOW()` } as any)
+      .set({ entry_no: formatJournalEntryNo(journalNo), updated_at: sql`NOW()` })
       .where('id', '=', entryId)
       .where('tenant_id', '=', params.tenantId)
       .execute();
@@ -525,7 +525,7 @@ export class JournalPostingCoreService {
     if (params.reversalOfEntryId && Number(params.reversalOfEntryId) > 0) {
       await queryable
         .updateTable('journal_entries')
-        .set({ reversed_by_entry_id: entryId, updated_at: sql`NOW()` } as any)
+        .set({ reversed_by_entry_id: entryId, updated_at: sql`NOW()` })
         .where('id', '=', Number(params.reversalOfEntryId))
         .where('tenant_id', '=', params.tenantId)
         .execute();
@@ -546,7 +546,7 @@ export class JournalPostingCoreService {
             partner_id: line.partnerId,
             branch_id: line.branchId,
             location_id: line.locationId,
-          } as any))
+          }))
         )
         .execute();
 

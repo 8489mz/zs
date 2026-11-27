@@ -99,7 +99,7 @@ export class MaritimeFreightCarrierDisputesService {
           dispute_reason: dto.reason?.trim() || 'فروق تسعير عن التعرفة المتعاقد عليها',
           dispute_status: 'submitted',
           created_by: auth.userId ? Number(auth.userId) : null,
-        } as any)
+        })
         .returningAll()
         .execute();
 
@@ -114,7 +114,7 @@ export class MaritimeFreightCarrierDisputesService {
         .updateTable('maritime_carrier_disputes')
         .set({ dispute_number: finalNumber })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', inserted.id as any)
+        .where('id', '=', inserted.id)
         .returningAll()
         .execute();
 
@@ -187,7 +187,7 @@ export class MaritimeFreightCarrierDisputesService {
         .selectFrom('maritime_jobs')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', String(dispute.job_id) as any)
+        .where('id', '=', String(dispute.job_id))
         .forUpdate()
         .executeTakeFirstOrThrow();
       if (creditAmount > 0) {
@@ -300,7 +300,7 @@ export class MaritimeFreightCarrierDisputesService {
           resolved_by: auth.userId || null,
           resolved_at: new Date(),
           updated_at: new Date(),
-        } as any)
+        })
         .where('tenant_id', '=', tenantId)
         .where('id', '=', dispute.id)
         .returningAll()
@@ -364,7 +364,7 @@ export class MaritimeFreightCarrierDisputesService {
         'mrc.total_freight_cost as rate_card_unit_cost',
       ])
       .where('mci.tenant_id', '=', tenantId)
-      .where('mci.job_id', '=', Number(jobId) as any)
+      .where('mci.job_id', '=', Number(jobId))
       .orderBy('mci.id', 'desc')
       .execute();
 
@@ -481,7 +481,7 @@ export class MaritimeFreightCarrierDisputesService {
     }
 
     if (filters?.shippingLineId) {
-      query = query.where('mci.shipping_line_id', '=', Number(filters.shippingLineId) as any);
+      query = query.where('mci.shipping_line_id', '=', Number(filters.shippingLineId));
     }
 
     if (filters?.search?.trim()) {

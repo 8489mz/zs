@@ -27,7 +27,7 @@ export class RecordFieldCollectionSlice {
   constructor(private readonly deps: VanCollectionsAndSwapsDeps) {}
 
   private get anyDb(): any {
-    return this.deps.db as any;
+    return this.deps.db;
   }
 
   async recordFieldCollectionInternal(
@@ -264,7 +264,7 @@ export class RecordFieldCollectionSlice {
         }
         const custCoords = extractCoordinatesFromCustomerLocation({
           metadata: custMeta,
-          locationUrl: (lockedCust as any).location_url || custMeta?.location_url || custMeta?.locationUrl,
+          locationUrl: lockedCust.location_url || custMeta?.location_url || custMeta?.locationUrl,
         });
         if (custCoords && isValidCoordinatePair(custCoords.lat, custCoords.lng)) {
           const geo = evaluateGeofenceCompliance({

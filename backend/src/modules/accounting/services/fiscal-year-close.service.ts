@@ -130,7 +130,7 @@ export class FiscalYearCloseService {
       .where('jel.tenant_id', '=', tenantId)
       .where('je.status', '=', 'posted')
       .where('je.source_type', 'not in', ['fiscal_year_closing', 'fiscal_year_reopen'])
-      .where('je.entry_date', '>=', startDate as any)
+      .where('je.entry_date', '>=', startDate)
       .where('je.entry_date', '<', nextAccountingDay(endDate))
       .groupBy('jel.account_id')
       .execute();
@@ -466,8 +466,8 @@ export class FiscalYearCloseService {
           .updateTable('journal_entries')
           .set({
             entry_no: officialEntryNo,
-            updated_at: sql`NOW()` as any,
-          } as any)
+            updated_at: sql`NOW()`,
+          })
           .where('id', '=', entryId)
           .where('tenant_id', '=', tenantId)
           .execute();
@@ -483,10 +483,10 @@ export class FiscalYearCloseService {
           total_revenue: recomputed.totalRevenue,
           total_expense: recomputed.totalExpense,
           retained_earnings_account_id: retainedEarningsAccountId,
-          closed_at: sql`NOW()` as any,
+          closed_at: sql`NOW()`,
           closed_by: userId,
           closing_notes: dto.notes ? String(dto.notes).trim() : null,
-          updated_at: sql`NOW()` as any,
+          updated_at: sql`NOW()`,
         })
         .where('id', '=', fy.id)
         .where('tenant_id', '=', tenantId)
@@ -525,8 +525,8 @@ export class FiscalYearCloseService {
           await trx
             .updateTable('accounting_settings')
             .set({
-              lock_date_all: endDate as any,
-              updated_at: sql`NOW()` as any,
+              lock_date_all: endDate,
+              updated_at: sql`NOW()`,
             })
             .where('tenant_id', '=', tenantId)
             .where('id', '=', 1)
@@ -538,14 +538,14 @@ export class FiscalYearCloseService {
           .values({
             id: 1,
             tenant_id: tenantId,
-            lock_date_all: endDate as any,
-            updated_at: sql`NOW()` as any,
-          } as any)
+            lock_date_all: endDate,
+            updated_at: sql`NOW()`,
+          })
           .onConflict((oc) =>
             oc.columns(['tenant_id', 'id']).doUpdateSet({
-              lock_date_all: endDate as any,
-              updated_at: sql`NOW()` as any,
-            } as any),
+              lock_date_all: endDate,
+              updated_at: sql`NOW()`,
+            }),
           )
           .execute();
       }

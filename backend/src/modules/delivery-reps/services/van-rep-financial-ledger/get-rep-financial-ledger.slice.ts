@@ -12,7 +12,7 @@ export class GetRepFinancialLedgerSlice {
   constructor(private readonly deps: VanRepFinancialLedgerDeps) {}
 
   private get anyDb(): any {
-    return this.deps.db as any;
+    return this.deps.db;
   }
 
   /**

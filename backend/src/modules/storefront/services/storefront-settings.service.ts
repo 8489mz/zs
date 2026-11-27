@@ -92,7 +92,7 @@ export class StorefrontSettingsService {
     } catch {}
 
     const rawCurrency = (settings.get('currency') || 'EGP').toUpperCase();
-    let countryCode = ((tenant as any)?.country_code || settings.get('country') || '').toUpperCase();
+    let countryCode = (tenant?.country_code || settings.get('country') || '').toUpperCase();
     if (!countryCode) {
       if (rawCurrency === 'KWD') countryCode = 'KW';
       else if (rawCurrency === 'SAR') countryCode = 'SA';
@@ -437,7 +437,7 @@ export class StorefrontSettingsService {
     await this.db
       .updateTable('products')
       .set({
-        metadata: JSON.stringify(updatedMeta) as any,
+        metadata: JSON.stringify(updatedMeta),
         updated_at: new Date(),
       })
       .where(sql<boolean>`tenant_id = ${tenantId}`)

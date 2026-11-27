@@ -277,7 +277,7 @@ export class PurchasesWriteCustomerPaymentsService {
             created_by: auth.userId,
             tenant_id: scope.tenantId,
             account_id: scope.accountId,
-          } as any)
+          })
           .returning('id')
           .executeTakeFirstOrThrow();
 
@@ -397,7 +397,7 @@ export class PurchasesWriteCustomerPaymentsService {
               payment_status: newPaymentStatus,
               paid_at: newPaymentStatus === 'paid' ? sql`NOW()` : null,
               updated_at: sql`NOW()`,
-            } as any)
+            })
             .where('id', '=', String(targetJobId))
             .where('tenant_id', '=', scope.tenantId)
             .where('customer_id', '=', customer.id)
@@ -413,7 +413,7 @@ export class PurchasesWriteCustomerPaymentsService {
               location: 'الخزينة والحسابات',
               notes: `تم ربط وتخصيص دفعة نقدية بقيمة ${amount} ج.م من سند القبض ${docNo} للشحنة ${verifiedJob.job_number}`,
               recorded_by: auth.userId ? Number(auth.userId) : null,
-            } as any)
+            })
             .execute();
         }
 

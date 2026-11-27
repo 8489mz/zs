@@ -91,7 +91,7 @@ export class SalesOrdersConversion {
     // Atomic state transition: confirmed -> converting to prevent concurrent duplicate conversion (ZS-075)
     const locked = await this.db
       .updateTable('sales_orders')
-      .set({ status: 'converting', updated_at: new Date() } as any)
+      .set({ status: 'converting', updated_at: new Date() })
       .where('id', '=', id)
       .where('status', '=', 'confirmed')
       .where('tenant_id', '=', scope.tenantId)
@@ -133,7 +133,7 @@ export class SalesOrdersConversion {
         await this.revertConvertingClaim(id, scope);
         const relocked = await this.db
           .updateTable('sales_orders')
-          .set({ status: 'converting', updated_at: new Date() } as any)
+          .set({ status: 'converting', updated_at: new Date() })
           .where('id', '=', id)
           .where('status', '=', 'confirmed')
           .where('tenant_id', '=', scope.tenantId)
@@ -256,7 +256,7 @@ export class SalesOrdersConversion {
         requestHash: idemHash,
       });
       if (reservation?.status === 'committed') {
-        const saleId = Number(reservation.documentId) || Number((reservation.responsePayload as any)?.saleId);
+        const saleId = Number(reservation.documentId) || Number(reservation.responsePayload?.saleId);
         if (!saleId) {
           throw new BadRequestException('تعذر تحديد فاتورة تحويل أمر البيع العالق؛ يلزم تدخل يدوي');
         }

@@ -70,7 +70,7 @@ export class AccountingCurrenciesService {
               exchange_rate: c.rate,
               is_base: c.isBase,
               symbol: c.symbol,
-            } as any)
+            })
             .onConflict((oc) => oc.columns(['tenant_id', 'currency_code']).doNothing())
             .execute();
         }
@@ -131,7 +131,7 @@ export class AccountingCurrenciesService {
           exchange_rate: rate,
           is_base: isBase,
           symbol,
-        } as any)
+        })
         .onConflict((oc) =>
           oc.columns(['tenant_id', 'currency_code']).doUpdateSet({
             currency_name: name,

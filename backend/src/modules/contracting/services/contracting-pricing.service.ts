@@ -40,7 +40,7 @@ export class ContractingPricingService {
 
   async getMasterPriceList(auth: AuthContext, query?: { itemType?: string; category?: string; search?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
+    let q = (this.db)
       .selectFrom('contracting_master_price_list')
       .selectAll()
       .where('tenant_id', '=', tenantId);
@@ -78,7 +78,7 @@ export class ContractingPricingService {
 
   async createMasterPriceItem(auth: AuthContext, dto: CreateMasterPriceItemDto) {
     const { tenantId } = requireTenantScope(auth);
-    const [inserted] = await (this.db as any)
+    const [inserted] = await (this.db)
       .insertInto('contracting_master_price_list')
       .values({
         tenant_id: tenantId,
@@ -116,11 +116,11 @@ export class ContractingPricingService {
     if (dto.category !== undefined) updates.category = dto.category;
     if (dto.notes !== undefined) updates.notes = dto.notes;
 
-    const [updated] = await (this.db as any)
+    const [updated] = await (this.db)
       .updateTable('contracting_master_price_list')
       .set(updates)
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -144,17 +144,17 @@ export class ContractingPricingService {
 
   async deleteMasterPriceItem(auth: AuthContext, id: string) {
     const { tenantId } = requireTenantScope(auth);
-    await (this.db as any)
+    await (this.db)
       .deleteFrom('contracting_master_price_list')
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .execute();
     return { success: true };
   }
 
   async getEngineeringConstants(auth: AuthContext) {
     const { tenantId } = requireTenantScope(auth);
-    let rows = await (this.db as any)
+    let rows = await (this.db)
       .selectFrom('contracting_engineering_constants')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -163,7 +163,7 @@ export class ContractingPricingService {
 
     if (rows.length === 0) {
       await this.seedDefaultEngineeringConstants(tenantId);
-      rows = await (this.db as any)
+      rows = await (this.db)
         .selectFrom('contracting_engineering_constants')
         .selectAll()
         .where('tenant_id', '=', tenantId)
@@ -584,7 +584,7 @@ export class ContractingPricingService {
     ];
 
     for (const c of defaultConstants) {
-      await (this.db as any)
+      await (this.db)
         .insertInto('contracting_engineering_constants')
         .values({
           tenant_id: tenantId,
@@ -604,7 +604,7 @@ export class ContractingPricingService {
 
   async createEngineeringConstant(auth: AuthContext, dto: CreateEngineeringConstantDto) {
     const { tenantId } = requireTenantScope(auth);
-    const [inserted] = await (this.db as any)
+    const [inserted] = await (this.db)
       .insertInto('contracting_engineering_constants')
       .values({
         tenant_id: tenantId,
@@ -625,7 +625,7 @@ export class ContractingPricingService {
 
   async autoPriceBoqItem(auth: AuthContext, dto: AutoPriceBoqItemDto) {
     const { tenantId } = requireTenantScope(auth);
-    const constant = await (this.db as any)
+    const constant = await (this.db)
       .selectFrom('contracting_engineering_constants')
       .selectAll()
       .where('tenant_id', '=', tenantId)

@@ -61,7 +61,7 @@ export class PartnerContactsLoyaltySlice {
         phone: payload.phone || null,
         email: payload.email || null,
         ...this.tenantFields(actor),
-      } as any)
+      })
       .returning(['id'])
       .execute();
     return this.listContacts(partnerType, partnerId, actor);
@@ -93,7 +93,7 @@ export class PartnerContactsLoyaltySlice {
         city: payload.city || null,
         address_line: payload.addressLine || null,
         ...this.tenantFields(actor),
-      } as any)
+      })
       .returning(['id'])
       .execute();
     return this.listAddresses(partnerType, partnerId, actor);
@@ -123,7 +123,7 @@ export class PartnerContactsLoyaltySlice {
     await this.db.transaction().execute(async (trx) => {
       await trx
         .updateTable('customers')
-        .set({ loyalty_points: newBalance, updated_at: now } as any)
+        .set({ loyalty_points: newBalance, updated_at: now })
         .where('id', '=', id)
         .where(this.tenantPredicate(actor))
         .execute();
@@ -140,7 +140,7 @@ export class PartnerContactsLoyaltySlice {
           sale_id: null,
           notes: notes?.trim() || null,
           created_at: now,
-        } as any)
+        })
         .execute();
     });
 

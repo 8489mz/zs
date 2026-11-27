@@ -83,7 +83,7 @@ export class ApproveFieldReturnSlice {
    */
   async approveFieldReturn(tenantId: string, accountId: string, returnId: number, approvedByUserId: number) {
     return this.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
       const ret = await trxAny
         .selectFrom('van_field_returns')
         .selectAll()
@@ -138,7 +138,7 @@ export class ApproveFieldReturnSlice {
       const totalAmount = Number(ret.total_amount || 0);
       const isDamaged = ret.return_reason === 'damaged' || ret.return_reason === 'expired';
       const branchId = trip.vanBranchId ? Number(trip.vanBranchId) : null;
-      const refundMethod: 'credit' | 'cash' = (ret as any).refund_method === 'cash' ? 'cash' : 'credit';
+      const refundMethod: 'credit' | 'cash' = ret.refund_method === 'cash' ? 'cash' : 'credit';
 
       if (refundMethod === 'cash') {
         // Custody guard (van F5): this check runs inside the transaction
@@ -375,7 +375,7 @@ export class ApproveFieldReturnSlice {
           .where('tenant_id', '=', tenantId)
           .forUpdate()
           .executeTakeFirst();
-        const balanceBefore = Number((custRow as any)?.balance || 0);
+        const balanceBefore = Number(custRow?.balance || 0);
         if (totalAmount > balanceBefore + tolerance) {
           throw new AppError(
             `رصيد العميل الحالي (${roundMoney(balanceBefore, moneyDigits)}) أقل من قيمة المرتجع كائتمان (${roundMoney(totalAmount, moneyDigits)}) — لا يمكن أن يصبح رصيد العميل سالباً نتيجة مرتجع`,

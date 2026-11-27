@@ -244,7 +244,7 @@ export class WarehouseBinsService {
           quantity: args.quantity,
           is_primary: args.isPrimary,
           updated_at: sql`NOW()`,
-        } as any)
+        })
         .where('id', '=', args.existingId)
         .where('tenant_id', '=', args.scope.tenantId)
         .execute();
@@ -578,7 +578,7 @@ export class WarehouseBinsService {
           barcode: product.barcode || '',
           stockQty: Number(product.stock_qty || 0),
           binLocation: product.bin_location || '',
-          primaryBinId: (product as any).primary_bin_id ? Number((product as any).primary_bin_id) : null,
+          primaryBinId: product.primary_bin_id ? Number(product.primary_bin_id) : null,
         },
         allocatedBins: bins.map((b) => ({
           binId: Number(b.binId),
@@ -700,7 +700,7 @@ export class WarehouseBinsService {
             primary_bin_id: dto.binId,
             bin_location: bin.code,
             updated_at: sql`NOW()`,
-          } as any)
+          })
           .where('id', '=', dto.productId)
           .where('tenant_id', '=', scope.tenantId)
           .execute();

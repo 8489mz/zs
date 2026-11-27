@@ -186,7 +186,7 @@ export class CreateChequeSlice {
           deposit_bank_id: dto.depositBankId || null,
           notes: dto.notes?.trim() || null,
           created_by: authContext.userId ? Number(authContext.userId) : null,
-        } as any)
+        })
         .returningAll()
         .executeTakeFirstOrThrow();
 

@@ -326,7 +326,7 @@ export class StorefrontOrderConvertService {
                 metadata: { auto_created_store_rep: true },
                 tenant_id: tenantId,
                 account_id: String(accountId || 1),
-              } as any)
+              })
               .returning(['id', 'name'])
               .execute();
             activeRep = insertedReps[0];
@@ -434,7 +434,7 @@ export class StorefrontOrderConvertService {
         throw err;
       }
       const saleId = Number(
-        (saleResult as any)?.id || (saleResult as any)?.sale?.id || (typeof saleResult === 'number' ? saleResult : 0),
+        saleResult?.id || saleResult?.sale?.id || (typeof saleResult === 'number' ? saleResult : 0),
       );
 
       // Update order with saleId and status: 'shipped' for delivery, or 'delivered' for pickup/dine-in

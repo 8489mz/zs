@@ -66,7 +66,7 @@ export function mapPurchaseRows(
     shippingAddressId: entry.shipping_address_id ? String(entry.shipping_address_id) : '',
     costCenterId: entry.cost_center_id ? String(entry.cost_center_id) : '',
     projectId: entry.project_id ? String(entry.project_id) : '',
-    importProjectId: (entry as any).import_project_id ? String((entry as any).import_project_id) : '',
+    importProjectId: entry.import_project_id ? String(entry.import_project_id) : '',
     termsTemplate: entry.terms_template || '',
     items: byPurchase.get(String(entry.id)) || [],
     attachments: attachmentsByPurchase.get(String(entry.id)) || [],

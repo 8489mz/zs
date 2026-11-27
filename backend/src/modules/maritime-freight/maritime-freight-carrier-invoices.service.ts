@@ -276,7 +276,7 @@ export class MaritimeFreightCarrierInvoicesService {
       .where('valid_until', '>=', today);
 
     if (shippingLineId) {
-      query = query.where('shipping_line_id', '=', String(shippingLineId) as any);
+      query = query.where('shipping_line_id', '=', String(shippingLineId));
     }
 
     const containerType = dto.containerType || job.containers?.[0]?.container_type || '40HC';
@@ -445,9 +445,7 @@ export class MaritimeFreightCarrierInvoicesService {
               : null,
           carrier_name: dto.carrierName || job.shipping_line_name || 'Carrier',
           invoice_number: dto.invoiceNumber.trim(),
-          invoice_date: dto.invoiceDate
-            ? (dto.invoiceDate as any)
-            : ((await resolveBusinessDateKey(trx, tenantId, new Date())) as any),
+          invoice_date: dto.invoiceDate ? dto.invoiceDate : await resolveBusinessDateKey(trx, tenantId, new Date()),
           currency,
           total_invoiced_amount: totalAmount,
           ocean_freight: Number(dto.oceanFreight || 0),
@@ -502,7 +500,7 @@ export class MaritimeFreightCarrierInvoicesService {
         .selectFrom('maritime_carrier_invoices')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', Number(invoiceId) as any)
+        .where('id', '=', Number(invoiceId))
         .forUpdate()
         .executeTakeFirst();
 
@@ -615,7 +613,7 @@ export class MaritimeFreightCarrierInvoicesService {
           updated_at: sql`NOW()`,
         })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', Number(invoiceId) as any)
+        .where('id', '=', Number(invoiceId))
         .returningAll()
         .execute();
 

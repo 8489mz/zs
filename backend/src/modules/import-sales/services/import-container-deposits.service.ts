@@ -232,7 +232,7 @@ export class ImportContainerDepositsService {
             sourceId: Number(deposit.serial_id),
             tenantId,
             accountId: tenantId,
-            entryDate: deposit.payment_date ? new Date(deposit.payment_date as any) : new Date(),
+            entryDate: deposit.payment_date ? new Date(deposit.payment_date) : new Date(),
             description: `سداد تأمين حاوية #${dto.containerNo} للخط الملاحي ${dto.shippingLine}`,
             branchId: null,
             locationId: null,
@@ -461,7 +461,7 @@ export class ImportContainerDepositsService {
         sourceId: Number(refundEvent.serial_id),
         tenantId,
         accountId: tenantId,
-        entryDate: new Date(dto.actualReturnDate as any),
+        entryDate: new Date(dto.actualReturnDate),
         description: `تسوية واسترداد تأمين حاوية #${deposit.container_no} من الخط الملاحي (مبلغ مسوى: ${callSettled})`,
         branchId: null,
         locationId: null,
@@ -642,7 +642,7 @@ export class ImportContainerDepositsService {
         // Read-path set sum (same acceptance set as the posting
         // resolver): a missing inventory role account leaves the
         // frozen value null instead of breaking the sheet.
-        const inventoryAccountIds = await this.eligibleRoleAccountIds(this.db as any, tenantId, 'inventory');
+        const inventoryAccountIds = await this.eligibleRoleAccountIds(this.db, tenantId, 'inventory');
         const invLines: any[] = inventoryAccountIds.length
           ? await this.db
               .selectFrom('journal_entry_lines')
@@ -661,12 +661,12 @@ export class ImportContainerDepositsService {
     let brokerVerifiedCount = 0;
     let brokerUnverifiedCount = 0;
     for (const e of brokerExpenses) {
-      const state = String((e as any).capitalization_state || 'unknown');
+      const state = String(e.capitalization_state || 'unknown');
       const slot = brokerByState.get(state) || { count: 0, amountEgp: 0 };
       slot.count += 1;
-      slot.amountEgp = roundMoney(slot.amountEgp + Number((e as any).amount_egp || 0), digits);
+      slot.amountEgp = roundMoney(slot.amountEgp + Number(e.amount_egp || 0), digits);
       brokerByState.set(state, slot);
-      if ((e as any).is_verified) brokerVerifiedCount += 1;
+      if (e.is_verified) brokerVerifiedCount += 1;
       else brokerUnverifiedCount += 1;
     }
     const brokerLinks: any[] = await this.db

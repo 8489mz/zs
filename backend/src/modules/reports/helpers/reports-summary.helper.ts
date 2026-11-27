@@ -683,8 +683,8 @@ export async function buildReportSummaryAggregates(args: {
   let salesReturnsTotal = 0;
   let purchaseReturnsTotal = 0;
   for (const r of returnsAggRows || []) {
-    const c = Number((r as any).count || 0);
-    const t = Number((r as any).total || 0);
+    const c = Number(r.count || 0);
+    const t = Number(r.total || 0);
     returnsCount += c;
     if (r.return_type === 'sale') {
       salesReturnCount += c;
@@ -695,8 +695,8 @@ export async function buildReportSummaryAggregates(args: {
     }
   }
 
-  const rawCogs = Number((rawCogsRow as any)?.raw_cogs || 0);
-  const returnedCogs = Number((returnedCogsRow as any)?.returned_cogs || 0);
+  const rawCogs = Number(rawCogsRow?.raw_cogs || 0);
+  const returnedCogs = Number(returnedCogsRow?.returned_cogs || 0);
   // Return COGS can exceed new-sale COGS in a quiet period; do not clamp it away.
   const cogsOverride = rawCogs - returnedCogs;
 
@@ -708,35 +708,33 @@ export async function buildReportSummaryAggregates(args: {
   }));
 
   const countsOverride = {
-    salesCount: Number((salesAggRow as any)?.sales_count || 0),
-    servicesCount: Number((servicesAggRow as any)?.services_count || 0),
-    purchasesCount: Number((purchasesAggRow as any)?.purchases_count || 0),
-    expensesCount: Number((expensesAggRow as any)?.expenses_count || 0),
+    salesCount: Number(salesAggRow?.sales_count || 0),
+    servicesCount: Number(servicesAggRow?.services_count || 0),
+    purchasesCount: Number(purchasesAggRow?.purchases_count || 0),
+    expensesCount: Number(expensesAggRow?.expenses_count || 0),
     returnsCount,
     salesReturnCount,
     purchaseReturnCount,
   };
 
   const totalsOverride = {
-    salesTotal: Number((salesAggRow as any)?.sales_total || 0),
-    salesTaxTotal: Number((salesAggRow as any)?.sales_tax_total || 0),
-    salesReturnTaxTotal: Number((salesReturnTaxRow as any)?.tax_total || 0),
-    servicesTotal: Number((servicesAggRow as any)?.services_total || 0),
-    purchasesTotal: Number((purchasesAggRow as any)?.purchases_total || 0),
-    expensesTotal:
-      Number((expensesAggRow as any)?.expenses_total || 0) +
-      Number((operatingMaterialsRow as any)?.materials_total || 0),
-    operatingMaterialsTotal: Number((operatingMaterialsRow as any)?.materials_total || 0),
+    salesTotal: Number(salesAggRow?.sales_total || 0),
+    salesTaxTotal: Number(salesAggRow?.sales_tax_total || 0),
+    salesReturnTaxTotal: Number(salesReturnTaxRow?.tax_total || 0),
+    servicesTotal: Number(servicesAggRow?.services_total || 0),
+    purchasesTotal: Number(purchasesAggRow?.purchases_total || 0),
+    expensesTotal: Number(expensesAggRow?.expenses_total || 0) + Number(operatingMaterialsRow?.materials_total || 0),
+    operatingMaterialsTotal: Number(operatingMaterialsRow?.materials_total || 0),
     salesReturnsTotal,
     purchaseReturnsTotal,
-    salesDiscountsTotal: Number((salesAggRow as any)?.sales_discounts_total || 0),
-    cashIn: Number((treasuryAggRow as any)?.cash_in || 0),
-    cashOut: Number((treasuryAggRow as any)?.cash_out || 0),
+    salesDiscountsTotal: Number(salesAggRow?.sales_discounts_total || 0),
+    cashIn: Number(treasuryAggRow?.cash_in || 0),
+    cashOut: Number(treasuryAggRow?.cash_out || 0),
     cogs: cogsOverride,
-    freelanceCount: Number((salesAggRow as any)?.freelance_count || 0),
-    freelanceTotal: Number((salesAggRow as any)?.freelance_total || 0),
-    storeFleetCount: Number((salesAggRow as any)?.store_fleet_count || 0),
-    storeFleetTotal: Number((salesAggRow as any)?.store_fleet_total || 0),
+    freelanceCount: Number(salesAggRow?.freelance_count || 0),
+    freelanceTotal: Number(salesAggRow?.freelance_total || 0),
+    storeFleetCount: Number(salesAggRow?.store_fleet_count || 0),
+    storeFleetTotal: Number(salesAggRow?.store_fleet_total || 0),
   };
 
   return { countsOverride, totalsOverride, cogsOverride, topProductsOverride };

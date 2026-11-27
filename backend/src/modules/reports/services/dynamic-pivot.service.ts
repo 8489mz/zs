@@ -109,7 +109,7 @@ export class DynamicPivotService {
           );
       } else {
         // Query at sale header level
-        let query = (this.db as any)
+        let query = this.db
           .selectFrom('sales as s')
           .leftJoin('branches as b', (j: any) =>
             j.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'),
@@ -170,7 +170,7 @@ export class DynamicPivotService {
           );
       }
     } else if (dto.dataset === 'purchases') {
-      let query = (this.db as any)
+      let query = this.db
         .selectFrom('purchases as p')
         .leftJoin('suppliers as sup', (j: any) =>
           j.onRef('sup.id', '=', 'p.supplier_id').onRef('sup.tenant_id', '=', 'p.tenant_id'),
@@ -230,7 +230,7 @@ export class DynamicPivotService {
           'التقرير يحتوي على أكثر من 10,000 سجل؛ يرجى تضييق الفترة حتى لا تظهر نتائج جزئية.',
         );
     } else if (dto.dataset === 'expenses') {
-      let query = (this.db as any)
+      let query = this.db
         .selectFrom('expenses as e')
         .leftJoin('branches as b', (j: any) =>
           j.onRef('b.id', '=', 'e.branch_id').onRef('b.tenant_id', '=', 'e.tenant_id'),
@@ -275,10 +275,7 @@ export class DynamicPivotService {
    */
   async getSavedTemplates(auth: AuthContext, dataset?: string): Promise<any[]> {
     const scope = requireTenantScope(auth);
-    let query = (this.db as any)
-      .selectFrom('custom_bi_pivot_reports')
-      .selectAll()
-      .where('tenant_id', '=', scope.tenantId);
+    let query = this.db.selectFrom('custom_bi_pivot_reports').selectAll().where('tenant_id', '=', scope.tenantId);
 
     if (dataset) {
       query = query.where('dataset', '=', dataset);
@@ -294,7 +291,7 @@ export class DynamicPivotService {
     const scope = requireTenantScope(auth);
     const id = `bi_${randomUUID()}`;
 
-    await (this.db as any)
+    await this.db
       .insertInto('custom_bi_pivot_reports')
       .values({
         id,
@@ -324,7 +321,7 @@ export class DynamicPivotService {
   async deleteTemplate(auth: AuthContext, templateId: string): Promise<{ success: boolean }> {
     const scope = requireTenantScope(auth);
 
-    const existing = await (this.db as any)
+    const existing = await this.db
       .selectFrom('custom_bi_pivot_reports')
       .select('id')
       .where('id', '=', templateId)
@@ -335,7 +332,7 @@ export class DynamicPivotService {
       throw new NotFoundException('Template not found');
     }
 
-    await (this.db as any)
+    await this.db
       .deleteFrom('custom_bi_pivot_reports')
       .where('id', '=', templateId)
       .where('tenant_id', '=', scope.tenantId)

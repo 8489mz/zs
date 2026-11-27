@@ -66,7 +66,7 @@ export class GoodsReceiptCreateService {
     const freight = this.validateGrnFreight(dto.freight, moneyDigits);
 
     // Verify supplier exists
-    const supplier = await (this.db as any)
+    const supplier = await this.db
       .selectFrom('suppliers')
       .select(['id', 'name'])
       .where('id', '=', dto.supplierId)
@@ -295,7 +295,7 @@ export class GoodsReceiptCreateService {
     filter: { supplierId?: number; status?: string; search?: string },
     auth: AuthContext,
   ): Promise<any> {
-    let query = (this.db as any)
+    let query = this.db
       .selectFrom('goods_receipt_notes as g')
       .leftJoin('suppliers as s', (join: any) =>
         join.onRef('s.id', '=', 'g.supplier_id').onRef('s.tenant_id', '=', 'g.tenant_id'),
@@ -359,7 +359,7 @@ export class GoodsReceiptCreateService {
   }
 
   async getGoodsReceipt(id: number, auth: AuthContext, externalTrx?: any): Promise<any> {
-    const q = externalTrx || (this.db as any);
+    const q = externalTrx || this.db;
 
     const grn = await q
       .selectFrom('goods_receipt_notes as g')

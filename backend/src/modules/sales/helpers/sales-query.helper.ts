@@ -244,11 +244,10 @@ export function mapHeldSalesRows(
     const itemSeat =
       isEnvelope && rawModifiers.seatNumber != null
         ? Number(rawModifiers.seatNumber)
-        : (item as any).seat_number
-          ? Number((item as any).seat_number)
+        : item.seat_number
+          ? Number(item.seat_number)
           : undefined;
-    const itemCourse =
-      isEnvelope && rawModifiers.course ? String(rawModifiers.course) : (item as any).course || undefined;
+    const itemCourse = isEnvelope && rawModifiers.course ? String(rawModifiers.course) : item.course || undefined;
     /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the held line fields ride in the
      * modifiers envelope under `held`. The stored lineKey is preferred
      * over rebuilding it (the rebuild drops the combo/recall suffix and

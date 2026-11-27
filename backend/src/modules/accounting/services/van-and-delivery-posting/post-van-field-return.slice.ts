@@ -233,7 +233,7 @@ export class PostVanFieldReturnSlice {
         .where('id', '=', params.saleId)
         .where('tenant_id', '=', scope.tenantId)
         .executeTakeFirst();
-      const salePayment = String((linkedSale as any)?.payment_type || '').trim();
+      const salePayment = String(linkedSale?.payment_type || '').trim();
       const wantsCash = params.refundMethod === 'cash';
       if (!linkedSale || !['cash', 'credit', 'card', 'split', 'instapay', 'vodafone_cash'].includes(salePayment)) {
         throw new AppError(

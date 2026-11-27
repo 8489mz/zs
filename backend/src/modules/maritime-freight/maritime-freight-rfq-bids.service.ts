@@ -55,7 +55,7 @@ export class MaritimeFreightRfqBidsService {
       .selectFrom('maritime_rfqs')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', rfqId as any)
+      .where('id', '=', rfqId)
       .executeTakeFirst();
 
     if (!rfq) throw new NotFoundException('RFQ not found');
@@ -75,7 +75,7 @@ export class MaritimeFreightRfqBidsService {
       .selectFrom('shipping_lines')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', 'in', lineIds.map(String) as any)
+      .where('id', 'in', lineIds.map(String))
       .execute();
     if (new Set(carriers.map((carrier) => String(carrier.id))).size !== new Set(lineIds.map(String)).size) {
       throw new BadRequestException('One or more shipping lines do not belong to this tenant');
@@ -85,7 +85,7 @@ export class MaritimeFreightRfqBidsService {
         .updateTable('maritime_rfqs')
         .set({ target_line_ids: JSON.stringify(customLineIds) })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', rfqId as any)
+        .where('id', '=', rfqId)
         .execute();
     }
 
@@ -279,7 +279,7 @@ export class MaritimeFreightRfqBidsService {
       .updateTable('maritime_rfqs')
       .set({ status: 'sent', updated_at: sql`NOW()` })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', rfqId as any)
+      .where('id', '=', rfqId)
       .execute();
 
     return { sentCount, message: `Dispatched RFQ inquiries to ${sentCount} carriers` };
@@ -294,7 +294,7 @@ export class MaritimeFreightRfqBidsService {
       .selectFrom('maritime_rfqs')
       .select(['id', 'status'])
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', dto.rfqId as any)
+      .where('id', '=', dto.rfqId)
       .executeTakeFirst();
 
     if (!rfq) throw new NotFoundException('RFQ not found');
@@ -313,7 +313,7 @@ export class MaritimeFreightRfqBidsService {
       const tenantLine = await this.db
         .selectFrom('shipping_lines')
         .select('id')
-        .where('id', '=', String(dto.shippingLineId) as any)
+        .where('id', '=', String(dto.shippingLineId))
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
       if (!tenantLine) throw new BadRequestException('Shipping line does not belong to this company');
@@ -361,7 +361,7 @@ export class MaritimeFreightRfqBidsService {
         .updateTable('maritime_rfqs')
         .set({ status: 'bids_received', updated_at: sql`NOW()` })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', dto.rfqId as any)
+        .where('id', '=', dto.rfqId)
         .execute();
     }
 
@@ -375,7 +375,7 @@ export class MaritimeFreightRfqBidsService {
         .selectFrom('maritime_rfq_bids')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', bidId as any)
+        .where('id', '=', bidId)
         .executeTakeFirst();
 
       if (!bid) throw new NotFoundException('Bid not found');
@@ -396,7 +396,7 @@ export class MaritimeFreightRfqBidsService {
         .selectFrom('maritime_rfqs')
         .select('status')
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', bid.rfq_id as any)
+        .where('id', '=', bid.rfq_id)
         .executeTakeFirst();
       if (!rfqRow) throw new NotFoundException('RFQ not found');
       if (rfqRow.status === 'closed' || rfqRow.status === 'cancelled') {
@@ -416,7 +416,7 @@ export class MaritimeFreightRfqBidsService {
         .updateTable('maritime_rfq_bids')
         .set({ is_awarded: true, awarded_at: sql`NOW()` })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', bidId as any)
+        .where('id', '=', bidId)
         .returningAll()
         .execute();
 
@@ -425,7 +425,7 @@ export class MaritimeFreightRfqBidsService {
         .updateTable('maritime_rfqs')
         .set({ status: 'awarded', updated_at: sql`NOW()` })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', bid.rfq_id as any)
+        .where('id', '=', bid.rfq_id)
         .execute();
 
       return awardedBid;

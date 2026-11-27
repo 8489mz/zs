@@ -72,7 +72,7 @@ export class DailyCommercialRollupService {
     const endOfDay = bounds.end;
 
     // 1. Sales & Cash/Credit Aggregates
-    let salesQuery = (this.db as any)
+    let salesQuery = this.db
       .selectFrom('sales')
       .select([
         sql<number>`COALESCE(COUNT(*), 0)`.as('sales_count'),
@@ -94,7 +94,7 @@ export class DailyCommercialRollupService {
     }
 
     // 2. COGS Aggregate directly in SQL
-    let cogsQuery = (this.db as any)
+    let cogsQuery = this.db
       .selectFrom('sale_items as si')
       .innerJoin('sales as s', 's.id', 'si.sale_id')
       .select(sql<number>`COALESCE(SUM(si.qty * COALESCE(si.cost_price, 0)), 0)`.as('cogs_total'))
@@ -122,7 +122,7 @@ export class DailyCommercialRollupService {
     // commercially. The branch filter uses the return's own branch
     // (rd.branch_id), the same column the summary's scope filter
     // applies to return_documents.
-    let returnsQuery = (this.db as any)
+    let returnsQuery = this.db
       .selectFrom('return_documents as rd')
       .innerJoin('sales as s', (j: any) =>
         j.onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id'),
@@ -145,7 +145,7 @@ export class DailyCommercialRollupService {
     // line's cost). The stored cogs_total below is NET of this, so
     // a stored row reconciles from its own columns:
     // gross_profit = (sales_total − returns_total) − cogs_total.
-    let returnedCogsQuery = (this.db as any)
+    let returnedCogsQuery = this.db
       .selectFrom('return_items as ri')
       .innerJoin('return_documents as rd', (j: any) =>
         j.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'),
@@ -166,7 +166,7 @@ export class DailyCommercialRollupService {
     }
 
     // 4. Expenses Aggregate
-    let expensesQuery = (this.db as any)
+    let expensesQuery = this.db
       .selectFrom('expenses')
       .select(sql<number>`COALESCE(SUM(amount), 0)`.as('expenses_total'))
       .where('tenant_id', '=', tenantId)
@@ -205,7 +205,7 @@ export class DailyCommercialRollupService {
     const netProfit = this.toBookMoney(grossProfit - expensesTotal, bookDigits);
 
     // 5. Atomic Upsert into daily_commercial_rollups
-    await (this.db as any)
+    await this.db
       .insertInto('daily_commercial_rollups')
       .values({
         tenant_id: tenantId,
@@ -304,7 +304,7 @@ export class DailyCommercialRollupService {
 
     const branchKey = branchId ?? -1;
 
-    const query = (this.db as any)
+    const query = this.db
       .selectFrom('daily_commercial_rollups')
       .select([
         sql<number>`EXTRACT(YEAR FROM rollup_date)`.as('year'),

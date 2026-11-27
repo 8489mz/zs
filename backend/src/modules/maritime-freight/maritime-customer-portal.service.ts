@@ -228,7 +228,7 @@ export class MaritimeCustomerPortalService {
 
       // INV-PORTAL-TENANT-STATUS-ENFORCED: no fresh login for a
       // suspended / expired / trial-expired tenant, even with a valid PIN.
-      await assertPortalTenantAllowed(this.db as any, this.authCache, String(matched.tenant_id));
+      await assertPortalTenantAllowed(this.db, this.authCache, String(matched.tenant_id));
 
       this.customerLoginLimiter.recordSuccess(rateLimitKey);
 
@@ -339,7 +339,7 @@ export class MaritimeCustomerPortalService {
 
     // INV-PORTAL-TENANT-STATUS-ENFORCED: a magic link must not issue a
     // token for a suspended / expired / trial-expired tenant either.
-    await assertPortalTenantAllowed(this.db as any, this.authCache, String(matched.tenant_id));
+    await assertPortalTenantAllowed(this.db, this.authCache, String(matched.tenant_id));
 
     const tenantRow = await this.db
       .selectFrom('tenants')
@@ -403,7 +403,7 @@ export class MaritimeCustomerPortalService {
 
     // INV-PORTAL-TENANT-STATUS-ENFORCED: the token is stateless, so
     // every request re-checks the tenant status, not just the row.
-    await assertPortalTenantAllowed(this.db as any, this.authCache, tenantId);
+    await assertPortalTenantAllowed(this.db, this.authCache, tenantId);
 
     return {
       customerId: customer.id,
@@ -631,7 +631,7 @@ export class MaritimeCustomerPortalService {
     const job = await this.db
       .selectFrom('maritime_jobs')
       .selectAll()
-      .where('id', '=', jobId as any)
+      .where('id', '=', jobId)
       .where('tenant_id', '=', auth.tenantId)
       .where('customer_id', '=', auth.customerId)
       .executeTakeFirst();
@@ -797,7 +797,7 @@ export class MaritimeCustomerPortalService {
     const quote = await this.db
       .selectFrom('maritime_quotations')
       .selectAll()
-      .where('id', '=', quoteId as any)
+      .where('id', '=', quoteId)
       .where('tenant_id', '=', auth.tenantId)
       .where('customer_id', '=', auth.customerId)
       .executeTakeFirst();
@@ -830,7 +830,7 @@ export class MaritimeCustomerPortalService {
     const quote = await this.db
       .selectFrom('maritime_quotations')
       .selectAll()
-      .where('id', '=', quoteId as any)
+      .where('id', '=', quoteId)
       .where('tenant_id', '=', auth.tenantId)
       .where('customer_id', '=', auth.customerId)
       .executeTakeFirst();
@@ -914,7 +914,7 @@ export class MaritimeCustomerPortalService {
     const quote = await this.db
       .selectFrom('maritime_quotations')
       .selectAll()
-      .where('id', '=', quoteId as any)
+      .where('id', '=', quoteId)
       .where('tenant_id', '=', auth.tenantId)
       .where('customer_id', '=', auth.customerId)
       .executeTakeFirst();

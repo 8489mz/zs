@@ -236,7 +236,7 @@ export class CashierShiftVarianceSlice {
           variance_charged_to_user_id: chargedToUserId,
           variance_approved_by: auth.userId ?? null,
           variance_approved_at: sql`NOW()`,
-        } as any)
+        })
         .where('id', '=', shiftId)
         .where('tenant_id', '=', scope.tenantId)
         .execute();

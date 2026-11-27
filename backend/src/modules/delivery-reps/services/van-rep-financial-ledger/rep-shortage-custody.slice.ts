@@ -190,7 +190,7 @@ export class RepShortageCustodySlice {
         created_by: params.createdBy,
         payment_channel: 'cash',
         request_key: `rep-shortage-cash:${params.settlementItemId}`,
-      } as any)
+      })
       .execute();
   }
 }

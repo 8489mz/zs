@@ -284,7 +284,7 @@ export class ReturnsSaleReturnService {
       // INV-VAN-GENERIC-FEFO: same restore for the generic ledger.
       await this.restoreReturnedInventoryBatches(trx, Number(sale.id), saleLineId, requestItem.productId,
         previouslyReturnedBaseQty, preparedLine.stockDelta, auth);
-      await restoreImportLotsFromSalesReturn(trx as any, {
+      await restoreImportLotsFromSalesReturn(trx, {
         tenantId: scope.tenantId,
         saleId: Number(sale.id),
         saleItemId: saleLineId,
@@ -543,7 +543,7 @@ export class ReturnsSaleReturnService {
         // stays exactly unchanged. A settled sale keeps the old
         // single leg.
         if (await this.accountingPosting.hasDeliveryCustodyReclassification(trx, Number(sale.id), auth)
-          && String((sale as any).delivery_status || '') !== 'settled') {
+          && String((sale).delivery_status || '') !== 'settled') {
           await this.addCustomerLedgerEntry(trx, customerId, -allocation.amount, 'sale_return', 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
           await this.addCustomerLedgerEntry(trx, customerId, allocation.amount, 'sale_return_refund', 'sale return refund ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
         } else {
@@ -617,7 +617,7 @@ export class ReturnsSaleReturnService {
 
           await trx
             .updateTable('customers')
-            .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` } as any)
+            .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` })
             .where('id', '=', customerId)
             .where(this.tenantPredicate(auth))
             .execute();
@@ -634,7 +634,7 @@ export class ReturnsSaleReturnService {
               sale_id: Number(sale.id),
               notes: `خصم ${clawbackPoints} نقطة ولاء مكتسبة بسبب مرتجع مبيعات ${returnDocNo} على الفاتورة S-${sale.id}`,
               created_at: sql`NOW()`,
-            } as any)
+            })
             .execute();
         }
       }
@@ -669,7 +669,7 @@ export class ReturnsSaleReturnService {
 
           await trx
             .updateTable('customers')
-            .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` } as any)
+            .set({ loyalty_points: balanceAfter, updated_at: sql`NOW()` })
             .where('id', '=', customerId)
             .where(this.tenantPredicate(auth))
             .execute();
@@ -686,7 +686,7 @@ export class ReturnsSaleReturnService {
               sale_id: Number(sale.id),
               notes: `رد ${refundPoints} نقطة ولاء مستبدلة سابقاً بسبب مرتجع مبيعات ${returnDocNo} على الفاتورة S-${sale.id}`,
               created_at: sql`NOW()`,
-            } as any)
+            })
             .execute();
         }
       }

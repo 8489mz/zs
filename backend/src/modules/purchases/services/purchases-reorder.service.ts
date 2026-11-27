@@ -343,7 +343,7 @@ export class PurchasesReorderService {
       };
 
       try {
-        const res = await this.writeService.createPurchase(purchaseDto as any, auth);
+        const res = await this.writeService.createPurchase(purchaseDto, auth);
         const purchase = (res as any)?.purchase;
         if (purchase) {
           createdOrders.push({

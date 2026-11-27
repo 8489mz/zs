@@ -79,7 +79,7 @@ export class SaasAdminDeveloper {
           status: 'active',
           trial_starts_at: now,
           trial_ends_at: new Date(now.getTime() + 3650 * 24 * 60 * 60 * 1000),
-        } as any)
+        })
         .execute();
       tenant = { id: 'default', slug: 'default', plan_id: null, extra_features: null };
     }

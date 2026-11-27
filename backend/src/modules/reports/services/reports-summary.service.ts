@@ -349,7 +349,7 @@ export class ReportsSummaryService {
     }
 
     const countRow = await baseQuery.select(sql<number>`count(*)`.as('count')).executeTakeFirst();
-    const totalItems = Number((countRow as any)?.count || 0);
+    const totalItems = Number(countRow?.count || 0);
     const pagination = buildPagination(page, pageSize, totalItems);
 
     const stockCol = query.locationId ? sql<number>`coalesce(pls.qty, 0)`.as('stock_qty') : 'p.stock_qty';
@@ -421,9 +421,9 @@ export class ReportsSummaryService {
         pagination,
         summary: {
           totalDeadItems: totalItems,
-          totalDeadStockQty: Number(Number((summaryAgg as any)?.total_qty || 0).toFixed(2)),
-          totalTiedCapital: roundMoney(Number((summaryAgg as any)?.total_tied_capital || 0), digits),
-          totalRetailValue: roundMoney(Number((summaryAgg as any)?.total_retail_value || 0), digits),
+          totalDeadStockQty: Number(Number(summaryAgg?.total_qty || 0).toFixed(2)),
+          totalTiedCapital: roundMoney(Number(summaryAgg?.total_tied_capital || 0), digits),
+          totalRetailValue: roundMoney(Number(summaryAgg?.total_retail_value || 0), digits),
           daysThreshold: days,
         },
       },
@@ -438,7 +438,7 @@ export class ReportsSummaryService {
     const twoYearsAgo = new Date();
     twoYearsAgo.setUTCFullYear(twoYearsAgo.getUTCFullYear() - 2);
 
-    let baseQuery = (this.db as any)
+    let baseQuery = this.db
       .selectFrom('sales as s')
       .innerJoin('customers as c', 'c.id', 's.customer_id')
       .select([
@@ -467,7 +467,7 @@ export class ReportsSummaryService {
     }
 
     const rows = await baseQuery.limit(500).execute();
-    return this.withScope(buildCustomerRfmPayload(rows as any, (query as any).segment, digits), auth);
+    return this.withScope(buildCustomerRfmPayload(rows, (query as any).segment, digits), auth);
   }
 
   private async partnerBalances(
@@ -481,12 +481,10 @@ export class ReportsSummaryService {
     const partnerIdCol = isCust ? 'customer_id' : 'supplier_id';
     const tenantId = this.tenantId(auth);
     const digits =
-      typeof (this.db as any).getExecutor === 'function'
-        ? currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId))
-        : 2;
+      typeof this.db.getExecutor === 'function' ? currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId)) : 2;
 
-    if (typeof (this.db as any).getExecutor !== 'function') {
-      const partners = await (this.db as any)
+    if (typeof this.db.getExecutor !== 'function') {
+      const partners = await this.db
         .selectFrom(table)
         .select(isCust ? ['id', 'name', 'phone', 'balance', 'credit_limit'] : ['id', 'name', 'phone', 'balance'])
         .where('is_active', '=', true)
@@ -494,7 +492,7 @@ export class ReportsSummaryService {
         .orderBy('name', 'asc')
         .execute();
 
-      const ledgerRows = await (this.db as any)
+      const ledgerRows = await this.db
         .selectFrom(ledgerTable)
         .select([partnerIdCol, sql<number>`coalesce(sum(amount), 0)`.as('balance_total')])
         .where(this.tenantPredicate(auth))
@@ -596,11 +594,11 @@ export class ReportsSummaryService {
     const ledgerTable = isCust ? 'customer_ledger' : 'supplier_ledger';
     const partnerIdCol = isCust ? 'customer_id' : 'supplier_id';
     const digits =
-      typeof (this.db as any).getExecutor === 'function'
+      typeof this.db.getExecutor === 'function'
         ? currencyMoneyDigits(await tenantBaseCurrency(this.db, this.tenantId(auth)))
         : 2;
 
-    const partner = await (this.db as any)
+    const partner = await this.db
       .selectFrom(table)
       .select(isCust ? ['id', 'name', 'phone', 'balance', 'credit_limit'] : ['id', 'name', 'phone', 'balance'])
       .where('id', '=', partnerId)
@@ -618,14 +616,14 @@ export class ReportsSummaryService {
       timezone: await getTenantTimezone(this.db, this.tenantId(auth)),
     });
 
-    let countQuery = (this.db as any)
+    let countQuery = this.db
       .selectFrom(ledgerTable)
       .where(partnerIdCol, '=', partnerId)
       .where('created_at', '>=', fromDate!)
       .where('created_at', '<=', toDate!)
       .where(this.tenantPredicate(auth));
 
-    let entriesQuery = (this.db as any)
+    let entriesQuery = this.db
       .selectFrom(ledgerTable)
       .select(['id', 'entry_type', 'amount', 'balance_after', 'note', 'reference_type', 'reference_id', 'created_at'])
       .where(partnerIdCol, '=', partnerId)
@@ -658,7 +656,7 @@ export class ReportsSummaryService {
         .filter((row) => row.entry_type === 'supplier_advance' && row.reference_id != null)
         .map((row) => Number(row.reference_id));
       if (markerIds.length > 0) {
-        const payments = await (this.db as any)
+        const payments = await this.db
           .selectFrom('supplier_payments')
           .select(['id', 'amount'])
           .where('id', 'in', markerIds)
@@ -697,7 +695,7 @@ export class ReportsSummaryService {
         ])
         .executeTakeFirst(),
       fromDate
-        ? (this.db as any)
+        ? this.db
             .selectFrom(ledgerTable)
             .select(sql<number>`coalesce(sum(amount), 0)`.as('opening_balance'))
             .where(partnerIdCol, '=', partnerId)
@@ -706,7 +704,7 @@ export class ReportsSummaryService {
             .executeTakeFirst()
         : Promise.resolve(null),
       !isCust && hasSupplierAdvanceColumns
-        ? (this.db as any)
+        ? this.db
             .selectFrom('supplier_payments')
             .select(sql<number>`coalesce(sum(greatest(amount - coalesce(applied_amount, 0), 0)), 0)`.as('open_advance'))
             .where('supplier_id', '=', partnerId)

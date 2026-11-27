@@ -113,7 +113,7 @@ export class SupplierBillsService {
           accountRows.map((row) => [Number(row.id), row]),
         );
         for (const line of lines) {
-          validateBillLineAccount(accountById.get(Number(line.accountId)) as any, String(line.description || ''));
+          validateBillLineAccount(accountById.get(Number(line.accountId)), String(line.description || ''));
         }
 
         const tz = await getTenantTimezone(trx, scope.tenantId);
@@ -215,21 +215,19 @@ export class SupplierBillsService {
           for (const advanceRow of advances) {
             if (remainingBill <= 0) break;
             const outstanding =
-              Math.round(
-                (Number((advanceRow as any).amount || 0) - Number((advanceRow as any).applied_amount || 0)) * scale,
-              ) / scale;
+              Math.round((Number(advanceRow.amount || 0) - Number(advanceRow.applied_amount || 0)) * scale) / scale;
             if (!(outstanding > 0)) continue;
             const applyAmount = Math.min(outstanding, remainingBill);
             const application = await this.accountingPosting.postSupplierAdvanceApplication(
               trx,
-              Number((advanceRow as any).id),
+              Number(advanceRow.id),
               applyAmount,
               null,
               auth,
             );
             if (!application.journalEntryId)
               throw new AppError(
-                `Supplier advance application ${Number((advanceRow as any).id)} has no journal entry`,
+                `Supplier advance application ${Number(advanceRow.id)} has no journal entry`,
                 'LEDGER_POSTING_MISSING',
                 500,
               );
@@ -238,14 +236,14 @@ export class SupplierBillsService {
               supplier.id,
               -applyAmount,
               'supplier_advance_application',
-              `تطبيق دفعة مقدمة ${String((advanceRow as any).doc_no || `ZPV-${advanceRow.id}`)} على مستحقات ${supplier.name}`,
+              `تطبيق دفعة مقدمة ${String(advanceRow.doc_no || `ZPV-${advanceRow.id}`)} على مستحقات ${supplier.name}`,
               'supplier_payment',
-              Number((advanceRow as any).id),
+              Number(advanceRow.id),
               auth,
-              (advanceRow as any).branch_id ? Number((advanceRow as any).branch_id) : null,
-              (advanceRow as any).location_id ? Number((advanceRow as any).location_id) : null,
+              advanceRow.branch_id ? Number(advanceRow.branch_id) : null,
+              advanceRow.location_id ? Number(advanceRow.location_id) : null,
             );
-            appliedAdvances.push({ paymentId: Number((advanceRow as any).id), amount: applyAmount });
+            appliedAdvances.push({ paymentId: Number(advanceRow.id), amount: applyAmount });
             remainingBill = Math.round((remainingBill - applyAmount) * scale) / scale;
           }
         }

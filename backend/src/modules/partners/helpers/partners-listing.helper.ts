@@ -63,7 +63,7 @@ export function mapCustomerRow(
     storeCreditBalance: Number(row.store_credit_balance || 0),
     companyName: row.company_name || '',
     taxNumber: row.tax_number || '',
-    loyaltyPoints: Number((row as any).loyalty_points || 0),
+    loyaltyPoints: Number(row.loyalty_points || 0),
     metadata: meta,
   };
 }

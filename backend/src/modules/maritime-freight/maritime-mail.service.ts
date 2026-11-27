@@ -158,7 +158,7 @@ export class MaritimeMailService {
         imapPassword: parsed.imapPassword ? '••••••••••••' : '',
       };
     } catch {
-      return {} as any;
+      return {} as Promise<MaritimeMailConfig>;
     }
   }
 
@@ -225,7 +225,7 @@ export class MaritimeMailService {
         (dto as any)?.companyOfficialEmail !== undefined
           ? String((dto as any).companyOfficialEmail).trim()
           : (currentConfig as any)?.companyOfficialEmail || '',
-    } as any;
+    } as MaritimeMailConfig;
 
     // Save to settings table
     const jsonValue = JSON.stringify(mergedConfig);
@@ -843,7 +843,7 @@ export class MaritimeMailService {
           .select('id')
           .where('tenant_id', '=', tenantId)
           .where('rfq_id', '=', String(rfq.id))
-          .where('total_freight_cost', '=', totalCost as any)
+          .where('total_freight_cost', '=', totalCost)
           .executeTakeFirst();
 
         if (!existingBid) {

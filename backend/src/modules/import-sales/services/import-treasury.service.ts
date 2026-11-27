@@ -129,7 +129,7 @@ export class ImportTreasuryService {
       let ports: string[] = [];
       try {
         ports = Array.isArray(b.customs_ports)
-          ? (b.customs_ports as any)
+          ? b.customs_ports
           : typeof b.customs_ports === 'string'
             ? JSON.parse(b.customs_ports)
             : [];
@@ -283,7 +283,7 @@ export class ImportTreasuryService {
           sourceId: Number(advance.serial_id),
           tenantId,
           accountId: tenantId,
-          entryDate: advance.disbursement_date ? new Date(advance.disbursement_date as any) : new Date(),
+          entryDate: advance.disbursement_date ? new Date(advance.disbursement_date) : new Date(),
           description: `صرف عهدة تخليص جمركي للمخلص ${broker.name} - إذن #${dto.advanceNo}`,
           branchId: null,
           locationId: null,
@@ -544,7 +544,7 @@ export class ImportTreasuryService {
           sourceId: Number(expense.serial_id),
           tenantId,
           accountId: tenantId,
-          entryDate: expense.expense_date ? new Date(expense.expense_date as any) : new Date(),
+          entryDate: expense.expense_date ? new Date(expense.expense_date) : new Date(),
           description: `تسوية مصروف تخليص جمركي (${dto.category}) بإيصال #${dto.receiptNo}`,
           branchId: null,
           locationId: null,

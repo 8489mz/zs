@@ -90,7 +90,7 @@ export class PurchasesFinanceService {
         location_id: locationId,
         created_by: actor.userId,
         ...this.tenantFields(actor),
-      } as any)
+      })
       .execute();
   }
 
@@ -127,7 +127,7 @@ export class PurchasesFinanceService {
         location_id: locationId,
         created_by: actor.userId,
         ...this.tenantFields(actor),
-      } as any)
+      })
       .execute();
   }
 
@@ -156,7 +156,7 @@ export class PurchasesFinanceService {
         location_id: locationId,
         created_by: actor.userId,
         ...this.tenantFields(actor),
-      } as any)
+      })
       .execute();
   }
 }

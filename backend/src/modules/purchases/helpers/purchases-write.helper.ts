@@ -91,12 +91,12 @@ export function buildNormalizedPurchaseItem(
     unitName: String(item.unitName || 'قطعة').trim() || 'قطعة',
     unitMultiplier,
     total: roundCurrency(qty * cost, digits),
-    isService: (product as any)?.item_type === 'service',
+    isService: product?.item_type === 'service',
     categoryId: item.categoryId ? Number(item.categoryId) : null,
     locationId: item.locationId ? Number(item.locationId) : null,
     ...(item.serials !== undefined ? { serials: item.serials } : {}),
-    batchNumber: (item as any).batchNumber || (item as any).batch_number || null,
-    expiryDate: (item as any).expiryDate || (item as any).expiry_date || null,
+    batchNumber: item.batchNumber || (item as any).batch_number || null,
+    expiryDate: item.expiryDate || (item as any).expiry_date || null,
   };
 }
 

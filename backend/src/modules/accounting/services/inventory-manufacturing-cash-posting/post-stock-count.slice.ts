@@ -123,7 +123,7 @@ export class PostStockCountSlice {
       // Fall back to the stored variance only when no movement row
       // exists (chunks posted before this fix, whose movements carry
       // the frozen variance) -- prospective only, no history rewritten.
-      const delta = mov ? Number((mov as any).qty ?? 0) : variance;
+      const delta = mov ? Number(mov.qty ?? 0) : variance;
       if (delta === 0) continue;
 
       const rawCost = Number(mov?.unit_cost || 0);

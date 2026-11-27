@@ -672,7 +672,7 @@ export class MaritimeFreightMasterDataService {
         updated_at: sql`NOW()`,
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -685,7 +685,7 @@ export class MaritimeFreightMasterDataService {
       .updateTable('shipping_lines')
       .set({ is_active: false, updated_at: sql`NOW()` })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .execute();
 
     return { success: true };

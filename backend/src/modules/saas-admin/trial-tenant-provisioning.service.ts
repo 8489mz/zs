@@ -551,7 +551,7 @@ export class TrialTenantProvisioningService {
           sales_stock_mode: 'single_location',
           allow_external_sales_stock: false,
           is_active: true,
-        } as any)
+        })
         .returning(['id'])
         .executeTakeFirstOrThrow();
 
@@ -569,7 +569,7 @@ export class TrialTenantProvisioningService {
           code: 'WH-MAIN',
           location_type: 'branch_stock',
           is_active: true,
-        } as any)
+        })
         .returning(['id'])
         .executeTakeFirstOrThrow();
 
@@ -601,7 +601,7 @@ export class TrialTenantProvisioningService {
           must_change_password: true,
           tenant_id: tenantId,
           account_id: accountId,
-        } as any)
+        })
         .returning(['id'])
         .executeTakeFirstOrThrow();
 
@@ -613,7 +613,7 @@ export class TrialTenantProvisioningService {
           account_id: accountId,
           user_id: Number(user.id),
           branch_id: branchId,
-        } as any)
+        })
         .onConflict((oc) => oc.columns(['user_id', 'branch_id'] as never).doNothing())
         .execute();
 

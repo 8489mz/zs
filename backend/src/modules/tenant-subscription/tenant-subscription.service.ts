@@ -115,7 +115,7 @@ export class TenantSubscriptionService {
       const rawPillar = String(settingsMap.get('pillar') ?? settingsMap.get('industryPillar') ?? '')
         .trim()
         .replace(/^"|"$/g, '');
-      const tenantActivity = String((tenantRow as any)?.activity_type ?? '').trim();
+      const tenantActivity = String(tenantRow?.activity_type ?? '').trim();
 
       const nonGeneric = [rawActivity, rawPillar, rawIndustry, tenantActivity].filter(
         (s) => s && s !== 'general' && s !== 'retail_general' && s !== 'retail' && s !== 'store',
@@ -130,7 +130,7 @@ export class TenantSubscriptionService {
 
     return {
       industryPresetId: resolvedIndustry,
-      countryCode: (tenantRow as any)?.country_code || null,
+      countryCode: tenantRow?.country_code || null,
     };
   }
 
@@ -171,7 +171,7 @@ export class TenantSubscriptionService {
       trial_starts_at: null,
       trial_ends_at: null,
       created_at: new Date(),
-    } as any;
+    };
   }
 
   /** O33: the plan catalogue as it is; the static list is a display fallback, not a seed. */
@@ -210,7 +210,7 @@ export class TenantSubscriptionService {
       .executeTakeFirst();
 
     if (existingTenant) {
-      return existingTenant as any;
+      return existingTenant;
     }
 
     // Auto-heal / provision tenant record from settings or auth context
@@ -263,7 +263,7 @@ export class TenantSubscriptionService {
         .where('id', '=', normalizedTenantId)
         .executeTakeFirst();
 
-      if (created) return created as any;
+      if (created) return created;
     } catch {
       // Fallback synthetic tenant object
     }
@@ -507,10 +507,10 @@ export class TenantSubscriptionService {
         ownerName: tenant.owner_name,
         ownerPhone: tenant.owner_phone,
         status: tenant.status,
-        planId: (tenant as any).plan_id || null,
-        activityType: (tenant as any).activity_type || null,
-        pillar: (tenant as any).pillar || null,
-        features: (tenant as any).features || (tenant as any).extra_features || [],
+        planId: tenant.plan_id || null,
+        activityType: tenant.activity_type || null,
+        pillar: tenant.pillar || null,
+        features: tenant.features || tenant.extra_features || [],
         trialStartsAt: tenant.trial_starts_at,
         trialEndsAt: tenant.trial_ends_at,
         createdAt: tenant.created_at,
@@ -564,9 +564,9 @@ export class TenantSubscriptionService {
         billingPeriodMonths: p.billing_period_months,
         maxUsers: p.max_users,
         maxBranches: p.max_branches,
-        featurePlanId: (p as any).feature_plan_id,
-        pricingBand: (p as any).pricing_band ?? null,
-        pricingLevel: (p as any).pricing_level ?? null,
+        featurePlanId: p.feature_plan_id,
+        pricingBand: p.pricing_band ?? null,
+        pricingLevel: p.pricing_level ?? null,
       })),
       payments: payments.map((p) => ({
         id: p.id,

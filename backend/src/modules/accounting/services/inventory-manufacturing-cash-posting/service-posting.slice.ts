@@ -203,7 +203,7 @@ export class ServicePostingSlice {
       description: `عكس ${l.description}`,
       debit: Number(l.credit), // Flip
       credit: Number(l.debit), // Flip
-      partnerType: l.partner_type as any,
+      partnerType: l.partner_type,
       partnerId: l.partner_id ? Number(l.partner_id) : null,
       branchId: l.branch_id ? Number(l.branch_id) : null,
       locationId: l.location_id ? Number(l.location_id) : null,

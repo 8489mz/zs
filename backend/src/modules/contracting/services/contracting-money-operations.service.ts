@@ -48,10 +48,10 @@ export class ContractingMoneyOperationsService {
 
   async getRetentionRecords(auth: AuthContext, query?: { projectId?: string; status?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any).selectFrom('contracting_retention_records').selectAll().where('tenant_id', '=', tenantId);
+    let q = this.db.selectFrom('contracting_retention_records').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
-      q = q.where('project_id', '=', query.projectId as any);
+      q = q.where('project_id', '=', query.projectId);
     }
     if (query?.status && query.status !== 'all') {
       q = q.where('status', '=', query.status);
@@ -80,19 +80,19 @@ export class ContractingMoneyOperationsService {
 
   async createRetentionRecord(auth: AuthContext, projectId: string, dto: CreateRetentionRecordDto) {
     const { tenantId } = requireTenantScope(auth);
-    const [inserted] = await (this.db as any)
+    const [inserted] = await this.db
       .insertInto('contracting_retention_records')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
-        subcontract_id: dto.subcontractId ? (dto.subcontractId as any) : null,
+        project_id: projectId,
+        subcontract_id: dto.subcontractId ? dto.subcontractId : null,
         party_type: dto.partyType,
         party_id: dto.partyId ? Number(dto.partyId) : null,
         party_name: dto.partyName.trim(),
         held_amount: Number(dto.heldAmount || 0),
         released_amount: 0,
         retention_percent: Number(dto.retentionPercent ?? 5.0),
-        ipc_invoice_id: dto.ipcInvoiceId ? (dto.ipcInvoiceId as any) : null,
+        ipc_invoice_id: dto.ipcInvoiceId ? dto.ipcInvoiceId : null,
         release_due_date: dto.releaseDueDate || null,
         status: 'held',
         guarantee_certificate_ref: dto.guaranteeCertificateRef || null,
@@ -106,11 +106,11 @@ export class ContractingMoneyOperationsService {
 
   async releaseRetentionRecord(auth: AuthContext, id: string, dto: ReleaseRetentionDto) {
     const { tenantId } = requireTenantScope(auth);
-    const record = await (this.db as any)
+    const record = await this.db
       .selectFrom('contracting_retention_records')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!record) {
@@ -123,7 +123,7 @@ export class ContractingMoneyOperationsService {
 
     const newStatus = newReleased >= totalHeld ? 'fully_released' : 'partially_released';
 
-    const [updated] = await (this.db as any)
+    const [updated] = await this.db
       .updateTable('contracting_retention_records')
       .set({
         released_amount: newReleased,
@@ -132,7 +132,7 @@ export class ContractingMoneyOperationsService {
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -141,10 +141,10 @@ export class ContractingMoneyOperationsService {
 
   async getPaymentHolds(auth: AuthContext, query?: { projectId?: string; isReleased?: boolean }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any).selectFrom('contracting_payment_holds').selectAll().where('tenant_id', '=', tenantId);
+    let q = this.db.selectFrom('contracting_payment_holds').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
-      q = q.where('project_id', '=', query.projectId as any);
+      q = q.where('project_id', '=', query.projectId);
     }
     if (query?.isReleased !== undefined) {
       q = q.where('is_released', '=', query.isReleased);
@@ -170,12 +170,12 @@ export class ContractingMoneyOperationsService {
 
   async createPaymentHold(auth: AuthContext, projectId: string, dto: CreatePaymentHoldDto) {
     const { tenantId } = requireTenantScope(auth);
-    const [inserted] = await (this.db as any)
+    const [inserted] = await this.db
       .insertInto('contracting_payment_holds')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
-        subcontract_id: dto.subcontractId ? (dto.subcontractId as any) : null,
+        project_id: projectId,
+        subcontract_id: dto.subcontractId ? dto.subcontractId : null,
         party_type: dto.partyType,
         party_name: dto.partyName.trim(),
         hold_amount: Number(dto.holdAmount || 0),
@@ -192,7 +192,7 @@ export class ContractingMoneyOperationsService {
   async releasePaymentHold(auth: AuthContext, id: string, dto: ReleasePaymentHoldDto) {
     const { tenantId } = requireTenantScope(auth);
     const userEmail = (auth as any)?.user?.email || (auth as any)?.email || 'finance_manager';
-    const [updated] = await (this.db as any)
+    const [updated] = await this.db
       .updateTable('contracting_payment_holds')
       .set({
         is_released: true,
@@ -201,7 +201,7 @@ export class ContractingMoneyOperationsService {
         release_notes: dto.releaseNotes || null,
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -214,10 +214,10 @@ export class ContractingMoneyOperationsService {
 
   async getSupplierReturns(auth: AuthContext, query?: { projectId?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any).selectFrom('contracting_supplier_returns').selectAll().where('tenant_id', '=', tenantId);
+    let q = this.db.selectFrom('contracting_supplier_returns').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
-      q = q.where('project_id', '=', query.projectId as any);
+      q = q.where('project_id', '=', query.projectId);
     }
 
     const rows = await q.orderBy('created_at', 'desc').execute();
@@ -256,7 +256,7 @@ export class ContractingMoneyOperationsService {
 
     const values: any = {
       tenant_id: tenantId,
-      project_id: projectId as any,
+      project_id: projectId,
       return_number: suppliedNumber || tempNumber,
       supplier_id: dto.supplierId ? Number(dto.supplierId) : null,
       supplier_name: dto.supplierName.trim(),
@@ -269,7 +269,7 @@ export class ContractingMoneyOperationsService {
     };
 
     if (suppliedNumber) {
-      const [inserted] = await (this.db as any)
+      const [inserted] = await this.db
         .insertInto('contracting_supplier_returns')
         .values(values)
         .returningAll()
@@ -278,13 +278,13 @@ export class ContractingMoneyOperationsService {
     }
 
     const inserted = await this.db.transaction().execute(async (trx) => {
-      const row = await (trx as any)
+      const row = await trx
         .insertInto('contracting_supplier_returns')
         .values(values)
         .returning('id')
         .executeTakeFirstOrThrow();
       const finalNumber = `${prefix}${String(row.id).padStart(4, '0')}`;
-      const updated = await (trx as any)
+      const updated = await trx
         .updateTable('contracting_supplier_returns')
         .set({ return_number: finalNumber, credit_note_number: `CN-${finalNumber}`, updated_at: new Date() })
         .where('tenant_id', '=', tenantId)
@@ -299,10 +299,10 @@ export class ContractingMoneyOperationsService {
 
   async getLaborAttendance(auth: AuthContext, query?: { projectId?: string; workDate?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any).selectFrom('contracting_labor_attendance').selectAll().where('tenant_id', '=', tenantId);
+    let q = this.db.selectFrom('contracting_labor_attendance').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
-      q = q.where('project_id', '=', query.projectId as any);
+      q = q.where('project_id', '=', query.projectId);
     }
     if (query?.workDate) {
       q = q.where('work_date', '=', query.workDate);
@@ -334,17 +334,17 @@ export class ContractingMoneyOperationsService {
     const dailyRate = Number(dto.dailyRate || 0);
     const totalWage = Math.round(dailyRate * (hours / 8) * 100) / 100;
 
-    const [inserted] = await (this.db as any)
+    const [inserted] = await this.db
       .insertInto('contracting_labor_attendance')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
+        project_id: projectId,
         worker_name: dto.workerName.trim(),
         trade: dto.trade,
         work_date: dto.workDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         shift_type: dto.shiftType || 'full_day',
         hours_worked: hours,
-        split_project_id: dto.splitProjectId ? (dto.splitProjectId as any) : null,
+        split_project_id: dto.splitProjectId ? dto.splitProjectId : null,
         split_hours: Number(dto.splitHours || 0),
         daily_rate: dailyRate,
         total_wage: totalWage,
@@ -359,10 +359,10 @@ export class ContractingMoneyOperationsService {
 
   async getPettyCashRecords(auth: AuthContext, query?: { projectId?: string; status?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any).selectFrom('contracting_petty_cash').selectAll().where('tenant_id', '=', tenantId);
+    let q = this.db.selectFrom('contracting_petty_cash').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
-      q = q.where('project_id', '=', query.projectId as any);
+      q = q.where('project_id', '=', query.projectId);
     }
     if (query?.status && query.status !== 'all') {
       q = q.where('status', '=', query.status);
@@ -392,7 +392,7 @@ export class ContractingMoneyOperationsService {
     const { tenantId } = requireTenantScope(auth);
     const businessTz = await getTenantTimezone(this.db, tenantId);
     // Strict Auditor Rule: Check if custodian already has an active, un-settled petty cash custody
-    const activeCustody = await (this.db as any)
+    const activeCustody = await this.db
       .selectFrom('contracting_petty_cash')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -415,7 +415,7 @@ export class ContractingMoneyOperationsService {
 
     const values: any = {
       tenant_id: tenantId,
-      project_id: projectId as any,
+      project_id: projectId,
       custodian_name: dto.custodianName.trim(),
       custodian_role: dto.custodianRole || 'site_engineer',
       disbursement_number: suppliedNumber || tempNumber,
@@ -429,21 +429,17 @@ export class ContractingMoneyOperationsService {
     };
 
     if (suppliedNumber) {
-      const [inserted] = await (this.db as any)
-        .insertInto('contracting_petty_cash')
-        .values(values)
-        .returningAll()
-        .execute();
+      const [inserted] = await this.db.insertInto('contracting_petty_cash').values(values).returningAll().execute();
       return inserted;
     }
 
     const inserted = await this.db.transaction().execute(async (trx) => {
-      const row = await (trx as any)
+      const row = await trx
         .insertInto('contracting_petty_cash')
         .values(values)
         .returning('id')
         .executeTakeFirstOrThrow();
-      const updated = await (trx as any)
+      const updated = await trx
         .updateTable('contracting_petty_cash')
         .set({
           disbursement_number: `${prefix}${String(row.id).padStart(4, '0')}`,
@@ -461,11 +457,11 @@ export class ContractingMoneyOperationsService {
 
   async settlePettyCash(auth: AuthContext, id: string, dto: SettlePettyCashDto) {
     const { tenantId } = requireTenantScope(auth);
-    const custody = await (this.db as any)
+    const custody = await this.db
       .selectFrom('contracting_petty_cash')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!custody) {
@@ -476,7 +472,7 @@ export class ContractingMoneyOperationsService {
     const remaining = Math.max(0, Number(custody.amount_given) - settledAmount);
     const status = remaining === 0 ? 'settled' : 'active';
 
-    const [updated] = await (this.db as any)
+    const [updated] = await this.db
       .updateTable('contracting_petty_cash')
       .set({
         amount_settled: settledAmount,
@@ -487,7 +483,7 @@ export class ContractingMoneyOperationsService {
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -496,13 +492,10 @@ export class ContractingMoneyOperationsService {
 
   async getGovernmentLicenses(auth: AuthContext, query?: { projectId?: string; status?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
-      .selectFrom('contracting_government_licenses')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
+    let q = this.db.selectFrom('contracting_government_licenses').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.projectId && query.projectId !== 'all') {
-      q = q.where('project_id', '=', query.projectId as any);
+      q = q.where('project_id', '=', query.projectId);
     }
 
     const rows = await q.orderBy('expiry_date', 'asc').execute();
@@ -541,11 +534,11 @@ export class ContractingMoneyOperationsService {
 
   async createGovernmentLicense(auth: AuthContext, projectId: string, dto: CreateGovernmentLicenseDto) {
     const { tenantId } = requireTenantScope(auth);
-    const [inserted] = await (this.db as any)
+    const [inserted] = await this.db
       .insertInto('contracting_government_licenses')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
+        project_id: projectId,
         license_type: dto.licenseType,
         license_number: dto.licenseNumber.trim(),
         issuing_authority: dto.issuingAuthority.trim(),

@@ -42,7 +42,7 @@ export class ContractingSubcontractorsService {
       .selectFrom('contracting_subcontracts')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('created_at', 'desc')
       .execute();
 
@@ -50,7 +50,7 @@ export class ContractingSubcontractorsService {
       subcontracts.map(async (sc) => {
         let subcontractorName = '';
         if (sc.subcontractor_id) {
-          const subc = await (this.db as any)
+          const subc = await this.db
             .selectFrom('contracting_subcontractors')
             .select('name')
             .where('tenant_id', '=', tenantId)
@@ -59,7 +59,7 @@ export class ContractingSubcontractorsService {
           if (subc) {
             subcontractorName = subc.name;
           } else {
-            const sup = await (this.db as any)
+            const sup = await this.db
               .selectFrom('suppliers')
               .select('name')
               .where('tenant_id', '=', tenantId)
@@ -76,11 +76,11 @@ export class ContractingSubcontractorsService {
             sql<number>`COALESCE(SUM(retention_held_amount), 0)`.as('total_retention_held'),
           ])
           .where('tenant_id', '=', tenantId)
-          .where('project_id', '=', projectId as any)
+          .where('project_id', '=', projectId)
           .where((eb) =>
             eb.or([
-              eb('subcontract_id', '=', sc.id as any),
-              eb.and([eb('ipc_type', '=', 'subcontractor'), eb('subcontractor_id', '=', sc.subcontractor_id as any)]),
+              eb('subcontract_id', '=', sc.id),
+              eb.and([eb('ipc_type', '=', 'subcontractor'), eb('subcontractor_id', '=', sc.subcontractor_id)]),
             ]),
           )
           .where('status', 'in', ['approved', 'paid'])
@@ -97,24 +97,24 @@ export class ContractingSubcontractorsService {
           subcontractorId: Number(sc.subcontractor_id),
           subcontractorName,
           contractNumber: sc.contract_number,
-          contractType: (sc as any).contract_type || 'supply_and_apply',
+          contractType: sc.contract_type || 'supply_and_apply',
           scopeOfWork: sc.scope_of_work,
           totalAmount,
           retentionPercent: Number(sc.retention_percent || 0),
-          advancePct: Number((sc as any).advance_pct || 0),
-          advanceAmount: Number((sc as any).advance_amount || 0),
-          advanceRecoveryStartPct: Number((sc as any).advance_recovery_start_pct || 10),
-          advanceRecoveryEndPct: Number((sc as any).advance_recovery_end_pct || 80),
-          retentionLimitPct: Number((sc as any).retention_limit_pct || 5),
-          penaltyPerDay: Number((sc as any).penalty_per_day || 0),
-          ldCapPct: Number((sc as any).ld_cap_pct || 10),
-          paymentLinkageMode: (sc as any).payment_linkage_mode || 'independent',
-          paymentTermsDays: Number((sc as any).payment_terms_days || 30),
-          tailReservePct: Number((sc as any).tail_reserve_pct || 10),
-          wastageAllowancePct: Number((sc as any).wastage_allowance_pct || 5),
-          mosAdmissiblePct: Number((sc as any).mos_admissible_pct || 0),
-          mosCapPct: Number((sc as any).mos_cap_pct || 15),
-          dlpMonths: Number((sc as any).dlp_months || 12),
+          advancePct: Number(sc.advance_pct || 0),
+          advanceAmount: Number(sc.advance_amount || 0),
+          advanceRecoveryStartPct: Number(sc.advance_recovery_start_pct || 10),
+          advanceRecoveryEndPct: Number(sc.advance_recovery_end_pct || 80),
+          retentionLimitPct: Number(sc.retention_limit_pct || 5),
+          penaltyPerDay: Number(sc.penalty_per_day || 0),
+          ldCapPct: Number(sc.ld_cap_pct || 10),
+          paymentLinkageMode: sc.payment_linkage_mode || 'independent',
+          paymentTermsDays: Number(sc.payment_terms_days || 30),
+          tailReservePct: Number(sc.tail_reserve_pct || 10),
+          wastageAllowancePct: Number(sc.wastage_allowance_pct || 5),
+          mosAdmissiblePct: Number(sc.mos_admissible_pct || 0),
+          mosCapPct: Number(sc.mos_cap_pct || 15),
+          dlpMonths: Number(sc.dlp_months || 12),
           startDate: sc.start_date ? String(sc.start_date) : null,
           endDate: sc.end_date ? String(sc.end_date) : null,
           status: sc.status,
@@ -147,10 +147,10 @@ export class ContractingSubcontractorsService {
 
     const values: any = {
       tenant_id: tenantId,
-      project_id: projectId as any,
+      project_id: projectId,
       subcontractor_id: dto.subcontractorId,
       contract_number: suppliedNumber || tempNumber,
-      contract_type: (dto.contractType || 'supply_and_apply') as any,
+      contract_type: dto.contractType || 'supply_and_apply',
       scope_of_work: dto.scopeOfWork.trim(),
       total_amount: totalAmount,
       retention_percent: dto.retentionPercent !== undefined ? Number(dto.retentionPercent) : 5.0,
@@ -165,7 +165,7 @@ export class ContractingSubcontractorsService {
       liability_cap_amount: dto.liabilityCapAmount !== undefined ? Number(dto.liabilityCapAmount) : null,
       wht_rate: Number(dto.whtRate || 0),
       social_insurance_pct: Number(dto.socialInsurancePct || 0),
-      payment_linkage_mode: (dto.paymentLinkageMode || 'independent') as any,
+      payment_linkage_mode: dto.paymentLinkageMode || 'independent',
       payment_terms_days: Number(dto.paymentTermsDays || 30),
       tail_reserve_pct: Number(dto.tailReservePct || 10.0),
       wastage_allowance_pct: Number(dto.wastageAllowancePct || 5.0),
@@ -207,11 +207,11 @@ export class ContractingSubcontractorsService {
 
   async getSubcontractById(auth: AuthContext, id: string) {
     const { tenantId } = requireTenantScope(auth);
-    const sub = await (this.db as any)
+    const sub = await this.db
       .selectFrom('contracting_subcontracts')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
     if (!sub) {
       throw new NotFoundException(`عقد مقاول الباطن برقم ${id} غير موجود`);
@@ -221,7 +221,7 @@ export class ContractingSubcontractorsService {
 
   async getSubcontractors(auth: AuthContext, query?: { search?: string; tradeSpecialty?: string; status?: string }) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any).selectFrom('contracting_subcontractors').selectAll().where('tenant_id', '=', tenantId);
+    let q = this.db.selectFrom('contracting_subcontractors').selectAll().where('tenant_id', '=', tenantId);
 
     if (query?.status) {
       q = q.where('status', '=', query.status);
@@ -248,7 +248,7 @@ export class ContractingSubcontractorsService {
       rows.map(async (sub: any) => {
         const subId = Number(sub.id);
 
-        const commitmentsRes = await (this.db as any)
+        const commitmentsRes = await this.db
           .selectFrom('contracting_subcontracts')
           .select([
             sql<number>`count(*)::int`.as('count'),
@@ -258,7 +258,7 @@ export class ContractingSubcontractorsService {
           .where('subcontractor_id', '=', subId)
           .executeTakeFirst();
 
-        const invoicesRes = await (this.db as any)
+        const invoicesRes = await this.db
           .selectFrom('contracting_invoices')
           .select([
             sql<number>`COALESCE(SUM(net_payable), 0)`.as('total_invoiced'),
@@ -270,7 +270,7 @@ export class ContractingSubcontractorsService {
           .where('status', 'in', ['approved', 'paid'])
           .executeTakeFirst();
 
-        const paymentsRes = await (this.db as any)
+        const paymentsRes = await this.db
           .selectFrom('contracting_subcontractor_payments')
           .select(sql<number>`COALESCE(SUM(amount), 0)`.as('total_paid'))
           .where('tenant_id', '=', tenantId)
@@ -315,7 +315,7 @@ export class ContractingSubcontractorsService {
 
   async getSubcontractorById(auth: AuthContext, id: number) {
     const { tenantId } = requireTenantScope(auth);
-    const sub = await (this.db as any)
+    const sub = await this.db
       .selectFrom('contracting_subcontractors')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -353,7 +353,7 @@ export class ContractingSubcontractorsService {
       throw new BadRequestException('اسم مقاول الباطن مطلوب');
     }
 
-    const [sub] = await (this.db as any)
+    const [sub] = await this.db
       .insertInto('contracting_subcontractors')
       .values({
         tenant_id: tenantId,
@@ -409,7 +409,7 @@ export class ContractingSubcontractorsService {
     if (dto.status !== undefined) updatePayload.status = dto.status;
     if (dto.notes !== undefined) updatePayload.notes = dto.notes.trim();
 
-    await (this.db as any)
+    await this.db
       .updateTable('contracting_subcontractors')
       .set(updatePayload)
       .where('tenant_id', '=', tenantId)
@@ -421,7 +421,7 @@ export class ContractingSubcontractorsService {
 
   async deleteSubcontractor(auth: AuthContext, id: number) {
     const { tenantId } = requireTenantScope(auth);
-    const commitments = await (this.db as any)
+    const commitments = await this.db
       .selectFrom('contracting_subcontracts')
       .select(sql<number>`count(*)::int`.as('count'))
       .where('tenant_id', '=', tenantId)
@@ -429,7 +429,7 @@ export class ContractingSubcontractorsService {
       .executeTakeFirst();
 
     if (commitments && commitments.count > 0) {
-      await (this.db as any)
+      await this.db
         .updateTable('contracting_subcontractors')
         .set({ status: 'suspended', updated_at: new Date() })
         .where('tenant_id', '=', tenantId)
@@ -438,7 +438,7 @@ export class ContractingSubcontractorsService {
       return { success: true, message: 'تم إيقاف حساب المقاول لوجود عقود مرتبطة به' };
     }
 
-    await (this.db as any)
+    await this.db
       .deleteFrom('contracting_subcontractors')
       .where('tenant_id', '=', tenantId)
       .where('id', '=', id)
@@ -456,7 +456,7 @@ export class ContractingSubcontractorsService {
     const businessTz = await getTenantTimezone(this.db, tenantId);
     const sub = await this.getSubcontractorById(auth, subcontractorId);
 
-    let subcontractsQuery = (this.db as any)
+    let subcontractsQuery = this.db
       .selectFrom('contracting_subcontracts')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -467,7 +467,7 @@ export class ContractingSubcontractorsService {
     const subcontracts = await subcontractsQuery.execute();
     const subcontractIds = subcontracts.map((s: any) => s.id);
 
-    let invQuery = (this.db as any)
+    let invQuery = this.db
       .selectFrom('contracting_invoices')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -479,7 +479,7 @@ export class ContractingSubcontractorsService {
     }
     const invoices = await invQuery.execute();
 
-    let payQuery = (this.db as any)
+    let payQuery = this.db
       .selectFrom('contracting_subcontractor_payments')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -491,7 +491,7 @@ export class ContractingSubcontractorsService {
 
     let backcharges: any[] = [];
     if (subcontractIds.length > 0) {
-      let bcQuery = (this.db as any)
+      let bcQuery = this.db
         .selectFrom('contracting_subcontractor_backcharges')
         .selectAll()
         .where('tenant_id', '=', tenantId)

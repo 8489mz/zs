@@ -27,7 +27,7 @@ export class VanRoutesVisitsSlice {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -43,7 +43,7 @@ export class VanRoutesVisitsSlice {
     const ids = new Set<number>();
     const collect = (rows: any[]): void => {
       for (const row of rows || []) {
-        const id = Number((row as any).customer_id ?? (row as any).customerId);
+        const id = Number(row.customer_id ?? row.customerId);
         if (Number.isInteger(id) && id > 0) ids.add(id);
       }
     };
@@ -107,12 +107,12 @@ export class VanRoutesVisitsSlice {
       if (!trip) {
         throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
       }
-      if (Number((trip as any).rep_id) !== Number(repId)) {
+      if (Number(trip.rep_id) !== Number(repId)) {
         throw new AppError('هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل زيارة عليها', 'REP_TRIP_NOT_OWNED', 403);
       }
       return;
     }
-    if (extractAssignedRepIds((customer as any).metadata).includes(Number(repId))) return;
+    if (extractAssignedRepIds(customer.metadata).includes(Number(repId))) return;
     throw new AppError(
       'العميل غير مسند إليك ولا توجد رحلة مملوكة لك تبرر تسجيل الزيارة',
       'REP_CUSTOMER_NOT_ASSIGNED',
@@ -396,10 +396,10 @@ export class VanRoutesVisitsSlice {
       if (!sale) {
         throw new AppError('الفاتورة غير موجودة', 'SALE_NOT_FOUND', 404);
       }
-      if (Number((sale as any).customer_id) !== Number(payload.customerId)) {
+      if (Number(sale.customer_id) !== Number(payload.customerId)) {
         throw new AppError('الفاتورة لا تخص هذا العميل', 'VISIT_SALE_CUSTOMER_MISMATCH', 400);
       }
-      if ((sale as any).delivery_rep_id != null && Number((sale as any).delivery_rep_id) !== Number(repId)) {
+      if (sale.delivery_rep_id != null && Number(sale.delivery_rep_id) !== Number(repId)) {
         throw new AppError('الفاتورة تخص مندوباً آخر، لا يمكنك ربطها بزيارتك', 'REP_SALE_NOT_OWNED', 403);
       }
     }

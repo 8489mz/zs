@@ -122,17 +122,14 @@ export class AuditService {
     if (idempotencyKey) {
       await executor
         .insertInto('audit_logs')
-        .values({ ...base, idempotency_key: idempotencyKey } as any)
+        .values({ ...base, idempotency_key: idempotencyKey })
         .onConflict((oc) => oc.columns(['tenant_id', 'idempotency_key']).doNothing())
         .execute();
     } else {
       // Keyless callers keep the exact pre-0293 insert: schemas that have
       // not run the migration (older specs, pre-migration databases) must
       // not see the new column at all.
-      await executor
-        .insertInto('audit_logs')
-        .values(base as any)
-        .execute();
+      await executor.insertInto('audit_logs').values(base).execute();
     }
   }
 }

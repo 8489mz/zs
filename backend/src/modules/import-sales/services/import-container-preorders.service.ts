@@ -519,13 +519,11 @@ export class ImportContainerPreordersService {
         .executeTakeFirst();
 
       const qty = Number(preorder.reserved_quantity);
-      const unitPrice = Number((preorder as any).unit_price_egp ?? (preorder as any).agreed_unit_price_egp ?? 0);
+      const unitPrice = Number(preorder.unit_price_egp ?? preorder.agreed_unit_price_egp ?? 0);
       const total = Number((qty * unitPrice).toFixed(2));
       const depositAmount = Math.max(
         0,
-        Number(
-          (Number(preorder.deposit_amount_egp || 0) - Number((preorder as any).refunded_amount_egp || 0)).toFixed(2),
-        ),
+        Number((Number(preorder.deposit_amount_egp || 0) - Number(preorder.refunded_amount_egp || 0)).toFixed(2)),
       );
       const appliedDeposit = Math.min(depositAmount, total);
       const balanceDue = Math.max(0, Number((total - appliedDeposit).toFixed(2)));
@@ -566,7 +564,7 @@ export class ImportContainerPreordersService {
         .forUpdate()
         .orderBy('id')
         .execute();
-      const allocatedQty = coveringLots.reduce((sum, l) => sum + Number((l as any).remaining_quantity || 0), 0);
+      const allocatedQty = coveringLots.reduce((sum, l) => sum + Number(l.remaining_quantity || 0), 0);
       if (allocatedQty + 0.0001 < qty) {
         throw new BadRequestException(
           `لا يمكن تحويل الحجز إلى بيع: الحصص المخصصة للشحنة (${allocatedQty}) أقل من كمية الحجز (${qty}). [IMPORT_PREORDER_CONVERSION_NOT_ALLOCATED]`,
@@ -588,12 +586,12 @@ export class ImportContainerPreordersService {
       if (product) {
         await lockStockProducts(trx as any, {
           tenantId,
-          accountId: (product as any).account_id || tenantId,
+          accountId: product.account_id || tenantId,
           productIds: [Number(preorder.product_id)],
         });
         stockDelta = await applyStockDelta(trx as any, {
           tenantId,
-          accountId: (product as any).account_id || tenantId,
+          accountId: product.account_id || tenantId,
           productId: Number(preorder.product_id),
           delta: -qty,
           branchId,
@@ -626,7 +624,7 @@ export class ImportContainerPreordersService {
           location_id: locationId,
           created_by: userId,
           tenant_id: tenantId,
-          account_id: (product as any)?.account_id || tenantId,
+          account_id: product?.account_id || tenantId,
         } as any)
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -655,7 +653,7 @@ export class ImportContainerPreordersService {
           allocated_discount: 0,
           allocated_tax: 0,
           tenant_id: tenantId,
-          account_id: (product as any)?.account_id || tenantId,
+          account_id: product?.account_id || tenantId,
         } as any)
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -711,7 +709,7 @@ export class ImportContainerPreordersService {
       // cost. The fallback lot here is shipment-scoped, not
       // location-scoped (same as before); WAC remains the GL basis for
       // ordinary POS sales and is the fallback of last resort here.
-      const fallbackUnitCostEgp = Number(lot?.unit_landed_cost_egp || (product as any)?.cost_price || 0);
+      const fallbackUnitCostEgp = Number(lot?.unit_landed_cost_egp || product?.cost_price || 0);
       const saleCost = calculateImportSaleCost({
         qty,
         allocatedQty: coverage.allocatedQty,
@@ -744,7 +742,7 @@ export class ImportContainerPreordersService {
       // unit cost, leaving a stale/default cost_price on the item.)
       await trx
         .updateTable('sale_items')
-        .set({ cost_price: unitCostEgp } as any)
+        .set({ cost_price: unitCostEgp })
         .where('id', '=', saleItemInsert.id)
         .where('tenant_id', '=', tenantId)
         .execute();
@@ -765,7 +763,7 @@ export class ImportContainerPreordersService {
           branchId,
           locationId,
           tenantId,
-          accountId: (product as any).account_id || tenantId,
+          accountId: product.account_id || tenantId,
           movementType: 'sale',
           delta: -qty,
           beforeQty: stockDelta!.scopeBefore,
@@ -785,7 +783,7 @@ export class ImportContainerPreordersService {
           .updateTable('customers')
           .set({
             balance: sql`COALESCE(balance, 0) + ${balanceDue}`,
-          } as any)
+          })
           .where('id', '=', preorder.customer_id)
           .where('tenant_id', '=', tenantId)
           .execute();
@@ -884,7 +882,7 @@ export class ImportContainerPreordersService {
           sourceType: 'sale',
           sourceId: saleId,
           tenantId,
-          accountId: (product as any)?.account_id || tenantId,
+          accountId: product?.account_id || tenantId,
           entryDate: new Date(),
           description: `فاتورة مبيعات حجز حاوية مستوردة #${docNo}`,
           branchId,
@@ -911,7 +909,7 @@ export class ImportContainerPreordersService {
           sale_invoice_id: saleId,
           notes: `${preorder.notes || ''} [تم التحويل لفاتورة مبيعات #${docNo} برقم معرف ${saleId}]`.trim(),
           updated_at: sql`NOW()`,
-        } as any)
+        })
         .where('id', '=', preorderId)
         .where('tenant_id', '=', tenantId)
         .returningAll()

@@ -227,9 +227,9 @@ export class PostSaleService {
     const subtotal = toBookMoney(sale.subtotal);
     const discount = toBookMoney(sale.discount);
     const taxAmount = toBookMoney(sale.tax_amount);
-    const deliveryFee = toBookMoney((sale as any).delivery_fee ?? 0);
-    const serviceCharge = toBookMoney((sale as any).service_charge ?? 0);
-    const tipAmount = toBookMoney((sale as any).tip_amount ?? 0);
+    const deliveryFee = toBookMoney(sale.delivery_fee ?? 0);
+    const serviceCharge = toBookMoney(sale.service_charge ?? 0);
+    const tipAmount = toBookMoney(sale.tip_amount ?? 0);
     const paidAmount = toBookMoney(sale.paid_amount);
     const storeCreditUsed = toBookMoney(sale.store_credit_used);
     const saleTotal = toBookMoney(sale.total);
@@ -339,8 +339,8 @@ export class PostSaleService {
     }
 
     if (receivableAmount > 0) {
-      const isVanSale = String((sale as any).sale_origin || '') === 'van_sale';
-      const paymentType = String((sale as any).payment_type || '');
+      const isVanSale = String(sale.sale_origin || '') === 'van_sale';
+      const paymentType = String(sale.payment_type || '');
       const branchIdVal = sale.branch_id ? Number(sale.branch_id) : null;
       const locationIdVal = sale.location_id ? Number(sale.location_id) : null;
 
@@ -358,7 +358,7 @@ export class PostSaleService {
           locationId: locationIdVal,
         });
       } else if (isVanSale && paymentType === 'split') {
-        const creditLedgerRow = await (queryable as any)
+        const creditLedgerRow = await queryable
           .selectFrom('customer_ledger')
           .select(['amount'])
           .where('reference_type', '=', 'sale')
@@ -444,7 +444,7 @@ export class PostSaleService {
           subtotal,
           taxAmount,
           deliveryFee,
-          deliveryFeeMode: (sale as any).delivery_fee_mode,
+          deliveryFeeMode: sale.delivery_fee_mode,
           serviceCharge,
           tipAmount,
           pricesIncludeTax: Boolean(sale.prices_include_tax),

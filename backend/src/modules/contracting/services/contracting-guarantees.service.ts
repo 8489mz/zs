@@ -83,7 +83,7 @@ export class ContractingGuaranteesService {
     tenantId: string,
     filters: { projectId?: string; subcontractId?: string; status?: string } = {},
   ): Promise<BankGuarantee[]> {
-    let query = (this.db as any).selectFrom('contracting_guarantees').selectAll().where('tenant_id', '=', tenantId);
+    let query = this.db.selectFrom('contracting_guarantees').selectAll().where('tenant_id', '=', tenantId);
 
     if (filters.projectId) {
       query = query.where('project_id', '=', String(filters.projectId));
@@ -130,7 +130,7 @@ export class ContractingGuaranteesService {
     } = {},
   ) {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
+    let q = this.db
       .selectFrom('contracting_guarantees as g')
       .leftJoin('contracting_projects as p', 'p.id', 'g.project_id')
       .leftJoin('contracting_subcontracts as s', 's.id', 'g.subcontract_id')
@@ -259,7 +259,7 @@ export class ContractingGuaranteesService {
       await this.getSubcontractorById(auth, dto.subcontractorId);
     }
 
-    const [inserted] = await (this.db as any)
+    const [inserted] = await this.db
       .insertInto('contracting_guarantees')
       .values({
         tenant_id: tenantId,
@@ -305,7 +305,7 @@ export class ContractingGuaranteesService {
     if (dto.documentUrl !== undefined) updates.document_url = dto.documentUrl?.trim() || null;
     if (dto.notes !== undefined) updates.notes = dto.notes?.trim() || null;
 
-    await (this.db as any)
+    await this.db
       .updateTable('contracting_guarantees')
       .set(updates)
       .where('tenant_id', '=', tenantId)
@@ -328,7 +328,7 @@ export class ContractingGuaranteesService {
       : ` | تمديد بنكي حتى ${dto.newExpiryDate}`;
     const combinedNotes = existing.notes ? `${existing.notes}${noteAppend}` : noteAppend.replace(/^ \| /, '');
 
-    await (this.db as any)
+    await this.db
       .updateTable('contracting_guarantees')
       .set({
         expiry_date: dto.newExpiryDate,
@@ -353,7 +353,7 @@ export class ContractingGuaranteesService {
       : ` | تم الإفراج ورد أصل الخطاب بتاريخ ${dto.releaseDate}`;
     const combinedNotes = existing.notes ? `${existing.notes}${noteAppend}` : noteAppend.replace(/^ \| /, '');
 
-    await (this.db as any)
+    await this.db
       .updateTable('contracting_guarantees')
       .set({
         status: 'released',
@@ -378,7 +378,7 @@ export class ContractingGuaranteesService {
     const noteAppend = ` | تسييل/مصادرة بتاريخ ${dto.invocationDate} بمبلغ (${dto.invokedAmount || existing.amount} ${existing.currency}). السبب: ${dto.reason}`;
     const combinedNotes = existing.notes ? `${existing.notes}${noteAppend}` : noteAppend.replace(/^ \| /, '');
 
-    await (this.db as any)
+    await this.db
       .updateTable('contracting_guarantees')
       .set({
         status: 'confiscated_invoked',
@@ -401,11 +401,11 @@ export class ContractingGuaranteesService {
 
   async initializeDefaultCostPools(auth: AuthContext, projectId: string) {
     const { tenantId } = requireTenantScope(auth);
-    const existing = await (this.db as any)
+    const existing = await this.db
       .selectFrom('contracting_cost_pools')
       .select('id')
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .execute();
 
     if (existing.length > 0) return;
@@ -442,11 +442,11 @@ export class ContractingGuaranteesService {
     ];
 
     for (const d of defaults) {
-      await (this.db as any)
+      await this.db
         .insertInto('contracting_cost_pools')
         .values({
           tenant_id: tenantId,
-          project_id: projectId as any,
+          project_id: projectId,
           pool_code: d.pool_code,
           pool_name: d.pool_name,
           pool_type: d.pool_type,
@@ -462,11 +462,11 @@ export class ContractingGuaranteesService {
     const { tenantId } = requireTenantScope(auth);
     await this.initializeDefaultCostPools(auth, projectId);
 
-    const pools = await (this.db as any)
+    const pools = await this.db
       .selectFrom('contracting_cost_pools')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('pool_code', 'asc')
       .execute();
 
@@ -487,11 +487,11 @@ export class ContractingGuaranteesService {
     const { tenantId } = requireTenantScope(auth);
     await this.getProjectById(auth, projectId);
 
-    const [inserted] = await (this.db as any)
+    const [inserted] = await this.db
       .insertInto('contracting_cost_pools')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
+        project_id: projectId,
         pool_code: dto.poolCode.trim().toUpperCase(),
         pool_name: dto.poolName.trim(),
         pool_type: dto.poolType,
@@ -517,7 +517,7 @@ export class ContractingGuaranteesService {
 
   async getIndirectExpenses(auth: AuthContext, projectId: string, poolId?: string) {
     const { tenantId } = requireTenantScope(auth);
-    let query = (this.db as any)
+    let query = this.db
       .selectFrom('contracting_indirect_expenses as ie')
       .innerJoin('contracting_cost_pools as cp', 'cp.id', 'ie.pool_id')
       .select([
@@ -539,10 +539,10 @@ export class ContractingGuaranteesService {
         'cp.driver_type',
       ])
       .where('ie.tenant_id', '=', tenantId)
-      .where('ie.project_id', '=', projectId as any);
+      .where('ie.project_id', '=', projectId);
 
     if (poolId) {
-      query = query.where('ie.pool_id', '=', poolId as any);
+      query = query.where('ie.pool_id', '=', poolId);
     }
 
     const rows = await query.orderBy('ie.expense_date', 'desc').execute();
@@ -575,19 +575,19 @@ export class ContractingGuaranteesService {
     const recovered = Number(dto.recoveredAmount || 0);
     const net = Math.round(Math.max(0, gross - recovered) * 1000) / 1000;
 
-    const [inserted] = await (this.db as any)
+    const [inserted] = await this.db
       .insertInto('contracting_indirect_expenses')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
-        pool_id: dto.poolId as any,
+        project_id: projectId,
+        pool_id: dto.poolId,
         expense_title: dto.expenseTitle.trim(),
         gross_amount: gross,
         recovered_amount: recovered,
         net_amount: net,
         expense_date: dto.expenseDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         voucher_ref: dto.voucherRef || null,
-        mobilization_expense_id: dto.mobilizationExpenseId ? (dto.mobilizationExpenseId as any) : null,
+        mobilization_expense_id: dto.mobilizationExpenseId ? dto.mobilizationExpenseId : null,
       })
       .returningAll()
       .execute();
@@ -597,11 +597,11 @@ export class ContractingGuaranteesService {
 
   async getAllocationBatches(auth: AuthContext, projectId: string) {
     const { tenantId } = requireTenantScope(auth);
-    const batches = await (this.db as any)
+    const batches = await this.db
       .selectFrom('contracting_allocation_batches')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('period_start', 'desc')
       .execute();
 
@@ -635,11 +635,11 @@ export class ContractingGuaranteesService {
     const boqItems = await this.getBoqItems(auth, projectId);
 
     // Fetch unallocated or in-period indirect expenses
-    const expenses = await (this.db as any)
+    const expenses = await this.db
       .selectFrom('contracting_indirect_expenses')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where((eb: any) =>
         eb.or([
           eb('batch_id', 'is', null),
@@ -674,11 +674,11 @@ export class ContractingGuaranteesService {
     });
 
     // Fetch labor attendance driver metrics in period
-    const attendanceRecords = await (this.db as any)
+    const attendanceRecords = await this.db
       .selectFrom('contracting_labor_attendance_records')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('attendance_date', '>=', dto.periodStart)
       .where('attendance_date', '<=', dto.periodEnd)
       .execute();
@@ -695,11 +695,11 @@ export class ContractingGuaranteesService {
     }
 
     // Fetch equipment fuel/meter logs driver metrics in period
-    const equipmentLogs = await (this.db as any)
+    const equipmentLogs = await this.db
       .selectFrom('contracting_equipment_fuel_logs')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('log_date', '>=', dto.periodStart)
       .where('log_date', '<=', dto.periodEnd)
       .execute();
@@ -750,11 +750,11 @@ export class ContractingGuaranteesService {
 
     // Insert batch
     const batch = await this.db.transaction().execute(async (trx) => {
-      const inserted = await (trx as any)
+      const inserted = await trx
         .insertInto('contracting_allocation_batches')
         .values({
           tenant_id: tenantId,
-          project_id: projectId as any,
+          project_id: projectId,
           batch_number: tempNumber,
           period_start: dto.periodStart,
           period_end: dto.periodEnd,
@@ -771,7 +771,7 @@ export class ContractingGuaranteesService {
         })
         .returning('id')
         .executeTakeFirstOrThrow();
-      const updated = await (trx as any)
+      const updated = await trx
         .updateTable('contracting_allocation_batches')
         .set({
           batch_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
@@ -785,11 +785,11 @@ export class ContractingGuaranteesService {
     });
 
     // Link expenses to batch
-    await (this.db as any)
+    await this.db
       .updateTable('contracting_indirect_expenses')
       .set({ batch_id: batch.id })
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('batch_id', 'is', null)
       .where('expense_date', '>=', dto.periodStart)
       .where('expense_date', '<=', dto.periodEnd)
@@ -799,14 +799,14 @@ export class ContractingGuaranteesService {
     for (const pool of summary.poolSummaries) {
       for (const alloc of pool.allocations) {
         if (alloc.allocatedAmount > 0 || alloc.driverQty > 0) {
-          await (this.db as any)
+          await this.db
             .insertInto('contracting_boq_indirect_allocations')
             .values({
               tenant_id: tenantId,
-              project_id: projectId as any,
+              project_id: projectId,
               batch_id: batch.id,
-              pool_id: pool.poolId as any,
-              boq_item_id: alloc.boqItemId as any,
+              pool_id: pool.poolId,
+              boq_item_id: alloc.boqItemId,
               driver_type: pool.driverType,
               driver_qty: alloc.driverQty,
               total_pool_driver_qty: pool.totalDriverQty,
@@ -822,7 +822,7 @@ export class ContractingGuaranteesService {
     // Update BOQ items' allocated_indirect_cost & total_actual_cost
     for (const itemSummary of summary.boqItemSummaries) {
       if (itemSummary.totalAllocatedIndirectCost > 0) {
-        await (this.db as any)
+        await this.db
           .updateTable('contracting_boq_items')
           .set({
             allocated_indirect_cost: sql`COALESCE(allocated_indirect_cost, 0) + ${itemSummary.totalAllocatedIndirectCost}`,
@@ -830,7 +830,7 @@ export class ContractingGuaranteesService {
             updated_at: new Date(),
           })
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', itemSummary.boqItemId as any)
+          .where('id', '=', itemSummary.boqItemId)
           .execute();
       }
     }

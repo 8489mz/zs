@@ -97,11 +97,11 @@ export function normalizePerDayCash(input: unknown, bookDigits: MoneyDigits): Pe
   const seen = new Set<string>();
   const out: PerDayCashInput[] = [];
   for (const row of input as Array<Record<string, unknown>>) {
-    const businessDay = String((row as any)?.businessDay || '').trim();
+    const businessDay = String(row?.businessDay || '').trim();
     if (!isBusinessDayKey(businessDay)) throw new Error('SETTLEMENT_PER_DAY_INVALID_DAY');
     if (seen.has(businessDay)) throw new Error('SETTLEMENT_PER_DAY_DUPLICATE_DAY');
     seen.add(businessDay);
-    const counted = Number((row as any)?.countedCash);
+    const counted = Number(row?.countedCash);
     if (!Number.isFinite(counted) || counted < 0) throw new Error('SETTLEMENT_PER_DAY_INVALID_AMOUNT');
     out.push({ businessDay, countedCash: roundMoney(counted, bookDigits) });
   }

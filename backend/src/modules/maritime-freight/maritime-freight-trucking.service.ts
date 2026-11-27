@@ -130,7 +130,7 @@ export class MaritimeFreightTruckingService {
         .selectFrom('maritime_jobs')
         .select(['id', 'transport_mode', 'status'])
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', String(dto.jobId) as any)
+        .where('id', '=', String(dto.jobId))
         .executeTakeFirst();
 
       if (job) {
@@ -171,7 +171,7 @@ export class MaritimeFreightTruckingService {
         .selectFrom('maritime_inland_trucking_trips')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', String(id) as any)
+        .where('id', '=', String(id))
         .forUpdate()
         .executeTakeFirst();
       if (!trip) throw new NotFoundException('Inland trucking trip not found');
@@ -179,7 +179,7 @@ export class MaritimeFreightTruckingService {
         .selectFrom('maritime_jobs')
         .select(['transport_mode', 'gross_weight_kg', 'total_cbm', 'booking_number'])
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', trip.job_id as any)
+        .where('id', '=', trip.job_id)
         .executeTakeFirst();
       if (job?.transport_mode === 'road' && dto.tripStatus === 'in_transit') {
         const assigned = await trx
@@ -211,7 +211,7 @@ export class MaritimeFreightTruckingService {
           updated_at: sql`NOW()`,
         })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', String(id) as any)
+        .where('id', '=', String(id))
         .returningAll()
         .execute();
 
@@ -253,7 +253,7 @@ export class MaritimeFreightTruckingService {
         await trx
           .updateTable('maritime_jobs')
           .set({ milestone_status: mapping.key })
-          .where('id', '=', String(updated.job_id) as any)
+          .where('id', '=', String(updated.job_id))
           .where('tenant_id', '=', tenantId)
           .execute();
       }

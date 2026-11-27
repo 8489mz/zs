@@ -44,7 +44,7 @@ export class InventoryTransferService {
     await sql`select pg_advisory_xact_lock(731234, hashtext(${scope.tenantId}))`.execute(trx);
     const existing = await trx.selectFrom('stock_locations').select(['id']).where('location_type', '=', 'in_transit').where('tenant_id', '=', scope.tenantId).executeTakeFirst();
     if (existing) return existing.id;
-    const inserted = await trx.insertInto('stock_locations').values({ name: 'بضاعة بالطريق', code: 'IN_TRANSIT', location_type: 'in_transit' as any, is_active: true, tenant_id: scope.tenantId, account_id: scope.accountId }).returning('id').executeTakeFirstOrThrow();
+    const inserted = await trx.insertInto('stock_locations').values({ name: 'بضاعة بالطريق', code: 'IN_TRANSIT', location_type: 'in_transit', is_active: true, tenant_id: scope.tenantId, account_id: scope.accountId }).returning('id').executeTakeFirstOrThrow();
     return inserted.id;
   }
 
@@ -287,7 +287,7 @@ export class InventoryTransferService {
           variance_qty: 0,
           serial_tracking: JSON.stringify(trace.serialTracking), batch_tracking: JSON.stringify(trace.batchTracking),
           ...this.tenantFields(auth),
-        } as any).execute();
+        }).execute();
 
         // Deduct from source. Only reduce global stock if final_issue to a
         // consumption sink (inTransitLocationId is null and there is no
@@ -624,7 +624,7 @@ export class InventoryTransferService {
 
           await trx
             .updateTable('stock_transfer_items')
-            .set({ dispatched_qty: dispatched, received_qty: received, variance_qty: shortfall, variance_reason: shortfall > 0.0001 ? (varianceReason || null) : null, batch_tracking: JSON.stringify(reconciledBatches) } as any)
+            .set({ dispatched_qty: dispatched, received_qty: received, variance_qty: shortfall, variance_reason: shortfall > 0.0001 ? (varianceReason || null) : null, batch_tracking: JSON.stringify(reconciledBatches) })
             .where('id', '=', Number(item.id))
             .where(this.tenantPredicate(auth))
             .execute();
@@ -642,7 +642,7 @@ export class InventoryTransferService {
       // and the status still post normally.
       const headerUpdate: Record<string, unknown> = { status: 'received', received_by: auth.userId, received_at: sql`NOW()`, has_transit_variance: anyVariance, transit_variance_journal_entry_id: shrinkageJournalIds[0] ?? null, updated_at: sql`NOW()` };
       if (Number(effectiveToLocationId) !== Number(transfer.from_location_id)) headerUpdate.to_location_id = effectiveToLocationId;
-      await trx.updateTable('stock_transfers').set(headerUpdate as any).where('id', '=', transferId).where(this.tenantPredicate(auth)).execute();
+      await trx.updateTable('stock_transfers').set(headerUpdate).where('id', '=', transferId).where(this.tenantPredicate(auth)).execute();
 
       await this.audit.logWithExecutor(trx, 'استلام تحويل مخزون', `تم استلام التحويل TR-${transferId}` + (soloOverride ? ` — اعتماد فاقد منفرد بقرار إداري — استلم ${auth.username} التحويل بفاقد ${Number(receiptPlan.reduce((sum, row) => sum + (row.shortfall > 0.0001 ? row.shortfall : 0), 0).toFixed(3))} — ${varianceReason}` : ''), auth);
 
@@ -910,7 +910,7 @@ export class InventoryTransferService {
           transfer_id: transferId, product_id: stock.product_id, product_name: stock.name || '', qty,
           serial_tracking: JSON.stringify(trace.serialTracking), batch_tracking: JSON.stringify(trace.batchTracking),
           ...this.tenantFields(auth),
-        } as any).execute();
+        }).execute();
 
         // Deduct from source
         const fromScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: Number(stock.product_id), branchId: from.branchId, locationId: from.id };
@@ -1012,7 +1012,7 @@ export class InventoryTransferService {
             transfer_id: transferId, product_id: item.productId, product_name: product.name || '', qty,
             serial_tracking: JSON.stringify(trace.serialTracking), batch_tracking: JSON.stringify(trace.batchTracking),
             ...this.tenantFields(auth),
-          } as any).execute();
+          }).execute();
 
           // Deduct from source
           const fromScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: item.productId, branchId: from.branchId, locationId: from.id };
@@ -1126,7 +1126,7 @@ export class InventoryTransferService {
           transfer_id: transferId, product_id: stock.product_id, product_name: stock.name || '', qty,
           serial_tracking: JSON.stringify(trace.serialTracking), batch_tracking: JSON.stringify(trace.batchTracking),
           ...this.tenantFields(auth),
-        } as any).execute();
+        }).execute();
 
         // Deduct from source
         const fromScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: Number(stock.product_id), branchId: from.branchId, locationId: from.id };

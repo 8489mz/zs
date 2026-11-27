@@ -41,7 +41,7 @@ async function decidePortalTenantStatus(db: Kysely<any>, tenantId: string): Prom
     .executeTakeFirst();
   if (!tenant) return ALLOWED;
 
-  const status = String((tenant as any).status || '');
+  const status = String(tenant.status || '');
   if (status === 'suspended') {
     return blocked('TENANT_SUSPENDED', 'تم إيقاف هذه النسخة. تواصل مع الدعم لتفعيلها.');
   }
@@ -50,7 +50,7 @@ async function decidePortalTenantStatus(db: Kysely<any>, tenantId: string): Prom
   }
 
   const now = new Date();
-  if (status === 'trial' && new Date((tenant as any).trial_ends_at) <= now) {
+  if (status === 'trial' && new Date(tenant.trial_ends_at) <= now) {
     return blocked('TENANT_TRIAL_EXPIRED', 'انتهت الفترة التجريبية لهذه النسخة. تواصل معنا لتفعيل الاشتراك.');
   }
 
@@ -58,17 +58,17 @@ async function decidePortalTenantStatus(db: Kysely<any>, tenantId: string): Prom
     const subscription = await db
       .selectFrom('tenant_subscriptions')
       .selectAll()
-      .where('tenant_id', '=', (tenant as any).id)
+      .where('tenant_id', '=', tenant.id)
       .where('status', 'in', ['active', 'past_due'])
       .orderBy('created_at', 'desc')
       .executeTakeFirst();
     if (!subscription) {
       return blocked('TENANT_EXPIRED', 'لا يوجد اشتراك فعال لهذه النسخة. تواصل معنا لتفعيل الاشتراك.');
     }
-    if (new Date((subscription as any).ends_at) <= now) {
-      const graceEndsAt = (subscription as any).grace_ends_at
-        ? new Date((subscription as any).grace_ends_at)
-        : new Date((subscription as any).ends_at);
+    if (new Date(subscription.ends_at) <= now) {
+      const graceEndsAt = subscription.grace_ends_at
+        ? new Date(subscription.grace_ends_at)
+        : new Date(subscription.ends_at);
       if (graceEndsAt <= now) {
         return blocked('TENANT_EXPIRED', 'انتهى اشتراك هذه النسخة وانتهت فترة السماح. تواصل معنا لتفعيل الاشتراك.');
       }

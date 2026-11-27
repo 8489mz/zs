@@ -180,7 +180,7 @@ export class InventoryController {
     @Body() payload: CreateStockTransferDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    return this.inventoryService.internalTransferProducts(payload as any, req.authContext!);
+    return this.inventoryService.internalTransferProducts(payload, req.authContext!);
   }
 
   @Post(['internal-transfer-category', 'v1/internal-transfer-category'])
@@ -189,7 +189,7 @@ export class InventoryController {
     @Body() payload: import('./dto/create-category-transfer.dto').CreateCategoryTransferDto,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    return this.inventoryService.internalTransferCategory(payload as any, req.authContext!);
+    return this.inventoryService.internalTransferCategory(payload, req.authContext!);
   }
 
   @Post(['stock-transfers/:id/receive', 'v1/stock-transfers/:id/receive'])

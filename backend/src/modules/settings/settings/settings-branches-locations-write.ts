@@ -66,7 +66,7 @@ export class SettingsBranchesLocationsWrite {
         .select(['id', 'plan_id', 'extra_features', 'status'])
         .where('id', '=', scope.tenantId)
         .executeTakeFirst();
-      const planFeatures = await this.getPlanFeatures(scope.tenantId, tenant?.plan_id as any);
+      const planFeatures = await this.getPlanFeatures(scope.tenantId, tenant?.plan_id);
       const maxBranches = await resolveMaxBranchesForTenant(this.db, scope.tenantId, tenant, planFeatures);
       if (activeBranches.length >= maxBranches) {
         throw new AppError(
@@ -198,7 +198,7 @@ export class SettingsBranchesLocationsWrite {
         .select(['id', 'plan_id', 'extra_features'])
         .where('id', '=', scope.tenantId)
         .executeTakeFirst();
-      const planFeatures = await this.getPlanFeatures(scope.tenantId, tenant?.plan_id as any);
+      const planFeatures = await this.getPlanFeatures(scope.tenantId, tenant?.plan_id);
       const extraFeatures = Array.isArray(tenant?.extra_features)
         ? tenant?.extra_features
         : typeof tenant?.extra_features === 'string'

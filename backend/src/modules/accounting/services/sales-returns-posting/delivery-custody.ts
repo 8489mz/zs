@@ -87,22 +87,22 @@ export class DeliveryCustodyService {
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .executeTakeFirst();
     if (!sale) throw new AppError('Order not found', 'ORDER_NOT_FOUND', 404);
-    const docNo = (sale as any).doc_no || `Z-${saleId}`;
-    if (String((sale as any).delivery_status || '') !== 'out_for_delivery') {
+    const docNo = sale.doc_no || `Z-${saleId}`;
+    if (String(sale.delivery_status || '') !== 'out_for_delivery') {
       throw new AppError(
         'Only a dispatched delivery order can move its receivable to courier custody',
         'DELIVERY_CUSTODY_RECLASSIFICATION_INVALID',
         409,
       );
     }
-    if (Number((sale as any).delivery_rep_id || 0) !== Number(repId)) {
+    if (Number(sale.delivery_rep_id || 0) !== Number(repId)) {
       throw new AppError(
         "Order is not in this representative's custody",
         'DELIVERY_CUSTODY_RECLASSIFICATION_INVALID',
         409,
       );
     }
-    const customerId = (sale as any).customer_id ? Number((sale as any).customer_id) : null;
+    const customerId = sale.customer_id ? Number(sale.customer_id) : null;
 
     const existing = await queryable
       .selectFrom('journal_entries')
@@ -120,8 +120,8 @@ export class DeliveryCustodyService {
     if (!customerId) return { posted: false, journalEntryId: null, amount: 0, customerId, docNo };
 
     const customerAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '1130');
-    const branchId = (sale as any).branch_id ? Number((sale as any).branch_id) : null;
-    const locationId = (sale as any).location_id ? Number((sale as any).location_id) : null;
+    const branchId = sale.branch_id ? Number(sale.branch_id) : null;
+    const locationId = sale.location_id ? Number(sale.location_id) : null;
     const lines: JournalLineDraft[] = [];
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
     addBookLine({
@@ -210,10 +210,10 @@ export class DeliveryCustodyService {
       .where('debit', '>', 0)
       .executeTakeFirst();
     if (!leg) return { partnerType: 'none', partnerId: null };
-    const partnerType = String((leg as any).partner_type || 'none');
+    const partnerType = String(leg.partner_type || 'none');
     return {
       partnerType: partnerType === 'rep' ? 'rep' : 'none',
-      partnerId: partnerType === 'rep' && (leg as any).partner_id != null ? Number((leg as any).partner_id) : null,
+      partnerId: partnerType === 'rep' && leg.partner_id != null ? Number(leg.partner_id) : null,
     };
   }
 
@@ -243,6 +243,6 @@ export class DeliveryCustodyService {
       .where('l.partner_id', '=', repId)
       .where('j.status', '=', 'posted')
       .executeTakeFirst();
-    return this.toMoney(Number((row as any)?.balance || 0), bookDigits);
+    return this.toMoney(Number(row?.balance || 0), bookDigits);
   }
 }

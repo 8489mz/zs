@@ -13,7 +13,7 @@ export class ConvertPreSalesOrderSlice {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -241,7 +241,7 @@ export class ConvertPreSalesOrderSlice {
     // sale already committed, so this needs manual reconciliation,
     // never a silent second flip).
     await this.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
       const updated = await trxAny
         .updateTable('sales_orders')
         .set({

@@ -423,8 +423,8 @@ export class AccountingJournalsReadService {
       .select(['name', 'period_number'])
       .where('tenant_id', '=', tenantId)
       .where('status', '=', 'closed')
-      .where('start_date', '<=', dateStr as any)
-      .where('end_date', '>=', dateStr as any)
+      .where('start_date', '<=', dateStr)
+      .where('end_date', '>=', dateStr)
       .executeTakeFirst();
 
     if (closedPeriod) {

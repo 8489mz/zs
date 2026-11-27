@@ -733,7 +733,7 @@ export class SalesWriteService {
 
     let items: Array<Record<string, unknown>> = [];
     try {
-      const raw = (order as any).items_json;
+      const raw = order.items_json;
       items = (typeof raw === 'string' ? JSON.parse(raw) : raw) || [];
     } catch {
       items = [];
@@ -741,8 +741,8 @@ export class SalesWriteService {
 
     const approvedUnitPrices: Record<number, number> = { ...(existing?.approvedUnitPrices || {}) };
     for (const item of items) {
-      const productId = Number((item as any).productId);
-      const unitPrice = Number((item as any).unitPrice ?? (item as any).price);
+      const productId = Number(item.productId);
+      const unitPrice = Number(item.unitPrice ?? item.price);
       if (productId > 0 && Number.isFinite(unitPrice) && unitPrice >= 0) approvedUnitPrices[productId] = unitPrice;
     }
 
@@ -752,7 +752,7 @@ export class SalesWriteService {
     // is the authority; an internal caller's older map never overrides it.
     const approvedModifierPrices: Record<string, number> = { ...(existing?.approvedModifierPrices || {}) };
     for (const item of items) {
-      const modifiers = Array.isArray((item as any).modifiers) ? (item as any).modifiers : [];
+      const modifiers = Array.isArray(item.modifiers) ? (item as any).modifiers : [];
       for (const mod of modifiers) {
         const optionId = Number(mod?.optionId || mod?.option_id || 0);
         const productId = Number(mod?.productId || mod?.componentProductId || mod?.component_product_id || 0);

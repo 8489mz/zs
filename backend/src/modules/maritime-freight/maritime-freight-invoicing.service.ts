@@ -141,7 +141,7 @@ export class MaritimeFreightInvoicingService {
         reference_type: 'maritime_job',
         reference_id: Number(job.id),
         created_by: auth.userId ? Number(auth.userId) : null,
-      } as any)
+      })
       .execute();
   }
 
@@ -174,7 +174,7 @@ export class MaritimeFreightInvoicingService {
           await this.db
             .updateTable('maritime_jobs')
             .set({ cost_center_id: String(costCenterId) })
-            .where('id', '=', job.id as any)
+            .where('id', '=', job.id)
             .where('tenant_id', '=', tenantId)
             .execute();
         }
@@ -288,7 +288,7 @@ export class MaritimeFreightInvoicingService {
           updated_at: sql`NOW()`,
         })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', job.id as any)
+        .where('id', '=', job.id)
         .returningAll()
         .execute();
 
@@ -364,7 +364,7 @@ export class MaritimeFreightInvoicingService {
           await this.db
             .updateTable('maritime_jobs')
             .set({ cost_center_id: String(costCenterId) })
-            .where('id', '=', job.id as any)
+            .where('id', '=', job.id)
             .where('tenant_id', '=', tenantId)
             .execute();
         }
@@ -474,7 +474,7 @@ export class MaritimeFreightInvoicingService {
           updated_at: sql`NOW()`,
         })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', job.id as any)
+        .where('id', '=', job.id)
         .returningAll()
         .execute();
 
@@ -567,7 +567,7 @@ export class MaritimeFreightInvoicingService {
         .selectFrom('maritime_jobs')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', jobId as any)
+        .where('id', '=', jobId)
         .forUpdate()
         .executeTakeFirstOrThrow();
       if (!job.customer_id || Number(job.client_invoiced_total || 0) <= 0)
@@ -640,7 +640,7 @@ export class MaritimeFreightInvoicingService {
             location: 'الحسابات',
             notes: `مطابقة ${amount} بعملة الأساس؛ لا توجد حركة نقدية جديدة`,
             recorded_by: auth.userId || null,
-          } as any)
+          })
           .execute();
       // Invoice and receipt already changed AR and the shared ledger. Applying their
       // offset a second time here would consume the customer's credit twice.

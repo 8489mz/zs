@@ -14,7 +14,7 @@ export class VanTripPinGatesService {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -96,7 +96,7 @@ export class VanTripPinGatesService {
           .where('tenant_id', '=', tenantId)
           .orderBy('id', 'asc')
           .executeTakeFirst();
-        scopeAccountId = String((scopeUser as any)?.account_id || '').trim();
+        scopeAccountId = String(scopeUser?.account_id || '').trim();
       } catch {
         scopeAccountId = '';
       }

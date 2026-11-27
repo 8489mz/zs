@@ -176,7 +176,7 @@ export class SettleRepFinancialItemSlice {
     return this.db
       .transaction()
       .execute(async (trx) => {
-        const trxAny = trx as any;
+        const trxAny = trx;
         const item = await trxAny
           .selectFrom('van_rep_financial_settlements')
           .selectAll()

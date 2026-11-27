@@ -183,7 +183,7 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
               demurrage_amount: demurrageAmount,
               updated_at: sql`NOW()`,
             })
-            .where('id', '=', c.id as any)
+            .where('id', '=', c.id)
             .where('tenant_id', '=', c.tenant_id)
             .execute();
 
@@ -195,7 +195,7 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
           try {
             await this.freightService.syncDemurrageChargeForContainer(
               c.tenant_id,
-              c.job_id as any,
+              c.job_id,
               c.container_number,
               demurrageAmount,
             );
@@ -215,7 +215,7 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
                 demurrage_amount: 0,
                 updated_at: sql`NOW()`,
               })
-              .where('id', '=', c.id as any)
+              .where('id', '=', c.id)
               .where('tenant_id', '=', c.tenant_id)
               .execute();
           }
@@ -230,7 +230,7 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
               const job = await this.db
                 .selectFrom('maritime_jobs')
                 .select(['job_number', 'customer_name', 'customer_id', 'pod_name'])
-                .where('id', '=', c.job_id as any)
+                .where('id', '=', c.job_id)
                 .where('tenant_id', '=', c.tenant_id)
                 .executeTakeFirst();
 
@@ -238,7 +238,7 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
                 const customer = await this.db
                   .selectFrom('customers')
                   .select(['phone'])
-                  .where('id', '=', job.customer_id as any)
+                  .where('id', '=', job.customer_id)
                   .where('tenant_id', '=', c.tenant_id)
                   .executeTakeFirst();
 

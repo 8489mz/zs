@@ -16,7 +16,7 @@ export const migration = {
 
     const settings = await db.selectFrom('accounting_settings').select(['tenant_id', 'account_id']).execute();
     if (!settings.find((s) => s.tenant_id === 'default')) {
-      settings.push({ tenant_id: 'default', account_id: 'default' } as any);
+      settings.push({ tenant_id: 'default', account_id: 'default' });
     }
 
     for (const setting of settings) {

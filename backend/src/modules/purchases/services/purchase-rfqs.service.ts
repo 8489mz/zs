@@ -288,8 +288,8 @@ export class PurchaseRfqsService {
           rfq_number: rfqNumber,
           title: dto.title.trim(),
           status: 'draft',
-          deadline_date: dto.deadline_date ? (dto.deadline_date as any) : null,
-          expected_delivery_date: dto.expected_delivery_date ? (dto.expected_delivery_date as any) : null,
+          deadline_date: dto.deadline_date ? dto.deadline_date : null,
+          expected_delivery_date: dto.expected_delivery_date ? dto.expected_delivery_date : null,
           notes: dto.notes || null,
           created_by: auth.userId ? Number(auth.userId) : null,
         })
@@ -499,7 +499,7 @@ export class PurchaseRfqsService {
           discount_amount: 0,
           total_amount: roundMoney(totalAmount, moneyDigits),
           status: 'confirmed',
-          expected_delivery_date: rfq.expected_delivery_date ? (rfq.expected_delivery_date as any) : null,
+          expected_delivery_date: rfq.expected_delivery_date ? rfq.expected_delivery_date : null,
           notes: `تم توليده تلقائياً من طلب عرض السعر رقم: ${rfq.rfq_number} بعد المفاضلة واعتماد العرض الفائز.`,
           created_by: auth.userId ? Number(auth.userId) : null,
         })

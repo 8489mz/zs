@@ -64,7 +64,7 @@ export class FinalizeSaleService {
     if (normalized.loyaltyPointsRedeemed > 0 && customer) {
       await trx
         .updateTable('customers')
-        .set({ loyalty_points: pointsAfterRedeem, updated_at: sql`NOW()` } as any)
+        .set({ loyalty_points: pointsAfterRedeem, updated_at: sql`NOW()` })
         .where('id', '=', customer.id)
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .execute();
@@ -81,7 +81,7 @@ export class FinalizeSaleService {
           sale_id: id,
           notes: `استبدال ${normalized.loyaltyPointsRedeemed} نقطة بخصم ${loyaltyDiscount} ج.م في الفاتورة S-${id}`,
           created_at: sql`NOW()`,
-        } as any)
+        })
         .execute();
     }
 
@@ -90,12 +90,12 @@ export class FinalizeSaleService {
       const pointsEarned = Math.floor((paidAmount / 100) * pointsPer100Egp);
       if (pointsEarned > 0) {
         const startingPoints =
-          normalized.loyaltyPointsRedeemed > 0 ? pointsAfterRedeem : Number((customer as any)?.loyalty_points || 0);
+          normalized.loyaltyPointsRedeemed > 0 ? pointsAfterRedeem : Number(customer?.loyalty_points || 0);
         const finalPoints = Number((startingPoints + pointsEarned).toFixed(2));
 
         await trx
           .updateTable('customers')
-          .set({ loyalty_points: finalPoints, updated_at: sql`NOW()` } as any)
+          .set({ loyalty_points: finalPoints, updated_at: sql`NOW()` })
           .where('id', '=', customer.id)
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .execute();
@@ -112,7 +112,7 @@ export class FinalizeSaleService {
             sale_id: id,
             notes: `اكتساب ${pointsEarned} نقطة من مشتريات الفاتورة S-${id} (بمعدل ${pointsPer100Egp} نقطة لكل 100 ج.م)`,
             created_at: sql`NOW()`,
-          } as any)
+          })
           .execute();
       }
     }
@@ -229,7 +229,7 @@ export class FinalizeSaleService {
                 created_by: auth.userId,
                 tenant_id: scope.tenantId,
                 account_id: scope.accountId,
-              } as any)
+              })
               .execute();
 
             // R8-A (M12): no stored expected_cash update here — the

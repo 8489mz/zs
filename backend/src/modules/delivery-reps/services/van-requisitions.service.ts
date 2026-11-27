@@ -18,7 +18,7 @@ export class VanRequisitionsService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   async submitLoadRequisition(
@@ -75,7 +75,7 @@ export class VanRequisitionsService {
       // rolls the TMP row back with the number instead of leaving a
       // TMP-REQ row, and the advisory lock is held across the read.
       return await this.db.transaction().execute(async (trx) => {
-        const trxAny = trx as any;
+        const trxAny = trx;
         const tempDocNo = `TMP-REQ-${Date.now()}`;
         const [inserted] = await trxAny
           .insertInto('van_load_requisitions')
@@ -130,7 +130,7 @@ export class VanRequisitionsService {
       // INV-SEQUENCE-NUMBER-FAIL-CLOSED: one transaction per warehouse
       // group, covering the insert, the locked numbering, and the rename.
       const created = await this.db.transaction().execute(async (trx) => {
-        const trxAny = trx as any;
+        const trxAny = trx;
         const tempDocNo = `TMP-REQ-${Date.now()}-${whId}`;
         const [inserted] = await trxAny
           .insertInto('van_load_requisitions')
@@ -336,8 +336,8 @@ export class VanRequisitionsService {
           // the form and the dispatch pre-check read).
           const bal = balanceByProduct.get(pid);
           const whBal = bal?.byWarehouse.get(Number(r.sourceWarehouseId));
-          const globalStock = Number((p as any)?.stockQty || 0);
-          const globalReserved = Number((p as any)?.reservedQty || 0);
+          const globalStock = Number(p?.stockQty || 0);
+          const globalReserved = Number(p?.reservedQty || 0);
           const discrepancy = globalStock - (bal?.locatedSum || 0);
           const unassignedQty = (bal?.unassignedQty || 0) + (discrepancy > 0.001 ? discrepancy : 0);
           const warehouseAvailQty = computeVanLoadAvailableQty(
@@ -702,7 +702,7 @@ export class VanRequisitionsService {
     for (const row of stockRows) {
       const pid = Number(row.product_id);
       const qty = Number(row.qty || 0);
-      const reservedQty = Number((row as any).reservedQty || 0);
+      const reservedQty = Number(row.reservedQty || 0);
       // A warehouse with zero on-hand but a reservation still counts:
       // it is the warehouse the gate would refuse a load from.
       if (qty > 0 || reservedQty > 0) {

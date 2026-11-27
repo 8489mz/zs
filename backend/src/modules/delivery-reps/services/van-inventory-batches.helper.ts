@@ -28,14 +28,14 @@ type Trx = Kysely<Database> | Transaction<Database>;
 type Scope = { tenantId: string; accountId: string };
 
 async function hasPharmacyPrecedence(trx: Trx, productId: number, scope: Scope): Promise<boolean> {
-  const drug = await (trx as any)
+  const drug = await trx
     .selectFrom('pharmacy_drugs')
     .select('id')
     .where('product_id', '=', productId)
     .where('tenant_id', '=', scope.tenantId)
     .executeTakeFirst();
   if (drug) return true;
-  const activePharmacy = await (trx as any)
+  const activePharmacy = await trx
     .selectFrom('pharmacy_batches')
     .select('id')
     .where('product_id', '=', productId)
@@ -70,7 +70,7 @@ export async function moveVanInventoryBatches(
   fromLocationId: number,
   toLocationId: number,
 ): Promise<number> {
-  const trxAny = trx as any;
+  const trxAny = trx;
   const remaining0 = Number(Number(qty || 0).toFixed(3));
   if (remaining0 <= 0 || fromLocationId === toLocationId) return 0;
   if (await hasPharmacyPrecedence(trx, productId, scope)) return 0;
@@ -155,7 +155,7 @@ export async function moveVanInventoryBatches(
           location_id: toLocationId,
           supplier_name: batch.supplier_name,
           status: 'active',
-        } as any)
+        })
         .execute();
     }
 
@@ -165,7 +165,7 @@ export async function moveVanInventoryBatches(
         quantity: newQty,
         status: newQty <= 0 ? 'depleted' : 'active',
         updated_at: sql`NOW()`,
-      } as any)
+      })
       .where('id', '=', Number(batch.id))
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .execute();
@@ -192,7 +192,7 @@ export async function deductVanSaleInventoryBatches(
   vanLocationId: number,
   failClosed = true,
 ): Promise<Array<{ inventoryBatchId: number; quantity: number }>> {
-  const trxAny = trx as any;
+  const trxAny = trx;
   if (await hasPharmacyPrecedence(trx, productId, scope)) return [];
   const linkedBatch = await trxAny
     .selectFrom('inventory_batches')
@@ -228,7 +228,7 @@ export async function deductVanSaleInventoryBatches(
 
     await trxAny
       .updateTable('inventory_batches')
-      .set({ quantity: newQty, status: nextStatus, updated_at: sql`NOW()` } as any)
+      .set({ quantity: newQty, status: nextStatus, updated_at: sql`NOW()` })
       .where('id', '=', Number(batch.id))
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .execute();
@@ -263,7 +263,7 @@ export async function restoreReturnedInventoryBatches(
   returnBaseQty: number,
   scope: Scope,
 ): Promise<void> {
-  const trxAny = trx as any;
+  const trxAny = trx;
   const allocations = await trxAny
     .selectFrom('sale_inventory_batch_allocations')
     .selectAll()

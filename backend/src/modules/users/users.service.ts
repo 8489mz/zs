@@ -479,7 +479,7 @@ export class UsersService {
         last_login_at: null,
         tenant_id: scope.tenantId,
         account_id: scope.accountId,
-      } as any))
+      }))
       .returning(['id'])
       .executeTakeFirstOrThrow();
 
@@ -684,7 +684,7 @@ export class UsersService {
           must_change_password: false,
           failed_login_count: 0,
           locked_until: null,
-        } as any)
+        })
         .where('id', '=', id)
         .where(this.tenantPredicate(actor))
         .execute();
@@ -969,7 +969,7 @@ if (row.is_active !== false && (rowRole === 'admin' || rowRole === 'super_admin'
       await this.tx.runInTransaction(this.db, async (trx) => {
         await trx
           .updateTable('users')
-          .set({ is_active: false } as any)
+          .set({ is_active: false })
           .where('id', 'in', allowedIds)
           .where(this.tenantPredicate(actor))
           .execute();

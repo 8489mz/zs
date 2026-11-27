@@ -195,7 +195,7 @@ export class DeliveryRepsSettlementsService {
         // full total would over-credit 1130. The basis is the
         // single source of truth shared with the posting gate.
         const basis = await this.accountingPosting.deliverySettlementBasis(trx, saleId, actor);
-        const deliveryFeeMode = (sale as any).delivery_fee_mode || (await this.getDeliveryFeeMode(trx, actor));
+        const deliveryFeeMode = sale.delivery_fee_mode || (await this.getDeliveryFeeMode(trx, actor));
         const remainingFee = deliveryFeeMode === 'store_fleet' ? 0 : basis.remainingFee;
         const { tenantId: settleTenantId } = requireTenantScope(actor);
         const settleDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, settleTenantId));
@@ -419,7 +419,7 @@ export class DeliveryRepsSettlementsService {
       // already subtracts the partial payment (and any prior
       // return relief) from the remaining receivable.
       const basis = await this.accountingPosting.deliverySettlementBasis(trx, saleId, actor);
-      const deliveryFeeMode = (sale as any).delivery_fee_mode || (await this.getDeliveryFeeMode(trx, actor));
+      const deliveryFeeMode = sale.delivery_fee_mode || (await this.getDeliveryFeeMode(trx, actor));
       const remainingFee = deliveryFeeMode === 'store_fleet' ? 0 : basis.remainingFee;
       const { tenantId: settleTenantId } = requireTenantScope(actor);
       const settleDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, settleTenantId));

@@ -24,7 +24,7 @@ export class OfflineReleasesGitHub {
       });
 
       if (rawRes.ok) {
-        const manifest = (await rawRes.json()) as any;
+        const manifest = await rawRes.json();
         if (manifest?.version && manifest.version !== '0.0.0') {
           return {
             version: manifest.version,
@@ -52,7 +52,7 @@ export class OfflineReleasesGitHub {
       });
 
       if (apiRes.ok) {
-        const data = (await apiRes.json()) as any;
+        const data = await apiRes.json();
         const tag = (data.tag_name || '').replace(/^v/, '').trim();
         if (tag) {
           const zipAsset = (data.assets || []).find((a: any) => a.name?.endsWith('.zip'));

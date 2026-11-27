@@ -97,7 +97,7 @@ export class PostSupplierPaymentBillService {
      * fails closed (a tenant-created 1185 of another type throws)
      * and auto-creates the account from the fallback map when the
      * chart lacks it. An ordinary payment keeps Dr 2110. */
-    const isAdvance = (payment as any).is_advance === true;
+    const isAdvance = payment.is_advance === true;
     const debitAccountId = isAdvance
       ? await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1185')
       : supplierPayableAccountId;
@@ -237,7 +237,7 @@ export class PostSupplierPaymentBillService {
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
     if (!settings) throw new Error(`Accounting settings missing while posting supplier bill ${billId}`);
 
-    const total = toBookMoney((bill as any).total);
+    const total = toBookMoney(bill.total);
     if (!(total > 0)) {
       this.logger.warn(`Supplier bill ${billId} has non-positive total; skipping accounting post`);
       return { posted: false, journalEntryId: null };
@@ -245,8 +245,8 @@ export class PostSupplierPaymentBillService {
 
     const branchId = null;
     const locationId = null;
-    const supplierName = String((bill as any).supplier_name || '').trim();
-    const docNo = String((bill as any).doc_no || `SPB-${billId}`).trim();
+    const supplierName = String(bill.supplier_name || '').trim();
+    const docNo = String(bill.doc_no || `SPB-${billId}`).trim();
 
     const supplierPayableAccountId = await this.resolveAccountWithFallback(
       queryable,
@@ -289,8 +289,8 @@ export class PostSupplierPaymentBillService {
       description: `مستحق مورد — فاتورة بدون مخزون ${docNo}`,
       debit: 0,
       credit: total,
-      partnerType: (bill as any).supplier_id ? 'supplier' : 'none',
-      partnerId: (bill as any).supplier_id ? Number((bill as any).supplier_id) : null,
+      partnerType: bill.supplier_id ? 'supplier' : 'none',
+      partnerId: bill.supplier_id ? Number(bill.supplier_id) : null,
       branchId,
       locationId,
     });
@@ -314,17 +314,17 @@ export class PostSupplierPaymentBillService {
       // instant, and insertPostedJournal re-derives it in the TENANT
       // zone — one day early whenever the tenant zone is west of the
       // host zone. The day string passes through untouched.
-      entryDate: (bill as any).bill_date
-        ? (bill as any).bill_date instanceof Date
-          ? formatLocalCalendarDay((bill as any).bill_date)
-          : String((bill as any).bill_date).slice(0, 10)
-        : (bill as any).created_at
-          ? new Date((bill as any).created_at)
+      entryDate: bill.bill_date
+        ? bill.bill_date instanceof Date
+          ? formatLocalCalendarDay(bill.bill_date)
+          : String(bill.bill_date).slice(0, 10)
+        : bill.created_at
+          ? new Date(bill.created_at)
           : new Date(),
       description: `قيد فاتورة مورد بدون مخزون رقم ${docNo}${supplierName ? ` - ${supplierName}` : ''}`,
       branchId,
       locationId,
-      createdBy: (bill as any).created_by ? Number((bill as any).created_by) : auth.userId,
+      createdBy: bill.created_by ? Number(bill.created_by) : auth.userId,
       postedBy: auth.userId,
       lines: normalizedLines,
     });

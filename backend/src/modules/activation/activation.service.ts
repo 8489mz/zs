@@ -136,8 +136,8 @@ export class ActivationService {
     if (!settingsScoped) {
       await executor
         .insertInto('settings')
-        .values({ key, value } as any)
-        .onConflict((oc) => oc.column('key').doUpdateSet({ value } as any))
+        .values({ key, value })
+        .onConflict((oc) => oc.column('key').doUpdateSet({ value }))
         .execute();
       return;
     }
@@ -293,9 +293,9 @@ export class ActivationService {
           const tenantsHasActivity = await this.columnExists('tenants', 'activity_type', trx);
           if (tenantsHasActivity) {
             await trx
-              .updateTable('tenants' as any)
-              .set({ activity_type: normalizedIndustry } as any)
-              .where('id' as any, '=', scope.tenantId as any)
+              .updateTable('tenants')
+              .set({ activity_type: normalizedIndustry })
+              .where('id', '=', scope.tenantId)
               .execute()
               .catch(() => undefined);
           }

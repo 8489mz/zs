@@ -22,7 +22,7 @@ export async function findTenantByStorefrontSlug(db: Kysely<any>, slug: string):
   if (!cleanSlug || cleanSlug === 'admin') return null;
 
   const bySlug = await db.selectFrom('tenants').select(['id']).where('slug', '=', cleanSlug).executeTakeFirst();
-  if (bySlug) return { id: String((bySlug as any).id) };
+  if (bySlug) return { id: String(bySlug.id) };
 
   if (cleanSlug.includes('.')) {
     const byDomain = await db
@@ -30,7 +30,7 @@ export async function findTenantByStorefrontSlug(db: Kysely<any>, slug: string):
       .select(['id'])
       .where('custom_domain', '=', cleanSlug)
       .executeTakeFirst();
-    if (byDomain) return { id: String((byDomain as any).id) };
+    if (byDomain) return { id: String(byDomain.id) };
   }
 
   const slugSetting = await db
@@ -43,9 +43,9 @@ export async function findTenantByStorefrontSlug(db: Kysely<any>, slug: string):
     const tenant = await db
       .selectFrom('tenants')
       .select(['id'])
-      .where('id', '=', (slugSetting as any).tenant_id)
+      .where('id', '=', slugSetting.tenant_id)
       .executeTakeFirst();
-    if (tenant) return { id: String((tenant as any).id) };
+    if (tenant) return { id: String(tenant.id) };
   }
 
   return null;

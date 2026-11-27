@@ -6,7 +6,7 @@ export class VanFleetMaintenanceSlice {
   constructor(private readonly db: Kysely<Database>) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   async getFleetMaintenanceAlerts(tenantId: string, vehicleId?: number, repId?: number) {
@@ -36,7 +36,7 @@ export class VanFleetMaintenanceSlice {
       ]);
       repVehicleIds = new Set<number>();
       for (const row of [...(assigned || []), ...(driven || [])]) {
-        const id = Number((row as any).id ?? (row as any).vehicle_id);
+        const id = Number(row.id ?? row.vehicle_id);
         if (Number.isInteger(id) && id > 0) repVehicleIds.add(id);
       }
       if (vehicleId && !repVehicleIds.has(Number(vehicleId))) {

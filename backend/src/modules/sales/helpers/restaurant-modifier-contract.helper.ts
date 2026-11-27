@@ -181,7 +181,7 @@ export function validateModifierGroupRules(
   truth: ModifierPriceTruth,
 ): void {
   for (const item of items) {
-    const groups = linkedGroups.get(Number((item as any).productId || 0)) || [];
+    const groups = linkedGroups.get(Number(item.productId || 0)) || [];
     if (groups.length === 0) continue;
     const modifiers = Array.isArray(item.modifiers) ? item.modifiers : [];
     for (const group of groups) {

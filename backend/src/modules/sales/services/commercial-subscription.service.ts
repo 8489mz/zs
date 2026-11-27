@@ -44,7 +44,7 @@ export class CommercialSubscriptionService {
    * then treats the configured rate as 0 (exempt-only) per its contract.
    */
   private async resolveConfiguredTaxRate(tenantId: string): Promise<unknown> {
-    const rows = await (this.db as any)
+    const rows = await this.db
       .selectFrom('settings')
       .select(['key', 'value'])
       .where('tenant_id', '=', tenantId)
@@ -70,7 +70,7 @@ export class CommercialSubscriptionService {
     const tenantId = scope.tenantId;
 
     // Verify customer exists
-    const customer = await (this.db as any)
+    const customer = await this.db
       .selectFrom('customers')
       .select(['id', 'name'])
       .where('id', '=', dto.customerId)
@@ -84,7 +84,7 @@ export class CommercialSubscriptionService {
     // Generate contract number if omitted
     let contractNumber = dto.contractNumber;
     if (!contractNumber) {
-      const countRes = await (this.db as any)
+      const countRes = await this.db
         .selectFrom('commercial_subscriptions')
         .select(sql<number>`COUNT(*)`.as('count'))
         .where('tenant_id', '=', tenantId)
@@ -111,7 +111,7 @@ export class CommercialSubscriptionService {
     const subscriptionId = `sub_${randomUUID()}`;
 
     // Execute in transaction
-    await (this.db as any).transaction().execute(async (trx: any) => {
+    await this.db.transaction().execute(async (trx: any) => {
       await trx
         .insertInto('commercial_subscriptions')
         .values({
@@ -165,7 +165,7 @@ export class CommercialSubscriptionService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    let query = (this.db as any)
+    let query = this.db
       .selectFrom('commercial_subscriptions as s')
       .innerJoin('customers as c', 'c.id', 's.customer_id')
       .select([
@@ -210,7 +210,7 @@ export class CommercialSubscriptionService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    const sub = await (this.db as any)
+    const sub = await this.db
       .selectFrom('commercial_subscriptions as s')
       .innerJoin('customers as c', 'c.id', 's.customer_id')
       .select([
@@ -242,7 +242,7 @@ export class CommercialSubscriptionService {
       throw new NotFoundException('Subscription contract not found');
     }
 
-    const lines = await (this.db as any)
+    const lines = await this.db
       .selectFrom('commercial_subscription_lines as sl')
       .leftJoin('products as p', 'p.id', 'sl.product_id')
       .select([
@@ -269,7 +269,7 @@ export class CommercialSubscriptionService {
     this.assertAccess(auth);
     const scope = requireTenantScope(auth);
 
-    await (this.db as any)
+    await this.db
       .updateTable('commercial_subscriptions')
       .set({
         status: dto.status,
@@ -322,7 +322,7 @@ export class CommercialSubscriptionService {
 
       if (!evalStatus.isDueForBilling) {
         if (evalStatus.isExpired) {
-          await (this.db as any)
+          await this.db
             .updateTable('commercial_subscriptions')
             .set({ status: 'expired', updated_at: now })
             .where('id', '=', sub.id)
@@ -333,7 +333,7 @@ export class CommercialSubscriptionService {
       }
 
       // Fetch subscription lines
-      const lines = await (this.db as any)
+      const lines = await this.db
         .selectFrom('commercial_subscription_lines')
         .selectAll()
         .where('subscription_id', '=', sub.id)
@@ -362,7 +362,7 @@ export class CommercialSubscriptionService {
         await getTenantTimezone(this.db, tenantId),
       );
 
-      await (this.db as any).transaction().execute(async (trx: any) => {
+      await this.db.transaction().execute(async (trx: any) => {
         const saleInsert = await trx
           .insertInto('sales')
           .values({

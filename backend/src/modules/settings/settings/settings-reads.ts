@@ -97,7 +97,7 @@ export class SettingsReads {
     const isAlmhnds = tenant?.slug === 'almhnds';
 
     if (tenant) {
-      if (!settings.country && (tenant as any).country_code) settings.country = (tenant as any).country_code;
+      if (!settings.country && tenant.country_code) settings.country = tenant.country_code;
       if (!settings.country && settings.currency === 'KWD') settings.country = 'KW';
       if (!settings.country && settings.currency === 'SAR') settings.country = 'SA';
       if (!settings.country && settings.currency === 'AED') settings.country = 'AE';

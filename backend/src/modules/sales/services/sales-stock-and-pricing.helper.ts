@@ -289,7 +289,7 @@ export class SalesStockAndPricingHelper {
         if (missingMatch) {
           const missingId = Number(missingMatch[1]);
           const matchedItem = items.find((it) => Number(it.productId ?? it.product_id) === missingId);
-          const itemName = matchedItem?.name || (matchedItem as any)?.productName;
+          const itemName = matchedItem?.name || matchedItem?.productName;
           if (itemName) {
             throw new AppError(
               `الصنف "${itemName}" (#${missingId}) غير موجود بقاعدة بيانات هذه المنشأة أو ليس لديك صلاحية للوصول إليه`,

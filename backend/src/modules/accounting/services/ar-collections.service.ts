@@ -74,7 +74,7 @@ export class ArCollectionsService {
     // calendar day from the tenant's around the tenant midnight.
     const todayKey = todayTenantDate(await getTenantTimezone(this.db, tenantId), new Date());
 
-    const casesStats = await (this.db as any)
+    const casesStats = await this.db
       .selectFrom('ar_collection_cases')
       .select([
         sql<number>`COALESCE(SUM(CASE WHEN status IN ('open', 'promised_to_pay', 'escalated') THEN total_overdue ELSE 0 END), 0)`.as(
@@ -96,7 +96,7 @@ export class ArCollectionsService {
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
 
-    const blockedStats = await (this.db as any)
+    const blockedStats = await this.db
       .selectFrom('customers')
       .select([sql<number>`COUNT(*)`.as('blocked_count')])
       .where('tenant_id', '=', tenantId)
@@ -425,7 +425,7 @@ export class ArCollectionsService {
         },
       ];
 
-      await (this.db as any)
+      await this.db
         .insertInto('ar_dunning_levels')
         .values(defaultLevels)
         .onConflict((oc: any) => oc.column('id').doNothing())
@@ -670,7 +670,7 @@ export class ArCollectionsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    const caseRecord = await (this.db as any)
+    const caseRecord = await this.db
       .selectFrom('ar_collection_cases')
       .selectAll()
       .where('id', '=', caseId)
@@ -706,7 +706,7 @@ export class ArCollectionsService {
     }
 
     const logId = `log_${randomUUID()}`;
-    await (this.db as any)
+    await this.db
       .insertInto('ar_collection_logs')
       .values({
         id: logId,
@@ -744,7 +744,7 @@ export class ArCollectionsService {
       updates.status = 'settled';
     }
 
-    await (this.db as any)
+    await this.db
       .updateTable('ar_collection_cases')
       .set(updates)
       .where('id', '=', caseId)
@@ -762,7 +762,7 @@ export class ArCollectionsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    const caseRecord = await (this.db as any)
+    const caseRecord = await this.db
       .selectFrom('ar_collection_cases')
       .selectAll()
       .where('id', '=', caseId)
@@ -785,7 +785,7 @@ export class ArCollectionsService {
     }
 
     // 1. Update case status and promise date
-    await (this.db as any)
+    await this.db
       .updateTable('ar_collection_cases')
       .set({
         status: 'promised_to_pay',
@@ -800,7 +800,7 @@ export class ArCollectionsService {
 
     // 2. Insert interaction log
     const logId = `log_${randomUUID()}`;
-    await (this.db as any)
+    await this.db
       .insertInto('ar_collection_logs')
       .values({
         id: logId,
@@ -827,7 +827,7 @@ export class ArCollectionsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    const caseRecord = await (this.db as any)
+    const caseRecord = await this.db
       .selectFrom('ar_collection_cases')
       .selectAll()
       .where('id', '=', caseId)
@@ -840,7 +840,7 @@ export class ArCollectionsService {
 
     const cId = Number(caseRecord.customer_id);
 
-    await (this.db as any)
+    await this.db
       .updateTable('customers')
       .set({
         is_credit_blocked: dto.block,
@@ -854,7 +854,7 @@ export class ArCollectionsService {
 
     // Log the manual block action
     const logId = `log_${randomUUID()}`;
-    await (this.db as any)
+    await this.db
       .insertInto('ar_collection_logs')
       .values({
         id: logId,
@@ -879,7 +879,7 @@ export class ArCollectionsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    return (this.db as any)
+    return this.db
       .selectFrom('ar_dunning_levels')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -895,7 +895,7 @@ export class ArCollectionsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    const existing = await (this.db as any)
+    const existing = await this.db
       .selectFrom('ar_dunning_levels')
       .selectAll()
       .where('id', '=', levelId)
@@ -913,7 +913,7 @@ export class ArCollectionsService {
     if (dto.actionType !== undefined) updates.action_type = dto.actionType;
     if (dto.templateText !== undefined) updates.template_text = dto.templateText;
 
-    await (this.db as any)
+    await this.db
       .updateTable('ar_dunning_levels')
       .set(updates)
       .where('id', '=', levelId)

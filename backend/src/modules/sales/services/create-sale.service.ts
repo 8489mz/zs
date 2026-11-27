@@ -244,9 +244,7 @@ export class CreateSaleService {
         tenantId: scope.tenantId,
         auth,
         explicitRepId:
-          String(normalized.orderType || '').trim() === 'delivery'
-            ? Number((payload as any).deliveryRepId || 0) || null
-            : null,
+          String(normalized.orderType || '').trim() === 'delivery' ? Number(payload.deliveryRepId || 0) || null : null,
       });
     } catch {
       vanTripAttribution = null;

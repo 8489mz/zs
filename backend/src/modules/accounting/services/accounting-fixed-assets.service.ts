@@ -105,7 +105,7 @@ export class AccountingFixedAssetsService {
           is_system: false,
           tenant_id: tenantId,
           description_ar: 'مجمع إهلاك الأصول الثابتة',
-        } as any)
+        })
         .returning('id')
         .executeTakeFirstOrThrow();
       accumDeprAccountId = Number(created.id);
@@ -154,7 +154,7 @@ export class AccountingFixedAssetsService {
           is_system: false,
           tenant_id: tenantId,
           description_ar: 'مصروف إهلاك الأصول الثابتة الدوري',
-        } as any)
+        })
         .returning('id')
         .executeTakeFirstOrThrow();
       deprExpenseAccountId = Number(created.id);

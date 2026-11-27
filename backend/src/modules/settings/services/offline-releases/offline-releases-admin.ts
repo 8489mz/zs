@@ -147,7 +147,7 @@ export class OfflineReleasesAdmin {
       .set({
         is_active: true,
         promoted_by: auth.username ?? auth.role,
-        promoted_at: new Date().toISOString() as any,
+        promoted_at: new Date().toISOString(),
       })
       .where('id', '=', id)
       .execute();

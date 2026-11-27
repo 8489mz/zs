@@ -389,8 +389,7 @@ export class ImportForeignTransfersService {
             note: `حوالة استيراد خارجية${notes ? ' - ' + notes : ''} [تدبير عملة: ${actualEgp} ج.م]`,
             created_by: userId,
             payment_date:
-              (dto as any).transferDate ||
-              (await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date())),
+              dto.transferDate || (await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date())),
             currency: currency || 'USD',
             exchange_rate: actualEgp / cleanForeign,
             forex_variance_egp: forexVarianceEgp,

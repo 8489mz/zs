@@ -575,7 +575,7 @@ export class PurchasesWriteCreateService {
             terms_template: payload.termsTemplate || '',
             tenant_id: scope.tenantId,
             account_id: scope.accountId,
-          } as any)
+          })
           .returning('id')
           .executeTakeFirstOrThrow();
 
@@ -632,7 +632,7 @@ export class PurchasesWriteCreateService {
                     ),
                   }
                 : {}),
-            } as any)
+            })
             .returning('id')
             .executeTakeFirst();
 
@@ -663,10 +663,7 @@ export class PurchasesWriteCreateService {
               .filter((r) => r.serial_number);
 
             if (serialRows.length > 0) {
-              await trx
-                .insertInto('product_serials')
-                .values(serialRows as any)
-                .execute();
+              await trx.insertInto('product_serials').values(serialRows).execute();
             }
           }
 
@@ -776,7 +773,7 @@ export class PurchasesWriteCreateService {
                     status: 'active',
                     expiry_date: expiryDate,
                     updated_at: sql`NOW()`,
-                  } as any)
+                  })
                   .where('id', '=', Number(existingBatch.id))
                   .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
                   .execute();
@@ -796,7 +793,7 @@ export class PurchasesWriteCreateService {
                     supplier_name: supplier?.name || null,
                     status: 'active',
                     notes: `وارد فاتورة شراء PUR-${id}`,
-                  } as any)
+                  })
                   .execute();
               }
             }
@@ -855,18 +852,15 @@ export class PurchasesWriteCreateService {
           await trx
             .insertInto('purchase_attachments')
             .values(
-              payload.attachments.map(
-                (attachment) =>
-                  ({
-                    purchase_id: id,
-                    file_name: attachment.fileName,
-                    file_url: attachment.fileUrl,
-                    file_size: attachment.fileSize,
-                    file_type: attachment.fileType,
-                    tenant_id: scope.tenantId,
-                    account_id: scope.accountId,
-                  }) as any,
-              ),
+              payload.attachments.map((attachment) => ({
+                purchase_id: id,
+                file_name: attachment.fileName,
+                file_url: attachment.fileUrl,
+                file_size: attachment.fileSize,
+                file_type: attachment.fileType,
+                tenant_id: scope.tenantId,
+                account_id: scope.accountId,
+              })),
             )
             .execute();
         }

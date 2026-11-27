@@ -19,7 +19,7 @@ export class TableServiceCallsService {
    * and no caller-supplied tenant is ever consulted.
    */
   async resolveTenantBySlug(slug: string | undefined): Promise<string> {
-    const tenant = await findTenantByStorefrontSlug(this.db as any, slug || '');
+    const tenant = await findTenantByStorefrontSlug(this.db, slug || '');
     if (!tenant) {
       throw new NotFoundException('المتجر غير موجود');
     }

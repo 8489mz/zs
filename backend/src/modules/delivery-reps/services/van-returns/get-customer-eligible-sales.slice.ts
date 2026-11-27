@@ -22,7 +22,7 @@ export class GetCustomerEligibleSalesSlice {
   }
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   private computeAlreadyReturnedQtyBySaleItem(tenantId: string, saleIds: number[]): Promise<Map<number, number>> {

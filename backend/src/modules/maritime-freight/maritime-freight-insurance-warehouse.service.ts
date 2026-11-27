@@ -66,7 +66,7 @@ export class MaritimeFreightInsuranceWarehouseService {
       .selectFrom('maritime_jobs')
       .select('id')
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', jobId as any)
+      .where('id', '=', jobId)
       .executeTakeFirst();
     if (!job) throw new NotFoundException('عملية الشحن غير موجودة');
   }
@@ -80,7 +80,7 @@ export class MaritimeFreightInsuranceWarehouseService {
         .insertInto('maritime_cargo_insurances')
         .values({
           tenant_id: tenantId,
-          job_id: dto.jobId as any,
+          job_id: dto.jobId,
           policy_number: dto.policyNumber,
           insurance_company: dto.insuranceCompany,
           insured_value: Number(dto.insuredValue || 0),
@@ -180,7 +180,7 @@ export class MaritimeFreightInsuranceWarehouseService {
       .selectFrom('maritime_cargo_insurances')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('job_id', '=', jobId as any)
+      .where('job_id', '=', jobId)
       .orderBy('id', 'desc')
       .execute();
   }
@@ -199,8 +199,8 @@ export class MaritimeFreightInsuranceWarehouseService {
         .values({
           tenant_id: tenantId,
           receipt_number: tempNumber,
-          job_id: dto.jobId as any,
-          location_id: dto.locationId ? (dto.locationId as any) : null,
+          job_id: dto.jobId,
+          location_id: dto.locationId ? dto.locationId : null,
           received_date: dto.receivedDate ? new Date(dto.receivedDate) : sql`NOW()`,
           package_count: Number(dto.packageCount || 1),
           gross_weight_kg: Number(dto.grossWeightKg || 0),
@@ -278,7 +278,7 @@ export class MaritimeFreightInsuranceWarehouseService {
       .selectFrom('maritime_warehouse_receipts')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('job_id', '=', jobId as any)
+      .where('job_id', '=', jobId)
       .orderBy('id', 'desc')
       .execute();
   }

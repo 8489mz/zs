@@ -21,7 +21,7 @@ async function integrityTolerance(db: Kysely<Database>, tenantId: string): Promi
       .where('tenant_id', '=', tenantId)
       .where('key', '=', 'currency')
       .executeTakeFirst();
-    let value: unknown = (setting as any)?.value;
+    let value: unknown = setting?.value;
     try {
       value = JSON.parse(String(value));
     } catch {

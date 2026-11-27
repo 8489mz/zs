@@ -58,7 +58,7 @@ export class MobileAttendanceService {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -261,7 +261,7 @@ export class MobileAttendanceService {
 
     // INV-PORTAL-TENANT-STATUS-ENFORCED: no fresh login for a
     // suspended / expired / trial-expired tenant, even with a valid PIN.
-    await assertPortalTenantAllowed(this.db as any, this.authCache, String(employeeUser.tenantId));
+    await assertPortalTenantAllowed(this.db, this.authCache, String(employeeUser.tenantId));
 
     const token = this.generateToken(employeeUser);
     this.loginLimiter.recordSuccess(rateLimitKey);
@@ -326,7 +326,7 @@ export class MobileAttendanceService {
 
     // INV-PORTAL-TENANT-STATUS-ENFORCED: the token is stateless, so
     // every request re-checks the tenant status, not just the row.
-    await assertPortalTenantAllowed(this.db as any, this.authCache, tenantId);
+    await assertPortalTenantAllowed(this.db, this.authCache, tenantId);
 
     return {
       employeeId,

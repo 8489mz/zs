@@ -706,7 +706,7 @@ export class SettingsBackupService implements OnModuleInit, OnModuleDestroy {
         }
 
         for (const [name, spec] of tenantSpecs) {
-          if (spec.kind === 'tenant' && !CLEAR_ORDER.includes(name as any)) {
+          if (spec.kind === 'tenant' && !CLEAR_ORDER.includes(name)) {
             await sql`delete from ${sql.table(name)} where tenant_id = ${scope.tenantId}`.execute(trx);
           }
         }

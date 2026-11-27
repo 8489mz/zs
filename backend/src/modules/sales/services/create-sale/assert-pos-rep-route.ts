@@ -46,7 +46,7 @@ export async function assertPosRepRouteForSale(
   if (isAdminSeller || authz.hasPermission(auth, '*')) return;
   let routeErr: AppError | null = null;
   try {
-    await assertRepRouteForSale(db as any, tenantId, repId, customerId);
+    await assertRepRouteForSale(db, tenantId, repId, customerId);
     return;
   } catch (err) {
     if (!(err instanceof AppError) || (err as AppError).code !== 'CUSTOMER_NOT_ON_REP_ROUTE') throw err;

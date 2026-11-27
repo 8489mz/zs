@@ -57,7 +57,7 @@ export class ExecuteFieldSaleInternalSlice {
   }
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
 
@@ -110,7 +110,7 @@ export class ExecuteFieldSaleInternalSlice {
       if (existing) {
         resolvedCustomerId = Number(existing.id);
         customerName = existing.name;
-        customerType = (existing as any).customer_type || null;
+        customerType = (existing).customer_type || null;
         await assertRouteGate(this.anyDb, repId, tenantId, accountId, resolvedCustomerId, this.verifySupervisorPin, payload.supervisorOverridePin);
       } else {
         isNewCustomer = true;
@@ -125,7 +125,7 @@ export class ExecuteFieldSaleInternalSlice {
         .executeTakeFirst();
       if (!cust) throw new AppError('العميل غير موجود', 'CUSTOMER_NOT_FOUND', 404);
       customerName = cust.name;
-      customerType = (cust as any).customer_type || null;
+      customerType = (cust).customer_type || null;
 
       // F3: the route gate runs BEFORE the metadata link below — a refused off-route sale must not record this rep against the customer it was refused for.
       await assertRouteGate(this.anyDb, repId, tenantId, accountId, resolvedCustomerId, this.verifySupervisorPin, payload.supervisorOverridePin);
@@ -360,10 +360,10 @@ export class ExecuteFieldSaleInternalSlice {
         const inputQty = Number(item.qty || 0);
         if (inputQty <= 0) continue;
 
-        const multiplier = Number((item as any).unitMultiplier || 1);
-        const unitName = (item as any).unitName || null;
-        const isBonus = Boolean((item as any).isBonus) || (item.unitPrice !== undefined && item.unitPrice !== null && Number(item.unitPrice) === 0);
-        const bonusReason = (item as any).bonusReason || (isBonus ? 'بونص ترويجي / عينة مجانية' : null);
+        const multiplier = Number((item).unitMultiplier || 1);
+        const unitName = (item).unitName || null;
+        const isBonus = Boolean((item).isBonus) || (item.unitPrice !== undefined && item.unitPrice !== null && Number(item.unitPrice) === 0);
+        const bonusReason = (item).bonusReason || (isBonus ? 'بونص ترويجي / عينة مجانية' : null);
         const baseQty = Number((inputQty * multiplier).toFixed(4));
 
         // CANONICAL LOCK ORDER: Lock products first!
@@ -682,8 +682,8 @@ export class ExecuteFieldSaleInternalSlice {
         repLineDiscountTotal = toBookMoney(repLineDiscountTotal + priceCutDelta + lineDiscount);
         capBaseTotal = toBookMoney(capBaseTotal + lineGrossAuthorized);
 
-        const originalPrice = (item as any).originalPrice
-          ? toBookMoney((item as any).originalPrice)
+        const originalPrice = (item).originalPrice
+          ? toBookMoney((item).originalPrice)
           : (isBonus ? baseUnitPrice : Math.max(unitPrice, baseUnitPrice));
         const lineTotal = toBookMoney(unitPrice * inputQty - lineDiscount);
         const lineSubtotal = toBookMoney(originalPrice * inputQty);
@@ -930,7 +930,7 @@ export class ExecuteFieldSaleInternalSlice {
           // Strictly prevents rep from booking credit sales while physically outside customer location
           const custCoords = extractCoordinatesFromCustomerLocation({
             metadata: custMeta,
-            locationUrl: (custRecord as any).location_url || custMeta?.location_url || custMeta?.locationUrl,
+            locationUrl: (custRecord).location_url || custMeta?.location_url || custMeta?.locationUrl,
           });
 
           if (custCoords && isValidCoordinatePair(custCoords.lat, custCoords.lng)) {
@@ -1124,14 +1124,14 @@ export class ExecuteFieldSaleInternalSlice {
         .execute();
       let configuredTaxRate: unknown;
       for (const row of taxSettingRows) {
-        const rawValue = (row as any).value;
+        const rawValue = (row).value;
         let parsedValue: unknown = rawValue;
         try {
           parsedValue = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue;
         } catch {
           parsedValue = rawValue;
         }
-        if ((row as any).key === 'taxRate') {
+        if ((row).key === 'taxRate') {
           configuredTaxRate = parsedValue;
           break;
         }

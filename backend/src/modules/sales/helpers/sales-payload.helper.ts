@@ -116,7 +116,7 @@ export function normalizeSalePayload(payload: UpsertSaleDto): NormalizedSalePayl
     tableNumber: typeof payload.tableNumber === 'string' ? payload.tableNumber.trim() : null,
     orderType: typeof payload.orderType === 'string' ? payload.orderType.trim() : null,
     diningCourse: typeof payload.diningCourse === 'string' ? payload.diningCourse.trim() : null,
-    pagerNumber: typeof (payload as any).pagerNumber === 'string' ? (payload as any).pagerNumber.trim() : null,
+    pagerNumber: typeof payload.pagerNumber === 'string' ? (payload as any).pagerNumber.trim() : null,
     terminalId: payload.terminalId ? String(payload.terminalId).trim() : null,
     // INV-REST-PAID-GATES-2 (R4-D, I24 follow-up): the per-browser POS
     // terminal code. Read via `as any`: the UpsertSaleDto field is
@@ -125,7 +125,7 @@ export function normalizeSalePayload(payload: UpsertSaleDto): NormalizedSalePayl
     // it as pos_terminal_code. The EDC terminalId above is a different
     // field (the card machine), not this one.
     terminalCode:
-      typeof (payload as any).terminalCode === 'string' && (payload as any).terminalCode.trim()
+      typeof payload.terminalCode === 'string' && (payload as any).terminalCode.trim()
         ? (payload as any).terminalCode.trim()
         : null,
     terminalAuthCode: payload.terminalAuthCode ? String(payload.terminalAuthCode).trim() : null,
@@ -138,8 +138,8 @@ export function normalizeSalePayload(payload: UpsertSaleDto): NormalizedSalePayl
       .map((item) => ({
         productId: Number(item.productId || 0),
         name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : undefined,
-        qty: Number((item as any).qty ?? (item as any).quantity ?? 0),
-        price: Number((item as any).price ?? (item as any).unitPrice ?? 0),
+        qty: Number(item.qty ?? (item as any).quantity ?? 0),
+        price: Number(item.price ?? (item as any).unitPrice ?? 0),
         originalPrice:
           item.originalPrice != null && Number(item.originalPrice) > 0 ? Number(item.originalPrice) : undefined,
         offerDiscount:

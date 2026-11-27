@@ -274,7 +274,7 @@ export class ZatcaSubmissionService {
         zatca_egs_id: egs?.id ? Number(egs.id) : null,
         zatca_invoice_type: invoiceType,
         updated_at: new Date(),
-      } as any)
+      })
       .where('id', '=', sale.id)
       .where('tenant_id', '=', tenantId)
       .execute();
@@ -287,14 +287,14 @@ export class ZatcaSubmissionService {
         sale_id: sale.id,
         egs_id: egs?.id ? Number(egs.id) : null,
         action_type: action,
-        environment: env as any,
+        environment: env,
         request_uuid: pkg.uuid,
         invoice_hash: pkg.invoiceHash,
         http_status: httpStatus || null,
         response_status: responseStatus,
         validation_results: validationResults ? JSON.stringify(validationResults) : null,
         raw_response: rawResponse ? rawResponse.slice(0, 10000) : null,
-        created_at: new Date() as any,
+        created_at: new Date(),
       })
       .execute();
 

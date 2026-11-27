@@ -741,7 +741,7 @@ export class CatalogProductListService {
       if (context.view !== 'all') {
         if (context.view === 'low' && !(stock <= minStock)) return false;
         if (context.view === 'out' && !(stock <= 0)) return false;
-        if (context.view === 'offers' && offerCount <= 0 && !(product as any).bom_id) return false;
+        if (context.view === 'offers' && offerCount <= 0 && !product.bom_id) return false;
         if (context.view === 'special' && customerPriceCount <= 0) return false;
       }
 
@@ -949,10 +949,10 @@ export class CatalogProductListService {
         customerPrices: context.pricesByProduct.get(String(product.id)) || [],
         icon:
           (product as any).metadata?.icon ||
-          (typeof (product as any).metadata === 'string'
+          (typeof product.metadata === 'string'
             ? (() => {
                 try {
-                  return JSON.parse((product as any).metadata)?.icon;
+                  return JSON.parse(product.metadata)?.icon;
                 } catch {
                   return null;
                 }
@@ -961,17 +961,17 @@ export class CatalogProductListService {
           null,
         imageUrl:
           (product as any).metadata?.imageUrl ||
-          (typeof (product as any).metadata === 'string'
+          (typeof product.metadata === 'string'
             ? (() => {
                 try {
-                  return JSON.parse((product as any).metadata)?.imageUrl;
+                  return JSON.parse(product.metadata)?.imageUrl;
                 } catch {
                   return null;
                 }
               })()
             : null) ||
           null,
-        metadata: (product as any).metadata || null,
+        metadata: product.metadata || null,
       };
       if (!context.canViewCost) delete mapped.costPrice;
       return mapped;

@@ -161,7 +161,7 @@ export class ImportCommercialService {
         return String(v).slice(0, 10);
       };
       const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
-      const expiry = toDateOnly((quote as any).expiry_date);
+      const expiry = toDateOnly(quote.expiry_date);
       if (expiry && expiry < today) {
         throw new BadRequestException(
           `انتهت صلاحية عرض السعر هذا (تاريخ الانتهاء: ${expiry}) ولا يمكن اعتماده؛ اطلب عرض سعر جديداً. [IMPORT_QUOTATION_EXPIRED]`,
@@ -192,7 +192,7 @@ export class ImportCommercialService {
             const t = Date.parse(String(v));
             return Number.isFinite(t) ? t : 0;
           };
-          if (toMs((quote as any).created_at) <= toMs((winner as any).updated_at)) {
+          if (toMs(quote.created_at) <= toMs(winner.updated_at)) {
             throw new BadRequestException(
               'تم اعتماد عرض سعر أحدث لنفس الصنف في هذا المشروع؛ لا يمكن لعرض أقدم أن يلغي الاعتماد المقفل. أنشئ عرض سعر جديداً لجولة تفاوض جديدة. [IMPORT_QUOTATION_SELECTION_LOCKED]',
             );

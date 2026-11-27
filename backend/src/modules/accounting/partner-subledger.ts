@@ -117,7 +117,7 @@ export async function ensureDomainSupplier(
 ): Promise<number> {
   await lockAccountingPeriod(db, tenantId);
   const table = domain === 'shipping_line' ? 'shipping_lines' : 'contracting_subcontractors';
-  const source = await (db as any)
+  const source = await db
     .selectFrom(table)
     .select('id')
     .where('tenant_id', '=', tenantId)
@@ -138,7 +138,7 @@ export async function ensureDomainSupplier(
       balance: 0,
       notes: `${domain}:${domainId}`,
       is_active: true,
-    } as any)
+    })
     .returning('id')
     .executeTakeFirstOrThrow();
   await sql`insert into accounting_supplier_links (tenant_id, domain, domain_id, supplier_id)

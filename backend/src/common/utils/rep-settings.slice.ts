@@ -203,7 +203,7 @@ export async function loadRepPermissions(queryable: any, tenantId: string, repId
       .where('id', '=', Number(repId))
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
-    return parseRepPermissions((row as any)?.permissions);
+    return parseRepPermissions(row?.permissions);
   } catch {
     return parseRepPermissions(null);
   }

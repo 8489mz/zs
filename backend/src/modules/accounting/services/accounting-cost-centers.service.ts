@@ -51,7 +51,7 @@ export class AccountingCostCentersService {
   async listCostCenters(auth: AuthContext): Promise<{ ok: boolean; costCenters: Record<string, unknown>[] }> {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
-    const rows = await (this.db as any)
+    const rows = await this.db
       .selectFrom('cost_centers as cc')
       .leftJoin('cost_centers as p', (join: any) =>
         join.onRef('cc.parent_id', '=', 'p.id').onRef('cc.tenant_id', '=', 'p.tenant_id'),
@@ -133,7 +133,7 @@ export class AccountingCostCentersService {
           parent_id: parentId,
           description,
           is_active: isActive,
-        } as any)
+        })
         .returningAll()
         .executeTakeFirstOrThrow();
 
@@ -142,8 +142,8 @@ export class AccountingCostCentersService {
         costCenter: {
           ...inserted,
           id: Number(inserted.id),
-          dimension: (inserted as any).dimension || 'operational',
-          budgetAmount: Number((inserted as any).budget_amount || 0),
+          dimension: inserted.dimension || 'operational',
+          budgetAmount: Number(inserted.budget_amount || 0),
           parentId: inserted.parent_id ? Number(inserted.parent_id) : null,
           isActive: Boolean(inserted.is_active),
         },
@@ -189,7 +189,7 @@ export class AccountingCostCentersService {
 
       const updated = await trx
         .updateTable('cost_centers')
-        .set(updates as any)
+        .set(updates)
         .where('id', '=', id)
         .where('tenant_id', '=', scope.tenantId)
         .returningAll()
@@ -204,8 +204,8 @@ export class AccountingCostCentersService {
         costCenter: {
           ...updated,
           id: Number(updated.id),
-          dimension: (updated as any).dimension || 'operational',
-          budgetAmount: Number((updated as any).budget_amount || 0),
+          dimension: updated.dimension || 'operational',
+          budgetAmount: Number(updated.budget_amount || 0),
           parentId: updated.parent_id ? Number(updated.parent_id) : null,
           isActive: Boolean(updated.is_active),
         },
@@ -227,7 +227,7 @@ export class AccountingCostCentersService {
     if (Number(linkedLines?.count || 0) > 0) {
       await this.db
         .updateTable('cost_centers')
-        .set({ is_active: false, updated_at: sql`NOW()` } as any)
+        .set({ is_active: false, updated_at: sql`NOW()` })
         .where('id', '=', id)
         .where('tenant_id', '=', scope.tenantId)
         .execute();

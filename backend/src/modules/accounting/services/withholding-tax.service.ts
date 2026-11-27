@@ -230,7 +230,7 @@ export class WithholdingTaxService {
     const quarter = params.quarter || currentQ.quarter;
     const direction = params.direction || 'payable';
 
-    const rawRows = await (this.db as any)
+    const rawRows = await this.db
       .selectFrom('withholding_tax_transactions')
       .where('tenant_id', '=', tenantId)
       .where('tax_year', '=', taxYear)
@@ -359,7 +359,7 @@ export class WithholdingTaxService {
       const bookBaseAmount = this.toBookMoney(baseAmount, digits);
       const taxAmount = this.toBookMoney(bookBaseAmount * (rate / 100), digits);
 
-      const inserted = await (trx as any)
+      const inserted = await trx
         .insertInto('withholding_tax_transactions')
         .values({
           tenant_id: tenantId,
@@ -442,7 +442,7 @@ export class WithholdingTaxService {
       // bills; exclusive bills already store subtotal pre-VAT.
       // Amounts round at the tenant's book digits, never a
       // hard-coded 2 (a KWD 0.001 of withholding survives).
-      const currencyRow = await (trx as any)
+      const currencyRow = await trx
         .selectFrom('settings')
         .select('value')
         .where('tenant_id', '=', tenantId)
@@ -452,7 +452,7 @@ export class WithholdingTaxService {
       const toBookMoney = (value: number): number => roundMoney(value, bookDigits);
 
       // Fetch purchases that exceed 300 EGP and are not cancelled
-      const purchases = await (trx as any)
+      const purchases = await trx
         .selectFrom('purchases as p')
         .leftJoin('suppliers as s', (join: any) =>
           join.onRef('s.id', '=', 'p.supplier_id').onRef('s.tenant_id', '=', 'p.tenant_id'),
@@ -490,7 +490,7 @@ export class WithholdingTaxService {
 
       // Check existing extracted purchases to avoid duplication
       const purchaseIds = purchases.map((p: any) => p.purchase_id);
-      const existing = await (trx as any)
+      const existing = await trx
         .selectFrom('withholding_tax_transactions')
         .where('tenant_id', '=', tenantId)
         .where('source_type', '=', 'purchase')

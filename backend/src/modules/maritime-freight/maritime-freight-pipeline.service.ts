@@ -315,7 +315,7 @@ export class MaritimeFreightPipelineService {
             .updateTable('maritime_quotations')
             .set({ status: 'sent' })
             .where('tenant_id', '=', tenantId)
-            .where('id', '=', quote.id as any)
+            .where('id', '=', quote.id)
             .execute();
 
           if (config.autoSendWhatsAppQuote && rfq.customer_phone) {

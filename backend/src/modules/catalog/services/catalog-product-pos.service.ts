@@ -664,10 +664,10 @@ export class CatalogProductPosService {
       matchedSerialNumber: product.matched_serial_number || null,
       icon:
         (product as any).metadata?.icon ||
-        (typeof (product as any).metadata === 'string'
+        (typeof product.metadata === 'string'
           ? (() => {
               try {
-                return JSON.parse((product as any).metadata)?.icon;
+                return JSON.parse(product.metadata)?.icon;
               } catch {
                 return null;
               }
@@ -676,10 +676,10 @@ export class CatalogProductPosService {
         null,
       imageUrl:
         (product as any).metadata?.imageUrl ||
-        (typeof (product as any).metadata === 'string'
+        (typeof product.metadata === 'string'
           ? (() => {
               try {
-                return JSON.parse((product as any).metadata)?.imageUrl;
+                return JSON.parse(product.metadata)?.imageUrl;
               } catch {
                 return null;
               }

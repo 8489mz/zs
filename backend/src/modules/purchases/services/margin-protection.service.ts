@@ -138,7 +138,7 @@ export class MarginProtectionService {
       ] as any)
       .where('pi.purchase_id', '=', purchaseId)
       .where('pi.tenant_id', '=', scope.tenantId)
-      .execute()) as any;
+      .execute()) as RawPurchaseItemRow[];
 
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const analysisItems: MarginProtectionItem[] = [];

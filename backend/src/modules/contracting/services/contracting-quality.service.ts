@@ -68,7 +68,7 @@ export class ContractingQualityService {
     status?: string,
   ): Promise<ContractingInspectionRequest[]> {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
+    let q = this.db
       .selectFrom('contracting_inspection_requests as w')
       .leftJoin('contracting_boq_items as b', 'b.id', 'w.boq_item_id')
       .leftJoin('contracting_subcontracts as s', 's.id', 'w.subcontract_id')
@@ -94,7 +94,7 @@ export class ContractingQualityService {
         'w.updated_at',
       ])
       .where('w.tenant_id', '=', tenantId)
-      .where('w.project_id', '=', projectId as any);
+      .where('w.project_id', '=', projectId);
 
     if (status && status !== 'all') {
       q = q.where('w.status', '=', status);
@@ -140,7 +140,7 @@ export class ContractingQualityService {
 
     const values: any = {
       tenant_id: tenantId,
-      project_id: projectId as any,
+      project_id: projectId,
       wir_number: suppliedNumber || tempNumber,
       boq_item_id: dto.boqItemId ? Number(dto.boqItemId) : null,
       subcontract_id: dto.subcontractId ? Number(dto.subcontractId) : null,
@@ -156,19 +156,15 @@ export class ContractingQualityService {
 
     let row: any;
     if (suppliedNumber) {
-      [row] = await (this.db as any)
-        .insertInto('contracting_inspection_requests')
-        .values(values)
-        .returningAll()
-        .execute();
+      [row] = await this.db.insertInto('contracting_inspection_requests').values(values).returningAll().execute();
     } else {
       row = await this.db.transaction().execute(async (trx) => {
-        const inserted = await (trx as any)
+        const inserted = await trx
           .insertInto('contracting_inspection_requests')
           .values(values)
           .returning('id')
           .executeTakeFirstOrThrow();
-        const updated = await (trx as any)
+        const updated = await trx
           .updateTable('contracting_inspection_requests')
           .set({
             wir_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
@@ -183,12 +179,12 @@ export class ContractingQualityService {
     }
 
     const list = await this.getInspectionRequests(auth, projectId);
-    return list.find((i) => i.id === String(row.id)) || (row as any);
+    return list.find((i) => i.id === String(row.id)) || row;
   }
 
   async updateInspectionRequestStatus(auth: AuthContext, id: string, dto: UpdateInspectionRequestStatusDto) {
     const { tenantId } = requireTenantScope(auth);
-    const [updated] = await (this.db as any)
+    const [updated] = await this.db
       .updateTable('contracting_inspection_requests')
       .set({
         status: dto.status,
@@ -198,7 +194,7 @@ export class ContractingQualityService {
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -211,10 +207,10 @@ export class ContractingQualityService {
 
   async deleteInspectionRequest(auth: AuthContext, id: string) {
     const { tenantId } = requireTenantScope(auth);
-    await (this.db as any)
+    await this.db
       .deleteFrom('contracting_inspection_requests')
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .execute();
     return { success: true };
   }
@@ -226,7 +222,7 @@ export class ContractingQualityService {
     severity?: string,
   ): Promise<ContractingSnagItem[]> {
     const { tenantId } = requireTenantScope(auth);
-    let q = (this.db as any)
+    let q = this.db
       .selectFrom('contracting_snag_items as s')
       .leftJoin('contracting_boq_items as b', 'b.id', 's.boq_item_id')
       .leftJoin('suppliers as sup', 'sup.id', 's.subcontractor_id')
@@ -252,7 +248,7 @@ export class ContractingQualityService {
         's.updated_at',
       ])
       .where('s.tenant_id', '=', tenantId)
-      .where('s.project_id', '=', projectId as any);
+      .where('s.project_id', '=', projectId);
 
     if (status && status !== 'all') {
       q = q.where('s.status', '=', status);
@@ -291,7 +287,7 @@ export class ContractingQualityService {
       .insertInto('contracting_snag_items')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
+        project_id: projectId,
         boq_item_id: dto.boqItemId ? Number(dto.boqItemId) : null,
         item_title: dto.itemTitle.trim(),
         location_desc: dto.locationDesc.trim(),
@@ -308,12 +304,12 @@ export class ContractingQualityService {
       .execute();
 
     const list = await this.getSnagItems(auth, projectId);
-    return list.find((s) => s.id === String(row.id)) || (row as any);
+    return list.find((s) => s.id === String(row.id)) || row;
   }
 
   async updateSnagItemStatus(auth: AuthContext, id: string, dto: UpdateSnagItemStatusDto) {
     const { tenantId } = requireTenantScope(auth);
-    const [updated] = await (this.db as any)
+    const [updated] = await this.db
       .updateTable('contracting_snag_items')
       .set({
         status: dto.status,
@@ -326,7 +322,7 @@ export class ContractingQualityService {
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -339,21 +335,17 @@ export class ContractingQualityService {
 
   async deleteSnagItem(auth: AuthContext, id: string) {
     const { tenantId } = requireTenantScope(auth);
-    await (this.db as any)
-      .deleteFrom('contracting_snag_items')
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
-      .execute();
+    await this.db.deleteFrom('contracting_snag_items').where('tenant_id', '=', tenantId).where('id', '=', id).execute();
     return { success: true };
   }
 
   async getProjectHandovers(auth: AuthContext, projectId: string): Promise<ContractingProjectHandover[]> {
     const { tenantId } = requireTenantScope(auth);
-    const rows = await (this.db as any)
+    const rows = await this.db
       .selectFrom('contracting_project_handovers')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('handover_date', 'desc')
       .execute();
 
@@ -387,11 +379,11 @@ export class ContractingQualityService {
     d.setFullYear(d.getFullYear() + 1);
     const warrantyEnd = dto.warrantyEndDate || d.toISOString().split('T')[0];
 
-    const [row] = await (this.db as any)
+    const [row] = await this.db
       .insertInto('contracting_project_handovers')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
+        project_id: projectId,
         handover_type: dto.handoverType,
         handover_date: dto.handoverDate,
         committee_members: dto.committeeMembers.trim(),
@@ -426,18 +418,18 @@ export class ContractingQualityService {
 
   async approveProjectHandover(auth: AuthContext, id: string, dto: ApproveProjectHandoverDto) {
     const { tenantId } = requireTenantScope(auth);
-    const handover = await (this.db as any)
+    const handover = await this.db
       .selectFrom('contracting_project_handovers')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!handover) {
       throw new NotFoundException(`محضر التسليم برقم ${id} غير موجود`);
     }
 
-    const [approved] = await (this.db as any)
+    const [approved] = await this.db
       .updateTable('contracting_project_handovers')
       .set({
         status: 'approved',
@@ -447,7 +439,7 @@ export class ContractingQualityService {
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -469,11 +461,11 @@ export class ContractingQualityService {
 
   async getSubmittals(auth: AuthContext, projectId: string): Promise<ContractingSubmittal[]> {
     const { tenantId } = requireTenantScope(auth);
-    const rows = await (this.db as any)
+    const rows = await this.db
       .selectFrom('contracting_submittals')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('created_at', 'desc')
       .execute();
 
@@ -513,18 +505,18 @@ export class ContractingQualityService {
     const tempNumber = `SUB-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const row = await this.db.transaction().execute(async (trx) => {
-      const inserted = await (trx as any)
+      const inserted = await trx
         .insertInto('contracting_submittals')
         .values({
           tenant_id: tenantId,
-          project_id: projectId as any,
+          project_id: projectId,
           submittal_number: tempNumber,
           submittal_type: dto.submittalType,
           title: dto.title,
           specification_section: dto.specificationSection || null,
           supplier_manufacturer: dto.supplierManufacturer || null,
-          boq_item_id: dto.boqItemId ? (dto.boqItemId as any) : null,
-          subcontract_id: dto.subcontractId ? (dto.subcontractId as any) : null,
+          boq_item_id: dto.boqItemId ? dto.boqItemId : null,
+          subcontract_id: dto.subcontractId ? dto.subcontractId : null,
           submission_date: dto.submissionDate || todayTenantDate(businessTz, new Date()),
           review_due_date: dto.reviewDueDate || null,
           status: 'submitted',
@@ -534,7 +526,7 @@ export class ContractingQualityService {
         })
         .returning('id')
         .executeTakeFirstOrThrow();
-      const updated = await (trx as any)
+      const updated = await trx
         .updateTable('contracting_submittals')
         .set({
           submittal_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
@@ -571,7 +563,7 @@ export class ContractingQualityService {
 
   async updateSubmittalStatus(auth: AuthContext, id: string, dto: UpdateSubmittalStatusDto) {
     const { tenantId } = requireTenantScope(auth);
-    const [updated] = await (this.db as any)
+    const [updated] = await this.db
       .updateTable('contracting_submittals')
       .set({
         status: dto.status,
@@ -581,7 +573,7 @@ export class ContractingQualityService {
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -594,11 +586,11 @@ export class ContractingQualityService {
 
   async getMaterialEscalations(auth: AuthContext, projectId: string): Promise<ContractingMaterialEscalation[]> {
     const { tenantId } = requireTenantScope(auth);
-    const rows = await (this.db as any)
+    const rows = await this.db
       .selectFrom('contracting_material_escalations')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('created_at', 'desc')
       .execute();
 
@@ -641,11 +633,11 @@ export class ContractingQualityService {
     const totalCompensationAmount = roundMoney(priceDifference * dto.executedQuantity, moneyDigits);
 
     const row = await this.db.transaction().execute(async (trx) => {
-      const inserted = await (trx as any)
+      const inserted = await trx
         .insertInto('contracting_material_escalations')
         .values({
           tenant_id: tenantId,
-          project_id: projectId as any,
+          project_id: projectId,
           claim_number: tempNumber,
           material_type: dto.materialType,
           material_name: dto.materialName,
@@ -663,7 +655,7 @@ export class ContractingQualityService {
         })
         .returning('id')
         .executeTakeFirstOrThrow();
-      const updated = await (trx as any)
+      const updated = await trx
         .updateTable('contracting_material_escalations')
         .set({
           claim_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
@@ -699,16 +691,16 @@ export class ContractingQualityService {
 
   async updateMaterialEscalationStatus(auth: AuthContext, id: string, dto: UpdateMaterialEscalationStatusDto) {
     const { tenantId } = requireTenantScope(auth);
-    const [updated] = await (this.db as any)
+    const [updated] = await this.db
       .updateTable('contracting_material_escalations')
       .set({
         status: dto.status,
-        ipc_invoice_id: dto.ipcInvoiceId ? (dto.ipcInvoiceId as any) : null,
+        ipc_invoice_id: dto.ipcInvoiceId ? dto.ipcInvoiceId : null,
         notes: dto.notes || undefined,
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -724,7 +716,7 @@ export class ContractingQualityService {
     projectId: string,
   ): Promise<ContractingSubcontractorBackcharge[]> {
     const { tenantId } = requireTenantScope(auth);
-    const rows = await (this.db as any)
+    const rows = await this.db
       .selectFrom('contracting_subcontractor_backcharges as cb')
       .leftJoin('contracting_subcontracts as cs', 'cs.id', 'cb.subcontract_id')
       .leftJoin('contracting_subcontracts as ben', 'ben.id', 'cb.beneficiary_subcontract_id')
@@ -746,7 +738,7 @@ export class ContractingQualityService {
         'cb.updated_at',
       ])
       .where('cb.tenant_id', '=', tenantId)
-      .where('cb.project_id', '=', projectId as any)
+      .where('cb.project_id', '=', projectId)
       .orderBy('cb.created_at', 'desc')
       .execute();
 
@@ -783,14 +775,14 @@ export class ContractingQualityService {
     const tempNumber = `BCH-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const row = await this.db.transaction().execute(async (trx) => {
-      const inserted = await (trx as any)
+      const inserted = await trx
         .insertInto('contracting_subcontractor_backcharges')
         .values({
           tenant_id: tenantId,
-          project_id: projectId as any,
+          project_id: projectId,
           voucher_number: tempNumber,
-          subcontract_id: dto.subcontractId as any,
-          beneficiary_subcontract_id: dto.beneficiarySubcontractId ? (dto.beneficiarySubcontractId as any) : null,
+          subcontract_id: dto.subcontractId,
+          beneficiary_subcontract_id: dto.beneficiarySubcontractId ? dto.beneficiarySubcontractId : null,
           backcharge_category: dto.backchargeCategory,
           amount: dto.amount,
           description: dto.description,
@@ -801,7 +793,7 @@ export class ContractingQualityService {
         })
         .returning('id')
         .executeTakeFirstOrThrow();
-      const updated = await (trx as any)
+      const updated = await trx
         .updateTable('contracting_subcontractor_backcharges')
         .set({
           voucher_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
@@ -833,15 +825,15 @@ export class ContractingQualityService {
 
   async updateBackchargeStatus(auth: AuthContext, id: string, dto: UpdateBackchargeStatusDto) {
     const { tenantId } = requireTenantScope(auth);
-    const [updated] = await (this.db as any)
+    const [updated] = await this.db
       .updateTable('contracting_subcontractor_backcharges')
       .set({
         status: dto.status,
-        applied_ipc_invoice_id: dto.appliedIpcInvoiceId ? (dto.appliedIpcInvoiceId as any) : null,
+        applied_ipc_invoice_id: dto.appliedIpcInvoiceId ? dto.appliedIpcInvoiceId : null,
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 

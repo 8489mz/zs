@@ -399,6 +399,7 @@
     "test/critical/phase1-d-m3-mail-nested.spec.ts",
     "test/critical/phase1-f5l-repair-bundle-budget.spec.ts",
     "test/critical/phase1-d-d10a-serials-payload.spec.ts",
-    "test/critical/phase1-discount-fix-line-amount.spec.ts"
+    "test/critical/phase1-discount-fix-line-amount.spec.ts",
+    "test/critical/phase1-cleanup-as-any-reduction.spec.ts"
   ]
 }

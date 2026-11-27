@@ -100,7 +100,7 @@ export class ForexRevaluationService {
       .selectFrom('forex_revaluation_runs')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!run) throw new NotFoundException('سجل إعادة التقييم غير موجود.');
@@ -455,8 +455,8 @@ export class ForexRevaluationService {
           .updateTable('journal_entries')
           .set({
             entry_no: entryNo,
-            updated_at: sql`NOW()` as any,
-          } as any)
+            updated_at: sql`NOW()`,
+          })
           .where('id', '=', entryId)
           .where('tenant_id', '=', tenantId)
           .execute();
@@ -484,14 +484,14 @@ export class ForexRevaluationService {
           status: createdEntryId ? 'posted' : 'no_difference',
           notes: dto.notes || `إعادة تقييم فروق عملة ${dto.currencyCode} بنهاية فترة ${dto.periodDate}`,
           created_by: auth.userId || 0,
-        } as any)
+        })
         .returningAll()
         .executeTakeFirstOrThrow();
 
       if (createdEntryId) {
         await trx
           .updateTable('journal_entries')
-          .set({ source_id: Number(runRow.id), updated_at: sql`NOW()` as any } as any)
+          .set({ source_id: Number(runRow.id), updated_at: sql`NOW()` })
           .where('id', '=', createdEntryId)
           .where('tenant_id', '=', tenantId)
           .execute();
@@ -511,10 +511,7 @@ export class ForexRevaluationService {
       }));
 
       if (lineRows.length > 0) {
-        await trx
-          .insertInto('forex_revaluation_lines')
-          .values(lineRows as any)
-          .execute();
+        await trx.insertInto('forex_revaluation_lines').values(lineRows).execute();
       }
 
       // Update the currency rate in currency_exchange_rates to the new closing rate
@@ -523,7 +520,7 @@ export class ForexRevaluationService {
         .set({
           exchange_rate: dto.closingRate,
           updated_at: sql`NOW()`,
-        } as any)
+        })
         .where('tenant_id', '=', tenantId)
         .where('currency_code', '=', dto.currencyCode)
         .execute();

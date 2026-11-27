@@ -35,7 +35,7 @@ export class SalesOrdersReads {
       .where('account_id', '=', scope.accountId);
 
     if (query?.status && query.status !== 'all') {
-      qb = qb.where('status', '=', query.status as any);
+      qb = qb.where('status', '=', query.status);
     }
 
     if (query?.search?.trim()) {

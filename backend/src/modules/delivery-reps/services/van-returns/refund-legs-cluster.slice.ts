@@ -68,9 +68,9 @@ export class RefundLegsClusterSlice {
     let priorCash = 0;
     let priorCredit = 0;
     for (const row of prior || []) {
-      if (opts.excludeReturnId != null && Number((row as any).id) === Number(opts.excludeReturnId)) continue;
-      const amount = roundMoney(Number((row as any).total_amount || 0), moneyDigits);
-      const method = String((row as any).refund_method || '').trim();
+      if (opts.excludeReturnId != null && Number(row.id) === Number(opts.excludeReturnId)) continue;
+      const amount = roundMoney(Number(row.total_amount || 0), moneyDigits);
+      const method = String(row.refund_method || '').trim();
       if (method === 'cash') priorCash += amount;
       else if (method === 'credit') priorCredit += amount;
       else {
@@ -111,7 +111,7 @@ export class RefundLegsClusterSlice {
           400,
         );
       }
-      creditLeg = Math.min(receivable, Math.max(0, roundMoney(Number((creditRow as any)?.amount || 0), moneyDigits)));
+      creditLeg = Math.min(receivable, Math.max(0, roundMoney(Number(creditRow?.amount || 0), moneyDigits)));
       cashLeg = Math.max(0, roundMoney(receivable - creditLeg, moneyDigits));
     }
     // card / instapay / vodafone_cash: settled straight to the bank —

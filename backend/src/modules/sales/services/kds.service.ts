@@ -138,7 +138,7 @@ export class KdsService {
           if (
             !ticket ||
             typeof ticket !== 'object' ||
-            !['pending', 'cooking', 'ready', 'served'].includes((ticket as any).status)
+            !['pending', 'cooking', 'ready', 'served'].includes(ticket.status)
           ) {
             delete state.tickets[id];
             quarantined = true;
@@ -234,7 +234,7 @@ export class KdsService {
       }
       // R4-E I18: state may only be written inside the 14h ticket window,
       // matching what getActiveTickets shows.
-      assertWithinTicketWindow((agg as any).created_at);
+      assertWithinTicketWindow(agg.created_at);
       if (itemId !== undefined) {
         let payload: any;
         try {
@@ -268,7 +268,7 @@ export class KdsService {
     }
     // R4-E I18: state may only be written inside the 14h ticket window,
     // matching what getActiveTickets shows.
-    assertWithinTicketWindow((sale as any).created_at);
+    assertWithinTicketWindow(sale.created_at);
     if (itemId !== undefined) {
       const item = await db
         .selectFrom('sale_items')
@@ -494,10 +494,10 @@ export class KdsService {
           // R4-E I15: product station -> category station -> word-boundary
           // keyword inference (see kds-station.helper).
           station: resolveItemStation({
-            productStation: (item as any).configured_station,
-            categoryStation: (item as any).category_station,
+            productStation: item.configured_station,
+            categoryStation: item.category_station,
             productName: item.product_name,
-            categoryName: (item as any).category_name,
+            categoryName: item.category_name,
           }),
         };
       });
@@ -545,8 +545,8 @@ export class KdsService {
         items: filteredItems,
         urgencyLevel,
         course: (sale as any).dining_course || undefined,
-        aggregatorChannel: (sale as any).aggregator_channel || undefined,
-        pagerNumber: (sale as any).pager_number || undefined,
+        aggregatorChannel: sale.aggregator_channel || undefined,
+        pagerNumber: sale.pager_number || undefined,
       });
 
       totalMinutes += elapsedMinutes;
@@ -914,7 +914,7 @@ export class KdsService {
           .where('id', '=', ticketId)
           .where('tenant_id', '=', tenantId)
           .executeTakeFirst();
-        const current = (sale as any)?.dining_course || 'appetizer';
+        const current = sale?.dining_course || 'appetizer';
         if (current === 'appetizer') targetCourse = 'main';
         else if (current === 'main') targetCourse = 'dessert';
         else targetCourse = 'dessert';
@@ -922,7 +922,7 @@ export class KdsService {
 
       await trx
         .updateTable('sales')
-        .set({ dining_course: targetCourse } as any)
+        .set({ dining_course: targetCourse })
         .where('id', '=', ticketId)
         .where('tenant_id', '=', tenantId)
         .execute();

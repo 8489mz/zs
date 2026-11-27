@@ -91,7 +91,7 @@ export class ImportSourcingService {
             metadata: JSON.stringify({ is_international: true, country: 'China' }),
             is_active: true,
             tenant_id: tenantId,
-          } as any)
+          })
           .returning('id')
           .executeTakeFirstOrThrow();
         supplierId = Number(inserted.id);
@@ -155,7 +155,7 @@ export class ImportSourcingService {
             verified_by: hasBank ? Number(userId) : null,
             verification_notes: hasBank ? 'تم توثيق الحساب البنكي رسمياً أثناء تسجيل المصنع' : null,
             notes: dto.notes || null,
-          } as any)
+          })
           .execute();
       }
 
@@ -633,8 +633,8 @@ export class ImportSourcingService {
       if (!shipment) {
         throw new BadRequestException('الشحنة المرتبطة غير موجودة في هذه المنشأة');
       }
-      if (!linkedProjectId && (shipment as any).project_id) {
-        linkedProjectId = String((shipment as any).project_id);
+      if (!linkedProjectId && shipment.project_id) {
+        linkedProjectId = String(shipment.project_id);
       }
     }
     if (dto.projectId) {
@@ -803,7 +803,7 @@ export class ImportSourcingService {
       .where('hs_code', '=', hsCode)
       .executeTakeFirst();
 
-    const isOfficial = Boolean(tariff && (tariff as any).is_official);
+    const isOfficial = Boolean(tariff && tariff.is_official);
     const isDocumented = isOfficial;
     let dutyRate = 0;
     let vatRate = 0;
@@ -814,7 +814,7 @@ export class ImportSourcingService {
       dutyRate = Number(tariff.duty_rate_percent) / 100;
       vatRate = Number(tariff.vat_rate_percent) / 100;
       inspRate = Number(tariff.inspection_fees_percent || 0) / 100;
-      source = (tariff as any).official_source || 'مصلحة الجمارك المصرية (بند رسمي موثق)';
+      source = tariff.official_source || 'مصلحة الجمارك المصرية (بند رسمي موثق)';
     } else if (tariff && !isOfficial) {
       dutyRate = Number(tariff.duty_rate_percent) / 100;
       vatRate = Number(tariff.vat_rate_percent) / 100;

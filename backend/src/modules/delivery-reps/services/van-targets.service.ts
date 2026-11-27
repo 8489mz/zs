@@ -40,7 +40,7 @@ export class VanTargetsService {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   async getCommissionConfig(tenantId: string): Promise<VanRepCommissionConfig> {
@@ -653,7 +653,7 @@ export class VanTargetsService {
     const effectivePayout = Math.min(requestedAmount, maxPayable);
 
     return await this.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
 
       const primaryBranch = await trxAny
         .selectFrom('branches')
@@ -714,7 +714,7 @@ export class VanTargetsService {
         .execute();
 
       if (this.accountingPosting) {
-        await this.accountingPosting.postExpense(trx as any, expenseId, auth);
+        await this.accountingPosting.postExpense(trx, expenseId, auth);
       }
 
       const remainingAfter = roundMoney(Math.max(0, maxPayable - effectivePayout), moneyDigits);

@@ -6,7 +6,7 @@ import type { ApprovePreSalesOrderResult, RejectPreSalesOrderResult } from './va
 
 export class PreSalesOrderLifecycleSlice {
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   constructor(private readonly db: Kysely<Database>) {}
@@ -102,7 +102,7 @@ export class PreSalesOrderLifecycleSlice {
     }
 
     await this.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
       const items = await trxAny
         .selectFrom('sales_order_items')
         .select(['product_id', 'reserved_quantity'])
@@ -120,7 +120,7 @@ export class PreSalesOrderLifecycleSlice {
         }));
 
       if (itemsToRelease.length > 0) {
-        await releaseLocationStock(trx as any, {
+        await releaseLocationStock(trx, {
           tenantId,
           accountId,
           locationId: whLocId > 0 ? whLocId : null,

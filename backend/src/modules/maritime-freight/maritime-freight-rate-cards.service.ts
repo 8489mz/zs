@@ -158,7 +158,7 @@ export class MaritimeFreightRateCardsService {
         .selectFrom('shipping_lines')
         .select(['name_en', 'name_ar'])
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', String(dto.shippingLineId) as any)
+        .where('id', '=', String(dto.shippingLineId))
         .executeTakeFirst();
       carrierName = line?.name_en || line?.name_ar || '';
     }
@@ -167,7 +167,7 @@ export class MaritimeFreightRateCardsService {
       .insertInto('maritime_rate_cards')
       .values({
         tenant_id: tenantId,
-        shipping_line_id: dto.shippingLineId ? (String(dto.shippingLineId) as any) : null,
+        shipping_line_id: dto.shippingLineId ? String(dto.shippingLineId) : null,
         carrier_name: carrierName || 'Unnamed Carrier',
         transport_mode: dto.transportMode || 'sea',
         rate_basis: dto.rateBasis || 'per_container',
@@ -227,7 +227,7 @@ export class MaritimeFreightRateCardsService {
         'r.container_type',
       ])
       .where('b.tenant_id', '=', tenantId)
-      .where('b.id', '=', bidId as any)
+      .where('b.id', '=', bidId)
       .executeTakeFirst();
 
     if (!bid) throw new NotFoundException('عرض السعر غير موجود');
@@ -272,7 +272,7 @@ export class MaritimeFreightRateCardsService {
       .updateTable('maritime_rate_cards')
       .set({ status: dto.status, updated_at: sql`NOW()` })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -282,11 +282,7 @@ export class MaritimeFreightRateCardsService {
 
   async deleteRateCard(auth: AuthContext, id: string) {
     const { tenantId } = requireTenantScope(auth);
-    await this.db
-      .deleteFrom('maritime_rate_cards')
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
-      .execute();
+    await this.db.deleteFrom('maritime_rate_cards').where('tenant_id', '=', tenantId).where('id', '=', id).execute();
     return { success: true };
   }
 }

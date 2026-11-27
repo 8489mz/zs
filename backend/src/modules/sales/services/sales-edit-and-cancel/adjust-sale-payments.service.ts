@@ -67,8 +67,8 @@ export class AdjustSalePaymentsService {
     auth: AuthContext,
   ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
-    const reason = String((payload as any)?.reason || '').trim();
-    const managerPin = String((payload as any)?.managerPin || '').trim();
+    const reason = String(payload?.reason || '').trim();
+    const managerPin = String(payload?.managerPin || '').trim();
     if (!reason) throw new AppError('سبب تعديل الدفعات مطلوب.', 'PAYMENT_ADJUSTMENT_REASON_REQUIRED', 400);
     const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
     if (!isAdmin && !managerPin)
@@ -78,8 +78,8 @@ export class AdjustSalePaymentsService {
     const validChannels = ['cash', 'card', 'wallet', 'instapay'] as const;
     const mergedLegs = new Map<string, number>();
     for (const leg of payload.payments || []) {
-      const channel = String((leg as any)?.paymentChannel || '').trim();
-      const amount = Number((leg as any)?.amount || 0);
+      const channel = String(leg?.paymentChannel || '').trim();
+      const amount = Number(leg?.amount || 0);
       if (!validChannels.includes(channel as (typeof validChannels)[number])) {
         throw new AppError(`قناة دفع غير صالحة (${channel || 'غير مسجلة'})`, 'INVALID_PAYMENT_CHANNEL', 400);
       }
@@ -110,7 +110,7 @@ export class AdjustSalePaymentsService {
         throw new AppError('فاتورة استبدال مترابطة؛ استخدم مرتجعاً بدلاً من تعديلها', 'EXCHANGE_IMMUTABLE', 422);
       if (sale.status !== 'posted')
         throw new AppError('لا يمكن تعديل دفعات فاتورة غير مرحّلة أو ملغاة.', 'SALE_EDIT_STATUS_FORBIDDEN', 400);
-      assertSaleNotZatcaSigned((sale as any).zatca_status);
+      assertSaleNotZatcaSigned(sale.zatca_status);
       // One-edit allowance: this posts a sale_edit journal, exactly
       // like updateSale — a second money edit of the same sale is
       // refused here too, not silently stacked.
@@ -198,7 +198,7 @@ export class AdjustSalePaymentsService {
         );
       }
 
-      const tripId = Number((sale as any).van_trip_id || 0) || null;
+      const tripId = Number(sale.van_trip_id || 0) || null;
       const tripOpen = tripId ? await lockOpenTripRow(trx, scope.tenantId, tripId) : false;
 
       const collectibleTotal = calculateCollectibleTotal(
@@ -220,11 +220,11 @@ export class AdjustSalePaymentsService {
       }
       remainingReceivable = roundMoney(Math.max(0, collectibleTotal - newPaid), moneyDigits);
 
-      const customer = (sale as any).customer_id
+      const customer = sale.customer_id
         ? await trx
             .selectFrom('customers')
             .select(['id', 'name', 'balance', 'credit_limit', 'is_credit_blocked'])
-            .where('id', '=', Number((sale as any).customer_id))
+            .where('id', '=', Number(sale.customer_id))
             .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
             .forUpdate()
             .executeTakeFirst()
@@ -308,8 +308,7 @@ export class AdjustSalePaymentsService {
       // changed — otherwise the stored channel stays (a 'mixed' or
       // split-sale channel must not collapse to a single leg's channel
       // just because the amounts moved).
-      const newPaymentType =
-        remainingReceivable > paymentTolerance ? 'credit' : String((sale as any).payment_type || 'cash');
+      const newPaymentType = remainingReceivable > paymentTolerance ? 'credit' : String(sale.payment_type || 'cash');
       const oldChannels = new Set(currentPayments.map((p) => String(p.payment_channel || '')));
       const newChannels = new Set(newLegs.map((l) => l.paymentChannel));
       const channelsChanged =
@@ -320,7 +319,7 @@ export class AdjustSalePaymentsService {
               newPaymentType === 'credit' ? 'credit' : 'cash',
               newLegs.map((leg) => ({ paymentChannel: leg.paymentChannel as 'cash' | 'card' | 'wallet' | 'instapay' })),
             )
-          : String((sale as any).payment_channel || 'cash');
+          : String(sale.payment_channel || 'cash');
       await trx
         .updateTable('sales')
         .set({
@@ -367,8 +366,8 @@ export class AdjustSalePaymentsService {
             'sale',
             saleId,
             auth,
-            (sale as any).branch_id,
-            (sale as any).location_id,
+            sale.branch_id,
+            sale.location_id,
           );
         }
       }
@@ -388,7 +387,7 @@ export class AdjustSalePaymentsService {
       // The trip counters move with the legs, same delta as updateSale.
       if (tripOpen && tripId) {
         let oldLedgerCredit: number | null = null;
-        if (String((sale as any).payment_channel || '').toLowerCase() === 'mixed') {
+        if (String(sale.payment_channel || '').toLowerCase() === 'mixed') {
           const ledgerRow = await trx
             .selectFrom('customer_ledger')
             .select('amount')
@@ -398,17 +397,17 @@ export class AdjustSalePaymentsService {
             .where('tenant_id', '=', scope.tenantId)
             .orderBy('id', 'desc')
             .executeTakeFirst();
-          oldLedgerCredit = ledgerRow ? Number((ledgerRow as any).amount || 0) : null;
+          oldLedgerCredit = ledgerRow ? Number(ledgerRow.amount || 0) : null;
         }
         const oldContribution = tripSaleContribution({
-          total: (sale as any).total,
-          paidAmount: (sale as any).paid_amount,
-          paymentChannel: (sale as any).payment_channel,
-          payments: currentPayments as any,
+          total: sale.total,
+          paidAmount: sale.paid_amount,
+          paymentChannel: sale.payment_channel,
+          payments: currentPayments,
           ledgerCreditAmount: oldLedgerCredit ?? undefined,
         });
         const newContribution = tripSaleContribution({
-          total: (sale as any).total,
+          total: sale.total,
           paidAmount: newPaid,
           paymentChannel: newPaymentChannel,
           payments: newLegs.map((leg) => ({ amount: leg.amount, payment_channel: leg.paymentChannel })),

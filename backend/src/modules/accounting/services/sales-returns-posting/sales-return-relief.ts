@@ -76,19 +76,19 @@ export class SalesReturnReliefService {
         .groupBy('account_id')
         .execute();
       for (const row of sums) {
-        const amount = Number((row as any).relieved || 0);
-        if (Number((row as any).account_id) === accountIdByCode.get('2147')) relieved.tip += amount;
-        if (Number((row as any).account_id) === accountIdByCode.get('2115')) relieved.courier += amount;
+        const amount = Number(row.relieved || 0);
+        if (Number(row.account_id) === accountIdByCode.get('2147')) relieved.tip += amount;
+        if (Number(row.account_id) === accountIdByCode.get('2115')) relieved.courier += amount;
       }
     }
     // R7-A F3: an exchange-collected prior return has no journal —
     // its relief lives only on its row. Count it here, and only
     // here (a return with a journal is already counted above).
-    const journaledReturnIds = new Set(priorJournals.map((row) => Number((row as any).source_id)));
+    const journaledReturnIds = new Set(priorJournals.map((row) => Number(row.source_id)));
     for (const prior of priorReturns) {
       if (journaledReturnIds.has(Number(prior.id))) continue;
-      relieved.tip += Number((prior as any).exchange_tip_relief || 0);
-      relieved.courier += Number((prior as any).exchange_courier_relief || 0);
+      relieved.tip += Number(prior.exchange_tip_relief || 0);
+      relieved.courier += Number(prior.exchange_courier_relief || 0);
     }
     return relieved;
   }
@@ -147,7 +147,7 @@ export class SalesReturnReliefService {
       .where('account_id', '=', Number(receivableAccount.id))
       .where(sql<boolean>`tenant_id = ${tenantId}`)
       .executeTakeFirst();
-    return Number((credited as any)?.credited || 0);
+    return Number(credited?.credited || 0);
   }
 
   /**
@@ -192,7 +192,7 @@ export class SalesReturnReliefService {
     const totalDebt = toBookMoney(sale.total);
     const priorRelief = await this.priorSalesReturnRelief(queryable, scope.tenantId, saleId, null);
     const priorReceivable = await this.priorSalesReturnReceivableCredit(queryable, scope.tenantId, saleId);
-    const isStoreFleetDelivery = String((sale as any)?.delivery_fee_mode ?? '').trim() === 'store_fleet';
+    const isStoreFleetDelivery = String(sale?.delivery_fee_mode ?? '').trim() === 'store_fleet';
     const remainingFee = toBookMoney(
       isStoreFleetDelivery ? 0 : Math.max(0, Number(sale.delivery_fee || 0) - priorRelief.courier),
     );

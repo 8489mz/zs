@@ -194,7 +194,7 @@ export function filterCashDrawerRows(
   const search = String(query.search || '')
     .trim()
     .toLowerCase();
-  const filter = String(query.filter || (query as any).status || 'all')
+  const filter = String(query.filter || query.status || 'all')
     .trim()
     .toLowerCase();
   const today = todayKey ?? (timeZone ? todayTenantDate(timeZone) : new Date().toISOString().slice(0, 10));

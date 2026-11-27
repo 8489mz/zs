@@ -176,7 +176,7 @@ export class PurchasesWriteReceiveGoodsService {
 
         await trx
           .updateTable('purchase_items')
-          .set({ received_qty: newReceivedQty } as any)
+          .set({ received_qty: newReceivedQty })
           .where('id', '=', item.id)
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .execute();
@@ -208,10 +208,7 @@ export class PurchasesWriteReceiveGoodsService {
             .filter((r) => r.serial_number);
 
           if (serialRows.length > 0) {
-            await trx
-              .insertInto('product_serials')
-              .values(serialRows as any)
-              .execute();
+            await trx.insertInto('product_serials').values(serialRows).execute();
           }
         }
 
@@ -314,7 +311,7 @@ export class PurchasesWriteReceiveGoodsService {
           matched_status: matchedStatus,
           status: 'posted',
           updated_at: sql`NOW()`,
-        } as any)
+        })
         .where('id', '=', purchaseId)
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .execute();

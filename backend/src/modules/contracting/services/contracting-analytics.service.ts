@@ -198,7 +198,7 @@ export class ContractingAnalyticsService {
     today.setHours(0, 0, 0, 0);
 
     // Inflows: Approved but un-paid client IPC invoices
-    let clientIpcsQuery = (this.db as any)
+    let clientIpcsQuery = this.db
       .selectFrom('contracting_invoices')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -206,7 +206,7 @@ export class ContractingAnalyticsService {
       .where('status', 'in', ['approved', 'under_review']);
 
     if (query?.projectId && query.projectId !== 'all') {
-      clientIpcsQuery = clientIpcsQuery.where('project_id', '=', query.projectId as any);
+      clientIpcsQuery = clientIpcsQuery.where('project_id', '=', query.projectId);
     }
     const pendingClientIpcs = await clientIpcsQuery.execute();
     const totalExpectedInflow = pendingClientIpcs.reduce((acc: number, r: any) => acc + Number(r.net_payable || 0), 0);
@@ -219,7 +219,7 @@ export class ContractingAnalyticsService {
     );
 
     // Outflows: Subcontractor IPCs + Government Licenses Fees
-    let subIpcsQuery = (this.db as any)
+    let subIpcsQuery = this.db
       .selectFrom('contracting_invoices')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -227,7 +227,7 @@ export class ContractingAnalyticsService {
       .where('status', 'in', ['approved', 'under_review']);
 
     if (query?.projectId && query.projectId !== 'all') {
-      subIpcsQuery = subIpcsQuery.where('project_id', '=', query.projectId as any);
+      subIpcsQuery = subIpcsQuery.where('project_id', '=', query.projectId);
     }
     const pendingSubIpcs = await subIpcsQuery.execute();
     const totalPendingSubIpcs = pendingSubIpcs.reduce((acc: number, r: any) => acc + Number(r.net_payable || 0), 0);
@@ -400,11 +400,11 @@ export class ContractingAnalyticsService {
     const boqItems = await this.getBoqItems(auth, projectId);
 
     // Fetch actual material costs incurred per BOQ item
-    const materialReqs = await (this.db as any)
+    const materialReqs = await this.db
       .selectFrom('contracting_material_requisitions')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .execute();
 
     const actualMatCostByBoq = new Map<string, number>();
@@ -507,19 +507,19 @@ export class ContractingAnalyticsService {
     const boqItems = await this.getBoqItems(auth, projectId);
 
     // Fetch materials tagged with boq_item_id
-    const materials = await (this.db as any)
+    const materials = await this.db
       .selectFrom('contracting_material_requisitions')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .execute();
 
     // Fetch labor wages tagged with boq_item_id
-    const laborRecords = await (this.db as any)
+    const laborRecords = await this.db
       .selectFrom('contracting_labor_attendance_records')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .execute();
 
     // Fetch site mobilization total
@@ -589,7 +589,7 @@ export class ContractingAnalyticsService {
       .selectFrom('contracting_projects')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', projectId as any)
+      .where('id', '=', projectId)
       .executeTakeFirst();
 
     if (!project) {
@@ -597,11 +597,11 @@ export class ContractingAnalyticsService {
     }
 
     // 1. Latest Cost Baseline
-    const latestSnapshot = await (this.db as any)
+    const latestSnapshot = await this.db
       .selectFrom('contracting_cost_snapshots')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('created_at', 'desc')
       .executeTakeFirst();
     const costBaseline = Number(latestSnapshot?.total_budget_cost || project.contract_value || 0);
@@ -611,7 +611,7 @@ export class ContractingAnalyticsService {
       .selectFrom('contracting_invoices')
       .select(sql<number>`COALESCE(SUM(current_amount + stored_materials_amount), 0)`.as('sum'))
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('ipc_type', '=', 'client')
       .where('status', 'in', ['approved', 'paid'])
       .executeTakeFirst();
@@ -622,16 +622,16 @@ export class ContractingAnalyticsService {
       .selectFrom('contracting_material_requisitions')
       .select(sql<number>`COALESCE(SUM(total_cost), 0)`.as('sum'))
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .executeTakeFirst();
     const materialsCost = Number(materialsCostRes?.sum || 0);
 
     // 4. Labor Cost from Attendance Records
-    const laborCostRes = await (this.db as any)
+    const laborCostRes = await this.db
       .selectFrom('contracting_labor_attendance_records')
       .select(sql<number>`COALESCE(SUM(total_payable), 0)`.as('sum'))
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .executeTakeFirst();
     const laborCost = Number(laborCostRes?.sum || 0);
 
@@ -640,7 +640,7 @@ export class ContractingAnalyticsService {
       .selectFrom('contracting_invoices')
       .select(sql<number>`COALESCE(SUM(current_amount + stored_materials_amount), 0)`.as('sum'))
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('ipc_type', '=', 'subcontractor')
       .where('status', 'in', ['approved', 'paid'])
       .executeTakeFirst();
@@ -650,27 +650,27 @@ export class ContractingAnalyticsService {
         .selectFrom('contracting_subcontracts')
         .select(sql<number>`COALESCE(SUM(total_amount), 0)`.as('sum'))
         .where('tenant_id', '=', tenantId)
-        .where('project_id', '=', projectId as any)
+        .where('project_id', '=', projectId)
         .where('status', '=', 'active')
         .executeTakeFirst();
       subcontractsCost = Number(subCommitments?.sum || 0);
     }
 
     // 6. Mobilization & Setup Expenses
-    const mobilizationCostRes = await (this.db as any)
+    const mobilizationCostRes = await this.db
       .selectFrom('contracting_site_mobilization_expenses')
       .select(sql<number>`COALESCE(SUM(amount), 0)`.as('sum'))
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .executeTakeFirst();
     const mobilizationCost = Number(mobilizationCostRes?.sum || 0);
 
     // 7. Petty Cash Settled Expenses
-    const pettyCashRes = await (this.db as any)
+    const pettyCashRes = await this.db
       .selectFrom('contracting_petty_cash')
       .select(sql<number>`COALESCE(SUM(spent_amount), 0)`.as('sum'))
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('status', '=', 'settled')
       .executeTakeFirst();
     const pettyCashCost = Number(pettyCashRes?.sum || 0);

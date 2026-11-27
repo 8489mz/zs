@@ -149,7 +149,7 @@ export class DeliveryRepsDriverOrdersService {
     const ordersWithRemaining = [];
     for (const row of pageRows) {
       const remainingAmount = await this.repOrderCashDue(
-        { id: Number(row.id), delivery_fee_mode: (row as any).deliveryFeeMode ?? null },
+        { id: Number(row.id), delivery_fee_mode: row.deliveryFeeMode ?? null },
         defaultMode,
         moneyDigits,
         driverActor,
@@ -320,7 +320,7 @@ export class DeliveryRepsDriverOrdersService {
             delivery_rep_id: rep.id,
             delivery_status: 'out_for_delivery',
             dispatched_at: now,
-            ...(payload.notes ? { note: sql`COALESCE(note, '') || ${' [' + payload.notes + ']'}` as any } : {}),
+            ...(payload.notes ? { note: sql`COALESCE(note, '') || ${' [' + payload.notes + ']'}` } : {}),
           })
           .where('id', 'in', saleIds)
           .where(this.tenantPredicate(actor))
@@ -415,7 +415,7 @@ export class DeliveryRepsDriverOrdersService {
               delivery_rep_id: rep.id,
               delivery_status: 'out_for_delivery',
               dispatched_at: now,
-              ...(payload.notes ? { note: sql`COALESCE(note, '') || ${' [' + payload.notes + ']'}` as any } : {}),
+              ...(payload.notes ? { note: sql`COALESCE(note, '') || ${' [' + payload.notes + ']'}` } : {}),
             })
             .where('id', 'in', linkedSaleIds)
             .where(this.tenantPredicate(actor))

@@ -53,7 +53,7 @@ export class SubmitFieldReturnSlice {
   }
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   private async computeAlreadyReturnedQtyBySaleItem(tenantId: string, saleIds: number[]): Promise<Map<number, number>> {
@@ -368,7 +368,7 @@ export class SubmitFieldReturnSlice {
     // numbering, and the rename run in one transaction. Validation
     // reads above stay outside; only the numbering unit is atomic.
     const created = await this.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
       const tempDocNo = `TMP-VRET-${Date.now()}`;
       const [inserted] = await trxAny
         .insertInto('van_field_returns')

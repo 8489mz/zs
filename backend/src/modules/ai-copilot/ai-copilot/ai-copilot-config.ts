@@ -169,7 +169,7 @@ export class AiCopilotConfig {
       ? ''
       : payload.baseUrl !== undefined
         ? payload.baseUrl.trim()
-        : (existingConfig as any).baseUrl || '';
+        : existingConfig.baseUrl || '';
 
     if (keyVal) {
       await sql`

@@ -159,7 +159,7 @@ export class ContractingMasterBoqService {
 
   async createMasterBoqItem(auth: AuthContext, dto: CreateMasterBoqLibraryItemDto) {
     const { tenantId } = requireTenantScope(auth);
-    const existing = await (this.db as any)
+    const existing = await this.db
       .selectFrom('contracting_master_boq_library')
       .select('id')
       .where('tenant_id', '=', tenantId)
@@ -170,7 +170,7 @@ export class ContractingMasterBoqService {
       throw new BadRequestException(`كود البند المرجعي ${dto.itemCode} موجود مسبقاً`);
     }
 
-    const inserted = await (this.db as any)
+    const inserted = await this.db
       .insertInto('contracting_master_boq_library')
       .values({
         tenant_id: tenantId,
@@ -237,10 +237,10 @@ export class ContractingMasterBoqService {
 
   async updateMasterBoqItem(auth: AuthContext, id: string, dto: UpdateMasterBoqLibraryItemDto) {
     const { tenantId } = requireTenantScope(auth);
-    const item = await (this.db as any)
+    const item = await this.db
       .selectFrom('contracting_master_boq_library')
       .selectAll()
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .where((eb: any) => eb.or([eb('tenant_id', '=', tenantId), eb('tenant_id', '=', '')]))
       .executeTakeFirst();
 
@@ -259,10 +259,10 @@ export class ContractingMasterBoqService {
     if (dto.isActive !== undefined) updates.is_active = dto.isActive;
 
     if (item.tenant_id === tenantId) {
-      const updated = await (this.db as any)
+      const updated = await this.db
         .updateTable('contracting_master_boq_library')
         .set(updates)
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .where('tenant_id', '=', tenantId)
         .returningAll()
         .executeTakeFirst();
@@ -305,10 +305,10 @@ export class ContractingMasterBoqService {
 
   async toggleMasterBoqItemStatus(auth: AuthContext, id: string, targetActive?: boolean) {
     const { tenantId } = requireTenantScope(auth);
-    const item = await (this.db as any)
+    const item = await this.db
       .selectFrom('contracting_master_boq_library')
       .selectAll()
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .where((eb: any) => eb.or([eb('tenant_id', '=', tenantId), eb('tenant_id', '=', '')]))
       .executeTakeFirst();
 
@@ -319,10 +319,10 @@ export class ContractingMasterBoqService {
     const newStatus = targetActive !== undefined ? targetActive : !item.is_active;
 
     if (item.tenant_id === tenantId) {
-      const updated = await (this.db as any)
+      const updated = await this.db
         .updateTable('contracting_master_boq_library')
         .set({ is_active: newStatus, updated_at: new Date() })
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .where('tenant_id', '=', tenantId)
         .returningAll()
         .executeTakeFirst();
@@ -345,10 +345,10 @@ export class ContractingMasterBoqService {
 
   async deleteMasterBoqItem(auth: AuthContext, id: string) {
     const { tenantId } = requireTenantScope(auth);
-    const item = await (this.db as any)
+    const item = await this.db
       .selectFrom('contracting_master_boq_library')
       .selectAll()
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .where((eb: any) => eb.or([eb('tenant_id', '=', tenantId), eb('tenant_id', '=', '')]))
       .executeTakeFirst();
 
@@ -357,9 +357,9 @@ export class ContractingMasterBoqService {
     }
 
     if (item.tenant_id === tenantId) {
-      await (this.db as any)
+      await this.db
         .deleteFrom('contracting_master_boq_library')
-        .where('id', '=', id as any)
+        .where('id', '=', id)
         .where('tenant_id', '=', tenantId)
         .execute();
       return { success: true, message: 'تم حذف البند المرجعي المخصص بنجاح' };
@@ -387,10 +387,10 @@ export class ContractingMasterBoqService {
       throw new BadRequestException('يرجى تحديد بند واحد على الأقل للاستيراد');
     }
 
-    const masterItems = await (this.db as any)
+    const masterItems = await this.db
       .selectFrom('contracting_master_boq_library')
       .selectAll()
-      .where('id', 'in', dto.itemIds as any)
+      .where('id', 'in', dto.itemIds)
       .where((eb: any) => eb.or([eb('tenant_id', '=', tenantId), eb('tenant_id', '=', '')]))
       .execute();
 
@@ -401,11 +401,11 @@ export class ContractingMasterBoqService {
       throw new NotFoundException('لم يتم العثور على البنود المحددة في بنك البنود المرجعي');
     }
 
-    const existingBoq = await (this.db as any)
+    const existingBoq = await this.db
       .selectFrom('contracting_boq_items')
       .select('item_code')
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .execute();
 
     const existingCodes = new Set(existingBoq.map((b: any) => b.item_code));
@@ -421,11 +421,11 @@ export class ContractingMasterBoqService {
       }
       existingCodes.add(candidateCode);
 
-      const inserted = await (this.db as any)
+      const inserted = await this.db
         .insertInto('contracting_boq_items')
         .values({
           tenant_id: tenantId,
-          project_id: projectId as any,
+          project_id: projectId,
           item_code: candidateCode,
           description: m.name + (m.description ? ` - ${m.description}` : ''),
           category: m.trade_category || 'general',
@@ -457,11 +457,11 @@ export class ContractingMasterBoqService {
 
   async getTakeoffsByBoqItem(auth: AuthContext, boqItemId: string) {
     const { tenantId } = requireTenantScope(auth);
-    const rows = await (this.db as any)
+    const rows = await this.db
       .selectFrom('contracting_boq_takeoffs')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('boq_item_id', '=', boqItemId as any)
+      .where('boq_item_id', '=', boqItemId)
       .orderBy('id', 'asc')
       .execute();
 
@@ -488,11 +488,11 @@ export class ContractingMasterBoqService {
 
   async saveTakeoffs(auth: AuthContext, boqItemId: string, dto: SaveBoqTakeoffsDto) {
     const { tenantId } = requireTenantScope(auth);
-    const boqItem = await (this.db as any)
+    const boqItem = await this.db
       .selectFrom('contracting_boq_items')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', boqItemId as any)
+      .where('id', '=', boqItemId)
       .executeTakeFirst();
 
     if (!boqItem) {
@@ -500,10 +500,10 @@ export class ContractingMasterBoqService {
     }
 
     // Delete existing takeoffs for this item
-    await (this.db as any)
+    await this.db
       .deleteFrom('contracting_boq_takeoffs')
       .where('tenant_id', '=', tenantId)
-      .where('boq_item_id', '=', boqItemId as any)
+      .where('boq_item_id', '=', boqItemId)
       .execute();
 
     let totalCalculatedQty = 0;
@@ -523,12 +523,12 @@ export class ContractingMasterBoqService {
       const total = net * (1 + waste / 100);
       totalCalculatedQty += total;
 
-      const ins = await (this.db as any)
+      const ins = await this.db
         .insertInto('contracting_boq_takeoffs')
         .values({
           tenant_id: tenantId,
           project_id: boqItem.project_id,
-          boq_item_id: boqItemId as any,
+          boq_item_id: boqItemId,
           drawing_ref: t.drawingRef || '',
           axis_ref: t.axisRef || '',
           description: t.description,
@@ -554,16 +554,16 @@ export class ContractingMasterBoqService {
       const unitPrice = Number(boqItem.unit_price || 0);
       const totalPrice = roundedQty * unitPrice;
 
-      await (this.db as any)
+      await this.db
         .updateTable('contracting_boq_items')
         .set({
           contract_qty: roundedQty,
           revised_qty: roundedQty,
           total_price: totalPrice,
-          updated_at: new Date() as any,
+          updated_at: new Date(),
         })
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', boqItemId as any)
+        .where('id', '=', boqItemId)
         .execute();
     }
 

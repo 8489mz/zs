@@ -48,7 +48,7 @@ export class StockBatchHelpersService {
     fromLocationId: number,
     toLocationId: number,
   ): Promise<number> {
-    const trxAny = trx as any;
+    const trxAny = trx;
     const remaining0 = Number(Number(qty || 0).toFixed(3));
     if (remaining0 <= 0 || fromLocationId === toLocationId) return 0;
 
@@ -157,7 +157,7 @@ export class StockBatchHelpersService {
             location_id: toLocationId,
             supplier_name: batch.supplier_name,
             status: 'active',
-          } as any)
+          })
           .execute();
       }
 
@@ -167,7 +167,7 @@ export class StockBatchHelpersService {
           quantity: newQty,
           status: newQty <= 0 ? 'depleted' : 'active',
           updated_at: sql`NOW()`,
-        } as any)
+        })
         .where('id', '=', Number(batch.id))
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .execute();
@@ -196,7 +196,7 @@ export class StockBatchHelpersService {
     vanLocationId: number,
     failClosed = true,
   ): Promise<Array<{ pharmacyBatchId: number; quantity: number }>> {
-    const trxAny = trx as any;
+    const trxAny = trx;
     const drug = await trxAny
       .selectFrom('pharmacy_drugs')
       .select('id')
@@ -254,7 +254,7 @@ export class StockBatchHelpersService {
 
       await trxAny
         .updateTable('pharmacy_batches')
-        .set({ quantity: newQty, status: nextStatus, updated_at: sql`NOW()` } as any)
+        .set({ quantity: newQty, status: nextStatus, updated_at: sql`NOW()` })
         .where('id', '=', Number(batch.id))
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .execute();

@@ -44,7 +44,7 @@ export class RecruitmentAtsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    const countRes = await (this.db as any)
+    const countRes = await this.db
       .selectFrom('recruitment_job_openings')
       .select(sql<number>`COUNT(*)`.as('count'))
       .where('tenant_id', '=', tenantId)
@@ -54,7 +54,7 @@ export class RecruitmentAtsService {
     const jobCode = formatDailyDocumentNumber('JOB', seq, new Date(), 4, await getTenantTimezone(this.db, tenantId));
     const id = `job_${randomUUID()}`;
 
-    await (this.db as any)
+    await this.db
       .insertInto('recruitment_job_openings')
       .values({
         id,
@@ -81,7 +81,7 @@ export class RecruitmentAtsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    let query = (this.db as any)
+    let query = this.db
       .selectFrom('recruitment_job_openings as j')
       .select([
         'j.id',
@@ -114,7 +114,7 @@ export class RecruitmentAtsService {
     const jobIds = jobs.map((j: any) => j.id);
     if (jobIds.length === 0) return [];
 
-    const applicantCounts = await (this.db as any)
+    const applicantCounts = await this.db
       .selectFrom('recruitment_applicants')
       .select(['job_id', sql<number>`COUNT(*)`.as('applicant_count')])
       .where('tenant_id', '=', tenantId)
@@ -138,7 +138,7 @@ export class RecruitmentAtsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    const countRes = await (this.db as any)
+    const countRes = await this.db
       .selectFrom('recruitment_applicants')
       .select(sql<number>`COUNT(*)`.as('count'))
       .where('tenant_id', '=', tenantId)
@@ -154,7 +154,7 @@ export class RecruitmentAtsService {
     );
     const id = `app_${randomUUID()}`;
 
-    await (this.db as any)
+    await this.db
       .insertInto('recruitment_applicants')
       .values({
         id,
@@ -187,7 +187,7 @@ export class RecruitmentAtsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    let query = (this.db as any)
+    let query = this.db
       .selectFrom('recruitment_applicants as a')
       .leftJoin('recruitment_job_openings as j', 'j.id', 'a.job_id')
       .select([
@@ -261,7 +261,7 @@ export class RecruitmentAtsService {
       const updates: any = { stage: dto.stage, updated_at: new Date() };
       if (dto.interviewNotes !== undefined) updates.interview_notes = dto.interviewNotes;
       if (dto.rating !== undefined) updates.rating = dto.rating;
-      await (trx as any)
+      await trx
         .updateTable('recruitment_applicants')
         .set(updates)
         .where('id', '=', id)
@@ -285,7 +285,7 @@ export class RecruitmentAtsService {
     }
     const { tenantId } = requireTenantScope(auth);
     const result = await this.db.transaction().execute(async (trx) => {
-      const applicant = await (trx as any)
+      const applicant = await trx
         .selectFrom('recruitment_applicants')
         .selectAll()
         .where('id', '=', id)
@@ -298,7 +298,7 @@ export class RecruitmentAtsService {
       }
       let job: any = null;
       if (applicant.job_id) {
-        job = await (trx as any)
+        job = await trx
           .selectFrom('recruitment_job_openings')
           .selectAll()
           .where('id', '=', applicant.job_id)
@@ -326,7 +326,7 @@ export class RecruitmentAtsService {
         auth,
       );
 
-      await (trx as any)
+      await trx
         .updateTable('recruitment_applicants')
         .set({ stage: 'hired', hired_employee_id: employeeId, updated_at: new Date() })
         .where('id', '=', id)
@@ -334,7 +334,7 @@ export class RecruitmentAtsService {
         .execute();
       if (job) {
         const hiredCount = Number(job.hired_count || 0) + 1;
-        await (trx as any)
+        await trx
           .updateTable('recruitment_job_openings')
           .set({
             hired_count: hiredCount,
@@ -359,13 +359,13 @@ export class RecruitmentAtsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    const applicants = await (this.db as any)
+    const applicants = await this.db
       .selectFrom('recruitment_applicants')
       .select(['stage'])
       .where('tenant_id', '=', tenantId)
       .execute();
 
-    const jobs = await (this.db as any)
+    const jobs = await this.db
       .selectFrom('recruitment_job_openings')
       .select(['status'])
       .where('tenant_id', '=', tenantId)

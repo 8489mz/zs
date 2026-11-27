@@ -43,7 +43,7 @@ export class VanCollectionsAndSwapsService {
   }
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   private get collectionsDeps(): VanCollectionsAndSwapsDeps {

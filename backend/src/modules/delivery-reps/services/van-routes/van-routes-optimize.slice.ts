@@ -22,7 +22,7 @@ export class VanRoutesOptimizeSlice {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   private async listRepServedCustomerIds(tenantId: string, repId: number): Promise<Set<number>> {
@@ -99,7 +99,7 @@ export class VanRoutesOptimizeSlice {
       const servedIds = await this.listRepServedCustomerIds(tenantId, repId);
       const candidateIds = customerRows.map((c: any) => Number(c.id));
       const totals: Record<number, number> = {};
-      for (const c of customerRows) totals[Number(c.id)] = Number((c as any).balance || 0);
+      for (const c of customerRows) totals[Number(c.id)] = Number(c.balance || 0);
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
       const repBalancesMap = await getCustomerRepBalancesMap(this.anyDb, tenantId, {
         customerIds: candidateIds,

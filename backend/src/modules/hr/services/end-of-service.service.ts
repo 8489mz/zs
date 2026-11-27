@@ -202,16 +202,16 @@ export class EndOfServiceService {
     const serviceDays = Math.floor((diffDays % 365.25) % 30.4375);
 
     // Latest contract salary
-    const latestContract = await (this.db as any)
+    const latestContract = await this.db
       .selectFrom('hr_employment_contracts')
       .selectAll()
       .where('employee_id', '=', input.employeeId)
       .where('tenant_id', '=', tenantId)
       .where('status', 'in', ['active', 'ended'])
-      .where('start_date', '<=', input.terminationDate as any)
+      .where('start_date', '<=', input.terminationDate)
       // A historic contract that expired before termination is NOT a valid
       // salary basis for an EOS gratuity or unused leave payout.
-      .where((eb: any) => eb.or([eb('end_date', 'is', null), eb('end_date', '>=', input.terminationDate as any)]))
+      .where((eb: any) => eb.or([eb('end_date', 'is', null), eb('end_date', '>=', input.terminationDate)]))
       .orderBy('start_date', 'desc')
       .orderBy('id', 'desc')
       .executeTakeFirst();
@@ -320,7 +320,7 @@ export class EndOfServiceService {
     const unpaidLoansDeduction = Number(loansRes.rows[0]?.total_unpaid || 0);
 
     // Active unreturned assets / custody
-    const assetsRes = await (this.db as any)
+    const assetsRes = await this.db
       .selectFrom('hr_employee_assets')
       .selectAll()
       .where('employee_id', '=', input.employeeId)
@@ -447,7 +447,7 @@ export class EndOfServiceService {
       const tempNo = `EOS-TMP-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
       // Insert record
-      const [inserted] = await (trx as any)
+      const [inserted] = await trx
         .insertInto('hr_end_of_service_settlements')
         .values({
           tenant_id: tenantId,
@@ -493,7 +493,7 @@ export class EndOfServiceService {
         4,
         await getTenantTimezone(trx, tenantId),
       );
-      await (trx as any)
+      await trx
         .updateTable('hr_end_of_service_settlements')
         .set({ settlement_no: settlementNo })
         .where('id', '=', inserted.id)
@@ -517,7 +517,7 @@ export class EndOfServiceService {
   async listSettlements(auth: AuthContext, query?: { status?: string; employeeId?: number }) {
     const { tenantId } = requireTenantScope(auth);
 
-    let q = (this.db as any)
+    let q = this.db
       .selectFrom('hr_end_of_service_settlements as s')
       .leftJoin('hr_employees as e', (join: any) =>
         join.onRef('e.id', '=', 's.employee_id').onRef('e.tenant_id', '=', 's.tenant_id'),
@@ -581,7 +581,7 @@ export class EndOfServiceService {
   async getSettlement(id: number, auth: AuthContext) {
     const { tenantId } = requireTenantScope(auth);
 
-    const row = await (this.db as any)
+    const row = await this.db
       .selectFrom('hr_end_of_service_settlements as s')
       .leftJoin('hr_employees as e', (join: any) =>
         join.onRef('e.id', '=', 's.employee_id').onRef('e.tenant_id', '=', 's.tenant_id'),
@@ -643,7 +643,7 @@ export class EndOfServiceService {
       // Use the same lock order as payroll approval, loan disbursement and
       // manual repayments. An EOS journal may settle the very same loan.
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + tenantId}))`.execute(trx);
-      const settlement = await (trx as any)
+      const settlement = await trx
         .selectFrom('hr_end_of_service_settlements')
         .selectAll()
         .where('id', '=', id)
@@ -720,7 +720,7 @@ export class EndOfServiceService {
       }
 
       // Custody clearance gate: If employee has unreturned assets, custody must be cleared or deducted
-      const unreturnedAssets = await (trx as any)
+      const unreturnedAssets = await trx
         .selectFrom('hr_employee_assets')
         .selectAll()
         .where('employee_id', '=', settlement.employee_id)
@@ -872,7 +872,7 @@ export class EndOfServiceService {
           AND status = 'active' AND start_date <= ${settlement.termination_date}::date
       `.execute(trx);
       // Update settlement record
-      await (trx as any)
+      await trx
         .updateTable('hr_end_of_service_settlements')
         .set({
           journal_entry_id: entryId,
@@ -899,7 +899,7 @@ export class EndOfServiceService {
     const { tenantId } = requireTenantScope(auth);
 
     return await this.db.transaction().execute(async (trx) => {
-      const row = await (trx as any)
+      const row = await trx
         .selectFrom('hr_end_of_service_settlements')
         .select(['id', 'status', 'journal_entry_id'])
         .where('id', '=', id)
@@ -915,7 +915,7 @@ export class EndOfServiceService {
         throw new BadRequestException('لا يمكن حذف مخالصة تم ترحيل قيدها المحاسبي');
       }
 
-      await (trx as any)
+      await trx
         .deleteFrom('hr_end_of_service_settlements')
         .where('id', '=', id)
         .where('tenant_id', '=', tenantId)

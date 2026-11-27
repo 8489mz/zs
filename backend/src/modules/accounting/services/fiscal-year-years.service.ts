@@ -177,8 +177,8 @@ export class FiscalYearYearsService {
       .selectFrom('accounting_fiscal_years')
       .select(['id', 'name', 'start_date', 'end_date'])
       .where('tenant_id', '=', tenantId)
-      .where('start_date', '<=', endDate as any)
-      .where('end_date', '>=', startDate as any)
+      .where('start_date', '<=', endDate)
+      .where('end_date', '>=', startDate)
       .executeTakeFirst();
 
     if (overlapping) {
@@ -197,14 +197,14 @@ export class FiscalYearYearsService {
           tenant_id: tenantId,
           name,
           code: dto.code ? String(dto.code).trim() : null,
-          start_date: startDate as any,
-          end_date: endDate as any,
+          start_date: startDate,
+          end_date: endDate,
           status: 'open',
           net_profit_loss: 0,
           total_revenue: 0,
           total_expense: 0,
-          created_at: sql`NOW()` as any,
-          updated_at: sql`NOW()` as any,
+          created_at: sql`NOW()`,
+          updated_at: sql`NOW()`,
         })
         .returningAll()
         .executeTakeFirstOrThrow();

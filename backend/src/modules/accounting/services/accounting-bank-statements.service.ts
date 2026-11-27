@@ -75,7 +75,7 @@ export class AccountingBankStatementsService {
   async listBankStatements(auth: AuthContext, accountId?: number): Promise<any[]> {
     this.assertAccountingAccess(auth);
 
-    let query = (this.db as any)
+    let query = this.db
       .selectFrom('bank_statements as bs')
       .innerJoin('accounting_accounts as a', (join: any) =>
         join.onRef('a.id', '=', 'bs.account_id').onRef('a.tenant_id', '=', 'bs.tenant_id'),
@@ -119,7 +119,7 @@ export class AccountingBankStatementsService {
   async getBankStatement(id: number, auth: AuthContext): Promise<any> {
     this.assertAccountingAccess(auth);
 
-    const statement = await (this.db as any)
+    const statement = await this.db
       .selectFrom('bank_statements as bs')
       .innerJoin('accounting_accounts as a', (join: any) =>
         join.onRef('a.id', '=', 'bs.account_id').onRef('a.tenant_id', '=', 'bs.tenant_id'),
@@ -145,7 +145,7 @@ export class AccountingBankStatementsService {
       throw new NotFoundException('كشف الحساب البنكي غير موجود.');
     }
 
-    const lines = await (this.db as any)
+    const lines = await this.db
       .selectFrom('bank_statement_lines')
       .selectAll()
       .where('statement_id', '=', id)
@@ -199,7 +199,7 @@ export class AccountingBankStatementsService {
         throw new BadRequestException('كشف الحساب البنكي يتطلب حساب خزينة أو بنك.');
       }
 
-      const statement = await (trx as any)
+      const statement = await trx
         .insertInto('bank_statements')
         .values({
           tenant_id: scope.tenantId,
@@ -224,7 +224,7 @@ export class AccountingBankStatementsService {
           amount: line.amount,
           is_reconciled: false,
         }));
-        await (trx as any).insertInto('bank_statement_lines').values(lineRows).execute();
+        await trx.insertInto('bank_statement_lines').values(lineRows).execute();
       }
       return Number(statement.id);
     });
@@ -493,7 +493,7 @@ export class AccountingBankStatementsService {
     const scope = requireTenantScope(auth);
     return this.db.transaction().execute(async (trx) => {
       const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
-      const sLine = await (trx as any)
+      const sLine = await trx
         .selectFrom('bank_statement_lines as bsl')
         .innerJoin('bank_statements as bs', (join: any) =>
           join.onRef('bs.id', '=', 'bsl.statement_id').onRef('bs.tenant_id', '=', 'bsl.tenant_id'),

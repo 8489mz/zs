@@ -85,7 +85,7 @@ export class ContractingPostingService {
         .selectFrom('contracting_invoices')
         .selectAll()
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', invoiceId as any)
+        .where('id', '=', invoiceId)
         .forUpdate()
         .executeTakeFirst();
 
@@ -94,7 +94,7 @@ export class ContractingPostingService {
       }
 
       if (invoice.journal_entry_id) {
-        const existingJe = await (trx as any)
+        const existingJe = await trx
           .selectFrom('journal_entries')
           .select(['id', 'entry_no'])
           .where('tenant_id', '=', tenantId)
@@ -127,7 +127,7 @@ export class ContractingPostingService {
       // describe a holding that was taken at a different rate.
       let ledgerRetentionPercent = Number(project.retention_percent ?? 5);
       if (invoice.subcontract_id) {
-        const subcontractForRetention = await (trx as any)
+        const subcontractForRetention = await trx
           .selectFrom('contracting_subcontracts')
           .select('retention_percent')
           .where('tenant_id', '=', tenantId)
@@ -175,7 +175,7 @@ export class ContractingPostingService {
 
       if (isSubcontractor) {
         // 1. Subcontracting Cost / Work in Progress (Expense)
-        let expAccount = await (trx as any)
+        let expAccount = await trx
           .selectFrom('accounting_accounts')
           .select('id')
           .where('tenant_id', '=', tenantId)
@@ -184,7 +184,7 @@ export class ContractingPostingService {
           .orderBy('code', 'asc')
           .executeTakeFirst();
         if (!expAccount) {
-          expAccount = await (trx as any)
+          expAccount = await trx
             .selectFrom('accounting_accounts')
             .select('id')
             .where('tenant_id', '=', tenantId)
@@ -194,7 +194,7 @@ export class ContractingPostingService {
         }
 
         // 2. Accounts Payable (Suppliers / Subcontractors)
-        let apAccount = await (trx as any)
+        let apAccount = await trx
           .selectFrom('accounting_accounts')
           .select('id')
           .where('tenant_id', '=', tenantId)
@@ -202,7 +202,7 @@ export class ContractingPostingService {
           .where('is_active', '=', true)
           .executeTakeFirst();
         if (!apAccount) {
-          apAccount = await (trx as any)
+          apAccount = await trx
             .selectFrom('accounting_accounts')
             .select('id')
             .where('tenant_id', '=', tenantId)
@@ -225,7 +225,7 @@ export class ContractingPostingService {
         }
       } else {
         // 1. Accounts Receivable (Clients)
-        let arAccount = await (trx as any)
+        let arAccount = await trx
           .selectFrom('accounting_accounts')
           .select('id')
           .where('tenant_id', '=', tenantId)
@@ -233,7 +233,7 @@ export class ContractingPostingService {
           .where('is_active', '=', true)
           .executeTakeFirst();
         if (!arAccount) {
-          arAccount = await (trx as any)
+          arAccount = await trx
             .selectFrom('accounting_accounts')
             .select('id')
             .where('tenant_id', '=', tenantId)
@@ -244,7 +244,7 @@ export class ContractingPostingService {
         }
 
         // 2. Contracting Revenue
-        const revAccount = await (trx as any)
+        const revAccount = await trx
           .selectFrom('accounting_accounts')
           .select('id')
           .where('tenant_id', '=', tenantId)
@@ -254,7 +254,7 @@ export class ContractingPostingService {
           .executeTakeFirst();
 
         // 3. Advances from customers
-        let advanceAccount = await (trx as any)
+        let advanceAccount = await trx
           .selectFrom('accounting_accounts')
           .select('id')
           .where('tenant_id', '=', tenantId)
@@ -262,7 +262,7 @@ export class ContractingPostingService {
           .where('is_active', '=', true)
           .executeTakeFirst();
         if (!advanceAccount) {
-          advanceAccount = await (trx as any)
+          advanceAccount = await trx
             .selectFrom('accounting_accounts')
             .select('id')
             .where('tenant_id', '=', tenantId)
@@ -272,7 +272,7 @@ export class ContractingPostingService {
         }
 
         // 4. Retentions Receivable
-        const retentionAccount = await (trx as any)
+        const retentionAccount = await trx
           .selectFrom('accounting_accounts')
           .select('id')
           .where('tenant_id', '=', tenantId)
@@ -470,7 +470,7 @@ export class ContractingPostingService {
           // Line 4: Debit Other Deductions
           if (otherDeductions > 0) {
             let deductionAccId = contraAccountId;
-            const expAccount = await (trx as any)
+            const expAccount = await trx
               .selectFrom('accounting_accounts')
               .select('id')
               .where('tenant_id', '=', tenantId)
@@ -543,7 +543,7 @@ export class ContractingPostingService {
         return journalEntryId;
       })();
 
-      const postedEntry = await (trx as any)
+      const postedEntry = await trx
         .selectFrom('journal_entries')
         .select(['id', 'entry_no'])
         .where('tenant_id', '=', tenantId)
@@ -588,7 +588,7 @@ export class ContractingPostingService {
         paymentCategory: payment.payment_category,
         referenceNumber: payment.reference_number,
       });
-      const priorPayment = await (trx as any)
+      const priorPayment = await trx
         .selectFrom('contracting_subcontractor_payments')
         .selectAll()
         .where('tenant_id', '=', tenantId)
@@ -601,7 +601,7 @@ export class ContractingPostingService {
       }
       if (dto.paymentMethod === 'check')
         throw new BadRequestException('تسجل أوراق الدفع من محفظة الشيكات؛ لا يجوز خصم البنك قبل صرفها.');
-      const userId = (auth as any).userId || (auth as any).user?.id || null;
+      const userId = auth.userId || (auth as any).user?.id || null;
       if (!dto.subcontractorId) {
         throw new BadRequestException('يجب تحديد مقاول الباطن');
       }
@@ -622,7 +622,7 @@ export class ContractingPostingService {
       // Fetch subcontract details if subcontractId is specified
       let subcontract: any = null;
       if (dto.subcontractId) {
-        subcontract = await (trx as any)
+        subcontract = await trx
           .selectFrom('contracting_subcontracts')
           .selectAll()
           .where('tenant_id', '=', tenantId)
@@ -649,7 +649,7 @@ export class ContractingPostingService {
       )
         throw new BadRequestException('المشروع غير موجود في المنشأة.');
       if (dto.invoiceId) {
-        const invoice = await (trx as any)
+        const invoice = await trx
           .selectFrom('contracting_invoices')
           .selectAll()
           .where('tenant_id', '=', tenantId)
@@ -668,7 +668,7 @@ export class ContractingPostingService {
       // Calculate prior advance disbursements against this subcontract or project (Invariant G1-C)
       let priorAdvanceDisbursed = 0;
       if (dto.subcontractId) {
-        const priorRes = await (trx as any)
+        const priorRes = await trx
           .selectFrom('contracting_subcontractor_payments')
           .select(sql<number>`COALESCE(SUM(amount), 0)::numeric`.as('total'))
           .where('tenant_id', '=', tenantId)
@@ -678,7 +678,7 @@ export class ContractingPostingService {
           .executeTakeFirst();
         priorAdvanceDisbursed = Number(priorRes?.total || 0);
       } else if (dto.projectId) {
-        const priorRes = await (trx as any)
+        const priorRes = await trx
           .selectFrom('contracting_subcontractor_payments')
           .select(sql<number>`COALESCE(SUM(amount), 0)::numeric`.as('total'))
           .where('tenant_id', '=', tenantId)
@@ -732,7 +732,7 @@ export class ContractingPostingService {
         ? 'advance'
         : dto.paymentCategory || (dto.invoiceId ? 'progress' : 'progress');
 
-      const [payment] = await (trx as any)
+      const [payment] = await trx
         .insertInto('contracting_subcontractor_payments')
         .values({
           tenant_id: tenantId,

@@ -7,7 +7,7 @@ export class VanFleetVehiclesSlice {
   constructor(private readonly db: Kysely<Database>) {}
 
   get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -52,10 +52,10 @@ export class VanFleetVehiclesSlice {
       if (!trip) {
         throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
       }
-      if (Number((trip as any).rep_id) !== Number(repId)) {
+      if (Number(trip.rep_id) !== Number(repId)) {
         throw new AppError('هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل وقود عليها', 'REP_TRIP_NOT_OWNED', 403);
       }
-      if ((trip as any).vehicle_id != null && Number((trip as any).vehicle_id) !== Number(vehicleId)) {
+      if (trip.vehicle_id != null && Number(trip.vehicle_id) !== Number(vehicleId)) {
         throw new AppError('هذه المركبة ليست مركبة الرحلة المذكورة', 'REP_VEHICLE_NOT_ASSIGNED', 403);
       }
       return;
@@ -150,7 +150,7 @@ export class VanFleetVehiclesSlice {
     vehicle: { id: number; van_location_id: number | null; assigned_rep_id: number | null; plate_number: string },
     newRepId: number | null,
   ): Promise<void> {
-    const trxAny = trx as any;
+    const trxAny = trx;
     const currentRepId = vehicle.assigned_rep_id ? Number(vehicle.assigned_rep_id) : null;
     const nextRepId = newRepId ? Number(newRepId) : null;
 
@@ -251,7 +251,7 @@ export class VanFleetVehiclesSlice {
     const locationName = `سيارة فان (${plateNumber}) - ${payload.modelName || 'أسطول التوزيع'}`;
 
     await this.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
 
       const loc = await trxAny
         .insertInto('stock_locations')
@@ -332,7 +332,7 @@ export class VanFleetVehiclesSlice {
     }
 
     await this.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
 
       const existing = await trxAny
         .selectFrom('fleet_vehicles')
@@ -401,7 +401,7 @@ export class VanFleetVehiclesSlice {
     void shiftName;
 
     await this.db.transaction().execute(async (trx) => {
-      const trxAny = trx as any;
+      const trxAny = trx;
       const vehicle = await trxAny
         .selectFrom('fleet_vehicles')
         .selectAll()

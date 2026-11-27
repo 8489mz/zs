@@ -65,7 +65,7 @@ export class AiCopilotTestKeys {
     const provider = params.provider || (keyToTest.startsWith('sk-') ? 'openai' : config.provider || 'gemini');
     const rawModel = (params.model !== undefined ? params.model : config.model) || '';
     const model = rawModel && !/[^\x20-\x7E]/.test(rawModel) ? rawModel.trim() : '';
-    const baseUrl = params.baseUrl || (config as any).baseUrl || 'https://api.openai.com/v1';
+    const baseUrl = params.baseUrl || config.baseUrl || 'https://api.openai.com/v1';
 
     if (!keyToTest) {
       return { success: false, message: 'لم يتم توفير مفتاح الذكاء الاصطناعي لاختباره' };

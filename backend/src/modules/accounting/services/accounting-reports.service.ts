@@ -706,7 +706,7 @@ export class AccountingReportsService {
       }
     }
 
-    const budgetAmount = Number((costCenter as any).budget_amount || 0);
+    const budgetAmount = Number(costCenter.budget_amount || 0);
     const variance = budgetAmount > 0 ? budgetAmount - totalExpenses : 0;
     const utilizationRate = budgetAmount > 0 ? Math.round((totalExpenses / budgetAmount) * 100) : 0;
 
@@ -715,7 +715,7 @@ export class AccountingReportsService {
         id: Number(costCenter.id),
         code: costCenter.code,
         name: costCenter.name,
-        dimension: (costCenter as any).dimension || 'operational',
+        dimension: costCenter.dimension || 'operational',
         budgetAmount,
       },
       summary: {

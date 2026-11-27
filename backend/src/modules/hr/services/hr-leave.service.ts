@@ -180,9 +180,9 @@ export class HrLeaveService {
     );
     const list = await this.listMasterData(kind, {}, auth);
     const finalId = String(insertedId || id || '');
-    const rows = (list && Array.isArray((list as any).rows) ? (list as any).rows : []) as any[];
+    const rows = (list && Array.isArray(list.rows) ? list.rows : []) as any[];
     const foundItem = rows.find((r) => String(r.id) === finalId) || rows[0];
-    return { ok: true, id: finalId, item: foundItem, ...(list as any) };
+    return { ok: true, id: finalId, item: foundItem, ...list };
   }
 
   async deactivateMasterData(kind: MasterKind, id: number, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -319,8 +319,7 @@ export class HrLeaveService {
     const description = clean(payload.description);
     const isPaid = payload.isPaid !== false;
     const isActive = payload.isActive !== false;
-    const deductsFromBalance =
-      (payload as any).deductsFromBalance === true || (payload as any).deducts_from_balance === true;
+    const deductsFromBalance = payload.deductsFromBalance === true || (payload as any).deducts_from_balance === true;
     if (id) {
       await sql`
         UPDATE hr_leave_types

@@ -50,7 +50,7 @@ export class QualityAssuranceService {
 
     const id = `qcp_${randomUUID()}`;
 
-    await (this.db as any)
+    await this.db
       .insertInto('quality_control_points')
       .values({
         id,
@@ -76,7 +76,7 @@ export class QualityAssuranceService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    let query = (this.db as any)
+    let query = this.db
       .selectFrom('quality_control_points as qcp')
       .leftJoin('products as p', 'p.id', 'qcp.product_id')
       .select([
@@ -151,7 +151,7 @@ export class QualityAssuranceService {
     const inspectionId = `qci_${randomUUID()}`;
     let autoNcrNumber: string | null = null;
 
-    await (this.db as any).transaction().execute(async (trx: any) => {
+    await this.db.transaction().execute(async (trx: any) => {
       await trx
         .insertInto('quality_inspections')
         .values({
@@ -407,7 +407,7 @@ export class QualityAssuranceService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
-    const countRes = await (this.db as any)
+    const countRes = await this.db
       .selectFrom('quality_non_conformance_reports')
       .select(sql<number>`COUNT(*)`.as('count'))
       .where('tenant_id', '=', tenantId)
@@ -417,7 +417,7 @@ export class QualityAssuranceService {
     const ncrNumber = formatDailyDocumentNumber('NCR', seq, new Date(), 4, await getTenantTimezone(this.db, tenantId));
     const id = `ncr_${randomUUID()}`;
 
-    await (this.db as any)
+    await this.db
       .insertInto('quality_non_conformance_reports')
       .values({
         id,
@@ -491,7 +491,7 @@ export class QualityAssuranceService {
       updates.closed_at = new Date();
     }
 
-    await (this.db as any)
+    await this.db
       .updateTable('quality_non_conformance_reports')
       .set(updates)
       .where('id', '=', id)
@@ -517,7 +517,7 @@ export class QualityAssuranceService {
 
     const rates = calculateQualityAcceptanceRate(inspections);
 
-    const ncrs = await (this.db as any)
+    const ncrs = await this.db
       .selectFrom('quality_non_conformance_reports')
       .select(['id', 'status', 'severity'])
       .where('tenant_id', '=', tenantId)

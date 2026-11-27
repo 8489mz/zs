@@ -161,7 +161,7 @@ export class CustomerCrudSlice {
           address: String(payload.address || '').trim(),
           balance: 0,
           customer_type: ['vip', 'credit', 'wholesale', 'half_wholesale'].includes(payload.type as string)
-            ? (payload.type as any)
+            ? payload.type
             : 'cash',
           price_list_id: priceListId,
           credit_limit: Number(payload.creditLimit || 0),
@@ -191,7 +191,7 @@ export class CustomerCrudSlice {
       await (trx as any)
         .updateTable('customers')
         .set({ metadata: JSON.stringify(initialMeta) })
-        .where('id', '=', (inserted as any).id)
+        .where('id', '=', inserted.id)
         .where('tenant_id', '=', actor.tenantId)
         .execute();
 
@@ -267,7 +267,7 @@ export class CustomerCrudSlice {
         phone,
         address: String(payload.address || '').trim(),
         customer_type: ['vip', 'credit', 'wholesale', 'half_wholesale'].includes(payload.type as string)
-          ? (payload.type as any)
+          ? payload.type
           : 'cash',
         ...(priceListId !== undefined ? { price_list_id: priceListId } : {}),
         credit_limit: Number(payload.creditLimit || 0),

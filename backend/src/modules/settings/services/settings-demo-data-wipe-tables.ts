@@ -23,69 +23,69 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
   // holds a foreign key WITHOUT a delete rule (NO ACTION) or with RESTRICT
   // to a wiped parent, so a single row in any of them used to abort the
   // whole wipe with a 500. Refund events go before preorders (RESTRICT).
-  await (trx as any)
+  await trx
     .deleteFrom('accounting_installment_interest')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('accounting_supplier_links')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('accounting_marketplace_settlements')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_partner_project_payouts')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_preorder_refund_events')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_container_preorders')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_proforma_invoices')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('settlement_allocations')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_field_returns')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
 
   // 1. Operational tables
-  await (trx as any)
+  await trx
     .deleteFrom('customer_installments')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('customer_installment_plans')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('quotation_items')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('quotations')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
@@ -166,88 +166,88 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
   // children (visits, targets, fleet, settlements, trip costs) are wiped
   // here too so the store is white instead of keeping stale van rows.
   // Transfer items go before transfers, drivers/oil/fuel before vehicles.
-  await (trx as any)
+  await trx
     .deleteFrom('van_load_requisitions')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_stock_transfer_items')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_stock_transfers')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_damaged_swaps')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_field_visits')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('delivery_rep_targets')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('fleet_vehicle_drivers')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('fleet_oil_changes')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('fleet_fuel_logs')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('fleet_vehicles')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_rep_financial_settlements')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_trip_expenses')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_trip_packaging_movements')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_store_visits')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_trade_marketing_surveys')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('van_rep_live_breadcrumbs')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
 
-  await (trx as any)
+  await trx
     .deleteFrom('van_sales_trips')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
@@ -326,149 +326,149 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
   // (deleted in section 1), which reference them with RESTRICT.
   // Project partners go before projects, refund events before deposits,
   // allocations before lots.
-  await (trx as any)
+  await trx
     .deleteFrom('import_sale_allocations')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_inventory_lots')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_inventory_receipts')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_inventory_receipt_reversals')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_late_expense_events')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_container_refund_events')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_container_deposits')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_broker_advances')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_broker_expenses')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_broker_capitalizations')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_documents')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_qc_inspections')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_reconciliation_exceptions')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_aci_compliance')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_quotations')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_sample_orders')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_suppliers_meta')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_project_partners')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_sourcing_trips')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_projects')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_customs_brokers')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_customs_tariffs')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_fx_acquisitions')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_partner_ledger')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_approval_requests')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
 
   // Import & Export Shipments (must be deleted before products/suppliers)
-  await (trx as any)
+  await trx
     .deleteFrom('import_sale_partner_shares')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_sales_and_profit')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_shipment_items')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('import_shipments')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
@@ -497,7 +497,7 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
     .deleteFrom('suppliers')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute();
-  await (trx as any)
+  await trx
     .deleteFrom('import_partners')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
@@ -598,7 +598,7 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
     .execute();
 
   // 2. HR tables (ordered strictly from child leaf to parent root)
-  await (trx as any)
+  await trx
     .deleteFrom('hr_payroll_loan_deduction_allocations')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
@@ -613,7 +613,7 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('hr_employee_adjustments')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
@@ -683,7 +683,7 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
     .catch(() => undefined);
-  await (trx as any)
+  await trx
     .deleteFrom('hr_holidays')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
@@ -712,7 +712,7 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
   // 3. Accounting & Journals
   // Treasury transfers reference journals with RESTRICT
   // (INV-TENANT-WIPE-FK-CLOSURE): they must go before the journals.
-  await (trx as any)
+  await trx
     .deleteFrom('treasury_transfers')
     .where(sql<boolean>`tenant_id = ${tenantId}`)
     .execute()
@@ -748,7 +748,7 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
     )
     .execute();
 
-  await (trx as any)
+  await trx
     .updateTable('tenant_subscription_payments')
     .set({ created_by: null })
     .where(

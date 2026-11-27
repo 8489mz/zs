@@ -171,11 +171,7 @@ export class MaritimeFreightPublicPortalService {
   }
 
   async getPublicRfqForQuote(rfqId: string, token: string, carrierCode?: string) {
-    const rfq = await this.db
-      .selectFrom('maritime_rfqs')
-      .selectAll()
-      .where('id', '=', rfqId as any)
-      .executeTakeFirst();
+    const rfq = await this.db.selectFrom('maritime_rfqs').selectAll().where('id', '=', rfqId).executeTakeFirst();
 
     this.assertValidPublicQuoteToken(rfq, token);
 
@@ -244,11 +240,7 @@ export class MaritimeFreightPublicPortalService {
   }
 
   async submitPublicCarrierBid(rfqId: string, dto: any) {
-    const rfq = await this.db
-      .selectFrom('maritime_rfqs')
-      .selectAll()
-      .where('id', '=', rfqId as any)
-      .executeTakeFirst();
+    const rfq = await this.db.selectFrom('maritime_rfqs').selectAll().where('id', '=', rfqId).executeTakeFirst();
 
     this.assertValidPublicQuoteToken(rfq, dto?.token);
 
@@ -292,7 +284,7 @@ export class MaritimeFreightPublicPortalService {
       await this.db
         .updateTable('maritime_rfqs')
         .set({ status: 'bids_received', updated_at: sql`NOW()` })
-        .where('id', '=', rfqId as any)
+        .where('id', '=', rfqId)
         .where('tenant_id', '=', rfq.tenant_id)
         .execute();
     }

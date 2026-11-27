@@ -370,7 +370,7 @@ export class ImportProjectsPartnersService {
       .map((p) => ({
         ...p,
         status: resolveImportProjectDisplayStatus(p.status, {
-          feasibilityConvertedAt: (p as any).feasibility_converted_at,
+          feasibilityConvertedAt: p.feasibility_converted_at,
           hasApprovedProforma: approvedProformaByProject.has(String(p.id)),
           hasShipment: (countByProject.get(String(p.id)) || 0) > 0,
           hasArrivedShipment: arrivedByProject.has(String(p.id)),
@@ -451,7 +451,7 @@ export class ImportProjectsPartnersService {
     return {
       ...project,
       status: resolveImportProjectDisplayStatus(project.status, {
-        feasibilityConvertedAt: (project as any).feasibility_converted_at,
+        feasibilityConvertedAt: project.feasibility_converted_at,
         hasApprovedProforma: !!approvedProforma,
         hasShipment: shipments.length > 0,
         hasArrivedShipment: shipments.some((s: any) => s.status === 'Arrived'),
@@ -474,7 +474,7 @@ export class ImportProjectsPartnersService {
       const suppliedNo = dto.projectNo?.trim();
       const projectNo = suppliedNo
         ? suppliedNo
-        : await generateDailySequenceNumber(trx, this.db as any, 'import_projects', 'project_no', 'IMP', tenantId);
+        : await generateDailySequenceNumber(trx, this.db, 'import_projects', 'project_no', 'IMP', tenantId);
 
       // INV-IMPORT-SECTOR-PRESET: the preset is a validated data
       // choice. An unknown key fails closed before any write; a
@@ -533,7 +533,7 @@ export class ImportProjectsPartnersService {
         }
         for (const p of dto.partners) {
           let partnerId = p.partnerId;
-          const partnerName = (p as any).name?.trim();
+          const partnerName = p.name?.trim();
 
           if (!partnerId && partnerName) {
             const existing = await trx
@@ -643,7 +643,7 @@ export class ImportProjectsPartnersService {
         .where('id', '=', projectId)
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
-      const currentKey = (current as any)?.sector_preset || null;
+      const currentKey = current?.sector_preset || null;
       if (currentKey !== nextPresetKey) {
         const hasItems = await this.db
           .selectFrom('import_shipment_items')

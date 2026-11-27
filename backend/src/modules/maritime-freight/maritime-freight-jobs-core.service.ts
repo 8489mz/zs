@@ -353,7 +353,7 @@ export class MaritimeFreightJobsCoreService {
       .selectFrom('maritime_jobs')
       .select(['transport_mode'])
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', String(parentJobId) as any)
+      .where('id', '=', String(parentJobId))
       .executeTakeFirst();
     if (!parent) {
       return { synced: false, grossWeightKg, totalCbm, packageCount };
@@ -373,7 +373,7 @@ export class MaritimeFreightJobsCoreService {
       .updateTable('maritime_jobs')
       .set(patch)
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', String(parentJobId) as any)
+      .where('id', '=', String(parentJobId))
       .execute();
     return { synced: true, grossWeightKg, totalCbm, packageCount };
   }
@@ -525,7 +525,7 @@ export class MaritimeFreightJobsCoreService {
             sub_job_count: sql`sub_job_count + 1`,
             is_consolidation_master: true,
           })
-          .where('id', '=', dto.parentJobId as any)
+          .where('id', '=', dto.parentJobId)
           .where('tenant_id', '=', tenantId)
           .execute();
         // INV-MARITIME-CONSOLIDATION-TOTALS-REAL: the new child
@@ -682,7 +682,7 @@ export class MaritimeFreightJobsCoreService {
             updated_at: sql`NOW()`,
           })
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', dto.quotationId as any)
+          .where('id', '=', dto.quotationId)
           .execute();
       }
 
@@ -696,7 +696,7 @@ export class MaritimeFreightJobsCoreService {
             updated_at: sql`NOW()`,
           })
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', dto.inquiryId as any)
+          .where('id', '=', dto.inquiryId)
           .execute();
       }
 
@@ -718,14 +718,14 @@ export class MaritimeFreightJobsCoreService {
       .selectFrom('maritime_quotations')
       .select('status')
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', quotationId as any)
+      .where('id', '=', quotationId)
       .executeTakeFirst();
     const priorStatus = priorQuote?.status ?? null;
     const quote = await this.db
       .updateTable('maritime_quotations')
       .set({ status: 'converted_to_job', updated_at: sql`NOW()` })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', quotationId as any)
+      .where('id', '=', quotationId)
       .where('status', '!=', 'converted_to_job')
       .returningAll()
       .executeTakeFirst();
@@ -735,7 +735,7 @@ export class MaritimeFreightJobsCoreService {
         .selectFrom('maritime_quotations')
         .select('id')
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', quotationId as any)
+        .where('id', '=', quotationId)
         .executeTakeFirst();
       if (!existing) throw new NotFoundException('Quotation not found');
       throw new BadRequestException('تم تحويل عرض السعر هذا إلى أمر تشغيل بالفعل');
@@ -749,7 +749,7 @@ export class MaritimeFreightJobsCoreService {
           .selectFrom('maritime_rfqs')
           .selectAll()
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', quote.rfq_id as any)
+          .where('id', '=', quote.rfq_id)
           .executeTakeFirst();
       }
       if (quote.bid_id) {
@@ -757,7 +757,7 @@ export class MaritimeFreightJobsCoreService {
           .selectFrom('maritime_rfq_bids')
           .selectAll()
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', quote.bid_id as any)
+          .where('id', '=', quote.bid_id)
           .executeTakeFirst();
       }
 
@@ -785,7 +785,7 @@ export class MaritimeFreightJobsCoreService {
         inquiryId: quote.inquiry_id ? String(quote.inquiry_id) : undefined,
         customerId: quote.customer_id,
         customerName: quote.customer_name,
-        direction: (rfq?.direction as any) || 'import',
+        direction: rfq?.direction || 'import',
         transportMode: quote.transport_mode || rfq?.transport_mode || 'sea',
         airCargoType: quote.air_cargo_type || rfq?.air_cargo_type || null,
         grossWeightKg: Number(quote.gross_weight_kg || rfq?.gross_weight_kg || 0),
@@ -841,7 +841,7 @@ export class MaritimeFreightJobsCoreService {
           .updateTable('maritime_quotations')
           .set({ status: priorStatus, updated_at: sql`NOW()` })
           .where('tenant_id', '=', tenantId)
-          .where('id', '=', quote.id as any)
+          .where('id', '=', quote.id)
           .execute();
       }
       throw err;
@@ -904,7 +904,7 @@ export class MaritimeFreightJobsCoreService {
       .selectFrom('maritime_jobs')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .executeTakeFirst();
 
     if (!job) throw new NotFoundException('Shipment Job not found');
@@ -928,7 +928,7 @@ export class MaritimeFreightJobsCoreService {
       .selectFrom('maritime_cargo_insurances')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('job_id', '=', id as any)
+      .where('job_id', '=', id)
       .orderBy('id', 'desc')
       .execute();
 
@@ -936,7 +936,7 @@ export class MaritimeFreightJobsCoreService {
       .selectFrom('maritime_warehouse_receipts')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('job_id', '=', id as any)
+      .where('job_id', '=', id)
       .orderBy('id', 'desc')
       .execute();
 
@@ -955,7 +955,7 @@ export class MaritimeFreightJobsCoreService {
         .selectFrom('customers')
         .select(['balance'])
         .where('tenant_id', '=', tenantId)
-        .where('id', '=', job.customer_id as any)
+        .where('id', '=', job.customer_id)
         .executeTakeFirst();
       if (cust) {
         customerBalance = Number(cust.balance || 0);

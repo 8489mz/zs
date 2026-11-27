@@ -151,26 +151,23 @@ export async function recordTrackedStockIncrease(
     await trx
       .insertInto('product_serials')
       .values(
-        serials.map(
-          (serial) =>
-            ({
-              tenant_id: scope.tenantId,
-              account_id: scope.accountId,
-              product_id: productId,
-              serial_number: serial,
-              imei_2: null,
-              status: 'in_stock' as const,
-              branch_id: branchId,
-              location_id: locationId,
-              cost_price: input.unitCost,
-              purchase_id: null,
-              purchase_item_id: null,
-              sale_id: null,
-              sale_item_id: null,
-              warranty_end_date: null,
-              notes: `زيادة تسوية موثقة: ${input.reason}`,
-            }) as any,
-        ),
+        serials.map((serial) => ({
+          tenant_id: scope.tenantId,
+          account_id: scope.accountId,
+          product_id: productId,
+          serial_number: serial,
+          imei_2: null,
+          status: 'in_stock' as const,
+          branch_id: branchId,
+          location_id: locationId,
+          cost_price: input.unitCost,
+          purchase_id: null,
+          purchase_item_id: null,
+          sale_id: null,
+          sale_item_id: null,
+          warranty_end_date: null,
+          notes: `زيادة تسوية موثقة: ${input.reason}`,
+        })),
       )
       .execute();
   } else if (serials.length) {
@@ -269,7 +266,7 @@ export async function recordTrackedStockIncrease(
             supplier_name: null,
             status: 'active',
             notes: `زيادة تسوية موثقة: ${input.reason}`,
-          } as any)
+          })
           .execute();
       }
     }

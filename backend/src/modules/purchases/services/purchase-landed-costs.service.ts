@@ -125,7 +125,7 @@ export class PurchaseLandedCostsService {
   ): Promise<any> {
     const scope = requireTenantScope(auth);
 
-    const purchase = await (queryable as any)
+    const purchase = await queryable
       .selectFrom('purchases as p')
       .leftJoin('suppliers as s', (join: any) =>
         join.onRef('s.id', '=', 'p.supplier_id').onRef('s.tenant_id', '=', 'p.tenant_id'),
@@ -151,7 +151,7 @@ export class PurchaseLandedCostsService {
       throw new NotFoundException('فاتورة المشتريات غير موجودة.');
     }
 
-    const items = await (queryable as any)
+    const items = await queryable
       .selectFrom('purchase_items as pi')
       .where('pi.purchase_id', '=', purchaseId)
       .where(this.tenantPredicate(auth, 'pi'))
@@ -169,7 +169,7 @@ export class PurchaseLandedCostsService {
       .orderBy('pi.id', 'asc')
       .execute();
 
-    const landedCosts = await (queryable as any)
+    const landedCosts = await queryable
       .selectFrom('purchase_landed_costs as plc')
       .where('plc.purchase_id', '=', purchaseId)
       .where(this.tenantPredicate(auth, 'plc'))

@@ -444,10 +444,10 @@ export class ReturnsPurchaseReturnService {
       // return_items.cost_price that postPurchaseReturn journals from, so
       // the movement and the GL inventory leg cannot diverge.
       const originalCost = originalPurchaseReturnUnitCost({
-        unitCost: (purchaseItem as any).unit_cost,
-        unitMultiplier: (purchaseItem as any).unit_multiplier,
-        taxRate: (purchase as any).tax_rate,
-        pricesIncludeTax: (purchase as any).prices_include_tax,
+        unitCost: purchaseItem.unit_cost,
+        unitMultiplier: purchaseItem.unit_multiplier,
+        taxRate: purchase.tax_rate,
+        pricesIncludeTax: purchase.prices_include_tax,
       });
       const movement = await recordStockMovement(trx, {
         productId: requestItem.productId,

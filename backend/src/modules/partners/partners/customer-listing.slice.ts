@@ -81,7 +81,7 @@ export class CustomerListingSlice {
       const customerTotalBalances: Record<number, number> = {};
       for (const r of rows) customerTotalBalances[Number(r.id)] = Number(r.balance || 0);
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, this.tenantId(actor)));
-      const repBalancesMap = await getCustomerRepBalancesMap(this.db as any, this.tenantId(actor), {
+      const repBalancesMap = await getCustomerRepBalancesMap(this.db, this.tenantId(actor), {
         customerIds,
         customerTotalBalances,
         moneyDigits,
@@ -111,7 +111,7 @@ export class CustomerListingSlice {
     const customerTotalBalances: Record<number, number> = {};
     for (const r of rows) customerTotalBalances[Number(r.id)] = Number(r.balance || 0);
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, this.tenantId(actor)));
-    const repBalancesMap = await getCustomerRepBalancesMap(this.db as any, this.tenantId(actor), {
+    const repBalancesMap = await getCustomerRepBalancesMap(this.db, this.tenantId(actor), {
       customerIds,
       customerTotalBalances,
       moneyDigits,

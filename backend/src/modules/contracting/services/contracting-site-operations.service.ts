@@ -52,7 +52,7 @@ export class ContractingSiteOperationsService {
       .selectFrom('contracting_site_daily_logs')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('log_date', 'desc')
       .execute();
   }
@@ -63,7 +63,7 @@ export class ContractingSiteOperationsService {
       .insertInto('contracting_site_daily_logs')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
+        project_id: projectId,
         log_date: dto.logDate,
         weather_conditions: dto.weatherConditions || null,
         labor_count: Number(dto.laborCount || 0),
@@ -86,7 +86,7 @@ export class ContractingSiteOperationsService {
       .selectFrom('contracting_rfis')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('created_at', 'desc')
       .execute();
   }
@@ -104,7 +104,7 @@ export class ContractingSiteOperationsService {
         .insertInto('contracting_rfis')
         .values({
           tenant_id: tenantId,
-          project_id: projectId as any,
+          project_id: projectId,
           rfi_number: tempNumber,
           subject: dto.subject.trim(),
           question: dto.question.trim(),
@@ -145,7 +145,7 @@ export class ContractingSiteOperationsService {
         updated_at: new Date(),
       })
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -248,7 +248,7 @@ export class ContractingSiteOperationsService {
       .selectFrom('contracting_schedule_tasks')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('start_date', 'asc')
       .execute();
 
@@ -264,7 +264,7 @@ export class ContractingSiteOperationsService {
         .selectFrom('contracting_schedule_tasks')
         .select(sql<number>`count(*)::int`.as('count'))
         .where('tenant_id', '=', tenantId)
-        .where('project_id', '=', projectId as any)
+        .where('project_id', '=', projectId)
         .executeTakeFirst();
       const count = (countRes?.count || 0) + 1;
       taskCode = `TSK-${String(count).padStart(3, '0')}`;
@@ -275,7 +275,7 @@ export class ContractingSiteOperationsService {
       .selectFrom('contracting_schedule_tasks')
       .select('id')
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .where('task_code', '=', taskCode)
       .executeTakeFirst();
 
@@ -284,7 +284,7 @@ export class ContractingSiteOperationsService {
         .selectFrom('contracting_schedule_tasks')
         .select(sql<number>`count(*)::int`.as('count'))
         .where('tenant_id', '=', tenantId)
-        .where('project_id', '=', projectId as any)
+        .where('project_id', '=', projectId)
         .executeTakeFirst();
       let count = (countRes?.count || 0) + 1;
       let candidate = `TSK-${String(count).padStart(3, '0')}`;
@@ -293,7 +293,7 @@ export class ContractingSiteOperationsService {
           .selectFrom('contracting_schedule_tasks')
           .select('id')
           .where('tenant_id', '=', tenantId)
-          .where('project_id', '=', projectId as any)
+          .where('project_id', '=', projectId)
           .where('task_code', '=', candidate)
           .executeTakeFirst()
       ) {
@@ -330,7 +330,7 @@ export class ContractingSiteOperationsService {
       .insertInto('contracting_schedule_tasks')
       .values({
         tenant_id: tenantId,
-        project_id: projectId as any,
+        project_id: projectId,
         task_code: taskCode,
         task_name: (dto.taskName || (dto as any).task_name || '').trim(),
         wbs_code: (dto.wbsCode || (dto as any).wbs_code)?.trim() || '1.0',
@@ -338,10 +338,10 @@ export class ContractingSiteOperationsService {
         end_date: endStr,
         duration_days: durationDays,
         progress_percent: dto.progressPercent !== undefined ? Number(dto.progressPercent) : 0,
-        predecessor_id: dto.predecessorId ? (dto.predecessorId as any) : null,
+        predecessor_id: dto.predecessorId ? dto.predecessorId : null,
         is_critical_path: Boolean(dto.isCriticalPath || (dto as any).is_critical_path),
-        status: (dto.status || 'not_started') as any,
-        boq_item_id: dto.boqItemId ? (dto.boqItemId as any) : null,
+        status: dto.status || 'not_started',
+        boq_item_id: dto.boqItemId ? dto.boqItemId : null,
         assigned_team: dto.assignedTeam || (dto as any).assigned_team || null,
         planned_manpower_count: dto.plannedManpowerCount !== undefined ? Number(dto.plannedManpowerCount) : 0,
         planned_equipment_count: dto.plannedEquipmentCount !== undefined ? Number(dto.plannedEquipmentCount) : 0,
@@ -414,7 +414,7 @@ export class ContractingSiteOperationsService {
       .updateTable('contracting_schedule_tasks')
       .set(updatePayload)
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .returningAll()
       .execute();
 
@@ -426,7 +426,7 @@ export class ContractingSiteOperationsService {
     await this.db
       .deleteFrom('contracting_schedule_tasks')
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .execute();
 
     return { success: true, message: 'تم حذف المهمة الجدولية بنجاح' };
@@ -445,7 +445,7 @@ export class ContractingSiteOperationsService {
       .selectFrom('contracting_schedule_tasks')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('start_date', 'asc')
       .execute();
 
@@ -534,7 +534,7 @@ export class ContractingSiteOperationsService {
       .selectFrom('contracting_material_requisitions')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .where('project_id', '=', projectId as any)
+      .where('project_id', '=', projectId)
       .orderBy('issue_date', 'desc')
       .execute();
   }
@@ -557,9 +557,9 @@ export class ContractingSiteOperationsService {
 
     const values: any = {
       tenant_id: tenantId,
-      project_id: projectId as any,
+      project_id: projectId,
       requisition_number: suppliedNumber || tempNumber,
-      boq_item_id: dto.boqItemId ? (dto.boqItemId as any) : null,
+      boq_item_id: dto.boqItemId ? dto.boqItemId : null,
       warehouse_id: dto.warehouseId ? Number(dto.warehouseId) : null,
       product_id: dto.productId ? Number(dto.productId) : null,
       item_name: dto.itemName.trim(),
@@ -609,7 +609,7 @@ export class ContractingSiteOperationsService {
     await this.db
       .deleteFrom('contracting_material_requisitions')
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
+      .where('id', '=', id)
       .execute();
 
     return { success: true, message: 'تم إلغاء إذن صرف المواد بنجاح' };

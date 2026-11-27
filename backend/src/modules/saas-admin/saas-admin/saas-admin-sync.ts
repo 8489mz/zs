@@ -29,7 +29,7 @@ export class SaasAdminSync {
         const rows = await this.db
           .selectFrom('plan_features')
           .select('feature_code')
-          .where('plan_id', '=', planId as any)
+          .where('plan_id', '=', planId)
           .execute();
         baseFeatures = rows.map((r) => r.feature_code);
         if (baseFeatures.length === 0) {

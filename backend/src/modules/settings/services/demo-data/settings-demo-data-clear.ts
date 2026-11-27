@@ -78,7 +78,7 @@ export class SettingsDemoDataClear {
 
         const demoSaleIds = demoSales.map((s) => Number(s.sale_id)).filter(Boolean);
         if (demoSaleIds.length > 0) {
-          await (trx as any)
+          await trx
             .deleteFrom('settlement_allocations')
             .where('sale_id', 'in', demoSaleIds)
             .where(sql<boolean>`tenant_id = ${scope.tenantId}`)

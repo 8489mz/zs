@@ -237,7 +237,7 @@ export async function dispatchTrackedStock(
             supplier_name: batch.supplier_name,
             status: 'in_transit',
             notes: `تحويل مخزون ${transferId} من تشغيلة ${batch.id}`,
-          } as any)
+          })
           .returning('id')
           .executeTakeFirstOrThrow();
         transitBatchId = Number(inserted.id);
@@ -411,7 +411,7 @@ export async function receiveTrackedStock(
               supplier_name: transit.supplier_name,
               status: 'active',
               notes: `استلام من تحويل ${transferId} / تشغيلة ${line.sourceBatchId}`,
-            } as any)
+            })
             .execute();
         }
       }

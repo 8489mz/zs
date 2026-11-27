@@ -65,13 +65,13 @@ export class ComputeTotalsAndGatesService {
 
     let effectiveDiscount = normalized.discount;
     let loyaltyDiscount = 0;
-    let pointsAfterRedeem = Number((customer as any)?.loyalty_points || 0);
+    let pointsAfterRedeem = Number(customer?.loyalty_points || 0);
 
     if (normalized.loyaltyPointsRedeemed > 0 && customer) {
       if (!loyaltyEnabled) {
         throw new AppError('برنامج نقاط الولاء معطل حالياً في إعدادات النظام', 'LOYALTY_PROGRAM_DISABLED', 400);
       }
-      const availablePoints = Number((customer as any)?.loyalty_points || 0);
+      const availablePoints = Number(customer?.loyalty_points || 0);
       if (normalized.loyaltyPointsRedeemed > availablePoints + 0.001) {
         throw new AppError('رصيد نقاط الولاء غير كافٍ للاستبدال', 'INSUFFICIENT_LOYALTY_POINTS', 400);
       }
@@ -220,7 +220,7 @@ export class ComputeTotalsAndGatesService {
         normalized.pricesIncludeTax,
         normalized.deliveryFee,
         normalized.serviceCharge,
-        Number((normalized as any).tipAmount || 0),
+        Number(normalized.tipAmount || 0),
       ),
       moneyDigits,
     );
@@ -338,7 +338,7 @@ export class ComputeTotalsAndGatesService {
               normalized.pricesIncludeTax,
               normalized.deliveryFee,
               normalized.serviceCharge,
-              Number((normalized as any).tipAmount || 0),
+              Number(normalized.tipAmount || 0),
             ),
             moneyDigits,
           );

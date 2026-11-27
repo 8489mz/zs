@@ -7,7 +7,7 @@ export class PreSalesOrderReadsSlice {
   constructor(private readonly db: Kysely<Database>) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -142,7 +142,7 @@ export class PreSalesOrderReadsSlice {
     // calling repId and may only see orders assigned to that rep. An order
     // with no rep (or another rep) is not the caller's. Staff callers pass
     // no repId and keep the unscoped supervisor view.
-    if (repId != null && Number((order as any).repId) !== Number(repId)) {
+    if (repId != null && Number(order.repId) !== Number(repId)) {
       throw new AppError('غير مصرح لك بالاطلاع على أمر حجز ميداني لمندوب آخر', 'FORBIDDEN', 403);
     }
 
@@ -173,7 +173,7 @@ export class PreSalesOrderReadsSlice {
     // so return it alongside `total` (additive, no FE type break);
     // and fall back to `مندوب #<repId>` when dr.full_name is NULL,
     // the same fallback the list row already renders.
-    const repName = (order as any).repName || ((order as any).repId ? `مندوب #${(order as any).repId}` : '');
+    const repName = order.repName || (order.repId ? `مندوب #${order.repId}` : '');
     return {
       ...order,
       repName,

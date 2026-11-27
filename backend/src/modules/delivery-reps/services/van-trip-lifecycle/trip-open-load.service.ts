@@ -63,7 +63,7 @@ export class TripOpenLoadService {
   ) {}
 
   private get anyDb(): any {
-    return this.db as any;
+    return this.db;
   }
 
   /**
@@ -453,7 +453,7 @@ export class TripOpenLoadService {
         const qty = Number(item.qty || 0);
         if (qty <= 0) continue;
 
-        const effectiveLocId = Number((item as any).sourceWarehouseId || sourceLocId);
+        const effectiveLocId = Number(item.sourceWarehouseId || sourceLocId);
         if (effectiveLocId === vanLoc.id) {
           throw new AppError('لا يمكن أن يكون المستودع المصدر هو نفس سيارة المندوب', 'INVALID_SOURCE_WAREHOUSE', 400);
         }

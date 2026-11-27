@@ -463,7 +463,7 @@ export class StorefrontMerchantOrdersService {
     }
 
     const updatePayload: any = {
-      status: status as any,
+      status: status,
       updated_at: new Date(),
     };
     let linkedStatus: string | undefined;
