@@ -388,6 +388,7 @@
     "test/critical/phase1-f5f-cash-drawer-pos.spec.ts",
     "test/critical/phase1-f5g-customers-sales.spec.ts",
     "test/critical/phase1-f5h-pos-sales.spec.ts",
-    "test/critical/phase1-f5i-pos-settings.spec.ts"
+    "test/critical/phase1-f5i-pos-settings.spec.ts",
+    "test/critical/phase1-f5h-repair-sales-envelope-check.spec.ts"
   ]
 }

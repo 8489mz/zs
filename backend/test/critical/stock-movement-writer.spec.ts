@@ -386,11 +386,11 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 389);
-    assert.equal(chain.length, 389);
+    assert.equal(specs.length, 390);
+    assert.equal(chain.length, 390);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/stock-movement-writer.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5i-pos-settings.spec.ts');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-f5h-repair-sales-envelope-check.spec.ts');
     console.log('  evidence spec wired into both critical lists (373 = 373, identical order), passed');
   }
 

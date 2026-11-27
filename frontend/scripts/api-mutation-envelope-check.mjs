@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const files = [
-  'src/features/sales/api/sales.api.ts',
+  'src/shared/api/sales.api.ts',
   'src/features/purchases/api/purchases.api.ts',
   'src/features/pos/api/pos.api.ts'
 ];
