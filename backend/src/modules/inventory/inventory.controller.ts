@@ -352,15 +352,8 @@ export class InventoryController {
 
   @Post(['inventory/hot-skus/toggle', 'v1/inventory/hot-skus/toggle'])
   @RequirePermissions('canAdjustInventory')
-  toggleHotSku(
-    @Body() payload: ToggleHotSkuDto,
-    @Req() req: RequestWithAuth,
-  ): Promise<Record<string, unknown>> {
-    return this.lossPreventionInventory.toggleHotSku(
-      payload.productId,
-      payload.isHighRiskShrinkage,
-      req.authContext!,
-    );
+  toggleHotSku(@Body() payload: ToggleHotSkuDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.lossPreventionInventory.toggleHotSku(payload.productId, payload.isHighRiskShrinkage, req.authContext!);
   }
 
   @Get(['inventory/shrinkage-report', 'v1/inventory/shrinkage-report'])

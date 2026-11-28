@@ -11,6 +11,7 @@ import {
   compareRankedProductMatches,
 } from '../engines/product-search-rank.engine';
 import {
+  CATALOG_PRODUCT_LIST_SELECT_COLUMNS,
   ProductRow,
   ProductOfferColumnCapabilities,
   ProductOfferReadRow,
@@ -138,41 +139,7 @@ export class CatalogProductListService {
       .leftJoin('stock_locations as sl', (join) =>
         join.onRef('sl.id', '=', 'products.default_location_id').on(this.tenantPredicate(actor, 'sl')),
       )
-      .select([
-        'products.id',
-        'products.name',
-        'products.name_en',
-        'products.barcode',
-        'products.sku',
-        'products.catalog_updated_at',
-        'products.item_type',
-        'products.item_kind',
-        'products.style_code',
-        'products.color',
-        'products.size',
-        'products.bin_location',
-        'products.track_serials',
-        'products.category_id',
-        'products.supplier_id',
-        'products.cost_price',
-        'products.retail_price',
-        'products.wholesale_price',
-        'products.half_wholesale_price',
-        'products.credit_price',
-        'products.consumer_price',
-        'products.min_selling_price',
-        'products.stock_qty',
-        'products.min_stock_qty',
-        'sl.id as default_location_id',
-        'products.notes',
-        'products.metadata',
-        'b.id as bom_id',
-        'sl.name as default_location_name',
-        'products.is_active',
-        'products.calories',
-        'products.allergens',
-        'products.is_spicy', 'products.is_vegetarian', 'products.is_gluten_free', 'products.is_high_risk_shrinkage',
-      ])
+      .select(CATALOG_PRODUCT_LIST_SELECT_COLUMNS)
       .where(view === 'archived' ? sql<boolean>`products.is_active = false` : sql<boolean>`products.is_active = true`)
       .where(this.tenantPredicate(actor, 'products'));
   }

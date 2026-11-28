@@ -47,11 +47,14 @@ export class InTransitAgingMonitorService implements OnApplicationBootstrap, OnM
         this.logger.warn(`Initial in-transit aging check error: ${err?.message}`);
       });
     }, 60_000);
-    this.intervalHandle = setInterval(() => {
-      this.scanAllTenantsForOverdueTransfers().catch((err) => {
-        this.logger.warn(`Periodic in-transit aging check error: ${err?.message}`);
-      });
-    }, 30 * 60 * 1000);
+    this.intervalHandle = setInterval(
+      () => {
+        this.scanAllTenantsForOverdueTransfers().catch((err) => {
+          this.logger.warn(`Periodic in-transit aging check error: ${err?.message}`);
+        });
+      },
+      30 * 60 * 1000,
+    );
   }
 
   onModuleDestroy() {
@@ -99,8 +102,12 @@ export class InTransitAgingMonitorService implements OnApplicationBootstrap, OnM
     const alertHours = Math.max(1, Number(antiTheft.inTransitAlertHours || 4));
     const openRows = await this.db
       .selectFrom('stock_transfers as t')
-      .leftJoin('stock_locations as fl', (j) => j.onRef('fl.id', '=', 't.from_location_id').onRef('fl.tenant_id', '=', 't.tenant_id'))
-      .leftJoin('stock_locations as tl', (j) => j.onRef('tl.id', '=', 't.to_location_id').onRef('tl.tenant_id', '=', 't.tenant_id'))
+      .leftJoin('stock_locations as fl', (j) =>
+        j.onRef('fl.id', '=', 't.from_location_id').onRef('fl.tenant_id', '=', 't.tenant_id'),
+      )
+      .leftJoin('stock_locations as tl', (j) =>
+        j.onRef('tl.id', '=', 't.to_location_id').onRef('tl.tenant_id', '=', 't.tenant_id'),
+      )
       .leftJoin('users as cu', (j) => j.onRef('cu.id', '=', 't.created_by').onRef('cu.tenant_id', '=', 't.tenant_id'))
       .select([
         't.id',
@@ -201,8 +208,12 @@ export class InTransitAgingMonitorService implements OnApplicationBootstrap, OnM
 
     const openRows = await this.db
       .selectFrom('stock_transfers as t')
-      .leftJoin('stock_locations as fl', (j) => j.onRef('fl.id', '=', 't.from_location_id').onRef('fl.tenant_id', '=', 't.tenant_id'))
-      .leftJoin('stock_locations as tl', (j) => j.onRef('tl.id', '=', 't.to_location_id').onRef('tl.tenant_id', '=', 't.tenant_id'))
+      .leftJoin('stock_locations as fl', (j) =>
+        j.onRef('fl.id', '=', 't.from_location_id').onRef('fl.tenant_id', '=', 't.tenant_id'),
+      )
+      .leftJoin('stock_locations as tl', (j) =>
+        j.onRef('tl.id', '=', 't.to_location_id').onRef('tl.tenant_id', '=', 't.tenant_id'),
+      )
       .leftJoin('users as cu', (j) => j.onRef('cu.id', '=', 't.created_by').onRef('cu.tenant_id', '=', 't.tenant_id'))
       .select([
         't.id',

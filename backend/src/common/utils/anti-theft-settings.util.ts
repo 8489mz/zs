@@ -66,7 +66,10 @@ function parseNonNegNumber(raw: unknown, fallback: number): number {
 
 export function parseAntiTheftSettingsFromMap(map: Map<string, unknown>): AntiTheftSettings {
   return {
-    requirePinForNoSale: parseBool(map.get('antiTheftRequirePinForNoSale'), DEFAULT_ANTI_THEFT_SETTINGS.requirePinForNoSale),
+    requirePinForNoSale: parseBool(
+      map.get('antiTheftRequirePinForNoSale'),
+      DEFAULT_ANTI_THEFT_SETTINGS.requirePinForNoSale,
+    ),
     enforceMandatoryReceiptPrint: parseBool(
       map.get('antiTheftEnforceMandatoryReceiptPrint'),
       DEFAULT_ANTI_THEFT_SETTINGS.enforceMandatoryReceiptPrint,

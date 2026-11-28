@@ -54,7 +54,10 @@ export async function executeLogPosAuditEvent(
                 )),
         )
       : Number(payload.total ?? itemsTotalSum ?? 0);
-  const eventAmount = roundMoney(Math.max(0, Number.isFinite(computedEventAmount) ? computedEventAmount : 0), moneyDigits);
+  const eventAmount = roundMoney(
+    Math.max(0, Number.isFinite(computedEventAmount) ? computedEventAmount : 0),
+    moneyDigits,
+  );
 
   const effectiveItems: AuditSnapshotItem[] =
     snapshotItems.length > 0
@@ -106,7 +109,11 @@ export async function executeLogPosAuditEvent(
     if (antiTheft.requirePinForNoSale && auth.role !== 'admin' && auth.role !== 'super_admin') {
       const pin = String(payload.managerPin || '').trim();
       if (!pin) {
-        throw new AppError('فتح الدرج بدون بيع يتطلب اعتماد مدير (درع منع السرقة مفعّل)', 'NO_SALE_MANAGER_PIN_REQUIRED', 403);
+        throw new AppError(
+          'فتح الدرج بدون بيع يتطلب اعتماد مدير (درع منع السرقة مفعّل)',
+          'NO_SALE_MANAGER_PIN_REQUIRED',
+          403,
+        );
       }
       await authorizeManagerSecret(deps.db, auth, pin);
     }
@@ -144,9 +151,14 @@ export async function executeLogPosAuditEvent(
       typeof payload.cartItemsCount === 'number' ? `المتبقي بالسلة: ${payload.cartItemsCount}` : '',
       reason ? `ملاحظة: ${reason}` : '',
     ];
-    await deps.audit.log('حدث أمني - حذف عنصر من السلة', buildSnapshotAuditText(headerParts, effectiveItems, moneyDigits), auth, {
-      eventCode: AUDIT_EVENT_CODES.POS_CART_ITEM_REMOVED,
-    });
+    await deps.audit.log(
+      'حدث أمني - حذف عنصر من السلة',
+      buildSnapshotAuditText(headerParts, effectiveItems, moneyDigits),
+      auth,
+      {
+        eventCode: AUDIT_EVENT_CODES.POS_CART_ITEM_REMOVED,
+      },
+    );
     detailInfo = payload.productName
       ? `${payload.productName} (كمية: ${payload.qty || 1} — قيمة: ${eventAmount})`
       : reason || 'حذف صنف من السلة';
@@ -162,15 +174,25 @@ export async function executeLogPosAuditEvent(
       eventAmount > 0 ? `القيمة: ${eventAmount}` : '',
       reason ? `ملاحظة: ${reason}` : '',
     ];
-    await deps.audit.log('حدث أمني - تنقيص كمية بالسلة', buildSnapshotAuditText(headerParts, effectiveItems, moneyDigits), auth, {
-      eventCode: AUDIT_EVENT_CODES.POS_CART_QTY_DECREASED,
-    });
+    await deps.audit.log(
+      'حدث أمني - تنقيص كمية بالسلة',
+      buildSnapshotAuditText(headerParts, effectiveItems, moneyDigits),
+      auth,
+      {
+        eventCode: AUDIT_EVENT_CODES.POS_CART_QTY_DECREASED,
+      },
+    );
     detailInfo = `${payload.productName || 'صنف'} (-${deltaQty} — فارق: ${eventAmount})`;
   } else if (payload.eventType === 'no_sale') {
     detailInfo = reason || 'فتح درج بدون بيع';
-    await deps.audit.log('حدث أمني - فتح درج بدون بيع', `فتح درج بدون بيع بواسطة ${auth.username} | السبب: ${detailInfo}`, auth, {
-      eventCode: AUDIT_EVENT_CODES.POS_NO_SALE_DRAWER_OPEN,
-    });
+    await deps.audit.log(
+      'حدث أمني - فتح درج بدون بيع',
+      `فتح درج بدون بيع بواسطة ${auth.username} | السبب: ${detailInfo}`,
+      auth,
+      {
+        eventCode: AUDIT_EVENT_CODES.POS_NO_SALE_DRAWER_OPEN,
+      },
+    );
   } else if (payload.eventType === 'receipt_reprint') {
     const headerParts = [
       `إعادة طباعة فاتورة بواسطة ${auth.username}`,
@@ -178,9 +200,14 @@ export async function executeLogPosAuditEvent(
       eventAmount > 0 ? `الإجمالي: ${eventAmount}` : '',
       reason ? `ملاحظة: ${reason}` : '',
     ];
-    await deps.audit.log('حدث أمني - إعادة طباعة فاتورة', buildSnapshotAuditText(headerParts, effectiveItems, moneyDigits), auth, {
-      eventCode: AUDIT_EVENT_CODES.POS_RECEIPT_REPRINTED,
-    });
+    await deps.audit.log(
+      'حدث أمني - إعادة طباعة فاتورة',
+      buildSnapshotAuditText(headerParts, effectiveItems, moneyDigits),
+      auth,
+      {
+        eventCode: AUDIT_EVENT_CODES.POS_RECEIPT_REPRINTED,
+      },
+    );
     detailInfo = `إعادة طباعة ${payload.saleDocNo || `#${payload.saleId || ''}`} بقيمة ${eventAmount}`;
   } else if (payload.eventType === 'weighted_barcode_replay') {
     const headerParts = [
@@ -189,9 +216,14 @@ export async function executeLogPosAuditEvent(
       payload.sourceBarcode ? `الباركود: ${payload.sourceBarcode}` : '',
       eventAmount > 0 ? `القيمة: ${eventAmount}` : '',
     ];
-    await deps.audit.log('حدث أمني - تكرار باركود ميزان', buildSnapshotAuditText(headerParts, effectiveItems, moneyDigits), auth, {
-      eventCode: AUDIT_EVENT_CODES.POS_WEIGHTED_BARCODE_REPLAY,
-    });
+    await deps.audit.log(
+      'حدث أمني - تكرار باركود ميزان',
+      buildSnapshotAuditText(headerParts, effectiveItems, moneyDigits),
+      auth,
+      {
+        eventCode: AUDIT_EVENT_CODES.POS_WEIGHTED_BARCODE_REPLAY,
+      },
+    );
     detailInfo = `تكرار باركود ميزان ${payload.sourceBarcode || ''} (${payload.productName || ''})`;
   } else {
     const cancelHeaderParts = [
@@ -200,10 +232,18 @@ export async function executeLogPosAuditEvent(
       `عدد العناصر: ${payload.cartItemsCount ?? effectiveItems.length}`,
       reason ? `ملاحظة: ${reason}` : '',
     ];
-    await deps.audit.log('حدث أمني - إلغاء/مسح سلة الكاشير', buildSnapshotAuditText(cancelHeaderParts, effectiveItems, moneyDigits), auth, {
-      eventCode: AUDIT_EVENT_CODES.POS_DRAFT_SALE_CANCELLED,
-    });
-    const previewNames = effectiveItems.slice(0, 4).map((it) => `${it.productName} (${it.qty})`).join('، ');
+    await deps.audit.log(
+      'حدث أمني - إلغاء/مسح سلة الكاشير',
+      buildSnapshotAuditText(cancelHeaderParts, effectiveItems, moneyDigits),
+      auth,
+      {
+        eventCode: AUDIT_EVENT_CODES.POS_DRAFT_SALE_CANCELLED,
+      },
+    );
+    const previewNames = effectiveItems
+      .slice(0, 4)
+      .map((it) => `${it.productName} (${it.qty})`)
+      .join('، ');
     detailInfo = `مسح سلة بقيمة ${eventAmount}${previewNames ? ` — [${previewNames}]` : ''}`;
   }
 

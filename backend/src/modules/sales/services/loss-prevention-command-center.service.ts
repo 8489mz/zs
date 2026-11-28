@@ -116,10 +116,7 @@ export class LossPreventionCommandCenterService {
     private readonly fraudRadar: CashierFraudRadarService,
   ) {}
 
-  async getCommandCenter(
-    timeframe: 'today' | '7days' | '30days',
-    auth: AuthContext,
-  ): Promise<CommandCenterResponse> {
+  async getCommandCenter(timeframe: 'today' | '7days' | '30days', auth: AuthContext): Promise<CommandCenterResponse> {
     const scope = requireTenantScope(auth);
     const now = new Date();
     const startDate = new Date(now);
@@ -148,8 +145,12 @@ export class LossPreventionCommandCenterService {
       this.fraudRadar.getEvents(50, auth, timeframe),
       this.db
         .selectFrom('stock_transfers as t')
-        .leftJoin('stock_locations as fl', (j) => j.onRef('fl.id', '=', 't.from_location_id').onRef('fl.tenant_id', '=', 't.tenant_id'))
-        .leftJoin('stock_locations as tl', (j) => j.onRef('tl.id', '=', 't.to_location_id').onRef('tl.tenant_id', '=', 't.tenant_id'))
+        .leftJoin('stock_locations as fl', (j) =>
+          j.onRef('fl.id', '=', 't.from_location_id').onRef('fl.tenant_id', '=', 't.tenant_id'),
+        )
+        .leftJoin('stock_locations as tl', (j) =>
+          j.onRef('tl.id', '=', 't.to_location_id').onRef('tl.tenant_id', '=', 't.tenant_id'),
+        )
         .leftJoin('users as cu', (j) => j.onRef('cu.id', '=', 't.created_by').onRef('cu.tenant_id', '=', 't.tenant_id'))
         .select([
           't.id',
@@ -168,7 +169,9 @@ export class LossPreventionCommandCenterService {
       this.db
         .selectFrom('damaged_stock_records as d')
         .leftJoin('products as p', (j) => j.onRef('p.id', '=', 'd.product_id').onRef('p.tenant_id', '=', 'd.tenant_id'))
-        .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 'd.location_id').onRef('l.tenant_id', '=', 'd.tenant_id'))
+        .leftJoin('stock_locations as l', (j) =>
+          j.onRef('l.id', '=', 'd.location_id').onRef('l.tenant_id', '=', 'd.tenant_id'),
+        )
         .select([
           'd.product_id',
           'd.location_id',
@@ -185,7 +188,9 @@ export class LossPreventionCommandCenterService {
       this.db
         .selectFrom('stock_movements as m')
         .leftJoin('products as p', (j) => j.onRef('p.id', '=', 'm.product_id').onRef('p.tenant_id', '=', 'm.tenant_id'))
-        .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 'm.location_id').onRef('l.tenant_id', '=', 'm.tenant_id'))
+        .leftJoin('stock_locations as l', (j) =>
+          j.onRef('l.id', '=', 'm.location_id').onRef('l.tenant_id', '=', 'm.tenant_id'),
+        )
         .select([
           'm.product_id',
           'm.location_id',
@@ -364,7 +369,8 @@ export class LossPreventionCommandCenterService {
     );
 
     // 4. Delivery Custodies
-    const overdueCutoffMs = now.getTime() - Math.max(1, Number(antiTheftSettings.deliveryOverdueHours || 20)) * 3_600_000;
+    const overdueCutoffMs =
+      now.getTime() - Math.max(1, Number(antiTheftSettings.deliveryOverdueHours || 20)) * 3_600_000;
     const defaultCap = Number(antiTheftSettings.defaultDeliveryCustodyCap || 0);
     const salesByRep = new Map<number, { count: number; overdue: number; cash: number; oldestMs: number | null }>();
     for (const s of unsettledSalesRows) {
@@ -412,11 +418,7 @@ export class LossPreventionCommandCenterService {
       .sort((a, b) => b.unsettledCash - a.unsettledCash);
 
     const totalFinancialExposure = Number(
-      (
-        Number(posSummary.estimatedProtectedLoss || 0) +
-        heatmap.totalLossCost +
-        totalShiftShortageAmount
-      ).toFixed(2),
+      (Number(posSummary.estimatedProtectedLoss || 0) + heatmap.totalLossCost + totalShiftShortageAmount).toFixed(2),
     );
     const highRiskCashiersCount = (posSummary.cashiers || []).filter((c) => c.riskLevel === 'high').length;
     const criticalAlertsCount =

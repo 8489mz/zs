@@ -28,7 +28,9 @@ export class LossPreventionInventoryService {
 
     const hotProducts = await this.db
       .selectFrom('products as p')
-      .leftJoin('product_categories as c', (j) => j.onRef('c.id', '=', 'p.category_id').onRef('c.tenant_id', '=', 'p.tenant_id'))
+      .leftJoin('product_categories as c', (j) =>
+        j.onRef('c.id', '=', 'p.category_id').onRef('c.tenant_id', '=', 'p.tenant_id'),
+      )
       .select([
         'p.id',
         'p.name',
@@ -148,7 +150,9 @@ export class LossPreventionInventoryService {
     let dmgQuery = this.db
       .selectFrom('damaged_stock_records as d')
       .leftJoin('products as p', (j) => j.onRef('p.id', '=', 'd.product_id').onRef('p.tenant_id', '=', 'd.tenant_id'))
-      .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 'd.location_id').onRef('l.tenant_id', '=', 'd.tenant_id'))
+      .leftJoin('stock_locations as l', (j) =>
+        j.onRef('l.id', '=', 'd.location_id').onRef('l.tenant_id', '=', 'd.tenant_id'),
+      )
       .select([
         'd.product_id',
         'd.location_id',
@@ -167,7 +171,9 @@ export class LossPreventionInventoryService {
     let movQuery = this.db
       .selectFrom('stock_movements as m')
       .leftJoin('products as p', (j) => j.onRef('p.id', '=', 'm.product_id').onRef('p.tenant_id', '=', 'm.tenant_id'))
-      .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 'm.location_id').onRef('l.tenant_id', '=', 'm.tenant_id'))
+      .leftJoin('stock_locations as l', (j) =>
+        j.onRef('l.id', '=', 'm.location_id').onRef('l.tenant_id', '=', 'm.tenant_id'),
+      )
       .select([
         'm.product_id',
         'm.location_id',
@@ -205,8 +211,7 @@ export class LossPreventionInventoryService {
 
     for (const row of movementRows) {
       const qty = Math.abs(Number(row.qty || 0));
-      const cost =
-        Math.abs(Number(row.total_cost || 0)) || qty * Number(row.unit_cost || row.product_cost_price || 0);
+      const cost = Math.abs(Number(row.total_cost || 0)) || qty * Number(row.unit_cost || row.product_cost_price || 0);
       const mType = String(row.movement_type || '');
       let cause: ShrinkageLossEvent['cause'] = 'negative_adjustment';
       if (mType === 'stock_count_loss') cause = 'count_shortage';
@@ -242,11 +247,7 @@ export class LossPreventionInventoryService {
       const hotIds = hotProducts.map((p) => Number(p.id));
       let flowQuery = this.db
         .selectFrom('stock_movements')
-        .select([
-          'product_id',
-          'movement_type',
-          sql<number>`COALESCE(SUM(qty), 0)`.as('net_qty'),
-        ])
+        .select(['product_id', 'movement_type', sql<number>`COALESCE(SUM(qty), 0)`.as('net_qty')])
         .where('tenant_id', '=', scope.tenantId)
         .where('product_id', 'in', hotIds)
         .where('created_at', '>=', todayStart)
@@ -256,7 +257,14 @@ export class LossPreventionInventoryService {
       const flowRows = await flowQuery.execute();
       const flowByProduct = new Map<
         number,
-        { transferredIn: number; purchased: number; transferredOut: number; sold: number; damaged: number; netDelta: number }
+        {
+          transferredIn: number;
+          purchased: number;
+          transferredOut: number;
+          sold: number;
+          damaged: number;
+          netDelta: number;
+        }
       >();
       for (const fr of flowRows) {
         const pid = Number(fr.product_id);
@@ -273,7 +281,8 @@ export class LossPreventionInventoryService {
         bucket.netDelta += q;
         if (mt === 'transfer_receive' || mt === 'stock_assign') bucket.transferredIn += Math.max(0, q);
         else if (mt === 'purchase' || mt === 'purchase_receive') bucket.purchased += Math.max(0, q);
-        else if (mt === 'transfer_send' || mt === 'transfer_final_issue') bucket.transferredOut += Math.abs(Math.min(0, q));
+        else if (mt === 'transfer_send' || mt === 'transfer_final_issue')
+          bucket.transferredOut += Math.abs(Math.min(0, q));
         else if (mt === 'sale' || mt === 'pos_sale') bucket.sold += Math.abs(Math.min(0, q));
         else if (mt === 'damaged') bucket.damaged += Math.abs(Math.min(0, q));
         flowByProduct.set(pid, bucket);
@@ -282,7 +291,9 @@ export class LossPreventionInventoryService {
       // Check if any posted or draft stock count exists today for these hot SKUs
       let countQuery = this.db
         .selectFrom('stock_count_items as ci')
-        .innerJoin('stock_count_sessions as cs', (j) => j.onRef('cs.id', '=', 'ci.session_id').onRef('cs.tenant_id', '=', 'ci.tenant_id'))
+        .innerJoin('stock_count_sessions as cs', (j) =>
+          j.onRef('cs.id', '=', 'ci.session_id').onRef('cs.tenant_id', '=', 'ci.tenant_id'),
+        )
         .select(['ci.product_id', 'ci.counted_qty', 'cs.created_at'])
         .where('ci.tenant_id', '=', scope.tenantId)
         .where('ci.product_id', 'in', hotIds)

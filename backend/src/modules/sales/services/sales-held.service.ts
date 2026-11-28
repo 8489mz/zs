@@ -361,7 +361,9 @@ export class HeldSalesService {
       };
     });
     const subtotal = snapshotItems.reduce((sum, it) => sum + it.lineTotal, 0);
-    const total = Number(Math.max(0, subtotal - Number(heldSale.discount || 0) + Number(heldSale.delivery_fee || 0)).toFixed(2));
+    const total = Number(
+      Math.max(0, subtotal - Number(heldSale.discount || 0) + Number(heldSale.delivery_fee || 0)).toFixed(2),
+    );
 
     await this.db
       .deleteFrom('held_sales')

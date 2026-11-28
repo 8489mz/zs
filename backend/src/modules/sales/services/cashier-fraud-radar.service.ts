@@ -262,7 +262,9 @@ export class CashierFraudRadarService {
         .execute(),
       this.db
         .selectFrom('sale_items as si')
-        .innerJoin('sales as s', (join) => join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
+        .innerJoin('sales as s', (join) =>
+          join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'),
+        )
         .select(['s.created_by', sql<number>`COUNT(si.id)::int`.as('line_items_count')])
         .where('s.tenant_id', '=', scope.tenantId)
         .where('s.status', '!=', 'cancelled')
@@ -599,7 +601,11 @@ export class CashierFraudRadarService {
       let alertReason = '';
       let alertKey = eventType;
 
-      if (eventType === 'draft_cancel' && eventAmount >= antiTheft.cartClearAlertThreshold && antiTheft.cartClearAlertThreshold > 0) {
+      if (
+        eventType === 'draft_cancel' &&
+        eventAmount >= antiTheft.cartClearAlertThreshold &&
+        antiTheft.cartClearAlertThreshold > 0
+      ) {
         shouldAlert = true;
         alertReason = `الكاشير *(${cashierName})* قام بـ *مسح سلة كاملة بقيمة ${eventAmount}* قبل إتمام البيع`;
         alertKey = 'draft_cancel_high';
@@ -609,7 +615,11 @@ export class CashierFraudRadarService {
       } else {
         const hourlyRule: Record<string, { code: string; threshold: number; label: string }> = {
           cart_remove: { code: AUDIT_EVENT_CODES.POS_CART_ITEM_REMOVED, threshold: 5, label: 'حذف أصناف من السلة' },
-          qty_decrease: { code: AUDIT_EVENT_CODES.POS_CART_QTY_DECREASED, threshold: 5, label: 'تنقيص كميات أصناف بالسلة' },
+          qty_decrease: {
+            code: AUDIT_EVENT_CODES.POS_CART_QTY_DECREASED,
+            threshold: 5,
+            label: 'تنقيص كميات أصناف بالسلة',
+          },
           no_sale: { code: AUDIT_EVENT_CODES.POS_NO_SALE_DRAWER_OPEN, threshold: 2, label: 'فتح الدرج بدون بيع' },
           receipt_reprint: { code: AUDIT_EVENT_CODES.POS_RECEIPT_REPRINTED, threshold: 3, label: 'إعادة طباعة فواتير' },
           held_sale_delete: { code: AUDIT_EVENT_CODES.POS_HELD_SALE_DELETED, threshold: 2, label: 'حذف فواتير معلقة' },

@@ -45,12 +45,7 @@ export class PosAuditCartItemDto {
 }
 
 export type PosAuditEventType =
-  | 'no_sale'
-  | 'cart_remove'
-  | 'draft_cancel'
-  | 'qty_decrease'
-  | 'receipt_reprint'
-  | 'weighted_barcode_replay';
+  'no_sale' | 'cart_remove' | 'draft_cancel' | 'qty_decrease' | 'receipt_reprint' | 'weighted_barcode_replay';
 
 export class PosAuditEventDto {
   @IsIn(['no_sale', 'cart_remove', 'draft_cancel', 'qty_decrease', 'receipt_reprint', 'weighted_barcode_replay'])

@@ -19,11 +19,7 @@ assert.equal(normalized[0].lineTotal, 720);
 assert.equal(normalized[1].lineTotal, 250, 'Missing lineTotal must compute qty * unitPrice');
 assert.equal(normalized[1].previousQty, 4, 'previousQty must survive normalization for qty_decrease');
 
-const auditText = buildSnapshotAuditText(
-  ['مسح سلة كاملة', 'الإجمالي: 970', 'عدد الأصناف: 2'],
-  normalized,
-  2,
-);
+const auditText = buildSnapshotAuditText(['مسح سلة كاملة', 'الإجمالي: 970', 'عدد الأصناف: 2'], normalized, 2);
 assert.ok(auditText.includes('بندق محمص فاخر'), 'Human-readable Arabic summary must name the items');
 assert.ok(auditText.includes('::ITEMS_JSON::'), 'Structured JSON marker must be embedded');
 
@@ -98,7 +94,11 @@ const singleCashier = evaluateCashierPeerBenchmarks([
 assert.equal(singleCashier.eligibleCashiersCount, 1);
 assert.equal(singleCashier.flaggedCashiersCount, 0);
 assert.equal(singleCashier.cashiers.length, 1);
-assert.equal(singleCashier.cashiers[0].anomalyLevel, 'normal', 'Must not flag peer-drop anomalies with fewer than 2 eligible peers');
+assert.equal(
+  singleCashier.cashiers[0].anomalyLevel,
+  'normal',
+  'Must not flag peer-drop anomalies with fewer than 2 eligible peers',
+);
 assert.deepEqual(singleCashier.cashiers[0].anomalyFlags, []);
 
 console.log('PASS: cashier-peer-benchmark-engine.spec.ts');

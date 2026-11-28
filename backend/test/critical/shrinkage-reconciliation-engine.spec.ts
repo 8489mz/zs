@@ -70,11 +70,51 @@ assert.equal(flowRows[2].status, 'uncounted');
 
 // 2. Shrinkage Heatmap — Multi-row, Multi-cause Accumulation (Zero Dropped Rows)
 const heatmap = buildShrinkageHeatmap([
-  { productId: '1', productName: 'لوز أمريكي', locationId: '1', locationName: 'مخزن 1', cause: 'damaged', qty: 2, cost: 800 },
-  { productId: '1', productName: 'لوز أمريكي', locationId: '1', locationName: 'مخزن 1', cause: 'damaged', qty: 1.5, cost: 600 },
-  { productId: '1', productName: 'لوز أمريكي', locationId: '2', locationName: 'صالة الفرع', cause: 'count_shortage', qty: 1, cost: 400 },
-  { productId: '2', productName: 'زيت زيتون بكر', locationId: '3', locationName: 'مخزن 2', cause: 'transfer_shortage', qty: 5, cost: 2500 },
-  { productId: '3', productName: 'فلفل أسود حصى', locationId: '2', locationName: 'صالة الفرع', cause: 'negative_adjustment', qty: 3, cost: 900 },
+  {
+    productId: '1',
+    productName: 'لوز أمريكي',
+    locationId: '1',
+    locationName: 'مخزن 1',
+    cause: 'damaged',
+    qty: 2,
+    cost: 800,
+  },
+  {
+    productId: '1',
+    productName: 'لوز أمريكي',
+    locationId: '1',
+    locationName: 'مخزن 1',
+    cause: 'damaged',
+    qty: 1.5,
+    cost: 600,
+  },
+  {
+    productId: '1',
+    productName: 'لوز أمريكي',
+    locationId: '2',
+    locationName: 'صالة الفرع',
+    cause: 'count_shortage',
+    qty: 1,
+    cost: 400,
+  },
+  {
+    productId: '2',
+    productName: 'زيت زيتون بكر',
+    locationId: '3',
+    locationName: 'مخزن 2',
+    cause: 'transfer_shortage',
+    qty: 5,
+    cost: 2500,
+  },
+  {
+    productId: '3',
+    productName: 'فلفل أسود حصى',
+    locationId: '2',
+    locationName: 'صالة الفرع',
+    cause: 'negative_adjustment',
+    qty: 3,
+    cost: 900,
+  },
 ]);
 
 assert.equal(heatmap.totalIncidents, 5);

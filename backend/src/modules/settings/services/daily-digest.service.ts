@@ -348,7 +348,9 @@ export class DailyDigestService {
           .select([
             'dr.name as rep_name',
             sql<number>`COUNT(s.id)`.as('orders_count'),
-            sql<number>`COALESCE(SUM(GREATEST(0, COALESCE(s.total, 0) - COALESCE(s.paid_amount, 0))), 0)`.as('unsettled_cash'),
+            sql<number>`COALESCE(SUM(GREATEST(0, COALESCE(s.total, 0) - COALESCE(s.paid_amount, 0))), 0)`.as(
+              'unsettled_cash',
+            ),
           ])
           .where('s.tenant_id', '=', tenantId)
           .where('s.delivery_rep_id', 'is not', null)
@@ -379,7 +381,13 @@ export class DailyDigestService {
       const noSales = Number(posSuspicionAgg?.no_sales || 0);
       const reprints = Number(posSuspicionAgg?.reprints || 0);
 
-      if (overdueTransfers.length > 0 || overdueDeliveries.length > 0 || cartClears > 0 || noSales > 0 || reprints > 0) {
+      if (
+        overdueTransfers.length > 0 ||
+        overdueDeliveries.length > 0 ||
+        cartClears > 0 ||
+        noSales > 0 ||
+        reprints > 0
+      ) {
         digestText += `*تقرير درع منع الخسائر والرقابة اليومي:*\n`;
         if (cartClears > 0 || noSales > 0 || reprints > 0) {
           digestText += `• نقطة البيع: مسح سلة (${cartClears}) | فتح درج بلا بيع (${noSales}) | إعادة طباعة (${reprints})\n`;

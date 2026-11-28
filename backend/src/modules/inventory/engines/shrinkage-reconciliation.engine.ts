@@ -75,9 +75,7 @@ function roundMoney(value: number): number {
  *   expectedEnding = opening + transferredIn + purchased - transferredOut - sold - recordedDamaged
  *   shrinkageQty   = expectedEnding - physicalCounted (positive = missing stock / theft / unrecorded loss)
  */
-export function computeDailyFlowReconciliation(
-  inputs: DailyFlowReconciliationInput[],
-): DailyFlowReconciliationRow[] {
+export function computeDailyFlowReconciliation(inputs: DailyFlowReconciliationInput[]): DailyFlowReconciliationRow[] {
   return inputs.map((item) => {
     const expectedEndingQty = roundQty(
       Number(item.openingQty || 0) +
@@ -89,7 +87,11 @@ export function computeDailyFlowReconciliation(
     );
     const unitCost = Math.max(0, Number(item.unitCost || 0));
 
-    if (item.physicalCountedQty === null || item.physicalCountedQty === undefined || !Number.isFinite(Number(item.physicalCountedQty))) {
+    if (
+      item.physicalCountedQty === null ||
+      item.physicalCountedQty === undefined ||
+      !Number.isFinite(Number(item.physicalCountedQty))
+    ) {
       return {
         ...item,
         expectedEndingQty,
@@ -108,9 +110,7 @@ export function computeDailyFlowReconciliation(
       Number(item.openingQty || 0) + Number(item.transferredInQty || 0) + Number(item.purchasedQty || 0),
     );
     const shrinkageRatePct =
-      totalHandled > 0.0001 && shrinkageQty > 0
-        ? Number(((shrinkageQty / totalHandled) * 100).toFixed(2))
-        : 0;
+      totalHandled > 0.0001 && shrinkageQty > 0 ? Number(((shrinkageQty / totalHandled) * 100).toFixed(2)) : 0;
 
     let status: DailyFlowReconciliationRow['status'] = 'matched';
     if (shrinkageQty > 0.0009) status = 'shortage';

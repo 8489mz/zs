@@ -128,11 +128,7 @@ export class PurchaseOrdersService {
     };
   }
 
-  async getOrderById(
-    id: number,
-    auth: AuthContext,
-    forReceiving = false,
-  ): Promise<Record<string, unknown>> {
+  async getOrderById(id: number, auth: AuthContext, forReceiving = false): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const order = await this.db
       .selectFrom('purchase_orders')

@@ -24,14 +24,22 @@ export const migration = {
     await sql`ALTER TABLE damaged_stock_records ADD COLUMN IF NOT EXISTS evidence_image_url TEXT`.execute(db);
 
     // 4. Server-enforced blind count & hot-SKU spot-check scope on stock_count_sessions
-    await sql`ALTER TABLE stock_count_sessions ADD COLUMN IF NOT EXISTS is_blind BOOLEAN NOT NULL DEFAULT FALSE`.execute(db);
-    await sql`ALTER TABLE stock_count_sessions ADD COLUMN IF NOT EXISTS count_scope VARCHAR(40) NOT NULL DEFAULT 'standard'`.execute(db);
+    await sql`ALTER TABLE stock_count_sessions ADD COLUMN IF NOT EXISTS is_blind BOOLEAN NOT NULL DEFAULT FALSE`.execute(
+      db,
+    );
+    await sql`ALTER TABLE stock_count_sessions ADD COLUMN IF NOT EXISTS count_scope VARCHAR(40) NOT NULL DEFAULT 'standard'`.execute(
+      db,
+    );
 
     // 5. High-risk shrinkage (Hot SKU) tagging on products
-    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_high_risk_shrinkage BOOLEAN NOT NULL DEFAULT FALSE`.execute(db);
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_high_risk_shrinkage BOOLEAN NOT NULL DEFAULT FALSE`.execute(
+      db,
+    );
 
     // 6. Cash custody ceiling on delivery_representatives
-    await sql`ALTER TABLE delivery_representatives ADD COLUMN IF NOT EXISTS max_cash_custody_limit NUMERIC(14, 3)`.execute(db);
+    await sql`ALTER TABLE delivery_representatives ADD COLUMN IF NOT EXISTS max_cash_custody_limit NUMERIC(14, 3)`.execute(
+      db,
+    );
 
     // Helpful partial index for in-transit aging monitor
     await sql`CREATE INDEX IF NOT EXISTS idx_stock_transfers_in_transit_aging

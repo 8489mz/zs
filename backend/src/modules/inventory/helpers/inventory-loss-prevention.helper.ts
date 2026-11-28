@@ -107,7 +107,9 @@ export async function loadCategoryStockItemsForTwoStep(
   if (!antiTheft.strictTwoStepTransfers) return [];
   const stocks = await db
     .selectFrom('product_location_stock as pls')
-    .innerJoin('products as p', (join) => join.onRef('p.id', '=', 'pls.product_id').onRef('p.tenant_id', '=', 'pls.tenant_id'))
+    .innerJoin('products as p', (join) =>
+      join.onRef('p.id', '=', 'pls.product_id').onRef('p.tenant_id', '=', 'pls.tenant_id'),
+    )
     .select(['pls.product_id', 'pls.qty'])
     .where('p.category_id', '=', categoryId)
     .where('pls.location_id', '=', fromLocationId)
@@ -127,7 +129,11 @@ export async function sendTransferShortageWhatsAppAlert(
   meta: { docNo: string; carrierName: string; totalShortfallQty: number; varianceReason: string; receiverName: string },
 ): Promise<void> {
   if (!whatsappService) return;
-  const tenant = await db.selectFrom('tenants').select(['business_name', 'owner_phone']).where('id', '=', tenantId).executeTakeFirst();
+  const tenant = await db
+    .selectFrom('tenants')
+    .select(['business_name', 'owner_phone'])
+    .where('id', '=', tenantId)
+    .executeTakeFirst();
   if (!tenant?.owner_phone) return;
   const text =
     `*درع منع الخسائر - إنذار فاقد/عجز في تحويل مخزني*\n` +
@@ -158,7 +164,11 @@ export async function sendDamageWhatsAppAlert(
   },
 ): Promise<void> {
   if (!whatsappService) return;
-  const tenant = await db.selectFrom('tenants').select(['business_name', 'owner_phone']).where('id', '=', tenantId).executeTakeFirst();
+  const tenant = await db
+    .selectFrom('tenants')
+    .select(['business_name', 'owner_phone'])
+    .where('id', '=', tenantId)
+    .executeTakeFirst();
   if (!tenant?.owner_phone) return;
   const text =
     `*درع منع الخسائر - إنذار تسجيل تالف/هالك مخزني*\n` +
@@ -175,11 +185,7 @@ export async function sendDamageWhatsAppAlert(
   await whatsappService.sendRawMessage(tenantId, tenant.owner_phone, text);
 }
 
-export async function generateStockTransferDocNo(
-  trx: DbOrTx,
-  transferId: number,
-  tenantId: string,
-): Promise<string> {
+export async function generateStockTransferDocNo(trx: DbOrTx, transferId: number, tenantId: string): Promise<string> {
   const settingRow = await trx
     .selectFrom('settings')
     .select(['value'])

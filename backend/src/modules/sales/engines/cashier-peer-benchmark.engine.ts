@@ -91,20 +91,14 @@ export function normalizeSnapshotItems(rawItems: unknown): AuditSnapshotItem[] {
  * Formats a concise human-readable Arabic line summary of cart items
  * AND appends a compact machine-readable JSON marker for tabular UI expansion.
  */
-export function buildSnapshotAuditText(
-  headerParts: string[],
-  items: AuditSnapshotItem[],
-  moneyDigits = 2,
-): string {
+export function buildSnapshotAuditText(headerParts: string[], items: AuditSnapshotItem[], moneyDigits = 2): string {
   const cleanHeader = headerParts.filter(Boolean).join(' | ');
   if (!items.length) return cleanHeader;
 
   const previewItems = items.slice(0, 8).map((it) => {
     const unitSuffix = it.unitName ? ` ${it.unitName}` : '';
     const qtyPart =
-      it.previousQty !== undefined
-        ? `(${it.previousQty} ← ${it.qty}${unitSuffix})`
-        : `× ${it.qty}${unitSuffix}`;
+      it.previousQty !== undefined ? `(${it.previousQty} ← ${it.qty}${unitSuffix})` : `× ${it.qty}${unitSuffix}`;
     return `${it.productName} ${qtyPart} بسعر ${roundMetric(it.unitPrice, moneyDigits)} = ${roundMetric(it.lineTotal, moneyDigits)}`;
   });
   const overflowNote = items.length > 8 ? ` (+${items.length - 8} أصناف أخرى)` : '';
@@ -140,7 +134,11 @@ export function extractSnapshotFromDetails(rawDetails: string | null | undefined
  */
 export function evaluateCashierPeerBenchmarks(
   inputs: CashierSalesMetricInput[],
-  options: { minSalesForBenchmark?: number; dropAlertThresholdPercent?: number; dropWatchThresholdPercent?: number } = {},
+  options: {
+    minSalesForBenchmark?: number;
+    dropAlertThresholdPercent?: number;
+    dropWatchThresholdPercent?: number;
+  } = {},
 ): PeerBenchmarkSummary {
   const minSales = Math.max(5, options.minSalesForBenchmark ?? 15);
   const alertDrop = options.dropAlertThresholdPercent ?? -25;
@@ -198,7 +196,9 @@ export function evaluateCashierPeerBenchmarks(
         }
 
         if (avgItemsDeltaPercent <= alertDrop) {
-          anomalyFlags.push(`متوسط عدد الأصناف بالفاتورة أقل بنسبة ${Math.abs(avgItemsDeltaPercent)}% (احتمال تمرير دون مسح)`);
+          anomalyFlags.push(
+            `متوسط عدد الأصناف بالفاتورة أقل بنسبة ${Math.abs(avgItemsDeltaPercent)}% (احتمال تمرير دون مسح)`,
+          );
           anomalyLevel = 'alert';
         } else if (avgItemsDeltaPercent <= watchDrop) {
           anomalyFlags.push(`انخفاض عدد الأصناف بالفاتورة بنسبة ${Math.abs(avgItemsDeltaPercent)}%`);
