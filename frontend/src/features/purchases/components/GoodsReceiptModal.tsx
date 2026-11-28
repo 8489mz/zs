@@ -8,6 +8,7 @@ import { goodsReceiptsApi } from '../api/goods-receipts.api';
 import { toast } from '@/shared/components/system-alert';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { shouldShowExpiryDateField } from '@/features/products';
+import { useAuthStore } from '@/stores/auth-store';
 
 export interface GoodsReceiptInitialItem {
   purchaseOrderItemId?: number;
@@ -58,7 +59,10 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const user = useAuthStore((s) => s.user);
   const settingsQuery = useSettingsQuery();
+  const isAdminRole = user?.role === 'admin' || user?.role === 'super_admin';
+  const isBlindGrn = Boolean(settingsQuery.data?.antiTheftEnforceBlindPurchaseReceiving && !isAdminRole);
   const showBatchesAndExpiry = shouldShowExpiryDateField({ settings: settingsQuery.data });
   const [deliveryRef, setDeliveryRef] = useState('');
   const [notes, setNotes] = useState('');
@@ -102,8 +106,8 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
           orderedQty: item.orderedQty,
           unitCost: item.unitCost,
           unitName: item.unitName,
-          receivedQty: item.orderedQty,
-          acceptedQty: item.orderedQty,
+          receivedQty: isBlindGrn ? 0 : item.orderedQty,
+          acceptedQty: isBlindGrn ? 0 : item.orderedQty,
           rejectedQty: 0,
           rejectionReason: '',
           batchNumber: '',
@@ -115,7 +119,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       setFreight('');
       setAutoPost(true);
     }
-  }, [open, initialItems]);
+  }, [open, initialItems, isBlindGrn]);
 
   if (!open) return null;
 
@@ -326,6 +330,23 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
           </div>
         </div>
 
+        {isBlindGrn && (
+          <div
+            style={{
+              backgroundColor: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              fontSize: '12px',
+              color: '#92400e',
+              fontWeight: 600,
+              marginBottom: '10px',
+            }}
+          >
+            وضع الاستلام الأعمى مفعّل (Blind GRN): أدخل الكميات التي تم عدّها ووزنها فعلياً دون عرض كميات أمر الشراء — يتم مقارنة الفروقات وإشعار الإدارة تلقائياً عند الترحيل.
+          </div>
+        )}
+
         {/* Lines Table */}
         <div
           style={{
@@ -358,7 +379,9 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
             >
               <tr>
                 <th style={{ padding: '8px 10px' }}>{t('purchases.goods_receipt_modal.s12', "الصنف")}</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', width: '70px' }}>{t('purchases.goods_receipt_modal.s13', "المطلوب")}</th>
+                {!isBlindGrn && (
+                  <th style={{ padding: '8px 10px', textAlign: 'center', width: '70px' }}>{t('purchases.goods_receipt_modal.s13', "المطلوب")}</th>
+                )}
                 <th style={{ padding: '8px 10px', textAlign: 'center', width: '80px' }}>{t('purchases.goods_receipt_modal.s14', "المستلم")}</th>
                 <th style={{ padding: '8px 10px', textAlign: 'center', width: '80px', color: '#166534' }}>{t('purchases.goods_receipt_modal.s15', "المقبول")}</th>
                 <th style={{ padding: '8px 10px', textAlign: 'center', width: '80px', color: '#b91c1c' }}>{t('purchases.goods_receipt_modal.s16', "المرفوض")}</th>
@@ -382,13 +405,17 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
                 >
                   <td style={{ padding: '8px 10px', fontWeight: 600, color: '#0f172a' }}>
                     <div>{l.productName}</div>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>
-                      {l.unitCost.toLocaleString()} {t('purchases.goods_receipt_modal.s20', "ج.م /")} {l.unitName || t('purchases.goods_receipt_modal.s21', "قطعة")}
-                    </span>
+                    {!isBlindGrn && (
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>
+                        {l.unitCost.toLocaleString()} {t('purchases.goods_receipt_modal.s20', "ج.م /")} {l.unitName || t('purchases.goods_receipt_modal.s21', "قطعة")}
+                      </span>
+                    )}
                   </td>
-                  <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700, color: '#475569' }}>
-                    {l.orderedQty}
-                  </td>
+                  {!isBlindGrn && (
+                    <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700, color: '#475569' }}>
+                      {l.orderedQty}
+                    </td>
+                  )}
                   <td style={{ padding: '6px 8px' }}>
                     <input
                       type="number"

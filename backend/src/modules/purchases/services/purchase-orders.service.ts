@@ -14,6 +14,7 @@ import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { calculatePurchaseOrderTotals } from '../engines/purchase-order-totals.engine';
+import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -127,7 +128,11 @@ export class PurchaseOrdersService {
     };
   }
 
-  async getOrderById(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
+  async getOrderById(
+    id: number,
+    auth: AuthContext,
+    forReceiving = false,
+  ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const order = await this.db
       .selectFrom('purchase_orders')
@@ -165,9 +170,24 @@ export class PurchaseOrdersService {
       .where('poi.tenant_id', '=', scope.tenantId)
       .execute();
 
+    const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
+    const antiTheft = forReceiving && !isAdmin ? await loadAntiTheftSettings(this.db, scope.tenantId) : null;
+    const blindReceivingMode = Boolean(forReceiving && !isAdmin && antiTheft?.enforceBlindPurchaseReceiving);
+
+    const responseItems = blindReceivingMode
+      ? items.map((item) => ({
+          ...item,
+          quantity: null,
+          received_quantity: null,
+          unit_cost: null,
+          total: null,
+        }))
+      : items;
+
     return {
       order,
-      items,
+      items: responseItems,
+      blindReceivingMode,
     };
   }
 

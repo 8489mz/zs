@@ -6,7 +6,8 @@ import { FormSection } from '@/shared/components/form-section';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { useClientPagination } from '@/shared/hooks/use-client-pagination';
 import { exportStockCountSheetExcel, printStockCountSheet, type StockCountSheetRow } from '@/features/inventory/lib/inventory-documents';
-import { useCategoriesQuery, useSuppliersQuery } from '@/shared/hooks/use-catalog-queries';
+import { useCategoriesQuery, useSettingsQuery, useSuppliersQuery } from '@/shared/hooks/use-catalog-queries';
+import { useAuthStore } from '@/stores/auth-store';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import type { Branch, Location, Product, StockCountItem } from '@/types/domain';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
@@ -69,6 +70,10 @@ export function StockCountComposerCard({
   const categories = Array.isArray(categoriesQuery.data) ? categoriesQuery.data : [];
   const suppliersQuery = useSuppliersQuery();
   const suppliers = Array.isArray(suppliersQuery.data) ? suppliersQuery.data : [];
+  const settingsQuery = useSettingsQuery();
+  const currentUser = useAuthStore((s) => s.user);
+  const isAdminRole = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const isForcedBlindCount = Boolean(settingsQuery.data?.antiTheftEnforceBlindStockCount && !isAdminRole);
 
   const getCategoryName = (id?: string) => {
     if (!id) return '';
@@ -143,6 +148,7 @@ export function StockCountComposerCard({
 
   const countTypeOptions: Array<{ key: StockCountType; label: string; description: string }> = useMemo(() => ([
     { key: 'quick', label: 'جرد سريع', description: 'عد صنف أو مجموعة بسيطة بسرعة بدون تجهيز قائمة كاملة.' },
+    { key: 'hot_skus', label: 'جرد الأصناف الساخنة (Hot SKUs)', description: 'عد يومي فوري للأصناف عالية الخطورة للفاقد والسرقة (الموسومة بغرفة منع الخسائر).' },
     { key: 'selected_items', label: 'أصناف محددة', description: 'اختر الأصناف التي تريد عدها يدويًا قبل إنشاء الجلسة.' },
     { key: 'category', label: 'جرد قسم / تصنيف', description: 'اختر القسم لفتح شيت عد أصناف هذا القسم فقط.' },
     { key: 'supplier', label: 'جرد مورد / شركة', description: 'اختر المورد لفتح شيت عد أصناف هذا المورد قبل طلبية الشراء.' },
@@ -167,7 +173,7 @@ export function StockCountComposerCard({
   const countedCount = countedItemsList.length;
   const uncountedCount = items.length - countedCount;
   const selectedCountType = countTypeOptions.find((entry) => entry.key === countType) || countTypeOptions[0];
-  const canShowExpectedCount = canReviewStock && showExpectedInElectronicCount;
+  const canShowExpectedCount = !isForcedBlindCount && canReviewStock && showExpectedInElectronicCount;
 
   const financialSummary = useMemo(() => {
     let deficitCost = 0;
@@ -223,6 +229,9 @@ export function StockCountComposerCard({
     // Empty or unavailable warehouse stock never means the entire company.
     const baseProducts = form.locationId ? filterCountableProductsAtLocation(products, scopedStocks) : products;
     if (countType === 'full') return baseProducts;
+    if (countType === 'hot_skus') {
+      return baseProducts.filter((product) => Boolean((product as any).isHighRiskShrinkage));
+    }
     if (countType === 'category') {
       const categoryId = selectedCategoryId || selectedProduct?.categoryId || '';
       if (!categoryId) return [];
@@ -243,7 +252,7 @@ export function StockCountComposerCard({
       return locQty !== null ? locQty : fallback;
     };
 
-    if (countType === 'full' || countType === 'category' || countType === 'supplier') {
+    if (countType === 'full' || countType === 'hot_skus' || countType === 'category' || countType === 'supplier') {
       return scopeProducts.map((product) => ({
         code: product.styleCode || product.id,
         barcode: product.barcode || product.units?.find((unit) => unit.barcode)?.barcode || '',
@@ -299,6 +308,10 @@ export function StockCountComposerCard({
   }
 
   async function handleResetAllToExpected() {
+    if (isForcedBlindCount) {
+      toast.warning('وضع الجرد الأعمى مفعّل — يجب إدخال الكميات المعدودة فعلياً دون نسخ رصيد النظام.');
+      return;
+    }
     if (!items.length) return;
     if (countedCount > 0) {
       const confirmed = await systemConfirm({
@@ -434,9 +447,13 @@ export function StockCountComposerCard({
       setStartCountMessage('اختر المورد المطلوب قبل بدء جرد المورد.');
       return;
     }
+    if (countType === 'hot_skus' && scopeProducts.length === 0) {
+      setStartCountMessage('لا توجد أصناف موسومة كأصناف ساخنة (عالية الخطورة) في هذا المخزن. أضفها أولاً من غرفة عمليات منع الخسائر.');
+      return;
+    }
     setStartCountMessage('');
     setIsCountStarted(true);
-    if (countType === 'full' || countType === 'category' || countType === 'supplier') {
+    if (countType === 'full' || countType === 'hot_skus' || countType === 'category' || countType === 'supplier') {
       handlePopulateScopeItems();
     }
   }
@@ -444,7 +461,7 @@ export function StockCountComposerCard({
   useEffect(() => {
     if (
       isCountStarted &&
-      (countType === 'full' || countType === 'category' || countType === 'supplier') &&
+      (countType === 'full' || countType === 'hot_skus' || countType === 'category' || countType === 'supplier') &&
       items.length === 0 &&
       scopeProducts.length > 0
     ) {

@@ -28,8 +28,11 @@ import { AssignProductsDto } from './dto/assign-products.dto';
 import { ReceiveStockTransferDto } from './dto/receive-stock-transfer.dto';
 import { ExecuteReplenishmentDto } from './dto/execute-replenishment.dto';
 import { InventoryAdjustmentDto } from './dto/inventory-adjustment.dto';
+import { ToggleHotSkuDto } from './dto/toggle-hot-sku.dto';
 import { InventoryService } from './inventory.service';
 import { InventoryReplenishmentService } from './services/inventory-replenishment.service';
+import { InTransitAgingMonitorService } from './services/in-transit-aging-monitor.service';
+import { LossPreventionInventoryService } from './services/loss-prevention-inventory.service';
 
 @Controller('api')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -38,6 +41,8 @@ export class InventoryController {
   constructor(
     private readonly inventoryService: InventoryService,
     private readonly replenishmentService: InventoryReplenishmentService,
+    private readonly inTransitMonitor: InTransitAgingMonitorService,
+    private readonly lossPreventionInventory: LossPreventionInventoryService,
   ) {}
 
   @Get(['locations', 'v1/locations'])
@@ -323,5 +328,52 @@ export class InventoryController {
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.replenishmentService.executeReplenishment(payload, req.authContext!);
+  }
+
+  @Get(['inventory/in-transit-custody', 'v1/inventory/in-transit-custody'])
+  @RequirePermissions('inventory')
+  listInTransitCustody(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.inTransitMonitor.listInTransitCustody(req.authContext!) as unknown as Promise<Record<string, unknown>>;
+  }
+
+  @Get(['inventory/hot-skus', 'v1/inventory/hot-skus'])
+  @RequirePermissions('inventory')
+  listHotSkus(
+    @Query('locationId') locationId: string | undefined,
+    @Query('search') search: string | undefined,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
+    const parsedLoc = locationId ? parseInt(locationId, 10) : undefined;
+    return this.lossPreventionInventory.listHotSkus(
+      { locationId: parsedLoc && Number.isFinite(parsedLoc) ? parsedLoc : undefined, search },
+      req.authContext!,
+    );
+  }
+
+  @Post(['inventory/hot-skus/toggle', 'v1/inventory/hot-skus/toggle'])
+  @RequirePermissions('canAdjustInventory')
+  toggleHotSku(
+    @Body() payload: ToggleHotSkuDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
+    return this.lossPreventionInventory.toggleHotSku(
+      payload.productId,
+      payload.isHighRiskShrinkage,
+      req.authContext!,
+    );
+  }
+
+  @Get(['inventory/shrinkage-report', 'v1/inventory/shrinkage-report'])
+  @RequirePermissions('inventory')
+  getShrinkageReport(
+    @Query('timeframe') timeframe: string | undefined,
+    @Query('locationId') locationId: string | undefined,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
+    const parsedLoc = locationId ? parseInt(locationId, 10) : undefined;
+    return this.lossPreventionInventory.getShrinkageReport(
+      { timeframe, locationId: parsedLoc && Number.isFinite(parsedLoc) ? parsedLoc : undefined },
+      req.authContext!,
+    );
   }
 }

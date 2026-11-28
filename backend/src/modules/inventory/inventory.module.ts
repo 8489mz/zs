@@ -1,12 +1,15 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { AuditModule } from '../../core/audit/audit.module';
 import { AccountingModule } from '../accounting/accounting.module';
+import { SettingsModule } from '../settings/settings.module';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
 import { InventoryAdjustmentService } from './services/inventory-adjustment.service';
 import { InventoryCountService } from './services/inventory-count.service';
 import { InventoryScopeService } from './services/inventory-scope.service';
 import { InventoryTransferService } from './services/inventory-transfer.service';
+import { InTransitAgingMonitorService } from './services/in-transit-aging-monitor.service';
+import { LossPreventionInventoryService } from './services/loss-prevention-inventory.service';
 
 import { InventoryReplenishmentService } from './services/inventory-replenishment.service';
 import { WarehouseBinsService } from './services/warehouse-bins.service';
@@ -20,7 +23,7 @@ import { ReorderingRulesService } from './services/reordering-rules.service';
 import { ReorderingSchedulerService } from './services/reordering-scheduler.service';
 
 @Module({
-  imports: [AuditModule, AccountingModule],
+  imports: [AuditModule, AccountingModule, forwardRef(() => SettingsModule)],
   controllers: [
     InventoryController,
     WarehouseBinsController,
@@ -34,6 +37,8 @@ import { ReorderingSchedulerService } from './services/reordering-scheduler.serv
     InventoryCountService,
     InventoryAdjustmentService,
     InventoryReplenishmentService,
+    InTransitAgingMonitorService,
+    LossPreventionInventoryService,
     InventoryService,
     WarehouseBinsService,
     WarehousePackagesService,
@@ -44,6 +49,8 @@ import { ReorderingSchedulerService } from './services/reordering-scheduler.serv
   exports: [
     InventoryScopeService,
     InventoryReplenishmentService,
+    InTransitAgingMonitorService,
+    LossPreventionInventoryService,
     WarehouseBinsService,
     WarehousePackagesService,
     QualityAssuranceService,

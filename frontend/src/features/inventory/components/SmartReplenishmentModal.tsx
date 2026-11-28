@@ -46,6 +46,7 @@ export const SmartReplenishmentModal: React.FC<SmartReplenishmentModalProps> = (
   const [toLocationId, setToLocationId] = useState<number | ''>('');
   const [coverDays, setCoverDays] = useState<number>(2);
   const [note, setNote] = useState<string>('');
+  const [carrierName, setCarrierName] = useState<string>('');
   const [editableItems, setEditableItems] = useState<ReplenishmentSuggestionItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
@@ -70,6 +71,7 @@ export const SmartReplenishmentModal: React.FC<SmartReplenishmentModalProps> = (
     items: PickListItem[];
     fromName: string;
     toName: string;
+    carrierName?: string;
   } | null>(null);
 
   // Initialize source and destination locations when locations load
@@ -177,6 +179,7 @@ export const SmartReplenishmentModal: React.FC<SmartReplenishmentModalProps> = (
         toLocationId: Number(toLocationId),
         items: validItems.map((it) => ({ productId: it.productId, qty: it.suggestedQty })),
         note: note || `إذن إمداد أرفف ذكي (تغطية ${coverDays * 24} ساعة)`,
+        ...(carrierName.trim() ? { carrierName: carrierName.trim() } : {}),
       });
 
       const fromLoc = locations.find((l: any) => Number(l.id) === Number(fromLocationId));
@@ -196,6 +199,7 @@ export const SmartReplenishmentModal: React.FC<SmartReplenishmentModalProps> = (
         })),
         fromName: fromLoc?.name || 'المستودع الرئيسي',
         toName: toLoc?.name || 'صالة المحل',
+        carrierName: carrierName.trim() || undefined,
       });
 
       setStatusMessage({ type: 'success', text: `تم اعتماد إذن الصرف رقم #${res.docNo} بنجاح!` });
@@ -223,8 +227,27 @@ export const SmartReplenishmentModal: React.FC<SmartReplenishmentModalProps> = (
         subtitle={`فحص آلي لأرصدة كافة المخازن وتوجيه الصرف للحاجات المتوفرة فعلياً (تغطية ${coverDays * 24} ساعة)`}
         size="xl"
         footerActions={
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '12px' }}>
-            <div style={{ flex: 1, minWidth: '240px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '10px' }}>
+            <div style={{ flex: 1, minWidth: '180px' }}>
+              <input
+                type="text"
+                placeholder="اسم الناقل / حامل العهدة (اختياري)..."
+                value={carrierName}
+                onChange={(e) => setCarrierName(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: '36px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  backgroundColor: '#ffffff',
+                  padding: '0 10px',
+                  fontSize: '12.5px',
+                  color: '#0f172a',
+                  outline: 'none',
+                }}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: '180px' }}>
               <input
                 type="text"
                 placeholder={t('inventory.smart_replenishment_modal.s1', "ملاحظات إذن الصرف (اختياري)...")}
@@ -232,11 +255,11 @@ export const SmartReplenishmentModal: React.FC<SmartReplenishmentModalProps> = (
                 onChange={(e) => setNote(e.target.value)}
                 style={{
                   width: '100%',
-                  height: '38px',
+                  height: '36px',
                   borderRadius: '8px',
                   border: '1px solid #cbd5e1',
                   backgroundColor: '#ffffff',
-                  padding: '0 12px',
+                  padding: '0 10px',
                   fontSize: '12.5px',
                   color: '#0f172a',
                   outline: 'none',
@@ -678,6 +701,7 @@ export const SmartReplenishmentModal: React.FC<SmartReplenishmentModalProps> = (
           items={printedTransfer.items}
           fromLocationName={printedTransfer.fromName}
           toLocationName={printedTransfer.toName}
+          carrierName={printedTransfer.carrierName}
         />
       )}
     </>

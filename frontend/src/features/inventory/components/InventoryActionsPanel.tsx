@@ -15,6 +15,8 @@ import type { Branch, Location, Product } from '@/types/domain';
 import { useDamagedStockMutation, useInventoryAdjustmentMutation } from '@/features/inventory/hooks/useInventoryMutations';
 import { InventoryProductPicker } from '@/features/inventory/components/InventoryProductPicker';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
+import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   damagedStockSchema,
   inventoryAdjustmentSchema,
@@ -78,6 +80,10 @@ function hasDamagedDraft(values: DamagedStockInput, locations: Location[]): bool
 
 export function InventoryActionsPanel({ products, selectedProduct = null, selectedProductToken = 0, branches, locations, locationStocks = [], isCatalogLoading, isCatalogError, catalogError, canManageInventory = true }: InventoryActionsPanelProps) {
   const { t } = useTranslation();
+  const settingsQuery = useSettingsQuery();
+  const currentUser = useAuthStore((s) => s.user);
+  const isAdminRole = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const requireManagerForWriteOff = Boolean(settingsQuery.data?.antiTheftRequireManagerForWriteOff && !isAdminRole);
   const adjustmentDisclosureRef = useRef<HTMLDetailsElement | null>(null);
   const damagedDisclosureRef = useRef<HTMLDetailsElement | null>(null);
   const lastPreparedAdjustmentTokenRef = useRef(0);
@@ -337,6 +343,11 @@ export function InventoryActionsPanel({ products, selectedProduct = null, select
                 </Field>
               )}
               <Field label={t('inventory.inventory_actions_panel.s25', "ملاحظات")}><textarea rows={3} {...adjustmentForm.register('note')} disabled={adjustmentMutation.isPending || !canManageInventory} /></Field>
+              {requireManagerForWriteOff ? (
+                <Field label="كلمة مرور المدير المعتمد (عند الخصم / التخفيض)">
+                  <input type="password" autoComplete="new-password" {...adjustmentForm.register('managerPin')} disabled={adjustmentMutation.isPending || !canManageInventory} placeholder="كلمة مرور حساب مدير محدد" />
+                </Field>
+              ) : null}
               {!canManageInventory ? <div className="muted small">{t('inventory.inventory_actions_panel.s26', "هذا الحساب يملك صلاحية متابعة المخزون فقط. تنفيذ التسويات والتالف يتطلب canAdjustInventory.")}</div> : null}
               <MutationFeedback isError={adjustmentMutation.isError} isSuccess={adjustmentMutation.isSuccess} error={adjustmentMutation.error} errorFallback={t('inventory.inventory_actions_panel.s27', "تعذر تنفيذ حركة المخزون")} successText={t('inventory.inventory_actions_panel.s28', "تم حفظ حركة المخزون وتحديث الرصيد بنجاح.")} />
               <div className="actions">
@@ -424,6 +435,11 @@ export function InventoryActionsPanel({ products, selectedProduct = null, select
                 </Field>
               )}
               <Field label={t('inventory.inventory_actions_panel.s46', "ملاحظات وتفاصيل التلف (8 أحرف على الأقل)")} error={damagedForm.formState.errors.note?.message}><textarea rows={3} {...damagedForm.register('note')} disabled={damagedMutation.isPending || !canManageInventory} placeholder={t('inventory.inventory_actions_panel.s47', "تفاصيل التلف أو محضر الهالك...")} /></Field>
+              {requireManagerForWriteOff ? (
+                <Field label="كلمة مرور المدير المعتمد (مطلوبة لاعتماد التالف)">
+                  <input type="password" autoComplete="new-password" {...damagedForm.register('managerPin')} disabled={damagedMutation.isPending || !canManageInventory} placeholder="كلمة مرور حساب مدير محدد" />
+                </Field>
+              ) : null}
               <div className="stats-grid compact-grid workspace-stats-grid inventory-damage-mini-grid" style={{ marginTop: 12 }}>
                 <div className="stat-card"><span>{t('inventory.inventory_actions_panel.s48', "المخزون الحالي")}</span><strong>{selectedDamagedProduct ? selectedDamagedProduct.stock : 0}</strong></div>
                 <div className="stat-card"><span>{t('inventory.inventory_actions_panel.s49', "الكمية التالفة")}</span><strong>{damagedQty || 0}</strong></div>

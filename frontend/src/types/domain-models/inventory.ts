@@ -61,6 +61,9 @@ export interface StockTransfer {
   status: string;
   note?: string;
   recipientName?: string;
+  carrierEmployeeId?: string;
+  carrierName?: string;
+  inTransitAlertedAt?: string;
   receivedAt?: string;
   cancelledAt?: string;
   createdBy?: string;
@@ -92,6 +95,8 @@ export interface StockCountSession {
   locationId?: string;
   locationName?: string;
   status: string;
+  isBlind?: boolean;
+  countScope?: string;
   note?: string;
   countedBy?: string;
   approvedBy?: string;
@@ -109,9 +114,13 @@ export interface DamagedStockRecord {
   locationId?: string;
   locationName?: string;
   qty: number;
+  unitCost?: number;
+  totalCost?: number;
   reason?: string;
   note?: string;
+  evidenceImageUrl?: string;
   createdBy?: string;
+  approvedBy?: string;
   createdAt?: string;
   date: string;
 }

@@ -65,6 +65,20 @@ export class CreateStockTransferDto {
   recipientName?: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  carrierEmployeeId?: number;
+
+  @IsOptional()
+  @IsString()
+  carrierName?: string;
+
+  @IsOptional()
+  @IsString()
+  managerPin?: string;
+
+  @IsOptional()
   @IsString()
   issueMode?: 'final_issue' | 'transfer_to_branch_stock';
 

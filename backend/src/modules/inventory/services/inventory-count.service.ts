@@ -1,7 +1,13 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Kysely, sql } from '../../../database/kysely';
-import { AuditService } from '../../../core/audit/audit.service';
+import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
+import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
+import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
+import {
+  assertWriteOffManagerPassword,
+  sendDamageWhatsAppAlert,
+} from '../helpers/inventory-loss-prevention.helper';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
@@ -49,6 +55,8 @@ const ARABIC_SEARCH_KEEP =
 
 @Injectable()
 export class InventoryCountService {
+  private readonly logger = new Logger(InventoryCountService.name);
+
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly tx: TransactionHelper,
@@ -56,7 +64,12 @@ export class InventoryCountService {
     private readonly scope: InventoryScopeService,
     private readonly idempotency: IdempotencyService,
     private readonly accountingPosting: AccountingPostingService,
+    @Optional() private readonly whatsappService?: WhatsAppGatewayService,
   ) {}
+
+  private isManagerRole(auth: AuthContext): boolean {
+    return auth.role === 'admin' || auth.role === 'super_admin';
+  }
 
   private tenantScope(auth: AuthContext) { return requireTenantScope(auth); }
   private tenantPredicate(auth: AuthContext, alias?: string) { const tenantId = this.tenantScope(auth).tenantId; return alias ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}` : sql<boolean>`tenant_id = ${tenantId}`; }
@@ -145,7 +158,7 @@ export class InventoryCountService {
       .leftJoin('stock_locations as l', (join) => join.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'))
       .leftJoin('users as cu', (join) => join.onRef('cu.id', '=', 's.counted_by').onRef('cu.tenant_id', '=', 's.tenant_id'))
       .leftJoin('users as au', (join) => join.onRef('au.id', '=', 's.approved_by').onRef('au.tenant_id', '=', 's.tenant_id'))
-      .select(['s.id', 's.doc_no', 's.branch_id', 's.location_id', 's.status', 's.note', 's.posted_at', 's.created_at', 'b.name as branch_name', 'l.name as location_name', 'cu.username as counted_by_name', 'au.username as approved_by_name'])
+      .select(['s.id', 's.doc_no', 's.branch_id', 's.location_id', 's.status', 's.is_blind', 's.count_scope', 's.note', 's.posted_at', 's.created_at', 'b.name as branch_name', 'l.name as location_name', 'cu.username as counted_by_name', 'au.username as approved_by_name'])
       .where(this.tenantPredicate(auth, 's'))
       .orderBy('s.id', 'desc')
       .execute();
@@ -153,7 +166,8 @@ export class InventoryCountService {
     const sessionIds = sessions.map((row) => Number(row.id || 0)).filter((id) => id > 0);
     const items = sessionIds.length ? await this.db.selectFrom('stock_count_items').selectAll().where('session_id', 'in', sessionIds).where(this.tenantPredicate(auth)).orderBy('session_id', 'asc').execute() : [];
     const bySession = groupStockCountItemsBySession(items as never);
-    let mapped = sessions.map((row) => mapStockCountSessionRow(row as never, bySession));
+    const hideBlindExpected = !this.isManagerRole(auth);
+    let mapped = sessions.map((row) => mapStockCountSessionRow(row as never, bySession, hideBlindExpected));
     mapped = await this.scope.filterByScope(mapped, auth);
 
     return { stockCountSessions: mapped, damagedStockRecords: (await this.listDamagedStock({}, auth)).damagedStockRecords, scope: this.tenantScope(auth) };
@@ -218,7 +232,7 @@ export class InventoryCountService {
     const safePage = Math.min(page, totalPages);
     const offset = (safePage - 1) * pageSize;
     const result = await sql<Record<string, unknown>>`
-      SELECT s.id, s.doc_no, s.branch_id, s.location_id, s.status, s.note, s.posted_at, s.created_at,
+      SELECT s.id, s.doc_no, s.branch_id, s.location_id, s.status, s.is_blind, s.count_scope, s.note, s.posted_at, s.created_at,
         b.name AS branch_name, l.name AS location_name,
         cu.username AS counted_by_name, au.username AS approved_by_name
       FROM stock_count_sessions s
@@ -235,13 +249,15 @@ export class InventoryCountService {
       ? await this.db.selectFrom('stock_count_items').selectAll().where('session_id', 'in', pageIds).where(this.tenantPredicate(auth)).orderBy('session_id', 'asc').execute()
       : [];
     const bySession = groupStockCountItemsBySession(pageItems as never);
-    const mapped = result.rows.map((row) => mapStockCountSessionRow(row as never, bySession));
+    const hideBlindExpected = !this.isManagerRole(auth);
+    const mapped = result.rows.map((row) => mapStockCountSessionRow(row as never, bySession, hideBlindExpected));
+    const hasHiddenBlindDraft = hideBlindExpected && mapped.some((s) => s.isBlind && s.status !== 'posted');
     // The summary is exact over the FULL filtered set, never page-scoped.
     const summary = {
       totalItems,
       draft: Number(counts.rows[0]?.draft_count || 0),
       posted: Number(counts.rows[0]?.posted_count || 0),
-      totalVariance: Number(Number(counts.rows[0]?.total_variance || 0).toFixed(3)),
+      totalVariance: hasHiddenBlindDraft ? null : Number(Number(counts.rows[0]?.total_variance || 0).toFixed(3)),
     };
     return { stockCountSessions: mapped, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary, scope: this.tenantScope(auth) };
   }
@@ -260,10 +276,26 @@ export class InventoryCountService {
     }
 
     const finalResponse = await this.tx.runInTransaction(this.db, async (trx) => {
+      const antiTheft = await loadAntiTheftSettings(trx, tenantScope.tenantId);
+      const isBlindSession = Boolean(payload.isBlind || antiTheft.enforceBlindStockCount);
+      const countScope =
+        payload.countScope === 'hot_skus' || payload.countScope === 'spot_check' || payload.countScope === 'hall_daily'
+          ? payload.countScope
+          : 'standard';
       // Time-based suffixes collide if two cashiers create a count at once.
       // A unique provisional code is replaced inside this transaction by the
       // stable database-generated session identity.
-      const result = await trx.insertInto('stock_count_sessions').values({ doc_no: `ZSC-TMP-${randomUUID()}`, branch_id: location.branchId, location_id: location.id, status: 'draft', note: String(payload.note || '').trim(), counted_by: auth.userId, ...this.tenantFields(auth) }).returning('id').executeTakeFirstOrThrow();
+      const result = await trx.insertInto('stock_count_sessions').values({
+        doc_no: `ZSC-TMP-${randomUUID()}`,
+        branch_id: location.branchId,
+        location_id: location.id,
+        status: 'draft',
+        is_blind: isBlindSession,
+        count_scope: countScope,
+        note: String(payload.note || '').trim(),
+        counted_by: auth.userId,
+        ...this.tenantFields(auth),
+      }).returning('id').executeTakeFirstOrThrow();
       const id = Number(result.id);
       await trx.updateTable('stock_count_sessions')
         .set({ doc_no: buildStockCountSessionDocNo(Date.now(), id) })
@@ -346,7 +378,15 @@ export class InventoryCountService {
       }).where('id', '=', itemId).where('session_id', '=', sessionId)
         .where('posted_at', 'is', null).where(this.tenantPredicate(auth)).execute();
       await this.audit.logWithExecutor(trx, 'إعادة جرد بند', JSON.stringify({ sessionId, itemId, productId: item.product_id, expectedQty, countedQty, varianceQty, reason }), auth);
-      const response = { ok: true, sessionId, itemId, expectedQty, countedQty, varianceQty };
+      const maskBlind = Boolean((session as any).is_blind) && !this.isManagerRole(auth);
+      const response = {
+        ok: true,
+        sessionId,
+        itemId,
+        expectedQty: maskBlind ? null : expectedQty,
+        countedQty,
+        varianceQty: maskBlind ? null : varianceQty,
+      };
       if (idemCtx?.idempotencyKey && idemCtx.operationType) {
         await this.idempotency.commitOperation(trx, {
           tenantId: tenantScope.tenantId, accountId: tenantScope.accountId,
@@ -746,6 +786,7 @@ export class InventoryCountService {
       .leftJoin('branches as b', (join) => join.onRef('b.id', '=', 'd.branch_id').onRef('b.tenant_id', '=', 'd.tenant_id'))
       .leftJoin('stock_locations as l', (join) => join.onRef('l.id', '=', 'd.location_id').onRef('l.tenant_id', '=', 'd.tenant_id'))
       .leftJoin('users as u', (join) => join.onRef('u.id', '=', 'd.created_by').onRef('u.tenant_id', '=', 'd.tenant_id'))
+      .leftJoin('users as au', (join) => join.onRef('au.id', '=', 'd.approved_by').onRef('au.tenant_id', '=', 'd.tenant_id'))
       .where(this.tenantPredicate(auth, 'd'));
 
     if (search) {
@@ -776,7 +817,12 @@ export class InventoryCountService {
     const totalQty = Number(countRes?.total_qty || 0);
 
     const rows = await baseQuery
-      .select(['d.id', 'd.product_id', 'd.branch_id', 'd.location_id', 'd.qty', 'd.reason', 'd.note', 'd.created_at', 'p.name as product_name', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name'])
+      .select([
+        'd.id', 'd.product_id', 'd.branch_id', 'd.location_id', 'd.qty', 'd.unit_cost', 'd.total_cost',
+        'd.reason', 'd.note', 'd.evidence_image_url', 'd.created_at',
+        'p.name as product_name', 'b.name as branch_name', 'l.name as location_name',
+        'u.username as created_by_name', 'au.username as approved_by_name',
+      ])
       .orderBy('d.id', 'desc')
       .limit(pageSize)
       .offset(offset)
@@ -806,30 +852,75 @@ export class InventoryCountService {
     const effectiveNote = String(payload.note || '').trim() || String(payload.reason || '').trim();
     if (!effectiveNote) throw new AppError('اكتب سبب التالف', 'DAMAGE_NOTE_REQUIRED', 400);
     payload.note = effectiveNote;
+    let damageAlertMeta: {
+      productName: string;
+      locationName: string;
+      qty: number;
+      totalCost: number;
+      reason: string;
+      note: string;
+      actorName: string;
+      approvedByName?: string;
+    } | null = null;
+    let damageProductName = '';
+    let damageTotalCost = 0;
+
     await this.tx.runInTransaction(this.db, async (trx) => {
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantScope.tenantId));
+      const antiTheft = await loadAntiTheftSettings(trx, tenantScope.tenantId);
       const product = await trx.selectFrom('products').selectAll()
         .where('id', '=', payload.productId).where('is_active', '=', true)
         .where(this.tenantPredicate(auth)).where('account_id', '=', tenantScope.accountId)
         .forUpdate().executeTakeFirst();
       if (!product) throw new AppError('Product not found', 'PRODUCT_NOT_FOUND', 404);
+      damageProductName = String(product.name || `#${payload.productId}`);
       const rawCost = Number(product.cost_price || 0);
       const unitCost = Number.isFinite(rawCost) && rawCost > 0 ? rawCost : 0;
       const damageQty = Number(payload.qty);
       const totalCost = roundMoney(damageQty * unitCost, moneyDigits);
+      damageTotalCost = totalCost;
       if (!Number.isFinite(damageQty) || damageQty <= 0
         || Math.abs(damageQty * 1000 - Math.round(damageQty * 1000)) > 0.000001) {
         throw new AppError('Damage quantity must be positive with at most three decimal places', 'INVALID_QTY', 400);
       }
+
+      let approvedById: number | null = this.isManagerRole(auth) ? auth.userId : null;
+      let approvedByName: string | undefined = this.isManagerRole(auth) ? auth.username : undefined;
+      if (antiTheft.requireManagerForWriteOff && !this.isManagerRole(auth)) {
+        const approval = await assertWriteOffManagerPassword(trx, auth, payload.managerPin, {
+          requiredMsg: 'تسجيل التالف أو الهالك يتطلب اعتماداً بكلمة مرور مدير محدد (درع منع السرقة)',
+          requiredCode: 'DAMAGE_MANAGER_APPROVAL_REQUIRED',
+          passwordOnlyMsg: 'رمز المدير المشترك لا يكفي؛ اعتماد التالف يتطلب كلمة مرور حساب مدير محدد',
+          passwordOnlyCode: 'DAMAGE_MANAGER_PASSWORD_REQUIRED',
+        });
+        approvedById = approval.authorizedById;
+        approvedByName = approval.authorizedByName;
+      }
+
       const availableQty = await previewConsumableStockQty(trx, { productId: payload.productId, branchId: location.branchId, locationId: location.id, tenantId: tenantScope.tenantId, accountId: tenantScope.accountId });
       const writeModels = buildDamagedStockWriteModels({ ...product, stock_qty: availableQty }, payload, location, auth.userId);
       const insertedDamage = await trx.insertInto('damaged_stock_records').values({
          ...writeModels.damagedRecord,
          unit_cost: unitCost,
          total_cost: totalCost,
+         approved_by: approvedById,
+         evidence_image_url: payload.evidenceImageUrl ? String(payload.evidenceImageUrl).trim() : null,
          ...this.tenantFields(auth)
       }).returning('id').executeTakeFirst();
       if (!insertedDamage?.id) throw new AppError('Failed to capture damaged stock ID', 'DAMAGE_INSERT_FAILED', 500);
+
+      if (totalCost >= antiTheft.writeOffAlertThreshold) {
+        damageAlertMeta = {
+          productName: damageProductName,
+          locationName: location.name,
+          qty: damageQty,
+          totalCost,
+          reason: String(payload.reason || 'damage'),
+          note: effectiveNote,
+          actorName: auth.username,
+          approvedByName,
+        };
+      }
 
       const trace = await dispatchTrackedStock(trx, tenantScope, {
         productId: Number(payload.productId), qty: damageQty,
@@ -885,8 +976,17 @@ export class InventoryCountService {
         }, { ok: true, damageId: Number(insertedDamage.id) }, String(insertedDamage.id));
       }
     });
-    await this.audit.log('تسجيل تالف', JSON.stringify({ actorUserId: auth.userId, productId: payload.productId, qty: payload.qty }), auth);
-    const responsePayload = { ok: true, products: (await this.db.selectFrom('products').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(auth)).execute()).map((p) => ({ id: String(p.id), name: p.name })), damagedStockRecords: (await this.listDamagedStock({}, auth)).damagedStockRecords, stockMovements: (await this.listStockMovements({}, auth)).stockMovements };
-    return responsePayload;
+    await this.audit.log(
+      'تسجيل تالف',
+      JSON.stringify({ actorUserId: auth.userId, productId: payload.productId, productName: damageProductName, locationName: location.name, qty: payload.qty, totalCost: damageTotalCost, reason: payload.reason || 'damage', note: effectiveNote }),
+      auth,
+      { eventCode: AUDIT_EVENT_CODES.INVENTORY_DAMAGE_RECORDED },
+    );
+    if (damageAlertMeta && this.whatsappService) {
+      void sendDamageWhatsAppAlert(this.db, this.whatsappService, tenantScope.tenantId, damageAlertMeta).catch((err) =>
+        this.logger.warn(`Damaged stock WhatsApp alert failed: ${err?.message}`),
+      );
+    }
+    return { ok: true, products: (await this.db.selectFrom('products').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(auth)).execute()).map((p) => ({ id: String(p.id), name: p.name })), damagedStockRecords: (await this.listDamagedStock({}, auth)).damagedStockRecords, stockMovements: (await this.listStockMovements({}, auth)).stockMovements };
   }
 }

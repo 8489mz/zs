@@ -42,6 +42,8 @@ export interface ExecuteReplenishmentPayload {
   toLocationId: number;
   items: { productId: number; qty: number }[];
   note?: string;
+  carrierEmployeeId?: number;
+  carrierName?: string;
 }
 
 export interface ExecuteReplenishmentResponse {

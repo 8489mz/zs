@@ -1,1 +1,1 @@
-export type StockCountType = 'quick' | 'selected_items' | 'category' | 'supplier' | 'full';
+export type StockCountType = 'quick' | 'hot_skus' | 'selected_items' | 'category' | 'supplier' | 'full';

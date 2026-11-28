@@ -171,9 +171,7 @@ export class CatalogProductListService {
         'products.is_active',
         'products.calories',
         'products.allergens',
-        'products.is_spicy',
-        'products.is_vegetarian',
-        'products.is_gluten_free',
+        'products.is_spicy', 'products.is_vegetarian', 'products.is_gluten_free', 'products.is_high_risk_shrinkage',
       ])
       .where(view === 'archived' ? sql<boolean>`products.is_active = false` : sql<boolean>`products.is_active = true`)
       .where(this.tenantPredicate(actor, 'products'));
@@ -922,6 +920,7 @@ export class CatalogProductListService {
         minStock: Number(product.min_stock_qty || 0),
         isActive: product.is_active !== false,
         is_active: product.is_active !== false,
+        isHighRiskShrinkage: Boolean(product.is_high_risk_shrinkage),
         hasMovements,
         canDelete: !hasMovements && Math.abs(currentStock) <= 0.0001,
         notes: product.notes || '',

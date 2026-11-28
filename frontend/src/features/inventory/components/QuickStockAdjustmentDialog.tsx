@@ -12,6 +12,8 @@ import { useDamagedStockMutation, useInventoryAdjustmentMutation } from '@/featu
 import { inventoryApi } from '@/features/inventory/api/inventory.api';
 import { resolveAdjustmentPrefill } from '@/features/inventory/lib/adjustment-prefill';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
+import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   damagedStockSchema,
   inventoryAdjustmentSchema,
@@ -47,6 +49,10 @@ export function QuickStockAdjustmentDialog({
   canManageInventory = true,
 }: QuickStockAdjustmentDialogProps) {
   const { t } = useTranslation();
+  const settingsQuery = useSettingsQuery();
+  const currentUser = useAuthStore((s) => s.user);
+  const isAdminRole = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const requireManagerForWriteOff = Boolean(settingsQuery.data?.antiTheftRequireManagerForWriteOff && !isAdminRole);
   const [activeTab, setActiveTab] = useState<'adjust' | 'damage'>('adjust');
 
   const adjustQtyInputRef = useRef<HTMLInputElement | null>(null);
@@ -529,6 +535,18 @@ export function QuickStockAdjustmentDialog({
               />
             </Field>
 
+            {requireManagerForWriteOff && (
+              <Field label="كلمة مرور المدير المعتمد (مطلوبة عند الخصم / التخفيض)">
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  {...adjustmentForm.register('managerPin')}
+                  placeholder="أدخل كلمة مرور حساب مدير محدد..."
+                  disabled={isSubmitting || !canManageInventory}
+                />
+              </Field>
+            )}
+
             {/* شريط معاينة الرصيد الجديد */}
             <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 600 }}>{t('inventory.quick_stock_adjustment_dialog.s23', "الرصيد المتوقع بعد حفظ الحركة:")}</span>
@@ -618,6 +636,18 @@ export function QuickStockAdjustmentDialog({
                 disabled={isSubmitting || !canManageInventory}
               />
             </Field>
+
+            {requireManagerForWriteOff && (
+              <Field label="كلمة مرور المدير المعتمد (مطلوبة لاعتماد التالف)">
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  {...damagedForm.register('managerPin')}
+                  placeholder="أدخل كلمة مرور حساب مدير محدد..."
+                  disabled={isSubmitting || !canManageInventory}
+                />
+              </Field>
+            )}
 
             {/* شبكة إحصائيات التالف الفورية */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginTop: '2px' }}>

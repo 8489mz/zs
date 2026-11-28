@@ -1,6 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
-import { AuditService } from '../../../core/audit/audit.service';
+import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
+import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
+import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
+import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
@@ -28,6 +31,8 @@ import { recordStockMovementRow } from '../../../common/utils/stock-movement-wri
 
 @Injectable()
 export class InventoryAdjustmentService {
+  private readonly logger = new Logger(InventoryAdjustmentService.name);
+
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly tx: TransactionHelper,
@@ -36,6 +41,7 @@ export class InventoryAdjustmentService {
     private readonly scopeService: InventoryScopeService,
     private readonly idempotency: IdempotencyService,
     private readonly accountingPosting: AccountingPostingService,
+    @Optional() private readonly whatsappService?: WhatsAppGatewayService,
   ) {}
 
   async createInventoryAdjustment(
@@ -249,6 +255,52 @@ export class InventoryAdjustmentService {
       const signedDelta = Number((stockChange.scopeAfter - stockChange.scopeBefore).toFixed(3));
       movementQty = Math.abs(signedDelta);
       if (movementQty < 0.001) throw new AppError('Adjustment did not change stock', 'STOCK_ADJUSTMENT_NO_CHANGE', 400);
+
+      let writeOffAlertMeta: {
+        productName: string;
+        locationName: string;
+        qty: number;
+        totalCost: number;
+        reason: string;
+        actorName: string;
+        approvedByName?: string;
+      } | null = null;
+      let approvedByName: string | undefined;
+
+      if (signedDelta < -0.0001) {
+        const antiTheft = await loadAntiTheftSettings(trx, scope.tenantId);
+        const lossCost = Number((movementQty * unitCost).toFixed(2));
+        const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
+        if (antiTheft.requireManagerForWriteOff && !isAdmin) {
+          if (!String(payload.managerPin || '').trim()) {
+            throw new AppError(
+              'خصم أو تخفيض المخزون اليدوي يتطلب كلمة مرور مدير محدد (درع منع السرقة)',
+              'WRITE_OFF_MANAGER_APPROVAL_REQUIRED',
+              403,
+            );
+          }
+          const approval = await authorizeManagerSecret(trx, auth, String(payload.managerPin || '').trim());
+          if (approval.mode !== 'account') {
+            throw new AppError(
+              'رمز المدير المشترك لا يكفي؛ اعتماد خصم المخزون يتطلب كلمة مرور حساب مدير محدد',
+              'WRITE_OFF_MANAGER_PASSWORD_REQUIRED',
+              403,
+            );
+          }
+          approvedByName = approval.authorizedByName;
+        }
+        if (lossCost >= antiTheft.writeOffAlertThreshold) {
+          writeOffAlertMeta = {
+            productName: String(product.name || `#${payload.productId}`),
+            locationName: location?.name || 'الرصيد العام',
+            qty: movementQty,
+            totalCost: lossCost,
+            reason: String(payload.reason || payload.note || 'تسوية سالبة'),
+            actorName: auth.username,
+            approvedByName,
+          };
+        }
+      }
       // Source movement and GL must represent the same tenant-currency minor units.
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
 
@@ -312,9 +364,11 @@ export class InventoryAdjustmentService {
 
       await this.audit.logWithExecutor(
         trx,
-        'تعديل مخزون',
-        `تم تعديل مخزون الصنف #${payload.productId} من ${result.beforeQty} إلى ${result.afterQty} بسبب ${payload.reason}`,
+        signedDelta < -0.0001 ? 'خصم/تسوية مخزون سالبة' : 'تعديل مخزون',
+        `تم تعديل مخزون الصنف ${product.name || `#${payload.productId}`} من ${result.beforeQty} إلى ${result.afterQty} (الفرق: ${signedDelta}) | السبب: ${payload.reason}` +
+          (approvedByName ? ` | اعتماد المدير: ${approvedByName}` : ''),
         auth,
+        signedDelta < -0.0001 ? { eventCode: AUDIT_EVENT_CODES.INVENTORY_NEGATIVE_ADJUSTMENT } : undefined,
       );
 
       const responsePayload = {
@@ -330,6 +384,7 @@ export class InventoryAdjustmentService {
         ).map((p) => ({ id: String(p.id), name: p.name })),
         stockMovements: (await this.countService.listStockMovements({}, auth)).stockMovements,
         auditLogs: [],
+        _writeOffAlert: writeOffAlertMeta,
       };
 
       if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {
@@ -341,14 +396,58 @@ export class InventoryAdjustmentService {
             idempotencyKey: idemCtx.idempotencyKey,
             operationType: idemCtx.operationType,
           },
-          responsePayload,
+          { ...responsePayload, _writeOffAlert: undefined },
         );
       }
 
       return responsePayload;
     });
 
+    const alertMeta = (finalResponse as any)?._writeOffAlert;
+    if (finalResponse && '_writeOffAlert' in (finalResponse as any)) {
+      delete (finalResponse as any)._writeOffAlert;
+    }
+    if (alertMeta && this.whatsappService) {
+      void this.notifyWriteOffWhatsApp(scope.tenantId, alertMeta).catch((err) =>
+        this.logger.warn(`Write-off WhatsApp alert failed: ${err?.message}`),
+      );
+    }
+
     return finalResponse;
+  }
+
+  private async notifyWriteOffWhatsApp(
+    tenantId: string,
+    meta: {
+      productName: string;
+      locationName: string;
+      qty: number;
+      totalCost: number;
+      reason: string;
+      actorName: string;
+      approvedByName?: string;
+    },
+  ): Promise<void> {
+    if (!this.whatsappService) return;
+    const tenant = await this.db
+      .selectFrom('tenants')
+      .select(['business_name', 'owner_phone'])
+      .where('id', '=', tenantId)
+      .executeTakeFirst();
+    if (!tenant?.owner_phone) return;
+    const text =
+      `*درع منع الخسائر - إنذار خصم/تسوية مخزنية سالبة*\n` +
+      `*${tenant.business_name || 'إدارة المخازن'}*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `الصنف: *${meta.productName}*\n` +
+      `المخزن: ${meta.locationName}\n` +
+      `الكمية المخصومة: *${meta.qty}*\n` +
+      `التكلفة التقديرية: *${meta.totalCost.toLocaleString('en-US')}*\n` +
+      `المنفذ: ${meta.actorName}\n` +
+      (meta.approvedByName ? `المعتمد: ${meta.approvedByName}\n` : '') +
+      `السبب: ${meta.reason}\n\n` +
+      `_يرجى المراجعة للتأكد من عدم وجود إخفاء عجز أو سحب غير مبرر._`;
+    await this.whatsappService.sendRawMessage(tenantId, tenant.owner_phone, text);
   }
 
   // INV-ADJUST-SINGLE-QTY-BASIS: the read side of the dialog prefill.

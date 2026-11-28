@@ -21,6 +21,7 @@ interface ReplenishmentPickListPrintModalProps {
   toLocationName: string;
   items: PickListItem[];
   createdByName?: string;
+  carrierName?: string;
 }
 
 export const ReplenishmentPickListPrintModal: React.FC<ReplenishmentPickListPrintModalProps> = ({
@@ -31,6 +32,7 @@ export const ReplenishmentPickListPrintModal: React.FC<ReplenishmentPickListPrin
   toLocationName,
   items,
   createdByName = 'كاشير المحل',
+  carrierName,
 }) => {
   const { t } = useTranslation();
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -123,9 +125,9 @@ export const ReplenishmentPickListPrintModal: React.FC<ReplenishmentPickListPrin
             }
             .signatures {
               display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 40px;
-              margin-top: 40px;
+              grid-template-columns: 1fr 1fr 1fr;
+              gap: 24px;
+              margin-top: 36px;
               text-align: center;
             }
             .sig-line {
@@ -155,6 +157,7 @@ export const ReplenishmentPickListPrintModal: React.FC<ReplenishmentPickListPrin
             <div><strong>صالة عرض المحل (الوجهة):</strong> ${toLocationName}</div>
             <div><strong>تاريخ وأمر الإذن:</strong> ${new Date().toLocaleDateString('ar-EG')} - ${new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</div>
             <div><strong>المشرف المسؤول:</strong> ${createdByName}</div>
+            ${carrierName ? `<div style="grid-column: 1 / -1;"><strong>الناقل / حامل العهدة:</strong> ${carrierName}</div>` : ''}
           </div>
 
           <table>
@@ -202,11 +205,15 @@ export const ReplenishmentPickListPrintModal: React.FC<ReplenishmentPickListPrin
 
           <div class="signatures">
             <div>
-              <div>توقيع مسؤول المستودع (المُسلِّم)</div>
+              <div>توقيع أمين المستودع (المُسلِّم)</div>
               <div class="sig-line"></div>
             </div>
             <div>
-              <div>توقيع المستلم (العامل / الكاشير)</div>
+              <div>توقيع الناقل / حامل العهدة${carrierName ? ` (${carrierName})` : ''}</div>
+              <div class="sig-line"></div>
+            </div>
+            <div>
+              <div>توقيع المستلم بالفرع (المطابقة)</div>
               <div class="sig-line"></div>
             </div>
           </div>
@@ -285,6 +292,12 @@ export const ReplenishmentPickListPrintModal: React.FC<ReplenishmentPickListPrin
                 <span style={{ color: '#64748b' }}>{t('inventory.replenishment_pick_list_print_modal.s8', "المشرف المعتمد:")} </span>
                 <span style={{ fontWeight: 600, color: '#334155' }}>{createdByName}</span>
               </div>
+              {carrierName && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <span style={{ color: '#64748b' }}>الناقل / حامل العهدة: </span>
+                  <strong style={{ color: '#170e5e' }}>{carrierName}</strong>
+                </div>
+              )}
             </div>
 
             <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
@@ -337,14 +350,18 @@ export const ReplenishmentPickListPrintModal: React.FC<ReplenishmentPickListPrin
               <span style={{ color: '#170e5e', fontSize: '13px' }}>{t('inventory.replenishment_pick_list_print_modal.s16', "إجمالي القطع المنصرفة:")} {totalPieces} {t('inventory.replenishment_pick_list_print_modal.s17', "قطعة")}</span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', borderTop: '1px solid #e2e8f0', paddingTop: '16px', fontSize: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', borderTop: '1px solid #e2e8f0', paddingTop: '16px', fontSize: '12px' }}>
               <div style={{ textAlign: 'center' }}>
-                <span style={{ color: '#475569', fontWeight: 700 }}>{t('inventory.replenishment_pick_list_print_modal.s18', "توقيع مسؤول المستودع (المُسلِّم)")}</span>
-                <div style={{ marginTop: '30px', borderBottom: '1px dashed #94a3b8', marginInline: '20px' }} />
+                <span style={{ color: '#475569', fontWeight: 700 }}>{t('inventory.replenishment_pick_list_print_modal.s18', "توقيع أمين المستودع (المُسلِّم)")}</span>
+                <div style={{ marginTop: '30px', borderBottom: '1px dashed #94a3b8', marginInline: '12px' }} />
               </div>
               <div style={{ textAlign: 'center' }}>
-                <span style={{ color: '#475569', fontWeight: 700 }}>{t('inventory.replenishment_pick_list_print_modal.s19', "توقيع المستلم (العامل / الكاشير)")}</span>
-                <div style={{ marginTop: '30px', borderBottom: '1px dashed #94a3b8', marginInline: '20px' }} />
+                <span style={{ color: '#475569', fontWeight: 700 }}>توقيع الناقل / حامل العهدة{carrierName ? ` (${carrierName})` : ''}</span>
+                <div style={{ marginTop: '30px', borderBottom: '1px dashed #94a3b8', marginInline: '12px' }} />
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <span style={{ color: '#475569', fontWeight: 700 }}>{t('inventory.replenishment_pick_list_print_modal.s19', "توقيع المستلم بالفرع (المطابقة)")}</span>
+                <div style={{ marginTop: '30px', borderBottom: '1px dashed #94a3b8', marginInline: '12px' }} />
               </div>
             </div>
           </div>

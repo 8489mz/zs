@@ -24,13 +24,17 @@ export type DamagedStockRow = {
   branch_id?: unknown;
   location_id?: unknown;
   qty?: unknown;
+  unit_cost?: unknown;
+  total_cost?: unknown;
   reason?: unknown;
   note?: unknown;
+  evidence_image_url?: unknown;
   created_at?: unknown;
   product_name?: unknown;
   branch_name?: unknown;
   location_name?: unknown;
   created_by_name?: unknown;
+  approved_by_name?: unknown;
 };
 
 export type StockCountItemRow = {
@@ -53,6 +57,8 @@ export type StockCountSessionRow = {
   branch_id?: unknown;
   location_id?: unknown;
   status?: unknown;
+  is_blind?: unknown;
+  count_scope?: unknown;
   note?: unknown;
   posted_at?: unknown;
   created_at?: unknown;
@@ -107,9 +113,13 @@ export function mapDamagedStockRow(row: DamagedStockRow) {
     locationId: row.location_id ? String(row.location_id) : '',
     locationName: String(row.location_name || ''),
     qty: Number(row.qty || 0),
+    unitCost: Number(row.unit_cost || 0),
+    totalCost: Number(row.total_cost || 0),
     reason: String(row.reason || 'damage'),
     note: String(row.note || ''),
+    evidenceImageUrl: row.evidence_image_url ? String(row.evidence_image_url) : '',
     createdBy: String(row.created_by_name || ''),
+    approvedBy: String(row.approved_by_name || ''),
     date: row.created_at,
   };
 }
@@ -153,7 +163,20 @@ export function groupStockCountItemsBySession(items: StockCountItemRow[]) {
 export function mapStockCountSessionRow(
   row: StockCountSessionRow,
   itemsBySession: Map<string, Record<string, unknown>[]>,
+  hideBlindExpected = false,
 ) {
+  const isBlind = Boolean(row.is_blind);
+  const status = String(row.status || 'draft');
+  const shouldMask = hideBlindExpected && isBlind && status !== 'posted';
+  const rawItems = itemsBySession.get(String(row.id)) || [];
+  const items = shouldMask
+    ? rawItems.map((item) => ({
+        ...item,
+        expectedQty: null,
+        varianceQty: null,
+      }))
+    : rawItems;
+
   return {
     id: String(row.id),
     docNo: row.doc_no ? String(row.doc_no) : `COUNT-${row.id}`,
@@ -161,13 +184,15 @@ export function mapStockCountSessionRow(
     branchName: String(row.branch_name || ''),
     locationId: row.location_id ? String(row.location_id) : '',
     locationName: String(row.location_name || ''),
-    status: String(row.status || 'draft'),
+    status,
+    isBlind,
+    countScope: String(row.count_scope || 'standard'),
     note: String(row.note || ''),
     countedBy: String(row.counted_by_name || ''),
     approvedBy: String(row.approved_by_name || ''),
     postedAt: row.posted_at || '',
     createdAt: row.created_at,
-    items: itemsBySession.get(String(row.id)) || [],
+    items,
   };
 }
 

@@ -47,6 +47,7 @@ export type ProductRow = {
   is_spicy?: boolean | null;
   is_vegetarian?: boolean | null;
   is_gluten_free?: boolean | null;
+  is_high_risk_shrinkage?: boolean | null;
 };
 
 export type ProductWriteExecutor = Kysely<Database> | Transaction<Database>;

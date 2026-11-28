@@ -362,6 +362,11 @@ export class UpsertProductDto {
   @Type(() => Boolean)
   @IsBoolean()
   isGlutenFree?: boolean;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isHighRiskShrinkage?: boolean;
 }
 
 export type NormalizedProductUnit = {
@@ -478,4 +483,5 @@ export type NormalizedUpsertProduct = {
   isSpicy?: boolean;
   isVegetarian?: boolean;
   isGlutenFree?: boolean;
+  isHighRiskShrinkage?: boolean;
 };

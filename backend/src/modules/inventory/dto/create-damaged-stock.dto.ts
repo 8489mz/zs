@@ -56,4 +56,8 @@ export class CreateDamagedStockDto {
   @IsOptional()
   @IsString()
   managerPin?: string;
+
+  @IsOptional()
+  @IsString()
+  evidenceImageUrl?: string;
 }

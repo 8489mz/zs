@@ -93,6 +93,7 @@ export interface Product {
   isSpicy?: boolean;
   isVegetarian?: boolean;
   isGlutenFree?: boolean;
+  isHighRiskShrinkage?: boolean;
   metadata?: Record<string, any> | null;
 }
 

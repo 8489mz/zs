@@ -38,4 +38,14 @@ export class ExecuteReplenishmentDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  carrierEmployeeId?: number;
+
+  @IsOptional()
+  @IsString()
+  carrierName?: string;
 }

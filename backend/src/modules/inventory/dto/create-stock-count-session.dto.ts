@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsNumber, IsOptional, IsString, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min, MinLength, ValidateNested } from 'class-validator';
 
 class StockCountBatchDto {
   @IsOptional()
@@ -68,6 +68,14 @@ export class CreateStockCountSessionDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isBlind?: boolean;
+
+  @IsOptional()
+  @IsIn(['standard', 'hot_skus', 'spot_check', 'hall_daily'])
+  countScope?: 'standard' | 'hot_skus' | 'spot_check' | 'hall_daily';
 
   @IsArray()
   @ArrayMinSize(1)

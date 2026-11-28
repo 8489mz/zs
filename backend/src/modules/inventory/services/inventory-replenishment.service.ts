@@ -4,6 +4,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { KYSELY_DB } from '../../../database/database.constants';
+import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
 import { InventoryScopeService } from './inventory-scope.service';
 import { InventoryTransferService } from './inventory-transfer.service';
 
@@ -314,12 +315,15 @@ export class InventoryReplenishmentService {
       toLocationId: number;
       items: { productId: number; qty: number }[];
       note?: string;
+      carrierEmployeeId?: number;
+      carrierName?: string;
     },
     auth: AuthContext,
   ): Promise<{
     ok: boolean;
     transferId: number;
     docNo: string;
+    status: 'sent' | 'received';
     itemsCount: number;
     totalQty: number;
   }> {
@@ -338,7 +342,35 @@ export class InventoryReplenishmentService {
       throw new BadRequestException('الكميات المحددة للأصناف يجب أن تكون أكبر من صفر');
     }
 
+    const { tenantId } = requireTenantScope(auth);
+    const antiTheft = await loadAntiTheftSettings(this.db, tenantId);
     const note = payload.note || 'إذن إمداد أرفف ذكي معتمد آلياً';
+    const totalQty = cleanedItems.reduce((acc, it) => acc + it.qty, 0);
+
+    if (antiTheft.strictTwoStepTransfers) {
+      const result = await this.transferService.createStockTransfer(
+        {
+          fromLocationId: Number(payload.fromLocationId),
+          toLocationId: Number(payload.toLocationId),
+          items: cleanedItems,
+          note,
+          issueMode: 'transfer_to_branch_stock',
+          carrierEmployeeId: payload.carrierEmployeeId,
+          carrierName: payload.carrierName,
+        },
+        auth,
+      );
+      const transfers = Array.isArray(result.stockTransfers) ? result.stockTransfers : [];
+      const created = transfers.find((t: any) => String(t.id) === String(result.transferId));
+      return {
+        ok: true,
+        transferId: Number(result.transferId || 0),
+        docNo: String((created as any)?.docNo || `TR-${result.transferId || 'AUTO'}`),
+        status: 'sent',
+        itemsCount: cleanedItems.length,
+        totalQty,
+      };
+    }
 
     const result = await this.transferService.internalTransferProducts(
       {
@@ -346,16 +378,17 @@ export class InventoryReplenishmentService {
         toLocationId: Number(payload.toLocationId),
         items: cleanedItems,
         note,
+        carrierEmployeeId: payload.carrierEmployeeId,
+        carrierName: payload.carrierName,
       },
       auth,
     );
-
-    const totalQty = cleanedItems.reduce((acc, it) => acc + it.qty, 0);
 
     return {
       ok: true,
       transferId: Number(result.transferId || 0),
       docNo: String(result.docNo || 'TR-AUTO'),
+      status: 'received',
       itemsCount: cleanedItems.length,
       totalQty,
     };

@@ -26,8 +26,12 @@ export class PurchaseOrdersController {
   }
 
   @Get(':id')
-  getOrderById(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
-    return this.purchaseOrdersService.getOrderById(id, req.authContext!);
+  getOrderById(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('forReceiving') forReceiving: string | undefined,
+    @Req() req: RequestWithAuth,
+  ) {
+    return this.purchaseOrdersService.getOrderById(id, req.authContext!, forReceiving === 'true');
   }
 
   @Post()

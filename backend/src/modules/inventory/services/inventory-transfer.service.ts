@@ -1,6 +1,16 @@
-import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
-import { AuditService } from '../../../core/audit/audit.service';
+import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
+import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
+import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
+import {
+  assertTransferMakerChecker,
+  generateStockTransferDocNo,
+  groupTransferItemsByTransfer,
+  loadCategoryStockItemsForTwoStep,
+  resolveTransferAntiTheftContext,
+  sendTransferShortageWhatsAppAlert,
+} from '../helpers/inventory-loss-prevention.helper';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
@@ -27,6 +37,8 @@ import { moveDirectTrackedStock } from '../helpers/direct-tracked-stock-move.hel
 
 @Injectable()
 export class InventoryTransferService {
+  private readonly logger = new Logger(InventoryTransferService.name);
+
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly tx: TransactionHelper,
@@ -34,6 +46,7 @@ export class InventoryTransferService {
     private readonly scope: InventoryScopeService,
     private readonly idempotency: IdempotencyService,
     private readonly accountingPosting: AccountingPostingService,
+    @Optional() private readonly whatsappService?: WhatsAppGatewayService,
   ) {}
 
   private tenantScope(auth: AuthContext) { return requireTenantScope(auth); }
@@ -62,7 +75,7 @@ export class InventoryTransferService {
       .leftJoin('users as cu', (join) => join.onRef('cu.id', '=', 't.created_by').onRef('cu.tenant_id', '=', 't.tenant_id'))
       .leftJoin('users as ru', (join) => join.onRef('ru.id', '=', 't.received_by').onRef('ru.tenant_id', '=', 't.tenant_id'))
       .leftJoin('users as xu', (join) => join.onRef('xu.id', '=', 't.cancelled_by').onRef('xu.tenant_id', '=', 't.tenant_id'))
-      .select(['t.id', 't.doc_no', 't.from_location_id', 't.to_location_id', 't.from_branch_id', 't.to_branch_id', 't.status', 't.note', 't.recipient_name', 't.received_at', 't.cancelled_at', 't.created_at', 'fl.name as from_location_name', 'tl.name as to_location_name', 'fb.name as from_branch_name', 'tb.name as to_branch_name', 'cu.username as created_by_name', 'ru.username as received_by_name', 'xu.username as cancelled_by_name'])
+      .select(['t.id', 't.doc_no', 't.from_location_id', 't.to_location_id', 't.from_branch_id', 't.to_branch_id', 't.status', 't.note', 't.recipient_name', 't.carrier_employee_id', 't.carrier_name', 't.in_transit_alerted_at', 't.received_at', 't.cancelled_at', 't.created_at', 'fl.name as from_location_name', 'tl.name as to_location_name', 'fb.name as from_branch_name', 'tb.name as to_branch_name', 'cu.username as created_by_name', 'ru.username as received_by_name', 'xu.username as cancelled_by_name'])
       .where(this.tenantPredicate(auth, 't'));
 
     if (query.locationId) {
@@ -81,21 +94,9 @@ export class InventoryTransferService {
       .orderBy('transfer_id', 'asc')
       .execute() : [];
 
-    const byTransfer = new Map<string, Record<string, unknown>[]>();
-    for (const item of items) {
-      const key = String(item.transfer_id);
-      if (!byTransfer.has(key)) byTransfer.set(key, []);
-      const serialTracking: unknown = typeof item.serial_tracking === 'string' ? JSON.parse(item.serial_tracking) : item.serial_tracking;
-      const batchTracking: unknown = typeof item.batch_tracking === 'string' ? JSON.parse(item.batch_tracking) : item.batch_tracking;
-      byTransfer.get(key)!.push({
-        id: String(item.id), productId: String(item.product_id),
-        productName: item.product_name || '', qty: Number(item.qty || 0),
-        serialTracking: Array.isArray(serialTracking) ? serialTracking : [],
-        batchTracking: Array.isArray(batchTracking) ? batchTracking : [],
-      });
-    }
+    const byTransfer = groupTransferItemsByTransfer(items);
 
-    let rows = transfers.map((t) => ({ id: String(t.id), docNo: t.doc_no || `TR-${t.id}`, fromLocationId: String(t.from_location_id), toLocationId: t.to_location_id ? String(t.to_location_id) : '', fromBranchId: t.from_branch_id ? String(t.from_branch_id) : '', toBranchId: t.to_branch_id ? String(t.to_branch_id) : '', fromLocationName: t.from_location_name || '', toLocationName: t.to_location_name || '', fromBranchName: t.from_branch_name || '', toBranchName: t.to_branch_name || '', status: t.status || 'sent', note: t.note || '', recipientName: t.recipient_name || '', receivedAt: t.received_at || '', cancelledAt: t.cancelled_at || '', createdBy: t.created_by_name || '', receivedBy: t.received_by_name || '', cancelledBy: t.cancelled_by_name || '', date: t.created_at, items: byTransfer.get(String(t.id)) || [] }));
+    let rows = transfers.map((t) => ({ id: String(t.id), docNo: t.doc_no || `TR-${t.id}`, fromLocationId: String(t.from_location_id), toLocationId: t.to_location_id ? String(t.to_location_id) : '', fromBranchId: t.from_branch_id ? String(t.from_branch_id) : '', toBranchId: t.to_branch_id ? String(t.to_branch_id) : '', fromLocationName: t.from_location_name || '', toLocationName: t.to_location_name || '', fromBranchName: t.from_branch_name || '', toBranchName: t.to_branch_name || '', status: t.status || 'sent', note: t.note || '', recipientName: t.recipient_name || '', carrierEmployeeId: t.carrier_employee_id ? String(t.carrier_employee_id) : '', carrierName: t.carrier_name || '', inTransitAlertedAt: t.in_transit_alerted_at || '', receivedAt: t.received_at || '', cancelledAt: t.cancelled_at || '', createdBy: t.created_by_name || '', receivedBy: t.received_by_name || '', cancelledBy: t.cancelled_by_name || '', date: t.created_at, items: byTransfer.get(String(t.id)) || [] }));
     rows = await this.scope.filterByScope(rows, auth, executor);
     const search = String(query.search || query.q || '').toLowerCase();
     const filter = String(query.filter || query.view || 'all').toLowerCase();
@@ -159,7 +160,7 @@ export class InventoryTransferService {
     const safePage = Math.min(page, totalPages);
     const offset = (safePage - 1) * pageSize;
     const result = await sql<Record<string, unknown>>`
-      SELECT t.id, t.doc_no, t.from_location_id, t.to_location_id, t.from_branch_id, t.to_branch_id, t.status, t.note, t.recipient_name, t.received_at, t.cancelled_at, t.created_at,
+      SELECT t.id, t.doc_no, t.from_location_id, t.to_location_id, t.from_branch_id, t.to_branch_id, t.status, t.note, t.recipient_name, t.carrier_employee_id, t.carrier_name, t.in_transit_alerted_at, t.received_at, t.cancelled_at, t.created_at,
         fl.name AS from_location_name, tl.name AS to_location_name,
         fb.name AS from_branch_name, tb.name AS to_branch_name,
         cu.username AS created_by_name, ru.username AS received_by_name, xu.username AS cancelled_by_name
@@ -179,20 +180,8 @@ export class InventoryTransferService {
     const pageItems = pageIds.length
       ? await executor.selectFrom('stock_transfer_items').select(['id', 'transfer_id', 'product_id', 'product_name', 'qty', 'serial_tracking', 'batch_tracking']).where('transfer_id', 'in', pageIds).where(this.tenantPredicate(auth)).orderBy('transfer_id', 'asc').execute()
       : [];
-    const byTransfer = new Map<string, Record<string, unknown>[]>();
-    for (const item of pageItems) {
-      const key = String(item.transfer_id);
-      if (!byTransfer.has(key)) byTransfer.set(key, []);
-      const serialTracking: unknown = typeof item.serial_tracking === 'string' ? JSON.parse(item.serial_tracking) : item.serial_tracking;
-      const batchTracking: unknown = typeof item.batch_tracking === 'string' ? JSON.parse(item.batch_tracking) : item.batch_tracking;
-      byTransfer.get(key)!.push({
-        id: String(item.id), productId: String(item.product_id),
-        productName: item.product_name || '', qty: Number(item.qty || 0),
-        serialTracking: Array.isArray(serialTracking) ? serialTracking : [],
-        batchTracking: Array.isArray(batchTracking) ? batchTracking : [],
-      });
-    }
-    const mapped = result.rows.map((t) => ({ id: String(t.id), docNo: t.doc_no || `TR-${t.id}`, fromLocationId: String(t.from_location_id), toLocationId: t.to_location_id ? String(t.to_location_id) : '', fromBranchId: t.from_branch_id ? String(t.from_branch_id) : '', toBranchId: t.to_branch_id ? String(t.to_branch_id) : '', fromLocationName: t.from_location_name || '', toLocationName: t.to_location_name || '', fromBranchName: t.from_branch_name || '', toBranchName: t.to_branch_name || '', status: t.status || 'sent', note: t.note || '', recipientName: t.recipient_name || '', receivedAt: t.received_at || '', cancelledAt: t.cancelled_at || '', createdBy: t.created_by_name || '', receivedBy: t.received_by_name || '', cancelledBy: t.cancelled_by_name || '', date: t.created_at, items: byTransfer.get(String(t.id)) || [] }));
+    const byTransfer = groupTransferItemsByTransfer(pageItems);
+    const mapped = result.rows.map((t) => ({ id: String(t.id), docNo: t.doc_no || `TR-${t.id}`, fromLocationId: String(t.from_location_id), toLocationId: t.to_location_id ? String(t.to_location_id) : '', fromBranchId: t.from_branch_id ? String(t.from_branch_id) : '', toBranchId: t.to_branch_id ? String(t.to_branch_id) : '', fromLocationName: t.from_location_name || '', toLocationName: t.to_location_name || '', fromBranchName: t.from_branch_name || '', toBranchName: t.to_branch_name || '', status: t.status || 'sent', note: t.note || '', recipientName: t.recipient_name || '', carrierEmployeeId: t.carrier_employee_id ? String(t.carrier_employee_id) : '', carrierName: t.carrier_name || '', inTransitAlertedAt: t.in_transit_alerted_at || '', receivedAt: t.received_at || '', cancelledAt: t.cancelled_at || '', createdBy: t.created_by_name || '', receivedBy: t.received_by_name || '', cancelledBy: t.cancelled_by_name || '', date: t.created_at, items: byTransfer.get(String(t.id)) || [] }));
     // The summary is exact over the FULL filtered set, never page-scoped.
     const summary = {
       totalItems,
@@ -237,7 +226,8 @@ export class InventoryTransferService {
       // receipt values any shrinkage at this cost, never at the
       // receive-time cost_price.
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
-      const initialStatus = issueMode === 'final_issue' ? 'received' : 'sent';
+      const { effectiveIssueMode, carrierEmployeeId, carrierName } = await resolveTransferAntiTheftContext(trx, scope.tenantId, payload, Boolean(to), issueMode, auth);
+      const initialStatus = effectiveIssueMode === 'final_issue' ? 'received' : 'sent';
 
       const result = await trx.insertInto('stock_transfers').values({
         from_location_id: from.id,
@@ -247,6 +237,8 @@ export class InventoryTransferService {
         status: initialStatus,
         note: String(payload.note || '').trim(),
         recipient_name: payload.recipientName || null,
+        carrier_employee_id: carrierEmployeeId,
+        carrier_name: carrierName,
         created_by: auth.userId,
         ...(initialStatus === 'received' ? { received_by: auth.userId, received_at: sql`NOW()` } : {}),
         ...this.tenantFields(auth)
@@ -264,7 +256,7 @@ export class InventoryTransferService {
       // F19: a final issue to a stock-holding location is a MOVE, not a
       // consumption. `to` can only be one here (in_transit refused by
       // assertLocationScope, van_stock refused above); null `to` stays the sink.
-      const finalIssueDest = issueMode === 'final_issue' ? to : null;
+      const finalIssueDest = effectiveIssueMode === 'final_issue' ? to : null;
       for (const item of [...payload.items].sort((a, b) => Number(a.productId) - Number(b.productId))) {
         const product = await trx.selectFrom('products').select(['id', 'name', 'cost_price']).where('id', '=', item.productId).where('is_active', '=', true).where(this.tenantPredicate(auth)).executeTakeFirst();
         if (!product) throw new AppError(`Product #${item.productId} not found`, 'PRODUCT_NOT_FOUND', 404);
@@ -274,7 +266,7 @@ export class InventoryTransferService {
         const availableAtSource = await previewAssignedLocationStockQty(trx, stockScope);
         ensureNonNegativeStock(Number(availableAtSource || 0) - Number(item.qty || 0), 'INSUFFICIENT_LOCATION_STOCK', `الكمية غير كافية في مخزن ${from.name} للصنف ${product.name}. المتاح: ${availableAtSource || 0}`);
 
-        const isFinalIssue = issueMode === 'final_issue';
+        const isFinalIssue = effectiveIssueMode === 'final_issue';
         const isFinalIssueToLocation = finalIssueDest !== null;
         const trace = await dispatchTrackedStock(trx, scope, item, from.id, from.branchId, finalIssueDest ? finalIssueDest.id : inTransitLocationId, id);
         await trx.insertInto('stock_transfer_items').values({
@@ -410,6 +402,7 @@ export class InventoryTransferService {
       const transfer = await trx.selectFrom('stock_transfers').selectAll().where('id', '=', transferId).where(this.tenantPredicate(auth)).forUpdate().executeTakeFirst();
       if (!transfer) throw new AppError('Transfer not found', 'TRANSFER_NOT_FOUND', 404);
       if ((transfer.status || 'sent') !== 'sent') throw new AppError('Only sent transfers can be received', 'TRANSFER_STATUS_INVALID', 400);
+      await assertTransferMakerChecker(trx, scope.tenantId, transfer.created_by, auth);
       const items = await trx.selectFrom('stock_transfer_items').select(['id', 'product_id', 'qty', 'dispatched_qty', 'serial_tracking', 'batch_tracking']).where('transfer_id', '=', transferId).where(this.tenantPredicate(auth)).orderBy('product_id', 'asc').execute();
       await lockStockProducts(trx, { ...scope, productIds: items.map((item) => Number(item.product_id)) });
       // Old transfers without trace snapshots may only be quantity-only goods.
@@ -644,21 +637,32 @@ export class InventoryTransferService {
       if (Number(effectiveToLocationId) !== Number(transfer.from_location_id)) headerUpdate.to_location_id = effectiveToLocationId;
       await trx.updateTable('stock_transfers').set(headerUpdate).where('id', '=', transferId).where(this.tenantPredicate(auth)).execute();
 
-      await this.audit.logWithExecutor(trx, 'استلام تحويل مخزون', `تم استلام التحويل TR-${transferId}` + (soloOverride ? ` — اعتماد فاقد منفرد بقرار إداري — استلم ${auth.username} التحويل بفاقد ${Number(receiptPlan.reduce((sum, row) => sum + (row.shortfall > 0.0001 ? row.shortfall : 0), 0).toFixed(3))} — ${varianceReason}` : ''), auth);
+      const totalShortfallQty = Number(receiptPlan.reduce((sum, row) => sum + (row.shortfall > 0.0001 ? row.shortfall : 0), 0).toFixed(3));
+      await this.audit.logWithExecutor(
+        trx,
+        anyVariance ? 'استلام تحويل مخزون بفاقد/عجز' : 'استلام تحويل مخزون',
+        `تم استلام التحويل ${transfer.doc_no || `TR-${transferId}`}${transfer.carrier_name ? ` | الناقل: ${transfer.carrier_name}` : ''}${anyVariance ? ` | إجمالي الفاقد: ${totalShortfallQty} | السبب: ${varianceReason}` : ''}${soloOverride ? ` — اعتماد فاقد منفرد بقرار إداري (${auth.username})` : ''}`,
+        auth,
+        anyVariance ? { eventCode: AUDIT_EVENT_CODES.INVENTORY_TRANSFER_SHORTAGE } : undefined,
+      );
 
-      const responsePayload = { ok: true, stockTransfers: (await this.listStockTransfers({}, auth, trx)).stockTransfers };
+      const responsePayload = {
+        ok: true,
+        stockTransfers: (await this.listStockTransfers({}, auth, trx)).stockTransfers,
+        _shortageAlert: anyVariance ? { docNo: transfer.doc_no || `TR-${transferId}`, carrierName: transfer.carrier_name || '', totalShortfallQty, varianceReason, receiverName: auth.username } : null,
+      };
 
       const idemCtx = idempotencyStorage.getStore();
       if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {
-        await this.idempotency.commitOperation(
-          trx,
-          { tenantId: scope.tenantId, accountId: idemCtx.accountId || scope.accountId, idempotencyKey: idemCtx.idempotencyKey, operationType: idemCtx.operationType },
-          responsePayload,
-          String(transferId)
-        );
+        await this.idempotency.commitOperation(trx, { tenantId: scope.tenantId, accountId: idemCtx.accountId || scope.accountId, idempotencyKey: idemCtx.idempotencyKey, operationType: idemCtx.operationType }, responsePayload, String(transferId));
       }
       return responsePayload;
     });
+    const alertMeta = (result as any)?._shortageAlert;
+    if (result && '_shortageAlert' in (result as any)) delete (result as any)._shortageAlert;
+    if (alertMeta && this.whatsappService) {
+      void sendTransferShortageWhatsAppAlert(this.db, this.whatsappService, scope.tenantId, alertMeta).catch((err) => this.logger.warn(`Transfer shortage WhatsApp alert failed: ${err?.message}`));
+    }
     return result as Record<string, unknown>;
   }
 
@@ -862,6 +866,10 @@ export class InventoryTransferService {
   async transferCategory(payload: { categoryId: number; fromLocationId: number; toLocationId: number; notes?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
     if (payload.fromLocationId === payload.toLocationId) throw new AppError('Source and destination locations must be different', 'INVALID_TRANSFER', 400);
     const scope = this.tenantScope(auth);
+    const twoStepItems = await loadCategoryStockItemsForTwoStep(this.db, scope.tenantId, payload.categoryId, payload.fromLocationId);
+    if (twoStepItems.length) {
+      return this.createStockTransfer({ fromLocationId: payload.fromLocationId, toLocationId: payload.toLocationId, items: twoStepItems, note: payload.notes || 'نقل قسم بالكامل (بمرحلتين - درع منع السرقة)', issueMode: 'transfer_to_branch_stock' }, auth);
+    }
     const from = await this.scope.assertLocationScope(payload.fromLocationId, auth, true, 'write');
     const to = await this.scope.assertLocationScope(payload.toLocationId, auth, false, 'write');
 
@@ -952,8 +960,12 @@ export class InventoryTransferService {
     await this.audit.log('نقل قسم', `تم نقل أرصدة القسم بنجاح من ${from.name} إلى ${to.name}`, auth);
     return { ok: true };
   }
-  async internalTransferProducts(payload: { items: { productId: number; qty: number }[]; fromLocationId: number; toLocationId: number; note?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  async internalTransferProducts(payload: { items: { productId: number; qty: number }[]; fromLocationId: number; toLocationId: number; note?: string; carrierEmployeeId?: number; carrierName?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
     if (payload.fromLocationId === payload.toLocationId) throw new AppError('Source and destination locations must be different', 'INVALID_TRANSFER', 400);
+    const isUnassignedLink = payload.fromLocationId === -1;
+    if (!isUnassignedLink && (await loadAntiTheftSettings(this.db, this.tenantScope(auth).tenantId)).strictTwoStepTransfers) {
+      return this.createStockTransfer({ fromLocationId: payload.fromLocationId, toLocationId: payload.toLocationId, items: payload.items, note: payload.note || 'تحويل مخزني (بمرحلتين - درع منع السرقة)', issueMode: 'transfer_to_branch_stock', carrierEmployeeId: payload.carrierEmployeeId, carrierName: payload.carrierName }, auth);
+    }
     ensureUniqueFlowItems(payload.items || [], 'TRANSFER_DUPLICATE_PRODUCT', 'Transfer must not contain duplicate product rows');
     if (!(payload.items || []).length || payload.items.some((item) =>
       !Number.isSafeInteger(Number(item.productId)) || Number(item.productId) <= 0 ||
@@ -962,7 +974,6 @@ export class InventoryTransferService {
       throw new AppError('Internal transfer quantities must use at most three decimal places', 'INVALID_TRANSFER_QUANTITY', 400);
     }
     const scope = this.tenantScope(auth);
-    const isUnassignedLink = payload.fromLocationId === -1;
     const from = isUnassignedLink
       ? { id: null, branchId: null, name: 'رصيد غير مربوط' }
       : await this.scope.assertLocationScope(payload.fromLocationId, auth, true, 'write');
@@ -1077,6 +1088,10 @@ export class InventoryTransferService {
   async internalTransferCategory(payload: { categoryId: number; fromLocationId: number; toLocationId: number; note?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
     if (payload.fromLocationId === payload.toLocationId) throw new AppError('Source and destination locations must be different', 'INVALID_TRANSFER', 400);
     const scope = this.tenantScope(auth);
+    const twoStepItems = await loadCategoryStockItemsForTwoStep(this.db, scope.tenantId, payload.categoryId, payload.fromLocationId);
+    if (twoStepItems.length) {
+      return this.createStockTransfer({ fromLocationId: payload.fromLocationId, toLocationId: payload.toLocationId, items: twoStepItems, note: payload.note || 'نقل قسم داخلي (بمرحلتين - درع منع السرقة)', issueMode: 'transfer_to_branch_stock' }, auth);
+    }
     const from = await this.scope.assertLocationScope(payload.fromLocationId, auth, true, 'write');
     const to = await this.scope.assertLocationScope(payload.toLocationId, auth, false, 'write');
 
@@ -1182,33 +1197,6 @@ export class InventoryTransferService {
   }
 
   private async generateTransferDocNo(trx: Kysely<Database>, transferId: number, auth: AuthContext): Promise<string> {
-    const settingRow = await trx
-      .selectFrom('settings')
-      .select(['value'])
-      .where('key', '=', 'invoiceNumberingScheme')
-      .where(this.tenantPredicate(auth))
-      .executeTakeFirst();
-
-    let scheme = 'daily';
-    if (settingRow?.value) {
-      try {
-        scheme = JSON.parse(settingRow.value);
-      } catch {
-        scheme = String(settingRow.value);
-      }
-    }
-
-    if (scheme === 'sequential') {
-      return `ZTR-${transferId}`;
-    }
-
-    // Daily date-based numbering: ZTR-YYMMDD-0001
-    const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const datePrefix = `${yy}${mm}${dd}`;
-    const seq = String(transferId).padStart(4, '0');
-    return `ZTR-${datePrefix}-${seq}`;
+    return generateStockTransferDocNo(trx, transferId, this.tenantScope(auth).tenantId);
   }
 }
