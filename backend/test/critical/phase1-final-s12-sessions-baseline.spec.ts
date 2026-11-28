@@ -1,0 +1,459 @@
+import 'reflect-metadata';
+import { strict as assert } from 'node:assert';
+import { PGlite } from '@electric-sql/pglite';
+import { Kysely } from 'kysely';
+import { PGliteDialect } from 'kysely-pglite-dialect';
+import { ConfigService } from '@nestjs/config';
+import { AppError } from '../../src/common/errors/app-error';
+import { Database } from '../../src/database/database.types';
+import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
+import { InMemoryRateLimitService } from '../../src/common/security/in-memory-rate-limit.service';
+import { AuthCacheService } from '../../src/core/auth/services/auth-cache.service';
+import { AuditService } from '../../src/core/audit/audit.service';
+import { createPasswordRecord, verifyPassword } from '../../src/core/auth/utils/password-hasher';
+import { generateTotpCode, generateTotpSecret } from '../../src/core/auth/utils/totp';
+import { encryptMfaSecret } from '../../src/core/auth/utils/mfa-secret-cipher';
+import { MfaService } from '../../src/modules/sessions/mfa.service';
+import { SessionService } from '../../src/core/auth/services/session.service';
+import { PasswordResetService, buildPasswordResetUrl } from '../../src/modules/sessions/password-reset.service';
+import { PasswordResetMailService } from '../../src/modules/sessions/password-reset-mail.service';
+
+/*
+ * Phase 1 final-inspection slice 12 — baseline spec for the sessions
+ * module (one of the 10 modules with zero primary specs on 95858d5).
+ *
+ * GROUNDING (live code, read before writing):
+ * - MfaService (sessions/mfa.service.ts): Kysely + AuditService only.
+ *   getStatus reads user_mfa; confirmSetup verifies the TOTP code
+ *   against the stored secret and issues 10 recovery codes once;
+ *   disable needs the current password AND a valid TOTP (or recovery
+ *   code); regenerateRecoveryCodes invalidates the old codes.
+ *   S12 FINDING 1 (recorded, not fixed here): beginSetup is NOT
+ *   driven by this spec because it throws on ANY Postgres —
+ *   `column reference "tenant_id" is ambiguous` (42702) at parse
+ *   time: its ON CONFLICT ... DO UPDATE ... WHERE uses unqualified
+ *   tenant_id / confirmed_at, which exist in both the target table
+ *   and the EXCLUDED row. No other doUpdateSet in src/ chains a
+ *   .where() — the bug is isolated to MFA setup. The follow-up
+ *   package qualifies the columns (user_mfa.tenant_id /
+ *   user_mfa.confirmed_at). This spec seeds the pending user_mfa row
+ *   directly (via the production encryptMfaSecret) and proves
+ *   confirm / regenerate / disable / status around it.
+ * - SessionService (core/auth/services/session.service.ts):
+ *   listSessions / revokeSessionForUser / revokeOtherSessions /
+ *   logout work on the sessions table, tenant-scoped. Login itself is
+ *   covered by session-ttl-sliding.spec.ts (already linked); this spec
+ *   proves the session-management surface, not the login flow.
+ * - PasswordResetService (sessions/password-reset.service.ts):
+ *   requestReset always answers { ok: true } (no account-enumeration
+ *   leak); the mail target carries the reset URL with the token in
+ *   the #fragment; validateToken joins users + tenants and classifies
+ *   the token; confirmReset consumes the token, sets the new
+ *   password, invalidates the account's other tokens and deletes its
+ *   sessions — all in one transaction. Candidates are admin /
+ *   super_admin users whose TENANT's owner_email matches.
+ * - The slice-10 filename rule forced password-reset.spec.ts and
+ *   session-ttl-sliding.spec.ts to PLATFORM although they directly
+ *   drive sessions code; this slice re-classifies them as sessions
+ *   primary (see the guard spec) instead of duplicating them.
+ *
+ * WHAT THIS PROVES (real services on PGlite, no mocks except the
+ * audit log + mail sender, which are side-effect sinks):
+ * - MFA: status before setup, setup + confirm with a real TOTP code,
+ *   wrong-code rejection, double-confirm rejection, recovery-code
+ *   regeneration invalidating the old codes, disable needing the
+ *   password + a valid code.
+ * - Sessions: tenant-scoped list, single revoke, revoke-others,
+ *   logout deleting the row.
+ * - Password reset: request -> validate -> confirm end to end, token
+ *   single-use, second request invalidating the first token, unknown
+ *   email answering ok without sending mail.
+ *
+ * NOT RUN: login flow (session-ttl-sliding), UI, live Postgres, the
+ * mail provider (stubbed sender), MFA_REQUIRED_FOR_PLATFORM policy
+ * (env-forced; the default is off and isRequiredFor is asserted off).
+ */
+
+const TENANT = 't1';
+const ACCOUNT = 'a1';
+const OWNER_EMAIL = 'owner@example.com';
+const PASSWORD = 'AdminPass123!';
+const NEW_PASSWORD = 'NewAdminPass123!';
+
+const auth: AuthContext = {
+  userId: 1,
+  sessionId: 'spec',
+  username: 'admin',
+  role: 'admin',
+  permissions: [],
+  tenantId: TENANT,
+  accountId: ACCOUNT,
+} as unknown as AuthContext;
+
+const DDL = `
+  CREATE TABLE users (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    username TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    role TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    tenant_id TEXT NOT NULL DEFAULT '',
+    account_id TEXT NOT NULL DEFAULT '',
+    permissions_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    display_name TEXT NOT NULL DEFAULT '',
+    must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+    failed_login_count INTEGER NOT NULL DEFAULT 0,
+    locked_until TIMESTAMPTZ NULL,
+    last_login_at TIMESTAMPTZ NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE TABLE tenants (
+    id TEXT PRIMARY KEY,
+    slug TEXT,
+    business_name TEXT,
+    owner_email TEXT
+  );
+  CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    tenant_id TEXT NOT NULL DEFAULT '',
+    account_id TEXT NOT NULL DEFAULT '',
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NULL,
+    ip_address TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE user_mfa (
+    user_id BIGINT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    account_id TEXT NOT NULL DEFAULT '',
+    secret_encrypted TEXT NOT NULL,
+    confirmed_at TIMESTAMPTZ NULL,
+    last_used_step BIGINT NOT NULL DEFAULT 0,
+    recovery_codes JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE TABLE password_reset_tokens (
+    id UUID PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    account_id TEXT NOT NULL DEFAULT '',
+    user_id BIGINT NOT NULL,
+    token_hash TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ NULL,
+    invalidated_at TIMESTAMPTZ NULL,
+    requested_ip VARCHAR(64) NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+`;
+
+class FakeConfigService {
+  constructor(private readonly values: Record<string, unknown> = {}) {}
+  get<T>(key: string): T | undefined {
+    return this.values[key] as T | undefined;
+  }
+}
+
+async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
+  const pg = new PGlite();
+  const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
+  await pg.exec(DDL);
+  return { pg, db };
+}
+
+async function seedAdmin(pg: PGlite): Promise<void> {
+  const record = await createPasswordRecord(PASSWORD);
+  await pg.query(
+    `INSERT INTO users (id, username, password_hash, password_salt, role, is_active, tenant_id, account_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [1, 'admin', record.hash, record.salt, 'admin', true, TENANT, ACCOUNT],
+  );
+  await pg.query(`INSERT INTO tenants (id, slug, business_name, owner_email) VALUES ($1, $2, $3, $4)`, [
+    TENANT,
+    'shop',
+    'Shop',
+    OWNER_EMAIL,
+  ]);
+}
+
+function tokenFromUrl(url: string): string {
+  const hash = new URL(url).hash;
+  assert.ok(hash.startsWith('#token='), 'the reset url must carry the token in the fragment');
+  return decodeURIComponent(hash.slice('#token='.length));
+}
+
+async function assertAppError(promise: Promise<unknown>, code: string, status?: number): Promise<void> {
+  try {
+    await promise;
+  } catch (error) {
+    assert.ok(error instanceof AppError, `expected an AppError, got ${String(error)}`);
+    assert.equal((error as AppError).code, code, `expected code ${code}`);
+    if (status !== undefined) assert.equal((error as AppError).statusCode, status);
+    return;
+  }
+  assert.fail(`expected rejection with ${code}, but the call succeeded`);
+}
+
+async function main(): Promise<void> {
+  const prevMfaKey = process.env.MFA_ENCRYPTION_KEY;
+  const prevPublicUrl = process.env.APP_PUBLIC_URL;
+  process.env.MFA_ENCRYPTION_KEY = 'slice12-test-only-mfa-key';
+  process.env.APP_PUBLIC_URL = 'https://example.com';
+  try {
+    // ---- Part A: MFA confirm / regenerate / disable ----
+    // (beginSetup is NOT driven: S12 finding 1 — its ON CONFLICT
+    // WHERE throws 42702 on any Postgres. The pending row is seeded
+    // directly with the production encryptMfaSecret.)
+    {
+      const { pg, db } = await makeDb();
+      try {
+        await seedAdmin(pg);
+        const auditCalls: string[] = [];
+        const audit = { log: async (action: string) => void auditCalls.push(action) } as unknown as AuditService;
+        const mfa = new MfaService(db, audit);
+
+        const before = await mfa.getStatus(auth);
+        assert.equal(before.enabled, false, 'MFA starts disabled');
+        assert.equal(before.confirmedAt, null, 'no confirmation before setup');
+        assert.equal(before.recoveryCodesRemaining, 0, 'no recovery codes before setup');
+        assert.equal(before.required, false, 'MFA is not forced by default');
+
+        const secret = generateTotpSecret();
+        await pg.query(
+          `INSERT INTO user_mfa (user_id, tenant_id, account_id, secret_encrypted, confirmed_at, last_used_step, recovery_codes, updated_at)
+           VALUES (1, $1, $2, $3, NULL, 0, '[]', NOW())`,
+          [TENANT, ACCOUNT, encryptMfaSecret(secret)],
+        );
+
+        await assertAppError(mfa.confirmSetup(auth, '000000'), 'MFA_CODE_INVALID', 400);
+
+        const code = generateTotpCode(secret);
+        const confirmed = await mfa.confirmSetup(auth, code);
+        assert.equal(confirmed.recoveryCodes.length, 10, 'confirming issues exactly 10 recovery codes');
+        const after = await mfa.getStatus(auth);
+        assert.equal(after.enabled, true, 'MFA is enabled after confirm');
+        assert.ok(after.confirmedAt, 'confirmation time is recorded');
+        assert.equal(after.recoveryCodesRemaining, 10, 'all 10 recovery codes remain');
+
+        await assertAppError(mfa.confirmSetup(auth, code), 'MFA_ALREADY_ENABLED', 400);
+
+        const fresh = await mfa.regenerateRecoveryCodes(auth, generateTotpCode(secret));
+        assert.equal(fresh.recoveryCodes.length, 10, 'regeneration issues 10 fresh codes');
+        assert.ok(
+          !fresh.recoveryCodes.some((c) => confirmed.recoveryCodes.includes(c)),
+          'the regenerated codes differ from the old ones',
+        );
+        const oldCode = confirmed.recoveryCodes[0];
+        await assertAppError(mfa.disable(auth, PASSWORD, oldCode), 'MFA_CODE_INVALID', 400);
+        await assertAppError(
+          mfa.disable(auth, 'WrongPass123!', generateTotpCode(secret)),
+          'CURRENT_PASSWORD_INVALID',
+          400,
+        );
+
+        const disabled = await mfa.disable(auth, PASSWORD, generateTotpCode(secret));
+        assert.equal(disabled.ok, true, 'disable succeeds with password + valid code');
+        const gone = await mfa.getStatus(auth);
+        assert.equal(gone.enabled, false, 'MFA is disabled again');
+        assert.ok(auditCalls.includes('تفعيل المصادقة الثنائية'), 'the audit log records the activation');
+        assert.ok(auditCalls.includes('إيقاف المصادقة الثنائية'), 'the audit log records the disable');
+      } finally {
+        await db.destroy();
+      }
+      console.log('  MFA confirm/regenerate/disable passed');
+    }
+
+    // ---- Part B: session list / revoke / revoke-others / logout ----
+    {
+      const { pg, db } = await makeDb();
+      try {
+        await seedAdmin(pg);
+        const auditCalls: string[] = [];
+        const audit = { log: async (action: string) => void auditCalls.push(action) } as unknown as AuditService;
+        const sessions = new SessionService(db, new FakeConfigService() as unknown as ConfigService, audit);
+        const now = new Date();
+        const later = new Date(now.getTime() + 3600_000);
+        for (const [id, tenant] of [
+          ['s1', TENANT],
+          ['s2', TENANT],
+          ['s3', 't2'],
+        ] as const) {
+          await pg.query(
+            `INSERT INTO sessions (id, user_id, tenant_id, account_id, expires_at, ip_address, user_agent)
+             VALUES ($1, 1, $2, $3, $4, '10.0.0.1', 'spec')`,
+            [id, tenant, ACCOUNT, later],
+          );
+        }
+        const listed = await sessions.listSessions(auth);
+        assert.equal(listed.length, 2, 'the list is tenant-scoped (the t2 session stays out)');
+        assert.ok(
+          listed.every((s) => s.id === 's1' || s.id === 's2'),
+          'only this tenant sessions are listed',
+        );
+
+        assert.equal(await sessions.revokeSessionForUser('s2', auth), 1, 'revoking an existing session removes 1 row');
+        assert.equal(await sessions.revokeSessionForUser('s2', auth), 0, 'revoking again removes 0 rows');
+        assert.equal((await sessions.listSessions(auth)).length, 1, 'one session remains');
+
+        await pg.query(
+          `INSERT INTO sessions (id, user_id, tenant_id, account_id, expires_at, ip_address, user_agent)
+           VALUES ('s4', 1, $1, $2, $3, '10.0.0.1', 'spec')`,
+          [TENANT, ACCOUNT, later],
+        );
+        assert.equal(
+          await sessions.revokeOtherSessions(auth, 's1'),
+          1,
+          'revoke-others removes every session but the kept one',
+        );
+        assert.deepEqual(
+          (await sessions.listSessions(auth)).map((s) => s.id),
+          ['s1'],
+          'only the kept session remains',
+        );
+
+        await sessions.logout('s1', auth);
+        assert.equal((await sessions.listSessions(auth)).length, 0, 'logout deletes the session row');
+        assert.ok(auditCalls.includes('تسجيل الخروج'), 'the audit log records the logout');
+      } finally {
+        await db.destroy();
+      }
+      console.log('  session list/revoke/revoke-others/logout passed');
+    }
+
+    // ---- Part C: password reset request -> validate -> confirm ----
+    {
+      const { pg, db } = await makeDb();
+      try {
+        await seedAdmin(pg);
+        const auditCalls: string[] = [];
+        const audit = { log: async (action: string) => void auditCalls.push(action) } as unknown as AuditService;
+        const sent: Array<{ email: string; targets: Array<{ resetUrl: string }> }> = [];
+        const mail = {
+          sendResetLink: async (args: { email: string; targets: Array<{ resetUrl: string }> }) => void sent.push(args),
+        } as unknown as PasswordResetMailService;
+        const reset = new PasswordResetService(
+          db,
+          new FakeConfigService() as unknown as ConfigService,
+          new InMemoryRateLimitService(),
+          mail,
+          audit,
+          new AuthCacheService(),
+        );
+
+        assert.equal(
+          buildPasswordResetUrl('https://example.com', 'tok'),
+          'https://example.com/reset-password#token=tok',
+          'the reset url keeps the token in the fragment',
+        );
+
+        const first = await reset.requestReset(
+          { email: 'OWNER@EXAMPLE.COM' },
+          { ip: '10.0.0.1', origin: 'https://example.com' },
+        );
+        assert.equal(first.ok, true, 'the request answers ok');
+        assert.equal(sent.length, 1, 'one mail is sent for a known email');
+        assert.equal(sent[0].targets.length, 1, 'one target for one matching admin');
+        assert.equal(
+          sent[0].targets[0].resetUrl.startsWith('https://example.com/reset-password#token='),
+          true,
+          'the mail carries the reset url',
+        );
+        const token1 = tokenFromUrl(sent[0].targets[0].resetUrl);
+
+        const valid = await reset.validateToken({ token: token1 }, { ip: '10.0.0.9' });
+        assert.equal(valid.ok, true, 'the issued token validates');
+        assert.equal(valid.username, 'admin', 'the token belongs to the admin');
+        assert.equal(valid.businessName, 'Shop', 'the tenant business name is returned');
+
+        const second = await reset.requestReset(
+          { email: OWNER_EMAIL },
+          { ip: '10.0.0.2', origin: 'https://example.com' },
+        );
+        assert.equal(second.ok, true, 'the second request answers ok');
+        const token2 = tokenFromUrl(sent[1].targets[0].resetUrl);
+        assert.notEqual(token2, token1, 'the second request issues a fresh token');
+        await assertAppError(
+          reset.validateToken({ token: token1 }, { ip: '10.0.0.9' }),
+          'PASSWORD_RESET_TOKEN_INVALID',
+          400,
+        );
+
+        const before = await db
+          .selectFrom('users')
+          .select(['password_hash', 'password_salt'])
+          .where('id', '=', 1)
+          .executeTakeFirstOrThrow();
+        await pg.query(
+          `INSERT INTO sessions (id, user_id, tenant_id, account_id, expires_at, ip_address, user_agent)
+           VALUES ('sx', 1, $1, $2, $3, '', '')`,
+          [TENANT, ACCOUNT, new Date(Date.now() + 3600_000)],
+        );
+        const done = await reset.confirmReset({ token: token2, newPassword: NEW_PASSWORD }, { ip: '10.0.0.3' });
+        assert.equal(done.ok, true, 'confirming the fresh token succeeds');
+        assert.equal(done.username, 'admin', 'the confirmation names the admin');
+        const after = await db
+          .selectFrom('users')
+          .select(['password_hash', 'password_salt'])
+          .where('id', '=', 1)
+          .executeTakeFirstOrThrow();
+        assert.notEqual(after.password_hash, before.password_hash, 'the password hash changes');
+        assert.equal(
+          (await verifyPassword(NEW_PASSWORD, after.password_hash, after.password_salt)).valid,
+          true,
+          'the new password verifies',
+        );
+        const used = await db
+          .selectFrom('password_reset_tokens')
+          .select(['used_at'])
+          .where('token_hash', '=', token2)
+          .executeTakeFirst();
+        assert.ok(!used, 'the token lookup by raw value finds nothing (only the hash is stored)');
+        const rows = await db.selectFrom('password_reset_tokens').select(['used_at', 'invalidated_at']).execute();
+        assert.ok(
+          rows.every((r) => r.used_at !== null || r.invalidated_at !== null),
+          'every token is used or invalidated after confirm',
+        );
+        assert.equal(await sessionsCount(db), 0, 'confirming the reset deletes the account sessions');
+        await assertAppError(
+          reset.validateToken({ token: token2 }, { ip: '10.0.0.9' }),
+          'PASSWORD_RESET_TOKEN_INVALID',
+          400,
+        );
+        await assertAppError(
+          reset.confirmReset({ token: token2, newPassword: 'AnotherPass123!' }, { ip: '10.0.0.4' }),
+          'PASSWORD_RESET_TOKEN_INVALID',
+          400,
+        );
+
+        const unknown = await reset.requestReset(
+          { email: 'nobody@example.com' },
+          { ip: '10.0.0.5', origin: 'https://example.com' },
+        );
+        assert.equal(unknown.ok, true, 'an unknown email still answers ok');
+        assert.equal(sent.length, 2, 'no mail is sent for an unknown email');
+      } finally {
+        await db.destroy();
+      }
+      console.log('  password reset request/validate/confirm passed');
+    }
+  } finally {
+    if (prevMfaKey === undefined) delete process.env.MFA_ENCRYPTION_KEY;
+    else process.env.MFA_ENCRYPTION_KEY = prevMfaKey;
+    if (prevPublicUrl === undefined) delete process.env.APP_PUBLIC_URL;
+    else process.env.APP_PUBLIC_URL = prevPublicUrl;
+  }
+  console.log('phase1 final slice 12 sessions baseline passed');
+}
+
+async function sessionsCount(db: Kysely<Database>): Promise<number> {
+  const rows = await db.selectFrom('sessions').select('id').execute();
+  return rows.length;
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

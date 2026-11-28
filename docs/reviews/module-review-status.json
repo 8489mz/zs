@@ -89,11 +89,17 @@
     {
       "module": "addons",
       "owner": "PRICING_CAPABILITIES.md",
-      "state": "unverified_current_head",
-      "last_verified_commit": null,
-      "verified_at": null,
-      "verified_scope": [],
-      "test_evidence": [],
+      "state": "verified_scoped",
+      "last_verified_commit": "95858d5e74669c2265255c78ab34ef0418f5ca38",
+      "verified_at": "2026-11-28",
+      "verified_scope": [
+        "Backend critical specs (PGlite, run-critical.mjs, no operation mode pinned) on commit 95858d5, run 2026-11-28",
+        "test/critical/phase1-final-s12-addons-baseline.spec.ts"
+      ],
+      "test_evidence": [
+        "Targeted critical-spec run (run-critical.mjs --list --workers 1) on 95858d5, 2026-11-28: all 1 primary-owner specs passed; per-spec logs backend/test-runner-logs/s12-batch1/ (gitignored), run record phase1-final-s12-batch1.out in the audit workspace",
+        "Not run: PostgreSQL integration, UI, UAT, legal/statutory; full routes and environment-specific integration not executed"
+      ],
       "blockers": [],
       "blocker_sources": []
     },
@@ -115,11 +121,18 @@
     {
       "module": "approvals",
       "owner": "APPROVALS_CAPABILITIES.md",
-      "state": "unverified_current_head",
-      "last_verified_commit": null,
-      "verified_at": null,
-      "verified_scope": [],
-      "test_evidence": [],
+      "state": "verified_scoped",
+      "last_verified_commit": "95858d5e74669c2265255c78ab34ef0418f5ca38",
+      "verified_at": "2026-11-28",
+      "verified_scope": [
+        "Backend critical specs (PGlite, run-critical.mjs, no operation mode pinned) on commit 95858d5, run 2026-11-28",
+        "test/critical/phase1-final-s12-approvals-baseline.spec.ts",
+        "test/critical/solo-admin-po-self-approval-override.spec.ts"
+      ],
+      "test_evidence": [
+        "Targeted critical-spec run (run-critical.mjs --list --workers 1) on 95858d5, 2026-11-28: all 2 primary-owner specs passed; per-spec logs backend/test-runner-logs/s12-batch1/ (gitignored), run record phase1-final-s12-batch1.out in the audit workspace",
+        "Not run: PostgreSQL integration, UI, UAT, legal/statutory; full routes and environment-specific integration not executed"
+      ],
       "blockers": [],
       "blocker_sources": []
     },
@@ -199,11 +212,18 @@
     {
       "module": "crm",
       "owner": "CRM_CAPABILITIES.md",
-      "state": "unverified_current_head",
-      "last_verified_commit": null,
-      "verified_at": null,
-      "verified_scope": [],
-      "test_evidence": [],
+      "state": "verified_scoped",
+      "last_verified_commit": "95858d5e74669c2265255c78ab34ef0418f5ca38",
+      "verified_at": "2026-11-28",
+      "verified_scope": [
+        "Backend critical specs (PGlite, run-critical.mjs, no operation mode pinned) on commit 95858d5, run 2026-11-28",
+        "test/critical/crm-close-date-required.spec.ts",
+        "test/critical/phase1-final-s12-crm-baseline.spec.ts"
+      ],
+      "test_evidence": [
+        "Targeted critical-spec run (run-critical.mjs --list --workers 1) on 95858d5, 2026-11-28: all 2 primary-owner specs passed; per-spec logs backend/test-runner-logs/s12-batch1/ (gitignored), run record phase1-final-s12-batch1.out in the audit workspace",
+        "Not run: PostgreSQL integration, UI, UAT, legal/statutory; full routes and environment-specific integration not executed"
+      ],
       "blockers": [],
       "blocker_sources": []
     },
@@ -749,11 +769,21 @@
     {
       "module": "sessions",
       "owner": "PLATFORM_CAPABILITIES.md",
-      "state": "unverified_current_head",
-      "last_verified_commit": null,
-      "verified_at": null,
-      "verified_scope": [],
-      "test_evidence": [],
+      "state": "verified_scoped",
+      "last_verified_commit": "95858d5e74669c2265255c78ab34ef0418f5ca38",
+      "verified_at": "2026-11-28",
+      "verified_scope": [
+        "Backend critical specs (PGlite, run-critical.mjs, no operation mode pinned) on commit 95858d5, run 2026-11-28",
+        "test/critical/password-reset.spec.ts",
+        "test/critical/phase1-final-s12-sessions-baseline.spec.ts",
+        "test/critical/session-ttl-sliding.spec.ts"
+      ],
+      "test_evidence": [
+        "Targeted critical-spec run (run-critical.mjs --list --workers 1) on 95858d5, 2026-11-28: all 3 primary-owner specs passed; per-spec logs backend/test-runner-logs/s12-batch1/ (gitignored), run record phase1-final-s12-batch1.out in the audit workspace",
+        "Not run: PostgreSQL integration, UI, UAT, legal/statutory; full routes and environment-specific integration not executed",
+        "P0-A blocker retained (see blockers); scope excludes the blocked areas (full routes, environment-specific integration)",
+        "S12 FINDING 1 (recorded, not fixed here): MfaService.beginSetup throws on any Postgres (column reference \"tenant_id\" is ambiguous, 42702) — MFA setup is broken in production; the baseline spec seeds the pending user_mfa row directly and proves confirm/regenerate/disable only. The fix is its own package"
+      ],
       "blockers": [
         "P0-A code-only follow-up: MFA setup/confirm and password version session transaction reviewed; regressions, full routes and environment-specific integration not executed on this HEAD"
       ],
@@ -874,11 +904,18 @@
     {
       "module": "tradein",
       "owner": "TRADEIN_CAPABILITIES.md",
-      "state": "unverified_current_head",
-      "last_verified_commit": null,
-      "verified_at": null,
-      "verified_scope": [],
-      "test_evidence": [],
+      "state": "verified_scoped",
+      "last_verified_commit": "95858d5e74669c2265255c78ab34ef0418f5ca38",
+      "verified_at": "2026-11-28",
+      "verified_scope": [
+        "Backend critical specs (PGlite, run-critical.mjs, no operation mode pinned) on commit 95858d5, run 2026-11-28",
+        "test/critical/phase1-final-s12-tradein-baseline.spec.ts",
+        "test/critical/tradein-exchange.spec.ts"
+      ],
+      "test_evidence": [
+        "Targeted critical-spec run (run-critical.mjs --list --workers 1) on 95858d5, 2026-11-28: all 2 primary-owner specs passed; per-spec logs backend/test-runner-logs/s12-batch1/ (gitignored), run record phase1-final-s12-batch1.out in the audit workspace",
+        "Not run: PostgreSQL integration, UI, UAT, legal/statutory; full routes and environment-specific integration not executed"
+      ],
       "blockers": [],
       "blocker_sources": []
     },
