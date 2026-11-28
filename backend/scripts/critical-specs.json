@@ -408,6 +408,7 @@
     "test/critical/phase1-eval-repair-type-imports.spec.ts",
     "test/critical/phase1-final-s1-fx-maritime-close-asof.spec.ts",
     "test/critical/phase1-final-s2-maritime-settlement-idempotency.spec.ts",
-    "test/critical/phase1-final-s3-money-precision-hr-import.spec.ts"
+    "test/critical/phase1-final-s3-money-precision-hr-import.spec.ts",
+    "test/critical/phase1-final-s4-legacy-doc-numbers.spec.ts"
   ]
 }

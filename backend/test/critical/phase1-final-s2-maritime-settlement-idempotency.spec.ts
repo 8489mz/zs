@@ -127,7 +127,7 @@ const GUARD_SPEC = path.join(BACKEND, 'test', 'critical', 'architecture-guard.sp
 const ENGINE_MAP = path.join(REPO_ROOT, 'docs', 'ENGINE_MAP.md');
 const CONTROLLER = path.join(BACKEND, 'src', 'modules', 'maritime-freight', 'maritime-freight.controller.ts');
 const MIGRATIONS_DIR = path.join(BACKEND, 'src', 'database', 'migrations');
-const MIGRATION_FILE = '2040000000343_maritime_agent_settlement_reference_unique.ts';
+const MIGRATION_FILE = '2040000000344_legacy_document_number_unique_indexes.ts';
 const B1_SPEC = path.join(BACKEND, 'test', 'critical', 'phase1-b1-reports-sales.spec.ts');
 const B2_SPEC = path.join(BACKEND, 'test', 'critical', 'phase1-b2-sales-settings.spec.ts');
 const B3_SPEC = path.join(BACKEND, 'test', 'critical', 'phase1-b3-sales-storefront.spec.ts');
@@ -609,11 +609,11 @@ async function main(): Promise<void> {
       .readdirSync(MIGRATIONS_DIR)
       .filter((n) => n.endsWith('.ts') && !n.endsWith('.d.ts'))
       .sort();
-    assert.ok(files.includes(MIGRATION_FILE), 'the 0343 migration file must exist in the migrations directory');
+    assert.ok(files.includes(MIGRATION_FILE), 'the 0344 migration file must exist in the migrations directory');
     assert.equal(
       files[files.length - 1],
       MIGRATION_FILE,
-      'the 0343 migration must be the highest-numbered migration on disk',
+      'the 0344 migration must be the highest-numbered migration on disk',
     );
     const engineMap = fs.readFileSync(ENGINE_MAP, 'utf8');
     assert.ok(engineMap.includes(NEW_INV), 'the engine-map idempotency row must cite the new INV');
@@ -625,7 +625,7 @@ async function main(): Promise<void> {
       engineMap.includes('maritime-freight createAgentSettlement (1 method'),
       'the engine-map idempotency row must list the new interceptor coverage',
     );
-    console.log('  ✓ controller annotation x1 on createAgentSettlement, migration 0343 highest, engine-map row');
+    console.log('  ✓ controller annotation x1 on createAgentSettlement, migration 0344 highest, engine-map row');
   }
 
   // §6: The INV entry exists exactly once in both places (never
@@ -635,7 +635,7 @@ async function main(): Promise<void> {
     const invCount = (invariants.match(new RegExp(NEW_INV, 'g')) || []).length;
     assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the new INV exactly once');
     const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-    const guardCount = (guard.match(/INV-MONEY-PRECISION-HR-IMPORT-3DP/g) || []).length;
+    const guardCount = (guard.match(/INV-LEGACY-DOC-NUMBER-UNIQUE-BACKSTOP/g) || []).length;
     assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the new INV exactly once');
   }
 
@@ -651,11 +651,11 @@ async function main(): Promise<void> {
       .split('&&')
       .map((part) => part.trim().replace(/^ts-node\s+/, ''))
       .filter((part) => part.endsWith('.spec.ts'));
-    assert.equal(specs.length, 409);
-    assert.equal(chain.length, 409);
+    assert.equal(specs.length, 410);
+    assert.equal(chain.length, 410);
     assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 408 specs in order');
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s3-money-precision-hr-import.spec.ts');
-    assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s3-money-precision-hr-import.spec.ts');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s4-legacy-doc-numbers.spec.ts');
+    assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s4-legacy-doc-numbers.spec.ts');
     for (const [label, specPath] of [
       ['B1', B1_SPEC],
       ['B2', B2_SPEC],
@@ -697,11 +697,11 @@ async function main(): Promise<void> {
     ] as const) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes('assert.equal(specs.length, 409);') && src.includes('assert.equal(chain.length, 409);'),
+        src.includes('assert.equal(specs.length, 410);') && src.includes('assert.equal(chain.length, 410);'),
         `${label} spec wiring must re-pin to 408`,
       );
       assert.ok(
-        src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s3-money-precision-hr-import.spec.ts'"),
+        src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s4-legacy-doc-numbers.spec.ts'"),
         `${label} spec last-entry must re-pin to the new spec`,
       );
     }
@@ -781,7 +781,7 @@ async function main(): Promise<void> {
     ] as const) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes('guard.match(/INV-MONEY-PRECISION-HR-IMPORT-3DP/g)'),
+        src.includes('guard.match(/INV-LEGACY-DOC-NUMBER-UNIQUE-BACKSTOP/g)'),
         `${label} spec guard assertion must re-pin to the new INV`,
       );
     }
@@ -841,11 +841,11 @@ async function main(): Promise<void> {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
         src.includes(`const HIGHEST_MIGRATION_FILE = '${MIGRATION_FILE}';`),
-        `${label} spec highest-migration pin must re-point to 0343`,
+        `${label} spec highest-migration pin must re-point to 0344`,
       );
       assert.ok(
-        src.includes('the 0343 migration must be the highest-numbered migration on disk'),
-        `${label} spec highest-migration message must re-point to 0343`,
+        src.includes('the 0344 migration must be the highest-numbered migration on disk'),
+        `${label} spec highest-migration message must re-point to 0344`,
       );
     }
   }

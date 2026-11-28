@@ -72,7 +72,7 @@ const MIGRATION_FILE = '2040000000338_van_sales_trips_loaded_amount_3dp.ts';
 // Highest migration on disk at the time of this edit (0342 is the HR
 // biometric raw punches staging migration; the driven migration above
 // stays 0338 — only the highest-on-disk pin moves).
-const HIGHEST_MIGRATION_FILE = '2040000000343_maritime_agent_settlement_reference_unique.ts';
+const HIGHEST_MIGRATION_FILE = '2040000000344_legacy_document_number_unique_indexes.ts';
 
 const ACCEPT_SCHEMA = `
   CREATE TABLE settings (tenant_id text, key text, value text);
@@ -290,7 +290,7 @@ async function main(): Promise<void> {
     assert.equal(
       files[files.length - 1],
       HIGHEST_MIGRATION_FILE,
-      'the 0343 migration must be the highest-numbered migration on disk',
+      'the 0344 migration must be the highest-numbered migration on disk',
     );
     const touching: string[] = [];
     for (const file of files) {
