@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Kysely, sql } from '../../../database/kysely';
 import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
-import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
+import { WhatsAppAlertPort } from '../../../common/utils/whatsapp-alert.port';
 import {
   assertWriteOffManagerPassword,
   sendDamageWhatsAppAlert,
@@ -64,7 +64,7 @@ export class InventoryCountService {
     private readonly scope: InventoryScopeService,
     private readonly idempotency: IdempotencyService,
     private readonly accountingPosting: AccountingPostingService,
-    @Optional() private readonly whatsappService?: WhatsAppGatewayService,
+    @Optional() private readonly whatsappService?: WhatsAppAlertPort,
   ) {}
 
   private isManagerRole(auth: AuthContext): boolean {

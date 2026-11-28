@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
+import { WhatsAppAlertPort } from '../../common/utils/whatsapp-alert.port';
 import { SettingsController } from './settings.controller';
 import { SettingsService } from './settings.service';
 import { SettingsAdminController } from './controllers/settings-admin.controller';
@@ -28,6 +29,7 @@ import { DiagnosticsSchedulerService } from './services/diagnostics-scheduler.se
 import { AiCopilotModule } from '../ai-copilot/ai-copilot.module';
 import { AccountingModule } from '../accounting/accounting.module';
 
+@Global()
 @Module({
   imports: [AiCopilotModule, AccountingModule],
   controllers: [
@@ -56,11 +58,13 @@ import { AccountingModule } from '../accounting/accounting.module';
     SettingsDemoDataService,
     OfflineReleasesService,
     WhatsAppGatewayService,
+    { provide: WhatsAppAlertPort, useExisting: WhatsAppGatewayService },
     DailyDigestService,
   ],
   exports: [
     SettingsService,
     WhatsAppGatewayService,
+    WhatsAppAlertPort,
     DailyDigestService,
     CloudBackupService,
     SettingsSupportService,

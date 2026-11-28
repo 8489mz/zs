@@ -95,11 +95,11 @@ async function main(): Promise<void> {
     CREATE TABLE branches (id int PRIMARY KEY, tenant_id text, name text);
     CREATE TABLE stock_locations (id int PRIMARY KEY, tenant_id text, name text, branch_id int);
     CREATE TABLE products (id int PRIMARY KEY, tenant_id text, name text, name_en text, barcode text, style_code text);
-    CREATE TABLE stock_count_sessions (id int PRIMARY KEY, tenant_id text, account_id text, doc_no text, branch_id int, location_id int, status text, note text, posted_at timestamptz, created_at timestamptz, counted_by int, approved_by int);
+    CREATE TABLE stock_count_sessions (id int PRIMARY KEY, tenant_id text, account_id text, doc_no text, branch_id int, location_id int, status text, is_blind boolean DEFAULT false, count_scope text DEFAULT 'full', note text, posted_at timestamptz, created_at timestamptz, counted_by int, approved_by int);
     CREATE TABLE stock_count_items (id int PRIMARY KEY, tenant_id text, session_id int, product_id int, product_name text, expected_qty numeric, counted_qty numeric, variance_qty numeric, counted_serials text, batch_counts text, reason text, note text);
-    CREATE TABLE stock_transfers (id int PRIMARY KEY, tenant_id text, account_id text, doc_no text, from_location_id int, to_location_id int, from_branch_id int, to_branch_id int, status text, note text, recipient_name text, received_at timestamptz, cancelled_at timestamptz, created_at timestamptz, created_by int, received_by int, cancelled_by int);
+    CREATE TABLE stock_transfers (id int PRIMARY KEY, tenant_id text, account_id text, doc_no text, from_location_id int, to_location_id int, from_branch_id int, to_branch_id int, status text, note text, recipient_name text, carrier_employee_id int, carrier_name text, in_transit_alerted_at timestamptz, received_at timestamptz, cancelled_at timestamptz, created_at timestamptz, created_by int, received_by int, cancelled_by int);
     CREATE TABLE stock_transfer_items (id int PRIMARY KEY, tenant_id text, transfer_id int, product_id int, product_name text, qty numeric, serial_tracking boolean, batch_tracking boolean);
-    CREATE TABLE damaged_stock_records (id int PRIMARY KEY, tenant_id text, product_id int, branch_id int, location_id int, qty numeric, reason text, note text, created_at timestamptz, created_by int);
+    CREATE TABLE damaged_stock_records (id int PRIMARY KEY, tenant_id text, product_id int, branch_id int, location_id int, qty numeric, unit_cost numeric DEFAULT 0, total_cost numeric DEFAULT 0, reason text, note text, evidence_image_url text, created_at timestamptz, created_by int, approved_by int);
   `);
 
   const now = '2026-11-24T10:00:00Z';

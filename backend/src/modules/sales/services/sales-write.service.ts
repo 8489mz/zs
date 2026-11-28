@@ -614,34 +614,25 @@ export class SalesWriteService {
     return { ok: true, authorized: true, mode: result.mode, authorizedByName: result.authorizedByName };
   }
 
+  private buildPosAuditDeps() {
+    return {
+      db: this.db,
+      tx: this.tx,
+      audit: this.audit,
+      authz: this.authz,
+      fraudRadarService: this.fraudRadarService,
+      logger: this.logger,
+      resolveMoneyDigits: async (tenantId: string) => currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId)),
+      roundAmount: (amount: number, digits: number) => roundMoney(amount, digits as 2 | 3),
+    };
+  }
+
   async logPosAuditEvent(payload: PosAuditEventDto, auth: AuthContext): Promise<Record<string, unknown>> {
-    return executeLogPosAuditEvent(
-      {
-        db: this.db,
-        tx: this.tx,
-        audit: this.audit,
-        authz: this.authz,
-        fraudRadarService: this.fraudRadarService,
-        logger: this.logger,
-      },
-      payload,
-      auth,
-    );
+    return executeLogPosAuditEvent(this.buildPosAuditDeps(), payload, auth);
   }
 
   async recordReceiptReprint(saleId: number, auth: AuthContext): Promise<Record<string, unknown>> {
-    return executeRecordReceiptReprint(
-      {
-        db: this.db,
-        tx: this.tx,
-        audit: this.audit,
-        authz: this.authz,
-        fraudRadarService: this.fraudRadarService,
-        logger: this.logger,
-      },
-      saleId,
-      auth,
-    );
+    return executeRecordReceiptReprint(this.buildPosAuditDeps(), saleId, auth);
   }
 
   /**

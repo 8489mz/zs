@@ -10,6 +10,7 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
+import { roundMoneyToTwoDecimals } from '../../../common/utils/financial-integrity';
 import {
   evaluateCashierPeerBenchmarks,
   extractSnapshotFromDetails,
@@ -544,7 +545,7 @@ export class CashierFraudRadarService {
       if (match && match[1]) {
         amount = Number(match[1]);
       } else if (snapshotItems.length > 0) {
-        amount = Number(snapshotItems.reduce((sum, it) => sum + Number(it.lineTotal || 0), 0).toFixed(2));
+        amount = roundMoneyToTwoDecimals(snapshotItems.reduce((sum, it) => sum + Number(it.lineTotal || 0), 0));
       }
       const createdIso = row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString();
 

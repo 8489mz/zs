@@ -4,7 +4,7 @@ import type { AuthContext } from '../../../core/auth/interfaces/auth-context.int
 import { AppError } from '../../../common/errors/app-error';
 import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
 import { authorizeManagerSecret, isSoloAdminOverride } from '../../../common/utils/manager-approval';
-import type { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
+import type { WhatsAppAlertPort } from '../../../common/utils/whatsapp-alert.port';
 
 type DbOrTx = Kysely<Database> | Transaction<Database>;
 
@@ -124,7 +124,7 @@ export async function loadCategoryStockItemsForTwoStep(
 
 export async function sendTransferShortageWhatsAppAlert(
   db: Kysely<Database>,
-  whatsappService: WhatsAppGatewayService | undefined,
+  whatsappService: WhatsAppAlertPort | undefined,
   tenantId: string,
   meta: { docNo: string; carrierName: string; totalShortfallQty: number; varianceReason: string; receiverName: string },
 ): Promise<void> {
@@ -150,7 +150,7 @@ export async function sendTransferShortageWhatsAppAlert(
 
 export async function sendDamageWhatsAppAlert(
   db: Kysely<Database>,
-  whatsappService: WhatsAppGatewayService | undefined,
+  whatsappService: WhatsAppAlertPort | undefined,
   tenantId: string,
   meta: {
     productName: string;

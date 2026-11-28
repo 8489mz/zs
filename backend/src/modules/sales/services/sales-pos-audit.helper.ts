@@ -8,8 +8,6 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
 import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
 import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
-import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import type { PosAuditEventDto } from '../dto/pos-audit-event.dto';
 import {
   buildSnapshotAuditText,
@@ -26,6 +24,8 @@ export interface PosAuditDeps {
   authz: SalesAuthorizationService;
   fraudRadarService?: CashierFraudRadarService;
   logger: Logger;
+  resolveMoneyDigits: (tenantId: string) => Promise<number>;
+  roundAmount: (amount: number, digits: number) => number;
 }
 
 export async function executeLogPosAuditEvent(
@@ -36,7 +36,7 @@ export async function executeLogPosAuditEvent(
   const scope = requireTenantScope(auth);
   const reason = String(payload.note || '').trim();
   const snapshotItems = normalizeSnapshotItems(payload.items);
-  const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(deps.db, scope.tenantId));
+  const moneyDigits = await deps.resolveMoneyDigits(scope.tenantId);
   const antiTheft = await loadAntiTheftSettings(deps.db, scope.tenantId);
 
   const itemsTotalSum = snapshotItems.reduce((sum, it) => sum + Number(it.lineTotal || 0), 0);
@@ -54,7 +54,7 @@ export async function executeLogPosAuditEvent(
                 )),
         )
       : Number(payload.total ?? itemsTotalSum ?? 0);
-  const eventAmount = roundMoney(
+  const eventAmount = deps.roundAmount(
     Math.max(0, Number.isFinite(computedEventAmount) ? computedEventAmount : 0),
     moneyDigits,
   );

@@ -1,7 +1,6 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AuditModule } from '../../core/audit/audit.module';
 import { AccountingModule } from '../accounting/accounting.module';
-import { SettingsModule } from '../settings/settings.module';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
 import { InventoryAdjustmentService } from './services/inventory-adjustment.service';
@@ -23,7 +22,7 @@ import { ReorderingRulesService } from './services/reordering-rules.service';
 import { ReorderingSchedulerService } from './services/reordering-scheduler.service';
 
 @Module({
-  imports: [AuditModule, AccountingModule, forwardRef(() => SettingsModule)],
+  imports: [AuditModule, AccountingModule],
   controllers: [
     InventoryController,
     WarehouseBinsController,

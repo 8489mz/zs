@@ -2,7 +2,7 @@ import { ForbiddenException, Inject, Injectable, Logger, Optional } from '@nestj
 import { Kysely, sql } from '../../../database/kysely';
 import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
-import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
+import { WhatsAppAlertPort } from '../../../common/utils/whatsapp-alert.port';
 import {
   assertTransferMakerChecker,
   generateStockTransferDocNo,
@@ -46,7 +46,7 @@ export class InventoryTransferService {
     private readonly scope: InventoryScopeService,
     private readonly idempotency: IdempotencyService,
     private readonly accountingPosting: AccountingPostingService,
-    @Optional() private readonly whatsappService?: WhatsAppGatewayService,
+    @Optional() private readonly whatsappService?: WhatsAppAlertPort,
   ) {}
 
   private tenantScope(auth: AuthContext) { return requireTenantScope(auth); }
@@ -237,8 +237,8 @@ export class InventoryTransferService {
         status: initialStatus,
         note: String(payload.note || '').trim(),
         recipient_name: payload.recipientName || null,
-        carrier_employee_id: carrierEmployeeId,
-        carrier_name: carrierName,
+        ...(carrierEmployeeId != null ? { carrier_employee_id: carrierEmployeeId } : {}),
+        ...(carrierName ? { carrier_name: carrierName } : {}),
         created_by: auth.userId,
         ...(initialStatus === 'received' ? { received_by: auth.userId, received_at: sql`NOW()` } : {}),
         ...this.tenantFields(auth)
@@ -640,8 +640,13 @@ export class InventoryTransferService {
       const totalShortfallQty = Number(receiptPlan.reduce((sum, row) => sum + (row.shortfall > 0.0001 ? row.shortfall : 0), 0).toFixed(3));
       await this.audit.logWithExecutor(
         trx,
-        anyVariance ? 'استلام تحويل مخزون بفاقد/عجز' : 'استلام تحويل مخزون',
-        `تم استلام التحويل ${transfer.doc_no || `TR-${transferId}`}${transfer.carrier_name ? ` | الناقل: ${transfer.carrier_name}` : ''}${anyVariance ? ` | إجمالي الفاقد: ${totalShortfallQty} | السبب: ${varianceReason}` : ''}${soloOverride ? ` — اعتماد فاقد منفرد بقرار إداري (${auth.username})` : ''}`,
+        'استلام تحويل مخزون',
+        `تم استلام التحويل ${transfer.doc_no || `TR-${transferId}`}${transfer.carrier_name ? ` | الناقل: ${transfer.carrier_name}` : ''}` +
+          (soloOverride
+            ? ` — اعتماد فاقد منفرد بقرار إداري — استلم ${auth.username} التحويل بفاقد ${totalShortfallQty} — ${varianceReason}`
+            : anyVariance
+              ? ` | بفاقد ${totalShortfallQty} | السبب: ${varianceReason}`
+              : ''),
         auth,
         anyVariance ? { eventCode: AUDIT_EVENT_CODES.INVENTORY_TRANSFER_SHORTAGE } : undefined,
       );

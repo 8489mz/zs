@@ -238,7 +238,15 @@ export class AllocateTendersAndDeliveryService {
       if (parsedRepId && !Number.isNaN(parsedRepId) && parsedRepId > 0) {
         const rep = await trx
           .selectFrom('delivery_representatives')
-          .select(['id', 'name', 'rep_type', 'is_active', 'max_cash_custody_limit'])
+          .select([
+            'id',
+            'name',
+            'rep_type',
+            'is_active',
+            sql<string | null>`to_jsonb(delivery_representatives)->>'max_cash_custody_limit'`.as(
+              'max_cash_custody_limit',
+            ),
+          ])
           .where('id', '=', parsedRepId)
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .executeTakeFirst();

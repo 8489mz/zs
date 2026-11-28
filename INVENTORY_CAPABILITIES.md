@@ -15,7 +15,7 @@
 <a id="cap-295"></a>
 ### 295. عزل المخازن بمرحلتين، عهدة الناقل، مراقبة البضاعة بالطريق، الجرد الأعمى، والأصناف الساخنة (Warehouse Loss Prevention, In-Transit Custody, Blind Count & Hot SKUs - 28 November 2026)
 * **حالة القدرة:** منفذة ومثبتة باختبارات المحرك النقي `shrinkage-reconciliation-engine.spec.ts` (2026-11-28؛ بانتظار إغلاق فحص التايب تشيك والحراس).
-* **الهجرة والأعمدة المضافة:** `backend/src/database/migrations/2040000000343_loss_prevention_anti_theft_shield.ts` (`stock_transfers.carrier_employee_id`, `carrier_name`, `in_transit_alerted_at`; `damaged_stock_records.approved_by`, `evidence_image_url`; `stock_count_sessions.is_blind`, `count_scope`; `products.is_high_risk_shrinkage`).
+* **الهجرة والأعمدة المضافة:** `backend/src/database/migrations/2040000000346_loss_prevention_anti_theft_shield.ts` (`stock_transfers.carrier_employee_id`, `carrier_name`, `in_transit_alerted_at`; `damaged_stock_records.approved_by`, `evidence_image_url`; `stock_count_sessions.is_blind`, `count_scope`; `products.is_high_risk_shrinkage`).
 * **السلوك والضوابط:**
   1. **التحويل الإلزامي بمرحلتين وعهدة الناقل:** عند تفعيل `antiTheftStrictTwoStepTransfers` تُوجَّه مسارات النقل السريع (`internalTransferProducts`, `transferCategory`, `internalTransferCategory`, `executeReplenishment`) عبر `createStockTransfer` بحالة `sent` وحساب «بضاعة بالطريق» بعهدة الناقل (`carrier_name` مع توقيع ثلاثي في `ReplenishmentPickListPrintModal.tsx`) مع إنذار واتساب فوري عند أي فاقد استلام.
   2. **مراقب تأخر البضاعة بالطريق (`InTransitAgingMonitorService`):** فحص دوري كل 30 دقيقة (معطّل في بيئة `NODE_ENV=test`) يرصد التحويلات المعلقة لأكثر من `inTransitAlertHours` ويبعث إنذار واتساب للمالك ويسجل `INVENTORY_IN_TRANSIT_OVERDUE` مع وسم `in_transit_alerted_at`.

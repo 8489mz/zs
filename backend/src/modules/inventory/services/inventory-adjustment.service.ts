@@ -3,11 +3,11 @@ import { Kysely, sql } from '../../../database/kysely';
 import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
 import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
-import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
+import { WhatsAppAlertPort } from '../../../common/utils/whatsapp-alert.port';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
-import { ensureNonNegativeStock } from '../../../common/utils/financial-integrity';
+import { ensureNonNegativeStock, roundMoneyToTwoDecimals } from '../../../common/utils/financial-integrity';
 import {
   applyStockDelta,
   getLocationAvailability,
@@ -41,7 +41,7 @@ export class InventoryAdjustmentService {
     private readonly scopeService: InventoryScopeService,
     private readonly idempotency: IdempotencyService,
     private readonly accountingPosting: AccountingPostingService,
-    @Optional() private readonly whatsappService?: WhatsAppGatewayService,
+    @Optional() private readonly whatsappService?: WhatsAppAlertPort,
   ) {}
 
   async createInventoryAdjustment(
@@ -269,7 +269,7 @@ export class InventoryAdjustmentService {
 
       if (signedDelta < -0.0001) {
         const antiTheft = await loadAntiTheftSettings(trx, scope.tenantId);
-        const lossCost = Number((movementQty * unitCost).toFixed(2));
+        const lossCost = roundMoneyToTwoDecimals(movementQty * unitCost);
         const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
         if (antiTheft.requireManagerForWriteOff && !isAdmin) {
           if (!String(payload.managerPin || '').trim()) {

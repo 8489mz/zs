@@ -149,11 +149,11 @@ export function buildReceiptDocument(options: {
       ? `<div class="receipt-copy-banner" style="text-align:center; font-weight:800; font-size:11px; padding:3px 6px; border:1px dashed #000; margin-bottom:5px; background:#fff; color:#000;">*** نسخة المحل والدرج ***</div>`
       : '';
     const reprintNum = Number(options.reprintCount || 0);
-    const reprintLabel = reprintNum > 0
-      ? `*** نسخة مكررة #${reprintNum} - COPY #${reprintNum} ***`
-      : '*** نسخة مكررة - COPY ***';
+    const reprintSubline = reprintNum > 0
+      ? `<div style="font-size:10px; font-weight:700; margin-top:2px;">نسخة رقم #${reprintNum} / COPY #${reprintNum}</div>`
+      : '';
     const reprintBanner = options.isReprint
-      ? `<div class="receipt-reprint-banner" style="text-align:center; font-weight:800; font-size:11.5px; padding:4px 6px; border:1.5px dashed #000; margin-bottom:5px; background:#fff; color:#000; letter-spacing:0.3px;">${reprintLabel}</div>`
+      ? `<div class="receipt-reprint-banner" style="text-align:center; font-weight:800; font-size:11.5px; padding:4px 6px; border:1.5px dashed #000; margin-bottom:5px; background:#fff; color:#000; letter-spacing:0.3px;">*** نسخة مكررة - REPRINT ***${reprintSubline}</div>`
       : '';
 
     return `

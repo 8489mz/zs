@@ -5,6 +5,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { loadAntiTheftSettings, type AntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
+import { roundMoneyToTwoDecimals } from '../../../common/utils/financial-integrity';
 import {
   CashierFraudRadarService,
   type FraudRadarEventItem,
@@ -14,7 +15,7 @@ import {
   buildShrinkageHeatmap,
   evaluateTransferAging,
   type ShrinkageLossEvent,
-} from '../../inventory/engines/shrinkage-reconciliation.engine';
+} from '../../../common/engines/shrinkage-reconciliation.engine';
 
 export interface CommandCenterResponse {
   timeframe: 'today' | '7days' | '30days';
@@ -277,7 +278,7 @@ export class LossPreventionCommandCenterService {
         transferStatsMap.set(Number(s.transfer_id), {
           itemsCount: Number(s.items_count || 0),
           totalQty: Number(Number(s.total_qty || 0).toFixed(3)),
-          estCost: Number(Number(s.est_cost || 0).toFixed(2)),
+          estCost: roundMoneyToTwoDecimals(Number(s.est_cost || 0)),
         });
       }
     }
@@ -364,8 +365,8 @@ export class LossPreventionCommandCenterService {
       closedAt: s.closed_at ? new Date(s.closed_at).toISOString() : '',
     }));
     const shortageShifts = shiftVariances.filter((s) => s.variance < -0.01);
-    const totalShiftShortageAmount = Number(
-      shortageShifts.reduce((sum, s) => sum + Math.abs(s.variance), 0).toFixed(2),
+    const totalShiftShortageAmount = roundMoneyToTwoDecimals(
+      shortageShifts.reduce((sum, s) => sum + Math.abs(s.variance), 0),
     );
 
     // 4. Delivery Custodies
@@ -397,7 +398,7 @@ export class LossPreventionCommandCenterService {
           rep.max_cash_custody_limit !== null && rep.max_cash_custody_limit !== undefined
             ? Number(rep.max_cash_custody_limit)
             : defaultCap;
-        const unsettledCash = Number(stats.cash.toFixed(2));
+        const unsettledCash = roundMoneyToTwoDecimals(stats.cash);
         const isOverCap = cap > 0 && unsettledCash > cap;
         totalUnsettledDeliveryCash += unsettledCash;
         overdueDeliveryOrdersCount += stats.overdue;
@@ -417,8 +418,8 @@ export class LossPreventionCommandCenterService {
       .filter((r) => r.unsettledOrdersCount > 0 || r.custodyCap > 0)
       .sort((a, b) => b.unsettledCash - a.unsettledCash);
 
-    const totalFinancialExposure = Number(
-      (Number(posSummary.estimatedProtectedLoss || 0) + heatmap.totalLossCost + totalShiftShortageAmount).toFixed(2),
+    const totalFinancialExposure = roundMoneyToTwoDecimals(
+      Number(posSummary.estimatedProtectedLoss || 0) + heatmap.totalLossCost + totalShiftShortageAmount,
     );
     const highRiskCashiersCount = (posSummary.cashiers || []).filter((c) => c.riskLevel === 'high').length;
     const criticalAlertsCount =
@@ -439,7 +440,7 @@ export class LossPreventionCommandCenterService {
         alertThresholdHours: alertHours,
         openCount: transfers.length,
         overdueCount: overdueTransfersCount,
-        totalEstimatedCost: Number(totalInTransitCost.toFixed(2)),
+        totalEstimatedCost: roundMoneyToTwoDecimals(totalInTransitCost),
         transfers,
       },
       shrinkage: {
@@ -450,7 +451,7 @@ export class LossPreventionCommandCenterService {
         totalShiftShortageAmount,
         shortageShiftsCount: shortageShifts.length,
         shiftVariances,
-        totalUnsettledDeliveryCash: Number(totalUnsettledDeliveryCash.toFixed(2)),
+        totalUnsettledDeliveryCash: roundMoneyToTwoDecimals(totalUnsettledDeliveryCash),
         overdueDeliveryOrdersCount,
         overCapRepsCount,
         deliveryCustodies,

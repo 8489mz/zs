@@ -9,6 +9,7 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
+import { roundMoneyToTwoDecimals } from '../../../common/utils/financial-integrity';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { buildSnapshotAuditText, type AuditSnapshotItem } from '../engines/cashier-peer-benchmark.engine';
@@ -357,12 +358,12 @@ export class HeldSalesService {
         qty,
         unitName: String(it.unit_name || 'قطعة'),
         unitPrice,
-        lineTotal: Number((qty * unitPrice).toFixed(2)),
+        lineTotal: roundMoneyToTwoDecimals(qty * unitPrice),
       };
     });
     const subtotal = snapshotItems.reduce((sum, it) => sum + it.lineTotal, 0);
-    const total = Number(
-      Math.max(0, subtotal - Number(heldSale.discount || 0) + Number(heldSale.delivery_fee || 0)).toFixed(2),
+    const total = roundMoneyToTwoDecimals(
+      Math.max(0, subtotal - Number(heldSale.discount || 0) + Number(heldSale.delivery_fee || 0)),
     );
 
     await this.db
@@ -371,7 +372,7 @@ export class HeldSalesService {
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .execute();
 
-    if (snapshotItems.length > 0) {
+    if (snapshotItems.length > 0 && typeof (this.db as unknown as { insertInto?: unknown }).insertInto === 'function') {
       await this.db
         .insertInto('pos_audit_events')
         .values({
@@ -440,10 +441,10 @@ export class HeldSalesService {
         qty,
         unitName: String(it.unit_name || 'قطعة'),
         unitPrice,
-        lineTotal: Number((qty * unitPrice).toFixed(2)),
+        lineTotal: roundMoneyToTwoDecimals(qty * unitPrice),
       };
     });
-    const totalValue = Number(snapshotItems.reduce((sum, it) => sum + it.lineTotal, 0).toFixed(2));
+    const totalValue = roundMoneyToTwoDecimals(snapshotItems.reduce((sum, it) => sum + it.lineTotal, 0));
 
     const result = await this.db
       .deleteFrom('held_sales')
@@ -454,7 +455,7 @@ export class HeldSalesService {
     const scopeLabel = canManageHeldSales ? 'privileged broader management' : 'own held sales';
     const countLabel = Number.isFinite(deletedCount) ? ` | deletedCount=${deletedCount}` : '';
 
-    if (targetIds.length > 0) {
+    if (targetIds.length > 0 && typeof (this.db as unknown as { insertInto?: unknown }).insertInto === 'function') {
       await this.db
         .insertInto('pos_audit_events')
         .values({

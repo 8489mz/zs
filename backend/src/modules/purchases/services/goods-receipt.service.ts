@@ -6,7 +6,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AuditService } from '../../../core/audit/audit.service';
 import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
-import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
+import { WhatsAppAlertPort } from '../../../common/utils/whatsapp-alert.port';
 import { CreateGoodsReceiptDto, CreateGrnBillDto, VerifyThreeWayMatchDto } from '../dto/goods-receipt.dto';
 import { fromMinorUnits, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
@@ -31,7 +31,7 @@ export class GoodsReceiptService {
     private readonly accountingPosting: AccountingPostingService,
     private readonly purchasesFinance: PurchasesFinanceService,
     @Optional() private readonly audit?: AuditService,
-    @Optional() private readonly whatsappService?: WhatsAppGatewayService,
+    @Optional() private readonly whatsappService?: WhatsAppAlertPort,
   ) {
     this.helpersService = new GoodsReceiptHelpersService();
     this.create = new GoodsReceiptCreateService({

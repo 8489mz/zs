@@ -702,37 +702,37 @@ async function main(): Promise<void> {
     ] as const) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes(`const HIGHEST_MIGRATION_FILE = '2040000000345_import_fx_payout_idempotency_keys.ts';`),
-        `${label} spec highest-migration pin must stay at 0345`,
+        src.includes(`const HIGHEST_MIGRATION_FILE = '2040000000346_loss_prevention_anti_theft_shield.ts';`),
+        `${label} spec highest-migration pin must stay at 0346`,
       );
       assert.ok(
-        src.includes('the 0345 migration must be the highest-numbered migration on disk'),
-        `${label} spec highest-migration message must stay at 0345`,
+        src.includes('the 0346 migration must be the highest-numbered migration on disk'),
+        `${label} spec highest-migration message must stay at 0346`,
       );
     }
     const s2Src = fs.readFileSync(S2_SPEC, 'utf8');
     assert.ok(
-      s2Src.includes(`const MIGRATION_FILE = '2040000000345_import_fx_payout_idempotency_keys.ts';`),
-      'S2 spec migration-file pin must stay at 0345',
+      s2Src.includes(`const MIGRATION_FILE = '2040000000346_loss_prevention_anti_theft_shield.ts';`),
+      'S2 spec migration-file pin must stay at 0346',
     );
     assert.ok(
-      s2Src.includes('the 0345 migration must be the highest-numbered migration on disk'),
-      'S2 spec highest-migration assertion must stay at 0345',
+      s2Src.includes('the 0346 migration must be the highest-numbered migration on disk'),
+      'S2 spec highest-migration assertion must stay at 0346',
     );
     assert.ok(
-      s2Src.includes('spec highest-migration pin must re-point to 0345'),
-      'S2 spec §10 pin message must stay at 0345',
+      s2Src.includes('spec highest-migration pin must re-point to 0346'),
+      'S2 spec §10 pin message must stay at 0346',
     );
     assert.ok(
-      s2Src.includes('spec highest-migration message must re-point to 0345'),
-      'S2 spec §10 message must stay at 0345',
+      s2Src.includes('spec highest-migration message must re-point to 0346'),
+      'S2 spec §10 message must stay at 0346',
     );
     const s3Src = fs.readFileSync(S3_SPEC, 'utf8');
     assert.ok(
-      s3Src.includes(`const MIGRATION_FILE = '2040000000345_import_fx_payout_idempotency_keys.ts';`),
-      'S3 spec migration-file pin must stay at 0345',
+      s3Src.includes(`const MIGRATION_FILE = '2040000000346_loss_prevention_anti_theft_shield.ts';`),
+      'S3 spec migration-file pin must stay at 0346',
     );
-    assert.ok(s3Src.includes('must re-point to 0345'), 'S3 spec highest-migration assertions must stay at 0345');
+    assert.ok(s3Src.includes('must re-point to 0346'), 'S3 spec highest-migration assertions must stay at 0346');
     const s4Src = fs.readFileSync(S4_SPEC, 'utf8');
     assert.ok(
       s4Src.includes(
@@ -742,29 +742,29 @@ async function main(): Promise<void> {
     );
     assert.ok(s4Src.includes('files[files.length - 1],'), 'S4 spec §4 must still compare the highest file on disk');
     assert.ok(
-      s4Src.includes("'2040000000345_import_fx_payout_idempotency_keys.ts',"),
-      'S4 spec §4 highest-migration literal must stay at 0345',
+      s4Src.includes("'2040000000346_loss_prevention_anti_theft_shield.ts',"),
+      'S4 spec §4 highest-migration literal must stay at 0346',
     );
     assert.ok(
-      s4Src.includes('the 0345 migration must be the highest-numbered migration on disk'),
-      'S4 spec highest-migration assertion must stay at 0345',
+      s4Src.includes('the 0346 migration must be the highest-numbered migration on disk'),
+      'S4 spec highest-migration assertion must stay at 0346',
     );
     assert.ok(
-      s4Src.includes('spec highest-migration pin must re-point to 0345'),
-      'S4 spec §9 pin message must stay at 0345',
+      s4Src.includes('spec highest-migration pin must re-point to 0346'),
+      'S4 spec §9 pin message must stay at 0346',
     );
     const s5Src = fs.readFileSync(S5_SPEC, 'utf8');
     assert.ok(
-      s5Src.includes(`const MIGRATION_FILE = '2040000000345_import_fx_payout_idempotency_keys.ts';`),
-      'S5 spec migration-file pin must stay at 0345',
+      s5Src.includes(`const MIGRATION_FILE = '2040000000346_loss_prevention_anti_theft_shield.ts';`),
+      'S5 spec migration-file pin must stay at 0346',
     );
-    assert.ok(s5Src.includes('must re-point to 0345'), 'S5 spec highest-migration assertions must stay at 0345');
+    assert.ok(s5Src.includes('must re-point to 0346'), 'S5 spec highest-migration assertions must stay at 0346');
     const s6Src = fs.readFileSync(S6_SPEC, 'utf8');
     assert.ok(
-      s6Src.includes(`const MIGRATION_FILE = '2040000000345_import_fx_payout_idempotency_keys.ts';`),
-      'S6 spec migration-file pin must stay at 0345',
+      s6Src.includes(`const MIGRATION_FILE = '2040000000346_loss_prevention_anti_theft_shield.ts';`),
+      'S6 spec migration-file pin must stay at 0346',
     );
-    assert.ok(s6Src.includes('must re-point to 0345'), 'S6 spec highest-migration assertions must stay at 0345');
+    assert.ok(s6Src.includes('must re-point to 0346'), 'S6 spec highest-migration assertions must stay at 0346');
   }
 
   console.log('phase1 final slice 8 checks passed (settings import posting port, 414 specs wired)');

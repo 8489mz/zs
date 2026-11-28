@@ -1,5 +1,6 @@
 import { Inject, Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { WhatsAppAlertPort } from '../../../common/utils/whatsapp-alert.port';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
@@ -24,11 +25,13 @@ export interface WhatsAppConfig {
 }
 
 @Injectable()
-export class WhatsAppGatewayService {
+export class WhatsAppGatewayService extends WhatsAppAlertPort {
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly aiCopilotService: AiCopilotService,
-  ) {}
+  ) {
+    super();
+  }
 
   async getConfig(actor: AuthContext): Promise<WhatsAppConfig> {
     const { tenantId } = requireTenantScope(actor);

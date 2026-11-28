@@ -6,7 +6,8 @@ import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.servi
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
-import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
+import { roundMoneyToTwoDecimals } from '../../../common/utils/financial-integrity';
+import { WhatsAppAlertPort } from '../../../common/utils/whatsapp-alert.port';
 import { evaluateTransferAging } from '../engines/shrinkage-reconciliation.engine';
 
 export interface InTransitCustodyItem {
@@ -37,7 +38,7 @@ export class InTransitAgingMonitorService implements OnApplicationBootstrap, OnM
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly audit: AuditService,
-    @Optional() private readonly whatsappService?: WhatsAppGatewayService,
+    @Optional() private readonly whatsappService?: WhatsAppAlertPort,
   ) {}
 
   onApplicationBootstrap() {
@@ -261,7 +262,7 @@ export class InTransitAgingMonitorService implements OnApplicationBootstrap, OnM
       statsMap.set(Number(s.transfer_id), {
         itemsCount: Number(s.items_count || 0),
         totalQty: Number(Number(s.total_qty || 0).toFixed(3)),
-        estCost: Number(Number(s.est_cost || 0).toFixed(2)),
+        estCost: roundMoneyToTwoDecimals(Number(s.est_cost || 0)),
       });
     }
 
@@ -304,7 +305,7 @@ export class InTransitAgingMonitorService implements OnApplicationBootstrap, OnM
       alertThresholdHours: alertHours,
       openCount: transfers.length,
       overdueCount,
-      totalEstimatedCost: Number(totalEstimatedCost.toFixed(2)),
+      totalEstimatedCost: roundMoneyToTwoDecimals(totalEstimatedCost),
       transfers,
     };
   }
