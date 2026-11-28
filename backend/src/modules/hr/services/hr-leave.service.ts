@@ -5,6 +5,7 @@ import { boundedPage } from '../../../common/utils/bounded-page';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
+import { normalizePgDateOnly } from '../../../common/utils/tenant-timezone.util';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { CreateLeaveRequestDto, DecideLeaveRequestDto, UpsertLeaveTypeDto, UpsertHrMasterDataDto } from '../dto/hr.dto';
@@ -32,9 +33,11 @@ import { clean, toId, normalizeDateOnly, inclusiveDaysBetween, masterConfig, typ
  * normalizeDateOnly, inclusiveDaysBetween, masterConfig, MasterKind) are
  * imported from ../hr-helpers — that file is created by the H0 merge and
  * does not exist on this generation tree yet; the import is still correct.
- * Date handling travels verbatim: listHolidays formats pg DATE reads as
- * ISO date strings (display only); no tenant-tz util is used by any moved
- * method and no clock pin travels with H3 (prep §7.3: the six source-text
+ * Date handling: listHolidays normalizes pg DATE reads with
+ * normalizePgDateOnly, so the stored day shows on every host
+ * (the old UTC slice showed the previous day on east hosts);
+ * no other tenant-tz util is used by any moved method and no
+ * clock pin travels with H3 (prep §7.3: the six source-text
  * specs repoint at H9/H7/H4/H11/H8, not H3).
  */
 
@@ -225,8 +228,8 @@ export class HrLeaveService {
     const rows = result.rows.map((row) => ({
       id: String(row.id),
       name: clean(row.name),
-      startDate: row.start_date ? new Date(row.start_date as string).toISOString().split('T')[0] : '',
-      endDate: row.end_date ? new Date(row.end_date as string).toISOString().split('T')[0] : '',
+      startDate: row.start_date ? normalizePgDateOnly(row.start_date) : '',
+      endDate: row.end_date ? normalizePgDateOnly(row.end_date) : '',
     }));
 
     return { rows, pagination: { page: safePage, pageSize, totalItems, totalPages }, summary: { totalItems } };

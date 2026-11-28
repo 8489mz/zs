@@ -313,7 +313,7 @@ export class ContractingSiteOperationsService {
     let durationDays = Number(dto.durationDays || (dto as any).duration_days || 0);
     if (!endStr && durationDays > 0) {
       const s = new Date(startStr);
-      s.setDate(s.getDate() + durationDays);
+      s.setUTCDate(s.getUTCDate() + durationDays);
       endStr = s.toISOString().slice(0, 10);
     } else if (!endStr) {
       endStr = startStr;

@@ -876,8 +876,7 @@ export class ImportProfitReportService {
       .where('acid_expiry_date', '<=', acidBound)
       .execute();
 
-    const monthStart = new Date();
-    monthStart.setDate(1);
+    const monthStart = `${todayKey.slice(0, 8)}01`;
     const profitReport = await this.generatePeriodProfitReport(tenantId, monthStart, new Date());
 
     return {

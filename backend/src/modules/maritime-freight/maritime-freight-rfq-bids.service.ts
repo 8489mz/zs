@@ -4,6 +4,7 @@ import { type Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { SubmitMaritimeBidDto } from './dto/submit-bid.dto';
+import { formatLocalCalendarDay } from '../../common/utils/tenant-timezone.util';
 import { type MaritimeMailService } from './maritime-mail.service';
 import nodemailer from 'nodemailer';
 
@@ -36,6 +37,22 @@ export interface MaritimeFreightRfqBidsDeps {
   // byte-identical). maritimeMailService is used by ONE method in the
   // whole file: dispatchRfqEmails (this slice).
   maritimeMailService: MaritimeMailService;
+}
+
+/**
+ * The day key of a date written in carrier text. A dash date
+ * (YYYY-MM-DD) parses as a UTC-midnight Date, so it keys from
+ * the UTC slice; every other accepted shape (15 Nov 2026,
+ * 2026/11/15, 11/15/2026) parses as a host-local midnight Date,
+ * so it keys from its local parts — the UTC slice would show
+ * the previous day on east hosts. Unparseable text passes
+ * through unchanged, as before.
+ */
+export function rfqDateKey(rawDate: string): string {
+  const parsed = new Date(rawDate);
+  if (isNaN(parsed.getTime())) return rawDate;
+  if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) return parsed.toISOString().split('T')[0];
+  return formatLocalCalendarDay(parsed);
 }
 
 @Injectable()
@@ -576,12 +593,7 @@ export class MaritimeFreightRfqBidsService {
     const extractDate = (labelRegex: RegExp): string | null => {
       const match = text.match(labelRegex);
       if (!match || !match[1]) return null;
-      const rawDate = match[1].trim();
-      const parsed = new Date(rawDate);
-      if (!isNaN(parsed.getTime())) {
-        return parsed.toISOString().split('T')[0];
-      }
-      return rawDate;
+      return rfqDateKey(match[1].trim());
     };
 
     // 4. ETD / ETA / Cut-off

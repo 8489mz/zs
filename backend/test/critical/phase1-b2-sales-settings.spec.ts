@@ -253,10 +253,10 @@ async function main(): Promise<void> {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 410);
-  assert.equal(chain.length, 410);
+  assert.equal(specs.length, 411);
+  assert.equal(chain.length, 411);
   assert.deepEqual(chain, specs, 'critical lists must agree in identical order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s4-legacy-doc-numbers.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s5-business-date-r3.spec.ts');
   assert.ok(specs.includes('test/critical/phase1-b2-sales-settings.spec.ts'));
 
   console.log('phase1 B2 sales|settings decoupling checks passed (375 specs wired, pair gone, invalidation identical)');

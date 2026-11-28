@@ -1,4 +1,4 @@
-import { nextAccountingDay } from '../../../accounting/engines/accounting-date.engine';
+import { nextAccountingDay, resolveBusinessDateKey } from '../../../accounting/engines/accounting-date.engine';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { AppError } from '../../../../common/errors/app-error';
 import { Kysely, sql } from '../../../../database/kysely';
@@ -61,6 +61,23 @@ const DECLARATION_TAX_PROVIDER: Record<'EG' | 'SA', string> = {
   SA: 'ZATCA',
 };
 
+/**
+ * The VAT default period is the tenant's current month, from the
+ * tenant day key — never the UTC month (at 01:00 Cairo on Nov 1
+ * the UTC month is still October, so the old defaults opened
+ * October). Returns UTC-midnight month bounds, exactly as an
+ * explicit query's dates render.
+ */
+export function vatDefaultPeriodFromTenantDay(todayKey: string): { from: Date; to: Date } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(todayKey);
+  if (!match) throw new BadRequestException('فترة الإقرار غير صالحة.');
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) throw new BadRequestException('فترة الإقرار غير صالحة.');
+  return { from: new Date(Date.UTC(year, month - 1, 1)), to: new Date(Date.UTC(year, month, 1)) };
+}
+
 @Injectable()
 export class VatDeclarationService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
@@ -100,9 +117,10 @@ export class VatDeclarationService {
   }
 
   async getDeclaration(query: VatDeclarationQueryDto, auth: AuthContext) {
+    const scope = this.tenantScope(auth);
     const now = new Date();
-    const defaultFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const defaultTo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const todayKey = await resolveBusinessDateKey(this.db, scope.tenantId, now);
+    const { from: defaultFrom, to: defaultTo } = vatDefaultPeriodFromTenantDay(todayKey);
 
     const fromDate = query.from ? new Date(query.from) : defaultFrom;
     const toDate = query.to ? nextAccountingDay(query.to) : defaultTo;
@@ -112,7 +130,6 @@ export class VatDeclarationService {
     // follows the tenant's configured jurisdiction (see
     // deriveDeclarationCountry). A request for another country's form
     // is not an option the API offers.
-    const scope = this.tenantScope(auth);
     const jurisdictionSettings = await this.db
       .selectFrom('settings')
       .select(['key', 'value'])

@@ -4,6 +4,7 @@ import { Kysely, sql } from '../../database/kysely';
 import { Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
+import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { canManageShippingConfig, canOperateShipping } from '../../core/auth/utils/commerce-operation-guards';
 import {
   GccCarrier,
@@ -302,7 +303,7 @@ export class GccShippingService {
             body: new URLSearchParams({
               passKey,
               refNos: `ORD-${orderId}`,
-              sentDate: now.toISOString().split('T')[0],
+              sentDate: todayTenantDate(await getTenantTimezone(this.db, tenantId), now),
               idNo: '1',
               cName: receiverName,
               cntry: 'SA',

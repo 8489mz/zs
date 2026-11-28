@@ -1,4 +1,5 @@
 import { Injectable, Inject, Optional } from '@nestjs/common';
+import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { Kysely, Transaction, Selectable } from 'kysely';
 import {
@@ -66,6 +67,19 @@ import { ImportApprovalGateSlice } from './import-approval-gate/import-approval-
 import { ImportReceiptHelpersSlice } from './import-receipt-helpers/import-receipt-helpers';
 import { ImportForm4GatesSlice } from './import-form4-gates/import-form4-gates';
 import { ImportContainerHelpersSlice } from './import-container-helpers/import-container-helpers';
+
+/**
+ * The profit default range is month-start to the tenant today —
+ * never the host month (at 01:00 Cairo on Nov 1 the host
+ * month-start was Oct 31). It serves both profit default sites
+ * in this facade (attribution and the period report). The
+ * facade fills only the missing end, so a caller that passes
+ * one date keeps it.
+ */
+export function profitAttributionDefaultRange(todayKey: string): { start: string; end: string } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(todayKey)) throw new Error(`Invalid business day key: ${todayKey}`);
+  return { start: `${todayKey.slice(0, 8)}01`, end: todayKey };
+}
 
 @Injectable()
 export class ImportSalesService {
@@ -576,11 +590,22 @@ export class ImportSalesService {
 
   async generatePeriodProfitReport(
     tenantId: string,
-    startDate: string | Date,
-    endDate: string | Date,
+    startDate?: string | Date,
+    endDate?: string | Date,
     projectId?: string,
     executor?: any,
   ) {
+    if (!startDate || !endDate) {
+      const todayKey = await resolveBusinessDateKey(this.db, tenantId, new Date());
+      const range = profitAttributionDefaultRange(todayKey);
+      return this.profitReportService.generatePeriodProfitReport(
+        tenantId,
+        startDate ?? range.start,
+        endDate ?? range.end,
+        projectId,
+        executor,
+      );
+    }
     return this.profitReportService.generatePeriodProfitReport(tenantId, startDate, endDate, projectId, executor);
   }
 
@@ -895,7 +920,16 @@ export class ImportSalesService {
     return this.closureAuditService.listImportFlowEvents(tenantId, projectId);
   }
 
-  async listProjectProfitAttribution(tenantId: string, startDate: string | Date, endDate: string | Date) {
+  async listProjectProfitAttribution(tenantId: string, startDate?: string | Date, endDate?: string | Date) {
+    if (!startDate || !endDate) {
+      const todayKey = await resolveBusinessDateKey(this.db, tenantId, new Date());
+      const range = profitAttributionDefaultRange(todayKey);
+      return this.commercialService.listProjectProfitAttribution(
+        tenantId,
+        startDate ?? range.start,
+        endDate ?? range.end,
+      );
+    }
     return this.commercialService.listProjectProfitAttribution(tenantId, startDate, endDate);
   }
 

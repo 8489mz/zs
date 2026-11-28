@@ -1054,7 +1054,7 @@ async function main(): Promise<void> {
   assert.equal(new Set(invariantIds).size, invariantIds.length, 'invariant ids must be unique: no duplicated entry');
   assert.equal(
     invariantIds[invariantIds.length - 1],
-    'INV-LEGACY-DOC-NUMBER-UNIQUE-BACKSTOP',
+    'INV-BUSINESS-DATE-R3-CONTINUATION',
     'the newest invariant entry must be the last INV- line',
   );
 

@@ -54,6 +54,24 @@ export interface ContractingQualityDeps {
   db: Kysely<any>;
 }
 
+/**
+ * The warranty end is one year after the warranty start, on UTC
+ * calendar math: the old host-local setFullYear kept the host
+ * wall time, so when the offset on that local date differed a
+ * year later the UTC day slipped (proven: Oct 3 + 1y on a Sydney
+ * host keyed Oct 2). Feb 29 rolls to Mar 1, exactly as
+ * setFullYear did. Throws like the old rendering on bad input.
+ */
+export function warrantyEndDate(startDay: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startDay);
+  if (!match) throw new RangeError('Invalid time value');
+  const end = new Date(Date.UTC(Number(match[1]) + 1, Number(match[2]) - 1, Number(match[3])));
+  const year = end.getUTCFullYear();
+  const month = String(end.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(end.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 @Injectable()
 export class ContractingQualityService {
   private readonly db: Kysely<any>;
@@ -375,9 +393,7 @@ export class ContractingQualityService {
   ): Promise<ContractingProjectHandover> {
     const { tenantId } = requireTenantScope(auth);
     const warrantyStart = dto.warrantyStartDate || dto.handoverDate;
-    const d = new Date(warrantyStart);
-    d.setFullYear(d.getFullYear() + 1);
-    const warrantyEnd = dto.warrantyEndDate || d.toISOString().split('T')[0];
+    const warrantyEnd = dto.warrantyEndDate || warrantyEndDate(warrantyStart);
 
     const [row] = await this.db
       .insertInto('contracting_project_handovers')

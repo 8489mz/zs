@@ -470,12 +470,6 @@ export class ImportSalesController {
     @Query('endDate') endDate: string,
     @Query('projectId') projectId?: string,
   ) {
-    if (!startDate || !endDate) {
-      const end = new Date();
-      const start = new Date();
-      start.setDate(1);
-      return this.importSalesService.generatePeriodProfitReport(req.authContext!.tenantId!, start, end, projectId);
-    }
     return this.importSalesService.generatePeriodProfitReport(
       req.authContext!.tenantId!,
       startDate,
@@ -493,12 +487,6 @@ export class ImportSalesController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    if (!startDate || !endDate) {
-      const end = new Date();
-      const start = new Date();
-      start.setDate(1);
-      return this.importSalesService.listProjectProfitAttribution(req.authContext!.tenantId!, start, end);
-    }
     return this.importSalesService.listProjectProfitAttribution(req.authContext!.tenantId!, startDate, endDate);
   }
 
