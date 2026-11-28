@@ -60,7 +60,12 @@ function openDb(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
-export async function saveCatalogToStorage(products: Product[], version: string, tenantId?: string): Promise<void> {
+export async function saveCatalogToStorage(
+  products: Product[],
+  version: string,
+  tenantId?: string,
+  pendingSoldByProduct?: Map<string, number>,
+): Promise<void> {
   if (!isIndexedDbSupported() || !products) return;
   try {
     const db = await openDb();
@@ -73,10 +78,17 @@ export async function saveCatalogToStorage(products: Product[], version: string,
 
       for (const product of products) {
         if (!product || !product.id) continue;
+        const pid = String(product.id);
+        const pendingDelta = pendingSoldByProduct?.get(pid) || 0;
+        const adjustedStock =
+          pendingDelta > 0 && typeof product.stock === 'number'
+            ? Number((product.stock - pendingDelta).toFixed(4))
+            : product.stock;
         productStore.put({
           ...product,
-          id: String(product.id),
+          id: pid,
           barcode: String(product.barcode || '').trim(),
+          ...(typeof adjustedStock === 'number' ? { stock: adjustedStock } : {}),
         });
       }
 
@@ -370,6 +382,54 @@ export async function getAllCatalogFromStorage(limit: number = 1200): Promise<Pr
     });
   } catch {
     return [];
+  }
+}
+
+export async function deductCatalogStockInStorage(
+  deductions: Array<{ productId: string | number; baseQty: number }>,
+  expectedTenantId?: string,
+): Promise<void> {
+  if (!isIndexedDbSupported() || !Array.isArray(deductions) || deductions.length === 0) return;
+  if (expectedTenantId !== undefined) {
+    const storedTenant = await getStoredTenantIdFromStorage();
+    if (!isPosCachedTenantCompatible(expectedTenantId, storedTenant)) return;
+  }
+
+  const aggregated = new Map<string, number>();
+  for (const entry of deductions) {
+    const pid = String(entry.productId || '').trim();
+    const qty = Number(entry.baseQty || 0);
+    if (pid && qty > 0) {
+      aggregated.set(pid, (aggregated.get(pid) || 0) + qty);
+    }
+  }
+  if (aggregated.size === 0) return;
+
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_PRODUCTS, 'readwrite');
+      const store = tx.objectStore(STORE_PRODUCTS);
+
+      for (const [pid, delta] of aggregated.entries()) {
+        const req = store.get(pid);
+        req.onsuccess = () => {
+          const existing = req.result as Product | undefined;
+          if (existing && typeof existing.stock === 'number') {
+            store.put({
+              ...existing,
+              stock: Number((existing.stock - delta).toFixed(4)),
+            });
+          }
+        };
+      }
+
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } catch {
+    // Non-fatal local stock adjustment
   }
 }
 

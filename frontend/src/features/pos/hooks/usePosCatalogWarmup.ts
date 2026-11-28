@@ -9,6 +9,7 @@ import {
   getStoredTenantIdFromStorage,
 } from '@/features/pos/lib/pos-catalog-storage';
 import { isPosCatalogWarmupTenantStable, shouldDownloadFullCatalog } from '@/features/pos/lib/pos-catalog-sync-policy';
+import { getPendingOfflineSoldQuantities } from '@/features/pos/lib/pos-offline-sync';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface PosCatalogWarmupOptions {
@@ -93,7 +94,7 @@ export function usePosCatalogWarmup({ branchId, locationId, enabled = true }: Po
       if (Array.isArray(products) && tenantIsStable()) {
         // The authenticated identity may have changed while 25k SKU records were
         // downloading. Never write that response under a different tenant.
-        await saveCatalogToStorage(products, remote.version, activeTenantId);
+        await saveCatalogToStorage(products, remote.version, activeTenantId, getPendingOfflineSoldQuantities());
         if (!tenantIsStable()) return;
         setCatalogVersion(remote.version);
         setTotalCached(products.length);

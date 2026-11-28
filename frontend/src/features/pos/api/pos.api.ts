@@ -1,7 +1,30 @@
-import { http, ApiError } from '@/lib/http';
+import { http, ApiError, type HttpRequestInit } from '@/lib/http';
 import { unwrapArray, unwrapByKey, unwrapEntity } from '@/lib/api/contracts';
 import type { AppSettings, Branch, Customer, Location, Product, Sale } from '@/types/domain';
 import type { HeldPosDraft } from '@/features/pos/hooks/usePosWorkspace';
+import {
+  getOfflineQuickCustomers,
+  getPosBootSnapshotAsync,
+  getPosBootSnapshotSync,
+  savePosBootSnapshot,
+} from '@/features/pos/lib/pos-offline-vault';
+
+const POS_INTERACTIVE_SALE_TIMEOUT_MS = 4_500;
+
+function isOfflineReadFallbackError(error: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  const err = error as { status?: number; code?: string } | null;
+  if (!err) return false;
+  return (
+    err.status === 0 ||
+    err.status === 408 ||
+    err.status === 502 ||
+    err.status === 503 ||
+    err.status === 504 ||
+    err.code === 'network_error' ||
+    err.code === 'timeout'
+  );
+}
 
 type SaleMutationEnvelope = { ok?: boolean; sale?: Sale; saleId?: number };
 type PosLookupParams = {
@@ -105,8 +128,18 @@ function shouldRetrySaleWithFallback(error: unknown) {
   return !message || message === 'البيانات المرسلة غير صحيحة.' || message === 'تعذر تنفيذ العملية المطلوبة.';
 }
 
-async function postSale(payload: unknown, headers?: Record<string, string>) {
-  const result = await http<Sale | SaleMutationEnvelope>('/api/sales', { method: 'POST', body: JSON.stringify(payload), headers });
+async function postSale(
+  payload: unknown,
+  headers?: Record<string, string>,
+  requestOptions?: Pick<HttpRequestInit, 'timeoutMs' | 'treatTimeoutAsOffline'>,
+) {
+  const result = await http<Sale | SaleMutationEnvelope>('/api/sales', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers,
+    timeoutMs: requestOptions?.timeoutMs ?? POS_INTERACTIVE_SALE_TIMEOUT_MS,
+    treatTimeoutAsOffline: requestOptions?.treatTimeoutAsOffline ?? true,
+  });
   if ('saleId' in result && result.saleId && !result.sale) {
     // The idempotency interceptor replays the committed operation reference.
     // Fetch the original posted invoice so retries have the same response shape.
@@ -154,7 +187,26 @@ export const posApi = {
     if (params?.limit) searchParams.set('limit', String(params.limit));
     if (params?.recentIds?.length) searchParams.set('recentIds', params.recentIds.join(','));
     const query = searchParams.toString();
-    return unwrapArray<Customer>(await http<Customer[] | { customers: Customer[] }>(`/api/customers${query ? `?${query}` : ''}`), 'customers');
+    try {
+      const online = unwrapArray<Customer>(await http<Customer[] | { customers: Customer[] }>(`/api/customers${query ? `?${query}` : ''}`), 'customers');
+      if (!params?.search) {
+        void savePosBootSnapshot({ customers: online });
+      }
+      const localQuick = getOfflineQuickCustomers();
+      return localQuick.length > 0 ? [...localQuick, ...online] : online;
+    } catch (error) {
+      if (!isOfflineReadFallbackError(error)) throw error;
+      const snapshot = (await getPosBootSnapshotAsync()) || getPosBootSnapshotSync();
+      const combined = [...getOfflineQuickCustomers(), ...(snapshot?.customers || [])];
+      const term = String(params?.search || '').trim().toLowerCase();
+      const filtered = term
+        ? combined.filter((c) =>
+            String(c.name || '').toLowerCase().includes(term) ||
+            String((c as { phone?: string }).phone || '').toLowerCase().includes(term),
+          )
+        : combined;
+      return params?.limit ? filtered.slice(0, params.limit) : filtered;
+    }
   },
   customerPosSummary: (customerId: string) => http<PosCustomerSummary>(`/api/customers/${customerId}/pos-summary`),
   customerDeliveryLookup: (phone: string) => http<PosCustomerDeliveryProfile>(`/api/customers/delivery-lookup?phone=${encodeURIComponent(phone)}`),
@@ -169,24 +221,84 @@ export const posApi = {
       method: 'DELETE',
       body: JSON.stringify({ address }),
     }),
-  settings: async () => unwrapByKey<AppSettings>(await http<AppSettings | { settings: AppSettings }>('/api/settings'), 'settings', {} as AppSettings),
-  branches: async () => unwrapArray<Branch>(await http<Branch[] | { branches: Branch[] }>('/api/branches'), 'branches'),
-  locations: async () => unwrapArray<Location>(await http<Location[] | { locations: Location[] }>('/api/locations'), 'locations'),
+  settings: async () => {
+    try {
+      const settings = unwrapByKey<AppSettings>(await http<AppSettings | { settings: AppSettings }>('/api/settings'), 'settings', {} as AppSettings);
+      void savePosBootSnapshot({ settings });
+      return settings;
+    } catch (error) {
+      if (!isOfflineReadFallbackError(error)) throw error;
+      const snapshot = (await getPosBootSnapshotAsync()) || getPosBootSnapshotSync();
+      if (snapshot?.settings) return snapshot.settings;
+      throw error;
+    }
+  },
+  branches: async () => {
+    try {
+      const branches = unwrapArray<Branch>(await http<Branch[] | { branches: Branch[] }>('/api/branches'), 'branches');
+      void savePosBootSnapshot({ branches });
+      return branches;
+    } catch (error) {
+      if (!isOfflineReadFallbackError(error)) throw error;
+      const snapshot = (await getPosBootSnapshotAsync()) || getPosBootSnapshotSync();
+      if (snapshot?.branches?.length) return snapshot.branches;
+      throw error;
+    }
+  },
+  locations: async () => {
+    try {
+      const locations = unwrapArray<Location>(await http<Location[] | { locations: Location[] }>('/api/locations'), 'locations');
+      void savePosBootSnapshot({ locations });
+      return locations;
+    } catch (error) {
+      if (!isOfflineReadFallbackError(error)) throw error;
+      const snapshot = (await getPosBootSnapshotAsync()) || getPosBootSnapshotSync();
+      if (snapshot?.locations?.length) return snapshot.locations;
+      throw error;
+    }
+  },
   authorizeDiscountOverride: async (secret: string) => http('/api/sales/discount-authorization', { method: 'POST', body: JSON.stringify({ secret }) }),
   logSecurityEvent: async (payload: {
-    eventType: 'no_sale' | 'cart_remove' | 'draft_cancel';
+    eventType: 'no_sale' | 'cart_remove' | 'draft_cancel' | 'qty_decrease' | 'receipt_reprint' | 'weighted_barcode_replay';
     branchId?: number;
+    saleId?: number;
+    saleDocNo?: string;
     managerPin?: string;
     productId?: number;
     productName?: string;
     qty?: number;
+    previousQty?: number;
+    unitPrice?: number;
+    removedValue?: number;
     total?: number;
     cartItemsCount?: number;
+    items?: Array<{
+      productId?: number;
+      productName: string;
+      qty: number;
+      previousQty?: number;
+      unitName?: string;
+      unitPrice: number;
+      lineTotal: number;
+      discount?: number;
+    }>;
+    sourceBarcode?: string;
+    terminalCode?: string;
     note?: string;
   }) => http('/api/sales/pos-audit-event', { method: 'POST', body: JSON.stringify(payload) }),
-  createSale: async (payload: unknown, legacyPayload?: unknown, headers?: Record<string, string>) => {
+  recordReceiptReprint: async (saleId: number | string) =>
+    http<{ ok: boolean; saleId: number; docNo: string; reprintCount: number }>(
+      `/api/sales/${encodeURIComponent(String(saleId))}/reprint-audit`,
+      { method: 'POST' },
+    ),
+  createSale: async (
+    payload: unknown,
+    legacyPayload?: unknown,
+    headers?: Record<string, string>,
+    requestOptions?: Pick<HttpRequestInit, 'timeoutMs' | 'treatTimeoutAsOffline'>,
+  ) => {
     try {
-      return await postSale(payload, headers);
+      return await postSale(payload, headers, requestOptions);
     } catch (error) {
       // A keyed checkout may already be committed even when the response is lost.
       // Changing payload or key for a fallback would bypass server idempotency.
@@ -195,14 +307,19 @@ export const posApi = {
       // R4-C I51: the minimal-payload leg is deleted — a retry that drops
       // modifiers and sale terms would post a modifier sale at base price.
       // The legacy payload is the only retry leg; it preserves them.
-      return await postSale(legacyPayload);
+      return await postSale(legacyPayload, undefined, requestOptions);
     }
   },
   // Resolves what actually happened to a previously submitted sale for a given idempotency key.
   // Used by the offline sync recovery path so a stale reservation is never resubmitted blindly.
   getSaleOperationStatus: async (idempotencyKey: string) =>
-    http<{ status: string; documentId?: string | null; response?: unknown; retryAfterMs?: number }>(
+    http<{ status: string; documentId?: string | null; response?: unknown; errorCode?: string; retryAfterMs?: number }>(
       `/api/operations/${encodeURIComponent('POST:/api/sales')}/${encodeURIComponent(idempotencyKey)}/status`,
+    ),
+  resetFailedSaleOperation: async (idempotencyKey: string) =>
+    http<{ reset: boolean }>(
+      `/api/operations/${encodeURIComponent('POST:/api/sales')}/${encodeURIComponent(idempotencyKey)}/reset-failed`,
+      { method: 'POST' },
     ),
   listHeldDrafts: async () => unwrapArray<HeldPosDraft>(await http<HeldPosDraft[] | { heldSales: HeldPosDraft[] }>('/api/held-sales'), 'heldSales'),
   saveHeldDraft: async (payload: unknown) => unwrapEntity<HeldPosDraft>(await http<HeldPosDraft | { draft: HeldPosDraft }>('/api/held-sales', { method: 'POST', body: JSON.stringify(payload) }), 'draft'),

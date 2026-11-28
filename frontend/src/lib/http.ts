@@ -1,5 +1,11 @@
 import { getFriendlyApiErrorMessage } from '@/lib/api-error-message';
+import {
+  APP_NETWORK_STATE_EVENT,
+  markNetworkFailure,
+  markNetworkSuccess,
+} from '@/lib/network-circuit-breaker';
 
+export { APP_NETWORK_STATE_EVENT };
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -15,7 +21,6 @@ export class ApiError extends Error {
 }
 
 export const APP_UNAUTHORIZED_EVENT = 'zsystems:unauthorized';
-export const APP_NETWORK_STATE_EVENT = 'zsystems:network-state';
 const REQUEST_TIMEOUT_MS = 30_000;
 const LOCAL_SESSION_STORAGE_KEY = 'zs.localSessionId';
 export const AUTH_STATE_VERSION_KEY = 'zs.authStateVersion';
@@ -25,6 +30,7 @@ let unauthorizedRecoveryDispatched = false;
 export interface HttpRequestInit extends RequestInit {
   timeoutMs?: number;
   skipUnauthorizedInterceptor?: boolean;
+  treatTimeoutAsOffline?: boolean;
 }
 const RAW_API_BASE = import.meta.env?.VITE_API_BASE_URL?.trim();
 const CSRF_COOKIE_NAME = import.meta.env?.VITE_CSRF_COOKIE_NAME?.trim() || 'csrf_token';
@@ -237,6 +243,12 @@ export async function http<T>(path: string, init?: HttpRequestInit): Promise<T> 
       signal
     });
 
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+      markNetworkFailure(`http_${response.status}`);
+    } else {
+      markNetworkSuccess('http_response');
+    }
+
     if (response.status === 204) {
       return null as T;
     }
@@ -280,10 +292,14 @@ export async function http<T>(path: string, init?: HttpRequestInit): Promise<T> 
     }
 
     if (error instanceof DOMException && error.name === 'AbortError') {
+      if (init?.treatTimeoutAsOffline) {
+        markNetworkFailure('http_timeout');
+      }
       throw new ApiError('انتهت مهلة الطلب. حاول مرة أخرى.', 408, { code: 'timeout' });
     }
 
-    emitWindowEvent(APP_NETWORK_STATE_EVENT, { online: typeof navigator !== 'undefined' ? navigator.onLine : false, path });
+    markNetworkFailure('http_network_error');
+    emitWindowEvent(APP_NETWORK_STATE_EVENT, { online: false, path });
     throw new ApiError('تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.', 0, { code: 'network_error', details: error });
   } finally {
     clear();

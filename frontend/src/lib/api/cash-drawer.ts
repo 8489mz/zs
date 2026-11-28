@@ -52,7 +52,12 @@ export const cashDrawerApi = {
     }
     return { rows: allRows, summary: firstPage.summary, pagination: firstPage.pagination };
   },
-  open: (payload: unknown) => http<{ ok: boolean; cashierShifts: CashierShift[] }>('/api/cashier-shifts/open', { method: 'POST', body: JSON.stringify(payload) }),
+  open: (payload: unknown, headers?: Record<string, string>) =>
+    http<{ ok: boolean; cashierShifts: CashierShift[] }>('/api/cashier-shifts/open', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers,
+    }),
   movement: (id: string, payload: unknown) => http<{ ok: boolean; cashierShifts: CashierShift[] }>(`/api/cashier-shifts/${id}/cash-movement`, { method: 'POST', body: JSON.stringify(payload) }),
   close: (id: string, payload: unknown) => http<{ ok: boolean; cashierShifts: CashierShift[] }>(`/api/cashier-shifts/${id}/close`, { method: 'POST', body: JSON.stringify(payload) }),
   reviewClose: (id: string, payload: unknown) => http<{ ok: boolean; cashierShifts: CashierShift[] }>(`/api/cashier-shifts/${id}/review-close`, { method: 'POST', body: JSON.stringify(payload) })
