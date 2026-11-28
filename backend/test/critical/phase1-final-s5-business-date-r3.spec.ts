@@ -635,7 +635,7 @@ async function main(): Promise<void> {
     const invCount = (invariants.match(new RegExp(NEW_INV, 'g')) || []).length;
     assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the new INV exactly once');
     const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-    const guardCount = (guard.match(/INV-MODULE-DOCUMENTATION-S14/g) || []).length;
+    const guardCount = (guard.match(/INV-OFFLINE-SYNC-BELOW-FLOOR-GATE/g) || []).length;
     assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the new INV exactly once');
   }
 
@@ -651,11 +651,11 @@ async function main(): Promise<void> {
       .split('&&')
       .map((part) => part.trim().replace(/^ts-node\s+/, ''))
       .filter((part) => part.endsWith('.spec.ts'));
-    assert.equal(specs.length, 450);
-    assert.equal(chain.length, 450);
+    assert.equal(specs.length, 451);
+    assert.equal(chain.length, 451);
     assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 411 specs in order');
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s14-module-documentation.spec.ts');
-    assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s14-module-documentation.spec.ts');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-r1-offline-below-floor-gate.spec.ts');
+    assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-r1-offline-below-floor-gate.spec.ts');
     for (const [label, specPath] of [
       ['B1', B1_SPEC],
       ['B2', B2_SPEC],
@@ -700,11 +700,11 @@ async function main(): Promise<void> {
     ] as const) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes('assert.equal(specs.length, 450);') && src.includes('assert.equal(chain.length, 450);'),
+        src.includes('assert.equal(specs.length, 451);') && src.includes('assert.equal(chain.length, 451);'),
         `${label} spec wiring must re-pin to 411`,
       );
       assert.ok(
-        src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s14-module-documentation.spec.ts'"),
+        src.includes("specs[specs.length - 1], 'test/critical/phase1-final-r1-offline-below-floor-gate.spec.ts'"),
         `${label} spec last-entry must re-pin to the new spec`,
       );
     }
@@ -787,7 +787,7 @@ async function main(): Promise<void> {
     ] as const) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes('guard.match(/INV-MODULE-DOCUMENTATION-S14/g)'),
+        src.includes('guard.match(/INV-OFFLINE-SYNC-BELOW-FLOOR-GATE/g)'),
         `${label} spec guard assertion must re-pin to the new INV`,
       );
     }

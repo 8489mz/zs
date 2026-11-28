@@ -298,20 +298,19 @@ export class ComputeTotalsAndGatesService {
     // floor is not blocked (the admin is the approver); the lines are
     // still recorded in the sale note below. A cashier still needs the
     // manager approval.
+    // INV-OFFLINE-SYNC-BELOW-FLOOR-GATE: the approval is required
+    // for offline sync exactly as for an online sale — no
+    // special-case swallow. A failed override throws here
+    // (MANAGER_AUTH_REQUIRED for a missing PIN, MANAGER_AUTH_INVALID
+    // for a wrong one) and the sync fails before any stock, journal
+    // or tender work, so a below-floor offline sale is rejected,
+    // not posted with a note tag. The cashier sells at full price
+    // offline and settles the discount later. The 5% rep cap above
+    // already throws the same way, so the two gates are consistent.
     const isAdminSeller = auth.role === 'admin' || auth.role === 'super_admin';
     let floorApproval: CreateSaleContext['floorApproval'] = null;
     if (belowFloorItems.length && !isAdminSeller) {
-      if (ctx.isOfflineSyncSale) {
-        if (normalized.managerPin) {
-          try {
-            floorApproval = await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx);
-          } catch {
-            floorApproval = null;
-          }
-        }
-      } else {
-        floorApproval = await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx);
-      }
+      floorApproval = await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx);
     }
 
     // INV-VAN-PRICE-LIST-WIRING (F8): the SYSTEM cash discount in
