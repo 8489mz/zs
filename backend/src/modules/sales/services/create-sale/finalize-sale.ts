@@ -306,16 +306,19 @@ export class FinalizeSaleService {
       }
     }
 
-    // INV-REST-SHIFT-CLOSE-CONTROL (I26): a backdated offline
-    // sale may belong to a shift that already closed. Correct
-    // that shift's stored figures now, inside this transaction,
-    // so the close record reflects the sale that actually
-    // happened inside its window. A no-op when no closed shift
-    // contains the timestamp.
+    // INV-REST-SHIFT-CLOSE-CONTROL (I26): a sale posted into a
+    // shift that closed while this transaction ran may need that
+    // shift's stored figures corrected now, inside this
+    // transaction, so the close record reflects the sale. Under
+    // server-time dating (INV-OFFLINE-SYNC-SERVER-TIMESTAMP) the
+    // timestamp matched here is the server sync instant, so a
+    // closed shift can only contain it if it closed mid-sync —
+    // a backdated offline sale no longer exists. A no-op when no
+    // closed shift contains the timestamp.
     if (offlineCreatedAt) {
       await this.refreshClosedShiftsForBackdatedOfflineSale(
         trx,
-        offlineCreatedAt,
+        ctx.serverSyncAt,
         id,
         normalized.branchId,
         normalized.locationId,

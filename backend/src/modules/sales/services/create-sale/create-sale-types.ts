@@ -170,7 +170,7 @@ export type CreateSaleDeps = {
   ) => Promise<SystemApprovedSaleTerms | undefined>;
   refreshClosedShiftsForBackdatedOfflineSale: (
     trx: Kysely<Database> | Transaction<Database>,
-    offlineCreatedAt: Date,
+    saleBusinessTimestamp: Date,
     saleId: number,
     branchId: number | null,
     locationId: number | null,
@@ -258,6 +258,11 @@ export interface CreateSaleContext {
   offlineCreatedAt: Date | null;
   posTerminalCode: string | null;
   isOfflineSyncSale?: boolean;
+  // INV-OFFLINE-SYNC-SERVER-TIMESTAMP: the server instant at sync
+  // time (set by loadSaleContext from the offline identity). The
+  // business timestamp for every decision in the sync path; the
+  // client-claimed offlineCreatedAt above is evidence only.
+  serverSyncAt: Date;
   offlineStockShortfalls?: OfflineStockShortfallItem[];
   offlinePriceDrifts?: OfflinePriceDriftItem[];
   // Phase 5 outputs (insertSaleAndStock).

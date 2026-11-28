@@ -85,16 +85,20 @@ export class PreparedWasteAndShiftRefreshService {
    * leave the closed shift stale.
    */
   /**
-   * INV-REST-SHIFT-CLOSE-CONTROL (I26): after a backdated offline
-   * sale has been written in this transaction, refresh every
-   * closed / pending_review shift whose [created_at, closed_at]
-   * window contains the sale's ORIGINAL timestamp. The sale was
-   * already counted by the open shift on read; only already-closed
-   * shifts need their stored figures corrected, with a stamp.
+   * INV-REST-SHIFT-CLOSE-CONTROL (I26): after a sale has been written
+   * in this transaction, refresh every closed / pending_review shift
+   * whose [created_at, closed_at] window contains the sale's
+   * business timestamp. The sale was already counted by the open
+   * shift on read; only already-closed shifts need their stored
+   * figures corrected, with a stamp. The timestamp passed in is
+   * the server sync instant for an offline sale
+   * (INV-OFFLINE-SYNC-SERVER-TIMESTAMP) — a backdated offline
+   * sale no longer exists, so this matches only a shift that
+   * closed mid-sync.
    */
   async refreshClosedShiftsForBackdatedOfflineSale(
     trx: Kysely<Database> | Transaction<Database>,
-    offlineCreatedAt: Date,
+    saleBusinessTimestamp: Date,
     saleId: number,
     branchId: number | null,
     locationId: number | null,
@@ -116,8 +120,8 @@ export class PreparedWasteAndShiftRefreshService {
       .select('id')
       .where('tenant_id', '=', tenantId)
       .where('status', 'in', ['closed', 'pending_review'])
-      .where('created_at', '<=', offlineCreatedAt)
-      .where((eb) => eb.or([eb('closed_at', '>=', offlineCreatedAt), eb('closed_at', 'is', null)]));
+      .where('created_at', '<=', saleBusinessTimestamp)
+      .where((eb) => eb.or([eb('closed_at', '>=', saleBusinessTimestamp), eb('closed_at', 'is', null)]));
     if (branchId != null) {
       shiftsQuery = shiftsQuery.where((eb) => eb.or([eb('branch_id', 'is', null), eb('branch_id', '=', branchId)]));
     }

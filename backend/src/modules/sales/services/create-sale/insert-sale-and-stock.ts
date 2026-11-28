@@ -66,6 +66,7 @@ export class InsertSaleAndStockService {
       collectionStatus,
       posTerminalCode,
       offlineCreatedAt,
+      serverSyncAt,
       vanTripAttribution,
     } = ctx;
     let saleNote = normalized.note;
@@ -162,11 +163,16 @@ export class InsertSaleAndStockService {
         card_last_four: normalized.cardLastFour || null,
         pager_number: normalized.pagerNumber || null,
         // INV-REST-SHIFT-CLOSE-CONTROL (I24/I26) + clock P2: station
-        // code for shift attribution, and the offline sale's original
-        // timestamp (only when the client sent a valid one — otherwise
-        // the column default NOW() applies) + received_at for audit.
+        // code for shift attribution, and the business timestamp
+        // (INV-OFFLINE-SYNC-SERVER-TIMESTAMP: for an offline sale
+        // the server sync instant, never the client-claimed offline
+        // date) + received_at for audit. The client-claimed
+        // offlineCreatedAt stays only in the reconciliation audit
+        // metadata below, as evidence. An online sale carries
+        // neither stamp and falls back to the column defaults,
+        // exactly as before.
         pos_terminal_code: posTerminalCode,
-        ...offlineSaleTimestamps(offlineCreatedAt),
+        ...offlineSaleTimestamps(ctx.isOfflineSyncSale ? serverSyncAt : null),
         tenant_id: scope.tenantId,
         account_id: scope.accountId,
       } as any)
@@ -185,7 +191,11 @@ export class InsertSaleAndStockService {
         .executeTakeFirst();
       if (!linkedReturn) throw new AppError('تعذر ربط طرفَي الاستبدال', 'EXCHANGE_LINK_FAILED', 409);
     }
-    const docNo = await this.generateSaleDocNo(trx, id, scope.tenantId, offlineCreatedAt ?? undefined);
+    // INV-OFFLINE-SYNC-SERVER-TIMESTAMP: the doc number is dated
+    // on the server sync day, never on the client-claimed offline
+    // day — a device clock set days back must not mint a number
+    // in a past day's sequence.
+    const docNo = await this.generateSaleDocNo(trx, id, scope.tenantId, serverSyncAt);
     await trx
       .updateTable('sales')
       .set({ doc_no: docNo, updated_at: sql`NOW()` })

@@ -31,7 +31,12 @@ export class LoadSaleContextService {
   async loadSaleContext(ctx: CreateSaleContext): Promise<void> {
     const { trx, scope, normalized, payload, auth, effectiveTerms, returnedItems, isExchange, conversionRelease } = ctx;
     const offlineIdentity = resolvePosOfflineSyncIdentity(payload);
-    await assertBusinessAccountingDate(trx, scope.tenantId, offlineIdentity.offlineCreatedAt ?? new Date(), true);
+    // INV-OFFLINE-SYNC-SERVER-TIMESTAMP: the accounting date is the
+    // server sync instant, never the client-claimed offline date —
+    // a device clock set days back must not move the posting into
+    // another business day. The client date stays on the context
+    // as evidence only.
+    await assertBusinessAccountingDate(trx, scope.tenantId, offlineIdentity.serverSyncAt, true);
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
     // R4-C INV-REST-MODIFIER-CONTRACT-2: re-price modifiers from
     // server truth and enforce group rules FIRST — before any stock
@@ -358,6 +363,7 @@ export class LoadSaleContextService {
     ctx.isOfflineSyncSale = offlineIdentity.isOfflineSyncSale;
     ctx.offlineDocNo = offlineIdentity.offlineDocNo;
     ctx.offlineCreatedAt = offlineIdentity.offlineCreatedAt;
+    ctx.serverSyncAt = offlineIdentity.serverSyncAt;
     ctx.posTerminalCode = offlineIdentity.posTerminalCode;
   }
 }

@@ -609,20 +609,24 @@ export { OFFLINE_CREATED_AT_MAX_AGE_MS, validateOfflineCreatedAt };
 
 /**
  * INV-REST-SHIFT-CLOSE-CONTROL (I26) + single-server-clock rule (P2):
- * the two stamps an offline sale carries — the client's claimed business
- * day (created_at, kept verbatim so the sale lands in the shift whose
- * window held it) and the server's receipt instant (received_at, stamped
- * from the server clock at insert time, never from the client). An online
- * sale (no offline timestamp) carries neither stamp and falls back to the
+ * the two stamps a sale carries — the authoritative business instant
+ * (created_at) and the server's receipt instant (received_at, stamped
+ * from the server clock at insert time, never from the client). The
+ * caller supplies the business instant: the server sync instant for
+ * a POS offline sale (INV-OFFLINE-SYNC-SERVER-TIMESTAMP), the
+ * validated client-claimed time for a van field sale/collection/
+ * return (those paths still stamp created_at from the validated
+ * client clock — a known remainder, their own package). An online
+ * sale (no timestamp) carries neither stamp and falls back to the
  * column defaults.
  */
 export function offlineSaleTimestamps(
-  offlineCreatedAt: Date | null,
+  businessTimestamp: Date | null,
   receivedAt: Date = new Date(),
 ): { created_at?: string; received_at?: string } {
-  if (!offlineCreatedAt) return {};
+  if (!businessTimestamp) return {};
   return {
-    created_at: offlineCreatedAt.toISOString(),
+    created_at: businessTimestamp.toISOString(),
     received_at: receivedAt.toISOString(),
   };
 }

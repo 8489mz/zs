@@ -450,6 +450,7 @@
     "test/critical/copilot-top-seller.spec.ts",
     "test/critical/p0a-mfa-ai-settings-boundaries.spec.ts",
     "test/critical/phase1-final-s14-module-documentation.spec.ts",
-    "test/critical/phase1-final-r1-offline-below-floor-gate.spec.ts"
+    "test/critical/phase1-final-r1-offline-below-floor-gate.spec.ts",
+    "test/critical/phase1-final-r2-offline-server-timestamp.spec.ts"
   ]
 }

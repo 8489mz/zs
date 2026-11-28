@@ -728,7 +728,7 @@ export class SalesWriteService {
 
   private async refreshClosedShiftsForBackdatedOfflineSale(
     trx: Kysely<Database> | Transaction<Database>,
-    offlineCreatedAt: Date,
+    saleBusinessTimestamp: Date,
     saleId: number,
     branchId: number | null,
     locationId: number | null,
@@ -737,7 +737,7 @@ export class SalesWriteService {
   ): Promise<void> {
     return this.editAndCancel().refreshClosedShiftsForBackdatedOfflineSale(
       trx,
-      offlineCreatedAt,
+      saleBusinessTimestamp,
       saleId,
       branchId,
       locationId,
@@ -784,8 +784,9 @@ export class SalesWriteService {
     }
 
     // Daily date-based numbering: Z-YYMMDD-0001 on the sale's business day
-    // (the offline sale's original day when present, else the tenant day) --
-    // never the host-local day (Clock P3).
+    // (the server sync day for an offline sale — INV-OFFLINE-SYNC-
+    // SERVER-TIMESTAMP — else the tenant day) -- never the host-local
+    // day (Clock P3).
     const businessTz = await getTenantTimezone(trx, tenantId);
     const dayKey = todayTenantDate(businessTz, businessDate ?? new Date());
     const datePrefix = `${dayKey.slice(2, 4)}${dayKey.slice(5, 7)}${dayKey.slice(8, 10)}`;

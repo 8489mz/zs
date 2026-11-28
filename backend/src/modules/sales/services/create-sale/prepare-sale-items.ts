@@ -219,7 +219,13 @@ export class PrepareSaleItemsService {
         offers: activeOffers,
         qty: item.qty,
         unitMultiplier: item.unitMultiplier,
-        now: ctx.offlineCreatedAt ?? undefined,
+        // INV-OFFLINE-SYNC-SERVER-TIMESTAMP: offers are judged at
+        // the server sync instant, never at the client-claimed sale
+        // time — an offer that expired during the outage no longer
+        // applies. The price-drift absorber below posts the
+        // collected price with an audit tag, so the sale does not
+        // trip SALE_TOTAL_MISMATCH over the expired offer.
+        now: ctx.serverSyncAt,
         businessTimezone,
         moneyDigits,
       });

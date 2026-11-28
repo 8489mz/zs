@@ -20,12 +20,21 @@ export interface ResolvedPosOfflineSyncIdentity {
   offlineDocNo: string;
   offlineCreatedAt: Date | null;
   posTerminalCode: string | null;
+  // INV-OFFLINE-SYNC-SERVER-TIMESTAMP: the server instant at sync
+  // time (the `now` argument — this code runs on the server, so
+  // `new Date()` here IS the server clock). Business decisions
+  // (offer validity, the accounting date, the shift window, doc
+  // numbering) use this instant, never the client-claimed
+  // offlineCreatedAt, which stays stored as evidence only.
+  serverSyncAt: Date;
 }
 
 /**
  * Resolves and validates the offline-sync identity of a POS sale payload upfront
- * before Phase 1..5 execute so offer windows, stock reconciliation, price-drift
- * auditing, and closed-shift window matching share a single verified timestamp.
+ * before Phase 1..5 execute so stock reconciliation, price-drift
+ * auditing, and shift matching share one identity. The client-claimed
+ * offlineCreatedAt is validated (bounds only) and kept as evidence;
+ * the business timestamp for the sync is the server instant.
  */
 export function resolvePosOfflineSyncIdentity(
   payload: {
@@ -46,6 +55,7 @@ export function resolvePosOfflineSyncIdentity(
     offlineDocNo,
     offlineCreatedAt,
     posTerminalCode,
+    serverSyncAt: now,
   };
 }
 

@@ -104,7 +104,7 @@ export class SalesEditAndCancelService {
 
   async refreshClosedShiftsForBackdatedOfflineSale(
     trx: Kysely<Database> | Transaction<Database>,
-    offlineCreatedAt: Date,
+    saleBusinessTimestamp: Date,
     saleId: number,
     branchId: number | null,
     locationId: number | null,
@@ -113,7 +113,7 @@ export class SalesEditAndCancelService {
   ): Promise<void> {
     return this.preparedWasteAndShiftRefreshService.refreshClosedShiftsForBackdatedOfflineSale(
       trx,
-      offlineCreatedAt,
+      saleBusinessTimestamp,
       saleId,
       branchId,
       locationId,
