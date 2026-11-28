@@ -92,13 +92,13 @@ export function getNetworkCircuitState() {
   };
 }
 
-export function markNetworkFailure(source = 'http_error'): void {
+export function markNetworkFailure(source = 'http_error', options?: { silent?: boolean }): void {
   ensureGlobalListeners();
   const wasOpen = circuitOpen;
   circuitOpen = true;
   lastFailureAt = Date.now();
   ensureHealthProbeLoop();
-  if (!wasOpen) {
+  if (!wasOpen && !options?.silent) {
     emitNetworkState(false, source);
   }
 }

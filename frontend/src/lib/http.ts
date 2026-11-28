@@ -298,8 +298,8 @@ export async function http<T>(path: string, init?: HttpRequestInit): Promise<T> 
       throw new ApiError('انتهت مهلة الطلب. حاول مرة أخرى.', 408, { code: 'timeout' });
     }
 
-    markNetworkFailure('http_network_error');
-    emitWindowEvent(APP_NETWORK_STATE_EVENT, { online: false, path });
+    markNetworkFailure('http_network_error', { silent: true });
+    emitWindowEvent(APP_NETWORK_STATE_EVENT, { online: false, path, source: 'http_network_error' });
     throw new ApiError('تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.', 0, { code: 'network_error', details: error });
   } finally {
     clear();

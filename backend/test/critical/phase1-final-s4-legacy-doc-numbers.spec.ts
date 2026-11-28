@@ -259,7 +259,9 @@ async function main(): Promise<void> {
     );
     const drawerWrite = fs.readFileSync(CASH_DRAWER_WRITE, 'utf8');
     assert.ok(
-      drawerWrite.includes('const docNo = buildCashDrawerShiftDocNo(shiftId, undefined, businessTz);'),
+      drawerWrite.includes(
+        'const docNo = buildCashDrawerShiftDocNo(shiftId, offlineOpenedAt ?? undefined, businessTz);',
+      ) || drawerWrite.includes('const docNo = buildCashDrawerShiftDocNo(shiftId, undefined, businessTz);'),
       'shift open must rename the NULL doc_no to the generated number in the same transaction',
     );
     const transfer = fs.readFileSync(INVENTORY_TRANSFER, 'utf8');

@@ -561,8 +561,14 @@ export function AppShell({ children }: PropsWithChildren) {
 
   async function handleLogout() {
     try {
-      const { getOfflineSalesQueue } = await import('@/features/pos/lib/pos-offline-sync');
-      const pendingOfflineCount = getOfflineSalesQueue().filter((s) => s.status !== 'committed').length;
+      const rawQueue = typeof window !== 'undefined' ? window.localStorage.getItem('zsystems_pos_offline_sales_queue') : null;
+      const parsedQueue: Array<{ status?: string; tenantId?: string }> = rawQueue ? JSON.parse(rawQueue) : [];
+      const currentTenantId = String(tenant?.id || user?.tenantId || '').trim();
+      const pendingOfflineCount = Array.isArray(parsedQueue)
+        ? parsedQueue.filter(
+            (s) => s && s.status !== 'committed' && (!currentTenantId || !s.tenantId || String(s.tenantId) === currentTenantId),
+          ).length
+        : 0;
       if (pendingOfflineCount > 0) {
         const confirmed = await systemConfirm({
           title: 'تنبيه: فواتير أوفلاين بانتظار المزامنة',
