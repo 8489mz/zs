@@ -304,7 +304,7 @@ export class LossPreventionCommandCenterService {
         toLocationName: String(row.to_location_name || '—'),
         carrierName: String(row.carrier_name || ''),
         createdByName: String(row.created_by_name || ''),
-        createdAt: row.created_at ? new Date(row.created_at as any).toISOString() : '',
+        createdAt: row.created_at ? new Date(String(row.created_at)).toISOString() : '',
         ageHours: aging.ageHours,
         isOverdue: aging.isOverdue,
         overdueByHours: aging.overdueByHours,
@@ -378,7 +378,7 @@ export class LossPreventionCommandCenterService {
       const repId = Number(s.delivery_rep_id || 0);
       if (!repId) continue;
       const remaining = Math.max(0, Number(s.total || 0) - Number(s.paid_amount || 0));
-      const createdMs = s.created_at ? new Date(s.created_at as any).getTime() : now.getTime();
+      const createdMs = s.created_at ? new Date(String(s.created_at)).getTime() : now.getTime();
       const bucket = salesByRep.get(repId) || { count: 0, overdue: 0, cash: 0, oldestMs: null };
       bucket.count += 1;
       bucket.cash += remaining;

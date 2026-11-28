@@ -175,10 +175,10 @@ async function main(): Promise<void> {
   // in the inventory file.
   {
     const all = listSpecFiles(path.join(BACKEND, 'test'));
-    assert.equal(all.length, 891, 'backend/test must hold exactly 878 spec files');
+    assert.equal(all.length, 894, 'backend/test must hold exactly 878 spec files');
     const specsJson = JSON.parse(fs.readFileSync(CRITICAL_JSON, 'utf8')) as { specs: string[] };
     assert.equal(specsJson.specs.length, 450, 'critical-specs.json must hold exactly 425 specs');
-    assert.equal(all.length - specsJson.specs.length, 441, 'unlinked files must be exactly 441');
+    assert.equal(all.length - specsJson.specs.length, 444, 'unlinked files must be exactly 441');
     const inventory = fs.readFileSync(INVENTORY, 'utf8');
     assert.ok(
       inventory.includes('Runs in another suite on main CI — 51'),

@@ -403,9 +403,20 @@ export class InventoryAdjustmentService {
       return responsePayload;
     });
 
-    const alertMeta = (finalResponse as any)?._writeOffAlert;
-    if (finalResponse && '_writeOffAlert' in (finalResponse as any)) {
-      delete (finalResponse as any)._writeOffAlert;
+    const responseRecord = finalResponse as unknown as Record<string, unknown> & {
+      _writeOffAlert?: {
+        productName: string;
+        locationName: string;
+        qty: number;
+        totalCost: number;
+        reason: string;
+        actorName: string;
+        approvedByName?: string;
+      } | null;
+    };
+    const alertMeta = responseRecord?._writeOffAlert;
+    if (responseRecord && '_writeOffAlert' in responseRecord) {
+      delete responseRecord._writeOffAlert;
     }
     if (alertMeta && this.whatsappService) {
       void this.notifyWriteOffWhatsApp(scope.tenantId, alertMeta).catch((err) =>

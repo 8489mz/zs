@@ -45,7 +45,7 @@ const STANDARD_PRESET = {
 export function SalesInventoryAntiTheft({ form, disabled }: Props) {
   const applyPreset = (preset: Record<string, boolean | number>) => {
     for (const [key, val] of Object.entries(preset)) {
-      form.setValue(key as any, val as any, { shouldDirty: true });
+      form.setValue(key as keyof SettingsFormInput, val as never, { shouldDirty: true });
     }
   };
 

@@ -158,7 +158,7 @@ export class InventoryCountService {
       .leftJoin('stock_locations as l', (join) => join.onRef('l.id', '=', 's.location_id').onRef('l.tenant_id', '=', 's.tenant_id'))
       .leftJoin('users as cu', (join) => join.onRef('cu.id', '=', 's.counted_by').onRef('cu.tenant_id', '=', 's.tenant_id'))
       .leftJoin('users as au', (join) => join.onRef('au.id', '=', 's.approved_by').onRef('au.tenant_id', '=', 's.tenant_id'))
-      .select(['s.id', 's.doc_no', 's.branch_id', 's.location_id', 's.status', 's.is_blind', 's.count_scope', 's.note', 's.posted_at', 's.created_at', 'b.name as branch_name', 'l.name as location_name', 'cu.username as counted_by_name', 'au.username as approved_by_name'])
+      .select(['s.id', 's.doc_no', 's.branch_id', 's.location_id', 's.status', 's.note', 's.posted_at', 's.created_at', sql<boolean>`COALESCE((to_jsonb(s)->>'is_blind')::boolean, false)`.as('is_blind'), sql<string>`COALESCE(to_jsonb(s)->>'count_scope', 'standard')`.as('count_scope'), 'b.name as branch_name', 'l.name as location_name', 'cu.username as counted_by_name', 'au.username as approved_by_name'])
       .where(this.tenantPredicate(auth, 's'))
       .orderBy('s.id', 'desc')
       .execute();
@@ -232,7 +232,7 @@ export class InventoryCountService {
     const safePage = Math.min(page, totalPages);
     const offset = (safePage - 1) * pageSize;
     const result = await sql<Record<string, unknown>>`
-      SELECT s.id, s.doc_no, s.branch_id, s.location_id, s.status, s.is_blind, s.count_scope, s.note, s.posted_at, s.created_at,
+      SELECT s.id, s.doc_no, s.branch_id, s.location_id, s.status, COALESCE((to_jsonb(s)->>'is_blind')::boolean, false) AS is_blind, COALESCE(to_jsonb(s)->>'count_scope', 'standard') AS count_scope, s.note, s.posted_at, s.created_at,
         b.name AS branch_name, l.name AS location_name,
         cu.username AS counted_by_name, au.username AS approved_by_name
       FROM stock_count_sessions s
@@ -290,8 +290,8 @@ export class InventoryCountService {
         branch_id: location.branchId,
         location_id: location.id,
         status: 'draft',
-        is_blind: isBlindSession,
-        count_scope: countScope,
+        ...(isBlindSession ? { is_blind: true } : {}),
+        ...(countScope !== 'standard' ? { count_scope: countScope } : {}),
         note: String(payload.note || '').trim(),
         counted_by: auth.userId,
         ...this.tenantFields(auth),
@@ -378,7 +378,7 @@ export class InventoryCountService {
       }).where('id', '=', itemId).where('session_id', '=', sessionId)
         .where('posted_at', 'is', null).where(this.tenantPredicate(auth)).execute();
       await this.audit.logWithExecutor(trx, 'إعادة جرد بند', JSON.stringify({ sessionId, itemId, productId: item.product_id, expectedQty, countedQty, varianceQty, reason }), auth);
-      const maskBlind = Boolean((session as any).is_blind) && !this.isManagerRole(auth);
+      const maskBlind = Boolean((session as { is_blind?: boolean | null }).is_blind) && !this.isManagerRole(auth);
       const response = {
         ok: true,
         sessionId,
@@ -786,7 +786,7 @@ export class InventoryCountService {
       .leftJoin('branches as b', (join) => join.onRef('b.id', '=', 'd.branch_id').onRef('b.tenant_id', '=', 'd.tenant_id'))
       .leftJoin('stock_locations as l', (join) => join.onRef('l.id', '=', 'd.location_id').onRef('l.tenant_id', '=', 'd.tenant_id'))
       .leftJoin('users as u', (join) => join.onRef('u.id', '=', 'd.created_by').onRef('u.tenant_id', '=', 'd.tenant_id'))
-      .leftJoin('users as au', (join) => join.onRef('au.id', '=', 'd.approved_by').onRef('au.tenant_id', '=', 'd.tenant_id'))
+      .leftJoin('users as au', (join) => join.on(sql<boolean>`au.id = NULLIF(to_jsonb(d)->>'approved_by', '')::bigint`).onRef('au.tenant_id', '=', 'd.tenant_id'))
       .where(this.tenantPredicate(auth, 'd'));
 
     if (search) {
@@ -818,8 +818,10 @@ export class InventoryCountService {
 
     const rows = await baseQuery
       .select([
-        'd.id', 'd.product_id', 'd.branch_id', 'd.location_id', 'd.qty', 'd.unit_cost', 'd.total_cost',
-        'd.reason', 'd.note', 'd.evidence_image_url', 'd.created_at',
+        'd.id', 'd.product_id', 'd.branch_id', 'd.location_id', 'd.qty', 'd.reason', 'd.note', 'd.created_at',
+        sql<number>`COALESCE((to_jsonb(d)->>'unit_cost')::numeric, 0)`.as('unit_cost'),
+        sql<number>`COALESCE((to_jsonb(d)->>'total_cost')::numeric, 0)`.as('total_cost'),
+        sql<string | null>`to_jsonb(d)->>'evidence_image_url'`.as('evidence_image_url'),
         'p.name as product_name', 'b.name as branch_name', 'l.name as location_name',
         'u.username as created_by_name', 'au.username as approved_by_name',
       ])
@@ -903,8 +905,8 @@ export class InventoryCountService {
          ...writeModels.damagedRecord,
          unit_cost: unitCost,
          total_cost: totalCost,
-         approved_by: approvedById,
-         evidence_image_url: payload.evidenceImageUrl ? String(payload.evidenceImageUrl).trim() : null,
+         ...(antiTheft.requireManagerForWriteOff && approvedById ? { approved_by: approvedById } : {}),
+         ...(payload.evidenceImageUrl ? { evidence_image_url: String(payload.evidenceImageUrl).trim() } : {}),
          ...this.tenantFields(auth)
       }).returning('id').executeTakeFirst();
       if (!insertedDamage?.id) throw new AppError('Failed to capture damaged stock ID', 'DAMAGE_INSERT_FAILED', 500);
@@ -929,7 +931,7 @@ export class InventoryCountService {
       await trx.updateTable('damaged_stock_records').set({
         serial_tracking: JSON.stringify(trace.serialTracking),
         batch_tracking: JSON.stringify(trace.batchTracking),
-      } as any).where('id', '=', Number(insertedDamage.id)).where(this.tenantPredicate(auth)).execute();
+      } as Record<string, unknown>).where('id', '=', Number(insertedDamage.id)).where(this.tenantPredicate(auth)).execute();
 
       // Phase 1 A9 (INV-PHASE1-A9-REMAINING-WRITER): the damaged deduct
       // goes through the row-writer; the row stamps the ledger's

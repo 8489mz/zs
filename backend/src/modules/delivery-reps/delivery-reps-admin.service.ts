@@ -77,36 +77,48 @@ export class DeliveryRepsAdminService {
           WHERE fvd.rep_id = dr.id AND fvd.tenant_id = dr.tenant_id AND fvd.is_active = true
           ORDER BY fvd.id DESC LIMIT 1
         )`.as('shift_name'),
-        sql<number>`COALESCE((
-          SELECT SUM(GREATEST(0, COALESCE(s.total, 0) - COALESCE(s.paid_amount, 0)))
-          FROM sales s
-          WHERE s.delivery_rep_id = dr.id
-            AND s.tenant_id = dr.tenant_id
-            AND s.status != 'cancelled'
-            AND COALESCE((to_jsonb(s)->>'driver_cash_settled')::boolean, false) = false
-            AND COALESCE(to_jsonb(s)->>'delivery_status', '') != 'settled'
-            AND COALESCE(to_jsonb(s)->>'collection_status', '') != 'prepaid_online'
-        ), 0)`.as('unsettled_cod_cash'),
-        sql<number>`COALESCE((
-          SELECT COUNT(*)
-          FROM sales s
-          WHERE s.delivery_rep_id = dr.id
-            AND s.tenant_id = dr.tenant_id
-            AND s.status != 'cancelled'
-            AND COALESCE((to_jsonb(s)->>'driver_cash_settled')::boolean, false) = false
-            AND COALESCE(to_jsonb(s)->>'delivery_status', '') != 'settled'
-            AND COALESCE(to_jsonb(s)->>'collection_status', '') != 'prepaid_online'
-        ), 0)`.as('unsettled_orders_count'),
       ])
       .where(this.tenantPredicate(actor))
       .orderBy('dr.is_active', 'desc')
       .orderBy('dr.name', 'asc')
       .execute();
 
+    const custodyByRep = new Map<number, { unsettledCash: number; unsettledCount: number }>();
+    if (reps.length > 0) {
+      try {
+        const tenantId = this.tenantFields(actor).tenant_id;
+        const agg = await sql<{ rep_id: number; unsettled_cash: string | number; unsettled_count: string | number }>`
+          SELECT s.delivery_rep_id AS rep_id,
+                 COALESCE(SUM(GREATEST(0, COALESCE(s.total, 0) - COALESCE(s.paid_amount, 0))), 0) AS unsettled_cash,
+                 COUNT(*) AS unsettled_count
+          FROM sales s
+          WHERE s.tenant_id = ${tenantId}
+            AND s.delivery_rep_id IS NOT NULL
+            AND s.status != 'cancelled'
+            AND COALESCE((to_jsonb(s)->>'driver_cash_settled')::boolean, false) = false
+            AND COALESCE(to_jsonb(s)->>'delivery_status', '') != 'settled'
+            AND COALESCE(to_jsonb(s)->>'collection_status', '') != 'prepaid_online'
+          GROUP BY s.delivery_rep_id
+        `.execute(this.db);
+        for (const row of agg.rows) {
+          custodyByRep.set(Number(row.rep_id), {
+            unsettledCash: Number(row.unsettled_cash || 0),
+            unsettledCount: Number(row.unsettled_count || 0),
+          });
+        }
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code;
+        if (code !== '42P01' && code !== '42703') throw err;
+      }
+    }
+
     const sanitized = reps.map((r) => {
       const { pin_hash, pin_salt, ...rest } = r;
+      const custody = custodyByRep.get(Number(r.id)) || { unsettledCash: 0, unsettledCount: 0 };
       return {
         ...rest,
+        unsettled_cod_cash: custody.unsettledCash,
+        unsettled_orders_count: custody.unsettledCount,
         // حالة وجود الرمز فقط كقيمة منطقية دون تسريب التجزئة (البند O20)
         has_pin: Boolean(pin_hash),
       };

@@ -79,9 +79,13 @@ assert.deepEqual(
     locationId: '8',
     locationName: 'L1',
     qty: 3.5,
+    unitCost: 0,
+    totalCost: 0,
     reason: 'damage',
     note: 'broken',
+    evidenceImageUrl: '',
     createdBy: 'owner',
+    approvedBy: '',
     date: '2026-02-01',
   },
 );

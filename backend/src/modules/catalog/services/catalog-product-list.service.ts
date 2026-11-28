@@ -139,7 +139,12 @@ export class CatalogProductListService {
       .leftJoin('stock_locations as sl', (join) =>
         join.onRef('sl.id', '=', 'products.default_location_id').on(this.tenantPredicate(actor, 'sl')),
       )
-      .select(CATALOG_PRODUCT_LIST_SELECT_COLUMNS)
+      .select([
+        ...CATALOG_PRODUCT_LIST_SELECT_COLUMNS,
+        sql<boolean>`COALESCE((to_jsonb(products)->>'is_high_risk_shrinkage')::boolean, false)`.as(
+          'is_high_risk_shrinkage',
+        ),
+      ])
       .where(view === 'archived' ? sql<boolean>`products.is_active = false` : sql<boolean>`products.is_active = true`)
       .where(this.tenantPredicate(actor, 'products'));
   }

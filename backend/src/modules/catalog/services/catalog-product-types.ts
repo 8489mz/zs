@@ -170,5 +170,4 @@ export const CATALOG_PRODUCT_LIST_SELECT_COLUMNS = [
   'products.is_spicy',
   'products.is_vegetarian',
   'products.is_gluten_free',
-  'products.is_high_risk_shrinkage',
 ] as const;

@@ -290,14 +290,14 @@ export class InTransitAgingMonitorService implements OnApplicationBootstrap, OnM
         carrierEmployeeId: row.carrier_employee_id ? String(row.carrier_employee_id) : null,
         carrierName: String(row.carrier_name || ''),
         createdByName: String(row.created_by_name || ''),
-        createdAt: row.created_at ? new Date(row.created_at as any).toISOString() : '',
+        createdAt: row.created_at ? new Date(String(row.created_at)).toISOString() : '',
         ageHours: aging.ageHours,
         isOverdue: aging.isOverdue,
         overdueByHours: aging.overdueByHours,
         itemsCount: stats.itemsCount,
         totalQty: stats.totalQty,
         estimatedCost: stats.estCost,
-        alertedAt: row.in_transit_alerted_at ? new Date(row.in_transit_alerted_at as any).toISOString() : null,
+        alertedAt: row.in_transit_alerted_at ? new Date(String(row.in_transit_alerted_at)).toISOString() : null,
       };
     });
 

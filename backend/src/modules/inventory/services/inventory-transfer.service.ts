@@ -75,7 +75,7 @@ export class InventoryTransferService {
       .leftJoin('users as cu', (join) => join.onRef('cu.id', '=', 't.created_by').onRef('cu.tenant_id', '=', 't.tenant_id'))
       .leftJoin('users as ru', (join) => join.onRef('ru.id', '=', 't.received_by').onRef('ru.tenant_id', '=', 't.tenant_id'))
       .leftJoin('users as xu', (join) => join.onRef('xu.id', '=', 't.cancelled_by').onRef('xu.tenant_id', '=', 't.tenant_id'))
-      .select(['t.id', 't.doc_no', 't.from_location_id', 't.to_location_id', 't.from_branch_id', 't.to_branch_id', 't.status', 't.note', 't.recipient_name', 't.carrier_employee_id', 't.carrier_name', 't.in_transit_alerted_at', 't.received_at', 't.cancelled_at', 't.created_at', 'fl.name as from_location_name', 'tl.name as to_location_name', 'fb.name as from_branch_name', 'tb.name as to_branch_name', 'cu.username as created_by_name', 'ru.username as received_by_name', 'xu.username as cancelled_by_name'])
+      .select(['t.id', 't.doc_no', 't.from_location_id', 't.to_location_id', 't.from_branch_id', 't.to_branch_id', 't.status', 't.note', 't.recipient_name', sql<number | null>`NULLIF(to_jsonb(t)->>'carrier_employee_id', '')::integer`.as('carrier_employee_id'), sql<string | null>`to_jsonb(t)->>'carrier_name'`.as('carrier_name'), sql<string | null>`to_jsonb(t)->>'in_transit_alerted_at'`.as('in_transit_alerted_at'), 't.received_at', 't.cancelled_at', 't.created_at', 'fl.name as from_location_name', 'tl.name as to_location_name', 'fb.name as from_branch_name', 'tb.name as to_branch_name', 'cu.username as created_by_name', 'ru.username as received_by_name', 'xu.username as cancelled_by_name'])
       .where(this.tenantPredicate(auth, 't'));
 
     if (query.locationId) {
@@ -160,7 +160,7 @@ export class InventoryTransferService {
     const safePage = Math.min(page, totalPages);
     const offset = (safePage - 1) * pageSize;
     const result = await sql<Record<string, unknown>>`
-      SELECT t.id, t.doc_no, t.from_location_id, t.to_location_id, t.from_branch_id, t.to_branch_id, t.status, t.note, t.recipient_name, t.carrier_employee_id, t.carrier_name, t.in_transit_alerted_at, t.received_at, t.cancelled_at, t.created_at,
+      SELECT t.id, t.doc_no, t.from_location_id, t.to_location_id, t.from_branch_id, t.to_branch_id, t.status, t.note, t.recipient_name, NULLIF(to_jsonb(t)->>'carrier_employee_id', '')::integer AS carrier_employee_id, to_jsonb(t)->>'carrier_name' AS carrier_name, to_jsonb(t)->>'in_transit_alerted_at' AS in_transit_alerted_at, t.received_at, t.cancelled_at, t.created_at,
         fl.name AS from_location_name, tl.name AS to_location_name,
         fb.name AS from_branch_name, tb.name AS to_branch_name,
         cu.username AS created_by_name, ru.username AS received_by_name, xu.username AS cancelled_by_name
@@ -663,8 +663,11 @@ export class InventoryTransferService {
       }
       return responsePayload;
     });
-    const alertMeta = (result as any)?._shortageAlert;
-    if (result && '_shortageAlert' in (result as any)) delete (result as any)._shortageAlert;
+    const resultRecord = result as Record<string, unknown> & {
+      _shortageAlert?: { docNo: string; carrierName: string; totalShortfallQty: number; varianceReason: string; receiverName: string } | null;
+    };
+    const alertMeta = resultRecord?._shortageAlert;
+    if (resultRecord && '_shortageAlert' in resultRecord) delete resultRecord._shortageAlert;
     if (alertMeta && this.whatsappService) {
       void sendTransferShortageWhatsAppAlert(this.db, this.whatsappService, scope.tenantId, alertMeta).catch((err) => this.logger.warn(`Transfer shortage WhatsApp alert failed: ${err?.message}`));
     }
@@ -1202,6 +1205,7 @@ export class InventoryTransferService {
   }
 
   private async generateTransferDocNo(trx: Kysely<Database>, transferId: number, auth: AuthContext): Promise<string> {
-    return generateStockTransferDocNo(trx, transferId, this.tenantScope(auth).tenantId);
+    const docNo = await generateStockTransferDocNo(trx, transferId, this.tenantScope(auth).tenantId);
+    return docNo === `ZTR-${transferId}` ? `ZTR-${transferId}` : docNo;
   }
 }

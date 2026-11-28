@@ -365,7 +365,7 @@ export class InventoryReplenishmentService {
       return {
         ok: true,
         transferId: Number(result.transferId || 0),
-        docNo: String((created as any)?.docNo || `TR-${result.transferId || 'AUTO'}`),
+        docNo: String((created as { docNo?: unknown } | undefined)?.docNo || `TR-${result.transferId || 'AUTO'}`),
         status: 'sent',
         itemsCount: cleanedItems.length,
         totalQty,

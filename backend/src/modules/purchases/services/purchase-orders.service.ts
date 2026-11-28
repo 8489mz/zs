@@ -567,7 +567,7 @@ export class PurchaseOrdersService {
     };
 
     const res = await this.purchasesWrite.createPurchase(purchasePayload, auth, `purchase-order-conversion-${id}`);
-    const createdPurchaseId = Number(res?.purchaseId || (res as any)?.purchase?.id || 0);
+    const createdPurchaseId = Number(res?.purchaseId || (res as { purchase?: { id?: unknown } })?.purchase?.id || 0);
     if (!createdPurchaseId) throw new BadRequestException('لم يتم إنشاء فاتورة مشتريات صالحة');
 
     try {

@@ -230,7 +230,7 @@ export function StockCountComposerCard({
     const baseProducts = form.locationId ? filterCountableProductsAtLocation(products, scopedStocks) : products;
     if (countType === 'full') return baseProducts;
     if (countType === 'hot_skus') {
-      return baseProducts.filter((product) => Boolean((product as any).isHighRiskShrinkage));
+      return baseProducts.filter((product) => Boolean(product.isHighRiskShrinkage));
     }
     if (countType === 'category') {
       const categoryId = selectedCategoryId || selectedProduct?.categoryId || '';

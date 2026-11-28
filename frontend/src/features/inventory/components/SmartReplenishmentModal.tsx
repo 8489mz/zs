@@ -403,7 +403,7 @@ export const SmartReplenishmentModal: React.FC<SmartReplenishmentModalProps> = (
                       createLocationMutation.mutate({
                         name: t('inventory.smart_replenishment_modal.s16', "المستودع الرئيسي (تخزين)"),
                         code: 'WH-MAIN',
-                        locationType: 'internal_warehouse' as any,
+                        locationType: 'internal_warehouse' as const,
                       })
                     }
                     disabled={createLocationMutation.isPending}

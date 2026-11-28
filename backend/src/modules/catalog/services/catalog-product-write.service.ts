@@ -626,7 +626,9 @@ export class CatalogProductWriteService {
             size: draft.size || null,
             bin_location: draft.binLocation || null,
             track_serials: Boolean(draft.trackSerials),
-            is_high_risk_shrinkage: Boolean(draft.isHighRiskShrinkage),
+            ...(draft.isHighRiskShrinkage !== undefined
+              ? { is_high_risk_shrinkage: Boolean(draft.isHighRiskShrinkage) }
+              : {}),
             category_id: draft.categoryId,
             supplier_id: draft.supplierId,
             cost_price: draft.costPrice,
@@ -770,7 +772,9 @@ export class CatalogProductWriteService {
         size: normalized.size || null,
         bin_location: normalized.binLocation || null,
         track_serials: normalized.trackSerials !== undefined ? Boolean(normalized.trackSerials) : undefined,
-        is_high_risk_shrinkage: normalized.isHighRiskShrinkage === undefined ? existing.is_high_risk_shrinkage : Boolean(normalized.isHighRiskShrinkage),
+        ...(normalized.isHighRiskShrinkage !== undefined
+          ? { is_high_risk_shrinkage: Boolean(normalized.isHighRiskShrinkage) }
+          : {}),
         category_id: normalized.categoryId,
         supplier_id: normalized.supplierId,
         cost_price: normalized.costPrice,

@@ -207,7 +207,7 @@ export function createPosWorkspaceActions(params: PosWorkspaceActionParams): Pos
   function checkAndLogWeightedReplay(product: Product, options?: { quantity?: number; isWeighted?: boolean; sourceBarcode?: string }) {
     const rawBarcode = String(options?.sourceBarcode || '').trim();
     if (!options?.isWeighted || rawBarcode.length < 10) return;
-    const shiftKey = String((params.ownOpenShift as any)?.id || 'active_session');
+    const shiftKey = String((params.ownOpenShift as { id?: string | number } | null)?.id || 'active_session');
     let seen = seenWeightedBarcodesByShift.get(shiftKey);
     if (!seen) {
       seen = new Set<string>();

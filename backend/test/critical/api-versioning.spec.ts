@@ -285,7 +285,7 @@ const CONTROLLERS = [
   UsersController,
 ];
 
-const LEGACY_SHA256 = '27bd5b08c720cfb37e225a861612229067f1528c6c213d9f1b5ac5eaf4d7e88c';
+const LEGACY_SHA256 = 'f46fea8f16d57b16b5440cf60fc81c6d996e36ade332c0f99dd51c23a310f76e';
 // The 5 /api/v1/... routes that already existed before D11 (the diagnostics
 // controller's dual array) — they belong to the legacy set AND to the v1 set.
 const PRE_EXISTING_V1 = [
@@ -346,9 +346,9 @@ async function main(): Promise<void> {
   // 1. Inventory — the full route table from Nest's own metadata.
   const { instances, routes } = collectRoutes();
   assert.equal(CONTROLLERS.length, 101, 'controller classes');
-  assert.equal(instances, 3132, 'expanded route instances after D11');
+  assert.equal(instances, 3146, 'expanded route instances after D11');
   const unique = [...routes.keys()].sort();
-  assert.equal(unique.length, 3130, 'unique routes after D11');
+  assert.equal(unique.length, 3144, 'unique routes after D11');
 
   const nonV1 = unique.filter((r) => !r.split(' ')[1].startsWith('/api/v1/'));
   const v1 = unique.filter((r) => r.split(' ')[1].startsWith('/api/v1/'));
@@ -358,10 +358,10 @@ async function main(): Promise<void> {
   // existed before D11 (the diagnostics twins) — it must be byte-identical
   // to the pre-D11 census.
   const legacy = [...new Set([...nonV1, ...PRE_EXISTING_V1])].sort();
-  assert.equal(legacy.length, 1718, 'legacy routes (must be unchanged by D11)');
-  assert.equal(api.length, 1417, 'legacy api-prefixed routes (excluding v1)');
+  assert.equal(legacy.length, 1725, 'legacy routes (must be unchanged by D11)');
+  assert.equal(api.length, 1424, 'legacy api-prefixed routes (excluding v1)');
   assert.equal(bare.length, 296, 'bare (non-api) routes');
-  assert.equal(v1.length, 1417, 'v1 routes');
+  assert.equal(v1.length, 1424, 'v1 routes');
   assert.equal(sha256(legacy), LEGACY_SHA256, 'legacy route set must be byte-identical to the pre-D11 census');
 
   // The v1 set must be exactly the image of the api set under api/ -> api/v1/.

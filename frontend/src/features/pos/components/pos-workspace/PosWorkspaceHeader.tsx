@@ -176,7 +176,9 @@ function PosWorkspaceHeaderComponent({
         const bridgeAvailable = await HardwareBridgeClient.isAvailable().catch(() => false);
         if (bridgeAvailable) {
           try {
-            await HardwareBridgeClient.kickDrawer({ ip: (settings as any)?.posNetworkPrinterIp || '127.0.0.1' });
+            await HardwareBridgeClient.kickDrawer({
+              ip: (settings as { posNetworkPrinterIp?: string } | null)?.posNetworkPrinterIp || '127.0.0.1',
+            });
             toast.success('تم تسجيل فتح الدرج وإرسال أمر الفتح عبر جسر العتاد');
           } catch {
             toast.warning('تم تسجيل الحدث، لكن تعذر الاتصال بجسر العتاد');
