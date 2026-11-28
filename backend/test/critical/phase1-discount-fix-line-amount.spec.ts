@@ -236,7 +236,7 @@ function main(): void {
     'the F1b entry must carry the in-place correction pointing at the new entry',
   );
   const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-  const guardCount = (guard.match(/INV-MARITIME-AGENT-SETTLEMENT-IDEMPOTENCY/g) || []).length;
+  const guardCount = (guard.match(/INV-MONEY-PRECISION-HR-IMPORT-3DP/g) || []).length;
   assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the discount-fix INV exactly once');
 
   // 4. Wiring: both critical lists carry 400 specs in identical order, this spec last.
@@ -249,11 +249,11 @@ function main(): void {
     .split('&&')
     .map((part) => part.trim().replace(/^ts-node\s+/, ''))
     .filter((part) => part.endsWith('.spec.ts'));
-  assert.equal(specs.length, 408);
-  assert.equal(chain.length, 408);
+  assert.equal(specs.length, 409);
+  assert.equal(chain.length, 409);
   assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 400 specs in order');
-  assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s2-maritime-settlement-idempotency.spec.ts');
-  assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s2-maritime-settlement-idempotency.spec.ts');
+  assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s3-money-precision-hr-import.spec.ts');
+  assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s3-money-precision-hr-import.spec.ts');
   for (const [label, specPath] of [
     ['B1', B1_SPEC],
     ['B2', B2_SPEC],
@@ -288,11 +288,11 @@ function main(): void {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('assert.equal(specs.length, 408);') && src.includes('assert.equal(chain.length, 408);'),
+      src.includes('assert.equal(specs.length, 409);') && src.includes('assert.equal(chain.length, 409);'),
       `${label} spec wiring must re-pin to 400`,
     );
     assert.ok(
-      src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s2-maritime-settlement-idempotency.spec.ts'"),
+      src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s3-money-precision-hr-import.spec.ts'"),
       `${label} spec last-entry must re-pin to the discount-fix spec`,
     );
   }
@@ -392,7 +392,7 @@ function main(): void {
   ] as const) {
     const src = fs.readFileSync(specPath, 'utf8');
     assert.ok(
-      src.includes('guard.match(/INV-MARITIME-AGENT-SETTLEMENT-IDEMPOTENCY/g)'),
+      src.includes('guard.match(/INV-MONEY-PRECISION-HR-IMPORT-3DP/g)'),
       `${label} spec guard assertion must re-pin to the discount-fix INV`,
     );
   }

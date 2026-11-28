@@ -395,8 +395,8 @@ async function main(): Promise<void> {
     {
       file: 'backend/src/modules/hr/services/hr-advances.service.ts',
       reason:
-        'hr advances slice (withdrawal preview amounts in withdrawals; no retail journal posting reads these values)',
-      toFixed2: 6,
+        'hr advances slice (withdrawal preview amounts in withdrawals now round through roundMoney at tenant book digits; no retail journal posting reads these values)',
+      toFixed2: 0,
       inlineRound: 0,
     },
     {
@@ -499,8 +499,8 @@ async function main(): Promise<void> {
     {
       file: 'backend/src/modules/import-sales/services/import-profit-report.service.ts',
       reason:
-        'import-sales profit slice (posted-ledger cost components / period profit report / command-center metrics; report/summary values; postings route through the canonical landed-cost/WAC engines per the engine map money row)',
-      toFixed2: 32,
+        'import-sales profit slice (posted-ledger cost components / period profit report / command-center metrics; EGP report/summary values now round through roundMoney at tenant book digits; the 3 remaining hardcoded 2dp sites are USD: unpaidForeignUsd, the foreign branch of totalDebtForeign, unpaidProformaUsd; postings route through the canonical landed-cost/WAC engines per the engine map money row)',
+      toFixed2: 3,
       inlineRound: 0,
     },
     {
@@ -1054,7 +1054,7 @@ async function main(): Promise<void> {
   assert.equal(new Set(invariantIds).size, invariantIds.length, 'invariant ids must be unique: no duplicated entry');
   assert.equal(
     invariantIds[invariantIds.length - 1],
-    'INV-MARITIME-AGENT-SETTLEMENT-IDEMPOTENCY',
+    'INV-MONEY-PRECISION-HR-IMPORT-3DP',
     'the newest invariant entry must be the last INV- line',
   );
 

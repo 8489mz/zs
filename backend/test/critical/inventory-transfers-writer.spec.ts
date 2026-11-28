@@ -631,11 +631,11 @@ async function main(): Promise<void> {
       };
       const serial = String(pkg.scripts['test:critical:serial']);
       const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-      assert.equal(specs.length, 408);
-      assert.equal(chain.length, 408);
+      assert.equal(specs.length, 409);
+      assert.equal(chain.length, 409);
       assert.deepEqual(chain, specs);
       assert.ok(specs.includes('test/critical/inventory-transfers-writer.spec.ts'));
-      assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s2-maritime-settlement-idempotency.spec.ts');
+      assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s3-money-precision-hr-import.spec.ts');
       console.log('  evidence spec wired into both critical lists (373 = 373, identical order), passed');
     }
     console.log('  block 13 (source pins + wiring) passed');

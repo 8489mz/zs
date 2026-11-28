@@ -4,7 +4,7 @@ import { Database } from '../../../database/database.types';
 import { addDaysToDayKey } from '../../../common/utils/client-date-bounds.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
-import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { calculateDemurrageRisk } from '../engines/import-landed-cost.engine';
 
 export interface ImportProfitReportDeps {
@@ -228,6 +228,13 @@ export class ImportProfitReportService {
     executor?: any,
   ) {
     const qb = (executor || this.db) as Kysely<Database>;
+    // Book digits for every EGP figure in this report
+    // (INV-MONEY-PRECISION-HR-IMPORT-3DP): report totals are
+    // tenant-currency money, so they round through roundMoney at
+    // the tenant's book digits, never a hardcoded two-decimal spelling.
+    // Resolved through qb so a caller-passed executor/trx stays
+    // in the same connection.
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(qb, tenantId));
     const start = new Date(startDate);
     const end = new Date(endDate);
     if (typeof endDate === 'string' && !endDate.includes('T')) {
@@ -552,22 +559,21 @@ export class ImportProfitReportService {
       // receipt / late-expense journals). A signed FX variance is
       // kept signed: a gain reduces expenses.
       const components = await this.sumPostedProjectCostComponents(qb, tenantId, projectId, start, end);
-      const totalPostedCostComponentsEgp = Number(
-        (
-          components.shortageExpenseEgp +
+      const totalPostedCostComponentsEgp = roundMoney(
+        components.shortageExpenseEgp +
           components.brokerExpensedEgp +
           components.fxVarianceEgp +
-          components.depositDeductionsEgp
-        ).toFixed(2),
+          components.depositDeductionsEgp,
+        digits,
       );
       postedCostComponents = {
-        shortageExpenseEgp: Number(components.shortageExpenseEgp.toFixed(2)),
-        brokerExpensedEgp: Number(components.brokerExpensedEgp.toFixed(2)),
-        fxVarianceEgp: Number(components.fxVarianceEgp.toFixed(2)),
-        depositDeductionsEgp: Number(components.depositDeductionsEgp.toFixed(2)),
+        shortageExpenseEgp: roundMoney(components.shortageExpenseEgp, digits),
+        brokerExpensedEgp: roundMoney(components.brokerExpensedEgp, digits),
+        fxVarianceEgp: roundMoney(components.fxVarianceEgp, digits),
+        depositDeductionsEgp: roundMoney(components.depositDeductionsEgp, digits),
         totalPostedCostComponentsEgp,
       };
-      totalExpenses = Number((totalExpenses + totalPostedCostComponentsEgp).toFixed(2));
+      totalExpenses = roundMoney(totalExpenses + totalPostedCostComponentsEgp, digits);
 
       // Estimates that must NOT enter profit, reported so the
       // reader can see exactly what was left out and why: trips
@@ -596,9 +602,9 @@ export class ImportProfitReportService {
       const unpostedTripEstimatesEgp = Number(unpostedTrips?.total_unposted || 0);
       const unpostedLateExpenseMemosEgp = Number(unpostedLate?.total_unposted || 0);
       unpostedEstimatesExcluded = {
-        unpostedTripEstimatesEgp: Number(unpostedTripEstimatesEgp.toFixed(2)),
-        unpostedLateExpenseMemosEgp: Number(unpostedLateExpenseMemosEgp.toFixed(2)),
-        totalExcludedEgp: Number((unpostedTripEstimatesEgp + unpostedLateExpenseMemosEgp).toFixed(2)),
+        unpostedTripEstimatesEgp: roundMoney(unpostedTripEstimatesEgp, digits),
+        unpostedLateExpenseMemosEgp: roundMoney(unpostedLateExpenseMemosEgp, digits),
+        totalExcludedEgp: roundMoney(unpostedTripEstimatesEgp + unpostedLateExpenseMemosEgp, digits),
       };
     } else {
       const shipmentExpenseIds = await qb
@@ -673,9 +679,9 @@ export class ImportProfitReportService {
         partnerId: p.id,
         name: p.name,
         percentage,
-        shareAmount: Number(shareAmount.toFixed(2)),
-        withdrawnProfit: Number(withdrawn.toFixed(2)),
-        currentBalance: Number((shareAmount - withdrawn).toFixed(2)),
+        shareAmount: roundMoney(shareAmount, digits),
+        withdrawnProfit: roundMoney(withdrawn, digits),
+        currentBalance: roundMoney(shareAmount - withdrawn, digits),
       };
     });
 
@@ -686,19 +692,19 @@ export class ImportProfitReportService {
         projectId: projectId || null,
         profitAttributionVerified,
         attributionStatus,
-        grossSalesRevenue: Number(totalRevenue.toFixed(2)),
-        salesDiscounts: Number(totalDiscounts.toFixed(2)),
-        salesReturnsRevenue: Number(returnRevenue.toFixed(2)),
-        netSalesRevenue: Number(netSalesRevenue.toFixed(2)),
-        totalRevenue: Number(netSalesRevenue.toFixed(2)),
-        grossCogs: Number(totalCost.toFixed(2)),
-        returnsCogs: Number(returnCost.toFixed(2)),
-        netCogs: Number(netCogs.toFixed(2)),
-        totalCost: Number(netCogs.toFixed(2)),
-        grossProfit: Number(grossProfit.toFixed(2)),
-        operatingExpenses: Number(totalExpenses.toFixed(2)),
-        totalExpenses: Number(totalExpenses.toFixed(2)),
-        netProfitPool: Number(netProfitPool.toFixed(2)),
+        grossSalesRevenue: roundMoney(totalRevenue, digits),
+        salesDiscounts: roundMoney(totalDiscounts, digits),
+        salesReturnsRevenue: roundMoney(returnRevenue, digits),
+        netSalesRevenue: roundMoney(netSalesRevenue, digits),
+        totalRevenue: roundMoney(netSalesRevenue, digits),
+        grossCogs: roundMoney(totalCost, digits),
+        returnsCogs: roundMoney(returnCost, digits),
+        netCogs: roundMoney(netCogs, digits),
+        totalCost: roundMoney(netCogs, digits),
+        grossProfit: roundMoney(grossProfit, digits),
+        operatingExpenses: roundMoney(totalExpenses, digits),
+        totalExpenses: roundMoney(totalExpenses, digits),
+        netProfitPool: roundMoney(netProfitPool, digits),
         postedCostComponents,
         unpostedEstimatesExcluded,
         profitBasis: projectId ? 'POSTED_LEDGER_ONLY' : 'COMPANY_WIDE_EXPENSES_TABLE',
@@ -813,6 +819,12 @@ export class ImportProfitReportService {
       }
     }
 
+    // Book digits for the EGP figures below (U4 W1 canonical wiring
+    // for the demurrage estimates; INV-MONEY-PRECISION-HR-IMPORT-3DP
+    // for the capital / debt totals): the USD figures keep their
+    // hardcoded 2dp, which is correct for USD.
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+
     const supplierLiabilities = foreignDebts.map((s) => ({
       supplierId: s.id,
       supplierName: s.name,
@@ -824,10 +836,10 @@ export class ImportProfitReportService {
     }));
 
     const totalDebtEgp = foreignDebts.reduce((sum, s) => sum + Number(s.balance || 0), 0);
-    const totalDebtForeign = Number((unpaidProformaForeign > 0 ? unpaidProformaForeign : totalDebtEgp).toFixed(2));
-
-    // Book digits for the demurrage estimates (U4 W1 canonical wiring).
-    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    // Mixed currency by design: the foreign branch is USD (2dp is
+    // correct), the fallback is the EGP total at book digits.
+    const totalDebtForeign =
+      unpaidProformaForeign > 0 ? Number(unpaidProformaForeign.toFixed(2)) : roundMoney(totalDebtEgp, digits);
 
     const demurrageAlerts: any[] = [];
     for (const s of shipmentRows.filter((r) => r.status !== 'Arrived')) {
@@ -870,9 +882,9 @@ export class ImportProfitReportService {
 
     return {
       capital: {
-        totalCapital: Number(netPaidInCapital.toFixed(2)),
-        deployedCapital: Number(deployedCapital.toFixed(2)),
-        availableCapital: Number(availableCapital.toFixed(2)),
+        totalCapital: roundMoney(netPaidInCapital, digits),
+        deployedCapital: roundMoney(deployedCapital, digits),
+        availableCapital: roundMoney(availableCapital, digits),
       },
       pipeline: {
         projects: projectCounts,
@@ -885,7 +897,7 @@ export class ImportProfitReportService {
       },
       liabilities: {
         totalDebtForeign,
-        totalDebtEgp: Number(totalDebtEgp.toFixed(2)),
+        totalDebtEgp: roundMoney(totalDebtEgp, digits),
         unpaidProformaUsd: Number(unpaidProformaForeign.toFixed(2)),
         supplierLiabilities,
       },

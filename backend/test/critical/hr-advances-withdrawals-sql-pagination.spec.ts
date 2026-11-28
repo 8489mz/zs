@@ -110,7 +110,7 @@ async function main(): Promise<void> {
       CREATE TABLE hr_employee_ledger (id bigint PRIMARY KEY, tenant_id text, account_id text, employee_id bigint, reference_id bigint, reference_type text, entry_type text, amount numeric, balance_after numeric, repayment_method text, note text, created_by bigint, created_at timestamptz);
       CREATE TABLE hr_employee_loan_installments (id bigint PRIMARY KEY, tenant_id text, loan_id bigint, paid_at timestamptz);
       CREATE TABLE users (id bigint PRIMARY KEY, tenant_id text, display_name text, username text);
-      INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Africa/Cairo');
+      INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Africa/Cairo'), ('t1', 'currency', '"EGP"');
       INSERT INTO hr_employees (id, tenant_id, display_name, hire_date) VALUES
         (1, 't1', 'Test Employee', '2020-01-01'),
         (2, 't1', 'Other Employee', '2020-01-01');

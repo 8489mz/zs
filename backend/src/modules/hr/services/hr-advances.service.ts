@@ -51,10 +51,12 @@ import {
  * Date.UTC site in getEmployeeWithdrawalBalance (L7051) is a day-count
  * computation, NOT the UTC-slice key, and stays byte-identical; the 2
  * .slice(0, 10) sites are pg DATE/text reads (display only). Guard: the
- * 6 toFixed2 sites all live in withdrawals (withdrawal preview amounts);
- * the facade entry drops 11 -> 5 on this generation tree + the H5 entry
- * (6, 0) — at merge H3 has already taken the facade to 6, so the
- * coordinator rebases that hunk to 6 -> 0 (see build script header).
+ * 6 former two-decimal sites in withdrawals (withdrawal preview amounts)
+ * now round through roundMoney at tenant book digits
+ * (INV-MONEY-PRECISION-HR-IMPORT-3DP); the facade entry drops 11 -> 5
+ * on this generation tree + the H5 entry (6, 0) — at merge H3 has
+ * already taken the facade to 6, so the coordinator rebases that hunk
+ * to 6 -> 0 (see build script header).
  * tenant-scoped-reads MT-04 reads withdrawals via a section slice — its
  * multi-file repoint is merge-owned (prep §7.3), NOT in this patch.
  */
@@ -323,12 +325,17 @@ export class HrAdvancesService {
 
     const rows = pageResult.rows.map((row) => (row.kind === 'loan' ? toLoanRow(row) : toRepaymentRow(row)));
 
-    const totalWithdrawals = Number(Number(totals.rows[0]?.total_withdrawals || 0).toFixed(2));
-    const totalRepayments = Number(Number(totals.rows[0]?.total_repayments || 0).toFixed(2));
-    const totalManualCashRepayments = Number(Number(totals.rows[0]?.total_manual_cash || 0).toFixed(2));
-    const totalSalaryDeductionRepayments = Number(Number(totals.rows[0]?.total_salary_deduction || 0).toFixed(2));
-    const totalRemaining = Number(Number(loanTotals.rows[0]?.total_remaining || 0).toFixed(2));
-    const totalSalaryDeductionDue = Number(Number(loanTotals.rows[0]?.total_due || 0).toFixed(2));
+    // Book digits for the six summary totals below
+    // (INV-MONEY-PRECISION-HR-IMPORT-3DP): the totals are tenant-
+    // currency money, so they round through roundMoney at the
+    // tenant's book digits, never a hardcoded two-decimal spelling.
+    const digits = await tenantBookDigits(this.db, tenantId);
+    const totalWithdrawals = roundMoney(Number(totals.rows[0]?.total_withdrawals || 0), digits);
+    const totalRepayments = roundMoney(Number(totals.rows[0]?.total_repayments || 0), digits);
+    const totalManualCashRepayments = roundMoney(Number(totals.rows[0]?.total_manual_cash || 0), digits);
+    const totalSalaryDeductionRepayments = roundMoney(Number(totals.rows[0]?.total_salary_deduction || 0), digits);
+    const totalRemaining = roundMoney(Number(loanTotals.rows[0]?.total_remaining || 0), digits);
+    const totalSalaryDeductionDue = roundMoney(Number(loanTotals.rows[0]?.total_due || 0), digits);
     const openLoanCount = Number(loanTotals.rows[0]?.open_count || 0);
 
     return {
