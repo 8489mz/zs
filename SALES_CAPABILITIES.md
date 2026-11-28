@@ -12,6 +12,26 @@
 
 ## التحديثات الحالية
 
+<a id="cap-loss-prevention-pos"></a>
+### 262. منظومة درع منع الخسائر ومكافحة السرقة في نقاط البيع وغرفة العمليات الموحدة (POS Loss Prevention Shield, Cart Snapshot, Peer Benchmark & Command Center - 28 November 2026)
+* **حالة القدرة:** منفذة ومثبتة باختبارات المحرك النقي `cashier-peer-benchmark-engine.spec.ts` (2026-11-28؛ بانتظار إغلاق فحص التايب تشيك والحراس).
+* **السلوك والضوابط:**
+  1. **لقطة السلة الكاملة وتوقيت الكاميرا (`::ITEMS_JSON::` + `cameraTime`):** تسجيل كامل أصناف السلة (الاسم، الكمية، السعر، الإجمالي) في `pos_audit_events` و`audit_logs` عند مسح السلة (`draft_cancel`)، حذف صنف (`cart_remove` بقيمة الصنف المحذوف الفعلية)، تنقيص الكمية بما فيها زر `[-]` (`qty_decrease`)، وحذف الفواتير المعلقة (`held_sale_delete`)، مع توقيت الكاميرا الدقيق بالثانية (`HH:MM:SS`) بتوقيت المنشأة.
+  2. **أقفال الكاشير الاختيارية (Zero-Regression defaults = `false`):** قفل فتح الدرج بدون بيع (`POS_NO_SALE_DRAWER_OPEN`) برمز/كلمة مرور مدير (`antiTheftRequirePinForNoSale`)، إلزام الطباعة التلقائية للإيصال (`antiTheftEnforceMandatoryReceiptPrint`)، إلزام رقم مرجع للدفع الإلكتروني (`antiTheftRequireElectronicPaymentRef`)، منع تعديل سعر/وزن باركود الميزان يدوياً (`antiTheftLockWeightedManualEdit`) ورصد تكرار نفس ملصق الميزان خلال الوردية (`POS_WEIGHTED_BARCODE_REPLAY`).
+  3. **تتبع إعادة الطباعة:** مسار `POST /api/sales/:id/reprint-audit` يحدّث `sales.reprint_count` ويسجل `POS_RECEIPT_REPRINTED` ويختم الريسيت بعبارة `*** نسخة مكررة #N - COPY #N ***`.
+  4. **مقارنة الكاشيرات ببعضهم (`Peer Benchmark`):** المحرك النقي `cashier-peer-benchmark.engine.ts` يقارن متوسط الفاتورة وعدد الأصناف لكل كاشير بمتوسط زملائه (Leave-One-Out) لرصد تمرير البضاعة دون مسح الباركود، مع إنذارات واتساب فورية للمالك.
+  5. **غرفة عمليات منع الخسائر الموحدة (`GET /api/sales/fraud-radar/command-center`):** واجهة موحدة بـ 5 تبويبات (`CashierFraudRadarSection.tsx`) تجمع رادار الكاشير وجدول السلة القابل للتوسيع، عهدة الناقلين، الفاقد والأصناف الساخنة، عجز الورديات وعهد المناديب، وإعدادات الدرع + بطاقة ملخص حي في `OwnerCompanionPage.tsx`.
+  6. **بوابة المناديب الزمنية (20 ساعة):** منع إسناد أوردرات دفع عند الاستلام جديدة لمندوب عليه عهدة غير مسوّاة تجاوزت `antiTheftDeliveryOverdueHours` (افتراضياً `20` ساعة) عند تفعيل `antiTheftBlockOverdueDeliveryRep` مع استثناء مدير؛ راجع [DELIVERY_CAPABILITIES.md](DELIVERY_CAPABILITIES.md#cap-delivery-custody-shield).
+* **مصادر التنفيذ:**
+  - `backend/src/modules/sales/engines/cashier-peer-benchmark.engine.ts`
+  - `backend/src/modules/sales/services/cashier-fraud-radar.service.ts`، `loss-prevention-command-center.service.ts`، `sales-write.service.ts`، `sales-held.service.ts`، `create-sale/allocate-tenders-and-delivery.ts`
+  - `backend/src/modules/sales/controllers/cashier-fraud-radar.controller.ts`، `sales.controller.ts`، `dto/pos-audit-event.dto.ts`
+  - `frontend/src/features/audit/components/CashierFraudRadarSection.tsx`، `frontend/src/features/audit/components/loss-prevention/*`، `frontend/src/features/audit/api/cashier-fraud-radar.api.ts`
+  - `frontend/src/features/pos/hooks/usePosWorkspaceActions.ts`، `createPosWorkspaceAsyncActions.ts`، `createPosWorkspaceReceiptActions.ts`، `PosWorkspaceHeader.tsx`، `PosWorkspaceHeaderModals.tsx`
+  - `frontend/src/lib/pos-printing/open-receipt.ts`، `prestage.ts`، `template-document.ts`، `frontend/src/features/dashboard/pages/OwnerCompanionPage.tsx`
+* **اختبار المحرك النقي:** `backend/test/critical/cashier-peer-benchmark-engine.spec.ts` (ناجح في 2026-11-28).
+* **مجالات مرتبطة:** [المخزون والمستودعات](INVENTORY_CAPABILITIES.md#cap-295) · [المشتريات](PURCHASES_CAPABILITIES.md#cap-blind-grn) · [المناديب](DELIVERY_CAPABILITIES.md#cap-delivery-custody-shield) · [الإعدادات](SETTINGS_CAPABILITIES.md#settings-anti-theft-shield).
+
 ### 260. التزامن الديناميكي لشريط السلة العائم مع إخفاء شريط التنقل السفلي في نقاط البيع للموبايل (Mobile POS Dynamic Floating Cart Bar & Bottom Nav Synchronizer - 26 October 2026)
 * **حالة القدرة:** 🟢 مكتملة ومختبرة بنسبة 100% (26 أكتوبر 2026).
 * **المسارات المتأثرة:** شاشة نقطة البيع للموبايل وشاشات الكاشير اللمسية (`/pos`).

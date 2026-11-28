@@ -12,6 +12,15 @@
 
 ## التحديثات الحالية
 
+<a id="cap-delivery-custody-shield"></a>
+### حوكمة عهدة المناديب الزمنية (20 ساعة) والسقف الاختياري (Delivery Rep Overdue Custody Gate & Optional Cash Cap - 28 November 2026)
+* **حالة القدرة:** منفذة في الباك إند والفرونت إند (2026-11-28).
+* **السلوك والضوابط:**
+  - **البوابة الزمنية (خيار أ — 20 ساعة افتراضياً):** عند تفعيل `antiTheftBlockOverdueDeliveryRep` يمنع النظام إسناد أوردرات دفع عند الاستلام (COD) جديدة لأي مندوب لديه طلب غير مسوّى تجاوز `antiTheftDeliveryOverdueHours` (الافتراضي `20` ساعة) دون تقييد مبيعات نفس اليوم، مع إتاحة استثناء مدير (`managerPin`).
+  - **السقف النقدي الاختياري لكل مندوب:** عمود `delivery_representatives.max_cash_custody_limit` (هجرة `2040000000343`) و`antiTheftDefaultDeliveryCustodyCap` (افتراضياً `0` = مفتوح حتى في الوضع المشدد) يُفعَّلان فقط عند تخصيص حد صريح.
+  - إرجاع `unsettled_cod_cash` و`unsettled_orders_count` لكل مندوب في `DeliveryRepsAdminService.list`، وعرضها في تبويب «عجز الورديات وعهد المناديب» داخل [غرفة عمليات منع الخسائر](SALES_CAPABILITIES.md#cap-loss-prevention-pos) والملخص اليومي [SETTINGS_CAPABILITIES.md](SETTINGS_CAPABILITIES.md#settings-anti-theft-shield).
+* **مصادر التنفيذ:** `backend/src/modules/delivery-reps/dto/upsert-delivery-rep.dto.ts`، `delivery-reps-admin.service.ts`، `backend/src/modules/sales/services/create-sale/allocate-tenders-and-delivery.ts`.
+
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
 ## فهرس الأقسام المنقولة

@@ -12,6 +12,15 @@
 
 ## التحديثات الحالية
 
+<a id="settings-anti-theft-shield"></a>
+### إعدادات درع منع الخسائر ومكافحة السرقة وتنبيهات الملخص اليومي (Anti-Theft Shield Settings & Daily Digest Alerts - 28 November 2026)
+- **السلوك الحالي والحدود:**
+  - إضافة 14 إعداداً اختيارياً تحت `antiTheft*` (`anti-theft-settings.util.ts`) بوضع افتراضي آمن (`false` للأقفال الصارمة، `20` ساعة لمهلة المناديب، `0` لسقف المندوب، `4` ساعات للبضاعة بالطريق، `200` لمسح السلة، `500` للتالف) لضمان عدم تأثر أي منشأة قائمة (`Zero-Regression`).
+  - توفير لوحة الإعدادات الموحدة مع زر **«تفعيل درع منع السرقة المشدد»** بنقرة واحدة في `SalesInventoryAntiTheft` (`Settings > Sales & Inventory`) وكذلك داخل تبويب الإعدادات في غرفة عمليات منع الخسائر، مع ربط `buildAntiTheftFormValues` في `SettingsMainForm.tsx` لضمان عدم مسح الإعدادات عند إعادة التحميل.
+  - توسيع الملخص التنفيذي اليومي عبر واتساب (`DailyDigestService`) ليتضمن قسماً مخصصاً لإنذارات درع منع الخسائر (ملخص مسح السلة وفتح الدرج وإعادة الطباعة، التحويلات المتأخرة بالطريق، وعهد المناديب المتأخرة).
+- **مصادر التنفيذ:** `backend/src/common/utils/anti-theft-settings.util.ts`، `backend/src/modules/settings/services/daily-digest.service.ts`، `frontend/src/types/domain-models/settings.ts`، `frontend/src/features/settings/schemas/settings.schema.ts`، `frontend/src/features/settings/contracts.ts`، `frontend/src/features/settings/components/forms/SettingsMainForm.tsx`، `frontend/src/features/settings/components/forms/tabs/sales-inventory/sales-inventory-anti-theft.tsx`.
+- **المجالات المتأثرة:** [المبيعات](SALES_CAPABILITIES.md#cap-loss-prevention-pos) · [المخزون](INVENTORY_CAPABILITIES.md#cap-295) · [المشتريات](PURCHASES_CAPABILITIES.md#cap-blind-grn) · [المناديب](DELIVERY_CAPABILITIES.md#cap-delivery-custody-shield) · [الثوابت المعمارية](ARCHITECTURE_INVARIANTS.md).
+
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
 <a id="settings-electron-barcode-and-receipt-printers"></a>

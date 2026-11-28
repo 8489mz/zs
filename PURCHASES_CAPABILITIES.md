@@ -12,6 +12,15 @@
 
 ## التحديثات الحالية
 
+<a id="cap-blind-grn"></a>
+### الاستلام الأعمى لبضاعة الموردين وإنذار فروقات الاستلام (Blind GRN & Discrepancy WhatsApp Alert - 28 November 2026)
+* **حالة القدرة:** منفذة في الباك إند والفرونت إند (2026-11-28).
+* **السلوك والضوابط:**
+  - عند تفعيل `antiTheftEnforceBlindPurchaseReceiving` يكون استلام غير المديرين أعمى: مسار `GET /api/purchase-orders/:id?forReceiving=true` يحجب `quantity` و`received_quantity` و`unit_cost` و`total` ويعيد `blindReceivingMode: true`، كما تخفي نافذة `GoodsReceiptModal.tsx` عمود «المطلوب» وتبدأ حقول الاستلام بقيمة `0` لإلزام أمين المخزن بالعد والوزن الفعلي.
+  - عند ترحيل إذن الاستلام (`postGoodsReceipt`) تقارن الخدمة الكميات المستلمة والمرفوضة ببنود أمر الشراء، وتسجل مخالفة تدقيق وترسل إنذار واتساب فورياً للمالك عند أي فارق أو كمية مرفوضة.
+* **مصادر التنفيذ:** `backend/src/modules/purchases/controllers/purchase-orders.controller.ts`، `services/purchase-orders.service.ts`، `services/goods-receipt.service.ts`، `frontend/src/features/purchases/components/GoodsReceiptModal.tsx`.
+* **مجالات مرتبطة:** [غرفة عمليات منع الخسائر](SALES_CAPABILITIES.md#cap-loss-prevention-pos) · [الإعدادات](SETTINGS_CAPABILITIES.md#settings-anti-theft-shield).
+
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
 ## فهرس الأقسام المنقولة

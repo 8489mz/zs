@@ -12,6 +12,23 @@
 
 ## التحديثات الحالية
 
+<a id="cap-295"></a>
+### 295. عزل المخازن بمرحلتين، عهدة الناقل، مراقبة البضاعة بالطريق، الجرد الأعمى، والأصناف الساخنة (Warehouse Loss Prevention, In-Transit Custody, Blind Count & Hot SKUs - 28 November 2026)
+* **حالة القدرة:** منفذة ومثبتة باختبارات المحرك النقي `shrinkage-reconciliation-engine.spec.ts` (2026-11-28؛ بانتظار إغلاق فحص التايب تشيك والحراس).
+* **الهجرة والأعمدة المضافة:** `backend/src/database/migrations/2040000000343_loss_prevention_anti_theft_shield.ts` (`stock_transfers.carrier_employee_id`, `carrier_name`, `in_transit_alerted_at`; `damaged_stock_records.approved_by`, `evidence_image_url`; `stock_count_sessions.is_blind`, `count_scope`; `products.is_high_risk_shrinkage`).
+* **السلوك والضوابط:**
+  1. **التحويل الإلزامي بمرحلتين وعهدة الناقل:** عند تفعيل `antiTheftStrictTwoStepTransfers` تُوجَّه مسارات النقل السريع (`internalTransferProducts`, `transferCategory`, `internalTransferCategory`, `executeReplenishment`) عبر `createStockTransfer` بحالة `sent` وحساب «بضاعة بالطريق» بعهدة الناقل (`carrier_name` مع توقيع ثلاثي في `ReplenishmentPickListPrintModal.tsx`) مع إنذار واتساب فوري عند أي فاقد استلام.
+  2. **مراقب تأخر البضاعة بالطريق (`InTransitAgingMonitorService`):** فحص دوري كل 30 دقيقة (معطّل في بيئة `NODE_ENV=test`) يرصد التحويلات المعلقة لأكثر من `inTransitAlertHours` ويبعث إنذار واتساب للمالك ويسجل `INVENTORY_IN_TRANSIT_OVERDUE` مع وسم `in_transit_alerted_at`.
+  3. **قفل التالف والتسويات السالبة:** عند تفعيل `antiTheftRequireManagerForWriteOff` يتطلب غير المدير كلمة مرور حساب مدير محدد (`mode === 'account'`) في `createDamagedStock` و`createInventoryAdjustment`، مع إنذار واتساب للمالك فوق `writeOffAlertThreshold` وأكواد `INVENTORY_DAMAGE_RECORDED` و`INVENTORY_NEGATIVE_ADJUSTMENT`.
+  4. **الجرد الأعمى (`is_blind`) والأصناف الساخنة (`Hot SKUs`) وخريطة الفاقد:** إخفاء `expectedQty` و`varianceQty` من استجابات الخادم والواجهة لغير المديرين ومنع زر «ملء برصيد النظام» أثناء الجرد الأعمى؛ دعم وسم الأصناف عالية الخطورة (`GET/POST /api/inventory/hot-skus`), وضع «جرد الأصناف الساخنة» في `InventoryComposerCards.tsx`، والمحرك النقي `shrinkage-reconciliation.engine.ts` (`GET /api/inventory/shrinkage-report` و`GET /api/inventory/in-transit-custody`).
+* **مصادر التنفيذ:**
+  - `backend/src/modules/inventory/engines/shrinkage-reconciliation.engine.ts`
+  - `backend/src/modules/inventory/services/in-transit-aging-monitor.service.ts`، `loss-prevention-inventory.service.ts`، `inventory-transfer.service.ts`، `inventory-replenishment.service.ts`، `inventory-adjustment.service.ts`، `inventory-count.service.ts`
+  - `backend/src/modules/catalog/services/catalog-product-list.service.ts`، `catalog-product-write.service.ts`، `dto/upsert-product.dto.ts`
+  - `frontend/src/features/inventory/components/SmartReplenishmentModal.tsx`، `ReplenishmentPickListPrintModal.tsx`، `QuickStockAdjustmentDialog.tsx`، `InventoryActionsPanel.tsx`، `sections/InventoryComposerCards.tsx`
+* **اختبار المحرك النقي:** `backend/test/critical/shrinkage-reconciliation-engine.spec.ts` (ناجح في 2026-11-28).
+* **مجالات مرتبطة:** [المبيعات وغرفة العمليات](SALES_CAPABILITIES.md#cap-loss-prevention-pos) · [الإعدادات](SETTINGS_CAPABILITIES.md#settings-anti-theft-shield).
+
 <a id="cap-294"></a>
 ### 294. مزامنة أرصدة المخازن اللحظية ومنع سباق التوقيت والقطع المبكر في بحث أصناف «إذن صرف جديد» (Issue Order Product Picker Real-Time Stock Sync & Race-Free Combobox - 24 November 2026)
 * **حالة القدرة:** تم التحديث في الكود (24 نوفمبر 2026؛ التحقق الموسع مؤجل لنهاية الجلسة).
