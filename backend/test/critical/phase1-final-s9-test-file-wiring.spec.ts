@@ -175,9 +175,9 @@ async function main(): Promise<void> {
   // in the inventory file.
   {
     const all = listSpecFiles(path.join(BACKEND, 'test'));
-    assert.equal(all.length, 886, 'backend/test must hold exactly 878 spec files');
+    assert.equal(all.length, 887, 'backend/test must hold exactly 878 spec files');
     const specsJson = JSON.parse(fs.readFileSync(CRITICAL_JSON, 'utf8')) as { specs: string[] };
-    assert.equal(specsJson.specs.length, 435, 'critical-specs.json must hold exactly 425 specs');
+    assert.equal(specsJson.specs.length, 436, 'critical-specs.json must hold exactly 425 specs');
     assert.equal(all.length - specsJson.specs.length, 451, 'unlinked files must be exactly 451');
     const inventory = fs.readFileSync(INVENTORY, 'utf8');
     assert.ok(
@@ -256,7 +256,7 @@ async function main(): Promise<void> {
     const invCount = (invariants.match(new RegExp(NEW_INV, 'g')) || []).length;
     assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the new INV exactly once');
     const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-    const guardCount = (guard.match(/INV-MODULE-DOCUMENTATION-S12/g) || []).length;
+    const guardCount = (guard.match(/INV-MFA-BEGIN-SETUP-ON-CONFLICT-42702/g) || []).length;
     assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the new INV exactly once');
   }
 
@@ -272,11 +272,11 @@ async function main(): Promise<void> {
       .split('&&')
       .map((part) => part.trim().replace(/^ts-node\s+/, ''))
       .filter((part) => part.endsWith('.spec.ts'));
-    assert.equal(specs.length, 435);
-    assert.equal(chain.length, 435);
+    assert.equal(specs.length, 436);
+    assert.equal(chain.length, 436);
     assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 425 specs in order');
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s12-module-documentation.spec.ts');
-    assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s12-module-documentation.spec.ts');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s13-mfa-begin-setup.spec.ts');
+    assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s13-mfa-begin-setup.spec.ts');
     for (const [label, specPath] of [
       ['B1', B1_SPEC],
       ['B2', B2_SPEC],
@@ -325,11 +325,11 @@ async function main(): Promise<void> {
     ] as const) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes('assert.equal(specs.length, 435);') && src.includes('assert.equal(chain.length, 435);'),
+        src.includes('assert.equal(specs.length, 436);') && src.includes('assert.equal(chain.length, 436);'),
         `${label} spec wiring must re-pin to 425`,
       );
       assert.ok(
-        src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s12-module-documentation.spec.ts'"),
+        src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s13-mfa-begin-setup.spec.ts'"),
         `${label} spec last-entry must re-pin to the new spec`,
       );
     }
@@ -417,7 +417,7 @@ async function main(): Promise<void> {
     ] as const) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes('guard.match(/INV-MODULE-DOCUMENTATION-S12/g)'),
+        src.includes('guard.match(/INV-MFA-BEGIN-SETUP-ON-CONFLICT-42702/g)'),
         `${label} spec guard assertion must re-pin to the new INV`,
       );
     }

@@ -434,6 +434,7 @@
     "test/critical/crm-close-date-required.spec.ts",
     "test/critical/phase1-final-s12-crm-baseline.spec.ts",
     "test/critical/phase1-final-s12-addons-baseline.spec.ts",
-    "test/critical/phase1-final-s12-module-documentation.spec.ts"
+    "test/critical/phase1-final-s12-module-documentation.spec.ts",
+    "test/critical/phase1-final-s13-mfa-begin-setup.spec.ts"
   ]
 }

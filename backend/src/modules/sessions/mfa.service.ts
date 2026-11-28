@@ -130,8 +130,8 @@ export class MfaService {
             updated_at: now,
             // Concurrent confirmation must NEVER be reset back to an unenrolled factor.
           })
-          .where('tenant_id', '=', tenantId)
-          .where('confirmed_at', 'is', null),
+          .where('user_mfa.tenant_id', '=', tenantId)
+          .where('user_mfa.confirmed_at', 'is', null),
       )
       .returning('user_id')
       .executeTakeFirst();
