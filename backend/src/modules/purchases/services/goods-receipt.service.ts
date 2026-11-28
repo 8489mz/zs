@@ -109,9 +109,13 @@ export class GoodsReceiptService {
 
   async postGoodsReceipt(id: number, auth: AuthContext): Promise<any> {
     const result = await this.post.postGoodsReceipt(id, auth);
-    void this.checkPostReceiptDiscrepancyAndAlert(id, auth).catch((err) =>
-      this.logger.warn(`GRN discrepancy alert failed: ${err?.message}`),
-    );
+    if (this.audit || this.whatsappService) {
+      try {
+        await this.checkPostReceiptDiscrepancyAndAlert(id, auth);
+      } catch (err) {
+        this.logger.warn(`GRN discrepancy alert failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     return result;
   }
 
@@ -197,7 +201,11 @@ export class GoodsReceiptService {
       `*البنود ذات الفارق:*\n` +
       discrepancies.slice(0, 8).join('\n') +
       `\n\n_يرجى مراجعة مطابقة الفاتورة مع المورد قبل اعتماد الصرف._`;
-    await this.whatsappService.sendRawMessage(scope.tenantId, tenant.owner_phone, text);
+    void this.whatsappService
+      .sendRawMessage(scope.tenantId, tenant.owner_phone, text)
+      .catch((err) =>
+        this.logger.warn(`GRN WhatsApp alert failed: ${err instanceof Error ? err.message : String(err)}`),
+      );
   }
 
   async createBillFromReceipts(

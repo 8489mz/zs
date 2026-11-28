@@ -145,7 +145,7 @@ export async function sendTransferShortageWhatsAppAlert(
     `إجمالي الكمية المفقودة: *${meta.totalShortfallQty}*\n` +
     `السبب المسجل: ${meta.varianceReason}\n\n` +
     `_يرجى المراجعة الفورية مع أمين المخزن والناقل._`;
-  await whatsappService.sendRawMessage(tenantId, tenant.owner_phone, text);
+  void whatsappService.sendRawMessage(tenantId, tenant.owner_phone, text).catch(() => undefined);
 }
 
 export async function sendDamageWhatsAppAlert(
@@ -182,7 +182,7 @@ export async function sendDamageWhatsAppAlert(
     (meta.approvedByName ? `المعتمد: ${meta.approvedByName}\n` : '') +
     `السبب: ${meta.note || meta.reason}\n\n` +
     `_يرجى التحقق من البضاعة التالفة فعلياً._`;
-  await whatsappService.sendRawMessage(tenantId, tenant.owner_phone, text);
+  void whatsappService.sendRawMessage(tenantId, tenant.owner_phone, text).catch(() => undefined);
 }
 
 export async function generateStockTransferDocNo(trx: DbOrTx, transferId: number, tenantId: string): Promise<string> {

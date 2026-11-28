@@ -985,7 +985,7 @@ export class InventoryCountService {
       { eventCode: AUDIT_EVENT_CODES.INVENTORY_DAMAGE_RECORDED },
     );
     if (damageAlertMeta && this.whatsappService) {
-      void sendDamageWhatsAppAlert(this.db, this.whatsappService, tenantScope.tenantId, damageAlertMeta).catch((err) =>
+      await sendDamageWhatsAppAlert(this.db, this.whatsappService, tenantScope.tenantId, damageAlertMeta).catch((err) =>
         this.logger.warn(`Damaged stock WhatsApp alert failed: ${err?.message}`),
       );
     }

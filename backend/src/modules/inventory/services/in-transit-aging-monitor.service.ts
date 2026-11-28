@@ -48,6 +48,7 @@ export class InTransitAgingMonitorService implements OnApplicationBootstrap, OnM
         this.logger.warn(`Initial in-transit aging check error: ${err?.message}`);
       });
     }, 60_000);
+    this.startupHandle.unref?.();
     this.intervalHandle = setInterval(
       () => {
         this.scanAllTenantsForOverdueTransfers().catch((err) => {
@@ -56,6 +57,7 @@ export class InTransitAgingMonitorService implements OnApplicationBootstrap, OnM
       },
       30 * 60 * 1000,
     );
+    this.intervalHandle.unref?.();
   }
 
   onModuleDestroy() {

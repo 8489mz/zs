@@ -419,7 +419,7 @@ export class InventoryAdjustmentService {
       delete responseRecord._writeOffAlert;
     }
     if (alertMeta && this.whatsappService) {
-      void this.notifyWriteOffWhatsApp(scope.tenantId, alertMeta).catch((err) =>
+      await this.notifyWriteOffWhatsApp(scope.tenantId, alertMeta).catch((err) =>
         this.logger.warn(`Write-off WhatsApp alert failed: ${err?.message}`),
       );
     }
@@ -458,7 +458,11 @@ export class InventoryAdjustmentService {
       (meta.approvedByName ? `المعتمد: ${meta.approvedByName}\n` : '') +
       `السبب: ${meta.reason}\n\n` +
       `_يرجى المراجعة للتأكد من عدم وجود إخفاء عجز أو سحب غير مبرر._`;
-    await this.whatsappService.sendRawMessage(tenantId, tenant.owner_phone, text);
+    void this.whatsappService
+      .sendRawMessage(tenantId, tenant.owner_phone, text)
+      .catch((err) =>
+        this.logger.warn(`Write-off WhatsApp alert failed: ${err instanceof Error ? err.message : String(err)}`),
+      );
   }
 
   // INV-ADJUST-SINGLE-QTY-BASIS: the read side of the dialog prefill.

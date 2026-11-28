@@ -669,7 +669,7 @@ export class InventoryTransferService {
     const alertMeta = resultRecord?._shortageAlert;
     if (resultRecord && '_shortageAlert' in resultRecord) delete resultRecord._shortageAlert;
     if (alertMeta && this.whatsappService) {
-      void sendTransferShortageWhatsAppAlert(this.db, this.whatsappService, scope.tenantId, alertMeta).catch((err) => this.logger.warn(`Transfer shortage WhatsApp alert failed: ${err?.message}`));
+      await sendTransferShortageWhatsAppAlert(this.db, this.whatsappService, scope.tenantId, alertMeta).catch((err) => this.logger.warn(`Transfer shortage WhatsApp alert failed: ${err?.message}`));
     }
     return result as Record<string, unknown>;
   }

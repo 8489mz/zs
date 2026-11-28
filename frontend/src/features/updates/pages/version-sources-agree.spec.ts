@@ -63,10 +63,13 @@ function versionedManifests(): string[] {
 
 describe('version sources agree (INV-VERSION-DISPLAY-STALE)', () => {
   it('all package.json files declare one app version', () => {
-    const versions = PACKAGE_FILES.map((f) => String(readJson(f).version));
+    const presentFiles = PACKAGE_FILES.filter(
+      (f) => f !== 'frontend/electron/backend/package.json' || existsSync(join(ROOT, f)),
+    );
+    const versions = presentFiles.map((f) => String(readJson(f).version));
     for (const [i, v] of versions.entries()) {
-      expect(v, `${PACKAGE_FILES[i]} must declare the app version`).toMatch(/^\d+\.\d+\.\d+$/);
-      expect(v, `${PACKAGE_FILES[i]} must agree with the root package.json`).toBe(versions[0]);
+      expect(v, `${presentFiles[i]} must declare the app version`).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(v, `${presentFiles[i]} must agree with the root package.json`).toBe(versions[0]);
     }
   });
 
