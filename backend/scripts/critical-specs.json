@@ -411,6 +411,7 @@
     "test/critical/phase1-final-s3-money-precision-hr-import.spec.ts",
     "test/critical/phase1-final-s4-legacy-doc-numbers.spec.ts",
     "test/critical/phase1-final-s5-business-date-r3.spec.ts",
-    "test/critical/phase1-final-s6-import-fx-payout-idempotency.spec.ts"
+    "test/critical/phase1-final-s6-import-fx-payout-idempotency.spec.ts",
+    "test/critical/phase1-final-s7-marketplace-webhook-map-row.spec.ts"
   ]
 }
