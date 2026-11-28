@@ -58,8 +58,9 @@ frontend/electron/backend/portable_data/
 frontend/electron/backend/portable_data_test/
 safe_backup_data/
 
-# Electron Env
+# Electron Env & Generated Backend Runtime Copy
 frontend/.env.electron
+frontend/electron/backend/package.json
 
  
 backend/runtime/
