@@ -4,6 +4,7 @@ import { recordStockMovement } from '../../../../common/utils/stock-movement-wri
 import { roundMoney } from '../../../accounting/engines/money-minor-units.engine';
 import { allocateSaleFromImportLots } from '../../../import-sales/helpers/import-lot-allocation.helper';
 import { offlineSaleTimestamps } from '../../../cash-drawer/helpers/cash-drawer.helper';
+import { formatOfflineReconciliationNoteTags } from '../../engines/pos-offline-sale.engine';
 import { computeSaleAllocationLegs, resolvePostedSalePaymentChannel } from '../../helpers/sales-write.helper';
 import { tripSaleContribution } from '../../../../common/utils/van-trip-counters.engine';
 import { applyTripCounterDelta, lockOpenTripRow } from '../sales-edit-and-cancel/sales-edit-and-cancel-types';
@@ -81,6 +82,16 @@ export class InsertSaleAndStockService {
       const terminalTag = `[تفويض شبكة: ${normalized.cardScheme || 'بطاقة'} | ${normalized.terminalAuthCode}${normalized.terminalRrn ? ` | مرجع: ${normalized.terminalRrn}` : ''}]`;
       saleNote = saleNote ? `${saleNote} | ${terminalTag}` : terminalTag;
     }
+    const offlineReconTags = formatOfflineReconciliationNoteTags({
+      shortfalls: ctx.offlineStockShortfalls || [],
+      priceDrifts: ctx.offlinePriceDrifts || [],
+    });
+    for (const tag of offlineReconTags) {
+      if (!saleNote.includes(tag)) {
+        saleNote = saleNote ? `${saleNote} | ${tag}` : tag;
+      }
+    }
+    const effectiveAllowNegativeStock = allowNegativeStockSales || Boolean(ctx.isOfflineSyncSale);
 
     // F7 (POS-to-trip attribution): the pre-transaction candidate
     // is re-checked inside this transaction — the trip row is
@@ -240,6 +251,28 @@ export class InsertSaleAndStockService {
             rrn: normalized.terminalRrn,
             cardScheme: normalized.cardScheme,
             cardLastFour: normalized.cardLastFour,
+          }),
+        })
+        .execute();
+    }
+
+    if (offlineReconTags.length > 0) {
+      await trx
+        .insertInto('pos_audit_events')
+        .values({
+          tenant_id: scope.tenantId,
+          account_id: scope.accountId,
+          event_type: 'offline_sale_reconciliation',
+          user_id: auth.userId,
+          sale_id: id,
+          product_id: ctx.offlineStockShortfalls?.[0]?.productId ?? ctx.offlinePriceDrifts?.[0]?.productId ?? null,
+          amount: total,
+          reason: offlineReconTags.join(' | '),
+          metadata: JSON.stringify({
+            offlineDocNo,
+            offlineCreatedAt: offlineCreatedAt?.toISOString() ?? null,
+            shortfalls: ctx.offlineStockShortfalls || [],
+            priceDrifts: ctx.offlinePriceDrifts || [],
           }),
         })
         .execute();
@@ -458,7 +491,7 @@ export class InsertSaleAndStockService {
       remainingQty = allocationLegs.remainingQty;
 
       if (remainingQty > 0) {
-        if (!allowNegativeStockSales) {
+        if (!effectiveAllowNegativeStock) {
           throw await this.buildInsufficientStockError(trx, {
             productId: item.productId,
             productName: item.productName,
@@ -484,7 +517,7 @@ export class InsertSaleAndStockService {
           accountId: scope.accountId,
           errorCode: 'INSUFFICIENT_STOCK',
           errorMessage: `Insufficient stock for ${item.productName}`,
-          allowNegative: allowNegativeStockSales,
+          allowNegative: effectiveAllowNegativeStock,
           movementType: 'sale',
           referenceType: 'sale',
           referenceId: id,
@@ -625,7 +658,7 @@ export class InsertSaleAndStockService {
             modRemainingQty = modAllocationLegs.remainingQty;
 
             if (modRemainingQty > 0) {
-              if (!allowNegativeStockSales) {
+              if (!effectiveAllowNegativeStock) {
                 throw new AppError(`Insufficient stock for modifier ${mod.name}`, 'INSUFFICIENT_MODIFIER_STOCK', 400);
               }
               modAllocations.push({
@@ -646,7 +679,7 @@ export class InsertSaleAndStockService {
                 accountId: scope.accountId,
                 errorCode: 'INSUFFICIENT_MODIFIER_STOCK',
                 errorMessage: `Insufficient stock for modifier ${mod.name}`,
-                allowNegative: allowNegativeStockSales,
+                allowNegative: effectiveAllowNegativeStock,
                 movementType: 'sale',
                 referenceType: 'sale',
                 referenceId: id,

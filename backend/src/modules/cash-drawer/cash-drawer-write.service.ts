@@ -123,9 +123,9 @@ export class CashDrawerWriteService {
     this.findOpenTablesBlockingClose = deps.findOpenTablesBlockingClose;
   }
 
-  async openCashierShift(payload: { openingCash?: number; note?: string; branchId?: number | string | null; locationId?: number | string | null; password?: string; managerPin?: string; terminalCode?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  async openCashierShift(payload: { openingCash?: number; note?: string; branchId?: number | string | null; locationId?: number | string | null; password?: string; managerPin?: string; terminalCode?: string; offlineOpenedAt?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = this.scope(auth);
-    const { openingCash, note, branchId, locationId, password, terminalCode } = normalizeShiftOpenPayload(payload);
+    const { openingCash, note, branchId, locationId, password, terminalCode, offlineOpenedAt } = normalizeShiftOpenPayload(payload);
     if (!Number.isFinite(openingCash) || openingCash < 0 || openingCash > 1_000_000_000_000) {
       throw new AppError('رصيد الافتتاح يجب أن يكون رقماً صالحاً وغير سالب', 'OPENING_CASH_INVALID', 400);
     }
@@ -190,7 +190,9 @@ export class CashDrawerWriteService {
       }
       let inserted: { rows: Array<{ id?: number }> };
       try {
-        inserted = await sql<{ id?: number }>`insert into cashier_shifts (doc_no, branch_id, location_id, opened_by, opening_cash, opening_note, status, expected_cash, tenant_id, account_id, terminal_code) values (null, ${resolvedBranchId}, ${locationId}, ${auth.userId}, ${openingCash}, ${note}, 'open', ${openingCash}, ${scope.tenantId}, ${scope.accountId}, ${terminalCode}) returning id`.execute(trx);
+        inserted = offlineOpenedAt
+          ? await sql<{ id?: number }>`insert into cashier_shifts (doc_no, branch_id, location_id, opened_by, opening_cash, opening_note, status, expected_cash, tenant_id, account_id, terminal_code, created_at) values (null, ${resolvedBranchId}, ${locationId}, ${auth.userId}, ${openingCash}, ${note}, 'open', ${openingCash}, ${scope.tenantId}, ${scope.accountId}, ${terminalCode}, ${offlineOpenedAt.toISOString()}) returning id`.execute(trx)
+          : await sql<{ id?: number }>`insert into cashier_shifts (doc_no, branch_id, location_id, opened_by, opening_cash, opening_note, status, expected_cash, tenant_id, account_id, terminal_code) values (null, ${resolvedBranchId}, ${locationId}, ${auth.userId}, ${openingCash}, ${note}, 'open', ${openingCash}, ${scope.tenantId}, ${scope.accountId}, ${terminalCode}) returning id`.execute(trx);
       } catch (err) {
         const code = (err as { code?: unknown })?.code;
         if (code === '23505') throw new AppError('توجد وردية مفتوحة بالفعل على هذه المحطة في الفرع', 'SHIFT_TERMINAL_OCCUPIED', 400);
@@ -199,7 +201,7 @@ export class CashDrawerWriteService {
       const shiftId = Number(inserted.rows?.[0]?.id || 0);
       if (!shiftId) throw new AppError('Could not open cashier shift', 'SHIFT_OPEN_FAILED', 400);
       const businessTz = await getTenantTimezone(trx, scope.tenantId);
-      const docNo = buildCashDrawerShiftDocNo(shiftId, undefined, businessTz);
+      const docNo = buildCashDrawerShiftDocNo(shiftId, offlineOpenedAt ?? undefined, businessTz);
       await sql`update cashier_shifts set doc_no = ${docNo} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
       // F5: one audit row per shift open, in this same transaction —
       // a rolled-back open leaves no audit trace, and a committed

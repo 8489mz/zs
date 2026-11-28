@@ -93,4 +93,23 @@ export class IdempotencyController {
 
     return response;
   }
+
+  @Post(':operationType/:idempotencyKey/reset-failed')
+  @AllowAuthenticated()
+  async resetFailedOperation(
+    @Param('operationType') operationType: string,
+    @Param('idempotencyKey') idempotencyKey: string,
+    @Req() req: RequestWithAuth,
+  ) {
+    const { tenantId, accountId } = req.authContext!;
+    if (!tenantId || !accountId) {
+      throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    }
+    return this.idempotencyService.resetTerminalFailedOperation({
+      tenantId,
+      accountId,
+      operationType,
+      idempotencyKey,
+    });
+  }
 }

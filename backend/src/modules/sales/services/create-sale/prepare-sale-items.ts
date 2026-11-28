@@ -7,6 +7,12 @@ import {
   resolvePriceListContext,
 } from '../../engines/price-list-resolution.engine';
 import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice } from '../../helpers/sales-write.helper';
+import {
+  decideOfflineSalePriceDrift,
+  decideOfflineSaleStockGate,
+  type OfflinePriceDriftItem,
+  type OfflineStockShortfallItem,
+} from '../../engines/pos-offline-sale.engine';
 import type { CreateSaleContext, CreateSaleDeps } from './create-sale-types';
 
 export class PrepareSaleItemsService {
@@ -146,6 +152,9 @@ export class PrepareSaleItemsService {
     let subtotal = 0;
     const preparedItems = [];
     const autoProduceItems = [];
+    const offlineStockShortfalls: OfflineStockShortfallItem[] = [];
+    const offlinePriceDrifts: OfflinePriceDriftItem[] = [];
+    const isOfflineSyncSale = Boolean(ctx.isOfflineSyncSale);
     for (const item of normalized.items) {
       if (Number(item.price || 0) <= 0) {
         throw new AppError('Sale item price must be greater than zero', 'INVALID_SALE_PRICE', 400);
@@ -210,6 +219,7 @@ export class PrepareSaleItemsService {
         offers: activeOffers,
         qty: item.qty,
         unitMultiplier: item.unitMultiplier,
+        now: ctx.offlineCreatedAt ?? undefined,
         businessTimezone,
         moneyDigits,
       });
@@ -220,14 +230,30 @@ export class PrepareSaleItemsService {
       const isApprovedPrice =
         approvedUnitPrice !== undefined && Math.abs(Number(item.price || 0) - Number(approvedUnitPrice)) <= 0.0001;
       if (!isApprovedPrice) {
-        await this.assertUnitPriceChangeAllowed(
-          trx,
-          auth,
-          Number(item.price || 0),
-          allowedUnitPrice,
-          item.productId,
-          normalized.managerPin,
-        );
+        try {
+          await this.assertUnitPriceChangeAllowed(
+            trx,
+            auth,
+            Number(item.price || 0),
+            allowedUnitPrice,
+            item.productId,
+            normalized.managerPin,
+          );
+        } catch (priceErr) {
+          const driftDecision = decideOfflineSalePriceDrift({
+            isOfflineSyncSale,
+            providedUnitPrice: Number(item.price || 0),
+            allowedUnitPrice,
+            productId: item.productId,
+            productName: product.name,
+          });
+          if (!driftDecision.acceptWithAudit) {
+            throw priceErr;
+          }
+          if (driftDecision.drift) {
+            offlinePriceDrifts.push(driftDecision.drift);
+          }
+        }
       }
       const effectiveAllowedUnitPrice =
         isApprovedPrice && approvedUnitPrice !== undefined ? Number(approvedUnitPrice) : allowedUnitPrice;
@@ -268,8 +294,17 @@ export class PrepareSaleItemsService {
       }
 
       const requiredQty = Number((Number(item.qty || 0) * Number(item.unitMultiplier || 1)).toFixed(3));
-      const canAllowNegative = allowNegativeStockSales || hasBOM || product.item_type === 'service';
-      if (!canAllowNegative && availableStockQty < requiredQty) {
+      const stockDecision = decideOfflineSaleStockGate({
+        isOfflineSyncSale,
+        allowNegativeStockSales,
+        hasBom: hasBOM,
+        isService: product.item_type === 'service',
+        availableStockQty,
+        requiredQty,
+        productId: item.productId,
+        productName: finalProductName,
+      });
+      if (!stockDecision.allowSale) {
         throw await this.buildInsufficientStockError(trx, {
           productId: item.productId,
           productName: finalProductName,
@@ -281,12 +316,15 @@ export class PrepareSaleItemsService {
           tenantId: scope.tenantId,
         });
       }
+      if (stockDecision.shortfall) {
+        offlineStockShortfalls.push(stockDecision.shortfall);
+      }
 
       const preparedItem = buildPreparedSaleItem(
         { ...product, name: finalProductName, stock_qty: availableStockQty },
         item,
         {
-          allowNegativeStockSales: allowNegativeStockSales || hasBOM || product.item_type === 'service',
+          allowNegativeStockSales: stockDecision.allowNegativeMovement,
           moneyDigits,
         },
       );
@@ -316,5 +354,7 @@ export class PrepareSaleItemsService {
     ctx.subtotal = subtotal;
     ctx.preparedItems = preparedItems;
     ctx.autoProduceItems = autoProduceItems;
+    ctx.offlineStockShortfalls = offlineStockShortfalls;
+    ctx.offlinePriceDrifts = offlinePriceDrifts;
   }
 }

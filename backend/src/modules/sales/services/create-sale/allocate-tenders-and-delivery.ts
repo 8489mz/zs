@@ -36,6 +36,27 @@ export class AllocateTendersAndDeliveryService {
       floorApproval,
       moneyDigits,
     } = ctx;
+    const offlineDocNo = ctx.offlineDocNo ?? String(payload.offlineDocNo || '').trim();
+    const offlineCreatedAt =
+      ctx.offlineCreatedAt !== undefined ? ctx.offlineCreatedAt : validateOfflineCreatedAt(payload.offlineCreatedAt);
+    const posTerminalCode = ctx.posTerminalCode ?? (String(payload.terminalCode || '').trim() || null);
+    const isOfflineSyncSale = Boolean(ctx.isOfflineSyncSale || (offlineDocNo && offlineCreatedAt));
+
+    const hasHistoricalShiftWindowForOfflineSale = async (): Promise<boolean> => {
+      if (!isOfflineSyncSale || !offlineCreatedAt) return false;
+      const lowerBound = new Date(offlineCreatedAt.getTime() + 5 * 60 * 1000).toISOString();
+      const upperBound = new Date(offlineCreatedAt.getTime() - 5 * 60 * 1000).toISOString();
+      const matched = await sql<{ id?: number }>`
+        select id from cashier_shifts
+        where tenant_id = ${scope.tenantId}
+          and (opened_by = ${auth.userId} or (${posTerminalCode}::text is not null and terminal_code = ${posTerminalCode}))
+          and created_at <= ${lowerBound}::timestamptz
+          and (closed_at is null or closed_at >= ${upperBound}::timestamptz)
+        limit 1
+      `.execute(trx);
+      return Boolean(matched.rows?.[0]?.id);
+    };
+
     if (normalized.source === 'pos') {
       // INV-REST-SHIFT-CLOSE-CONTROL (I23): the POS gate honours
       // requireCashierShiftForSales — tenants that run without
@@ -44,7 +65,7 @@ export class AllocateTendersAndDeliveryService {
       // off while sales still demand one. Missing setting fails
       // closed to demanding a shift.
       const hasOpenShift = await this.authz.hasOpenCashierShiftForSale(trx, auth, normalized.branchId, settingsMap);
-      if (!hasOpenShift)
+      if (!hasOpenShift && !(await hasHistoricalShiftWindowForOfflineSale()))
         throw new AppError('Open cashier shift is required before posting a POS sale', 'OPEN_SHIFT_REQUIRED', 400);
     } else if (
       normalized.paymentType !== 'credit' &&
@@ -59,7 +80,7 @@ export class AllocateTendersAndDeliveryService {
       // The setting-aware gate applies here too: a tenant that
       // runs without shifts must not be blocked on a cash sale.
       const hasOpenShift = await this.authz.hasOpenCashierShiftForSale(trx, auth, normalized.branchId, settingsMap);
-      if (!hasOpenShift)
+      if (!hasOpenShift && !(await hasHistoricalShiftWindowForOfflineSale()))
         throw new AppError('Open cashier shift is required before posting a cash sale', 'OPEN_SHIFT_REQUIRED', 400);
     }
 
@@ -318,18 +339,6 @@ export class AllocateTendersAndDeliveryService {
       }
     }
 
-    const offlineDocNo = String(payload.offlineDocNo || '').trim();
-    // INV-REST-SHIFT-CLOSE-CONTROL (I26): an offline sale keeps
-    // its ORIGINAL timestamp (savedAt) as created_at, so it lands
-    // in the shift whose window actually held it instead of the
-    // next shift's. An invalid timestamp rejects outright — never
-    // silently clamped to sync time.
-    const offlineCreatedAt = validateOfflineCreatedAt(payload.offlineCreatedAt);
-    // INV-REST-SHIFT-CLOSE-CONTROL (I24): the POS station code,
-    // stored on the sale so its cash attributes to its station's
-    // shift. Read off the DTO directly: normalizeSalePayload
-    // does not carry it, and this is the only read site.
-    const posTerminalCode = String(payload.terminalCode || '').trim() || null;
     ctx.payments = payments;
     ctx.paidAmount = paidAmount;
     ctx.remainingDebt = remainingDebt;
@@ -345,5 +354,6 @@ export class AllocateTendersAndDeliveryService {
     ctx.offlineDocNo = offlineDocNo;
     ctx.offlineCreatedAt = offlineCreatedAt;
     ctx.posTerminalCode = posTerminalCode;
+    ctx.isOfflineSyncSale = isOfflineSyncSale;
   }
 }

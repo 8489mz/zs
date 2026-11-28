@@ -71,7 +71,14 @@ export class IdempotencyService {
     if (Array.isArray(payload)) return payload.map((item) => this.stripVolatileFields(item));
 
     const clone = { ...payload };
-    const volatileKeys = ['timestamp', 'clientTime', 'requestId']; // add more as needed
+    const volatileKeys = [
+      'timestamp',
+      'clientTime',
+      'requestId',
+      'offlineDocNo',
+      'offlineCreatedAt',
+      'offlineOpenedAt',
+    ];
     for (const key of volatileKeys) {
       delete clone[key];
     }
@@ -297,6 +304,28 @@ export class IdempotencyService {
       .where('operation_type', '=', params.operationType)
       .where('status', '=', 'processing')
       .execute();
+  }
+
+  /**
+   * Explicitly clears a confirmed-rolled-back ('failed' with document_id IS NULL)
+   * reservation so an offline outbox item whose business blocker was resolved
+   * (e.g. stock replenished, shift opened, credit limit updated) can be retried
+   * safely under the SAME stable idempotency key without minting a new key.
+   * Never touches 'committed', 'processing', 'recovery_required', or any row with a document_id.
+   */
+  async resetTerminalFailedOperation(
+    params: Pick<IdempotencyReservation, 'tenantId' | 'accountId' | 'idempotencyKey' | 'operationType'>,
+  ): Promise<{ reset: boolean }> {
+    const result = await this.db
+      .deleteFrom('operation_executions')
+      .where('tenant_id', '=', params.tenantId)
+      .where('account_id', '=', params.accountId)
+      .where('idempotency_key', '=', params.idempotencyKey)
+      .where('operation_type', '=', params.operationType)
+      .where('status', '=', 'failed')
+      .where('document_id', 'is', null)
+      .executeTakeFirst();
+    return { reset: Number(result.numDeletedRows ?? 0) > 0 };
   }
 
   /**

@@ -299,10 +299,20 @@ export class ComputeTotalsAndGatesService {
     // still recorded in the sale note below. A cashier still needs the
     // manager approval.
     const isAdminSeller = auth.role === 'admin' || auth.role === 'super_admin';
-    const floorApproval =
-      belowFloorItems.length && !isAdminSeller
-        ? await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx)
-        : null;
+    let floorApproval: CreateSaleContext['floorApproval'] = null;
+    if (belowFloorItems.length && !isAdminSeller) {
+      if (ctx.isOfflineSyncSale) {
+        if (normalized.managerPin) {
+          try {
+            floorApproval = await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx);
+          } catch {
+            floorApproval = null;
+          }
+        }
+      } else {
+        floorApproval = await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx);
+      }
+    }
 
     // INV-VAN-PRICE-LIST-WIRING (F8): the SYSTEM cash discount in
     // POS — the portal path (execute-field-sale-internal) computes

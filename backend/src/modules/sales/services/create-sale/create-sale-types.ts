@@ -25,6 +25,10 @@ import { SalesQueryService } from '../sales-query.service';
 import { WhatsAppGatewayService } from '../../../settings/services/whatsapp-gateway.service';
 import type { SystemApprovedSaleTerms } from '../sales-write.service';
 import type { PosTripAttribution } from './resolve-pos-trip-attribution';
+import type {
+  OfflinePriceDriftItem,
+  OfflineStockShortfallItem,
+} from '../../engines/pos-offline-sale.engine';
 
 export type CreateSaleDeps = {
   db: Kysely<Database>;
@@ -256,6 +260,9 @@ export interface CreateSaleContext {
   offlineDocNo: string;
   offlineCreatedAt: Date | null;
   posTerminalCode: string | null;
+  isOfflineSyncSale?: boolean;
+  offlineStockShortfalls?: OfflineStockShortfallItem[];
+  offlinePriceDrifts?: OfflinePriceDriftItem[];
   // Phase 5 outputs (insertSaleAndStock).
   id: number;
   docNo: string;

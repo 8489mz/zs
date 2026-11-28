@@ -425,6 +425,7 @@ export function normalizeShiftOpenPayload(payload: {
   password?: string;
   managerPin?: string;
   terminalCode?: string;
+  offlineOpenedAt?: string;
 }): {
   openingCash: number;
   note: string;
@@ -432,12 +433,14 @@ export function normalizeShiftOpenPayload(payload: {
   locationId: number | null;
   password?: string;
   terminalCode: string | null;
+  offlineOpenedAt: Date | null;
 } {
   const rawPassword = payload.password || payload.managerPin;
   const terminalCode = String(payload.terminalCode || '')
     .trim()
     .toUpperCase();
   if (terminalCode.length > 32) throw new AppError('رمز المحطة غير صالح', 'SHIFT_TERMINAL_CODE_INVALID', 400);
+  const offlineOpenedAt = validateOfflineCreatedAt(payload.offlineOpenedAt);
   return {
     openingCash: Number(payload.openingCash || 0),
     note: String(payload.note || '').trim(),
@@ -445,6 +448,7 @@ export function normalizeShiftOpenPayload(payload: {
     locationId: payload.locationId ? Number(payload.locationId) : null,
     password: rawPassword ? String(rawPassword).trim() : undefined,
     terminalCode: terminalCode || null,
+    offlineOpenedAt,
   };
 }
 

@@ -27,4 +27,5 @@ export class OpenCashierShiftDto {
    * device and is null on cash sales.
    */
   @IsOptional() @IsString() @MaxLength(32) terminalCode?: string;
+  @IsOptional() @IsString() @MaxLength(64) offlineOpenedAt?: string;
 }

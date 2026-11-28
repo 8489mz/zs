@@ -10,6 +10,7 @@ import {
   resolveBranchSellableLocations,
 } from '../../../../common/engines/branch-sellable-locations.engine';
 import { assertProductsNot86ed } from '../restaurant-advanced-fnb.service';
+import { resolvePosOfflineSyncIdentity } from '../../engines/pos-offline-sale.engine';
 import type { ExchangeReturnContext } from '../../../../common/utils/exchange-return.port';
 import type { CreateSaleContext, CreateSaleDeps } from './create-sale-types';
 
@@ -29,7 +30,8 @@ export class LoadSaleContextService {
    */
   async loadSaleContext(ctx: CreateSaleContext): Promise<void> {
     const { trx, scope, normalized, payload, auth, effectiveTerms, returnedItems, isExchange, conversionRelease } = ctx;
-    await assertBusinessAccountingDate(trx, scope.tenantId, new Date(), true);
+    const offlineIdentity = resolvePosOfflineSyncIdentity(payload);
+    await assertBusinessAccountingDate(trx, scope.tenantId, offlineIdentity.offlineCreatedAt ?? new Date(), true);
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
     // R4-C INV-REST-MODIFIER-CONTRACT-2: re-price modifiers from
     // server truth and enforce group rules FIRST — before any stock
@@ -353,5 +355,9 @@ export class LoadSaleContextService {
     ctx.branch = branch;
     ctx.eligibleLocations = eligibleLocations;
     ctx.allowNegativeStockSales = allowNegativeStockSales;
+    ctx.isOfflineSyncSale = offlineIdentity.isOfflineSyncSale;
+    ctx.offlineDocNo = offlineIdentity.offlineDocNo;
+    ctx.offlineCreatedAt = offlineIdentity.offlineCreatedAt;
+    ctx.posTerminalCode = offlineIdentity.posTerminalCode;
   }
 }
