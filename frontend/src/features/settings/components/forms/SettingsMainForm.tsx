@@ -9,7 +9,7 @@ import { SINGLE_STORE_MODE } from '@/config/product-scope';
 import { normalizeText, type SettingsMainFormProps } from '@/features/settings/components/forms/settings-forms.shared';
 import { useLocalePreference } from '@/shared/locale/LocaleProvider';
 import { useSettingsUpdateMutation } from '@/features/settings/hooks/useSettingsMutations';
-import { buildZPayFormValues } from '@/features/settings/contracts';
+import { buildZPayFormValues, buildAntiTheftFormValues } from '@/features/settings/contracts';
 import { resolveBridgePrinter, resolveElectronPrinter } from '@/lib/printer-preferences';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -186,6 +186,7 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
       servicesBillingMethod: 'deliverable',
       servicesContractRenewalNoticeDays: 30,
       ...buildZPayFormValues(undefined),
+      ...buildAntiTheftFormValues(undefined),
     },
   });
 
@@ -511,6 +512,7 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
       servicesBillingMethod: ((settings as any).servicesBillingMethod as any) || 'deliverable',
       servicesContractRenewalNoticeDays: Number((settings as any).servicesContractRenewalNoticeDays ?? 30),
       ...buildZPayFormValues(settings),
+      ...buildAntiTheftFormValues(settings),
     });
   }, [settings, form, branches]);
 

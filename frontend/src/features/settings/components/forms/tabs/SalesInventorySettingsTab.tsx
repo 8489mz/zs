@@ -12,6 +12,7 @@ import { useSalesInventoryTerminals } from '@/features/settings/components/forms
 import { SalesInventoryTerminals } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-terminals';
 import { SalesInventoryLoyalty, useSalesInventoryLoyalty } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-loyalty';
 import { SalesInventoryExpiry } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-expiry';
+import { SalesInventoryAntiTheft } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-anti-theft';
 
 interface SalesInventoryTabProps {
   form: UseFormReturn<SettingsFormInput, undefined, SettingsFormOutput>;
@@ -85,6 +86,7 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
       {isRetailCommerce && (
         <SalesInventoryExpiry form={form} disabled={disabled} settings={settings} />
       )}
+      <SalesInventoryAntiTheft form={form} disabled={disabled} />
     </div>
   );
 }, (prev, next) => {

@@ -235,6 +235,22 @@ export const settingsFormSchema = z.object({
   // Services & Maintenance Dedicated Settings
   servicesBillingMethod: z.enum(['deliverable', 'subscription', 'hourly']).default('deliverable'),
   servicesContractRenewalNoticeDays: z.coerce.number().min(0).max(180).default(30),
+
+  // Enterprise Loss Prevention & Anti-Theft Shield Settings
+  antiTheftRequirePinForNoSale: z.boolean().optional(),
+  antiTheftEnforceMandatoryReceiptPrint: z.boolean().optional(),
+  antiTheftLockWeightedManualEdit: z.boolean().optional(),
+  antiTheftRequireElectronicPaymentRef: z.boolean().optional(),
+  antiTheftCartClearAlertThreshold: z.preprocess(emptyOrNanToDefault(200), z.coerce.number().min(0)).optional(),
+  antiTheftStrictTwoStepTransfers: z.boolean().optional(),
+  antiTheftInTransitAlertHours: z.preprocess(emptyOrNanToDefault(4), z.coerce.number().min(0.5).max(168)).optional(),
+  antiTheftRequireManagerForWriteOff: z.boolean().optional(),
+  antiTheftWriteOffAlertThreshold: z.preprocess(emptyOrNanToDefault(500), z.coerce.number().min(0)).optional(),
+  antiTheftEnforceBlindStockCount: z.boolean().optional(),
+  antiTheftEnforceBlindPurchaseReceiving: z.boolean().optional(),
+  antiTheftBlockOverdueDeliveryRep: z.boolean().optional(),
+  antiTheftDefaultDeliveryCustodyCap: z.preprocess(emptyOrNanToDefault(0), z.coerce.number().min(0)).optional(),
+  antiTheftDeliveryOverdueHours: z.preprocess(emptyOrNanToDefault(20), z.coerce.number().min(1).max(168)).optional(),
 });
 
 export const branchFormSchema = z.object({

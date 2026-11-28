@@ -367,6 +367,21 @@ export interface AppSettings {
   posTerminalIp?: string;
   posTerminalPort?: number;
   posTerminals?: import('./settings').PosTerminalDeviceConfig[];
+  // Enterprise Loss Prevention & Anti-Theft Shield Settings
+  antiTheftRequirePinForNoSale?: boolean;
+  antiTheftEnforceMandatoryReceiptPrint?: boolean;
+  antiTheftLockWeightedManualEdit?: boolean;
+  antiTheftRequireElectronicPaymentRef?: boolean;
+  antiTheftCartClearAlertThreshold?: number;
+  antiTheftStrictTwoStepTransfers?: boolean;
+  antiTheftInTransitAlertHours?: number;
+  antiTheftRequireManagerForWriteOff?: boolean;
+  antiTheftWriteOffAlertThreshold?: number;
+  antiTheftEnforceBlindStockCount?: boolean;
+  antiTheftEnforceBlindPurchaseReceiving?: boolean;
+  antiTheftBlockOverdueDeliveryRep?: boolean;
+  antiTheftDefaultDeliveryCustodyCap?: number;
+  antiTheftDeliveryOverdueHours?: number;
 }
 
 export interface ExpenseRecord {

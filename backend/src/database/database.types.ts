@@ -458,6 +458,7 @@ export interface ProductTable {
   is_spicy?: boolean | null;
   is_vegetarian?: boolean | null;
   is_gluten_free?: boolean | null;
+  is_high_risk_shrinkage?: ColumnType<boolean, boolean | undefined, boolean | undefined>;
 }
 
 export interface ProductSerialTable {
@@ -701,6 +702,9 @@ export interface StockTransferTable {
   status: 'sent' | 'received' | 'cancelled';
   note: string;
   recipient_name: string | null;
+  carrier_employee_id?: number | null;
+  carrier_name?: string | null;
+  in_transit_alerted_at?: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
   created_by: number | null;
   received_by: number | null;
   cancelled_by: number | null;
@@ -738,6 +742,8 @@ export interface StockCountSessionTable {
   location_id: number | null;
   status: 'draft' | 'posting' | 'posted';
   note: string;
+  is_blind?: ColumnType<boolean, boolean | undefined, boolean | undefined>;
+  count_scope?: ColumnType<string, string | undefined, string | undefined>;
   counted_by: number | null;
   approved_by: number | null;
   posted_at: Date | null;
@@ -773,6 +779,8 @@ export interface DamagedStockRecordTable {
   reason: string;
   note: string;
   created_by: number | null;
+  approved_by?: number | null;
+  evidence_image_url?: string | null;
   unit_cost: number | null;
   total_cost: number | null;
   created_at: ColumnType<Date, string | undefined, never>;
@@ -794,6 +802,7 @@ export interface DeliveryRepresentativeTable {
   is_van_rep?: boolean;
   van_location_id?: number | null;
   is_active: boolean;
+  max_cash_custody_limit?: ColumnType<number | null, number | null | undefined, number | null | undefined>;
   employee_id?: number | null;
   permissions?: ColumnType<Record<string, any>, string | Record<string, any> | undefined, string | Record<string, any> | undefined>;
   metadata?: ColumnType<Record<string, any>, string | Record<string, any> | undefined, string | Record<string, any> | undefined>;
@@ -1076,6 +1085,9 @@ export interface SalesTable {
   recipient_phone?: string | null;
   recipient_role?: string | null;
   recipient_signature?: string | null;
+  reprint_count?: ColumnType<number, number | undefined, number | undefined>;
+  last_reprinted_at?: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
+  last_reprinted_by?: number | null;
 }
 
 export interface SaleItemTable {

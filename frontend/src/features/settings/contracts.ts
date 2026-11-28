@@ -498,6 +498,48 @@ export function buildSettingsUpdatePayload(
     servicesContractRenewalNoticeDays: values.servicesContractRenewalNoticeDays !== undefined
       ? Number(values.servicesContractRenewalNoticeDays ?? 30)
       : Number(current?.servicesContractRenewalNoticeDays ?? 30),
+    antiTheftRequirePinForNoSale: values.antiTheftRequirePinForNoSale !== undefined
+      ? values.antiTheftRequirePinForNoSale === true
+      : current?.antiTheftRequirePinForNoSale === true,
+    antiTheftEnforceMandatoryReceiptPrint: values.antiTheftEnforceMandatoryReceiptPrint !== undefined
+      ? values.antiTheftEnforceMandatoryReceiptPrint === true
+      : current?.antiTheftEnforceMandatoryReceiptPrint === true,
+    antiTheftLockWeightedManualEdit: values.antiTheftLockWeightedManualEdit !== undefined
+      ? values.antiTheftLockWeightedManualEdit === true
+      : current?.antiTheftLockWeightedManualEdit === true,
+    antiTheftRequireElectronicPaymentRef: values.antiTheftRequireElectronicPaymentRef !== undefined
+      ? values.antiTheftRequireElectronicPaymentRef === true
+      : current?.antiTheftRequireElectronicPaymentRef === true,
+    antiTheftCartClearAlertThreshold: values.antiTheftCartClearAlertThreshold !== undefined
+      ? Math.max(0, Number(values.antiTheftCartClearAlertThreshold ?? 200))
+      : Math.max(0, Number(current?.antiTheftCartClearAlertThreshold ?? 200)),
+    antiTheftStrictTwoStepTransfers: values.antiTheftStrictTwoStepTransfers !== undefined
+      ? values.antiTheftStrictTwoStepTransfers === true
+      : current?.antiTheftStrictTwoStepTransfers === true,
+    antiTheftInTransitAlertHours: values.antiTheftInTransitAlertHours !== undefined
+      ? Math.max(0.5, Number(values.antiTheftInTransitAlertHours ?? 4))
+      : Math.max(0.5, Number(current?.antiTheftInTransitAlertHours ?? 4)),
+    antiTheftRequireManagerForWriteOff: values.antiTheftRequireManagerForWriteOff !== undefined
+      ? values.antiTheftRequireManagerForWriteOff === true
+      : current?.antiTheftRequireManagerForWriteOff === true,
+    antiTheftWriteOffAlertThreshold: values.antiTheftWriteOffAlertThreshold !== undefined
+      ? Math.max(0, Number(values.antiTheftWriteOffAlertThreshold ?? 500))
+      : Math.max(0, Number(current?.antiTheftWriteOffAlertThreshold ?? 500)),
+    antiTheftEnforceBlindStockCount: values.antiTheftEnforceBlindStockCount !== undefined
+      ? values.antiTheftEnforceBlindStockCount === true
+      : current?.antiTheftEnforceBlindStockCount === true,
+    antiTheftEnforceBlindPurchaseReceiving: values.antiTheftEnforceBlindPurchaseReceiving !== undefined
+      ? values.antiTheftEnforceBlindPurchaseReceiving === true
+      : current?.antiTheftEnforceBlindPurchaseReceiving === true,
+    antiTheftBlockOverdueDeliveryRep: values.antiTheftBlockOverdueDeliveryRep !== undefined
+      ? values.antiTheftBlockOverdueDeliveryRep === true
+      : current?.antiTheftBlockOverdueDeliveryRep === true,
+    antiTheftDefaultDeliveryCustodyCap: values.antiTheftDefaultDeliveryCustodyCap !== undefined
+      ? Math.max(0, Number(values.antiTheftDefaultDeliveryCustodyCap ?? 0))
+      : Math.max(0, Number(current?.antiTheftDefaultDeliveryCustodyCap ?? 0)),
+    antiTheftDeliveryOverdueHours: values.antiTheftDeliveryOverdueHours !== undefined
+      ? Math.max(1, Number(values.antiTheftDeliveryOverdueHours ?? 20))
+      : Math.max(1, Number(current?.antiTheftDeliveryOverdueHours ?? 20)),
   };
 
   const rawActivity = String(values.businessIndustry || values.activityType || (current as any)?.activityType || (current as any)?.pillar || current?.businessIndustry || 'retail_general').trim().toLowerCase();
@@ -579,6 +621,44 @@ export function buildZPayFormValues(settings: AppSettings | undefined): ZPayForm
       taxComplianceMode === 'optional_eta' || taxComplianceMode === 'mandatory' || taxComplianceMode === 'disabled'
         ? taxComplianceMode
         : 'disabled',
+  };
+}
+
+export type AntiTheftFormValues = Pick<
+  SettingsFormOutput,
+  | 'antiTheftRequirePinForNoSale'
+  | 'antiTheftEnforceMandatoryReceiptPrint'
+  | 'antiTheftLockWeightedManualEdit'
+  | 'antiTheftRequireElectronicPaymentRef'
+  | 'antiTheftCartClearAlertThreshold'
+  | 'antiTheftStrictTwoStepTransfers'
+  | 'antiTheftInTransitAlertHours'
+  | 'antiTheftRequireManagerForWriteOff'
+  | 'antiTheftWriteOffAlertThreshold'
+  | 'antiTheftEnforceBlindStockCount'
+  | 'antiTheftEnforceBlindPurchaseReceiving'
+  | 'antiTheftBlockOverdueDeliveryRep'
+  | 'antiTheftDefaultDeliveryCustodyCap'
+  | 'antiTheftDeliveryOverdueHours'
+>;
+
+export function buildAntiTheftFormValues(settings: AppSettings | undefined): AntiTheftFormValues {
+  const current = settings as Record<string, any> | undefined;
+  return {
+    antiTheftRequirePinForNoSale: current?.antiTheftRequirePinForNoSale === true,
+    antiTheftEnforceMandatoryReceiptPrint: current?.antiTheftEnforceMandatoryReceiptPrint === true,
+    antiTheftLockWeightedManualEdit: current?.antiTheftLockWeightedManualEdit === true,
+    antiTheftRequireElectronicPaymentRef: current?.antiTheftRequireElectronicPaymentRef === true,
+    antiTheftCartClearAlertThreshold: Math.max(0, Number(current?.antiTheftCartClearAlertThreshold ?? 200)),
+    antiTheftStrictTwoStepTransfers: current?.antiTheftStrictTwoStepTransfers === true,
+    antiTheftInTransitAlertHours: Math.max(0.5, Number(current?.antiTheftInTransitAlertHours ?? 4)),
+    antiTheftRequireManagerForWriteOff: current?.antiTheftRequireManagerForWriteOff === true,
+    antiTheftWriteOffAlertThreshold: Math.max(0, Number(current?.antiTheftWriteOffAlertThreshold ?? 500)),
+    antiTheftEnforceBlindStockCount: current?.antiTheftEnforceBlindStockCount === true,
+    antiTheftEnforceBlindPurchaseReceiving: current?.antiTheftEnforceBlindPurchaseReceiving === true,
+    antiTheftBlockOverdueDeliveryRep: current?.antiTheftBlockOverdueDeliveryRep === true,
+    antiTheftDefaultDeliveryCustodyCap: Math.max(0, Number(current?.antiTheftDefaultDeliveryCustodyCap ?? 0)),
+    antiTheftDeliveryOverdueHours: Math.max(1, Number(current?.antiTheftDeliveryOverdueHours ?? 20)),
   };
 }
 
