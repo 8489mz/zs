@@ -16,6 +16,15 @@ import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
 import { usePosCustomerDisplayBroadcaster } from '@/features/pos/hooks/usePosCustomerDisplayBroadcaster';
 import { useAuthStore } from '@/stores/auth-store';
 import { loadPosWorkspaceStorage } from '@/features/pos/lib/pos.persistence';
+import {
+  getActiveOfflineProvisionalShifts,
+  getOfflineHeldDrafts,
+  getOfflineQuickCustomers,
+  getPosBootSnapshotSync,
+  POS_LOCAL_CUSTOMERS_EVENT,
+  POS_LOCAL_HELD_EVENT,
+  POS_PROVISIONAL_SHIFTS_EVENT,
+} from '@/features/pos/lib/pos-offline-vault';
 import { RECALLED_BRANCH_EVENT, clearRecalledBranchLocation, readRecalledBranchLocation } from '@/features/pos/lib/pos-held-snapshot';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits } from '@/shared/utils/money';
@@ -120,10 +129,31 @@ export function applyPosOrderTypeChange(
 
 export function usePosWorkspace() {
   const state = usePosWorkspaceState();
-  const customersQuery = useQuery({ queryKey: queryKeys.posCustomers, queryFn: () => posApi.customers({ limit: 50 }), staleTime: posReferenceStaleTime });
-  const settingsQuery = useQuery({ queryKey: queryKeys.posSettings, queryFn: posApi.settings, staleTime: posReferenceStaleTime });
-  const branchesQuery = useQuery({ queryKey: queryKeys.posBranches, queryFn: posApi.branches, staleTime: posReferenceStaleTime });
-  const locationsQuery = useQuery({ queryKey: queryKeys.posLocations, queryFn: posApi.locations, staleTime: posReferenceStaleTime });
+  const bootSnapshot = useMemo(() => getPosBootSnapshotSync(), []);
+  const customersQuery = useQuery({
+    queryKey: queryKeys.posCustomers,
+    queryFn: () => posApi.customers({ limit: 50 }),
+    placeholderData: (prev) => prev ?? (bootSnapshot?.customers?.length ? bootSnapshot.customers : undefined),
+    staleTime: posReferenceStaleTime,
+  });
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.posSettings,
+    queryFn: posApi.settings,
+    placeholderData: (prev) => prev ?? (bootSnapshot?.settings ? bootSnapshot.settings : undefined),
+    staleTime: posReferenceStaleTime,
+  });
+  const branchesQuery = useQuery({
+    queryKey: queryKeys.posBranches,
+    queryFn: posApi.branches,
+    placeholderData: (prev) => prev ?? (bootSnapshot?.branches?.length ? bootSnapshot.branches : undefined),
+    staleTime: posReferenceStaleTime,
+  });
+  const locationsQuery = useQuery({
+    queryKey: queryKeys.posLocations,
+    queryFn: posApi.locations,
+    placeholderData: (prev) => prev ?? (bootSnapshot?.locations?.length ? bootSnapshot.locations : undefined),
+    staleTime: posReferenceStaleTime,
+  });
 
   // INV-FE1-FRONTEND-BOOK-DIGITS: paidAmount rounds at the tenant's
   // book digits (settings currency, global system currency fallback).
@@ -229,19 +259,66 @@ export function usePosWorkspace() {
   const authUser = useAuthStore((entry) => entry.user);
   const mutations = usePosWorkspaceMutations({ queryClient, storedHeld: state.persistedState.heldDrafts });
 
+  const [localVaultTick, setLocalVaultTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setLocalVaultTick((n) => n + 1);
+    window.addEventListener(POS_PROVISIONAL_SHIFTS_EVENT, bump);
+    window.addEventListener(POS_LOCAL_HELD_EVENT, bump);
+    window.addEventListener(POS_LOCAL_CUSTOMERS_EVENT, bump);
+    return () => {
+      window.removeEventListener(POS_PROVISIONAL_SHIFTS_EVENT, bump);
+      window.removeEventListener(POS_LOCAL_HELD_EVENT, bump);
+      window.removeEventListener(POS_LOCAL_CUSTOMERS_EVENT, bump);
+    };
+  }, []);
+
   /* POS render cost: same stabilization as items86 above — the query's
    * `data` is undefined while loading, and `|| []` would hand the
    * derived/actions factories a fresh array every pass. */
-  const heldDrafts = useMemo(
-    () => mutations.heldDraftsQuery.data ?? [],
-    [mutations.heldDraftsQuery.data],
-  );
-  const openShiftRows = mutations.openShiftsQuery.data?.rows || [];
+  const heldDrafts = useMemo(() => {
+    const serverHeld = mutations.heldDraftsQuery.data ?? [];
+    const localHeld = getOfflineHeldDrafts();
+    if (!localHeld.length) return serverHeld;
+    const seen = new Set(serverHeld.map((d) => d.id));
+    return [...localHeld.filter((d) => !seen.has(d.id)), ...serverHeld];
+  }, [mutations.heldDraftsQuery.data, localVaultTick]);
+
+  const openShiftRows = useMemo(() => {
+    const serverRows = mutations.openShiftsQuery.data?.rows || [];
+    const provisional = getActiveOfflineProvisionalShifts();
+    if (!provisional.length) return serverRows;
+    const mappedProvisional = provisional.map((s) => ({
+      id: s.id,
+      docNo: s.docNo,
+      openedById: s.openedById,
+      openedByName: s.openedByName,
+      branchId: s.branchId ? String(s.branchId) : '',
+      locationId: s.locationId ? String(s.locationId) : '',
+      openingCash: s.openingCash,
+      status: 'open',
+      isOfflineProvisional: true,
+    }));
+    const existingOpeners = new Set(
+      serverRows.map((r) => String((r as unknown as { opened_by?: string; openedById?: string }).opened_by || r.openedById || '')),
+    );
+    return [
+      ...serverRows,
+      ...mappedProvisional.filter((p) => !existingOpeners.has(String(p.openedById))),
+    ] as typeof serverRows;
+  }, [mutations.openShiftsQuery.data?.rows, localVaultTick]);
+
+  const mergedCustomers = useMemo(() => {
+    const serverCustomers = customersQuery.data || [];
+    const localQuick = getOfflineQuickCustomers();
+    if (!localQuick.length) return serverCustomers;
+    const seen = new Set(serverCustomers.map((c) => String(c.id)));
+    return [...localQuick.filter((c) => !seen.has(String(c.id))), ...serverCustomers];
+  }, [customersQuery.data, localVaultTick]);
 
   const derived = usePosWorkspaceDerived({
     saleProducts,
     products: catalogProducts,
-    customers: customersQuery.data || [],
+    customers: mergedCustomers,
     branches: branchesQuery.data || [],
     locations: locationsQuery.data || [],
     openShiftRows,
@@ -335,7 +412,7 @@ export function usePosWorkspace() {
 
   const authStoreName = useAuthStore((entry) => entry.storeName);
 
-  const activeCustomer = (customersQuery.data || []).find((c) => String(c.id) === String(state.customerId));
+  const activeCustomer = mergedCustomers.find((c) => String(c.id) === String(state.customerId));
   const activeCustomerInfo = activeCustomer ? {
     name: activeCustomer.name,
     phone: (activeCustomer as any).phone,

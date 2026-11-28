@@ -3,12 +3,13 @@
 // the dialog keeps all state and mounts this component with the
 // terminal session and its callbacks.
 
-import type { Dispatch, SetStateAction } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import type { PosTerminalDeviceConfig } from '@/types/domain-models/settings';
 import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
 import { CreditCardIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
+import { isFastOfflineMode } from '@/lib/network-circuit-breaker';
 
 export function PosCheckoutTerminalBanner({
   isCardLegOrPresetActive,
@@ -36,8 +37,62 @@ export function PosCheckoutTerminalBanner({
   onConfirmSale: (() => void) | undefined;
   handleCancelTerminal: () => Promise<void>;
 }) {
+  const [manualRefDraft, setManualRefDraft] = useState('');
+  const isOfflineNow = isFastOfflineMode();
+
   return (
     <>
+      {/* Offline 4G Standalone Card Terminal Fallback Notice */}
+      {(isCardLegOrPresetActive || pos.cardAmount > 0) && isOfflineNow && (
+        <div style={{
+          padding: '8px 12px',
+          background: '#fffbeb',
+          borderRadius: '6px',
+          border: '1px solid #fde68a',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '8px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 240px' }}>
+            <CreditCardIcon size={16} color="#b45309" />
+            <div style={{ fontSize: '11.5px', color: '#92400e', fontWeight: 600 }}>
+              وضع الأوفلاين: يمكنك السحب عبر شريحة الماكينة المستقلة (4G) وتأكيد الفاتورة مباشرة
+            </div>
+          </div>
+          <input
+            type="text"
+            value={manualRefDraft}
+            onChange={(e) => {
+              const ref = e.target.value;
+              setManualRefDraft(ref);
+              const trimmed = ref.trim();
+              pos.setTerminalPaymentDetails?.(
+                trimmed
+                  ? {
+                      ...(pos.terminalPaymentDetails || {}),
+                      rrn: trimmed,
+                      cardScheme: pos.terminalPaymentDetails?.cardScheme || 'card',
+                    }
+                  : null,
+              );
+            }}
+            placeholder="رقم إيصال الماكينة (اختياري)"
+            style={{
+              height: '30px',
+              width: '175px',
+              padding: '0 8px',
+              fontSize: '12px',
+              borderRadius: '6px',
+              border: '1px solid #fcd34d',
+              background: '#ffffff',
+              color: '#0f172a',
+            }}
+          />
+        </div>
+      )}
+
       {/* EDC / Sunmi POS Terminal Direct Dispatch Banner (Active for Card payments when terminal exists) */}
       {(isCardLegOrPresetActive || pos.cardAmount > 0) && (pos.settingsQuery?.data?.posTerminalEnabled === true) && activeTerminals.length > 0 && (
         <div style={{

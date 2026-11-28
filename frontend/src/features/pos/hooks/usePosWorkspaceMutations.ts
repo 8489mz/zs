@@ -5,12 +5,28 @@ import { invalidateAuditLogs, invalidateCatalogDomain } from '@/app/query-invali
 import { queryKeys } from '@/app/query-keys';
 import { posApi } from '@/features/pos/api/pos.api';
 import { useVisibleRefetch } from '@/features/pos/hooks/useVisibleRefetch';
+import { isNetworkOrOfflineError } from '@/features/pos/hooks/usePosSaleMutation';
+import {
+  getPosBootSnapshotAsync,
+  getPosBootSnapshotSync,
+  savePosBootSnapshot,
+} from '@/features/pos/lib/pos-offline-vault';
+import type { CashierShift } from '@/types/domain';
 import type { HeldPosDraft } from '@/features/pos/hooks/usePosWorkspace';
 
 export function usePosWorkspaceMutations({ queryClient, storedHeld }: { queryClient: QueryClient; storedHeld: HeldPosDraft[] }) {
   const heldDraftsQuery = useQuery({
     queryKey: queryKeys.posHeldDrafts,
-    queryFn: () => posApi.listHeldDrafts(),
+    queryFn: async () => {
+      try {
+        return await posApi.listHeldDrafts();
+      } catch (err) {
+        if (isNetworkOrOfflineError(err)) {
+          return storedHeld;
+        }
+        throw err;
+      }
+    },
     placeholderData: storedHeld,
     staleTime: 5_000,
   });
@@ -22,8 +38,48 @@ export function usePosWorkspaceMutations({ queryClient, storedHeld }: { queryCli
   useVisibleRefetch(queryKeys.posHeldDrafts);
   const openShiftsQuery = useQuery({
     queryKey: queryKeys.cashierShiftsPage('open:pos'),
-    queryFn: () => cashDrawerApi.listPage({ page: 1, pageSize: 50, filter: 'open' }),
-    placeholderData: (prev) => prev,
+    queryFn: async () => {
+      try {
+        const res = await cashDrawerApi.listPage({ page: 1, pageSize: 50, filter: 'open' });
+        void savePosBootSnapshot({ openShifts: res.rows as unknown as Array<Record<string, unknown>> });
+        return res;
+      } catch (err) {
+        if (isNetworkOrOfflineError(err)) {
+          const snap = (await getPosBootSnapshotAsync()) || getPosBootSnapshotSync();
+          const cachedRows = (snap?.openShifts || []) as unknown as CashierShift[];
+          return {
+            rows: cachedRows,
+            pagination: {
+              page: 1,
+              pageSize: 50,
+              totalItems: cachedRows.length,
+              totalPages: 1,
+              rangeStart: cachedRows.length ? 1 : 0,
+              rangeEnd: cachedRows.length,
+            },
+            summary: {
+              totalItems: cachedRows.length,
+              openShiftCount: cachedRows.length,
+              pendingReviewCount: 0,
+              openShiftDocNo: cachedRows[0]?.docNo || '',
+              totalVariance: 0,
+            },
+          };
+        }
+        throw err;
+      }
+    },
+    placeholderData: (prev) => {
+      if (prev) return prev;
+      const snap = getPosBootSnapshotSync();
+      if (!snap?.openShifts?.length) return undefined;
+      const cachedRows = snap.openShifts as unknown as CashierShift[];
+      return {
+        rows: cachedRows,
+        pagination: { page: 1, pageSize: 50, totalItems: cachedRows.length, totalPages: 1, rangeStart: 1, rangeEnd: cachedRows.length },
+        summary: { totalItems: cachedRows.length, openShiftCount: cachedRows.length, pendingReviewCount: 0, openShiftDocNo: cachedRows[0]?.docNo || '', totalVariance: 0 },
+      };
+    },
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,

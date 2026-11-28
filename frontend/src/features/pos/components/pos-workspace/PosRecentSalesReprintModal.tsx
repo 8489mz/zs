@@ -6,7 +6,10 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { formatCurrency } from '@/lib/format';
 import { formatDateTime, formatSalePaymentText } from '@/lib/pos-printing/shared';
 import { printPostedSaleReceipt } from '@/lib/pos-printing';
+import { posApi } from '@/features/pos/api/pos.api';
 import { salesApi } from '@/shared/api/sales.api';
+import { getArchivedRecentPosSales } from '@/features/pos/lib/pos-offline-vault';
+import { isFastOfflineMode } from '@/lib/network-circuit-breaker';
 import type { AppSettings, Sale } from '@/types/domain';
 
 interface PosRecentSalesReprintModalProps {
@@ -34,8 +37,26 @@ export function PosRecentSalesReprintModal({
   const fetchRecentSales = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await salesApi.listPage({ pageSize: 5 });
-      setRecentSales(Array.isArray(res?.rows) ? res.rows : []);
+      const localArchived = await getArchivedRecentPosSales(10);
+      if (isFastOfflineMode()) {
+        setRecentSales(localArchived.slice(0, 5));
+        return;
+      }
+      try {
+        const res = await salesApi.listPage({ pageSize: 5 });
+        const serverRows = Array.isArray(res?.rows) ? res.rows : [];
+        if (localArchived.length === 0) {
+          setRecentSales(serverRows);
+        } else {
+          const seenKeys = new Set(serverRows.map((r) => String(r.docNo || r.id || '').trim()));
+          const unsyncedLocal = localArchived.filter(
+            (r) => !seenKeys.has(String(r.docNo || r.id || '').trim()),
+          );
+          setRecentSales([...unsyncedLocal, ...serverRows].slice(0, 8));
+        }
+      } catch {
+        setRecentSales(localArchived.slice(0, 8));
+      }
     } catch {
       // silent fallback
     } finally {
@@ -50,20 +71,34 @@ export function PosRecentSalesReprintModal({
   }, [isOpen, fetchRecentSales]);
 
   function handlePrintSale(saleToPrint: Sale, pageSize: 'receipt' | 'a4' = 'receipt') {
-    try {
-      printPostedSaleReceipt(saleToPrint, {
-        pageSize,
-        settings: settings || null,
-        cashierName,
-        /* Every print from this modal is a reprint of an
-         * already-posted sale: the printed receipt carries the
-         * duplicate mark, so it can never pass as the original. */
-        isReprint: true,
-      });
-      setFeedbackMessage(`تم إرسال الفاتورة #${saleToPrint.docNo || saleToPrint.id} للطباعة (${pageSize === 'receipt' ? 'ريسيت' : 'A4'})`);
-      setTimeout(() => setFeedbackMessage(''), 3500);
-    } catch (e: any) {
-      setFeedbackMessage(`تعذرت الطباعة: ${e.message || 'خطأ غير متوقع'}`);
+    const numericId = Number(saleToPrint.id || 0);
+    const nextFallbackCount = Number((saleToPrint as any).reprintCount || (saleToPrint as any).reprint_count || 0) + 1;
+    const executePrint = (reprintCount: number) => {
+      try {
+        printPostedSaleReceipt(saleToPrint, {
+          pageSize,
+          settings: settings || null,
+          cashierName,
+          isReprint: true,
+          reprintCount,
+        });
+        setFeedbackMessage(`تم إرسال الفاتورة #${saleToPrint.docNo || saleToPrint.id} للطباعة (نسخة مكررة #${reprintCount})`);
+        setTimeout(() => setFeedbackMessage(''), 3500);
+      } catch (e: any) {
+        setFeedbackMessage(`تعذرت الطباعة: ${e.message || 'خطأ غير متوقع'}`);
+      }
+    };
+    if (numericId > 0 && !isFastOfflineMode()) {
+      void posApi
+        .recordReceiptReprint(numericId)
+        .then((res) => {
+          const count = Number(res?.reprintCount || nextFallbackCount);
+          (saleToPrint as any).reprintCount = count;
+          executePrint(count);
+        })
+        .catch(() => executePrint(nextFallbackCount));
+    } else {
+      executePrint(nextFallbackCount);
     }
   }
 

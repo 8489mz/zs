@@ -2,7 +2,11 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { formatCurrency } from '@/lib/format';
-import { OfflinePosSale, removeOfflineSale } from '@/features/pos/lib/pos-offline-sync';
+import {
+  downloadOfflineQueueEmergencyJson,
+  OfflinePosSale,
+  removeOfflineSale,
+} from '@/features/pos/lib/pos-offline-sync';
 import { posApi } from '@/features/pos/api/pos.api';
 import { systemConfirm, toast } from '@/shared/components/system-alert';
 
@@ -41,6 +45,16 @@ export function PosOfflineQueueModal({
       setCopyStatus('تعذر النسخ إلى الحافظة');
       setTimeout(() => setCopyStatus(null), 3000);
     }
+  };
+
+  const handleDownloadJson = () => {
+    const ok = downloadOfflineQueueEmergencyJson(offlineQueue);
+    if (ok) {
+      setCopyStatus('تم تنزيل ملف النسخة الاحتياطية للفواتير الأوفلاين بنجاح');
+    } else {
+      setCopyStatus('تعذر تنزيل ملف النسخة الاحتياطية');
+    }
+    setTimeout(() => setCopyStatus(null), 3000);
   };
 
   const handleRemoveSingle = async (id: string, e: React.MouseEvent) => {
@@ -134,6 +148,24 @@ export function PosOfflineQueueModal({
             </button>
             <button
               type="button"
+              onClick={handleDownloadJson}
+              disabled={offlineQueue.length === 0}
+              style={{
+                background: '#ffffff',
+                color: '#170e5e',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                padding: '8px 14px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: offlineQueue.length === 0 ? 'not-allowed' : 'pointer',
+                opacity: offlineQueue.length === 0 ? 0.6 : 1,
+              }}
+            >
+              تنزيل ملف طوارئ (JSON)
+            </button>
+            <button
+              type="button"
               onClick={handleCopyJson}
               disabled={offlineQueue.length === 0}
               style={{
@@ -204,6 +236,10 @@ export function PosOfflineQueueModal({
                 statusBg = '#dbeafe';
                 statusColor = '#1e40af';
                 statusLabel = t('pos.pos_workspace.pos_offline_queue_modal.s9', "جاري الترحيل...");
+              } else if (item.status === 'auth_required') {
+                statusBg = '#fef3c7';
+                statusColor = '#b45309';
+                statusLabel = 'بانتظار تسجيل الدخول لاستكمال الترحيل';
               } else if (item.status === 'failed') {
                 statusBg = '#fee2e2';
                 statusColor = '#991b1b';

@@ -30,6 +30,7 @@ import type { ContextMenuTarget } from '@/shared/layout/SidebarContextMenu';
 
 import { translateUiText } from '@/lib/auto-translator';
 import { useSidebarGroups } from '@/shared/layout/app-shell/use-sidebar-groups';
+import { systemConfirm } from '@/shared/components/system-alert';
 
 function formatWorkspaceName(name: string, isEn = false) {
   if (isEn) {
@@ -560,7 +561,24 @@ export function AppShell({ children }: PropsWithChildren) {
 
   async function handleLogout() {
     try {
+      const { getOfflineSalesQueue } = await import('@/features/pos/lib/pos-offline-sync');
+      const pendingOfflineCount = getOfflineSalesQueue().filter((s) => s.status !== 'committed').length;
+      if (pendingOfflineCount > 0) {
+        const confirmed = await systemConfirm({
+          title: 'تنبيه: فواتير أوفلاين بانتظار المزامنة',
+          message: `يوجد ${pendingOfflineCount} فاتورة مبيعات محفوظة أوفلاين على هذا الجهاز لم يكتمل ترحيلها للسيرفر بعد. ستظل الفواتير محفوظة بأمان ولن تُحذف، وسيُستأنف ترحيلها فور إعادة تسجيل الدخول بنفس المنشأة. هل تريد المتابعة لتسجيل الخروج؟`,
+          confirmText: 'تسجيل الخروج مع الاحتفاظ بالفواتير',
+          cancelText: 'البقاء لحين اكتمال المزامنة',
+        });
+        if (!confirmed) return;
+      }
+    } catch {
+      // Proceed safely
+    }
+    try {
       await authApi.logout();
+    } catch {
+      // Allow offline sign-out without uncaught network error
     } finally {
       await resetAuthenticatedClient(queryClient, clearSession);
       navigate('/login?reason=signed-out', { replace: true });

@@ -15,3 +15,4 @@ export {
 export { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 export { clearCatalogStorage } from '@/features/pos/lib/pos-catalog-storage';
 export { clearPosWorkspaceStorage } from '@/features/pos/lib/pos.persistence';
+export { PosGlobalOfflineSyncHost } from '@/features/pos/components/PosGlobalOfflineSyncHost';

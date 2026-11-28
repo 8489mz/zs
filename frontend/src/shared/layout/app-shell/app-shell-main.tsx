@@ -25,6 +25,7 @@ import type { AuthUser } from '@/types/auth';
 const GlobalSearchModal = lazy(() => import('@/shared/components/GlobalSearchModal').then((m) => ({ default: m.GlobalSearchModal })));
 const DeveloperActivationPanel = lazy(() => import('@/shared/system/DeveloperActivationPanel').then((m) => ({ default: m.DeveloperActivationPanel })));
 const LiveOrderNotificationBanner = lazy(() => import('@/features/storefront/components/LiveOrderNotificationBanner').then((m) => ({ default: m.LiveOrderNotificationBanner })));
+const PosGlobalOfflineSyncHost = lazy(() => import('@/features/pos/components/PosGlobalOfflineSyncHost').then((m) => ({ default: m.PosGlobalOfflineSyncHost })));
 
 export type AppShellMainProps = {
   isPosRoute: boolean;
@@ -88,6 +89,7 @@ export function AppShellMain({
       <PwaInstallBanner />
       {canAccessPath(user, '/hr/attendance') && <QuickAttendanceShortcut open={quickAttendanceOpen} onClose={() => setQuickAttendanceOpen(false)} />}
       <Suspense fallback={null}>
+        {user ? <PosGlobalOfflineSyncHost /> : null}
         {canQueryOnlineOrders && (isStorefrontEntitled || pendingOrdersCount > 0) ? <LiveOrderNotificationBanner /> : null}
         <GlobalSearchModal />
         <DeveloperActivationPanel />

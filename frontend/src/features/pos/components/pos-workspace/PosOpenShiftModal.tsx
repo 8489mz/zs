@@ -10,6 +10,11 @@ import { cashDrawerApi } from '@/lib/api/cash-drawer';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
+import { toast } from '@/shared/components/system-alert';
+import { isNetworkOrOfflineError } from '@/features/pos/hooks/usePosSaleMutation';
+import { getPosTerminalCode } from '@/features/pos/lib/pos-offline-sync';
+import { createOfflineProvisionalShift } from '@/features/pos/lib/pos-offline-vault';
+import { isFastOfflineMode } from '@/lib/network-circuit-breaker';
 import type { Branch, Location } from '@/types/domain';
 
 export interface PosOpenShiftModalProps {
@@ -116,13 +121,42 @@ export function PosOpenShiftModal(props: PosOpenShiftModalProps) {
   const onSubmit = async (values: OpenShiftFormValues) => {
     setIsPending(true);
     setError(null);
+    const terminalCode = getPosTerminalCode();
+    const openingCash = Number(values.openingCash || 0);
+    const branchId = values.branchId ? Number(values.branchId) : null;
+    const locationId = values.locationId ? Number(values.locationId) : null;
+    const note = String(values.note || '').trim();
+    const password = isPasswordRequired && values.password ? String(values.password).trim() : undefined;
+
+    const openProvisionalOffline = () => {
+      createOfflineProvisionalShift({
+        openingCash,
+        branchId,
+        locationId,
+        note,
+        terminalCode,
+        password,
+      });
+      toast.info('تم فتح وردية أوفلاين مؤقتة — يمكنك البيع الآن وستُزامن الوردية تلقائياً فور عودة الإنترنت.');
+      setIsSuccess(true);
+      setTimeout(() => {
+        onShiftOpened();
+        onClose();
+      }, 350);
+    };
+
     try {
+      if (isFastOfflineMode()) {
+        openProvisionalOffline();
+        return;
+      }
       await cashDrawerApi.open({
-        openingCash: Number(values.openingCash || 0),
-        branchId: values.branchId ? Number(values.branchId) : null,
-        locationId: values.locationId ? Number(values.locationId) : null,
-        note: String(values.note || '').trim(),
-        password: isPasswordRequired && values.password ? String(values.password).trim() : undefined,
+        openingCash,
+        branchId,
+        locationId,
+        note,
+        terminalCode,
+        password,
       });
       setIsSuccess(true);
       setTimeout(() => {
@@ -130,6 +164,15 @@ export function PosOpenShiftModal(props: PosOpenShiftModalProps) {
         onClose();
       }, 500);
     } catch (err) {
+      if (isNetworkOrOfflineError(err)) {
+        try {
+          openProvisionalOffline();
+          return;
+        } catch (vaultErr) {
+          setError(vaultErr);
+          return;
+        }
+      }
       setError(err);
     } finally {
       setIsPending(false);

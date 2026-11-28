@@ -12,6 +12,16 @@ import { getFriendlyApiErrorMessage } from '@/lib/api-error-message';
 import { getSubmitSaleErrorMessage } from '@/features/pos/lib/pos-submit-error';
 import { buildHeldSnapshot, restoreHeldSnapshot, writeRecalledBranchLocation } from '@/features/pos/lib/pos-held-snapshot';
 import { getPosTerminalCode } from '@/features/pos/lib/pos-offline-sync';
+import { isNetworkOrOfflineError } from '@/features/pos/hooks/usePosSaleMutation';
+import {
+  archiveCompletedPosSale,
+  clearOfflineHeldDrafts,
+  createOfflineQuickCustomer,
+  isOfflineLocalHeldDraftId,
+  removeOfflineHeldDraft,
+  saveOfflineHeldDraft,
+} from '@/features/pos/lib/pos-offline-vault';
+import { isFastOfflineMode } from '@/lib/network-circuit-breaker';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { computePaidAmount } from '@/features/pos/lib/pos-paid-amount';
@@ -21,11 +31,15 @@ import { printKitchenTicket, printKitchenTicketAuto, shouldAutoPrintKitchenTicke
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 import { resolveBridgePrinter } from '@/lib/printer-preferences';
 
-function kickCashDrawerForPostedSale(sale: Sale, settings?: PosWorkspaceActionParams['settings']) {
+function kickCashDrawerForPostedSale(
+  sale: Sale,
+  settings?: PosWorkspaceActionParams['settings'],
+  allowOfflineDraftKick = false,
+) {
   const isCashPayment = sale.payments?.length
     ? sale.payments.some((payment) => payment.paymentChannel === 'cash' && Number(payment.amount) > 0)
     : sale.paymentChannel === 'cash' && Number(sale.paidAmount) > 0;
-  if (sale.status !== 'posted' || !isCashPayment) return;
+  if ((!allowOfflineDraftKick && sale.status !== 'posted') || !isCashPayment) return;
 
   if (typeof window !== 'undefined' && (window as any).electronPrinter?.kickCashDrawer) {
     void (window as any).electronPrinter.kickCashDrawer(settings?.posElectronCashierPrinter).catch(() => {});
@@ -104,6 +118,23 @@ export function createPosWorkspaceAsyncActions(
         : 'تم إضافة العميل لكن تعذر تحديده تلقائيًا');
       params.requestBarcodeFocus();
     } catch (error) {
+      if (isNetworkOrOfflineError(error)) {
+        try {
+          const localCustomer = createOfflineQuickCustomer({ name, phone, address });
+          params.setQuickCustomerName(name);
+          params.setQuickCustomerPhone(phone);
+          params.setQuickCustomerAddress(address);
+          params.setCustomerId(localCustomer.id);
+          params.setPostSaleSaleKey('');
+          params.setSubmitMessage('تم حفظ بيانات العميل محلياً وتحديده للفاتورة (سيُرحّل تلقائياً مع عودة الإنترنت)');
+          params.requestBarcodeFocus();
+          return;
+        } catch (vaultErr) {
+          params.setSubmitMessage(vaultErr instanceof Error ? vaultErr.message : 'تعذر إضافة العميل محلياً');
+          params.requestBarcodeFocus();
+          return;
+        }
+      }
       params.setSubmitMessage(error instanceof Error ? error.message : 'تعذر إضافة العميل');
       params.requestBarcodeFocus();
     }
@@ -481,6 +512,7 @@ export function createPosWorkspaceAsyncActions(
         pagerNumber: params.pagerNumber || (createdSale as any)?.pagerNumber || (createdSale as any)?.pager_number,
       } as any;
       params.setLastSale(hydratedSale);
+      void archiveCompletedPosSale(hydratedSale);
       const createdSaleKey = getSaleKey(hydratedSale);
 
       // Instant Receipt Dispatch: when posAutoPrintReceipt is enabled (default true),
@@ -510,7 +542,7 @@ export function createPosWorkspaceAsyncActions(
         } catch (printErr) {
           console.error('Failed to auto-print POS receipt:', printErr);
         }
-        kickCashDrawerForPostedSale(hydratedSale, params.settings);
+        kickCashDrawerForPostedSale(hydratedSale, params.settings, isOffline);
         if (params.settings?.posKitchenPrinterEnabled && params.settings?.posKitchenPrinterAuto) {
           try {
             printKitchenTicket(hydratedSale, params.settings);
@@ -657,7 +689,7 @@ export function createPosWorkspaceAsyncActions(
         isWeighted: item.isWeighted,
         quantityChunks: item.quantityChunks,
       }));
-      await params.saveHeldDraftMutation.mutateAsync({
+      const holdPayload = {
         customerId: snapshot.customerId || null,
         paymentType: snapshot.paymentType,
         discount: snapshot.discount,
@@ -684,15 +716,33 @@ export function createPosWorkspaceAsyncActions(
         deliveryRepId: Number(snapshot.deliveryRepId) > 0 ? Number(snapshot.deliveryRepId) : undefined,
         collectionStatus: snapshot.collectionStatus || 'cod',
         items: sanitizedItems,
-      });
+      };
+      let savedLocallyOffline = false;
+      if (isFastOfflineMode()) {
+        saveOfflineHeldDraft({ ...snapshot, ...holdPayload, cart: snapshot.cart });
+        savedLocallyOffline = true;
+      } else {
+        try {
+          await params.saveHeldDraftMutation.mutateAsync(holdPayload);
+        } catch (holdErr) {
+          if (isNetworkOrOfflineError(holdErr)) {
+            saveOfflineHeldDraft({ ...snapshot, ...holdPayload, cart: snapshot.cart });
+            savedLocallyOffline = true;
+          } else {
+            throw holdErr;
+          }
+        }
+      }
       // R4-E I13: no kitchen print here anymore — a held draft never reaches
       // the KDS, so printing it as "sent to the kitchen" lied. The automatic
       // print lives on the POST in handleSubmit.
       base.resetPosDraft();
       const isRestaurant = Boolean(params.settings?.restaurantModuleEnabled);
-      const successMessage = isRestaurant
-        ? (params.tableNumber ? `تم تعليق طلب طاولة ${params.tableNumber} — لم يُرسل للمطبخ بعد` : 'تم تعليق الطلب — لم يُرسل للمطبخ بعد')
-        : 'تم تعليق الفاتورة الحالية ويمكن استرجاعها لاحقًا';
+      const successMessage = savedLocallyOffline
+        ? 'تم تعليق الفاتورة محلياً على الجهاز (بدون إنترنت) ويمكن استرجاعها فوراً'
+        : isRestaurant
+          ? (params.tableNumber ? `تم تعليق طلب طاولة ${params.tableNumber} — لم يُرسل للمطبخ بعد` : 'تم تعليق الطلب — لم يُرسل للمطبخ بعد')
+          : 'تم تعليق الفاتورة الحالية ويمكن استرجاعها لاحقًا';
       params.setSubmitMessage(successMessage);
       params.requestBarcodeFocus();
     } catch (error) {
@@ -715,12 +765,16 @@ export function createPosWorkspaceAsyncActions(
      * nothing — and a failed delete can no longer leave the same order
      * twice (once in the cart, once still held). The old order
      * (setCart, then delete with no try/catch) did exactly that. */
-    try {
-      await params.deleteHeldDraftMutation.mutateAsync(draftId);
-    } catch (error) {
-      params.setSubmitMessage(getFriendlyApiErrorMessage(error, 'تعذّر حذف الفاتورة المعلقة — لم يتم الاسترجاع'));
-      params.requestBarcodeFocus();
-      throw error;
+    if (isOfflineLocalHeldDraftId(draftId)) {
+      removeOfflineHeldDraft(draftId);
+    } else {
+      try {
+        await params.deleteHeldDraftMutation.mutateAsync(draftId);
+      } catch (error) {
+        params.setSubmitMessage(getFriendlyApiErrorMessage(error, 'تعذّر حذف الفاتورة المعلقة — لم يتم الاسترجاع'));
+        params.requestBarcodeFocus();
+        throw error;
+      }
     }
 
     /* Restore every field from the single versioned snapshot. The
@@ -808,11 +862,23 @@ export function createPosWorkspaceAsyncActions(
     holdDraft,
     recallDraft,
     deleteDraft: async (draftId: string) => {
+      if (isOfflineLocalHeldDraftId(draftId)) {
+        removeOfflineHeldDraft(draftId);
+        params.requestBarcodeFocus();
+        return;
+      }
       await params.deleteHeldDraftMutation.mutateAsync(draftId);
       params.requestBarcodeFocus();
     },
     clearHeldDrafts: async () => {
-      await params.clearHeldDraftsMutation.mutateAsync();
+      clearOfflineHeldDrafts();
+      if (!isFastOfflineMode()) {
+        try {
+          await params.clearHeldDraftsMutation.mutateAsync();
+        } catch (err) {
+          if (!isNetworkOrOfflineError(err)) throw err;
+        }
+      }
       params.requestBarcodeFocus();
     },
   };

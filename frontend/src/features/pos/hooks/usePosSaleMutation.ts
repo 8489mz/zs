@@ -3,7 +3,10 @@ import { useRef } from 'react';
 import { invalidateSalesDomain } from '@/app/query-invalidation';
 import { posApi } from '@/features/pos/api/pos.api';
 import { buildPosSalePayload, buildLegacyPosSalePayload, type CreatePosSaleInput } from '@/features/pos/contracts';
+import { deductCatalogStockInStorage } from '@/features/pos/lib/pos-catalog-storage';
 import { enqueueOfflineSale, APP_NETWORK_STATE_EVENT } from '@/features/pos/lib/pos-offline-sync';
+import { isFastOfflineMode } from '@/lib/network-circuit-breaker';
+import { useAuthStore } from '@/stores/auth-store';
 
 export function isNetworkOrOfflineError(error: unknown): boolean {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -11,8 +14,8 @@ export function isNetworkOrOfflineError(error: unknown): boolean {
   }
   if (!error) return false;
 
-  const err = error as any;
-  if (err.status === 0 || err.status === 502 || err.status === 503 || err.status === 504) {
+  const err = error as { status?: number; code?: string; name?: string; message?: string };
+  if (err.status === 0 || err.status === 408 || err.status === 502 || err.status === 503 || err.status === 504) {
     return true;
   }
 
@@ -64,16 +67,34 @@ export function usePosSaleMutation() {
         const payload = buildPosSalePayload(input);
         const legacyPayload = buildLegacyPosSalePayload(input);
         const idempotencyKey = crypto.randomUUID();
+        const attemptTimestamp = new Date().toISOString();
+
+        // 0ms Fast-Offline Circuit-Breaker Path: when the device is offline or the ISP WAN
+        // circuit breaker is open, save locally immediately without making the cashier wait.
+        if (isFastOfflineMode()) {
+          const offlineSale = enqueueOfflineSale(input, idempotencyKey, attemptTimestamp);
+          return {
+            id: offlineSale.id,
+            docNo: (offlineSale.payload as unknown as { docNo?: string })?.docNo || offlineSale.id,
+            offline: true,
+            ...input,
+          };
+        }
 
         try {
           return await posApi.createSale(payload, legacyPayload, { 'x-idempotency-key': idempotencyKey });
-        } catch (error: any) {
+        } catch (error: unknown) {
           if (isNetworkOrOfflineError(error)) {
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent(APP_NETWORK_STATE_EVENT, { detail: { online: false } }));
             }
-            const offlineSale = enqueueOfflineSale(input, idempotencyKey);
-            return { id: offlineSale.id, docNo: (offlineSale.payload as any)?.docNo || offlineSale.id, offline: true, ...input };
+            const offlineSale = enqueueOfflineSale(input, idempotencyKey, attemptTimestamp);
+            return {
+              id: offlineSale.id,
+              docNo: (offlineSale.payload as unknown as { docNo?: string })?.docNo || offlineSale.id,
+              offline: true,
+              ...input,
+            };
           }
           throw error;
         }
@@ -82,10 +103,10 @@ export function usePosSaleMutation() {
       }
     },
     onSuccess: (result, input) => {
-      const isOffline = Boolean(result && typeof result === 'object' && (result as any).offline);
+      const isOffline = Boolean(result && typeof result === 'object' && (result as { offline?: boolean }).offline);
 
-      // Optimistically deduct sold base quantities in cached POS product lists so the
-      // cashier sees updated stock immediately in 0ms without waiting for a network refetch.
+      // Optimistically deduct sold base quantities in both React Query RAM cache AND
+      // IndexedDB persistent catalog so offline search/reload reflects accurate shelf stock.
       if (input?.cart?.length) {
         const soldByProduct = new Map<string, number>();
         for (const item of input.cart) {
@@ -96,19 +117,29 @@ export function usePosSaleMutation() {
           }
         }
         if (soldByProduct.size > 0) {
-          const applyOptimisticStock = (list: any[]) =>
+          const applyOptimisticStock = (list: Array<Record<string, unknown>>) =>
             list.map((p) => {
               const delta = soldByProduct.get(String(p?.id ?? ''));
               if (!delta || typeof p?.stock !== 'number') return p;
               return { ...p, stock: Number((p.stock - delta).toFixed(4)) };
             });
-          queryClient.setQueriesData({ queryKey: ['products', 'pos'] }, (old: any) => {
-            if (Array.isArray(old)) return applyOptimisticStock(old);
-            if (old && Array.isArray(old.products)) {
-              return { ...old, products: applyOptimisticStock(old.products) };
+          queryClient.setQueriesData({ queryKey: ['products', 'pos'] }, (old: unknown) => {
+            if (Array.isArray(old)) return applyOptimisticStock(old as Array<Record<string, unknown>>);
+            if (old && typeof old === 'object' && Array.isArray((old as { products?: unknown[] }).products)) {
+              const typed = old as { products: Array<Record<string, unknown>> };
+              return { ...typed, products: applyOptimisticStock(typed.products) };
             }
             return old;
           });
+
+          const activeTenantId = String(
+            useAuthStore.getState().user?.tenantId || useAuthStore.getState().tenant?.id || '',
+          ).trim();
+          const idbDeductions = Array.from(soldByProduct.entries()).map(([productId, baseQty]) => ({
+            productId,
+            baseQty,
+          }));
+          void deductCatalogStockInStorage(idbDeductions, activeTenantId || undefined);
         }
       }
 
@@ -128,6 +159,6 @@ export function usePosSaleMutation() {
           console.error('Failed to refresh sales data after POS checkout:', error);
         });
       }, 180);
-    }
+    },
   });
 }
