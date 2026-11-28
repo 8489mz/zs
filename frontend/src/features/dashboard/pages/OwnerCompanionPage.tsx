@@ -2,15 +2,17 @@ import { useTranslation } from 'react-i18next';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '../api/dashboard.api';
+import { cashierFraudRadarApi } from '@/shared/api/loss-prevention.api';
+import { toast } from '@/shared/components/system-alert';
 import { useAuthStore } from '@/stores/auth-store';
 import { useHasAnyPermission, useHasFeature } from '@/shared/hooks/use-permission';
 import { findWorkspaceFallbackRoute, isPlatformAdmin } from '@/app/router/access';
 import { navigationItems } from '@/app/router/registry';
 import { Button } from '@/shared/ui/button';
-import { SmartphoneIcon, BellIcon } from '@/shared/components/icons/AppIcons';
+import { SmartphoneIcon, BellIcon, ShieldCheckIcon, TruckIcon, AlertTriangleIcon, CreditCardIcon } from '@/shared/components/icons/AppIcons';
 import type { DashboardTopItem } from '../api/dashboard.types';
 import { todayLocalDateKey } from '@/lib/format';
 
@@ -22,6 +24,7 @@ export function OwnerCompanionPage() {
   const canViewReports = useHasAnyPermission('reports') || isPlatformAdminUser;
 
   const tenant = useAuthStore((state) => state.tenant);
+  const navigate = useNavigate();
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleTimeString('ar-EG'));
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -42,7 +45,7 @@ export function OwnerCompanionPage() {
         setDeferredPrompt(null);
       }
     } else {
-      alert('لتثبيت شاشة المتابعة كتطبيق:\n• أندرويد (Chrome): اضغط على القائمة (⋮) ثم "تثبيت التطبيق" أو "إضافة للشاشة الرئيسية".\n• آيفون (Safari): اضغط زر المشاركة ثم "إضافة إلى الصفحة الرئيسية" (Add to Home Screen).');
+      toast.info('لتثبيت التطبيق: من قائمة المتصفح اختر "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية".');
     }
   };
 
@@ -54,12 +57,21 @@ export function OwnerCompanionPage() {
     enabled: hasReportsFeature && canViewReports,
   });
 
+  const lossPreventionQuery = useQuery({
+    queryKey: ['owner-companion-loss-prevention'],
+    queryFn: () => cashierFraudRadarApi.getCommandCenter('today'),
+    refetchInterval: 60000,
+    retry: 0,
+    enabled: hasReportsFeature && canViewReports,
+  });
+
   if (!hasReportsFeature || !canViewReports) {
     return <Navigate to={findWorkspaceFallbackRoute(user, navigationItems) || '/pos'} replace />;
   }
 
   const handleManualRefresh = () => {
-    refetch();
+    void refetch();
+    void lossPreventionQuery.refetch();
     setLastUpdated(new Date().toLocaleTimeString('ar-EG'));
   };
 
@@ -213,6 +225,85 @@ export function OwnerCompanionPage() {
           </div>
         </div>
       </div>
+
+      {/* Loss Prevention & Anti-Theft Live Summary (Mobile Visual Constitution) */}
+      {lossPreventionQuery.data && (
+        <div
+          style={{
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '14px',
+            padding: '14px',
+            marginBottom: '14px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+              <span style={{ width: '3px', height: '14px', backgroundColor: '#170e5e', borderRadius: '2px', display: 'inline-block' }} />
+              <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a' }}>درع منع الخسائر اليومي</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/audit')}
+              style={{
+                border: '1px solid #cbd5e1',
+                background: '#f8fafc',
+                color: '#170e5e',
+                borderRadius: '8px',
+                padding: '4px 10px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              فتح غرفة العمليات
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '12px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: '#fee2e2', color: '#b91c1c', margin: '0 auto 6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <AlertTriangleIcon size={18} />
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                {lossPreventionQuery.data.posRadar.summary.totalSuspiciousEvents}
+              </div>
+              <div style={{ fontSize: '10.5px', fontWeight: 500, color: '#64748b' }}>أحداث كاشير مرصودة</div>
+            </div>
+
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '12px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: '#fef3c7', color: '#b45309', margin: '0 auto 6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <TruckIcon size={18} />
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                {lossPreventionQuery.data.inTransitCustody.openCount} ({lossPreventionQuery.data.inTransitCustody.overdueCount} متأخر)
+              </div>
+              <div style={{ fontSize: '10.5px', fontWeight: 500, color: '#64748b' }}>تحويلات بالطريق</div>
+            </div>
+
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '12px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: '#eef2ff', color: '#170e5e', margin: '0 auto 6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ShieldCheckIcon size={18} />
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                {Number(lossPreventionQuery.data.shrinkage.totalLossCost || 0).toLocaleString('ar-EG')} <CurrencySymbol />
+              </div>
+              <div style={{ fontSize: '10.5px', fontWeight: 500, color: '#64748b' }}>فاقد وتالف اليوم</div>
+            </div>
+
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '12px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: '#dcfce7', color: '#15803d', margin: '0 auto 6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CreditCardIcon size={18} />
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                {lossPreventionQuery.data.shiftsAndDelivery.overdueDeliveryOrdersCount}
+              </div>
+              <div style={{ fontSize: '10.5px', fontWeight: 500, color: '#64748b' }}>أوردرات مناديب متأخرة</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top Products Sold Today */}
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px', marginBottom: '14px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>

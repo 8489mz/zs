@@ -20,6 +20,7 @@ import { CustomerInstallmentsController } from './controllers/customer-installme
 import { CustomerInstallmentsService } from './services/customer-installments.service';
 import { CashierFraudRadarController } from './controllers/cashier-fraud-radar.controller';
 import { CashierFraudRadarService } from './services/cashier-fraud-radar.service';
+import { LossPreventionCommandCenterService } from './services/loss-prevention-command-center.service';
 import { KdsController } from './controllers/kds.controller';
 import { KdsService } from './services/kds.service';
 import { SalesOrdersController } from './controllers/sales-orders.controller';
@@ -74,6 +75,7 @@ import { RestaurantAdvancedFnbService } from './services/restaurant-advanced-fnb
     PosTerminalService,
     CustomerInstallmentsService,
     CashierFraudRadarService,
+    LossPreventionCommandCenterService,
     KdsService,
     DeliveryAggregatorsService,
     RestaurantFoodWasteService,
@@ -94,6 +96,7 @@ import { RestaurantAdvancedFnbService } from './services/restaurant-advanced-fnb
     PosTerminalService,
     CustomerInstallmentsService,
     CashierFraudRadarService,
+    LossPreventionCommandCenterService,
     KdsService,
     DeliveryAggregatorsService,
     RestaurantFoodWasteService,

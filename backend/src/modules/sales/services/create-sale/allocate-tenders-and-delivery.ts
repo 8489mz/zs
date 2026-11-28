@@ -9,6 +9,8 @@ import {
 } from '../../engines/sale-tender.engine';
 import { assertPosSubmitGates } from '../../engines/pos-submit-gates.engine';
 import { validateOfflineCreatedAt } from '../../../cash-drawer/helpers/cash-drawer.helper';
+import { parseAntiTheftSettingsFromMap } from '../../../../common/utils/anti-theft-settings.util';
+import { authorizeManagerSecret } from '../../../../common/utils/manager-approval';
 import type { CreateSaleContext, CreateSaleDeps } from './create-sale-types';
 
 export class AllocateTendersAndDeliveryService {
@@ -236,7 +238,7 @@ export class AllocateTendersAndDeliveryService {
       if (parsedRepId && !Number.isNaN(parsedRepId) && parsedRepId > 0) {
         const rep = await trx
           .selectFrom('delivery_representatives')
-          .select(['id', 'name', 'rep_type', 'is_active'])
+          .select(['id', 'name', 'rep_type', 'is_active', 'max_cash_custody_limit'])
           .where('id', '=', parsedRepId)
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .executeTakeFirst();
@@ -249,6 +251,87 @@ export class AllocateTendersAndDeliveryService {
         deliveryRepId = parsedRepId;
         if (!resolvedDeliveryFeeMode && rep.rep_type === 'store_fleet') {
           resolvedDeliveryFeeMode = 'store_fleet';
+        }
+
+        // INV-LOSS-PREVENTION-DELIVERY-CUSTODY:
+        // 1) Time-Based Overdue Custody Gate (Option A: e.g. 20 hours): blocks assigning new delivery orders
+        //    to a rep who still holds an unsettled COD order older than `deliveryOverdueHours` (with manager override).
+        // 2) Optional Per-Rep / Global Cash Cap Gate: enforced ONLY when explicitly set > 0 (default 0 = open).
+        if (isCod) {
+          const antiTheftCfg = parseAntiTheftSettingsFromMap(settingsMap);
+          const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
+          let managerOverrideVerified = false;
+          const verifyOverrideOrThrow = async (message: string, code: string) => {
+            if (managerOverrideVerified) return;
+            const overridePin = String(payload.managerPin || '').trim();
+            if (!overridePin) {
+              throw new AppError(message, code, 403);
+            }
+            await authorizeManagerSecret(trx, auth, overridePin);
+            managerOverrideVerified = true;
+          };
+
+          if (antiTheftCfg.blockOverdueDeliveryRep && !isAdmin) {
+            const overdueHours = Math.max(1, Number(antiTheftCfg.deliveryOverdueHours || 20));
+            const overdueCutoff = new Date(Date.now() - overdueHours * 3_600_000);
+            const overdueRow = await trx
+              .selectFrom('sales')
+              .select([
+                sql<number>`COUNT(*)`.as('overdue_count'),
+                sql<number>`COALESCE(SUM(GREATEST(0, total - COALESCE(paid_amount, 0))), 0)`.as('overdue_cash'),
+                sql<Date | null>`MIN(created_at)`.as('oldest_at'),
+              ])
+              .where('tenant_id', '=', scope.tenantId)
+              .where('delivery_rep_id', '=', parsedRepId)
+              .where('status', '!=', 'cancelled')
+              .where('created_at', '<=', overdueCutoff)
+              .where((eb) =>
+                eb.and([
+                  eb.or([eb('driver_cash_settled', 'is', null), eb('driver_cash_settled', '=', false)]),
+                  eb.or([eb('delivery_status', 'is', null), eb('delivery_status', '!=', 'settled')]),
+                  eb.or([eb('collection_status', 'is', null), eb('collection_status', '!=', 'prepaid_online')]),
+                ]),
+              )
+              .executeTakeFirst();
+            const overdueCount = Number(overdueRow?.overdue_count || 0);
+            if (overdueCount > 0) {
+              const overdueCash = roundMoney(Number(overdueRow?.overdue_cash || 0), moneyDigits);
+              const ageHours = overdueRow?.oldest_at
+                ? Math.round((Date.now() - new Date(overdueRow.oldest_at).getTime()) / 3_600_000)
+                : overdueHours;
+              await verifyOverrideOrThrow(
+                `لا يمكن إسناد أوردر جديد للمندوب (${rep.name}): لديه ${overdueCount} طلب غير مسوّى بعهدة متأخرة منذ ${ageHours} ساعة (تجاوز حد ${overdueHours} ساعة) بإجمالي ${overdueCash}. يجب تسوية العهدة القديمة أولاً أو إدخال اعتماد المدير.`,
+                'DELIVERY_REP_OVERDUE_CUSTODY_BLOCKED',
+              );
+            }
+          }
+
+          const repOwnCap = rep.max_cash_custody_limit != null ? Number(rep.max_cash_custody_limit) : 0;
+          const effectiveCustodyCap = repOwnCap > 0 ? repOwnCap : antiTheftCfg.defaultDeliveryCustodyCap;
+          if (effectiveCustodyCap > 0 && !isAdmin) {
+            const unsettledRow = await trx
+              .selectFrom('sales')
+              .select(sql<number>`COALESCE(SUM(GREATEST(0, total - COALESCE(paid_amount, 0))), 0)`.as('unsettled_cash'))
+              .where('tenant_id', '=', scope.tenantId)
+              .where('delivery_rep_id', '=', parsedRepId)
+              .where('status', '!=', 'cancelled')
+              .where((eb) =>
+                eb.and([
+                  eb.or([eb('driver_cash_settled', 'is', null), eb('driver_cash_settled', '=', false)]),
+                  eb.or([eb('delivery_status', 'is', null), eb('delivery_status', '!=', 'settled')]),
+                  eb.or([eb('collection_status', 'is', null), eb('collection_status', '!=', 'prepaid_online')]),
+                ]),
+              )
+              .executeTakeFirst();
+            const currentUnsettled = roundMoney(Number(unsettledRow?.unsettled_cash || 0), moneyDigits);
+            const projectedCustody = roundMoney(currentUnsettled + remainingDebt, moneyDigits);
+            if (projectedCustody > effectiveCustodyCap + 0.001) {
+              await verifyOverrideOrThrow(
+                `عهدة المندوب (${rep.name}) وصلت للحد الأقصى المسموح (${effectiveCustodyCap}). العهدة الحالية غير المصفّاة: ${currentUnsettled} + الطلب الحالي: ${remainingDebt}. يجب تصفية العهدة أولاً أو إدخال اعتماد المدير.`,
+                'DELIVERY_CUSTODY_CAP_EXCEEDED',
+              );
+            }
+          }
         }
       }
 
@@ -326,6 +409,33 @@ export class AllocateTendersAndDeliveryService {
       discount: effectiveDiscount,
       subtotal,
     });
+
+    // INV-LOSS-PREVENTION-ELECTRONIC-REF: when strict electronic payment reference is enabled,
+    // prevent cashiers from booking cash sales as InstaPay/wallet/manual card to hide drawer cash.
+    if (normalized.source === 'pos' && auth.role !== 'admin' && auth.role !== 'super_admin') {
+      const antiTheftCfg = parseAntiTheftSettingsFromMap(settingsMap);
+      if (antiTheftCfg.requireElectronicPaymentRef) {
+        const hasManualElectronicLeg = payments.some(
+          (entry) =>
+            (entry.paymentChannel === 'instapay' ||
+              entry.paymentChannel === 'wallet' ||
+              (entry.paymentChannel === 'card' && !normalized.terminalAuthCode)) &&
+            Number(entry.amount || 0) > 0.0001,
+        );
+        if (hasManualElectronicLeg) {
+          const refText = String(
+            (payload as any).transferReference || normalized.terminalAuthCode || (payload as any).terminalRrn || '',
+          ).trim();
+          if (refText.length < 3) {
+            throw new AppError(
+              'يجب إدخال رقم مرجع التحويل أو إيصال البطاقة (3 خانات على الأقل) لإتمام الدفع الإلكتروني (درع منع السرقة مفعّل).',
+              'ELECTRONIC_PAYMENT_REF_REQUIRED',
+              400,
+            );
+          }
+        }
+      }
+    }
 
     const finalTenderedAmount = tenderAllocation.tenderedAmount;
     const changeAmount = tenderAllocation.changeAmount;

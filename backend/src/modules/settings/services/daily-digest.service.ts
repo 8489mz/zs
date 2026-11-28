@@ -6,6 +6,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { addDaysToDayKey } from '../../../common/utils/client-date-bounds.util';
+import { loadAntiTheftSettings } from '../../../common/utils/anti-theft-settings.util';
 import { WhatsAppGatewayService } from './whatsapp-gateway.service';
 
 export interface DailyDigestConfig {
@@ -320,6 +321,85 @@ export class DailyDigestService {
         }
         digestText += `\n`;
       }
+    }
+
+    // 4. Loss Prevention & Anti-Theft Digest (Overdue In-Transit, Overdue Delivery Custody, POS Suspicious Events)
+    try {
+      const antiTheft = await loadAntiTheftSettings(this.db, tenantId);
+      const inTransitThresholdMs = Math.max(1, antiTheft.inTransitAlertHours) * 3_600_000;
+      const deliveryThresholdMs = Math.max(1, antiTheft.deliveryOverdueHours) * 3_600_000;
+      const inTransitCutoff = new Date(Date.now() - inTransitThresholdMs);
+      const deliveryCutoff = new Date(Date.now() - deliveryThresholdMs);
+
+      const [overdueTransfers, overdueDeliveries, posSuspicionAgg] = await Promise.all([
+        this.db
+          .selectFrom('stock_transfers as t')
+          .select(['t.doc_no', 't.carrier_name', 't.created_at'])
+          .where('t.tenant_id', '=', tenantId)
+          .where('t.status', '=', 'sent')
+          .where('t.created_at', '<=', inTransitCutoff)
+          .limit(5)
+          .execute(),
+        this.db
+          .selectFrom('sales as s')
+          .leftJoin('delivery_representatives as dr', (j) =>
+            j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'),
+          )
+          .select([
+            'dr.name as rep_name',
+            sql<number>`COUNT(s.id)`.as('orders_count'),
+            sql<number>`COALESCE(SUM(GREATEST(0, COALESCE(s.total, 0) - COALESCE(s.paid_amount, 0))), 0)`.as('unsettled_cash'),
+          ])
+          .where('s.tenant_id', '=', tenantId)
+          .where('s.delivery_rep_id', 'is not', null)
+          .where('s.status', '!=', 'cancelled')
+          .where((eb) =>
+            eb.and([
+              eb.or([eb('s.driver_cash_settled', 'is', null), eb('s.driver_cash_settled', '=', false)]),
+              eb.or([eb('s.delivery_status', 'is', null), eb('s.delivery_status', '!=', 'settled')]),
+              eb.or([eb('s.collection_status', 'is', null), eb('s.collection_status', '!=', 'prepaid_online')]),
+            ]),
+          )
+          .where('s.created_at', '<=', deliveryCutoff)
+          .groupBy('dr.name')
+          .execute(),
+        this.db
+          .selectFrom('pos_audit_events')
+          .select([
+            sql<number>`COUNT(*) FILTER (WHERE event_type = 'draft_cancel')`.as('cart_clears'),
+            sql<number>`COUNT(*) FILTER (WHERE event_type = 'no_sale')`.as('no_sales'),
+            sql<number>`COUNT(*) FILTER (WHERE event_type = 'receipt_reprint')`.as('reprints'),
+          ])
+          .where('tenant_id', '=', tenantId)
+          .where(sql<boolean>`DATE(created_at AT TIME ZONE ${tenantTz}) = ${todayKey}`)
+          .executeTakeFirst(),
+      ]);
+
+      const cartClears = Number(posSuspicionAgg?.cart_clears || 0);
+      const noSales = Number(posSuspicionAgg?.no_sales || 0);
+      const reprints = Number(posSuspicionAgg?.reprints || 0);
+
+      if (overdueTransfers.length > 0 || overdueDeliveries.length > 0 || cartClears > 0 || noSales > 0 || reprints > 0) {
+        digestText += `*تقرير درع منع الخسائر والرقابة اليومي:*\n`;
+        if (cartClears > 0 || noSales > 0 || reprints > 0) {
+          digestText += `• نقطة البيع: مسح سلة (${cartClears}) | فتح درج بلا بيع (${noSales}) | إعادة طباعة (${reprints})\n`;
+        }
+        if (overdueTransfers.length > 0) {
+          digestText += `• تحويلات متأخرة بالطريق (+${antiTheft.inTransitAlertHours} ساعة): *${overdueTransfers.length} إذن*\n`;
+          for (const tr of overdueTransfers) {
+            digestText += `  - ${tr.doc_no || 'تحويل'}${tr.carrier_name ? ` (الناقل: ${tr.carrier_name})` : ''}\n`;
+          }
+        }
+        if (overdueDeliveries.length > 0) {
+          digestText += `• عهد مناديب متأخرة التسوية (+${antiTheft.deliveryOverdueHours} ساعة):\n`;
+          for (const d of overdueDeliveries) {
+            digestText += `  - ${d.rep_name || 'مندوب'}: ${Number(d.orders_count || 0)} طلب | متبقي *${Number(d.unsettled_cash || 0).toLocaleString('ar-EG')} ج.م*\n`;
+          }
+        }
+        digestText += `\n`;
+      }
+    } catch {
+      // Never block daily digest delivery if optional anti-theft metrics fail
     }
 
     digestText += `━━━━━━━━━━━━━━━━━━━━\n` + `_تم الإنشاء والإرسال آلياً عبر منظومة Z-Systems المؤسسية_`;

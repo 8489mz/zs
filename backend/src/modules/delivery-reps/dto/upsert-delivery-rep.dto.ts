@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsNumber, Min } from 'class-validator';
 
 export class UpsertDeliveryRepDto {
   @IsString()
@@ -46,4 +47,10 @@ export class UpsertDeliveryRepDto {
 
   @IsOptional()
   metadata?: Record<string, any>;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxCashCustodyLimit?: number | null;
 }

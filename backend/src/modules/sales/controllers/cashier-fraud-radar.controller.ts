@@ -6,11 +6,27 @@ import {
   FraudRadarSummaryResponse,
   FraudRadarEventItem,
 } from '../services/cashier-fraud-radar.service';
+import {
+  LossPreventionCommandCenterService,
+  type CommandCenterResponse,
+} from '../services/loss-prevention-command-center.service';
 
 @Controller(['api/sales/fraud-radar', 'api/v1/sales/fraud-radar'])
 @UseGuards(SessionAuthGuard)
 export class CashierFraudRadarController {
-  constructor(private readonly fraudRadarService: CashierFraudRadarService) {}
+  constructor(
+    private readonly fraudRadarService: CashierFraudRadarService,
+    private readonly commandCenterService: LossPreventionCommandCenterService,
+  ) {}
+
+  @Get('command-center')
+  async getCommandCenter(
+    @Query('timeframe') timeframe: 'today' | '7days' | '30days' = 'today',
+    @Req() req: RequestWithAuth,
+  ): Promise<CommandCenterResponse> {
+    const validTimeframe = ['today', '7days', '30days'].includes(timeframe) ? timeframe : 'today';
+    return this.commandCenterService.getCommandCenter(validTimeframe, req.authContext!);
+  }
 
   @Get('summary')
   async getSummary(

@@ -77,6 +77,26 @@ export class DeliveryRepsAdminService {
           WHERE fvd.rep_id = dr.id AND fvd.tenant_id = dr.tenant_id AND fvd.is_active = true
           ORDER BY fvd.id DESC LIMIT 1
         )`.as('shift_name'),
+        sql<number>`COALESCE((
+          SELECT SUM(GREATEST(0, COALESCE(s.total, 0) - COALESCE(s.paid_amount, 0)))
+          FROM sales s
+          WHERE s.delivery_rep_id = dr.id
+            AND s.tenant_id = dr.tenant_id
+            AND s.status != 'cancelled'
+            AND (s.driver_cash_settled IS NULL OR s.driver_cash_settled = false)
+            AND (s.delivery_status IS NULL OR s.delivery_status != 'settled')
+            AND (s.collection_status IS NULL OR s.collection_status != 'prepaid_online')
+        ), 0)`.as('unsettled_cod_cash'),
+        sql<number>`COALESCE((
+          SELECT COUNT(*)
+          FROM sales s
+          WHERE s.delivery_rep_id = dr.id
+            AND s.tenant_id = dr.tenant_id
+            AND s.status != 'cancelled'
+            AND (s.driver_cash_settled IS NULL OR s.driver_cash_settled = false)
+            AND (s.delivery_status IS NULL OR s.delivery_status != 'settled')
+            AND (s.collection_status IS NULL OR s.collection_status != 'prepaid_online')
+        ), 0)`.as('unsettled_orders_count'),
       ])
       .where(this.tenantPredicate(actor))
       .orderBy('dr.is_active', 'desc')
@@ -141,6 +161,10 @@ export class DeliveryRepsAdminService {
         rep_type: repType,
         is_van_rep: isVanRep,
         is_active: payload.isActive !== false,
+        max_cash_custody_limit:
+          payload.maxCashCustodyLimit !== undefined && payload.maxCashCustodyLimit !== null
+            ? Number(payload.maxCashCustodyLimit)
+            : null,
         permissions: permissions,
         // M14: مندوب جديد يبدأ بنسخة PIN رقم 0 — لا رموز صادرة قبله أصلاً.
         metadata: { ...((payload.metadata || {}) as Record<string, any>), pin_version: 0 },
@@ -221,6 +245,12 @@ export class DeliveryRepsAdminService {
         rep_type: payload.repType !== undefined ? payload.repType : undefined,
         is_van_rep: isVanRep !== undefined ? isVanRep : undefined,
         is_active: payload.isActive !== undefined ? payload.isActive : undefined,
+        max_cash_custody_limit:
+          payload.maxCashCustodyLimit !== undefined
+            ? payload.maxCashCustodyLimit === null
+              ? null
+              : Number(payload.maxCashCustodyLimit)
+            : undefined,
         ...(mergedPermissions !== undefined ? { permissions: mergedPermissions } : {}),
         ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {}),
         updated_at: sql`NOW()`,
