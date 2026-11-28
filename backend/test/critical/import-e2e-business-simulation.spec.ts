@@ -22,6 +22,7 @@ import { up as up290 } from '../../src/database/migrations/2040000000290_import_
 import { up as up291 } from '../../src/database/migrations/2040000000291_import_quotation_estimate_basis';
 import { up as up306 } from '../../src/database/migrations/2040000000306_import_write_uniqueness';
 import { up as up330 } from '../../src/database/migrations/2040000000330_import_broker_expenses_payment_date';
+import { up as up345 } from '../../src/database/migrations/2040000000345_import_fx_payout_idempotency_keys';
 import {
   allocateSaleFromImportLots,
   restoreImportLotsFromCancelledSale,
@@ -878,6 +879,9 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
   // liquidateBrokerExpenses inserts (Step 11) — without it the insert
   // fails with 'column "payment_date" ... does not exist' (ci-full #51).
   await up330(db as any);
+  // 0345 adds idempotency_key to import_fx_acquisitions and
+  // import_partner_project_payouts, which recordPartnerPayout inserts (Step 29).
+  await up345(db);
 
   // Seed default tenant
   await pglite.exec(`INSERT INTO tenants (id, name) VALUES ('tenant-e2e', 'Global Import & Trade Ltd');`);
