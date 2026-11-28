@@ -1056,8 +1056,8 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 411);
-    assert.equal(chain.length, 411);
+    assert.equal(specs.length, 412);
+    assert.equal(chain.length, 412);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-route-sale-gate.spec.ts'));
     console.log('  wiring (349 specs, identical order) passed');

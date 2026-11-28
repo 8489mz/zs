@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, Min, IsIn, IsNotEmpty } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, IsIn, IsNotEmpty, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PostSourcingTripExpenseDto {
@@ -162,4 +162,10 @@ export class RecordPartnerPayoutDto {
   @IsOptional()
   @IsString()
   treasuryAccountId?: string;
+
+  /** Optional idempotency key (service-level key path): a caller that sends a key owns the retry identity — a retry with the same key returns the original payout with no second row. A caller that sends no key gets pass-through, exactly as before (a retry then fails at the already-consumed approval instead of replaying). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  idempotencyKey?: string;
 }

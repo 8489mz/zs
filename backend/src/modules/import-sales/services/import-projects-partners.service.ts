@@ -679,6 +679,7 @@ export class ImportProjectsPartnersService {
     approvalRequestId?: string,
     projectId?: string,
     treasuryAccountId?: string,
+    idempotencyKey?: string,
   ) {
     const cleanAmount = Number(amount);
     if (!Number.isFinite(cleanAmount) || cleanAmount <= 0) {
@@ -691,7 +692,18 @@ export class ImportProjectsPartnersService {
       );
     }
 
-    return await this.db.transaction().execute(async (trx) => {
+    // A caller-supplied idempotency key owns the retry identity
+    // (S6): the same key replays the original payout instead of
+    // failing at the consumed approval. The key is OPTIONAL —
+    // without it the call behaves exactly as before.
+    const effectiveKey = typeof idempotencyKey === 'string' ? idempotencyKey.trim() : '';
+    if (idempotencyKey !== undefined && (!effectiveKey || effectiveKey.length > 128)) {
+      throw new BadRequestException('مفتاح عدم تكرار صرف أرباح الشركاء غير صالح. [IMPORT_PARTNER_PAYOUT_KEY_INVALID]');
+    }
+
+    // The transaction starts here; the catch below replays the
+    // committed row when a concurrent retry raced this one.
+    const booked = this.db.transaction().execute(async (trx) => {
       const partner = await trx
         .selectFrom('import_partners')
         .selectAll()
@@ -735,6 +747,15 @@ export class ImportProjectsPartnersService {
         .where('is_active', '=', true)
         .executeTakeFirst();
       if (!projectPartner) throw new BadRequestException('الشريك غير مرتبط بمشروع الأرباح المعتمد.');
+
+      // A supplied key replays the original payout instead of
+      // consuming the approval a second time (S6). The pre-check
+      // runs after the approval read resolves the target project
+      // and before the approval is consumed.
+      if (effectiveKey) {
+        const replayed = await this.replayPayout(trx, tenantId, partnerId, effectiveKey, cleanAmount, targetProjectId);
+        if (replayed) return replayed;
+      }
 
       await this.verifyAndConsumeApprovalRequest(trx, tenantId, 'partner_distribution', partnerId, approvalRequestId, {
         amount: cleanAmount,
@@ -816,6 +837,7 @@ export class ImportProjectsPartnersService {
           treasury_transaction_id: postedTreasury.id,
           amount_egp: cleanAmount,
           created_by: userId,
+          idempotency_key: effectiveKey || null,
         })
         .execute();
       await trx
@@ -837,6 +859,7 @@ export class ImportProjectsPartnersService {
           transaction_date: new Date(),
           note: `صرف أرباح الشريك: ${partner.name} (طلب موافقة: ${approvalRequestId})`,
           created_by: userId,
+          idempotency_key: effectiveKey || null,
         })
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -885,6 +908,67 @@ export class ImportProjectsPartnersService {
         treasuryTransactionId: postedTreasury.id,
       };
     });
+    try {
+      return await booked;
+    } catch (err: any) {
+      if (!effectiveKey) throw err;
+      const replayed = await this.replayPayout(this.db, tenantId, partnerId, effectiveKey, cleanAmount, projectId);
+      if (replayed) return replayed;
+      throw err;
+    }
+  }
+
+  // Replay-by-key (S6): rebuilds the original payout response
+  // from the committed rows. Retry identity is the
+  // caller-supplied business payload only — amount, partner, and
+  // the project when the caller supplied one (the approval payload
+  // resolved it otherwise). Server-resolved values (the journal,
+  // the treasury leg) are RESULTS, rebuilt from the stored rows.
+  private async replayPayout(
+    executor: any,
+    tenantId: string,
+    partnerId: string,
+    key: string,
+    amount: number,
+    projectId?: string,
+  ): Promise<{ success: boolean; ledgerId: any; journalEntryId: number; treasuryTransactionId: number } | null> {
+    const existing: any = await executor
+      .selectFrom('import_partner_project_payouts')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('idempotency_key', '=', key)
+      .executeTakeFirst();
+    if (!existing) return null;
+    if (
+      Number(existing.amount_egp) !== Number(amount) ||
+      String(existing.partner_id) !== String(partnerId) ||
+      (projectId !== undefined && String(existing.project_id) !== String(projectId))
+    ) {
+      throw new ConflictException(
+        'تم تسجيل صرف أرباح بهذا المفتاح مسبقاً بمبالغ مختلفة. [IMPORT_PARTNER_PAYOUT_DUPLICATE_KEY]',
+      );
+    }
+    const ledger: any = await executor
+      .selectFrom('import_partner_ledger')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('partner_id', '=', partnerId)
+      .where('type', '=', 'PROFIT_PAYOUT')
+      .where('idempotency_key', '=', key)
+      .executeTakeFirstOrThrow();
+    const journal: any = await executor
+      .selectFrom('journal_entries')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('source_type', '=', 'import_partner_payout')
+      .where('source_id', '=', Number(existing.treasury_transaction_id))
+      .executeTakeFirstOrThrow();
+    return {
+      success: true,
+      ledgerId: ledger.id,
+      journalEntryId: Number(journal.id),
+      treasuryTransactionId: Number(existing.treasury_transaction_id),
+    };
   }
 
   async getPartnerLedger(tenantId: string, partnerId: string) {

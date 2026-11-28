@@ -625,6 +625,7 @@ export class ImportSalesService {
     approvalRequestId?: string,
     projectId?: string,
     treasuryAccountId?: string,
+    idempotencyKey?: string,
   ) {
     return this.projectsPartnersService.recordPartnerPayout(
       tenantId,
@@ -634,6 +635,7 @@ export class ImportSalesService {
       approvalRequestId,
       projectId,
       treasuryAccountId,
+      idempotencyKey,
     );
   }
 

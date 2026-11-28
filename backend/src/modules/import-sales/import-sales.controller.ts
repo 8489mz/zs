@@ -346,7 +346,15 @@ export class ImportSalesController {
 
   @RequireAnyPermission('accounting')
   @Post('partners/:id/payout')
-  async recordPartnerPayout(@Req() req: RequestWithAuth, @Param('id') id: string, @Body() dto: RecordPartnerPayoutDto) {
+  async recordPartnerPayout(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: RecordPartnerPayoutDto,
+    @Headers('x-idempotency-key') headerIdempotencyKey?: string,
+  ) {
+    if (!dto.idempotencyKey && headerIdempotencyKey) {
+      dto.idempotencyKey = headerIdempotencyKey;
+    }
     return this.importSalesService.recordPartnerPayout(
       req.authContext!.tenantId!,
       req.authContext!.userId!,
@@ -355,6 +363,7 @@ export class ImportSalesController {
       dto.approvalRequestId,
       dto.projectId,
       dto.treasuryAccountId,
+      dto.idempotencyKey,
     );
   }
 
@@ -807,7 +816,14 @@ export class ImportSalesController {
 
   @RequireAnyPermission('accounting', 'treasury')
   @Post('fx-acquisitions')
-  async recordFxAcquisition(@Req() req: RequestWithAuth, @Body() dto: RecordFxAcquisitionDto) {
+  async recordFxAcquisition(
+    @Req() req: RequestWithAuth,
+    @Body() dto: RecordFxAcquisitionDto,
+    @Headers('x-idempotency-key') headerIdempotencyKey?: string,
+  ) {
+    if (!dto.idempotencyKey && headerIdempotencyKey) {
+      dto.idempotencyKey = headerIdempotencyKey;
+    }
     return this.importSalesService.recordFxAcquisition(req.authContext!.tenantId!, req.authContext!.userId!, dto);
   }
 

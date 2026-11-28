@@ -745,8 +745,25 @@ export class ImportTreasuryService {
         'عملة تدبير العملة يجب أن تكون رمزاً من ثلاثة أحرف (مثال: USD). [IMPORT_FX_CURRENCY_INVALID]',
       );
     }
+    // A caller-supplied idempotency key owns the retry identity
+    // (S6): the same key replays the original acquisition instead
+    // of booking it twice. The key is OPTIONAL — without it the
+    // call behaves exactly as before.
+    const suppliedKey = typeof dto.idempotencyKey === 'string' ? dto.idempotencyKey.trim() : '';
+    if (dto.idempotencyKey !== undefined && (!suppliedKey || suppliedKey.length > 128)) {
+      throw new BadRequestException('مفتاح عدم تكرار تدبير العملة غير صالح. [IMPORT_FX_ACQUISITION_KEY_INVALID]');
+    }
     const acquisitionDate = dto.acquisitionDate || (await resolveBusinessDateKey(this.db, tenantId, new Date()));
-    return await this.db.transaction().execute(async (trx) => {
+    // The transaction starts here; the catch below replays the
+    // committed row when a concurrent retry raced this one.
+    const booked = this.db.transaction().execute(async (trx) => {
+      // A supplied key replays the original acquisition instead
+      // of booking it twice (S6). The pre-check runs first,
+      // inside the transaction, before any write.
+      if (suppliedKey) {
+        const replayed = await this.replayFxAcquisition(trx, tenantId, dto, suppliedKey);
+        if (replayed) return replayed;
+      }
       // INV-IMPORT-FX-TREASURY-LIVE-RATE (I4-D7): the rate is NEVER
       // derived from the user-entered amounts — it resolves live
       // through the shared resolver (resolveFxRate), failing closed
@@ -835,6 +852,7 @@ export class ImportTreasuryService {
           bank_account_id: destinationAccountId,
           notes: dto.notes || null,
           supplier_payment_id: transferId,
+          idempotency_key: suppliedKey || null,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -924,6 +942,55 @@ export class ImportTreasuryService {
         .execute();
       return { ...acquisition, journal_entry_id: journalEntryId };
     });
+    try {
+      return await booked;
+    } catch (err: any) {
+      if (!suppliedKey) throw err;
+      const replayed = await this.replayFxAcquisition(this.db, tenantId, dto, suppliedKey);
+      if (replayed) return replayed;
+      throw err;
+    }
+  }
+
+  // Replay-by-key (S6): finds the acquisition a previous attempt
+  // committed under this key. Retry identity is the
+  // caller-supplied business payload only — currency, foreign
+  // amount, and the transfer link when the caller supplied one.
+  // Server-resolved values (live rate, EGP cost, the date when
+  // omitted, the accounts when omitted) are RESULTS, not identity:
+  // a retry on a later day with no supplied date must still replay.
+  private async replayFxAcquisition(
+    executor: any,
+    tenantId: string,
+    dto: RecordFxAcquisitionDto,
+    key: string,
+  ): Promise<any | null> {
+    const existing: any = await executor
+      .selectFrom('import_fx_acquisitions')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('idempotency_key', '=', key)
+      .executeTakeFirst();
+    if (!existing) return null;
+    const sameTransfer =
+      dto.transferId === undefined ||
+      dto.transferId === null ||
+      Number(existing.supplier_payment_id) === Number(dto.transferId);
+    if (
+      String(existing.currency || '')
+        .trim()
+        .toUpperCase() !==
+        String(dto.currency || '')
+          .trim()
+          .toUpperCase() ||
+      Number(existing.foreign_amount) !== Number(dto.foreignAmount) ||
+      !sameTransfer
+    ) {
+      throw new ConflictException(
+        'تم تسجيل تدبير عملة بهذا المفتاح مسبقاً بمبالغ مختلفة. [IMPORT_FX_ACQUISITION_DUPLICATE_KEY]',
+      );
+    }
+    return existing;
   }
 
   async getFxPortfolio(tenantId: string) {

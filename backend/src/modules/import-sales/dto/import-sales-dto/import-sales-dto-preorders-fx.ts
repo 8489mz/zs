@@ -144,4 +144,10 @@ export class RecordFxAcquisitionDto {
   @Type(() => Number)
   @IsNumber()
   transferId?: number;
+
+  /** Optional idempotency key (service-level key path): a caller that sends a key owns the retry identity — a retry with the same key returns the original acquisition with no second row. A caller that sends no key gets pass-through, exactly as before: two identical FX buys with no key are legitimate distinct operations, so no server-derived key exists here. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  idempotencyKey?: string;
 }

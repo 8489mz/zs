@@ -6378,6 +6378,8 @@ export interface ImportFxAcquisitionTable {
   journal_entry_id?: number | null;
   /** Foreign transfer this acquisition funds, when linked. NULL when unlinked. */
   supplier_payment_id?: number | null;
+  /** Optional client-supplied idempotency key (service-level key path). NULL when the caller sends no key. */
+  idempotency_key?: string | null;
   created_at: Generated<Date>;
 }
 
@@ -6477,6 +6479,8 @@ export interface Database {
     treasury_transaction_id: number;
     amount_egp: ImportNumeric;
     created_by: number | null;
+    /** Optional client-supplied idempotency key (service-level key path). NULL when the caller sends no key. */
+    idempotency_key?: string | null;
     created_at: Generated<Date>;
   };
   import_container_preorders: ImportContainerPreorderTable;
