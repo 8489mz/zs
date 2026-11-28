@@ -462,8 +462,8 @@ async function main(): Promise<void> {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 407);
-    assert.equal(chain.length, 407);
+    assert.equal(specs.length, 408);
+    assert.equal(chain.length, 408);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/van-admin-permission-split.spec.ts'));
     console.log('9. spec wired into both critical lists (373 = 373, identical order), passed');

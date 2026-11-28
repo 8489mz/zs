@@ -67,7 +67,7 @@ const MIGRATION_FILE = '2040000000337_import_container_deposit_amount_3dp.ts';
 // Highest migration on disk at the time of this edit (0342 landed
 // after 0341/0340 and owns the top slot now — see the section-8 pin;
 // 0341 and 0342 are HR biometric tables and touch neither deposit table).
-const HIGHEST_MIGRATION_FILE = '2040000000342_hr_biometric_raw_punches_staging.ts';
+const HIGHEST_MIGRATION_FILE = '2040000000343_maritime_agent_settlement_reference_unique.ts';
 
 const COLUMNS: Array<[string, string]> = [
   ['import_container_deposits', 'deposit_amount_egp'],
@@ -236,7 +236,7 @@ async function main(): Promise<void> {
   assert.equal(
     files[files.length - 1],
     HIGHEST_MIGRATION_FILE,
-    'the 0342 migration must be the highest-numbered migration on disk',
+    'the 0343 migration must be the highest-numbered migration on disk',
   );
   const touching: string[] = [];
   for (const file of files) {

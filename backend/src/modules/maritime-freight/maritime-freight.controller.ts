@@ -1,7 +1,21 @@
-import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { MaritimeFreightService } from './maritime-freight.service';
 import { MaritimeCustomerPortalService } from './maritime-customer-portal.service';
 import { MaritimeMailService } from './maritime-mail.service';
+import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { RequireFeature } from '../../core/auth/decorators/feature.decorator';
@@ -719,6 +733,7 @@ export class MaritimeFreightController {
   }
 
   @Post('agent-settlements')
+  @UseInterceptors(IdempotencyInterceptor)
   async createAgentSettlement(@Body() dto: CreateAgentSettlementDto, @Req() req: RequestWithAuth) {
     return this.freightService.createAgentSettlement(req.authContext!, dto);
   }
