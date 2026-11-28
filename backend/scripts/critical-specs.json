@@ -413,6 +413,17 @@
     "test/critical/phase1-final-s5-business-date-r3.spec.ts",
     "test/critical/phase1-final-s6-import-fx-payout-idempotency.spec.ts",
     "test/critical/phase1-final-s7-marketplace-webhook-map-row.spec.ts",
-    "test/critical/phase1-final-s8-settings-import-posting-port.spec.ts"
+    "test/critical/phase1-final-s8-settings-import-posting-port.spec.ts",
+    "test/critical/reports-query-book-digits.spec.ts",
+    "test/critical/maritime-settle-book-digits.spec.ts",
+    "test/critical/maritime-customs-duty-book-digits.spec.ts",
+    "test/critical/maritime-forex-gain-loss-book-digits.spec.ts",
+    "test/critical/maritime-deposit-fx-conversion.spec.ts",
+    "test/critical/maritime-stored-money-post-at-close.spec.ts",
+    "test/critical/opening-balance-book-digits.spec.ts",
+    "test/critical/catalog-stock-totals-book-digits.spec.ts",
+    "test/critical/reports-overview-figures.spec.ts",
+    "test/critical/loan-repay-book-digits-tolerance.spec.ts",
+    "test/critical/phase1-final-s9-test-file-wiring.spec.ts"
   ]
 }

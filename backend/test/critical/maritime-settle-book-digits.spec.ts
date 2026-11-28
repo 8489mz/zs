@@ -31,7 +31,7 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
  * - The 0.01 `full` band: at 3dp a 0.005 remainder still marks the job
  *   paid (a zero-amount settle on a 100.005/100.000 job stays 'paid').
  *   It is a policy band, not precision.
- * - The sibling writer in purchases-write.service.ts (customer-payment
+ * - The sibling writer in purchases-write-customer-payments.service.ts (customer-payment
  *   allocation stores client_paid_total as an unrounded float sum).
  *   Converging it onto the same rounding is a separate package; the
  *   source pin below pins that it is still unrounded.
@@ -237,7 +237,7 @@ async function main(): Promise<void> {
     assert.ok(!body.includes('toFixed(2)'));
     assert.ok(body.includes('newPaid >= invoiced - 0.01'));
     const sibling = readFileSync(
-      resolve(__dirname, '../../src/modules/purchases/services/purchases-write.service.ts'),
+      resolve(__dirname, '../../src/modules/purchases/services/purchases-write-customer-payments.service.ts'),
       'utf8',
     );
     assert.ok(sibling.includes('const newPaid = currentPaid + amount;'));
