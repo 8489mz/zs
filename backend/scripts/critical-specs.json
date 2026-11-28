@@ -424,6 +424,7 @@
     "test/critical/catalog-stock-totals-book-digits.spec.ts",
     "test/critical/reports-overview-figures.spec.ts",
     "test/critical/loan-repay-book-digits-tolerance.spec.ts",
-    "test/critical/phase1-final-s9-test-file-wiring.spec.ts"
+    "test/critical/phase1-final-s9-test-file-wiring.spec.ts",
+    "test/critical/phase1-final-s10-module-documentation.spec.ts"
   ]
 }
