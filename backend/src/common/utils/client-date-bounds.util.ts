@@ -1,3 +1,4 @@
+import { AppError } from '../errors/app-error';
 import { todayTenantDate } from './tenant-timezone.util';
 
 /**
@@ -19,6 +20,24 @@ import { todayTenantDate } from './tenant-timezone.util';
 
 /** Past bound for client-supplied business days — mirrors OFFLINE_CREATED_AT_MAX_AGE_MS (P2). */
 export const CLIENT_BUSINESS_DATE_PAST_DAYS = 7;
+export const OFFLINE_CREATED_AT_MAX_AGE_MS = CLIENT_BUSINESS_DATE_PAST_DAYS * 24 * 60 * 60 * 1000;
+
+export function validateOfflineCreatedAt(value: unknown, now: Date = new Date()): Date | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new AppError('تاريخ الفاتورة الأوفلاين غير صالح', 'OFFLINE_TIMESTAMP_INVALID', 400);
+  }
+  if (
+    parsed.getTime() < Date.UTC(2000, 0, 1) ||
+    parsed.getTime() < now.getTime() - OFFLINE_CREATED_AT_MAX_AGE_MS ||
+    parsed.getTime() > now.getTime() + 5 * 60 * 1000
+  ) {
+    throw new AppError('تاريخ الفاتورة الأوفلاين خارج النطاق المسموح', 'OFFLINE_TIMESTAMP_INVALID', 400);
+  }
+  return parsed;
+}
 /** Future horizon for dates that are future by nature (delivery, promise, follow-up). */
 export const CLIENT_BUSINESS_DATE_FUTURE_DAYS = 365;
 /** Longest sane installment schedule: first due at most 5 years after the plan starts. */

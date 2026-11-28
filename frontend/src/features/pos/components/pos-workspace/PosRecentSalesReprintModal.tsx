@@ -72,7 +72,8 @@ export function PosRecentSalesReprintModal({
 
   function handlePrintSale(saleToPrint: Sale, pageSize: 'receipt' | 'a4' = 'receipt') {
     const numericId = Number(saleToPrint.id || 0);
-    const nextFallbackCount = Number((saleToPrint as any).reprintCount || (saleToPrint as any).reprint_count || 0) + 1;
+    const saleMeta = saleToPrint as Sale & { reprintCount?: number; reprint_count?: number };
+    const nextFallbackCount = Number(saleMeta.reprintCount || saleMeta.reprint_count || 0) + 1;
     const executePrint = (reprintCount: number) => {
       try {
         printPostedSaleReceipt(saleToPrint, {
@@ -84,8 +85,9 @@ export function PosRecentSalesReprintModal({
         });
         setFeedbackMessage(`تم إرسال الفاتورة #${saleToPrint.docNo || saleToPrint.id} للطباعة (نسخة مكررة #${reprintCount})`);
         setTimeout(() => setFeedbackMessage(''), 3500);
-      } catch (e: any) {
-        setFeedbackMessage(`تعذرت الطباعة: ${e.message || 'خطأ غير متوقع'}`);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'خطأ غير متوقع';
+        setFeedbackMessage(`تعذرت الطباعة: ${msg}`);
       }
     };
     if (numericId > 0 && !isFastOfflineMode()) {
@@ -93,7 +95,7 @@ export function PosRecentSalesReprintModal({
         .recordReceiptReprint(numericId)
         .then((res) => {
           const count = Number(res?.reprintCount || nextFallbackCount);
-          (saleToPrint as any).reprintCount = count;
+          saleMeta.reprintCount = count;
           executePrint(count);
         })
         .catch(() => executePrint(nextFallbackCount));

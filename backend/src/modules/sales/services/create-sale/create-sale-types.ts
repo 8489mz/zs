@@ -25,10 +25,7 @@ import { SalesQueryService } from '../sales-query.service';
 import { WhatsAppGatewayService } from '../../../settings/services/whatsapp-gateway.service';
 import type { SystemApprovedSaleTerms } from '../sales-write.service';
 import type { PosTripAttribution } from './resolve-pos-trip-attribution';
-import type {
-  OfflinePriceDriftItem,
-  OfflineStockShortfallItem,
-} from '../../engines/pos-offline-sale.engine';
+import type { OfflinePriceDriftItem, OfflineStockShortfallItem } from '../../engines/pos-offline-sale.engine';
 
 export type CreateSaleDeps = {
   db: Kysely<Database>;

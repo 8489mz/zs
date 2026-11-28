@@ -3,6 +3,7 @@ import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-min
 import type { ShiftCustomerCollectionsByChannel } from './shift-customer-collections.helper';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import { OFFLINE_CREATED_AT_MAX_AGE_MS, validateOfflineCreatedAt } from '../../../common/utils/client-date-bounds.util';
 
 type CashDrawerQuery = Record<string, unknown>;
 type CashDrawerMappedRow = Record<string, unknown>;
@@ -604,24 +605,7 @@ export function sumExpectedCashRows(rows: ExpectedCashBreakdownRow[]): number {
  * surface, not move the sale into another shift's window unnoticed. The
  * closed-period journal re-check remains the backstop for the rest.
  */
-export const OFFLINE_CREATED_AT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-
-export function validateOfflineCreatedAt(value: unknown, now: Date = new Date()): Date | null {
-  const raw = String(value || '').trim();
-  if (!raw) return null;
-  const parsed = new Date(raw);
-  if (!Number.isFinite(parsed.getTime())) {
-    throw new AppError('تاريخ الفاتورة الأوفلاين غير صالح', 'OFFLINE_TIMESTAMP_INVALID', 400);
-  }
-  if (
-    parsed.getTime() < Date.UTC(2000, 0, 1) ||
-    parsed.getTime() < now.getTime() - OFFLINE_CREATED_AT_MAX_AGE_MS ||
-    parsed.getTime() > now.getTime() + 5 * 60 * 1000
-  ) {
-    throw new AppError('تاريخ الفاتورة الأوفلاين خارج النطاق المسموح', 'OFFLINE_TIMESTAMP_INVALID', 400);
-  }
-  return parsed;
-}
+export { OFFLINE_CREATED_AT_MAX_AGE_MS, validateOfflineCreatedAt };
 
 /**
  * INV-REST-SHIFT-CLOSE-CONTROL (I26) + single-server-clock rule (P2):

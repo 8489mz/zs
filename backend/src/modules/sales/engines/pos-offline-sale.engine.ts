@@ -1,4 +1,4 @@
-import { validateOfflineCreatedAt } from '../../cash-drawer/helpers/cash-drawer.helper';
+import { validateOfflineCreatedAt } from '../../../common/utils/client-date-bounds.util';
 
 export interface OfflineStockShortfallItem {
   productId: number;
@@ -144,9 +144,7 @@ export function formatOfflineReconciliationNoteTags(params: {
 }): string[] {
   const tags: string[] = [];
   if (params.shortfalls.length > 0) {
-    const summary = params.shortfalls
-      .map((s) => `${s.productName} (عجز ${s.deficitQty})`)
-      .join('، ');
+    const summary = params.shortfalls.map((s) => `${s.productName} (عجز ${s.deficitQty})`).join('، ');
     tags.push(`[تسوية مخزون أوفلاين للمراجعة: ${summary}]`);
   }
   if (params.priceDrifts.length > 0) {

@@ -19,11 +19,20 @@ import {
 } from '@/lib/network-circuit-breaker';
 import { useAuthStore } from '@/stores/auth-store';
 import type { CreatePosSaleInput } from '@/features/pos/contracts';
+import type { AppSettings, Branch, Customer, Location } from '@/types/domain';
 
 function activateTenant(tenantId: string, accountId: string, userId = 'u-1') {
+  const auth = useAuthStore.getState();
   useAuthStore.setState({
-    tenant: { id: tenantId, accountId } as any,
-    user: { id: userId, username: 'cashier1', displayName: 'كاشير 1', tenantId, accountId } as any,
+    tenant: { ...(auth.tenant ?? {}), id: tenantId, accountId } as typeof auth.tenant,
+    user: {
+      ...(auth.user ?? {}),
+      id: userId,
+      username: 'cashier1',
+      displayName: 'كاشير 1',
+      tenantId,
+      accountId,
+    } as typeof auth.user,
   });
 }
 
@@ -36,11 +45,11 @@ describe('POS SaaS Offline Vault & Circuit Breaker', () => {
 
   it('persists operational boot snapshot for instant offline F5 reload and strictly isolates tenants', async () => {
     await savePosBootSnapshot({
-      settings: { currency: 'EGP', taxRate: 14, storeName: 'متجر ألفا' } as any,
-      branches: [{ id: '1', name: 'الفرع الرئيسي' }] as any,
-      locations: [{ id: '10', name: 'المخزن الرئيسي', branchId: '1' }] as any,
+      settings: { currency: 'EGP', taxRate: 14, storeName: 'متجر ألفا' } as unknown as AppSettings,
+      branches: [{ id: '1', name: 'الفرع الرئيسي' }] as unknown as Branch[],
+      locations: [{ id: '10', name: 'المخزن الرئيسي', branchId: '1' }] as unknown as Location[],
       openShifts: [{ id: '500', docNo: 'SHIFT-261128-0001', openedById: '101', status: 'open' }],
-      customers: [{ id: '900', name: 'أحمد محمد', phone: '01000000001' }] as any,
+      customers: [{ id: '900', name: 'أحمد محمد', phone: '01000000001' }] as unknown as Customer[],
     });
 
     const alphaSnap = getPosBootSnapshotSync();
@@ -103,7 +112,7 @@ describe('POS SaaS Offline Vault & Circuit Breaker', () => {
       'stable-uuid-1',
     );
     expect(queued.payload.note).toBe('ملاحظة العميل الأصلية');
-    expect((queued.payload as any).offlineDocNo).toMatch(/^INV-/);
+    expect((queued.payload as unknown as { offlineDocNo?: string }).offlineDocNo).toMatch(/^INV-/);
     expect(getOfflineSalesQueue()).toHaveLength(1);
   });
 
