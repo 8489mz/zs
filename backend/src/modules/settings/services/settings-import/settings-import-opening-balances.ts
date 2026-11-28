@@ -5,7 +5,44 @@ import { currencyMoneyDigits } from '../../../accounting/engines/money-minor-uni
 import { stockMovementTotal } from '../../../catalog/engines/stock-movement-total.engine';
 import type { AuthContext } from '../../../../core/auth/interfaces/auth-context.interface';
 import type { DbExecutor, TenantScope } from './settings-import-shared';
-import type { AccountingPostingService } from '../../../accounting/accounting-posting.service';
+
+/**
+ * Narrow port for the single posting call this file makes: the
+ * opening-stock journal (Dr inventory 1140 / Cr opening capital
+ * 3100). This file depends on this local structural interface, not
+ * on the concrete posting-service module, so the external-import
+ * count into the posting service drops by one with zero behaviour
+ * change: SettingsImportService still passes the real service,
+ * which satisfies the port structurally (same method, same params
+ * shape — proven by backend tsc at the call site, and by the
+ * slice-8 spec's assignability check).
+ */
+export type OpeningStockPostingPort = {
+  postDomainJournal(
+    queryable: DbExecutor,
+    params: {
+      sourceType: string;
+      sourceId: number;
+      tenantId: string;
+      accountId: string | null;
+      entryDate: Date | string;
+      description: string;
+      branchId?: number | null;
+      locationId?: number | null;
+      createdBy: number | null;
+      lines: {
+        accountId: number;
+        debit: number;
+        credit: number;
+        description: string;
+        partnerType: string;
+        partnerId: number | null;
+        branchId?: number | null;
+        locationId?: number | null;
+      }[];
+    },
+  ): Promise<number>;
+};
 
 export class SettingsImportOpeningBalances {
   constructor(
@@ -13,7 +50,7 @@ export class SettingsImportOpeningBalances {
       scope: (actor: AuthContext) => TenantScope;
       tenantFields: (actor: AuthContext) => Record<string, string>;
     },
-    private readonly accountingPosting?: AccountingPostingService,
+    private readonly accountingPosting?: OpeningStockPostingPort,
   ) {}
 
   private scope(actor: AuthContext): TenantScope {
