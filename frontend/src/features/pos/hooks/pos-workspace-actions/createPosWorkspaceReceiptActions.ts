@@ -1,6 +1,7 @@
 import { printPostedSaleReceipt, printKitchenTicket, printGuestCheck } from '@/lib/pos-printing';
 import { computeDraftTotal } from '@/features/pos/lib/pos-workspace.helpers';
 import { calcCartLineNetTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { posApi } from '@/features/pos/api/pos.api';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
 
 function getSaleKey(params: PosWorkspaceActionParams) {
@@ -20,8 +21,47 @@ export function createPosWorkspaceReceiptActions(params: PosWorkspaceActionParam
 
   function printLastSaleAs(pageSize: 'receipt' | 'a4', isReprint = false) {
     if (!params.lastSale) return false;
+    const sale = params.lastSale;
     const cashierName = (params.ownOpenShift as any)?.openedByName || params.authUserName || '—';
-    printPostedSaleReceipt(params.lastSale, { pageSize, settings: params.settings || null, cashierName, isReprint });
+    if (isReprint) {
+      const numericId = Number(sale.id || 0);
+      const nextFallbackCount = Number((sale as any).reprintCount || (sale as any).reprint_count || 0) + 1;
+      if (numericId > 0) {
+        void posApi
+          .recordReceiptReprint(numericId)
+          .then((res) => {
+            const count = Number(res?.reprintCount || nextFallbackCount);
+            (sale as any).reprintCount = count;
+            printPostedSaleReceipt(sale, {
+              pageSize,
+              settings: params.settings || null,
+              cashierName,
+              isReprint: true,
+              reprintCount: count,
+            });
+          })
+          .catch(() => {
+            printPostedSaleReceipt(sale, {
+              pageSize,
+              settings: params.settings || null,
+              cashierName,
+              isReprint: true,
+              reprintCount: nextFallbackCount,
+            });
+          });
+      } else {
+        printPostedSaleReceipt(sale, {
+          pageSize,
+          settings: params.settings || null,
+          cashierName,
+          isReprint: true,
+          reprintCount: nextFallbackCount,
+        });
+      }
+      params.requestBarcodeFocus();
+      return true;
+    }
+    printPostedSaleReceipt(sale, { pageSize, settings: params.settings || null, cashierName, isReprint: false });
     params.requestBarcodeFocus();
     return true;
   }

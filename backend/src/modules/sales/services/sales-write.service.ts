@@ -14,7 +14,8 @@ import {
   invalidateTenantSettingsMapCache,
   tenantSettingsMapCache,
 } from '../../../common/utils/tenant-settings-map-cache';
-import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
+import { AuditService } from '../../../core/audit/audit.service';
+import { executeLogPosAuditEvent, executeRecordReceiptReprint } from './sales-pos-audit.helper';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { KYSELY_DB } from '../../../database/database.constants';
@@ -614,100 +615,19 @@ export class SalesWriteService {
   }
 
   async logPosAuditEvent(payload: PosAuditEventDto, auth: AuthContext): Promise<Record<string, unknown>> {
-    const scope = requireTenantScope(auth);
-    const reason = String(payload.note || '').trim();
-    const event = {
-      tenant_id: scope.tenantId,
-      account_id: scope.accountId,
-      event_type: payload.eventType,
-      user_id: auth.userId,
-      sale_id: null,
-      product_id: payload.productId || null,
-      amount: Number(payload.total || 0),
-      reason,
-      metadata: {
-        branchId: payload.branchId,
-        productName: payload.productName,
-        qty: payload.qty,
-        cartItemsCount: payload.cartItemsCount,
-      },
-    };
-    if (payload.eventType === 'no_sale') {
-      const branchId = Number(payload.branchId);
-      // INV-SPIRIT-NO-SALE-DRAWER: a no-sale opening needs only a
-      // short recorded reason (non-empty) and an open shift; no
-      // manager PIN. The opening itself is logged below (pos_audit
-      // event with shiftId + username, and the audit log entry).
-      if (!branchId || !reason) throw new AppError('حدد الفرع وسبب فتح الدرج', 'NO_SALE_REASON_REQUIRED', 400);
-      await this.tx.runInTransaction(this.db, async (trx) => {
-        if (!(await this.authz.hasOpenCashierShift(trx, auth, branchId))) {
-          throw new AppError('وردية كاشير مفتوحة مطلوبة لفتح الدرج', 'OPEN_SHIFT_REQUIRED', 400);
-        }
-        const shift = await trx
-          .selectFrom('cashier_shifts')
-          .select('id')
-          .where('tenant_id', '=', scope.tenantId)
-          .where('opened_by', '=', auth.userId)
-          .where('branch_id', '=', branchId)
-          .where('status', '=', 'open')
-          .orderBy('id', 'desc')
-          .forUpdate()
-          .executeTakeFirstOrThrow();
-        await trx
-          .insertInto('pos_audit_events')
-          .values({
-            ...event,
-            metadata: { ...event.metadata, shiftId: Number(shift.id), username: auth.username },
-          })
-          .execute();
-      });
-    } else {
-      await this.db.insertInto('pos_audit_events').values(event).execute();
-    }
-    let detailInfo = '';
+    return executeLogPosAuditEvent(
+      { db: this.db, tx: this.tx, audit: this.audit, authz: this.authz, fraudRadarService: this.fraudRadarService, logger: this.logger },
+      payload,
+      auth,
+    );
+  }
 
-    if (payload.eventType === 'cart_remove') {
-      const detailsParts = [
-        `تم حذف عنصر من السلة بواسطة ${auth.username}`,
-        payload.productName ? `الصنف: ${payload.productName}` : '',
-        payload.productId ? `#${payload.productId}` : '',
-        payload.qty ? `الكمية: ${payload.qty}` : '',
-        typeof payload.total === 'number' ? `الإجمالي بعد الحذف: ${payload.total}` : '',
-        typeof payload.cartItemsCount === 'number' ? `عدد العناصر: ${payload.cartItemsCount}` : '',
-        payload.note ? `ملاحظة: ${payload.note}` : '',
-      ].filter(Boolean);
-      await this.audit.log('حدث أمني - حذف عنصر من السلة', detailsParts.join(' | '), auth, {
-        eventCode: AUDIT_EVENT_CODES.POS_CART_ITEM_REMOVED,
-      });
-      detailInfo = payload.productName
-        ? `${payload.productName} (كمية: ${payload.qty || 1})`
-        : payload.note || 'حذف صنف من السلة';
-    } else if (payload.eventType === 'no_sale') {
-      detailInfo = reason || 'فتح درج بدون بيع';
-      await this.audit.log('حدث أمني - فتح درج بدون بيع', detailInfo, auth, {
-        eventCode: AUDIT_EVENT_CODES.POS_DRAFT_SALE_CANCELLED,
-      });
-    } else {
-      const cancelDetailsParts = [
-        `تم إلغاء/حذف فاتورة قبل الإرسال بواسطة ${auth.username}`,
-        typeof payload.total === 'number' ? `الإجمالي: ${payload.total}` : '',
-        typeof payload.cartItemsCount === 'number' ? `عدد العناصر: ${payload.cartItemsCount}` : '',
-        payload.note ? `ملاحظة: ${payload.note}` : '',
-      ].filter(Boolean);
-      await this.audit.log('حدث أمني - إلغاء/حذف فاتورة', cancelDetailsParts.join(' | '), auth, {
-        eventCode: AUDIT_EVENT_CODES.POS_DRAFT_SALE_CANCELLED,
-      });
-      detailInfo = `إلغاء فاتورة بقيمة ${payload.total || 0} ج.م`;
-    }
-
-    // Trigger proactive fraud radar anomaly check in the background
-    if (this.fraudRadarService) {
-      this.fraudRadarService
-        .checkAndAlertAnomaly(scope.tenantId, auth.userId, auth.username, payload.eventType, detailInfo)
-        .catch((err) => this.logger.warn(`Fraud radar anomaly check error: ${err?.message}`));
-    }
-
-    return { ok: true };
+  async recordReceiptReprint(saleId: number, auth: AuthContext): Promise<Record<string, unknown>> {
+    return executeRecordReceiptReprint(
+      { db: this.db, tx: this.tx, audit: this.audit, authz: this.authz, fraudRadarService: this.fraudRadarService, logger: this.logger },
+      saleId,
+      auth,
+    );
   }
 
   /**

@@ -46,6 +46,9 @@ export interface PosWorkspaceHeaderModalsProps {
   setShowFloatingAlert: Dispatch<SetStateAction<boolean>>;
   noSaleReason: string;
   setNoSaleReason: Dispatch<SetStateAction<string>>;
+  noSaleManagerPin?: string;
+  setNoSaleManagerPin?: Dispatch<SetStateAction<string>>;
+  requiresNoSalePin?: boolean;
   isNoSalePending: boolean;
   handleNoSaleDrawerKick: () => Promise<void>;
   upsellRules: any[];
@@ -101,7 +104,7 @@ export function PosWorkspaceHeaderModals(props: PosWorkspaceHeaderModalsProps) {
   const {
     pos, settings, isRestaurantActive, isPhoneOrdersActive, isStorefrontActive, isManager, count86,
     offlineQueue, isSyncing, syncOfflineSales, pendingCount, showFloatingAlert, setShowFloatingAlert,
-    noSaleReason, setNoSaleReason, isNoSalePending, handleNoSaleDrawerKick, upsellRules, setUpsellRules,
+    noSaleReason, setNoSaleReason, noSaleManagerPin, setNoSaleManagerPin, requiresNoSalePin, isNoSalePending, handleNoSaleDrawerKick, upsellRules, setUpsellRules,
     onOpenTables, onOpenComboModal, onPrintCupLabels, onOpenManagerComp,
     isOnlineOrdersOpen, setIsOnlineOrdersOpen, isTablesOpen, setIsTablesOpen,
     isOfflineQueueModalOpen, setIsOfflineQueueModalOpen, isNoSaleOpen, setIsNoSaleOpen,
@@ -229,7 +232,7 @@ export function PosWorkspaceHeaderModals(props: PosWorkspaceHeaderModalsProps) {
               type="button"
               variant="primary"
               onClick={() => { void handleNoSaleDrawerKick(); }}
-              disabled={isNoSalePending || !noSaleReason.trim()}
+              disabled={isNoSalePending || !noSaleReason.trim() || (Boolean(requiresNoSalePin) && !String(noSaleManagerPin || '').trim())}
             >
               {isNoSalePending
                 ? t('pos.pos_workspace.pos_workspace_header.s57', "جاري فتح الدرج...")
@@ -267,6 +270,38 @@ export function PosWorkspaceHeaderModals(props: PosWorkspaceHeaderModalsProps) {
               outline: 'none',
             }}
           />
+          {requiresNoSalePin && setNoSaleManagerPin && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+              <label
+                htmlFor="pos-no-sale-manager-pin"
+                style={{ fontSize: '0.8rem', fontWeight: 700, color: '#b91c1c', margin: 0 }}
+              >
+                رمز أو كلمة مرور المدير (إلزامي لفتح الدرج بدون بيع)
+              </label>
+              <input
+                id="pos-no-sale-manager-pin"
+                type="password"
+                autoComplete="new-password"
+                className="secure-password-field"
+                value={noSaleManagerPin || ''}
+                onChange={(event) => setNoSaleManagerPin(event.target.value)}
+                placeholder="أدخل رمز المدير أو كلمة مروره..."
+                disabled={isNoSalePending}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #fca5a5',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  color: '#0f172a',
+                  background: '#fffafa',
+                  outline: 'none',
+                }}
+              />
+            </div>
+          )}
         </div>
       </StandardDialog>
     )}

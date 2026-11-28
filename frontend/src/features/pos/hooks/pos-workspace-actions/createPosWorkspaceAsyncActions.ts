@@ -520,7 +520,9 @@ export function createPosWorkspaceAsyncActions(
       // network kitchen ticket or storefront link, and skip PosSaleSuccessDialog.
       // When posAutoPrintReceipt === false, keep postSaleSaleKey set so
       // PosSaleSuccessDialog opens and waits for cashier F2.
-      const autoPrintReceipt = params.settings?.posAutoPrintReceipt !== false;
+      const autoPrintReceipt =
+        params.settings?.antiTheftEnforceMandatoryReceiptPrint === true ||
+        params.settings?.posAutoPrintReceipt !== false;
       const postSalePrintMode = getPostSalePrintMode(params.settings || null);
       if (autoPrintReceipt) {
         const cashierName = (params.ownOpenShift as any)?.openedByName || params.authUserName || '—';

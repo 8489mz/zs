@@ -84,6 +84,7 @@ export function buildPostedSaleDocument(sale: Sale, options: PrintReceiptOptions
     guestCount: Number((sale as any).guestCount || (sale as any).guest_count || 0),
     copyType: options.copyType || (options.settings?.printDualReceiptForOnlineDelivery && (sale.orderType === 'delivery' || sale.paymentChannel === 'instapay' || sale.paymentChannel === 'wallet' || sale.paymentChannel === 'card') ? 'dual' : 'customer'),
     isReprint: options.isReprint,
+    reprintCount: options.reprintCount,
   });
 }
 

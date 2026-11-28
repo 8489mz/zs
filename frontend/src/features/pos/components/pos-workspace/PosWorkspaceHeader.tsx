@@ -70,6 +70,7 @@ function PosWorkspaceHeaderComponent({
   const [isNoSaleOpen, setIsNoSaleOpen] = useState(false);
   const [isExchangeOpen, setIsExchangeOpen] = useState(false);
   const [noSaleReason, setNoSaleReason] = useState('');
+  const [noSaleManagerPin, setNoSaleManagerPin] = useState('');
   const [isNoSalePending, setIsNoSalePending] = useState(false);
   const [isOnlineOrdersOpen, setIsOnlineOrdersOpen] = useState(false);
   const [isTablesOpen, setIsTablesOpen] = useState(false);
@@ -135,6 +136,8 @@ function PosWorkspaceHeaderComponent({
     }
   }, [isRestaurantActive, posMode, onModeChange]);
 
+  const requiresNoSalePin = Boolean(settings?.antiTheftRequirePinForNoSale) && !isAdminUser(currentUser);
+
   const handleNoSaleDrawerKick = useCallback(async () => {
     if (isNoSalePending) return;
     const branchId = Number(pos.branchId);
@@ -146,11 +149,21 @@ function PosWorkspaceHeaderComponent({
       toast.error('أدخل سبب فتح الدرج');
       return;
     }
+    if (requiresNoSalePin && !noSaleManagerPin.trim()) {
+      toast.error('أدخل رمز أو كلمة مرور المدير لاعتماد فتح الدرج');
+      return;
+    }
     setIsNoSalePending(true);
     try {
-      await posApi.logSecurityEvent({ eventType: 'no_sale', branchId, note: noSaleReason.trim() });
+      await posApi.logSecurityEvent({
+        eventType: 'no_sale',
+        branchId,
+        note: noSaleReason.trim(),
+        ...(noSaleManagerPin.trim() ? { managerPin: noSaleManagerPin.trim() } : {}),
+      });
       setIsNoSaleOpen(false);
       setNoSaleReason('');
+      setNoSaleManagerPin('');
       const printer = (window as Window & { electronPrinter?: { kickCashDrawer: (device?: string) => Promise<unknown> } }).electronPrinter;
       if (printer?.kickCashDrawer) {
         try {
@@ -177,7 +190,7 @@ function PosWorkspaceHeaderComponent({
     } finally {
       setIsNoSalePending(false);
     }
-  }, [isNoSalePending, noSaleReason, pos.branchId, pos.ownOpenShift, settings?.posElectronCashierPrinter]);
+  }, [isNoSalePending, noSaleReason, noSaleManagerPin, requiresNoSalePin, pos.branchId, pos.ownOpenShift, settings?.posElectronCashierPrinter]);
 
 
 
@@ -293,6 +306,9 @@ function PosWorkspaceHeaderComponent({
       setShowFloatingAlert={setShowFloatingAlert}
       noSaleReason={noSaleReason}
       setNoSaleReason={setNoSaleReason}
+      noSaleManagerPin={noSaleManagerPin}
+      setNoSaleManagerPin={setNoSaleManagerPin}
+      requiresNoSalePin={requiresNoSalePin}
       isNoSalePending={isNoSalePending}
       handleNoSaleDrawerKick={handleNoSaleDrawerKick}
       upsellRules={upsellRules}
@@ -361,6 +377,7 @@ function areEqual(prev: PosWorkspaceHeaderProps, next: PosWorkspaceHeaderProps) 
     && prev.pos.canSubmitHint === next.pos.canSubmitHint
     && prev.pos.heldDraftSummaries === next.pos.heldDraftSummaries
     && prev.pos.settingsQuery.data?.enableMobileStoreFeatures === next.pos.settingsQuery.data?.enableMobileStoreFeatures
+    && prev.pos.settingsQuery.data?.antiTheftRequirePinForNoSale === next.pos.settingsQuery.data?.antiTheftRequirePinForNoSale
     && prev.posMode === next.posMode
     && prev.onFocusSearch === next.onFocusSearch
     && prev.onOpenNewProduct === next.onOpenNewProduct

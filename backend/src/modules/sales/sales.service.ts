@@ -75,4 +75,8 @@ export class SalesService {
   async logPosAuditEvent(payload: PosAuditEventDto, auth: AuthContext): Promise<Record<string, unknown>> {
     return this.write.logPosAuditEvent(payload, auth);
   }
+
+  async recordReceiptReprint(saleId: number, auth: AuthContext): Promise<Record<string, unknown>> {
+    return this.write.recordReceiptReprint(saleId, auth);
+  }
 }

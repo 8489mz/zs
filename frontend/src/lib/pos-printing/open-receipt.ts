@@ -16,6 +16,7 @@ export interface PrintReceiptOptions {
    * marked as a duplicate copy (see the template banner), so a
    * reprint can never pass as the original. */
   isReprint?: boolean;
+  reprintCount?: number;
 }
 
 export function openReceiptDocument(

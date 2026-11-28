@@ -63,6 +63,15 @@ export class SalesController {
     return this.salesService.logPosAuditEvent(payload, req.authContext!);
   }
 
+  @Post(['sales/:id/reprint-audit', 'v1/sales/:id/reprint-audit'])
+  @RequirePermissions('sales')
+  recordReceiptReprint(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
+    return this.salesService.recordReceiptReprint(id, req.authContext!);
+  }
+
   @Post(['sales/:id/cancel', 'v1/sales/:id/cancel'])
   @RequirePermissions('canEditInvoices')
   @UseInterceptors(IdempotencyInterceptor)

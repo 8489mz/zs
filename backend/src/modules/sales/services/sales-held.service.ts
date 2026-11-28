@@ -10,7 +10,8 @@ import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
-import { AuditService } from '../../../core/audit/audit.service';
+import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
+import { buildSnapshotAuditText, type AuditSnapshotItem } from '../engines/cashier-peer-benchmark.engine';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { Database } from '../../../database/database.types';
@@ -332,7 +333,7 @@ export class HeldSalesService {
     const scope = requireTenantScope(auth);
     const heldSale = await this.db
       .selectFrom('held_sales')
-      .select(['id', 'created_by'])
+      .select(['id', 'created_by', 'branch_id', 'discount', 'delivery_fee', 'table_number'])
       .where('id', '=', id)
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .executeTakeFirst();
@@ -340,12 +341,69 @@ export class HeldSalesService {
       throw new AppError('Held sale not found', 'HELD_SALE_NOT_FOUND', 404);
     }
 
+    const heldItems = await this.db
+      .selectFrom('held_sale_items')
+      .select(['product_id', 'product_name', 'qty', 'unit_price', 'unit_name'])
+      .where('held_sale_id', '=', id)
+      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+      .execute();
+
+    const snapshotItems: AuditSnapshotItem[] = heldItems.map((it) => {
+      const qty = Number(it.qty || 0);
+      const unitPrice = Number(it.unit_price || 0);
+      return {
+        ...(it.product_id ? { productId: Number(it.product_id) } : {}),
+        productName: String(it.product_name || 'صنف'),
+        qty,
+        unitName: String(it.unit_name || 'قطعة'),
+        unitPrice,
+        lineTotal: Number((qty * unitPrice).toFixed(2)),
+      };
+    });
+    const subtotal = snapshotItems.reduce((sum, it) => sum + it.lineTotal, 0);
+    const total = Number(Math.max(0, subtotal - Number(heldSale.discount || 0) + Number(heldSale.delivery_fee || 0)).toFixed(2));
+
     await this.db
       .deleteFrom('held_sales')
       .where('id', '=', id)
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .execute();
-    await this.audit.log('حذف فاتورة معلقة', `تم حذف فاتورة معلقة #${id} بواسطة ${auth.username}`, auth);
+
+    if (snapshotItems.length > 0) {
+      await this.db
+        .insertInto('pos_audit_events')
+        .values({
+          tenant_id: scope.tenantId,
+          account_id: scope.accountId,
+          event_type: 'held_sale_delete',
+          user_id: auth.userId,
+          sale_id: null,
+          product_id: null,
+          amount: total,
+          reason: `حذف فاتورة معلقة #${id}`,
+          metadata: {
+            heldSaleId: id,
+            branchId: heldSale.branch_id,
+            tableNumber: heldSale.table_number || undefined,
+            cartItemsCount: snapshotItems.length,
+            items: snapshotItems,
+            username: auth.username,
+          },
+        })
+        .execute();
+    }
+
+    const auditDetails = buildSnapshotAuditText(
+      [
+        `تم حذف فاتورة معلقة #${id} بواسطة ${auth.username}`,
+        `الإجمالي: ${total}`,
+        `عدد العناصر: ${snapshotItems.length}`,
+      ],
+      snapshotItems,
+    );
+    await this.audit.log('حدث أمني - حذف فاتورة معلقة', auditDetails, auth, {
+      eventCode: AUDIT_EVENT_CODES.POS_HELD_SALE_DELETED,
+    });
     return { ok: true, heldSales: (await this.query.listHeldSales(auth)).heldSales };
   }
 
@@ -353,19 +411,80 @@ export class HeldSalesService {
     const scope = requireTenantScope(auth);
     const canManageHeldSales = this.authz.canManageHeldSales(auth);
     const ownerUserId = this.authz.heldSaleOwnerUserId(auth);
+
+    const targetHeldSales = await this.db
+      .selectFrom('held_sales')
+      .select(['id', 'branch_id', 'discount', 'delivery_fee'])
+      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+      .$if(!canManageHeldSales, (qb) => qb.where('created_by', '=', ownerUserId ?? -1))
+      .execute();
+
+    const targetIds = targetHeldSales.map((h) => Number(h.id)).filter((id) => id > 0);
+    const heldItems = targetIds.length
+      ? await this.db
+          .selectFrom('held_sale_items')
+          .select(['held_sale_id', 'product_id', 'product_name', 'qty', 'unit_price', 'unit_name'])
+          .where('held_sale_id', 'in', targetIds)
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .execute()
+      : [];
+
+    const snapshotItems: AuditSnapshotItem[] = heldItems.map((it) => {
+      const qty = Number(it.qty || 0);
+      const unitPrice = Number(it.unit_price || 0);
+      return {
+        ...(it.product_id ? { productId: Number(it.product_id) } : {}),
+        productName: String(it.product_name || 'صنف'),
+        qty,
+        unitName: String(it.unit_name || 'قطعة'),
+        unitPrice,
+        lineTotal: Number((qty * unitPrice).toFixed(2)),
+      };
+    });
+    const totalValue = Number(snapshotItems.reduce((sum, it) => sum + it.lineTotal, 0).toFixed(2));
+
     const result = await this.db
       .deleteFrom('held_sales')
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .$if(!canManageHeldSales, (qb) => qb.where('created_by', '=', ownerUserId ?? -1))
       .execute();
-    const deletedCount = Number(result?.[0]?.numDeletedRows ?? NaN);
+    const deletedCount = Number(result?.[0]?.numDeletedRows ?? targetIds.length);
     const scopeLabel = canManageHeldSales ? 'privileged broader management' : 'own held sales';
     const countLabel = Number.isFinite(deletedCount) ? ` | deletedCount=${deletedCount}` : '';
-    await this.audit.log(
-      'حذف كل الفواتير المعلقة',
-      `تم حذف كل الفواتير المعلقة بواسطة ${auth.username} | scope=${scopeLabel}${countLabel}`,
-      auth,
+
+    if (targetIds.length > 0) {
+      await this.db
+        .insertInto('pos_audit_events')
+        .values({
+          tenant_id: scope.tenantId,
+          account_id: scope.accountId,
+          event_type: 'held_sale_delete',
+          user_id: auth.userId,
+          sale_id: null,
+          product_id: null,
+          amount: totalValue,
+          reason: `حذف كل الفواتير المعلقة (${targetIds.length} فاتورة)`,
+          metadata: {
+            deletedHeldSaleIds: targetIds,
+            cartItemsCount: snapshotItems.length,
+            items: snapshotItems.slice(0, 60),
+            username: auth.username,
+          },
+        })
+        .execute();
+    }
+
+    const auditDetails = buildSnapshotAuditText(
+      [
+        `تم حذف كل الفواتير المعلقة بواسطة ${auth.username} | scope=${scopeLabel}${countLabel}`,
+        `الإجمالي: ${totalValue}`,
+        `عدد العناصر: ${snapshotItems.length}`,
+      ],
+      snapshotItems,
     );
+    await this.audit.log('حدث أمني - حذف كل الفواتير المعلقة', auditDetails, auth, {
+      eventCode: targetIds.length > 0 ? AUDIT_EVENT_CODES.POS_HELD_SALE_DELETED : undefined,
+    });
     return { ok: true, heldSales: (await this.query.listHeldSales(auth)).heldSales };
   }
 }
