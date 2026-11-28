@@ -56,9 +56,9 @@ import * as path from 'path';
  *
  * WHAT THIS PINS (all static — the specs prove their own live
  * cases when the chain runs them):
- * - §1: register shape — 37 modules, 31 verified_scoped (named),
- *   5 unverified (named), 1 release_blocked (hr), baseline
- *   unchanged. (Slice 12: 26 + batch 1 (5).) (Slice 11: batch 1 (10) + batch 2 (16).)
+ * - §1: register shape — 37 modules, 36 verified_scoped (named),
+ *   0 unverified (named), 1 release_blocked (hr), baseline
+ *   unchanged. (Slice 12: 26 + batch 1 (5).) (Slice 11: batch 1 (10) + batch 2 (16).) (Slice 14: 31 + batch 2 (5).)
  * - §2: per flipped module — state, verified commit, verified
  *   date, exact scope list (mode entry + spec files), exact
  *   test_evidence, blocker count.
@@ -559,10 +559,10 @@ const BATCH: ReadonlyArray<{ module: string; specs: string[]; evidence: string[]
 async function main(): Promise<void> {
   const register = JSON.parse(fs.readFileSync(REGISTER, 'utf8')) as Register;
 
-  // §1: Register shape — 37 modules, 31 verified_scoped (named),
-  // 5 unverified (named), 1 release_blocked (hr), baseline unchanged.
-  // (Slice 12 moved the counts: 26 + batch 1 (5) = 31;
-  // the 5 left unverified are recorded for later slices.)
+  // §1: Register shape — 37 modules, 36 verified_scoped (named),
+  // 0 unverified, 1 release_blocked (hr), baseline unchanged.
+  // (Slice 14 moved the counts: 31 + batch 2 (5) = 36;
+  // no module is left unverified — hr alone stays release_blocked.)
   {
     assert.equal(register.modules.length, 37, 'the register must hold exactly 37 modules');
     assert.equal(register.baseline_code_commit, BASELINE, 'the register baseline must stay unchanged');
@@ -573,12 +573,17 @@ async function main(): Promise<void> {
       verified,
       [
         'accounting',
+        'activation',
         'addons',
+        'ai-copilot',
         'approvals',
+        'bosta',
         'cash-drawer',
         'catalog',
+        'contracting',
         'crm',
         'delivery-reps',
+        'gcc-shipping',
         'import-sales',
         'inventory',
         'maintenance',
@@ -604,13 +609,9 @@ async function main(): Promise<void> {
         'treasury',
         'users',
       ],
-      'exactly the 31 verified modules (slices 10 + 11 + slice 12 batch 1) must be verified_scoped',
+      'exactly the 36 verified modules (slices 10 + 11 + slice 12 batch 1 + slice 14 batch 2) must be verified_scoped',
     );
-    assert.deepEqual(
-      unverified,
-      ['activation', 'ai-copilot', 'bosta', 'contracting', 'gcc-shipping'],
-      'the other 5 modules must stay unverified_current_head',
-    );
+    assert.deepEqual(unverified, [], 'no module may stay unverified_current_head');
     assert.deepEqual(blocked, ['hr'], 'hr alone must stay release_blocked');
   }
 
@@ -696,7 +697,7 @@ async function main(): Promise<void> {
     const invCount = (invariants.match(new RegExp(NEW_INV, 'g')) || []).length;
     assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the new INV exactly once');
     const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-    const guardCount = (guard.match(/INV-MFA-BEGIN-SETUP-ON-CONFLICT-42702/g) || []).length;
+    const guardCount = (guard.match(/INV-MODULE-DOCUMENTATION-S14/g) || []).length;
     assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the new INV exactly once');
   }
 
@@ -712,19 +713,19 @@ async function main(): Promise<void> {
       .split('&&')
       .map((part) => part.trim().replace(/^ts-node\s+/, ''))
       .filter((part) => part.endsWith('.spec.ts'));
-    assert.equal(specs.length, 436);
-    assert.equal(chain.length, 436);
+    assert.equal(specs.length, 450);
+    assert.equal(chain.length, 450);
     assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 426 specs in order');
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s13-mfa-begin-setup.spec.ts');
-    assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s13-mfa-begin-setup.spec.ts');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s14-module-documentation.spec.ts');
+    assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s14-module-documentation.spec.ts');
     for (const [label, specPath] of EARLIER_WIRING) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes('assert.equal(specs.length, 436);') && src.includes('assert.equal(chain.length, 436);'),
+        src.includes('assert.equal(specs.length, 450);') && src.includes('assert.equal(chain.length, 450);'),
         `${label} spec wiring must re-pin to 426`,
       );
       assert.ok(
-        src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s13-mfa-begin-setup.spec.ts'"),
+        src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s14-module-documentation.spec.ts'"),
         `${label} spec last-entry must re-pin to the new spec`,
       );
     }
@@ -765,7 +766,7 @@ async function main(): Promise<void> {
     for (const [label, specPath] of EARLIER_GUARD) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes('guard.match(/INV-MFA-BEGIN-SETUP-ON-CONFLICT-42702/g)'),
+        src.includes('guard.match(/INV-MODULE-DOCUMENTATION-S14/g)'),
         `${label} spec guard assertion must re-pin to the new INV`,
       );
     }

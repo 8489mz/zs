@@ -333,7 +333,7 @@ async function guardChecks(): Promise<void> {
     const invCount = (invariants.match(new RegExp(NEW_INV, 'g')) || []).length;
     assert.equal(invCount, 1, 'ARCHITECTURE_INVARIANTS.md must carry the new INV exactly once');
     const guard = fs.readFileSync(GUARD_SPEC, 'utf8');
-    const guardCount = (guard.match(/INV-MFA-BEGIN-SETUP-ON-CONFLICT-42702/g) || []).length;
+    const guardCount = (guard.match(/INV-MODULE-DOCUMENTATION-S14/g) || []).length;
     assert.equal(guardCount, 1, 'architecture-guard.spec.ts must carry the new INV exactly once');
   }
 
@@ -349,19 +349,19 @@ async function guardChecks(): Promise<void> {
       .split('&&')
       .map((part) => part.trim().replace(/^ts-node\s+/, ''))
       .filter((part) => part.endsWith('.spec.ts'));
-    assert.equal(specs.length, 436);
-    assert.equal(chain.length, 436);
+    assert.equal(specs.length, 450);
+    assert.equal(chain.length, 450);
     assert.deepEqual(specs, chain, 'critical-specs.json and the serial chain must list the same 436 specs in order');
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s13-mfa-begin-setup.spec.ts');
-    assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s13-mfa-begin-setup.spec.ts');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s14-module-documentation.spec.ts');
+    assert.equal(chain[chain.length - 1], 'test/critical/phase1-final-s14-module-documentation.spec.ts');
     for (const [label, specPath] of EARLIER_WIRING) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes('assert.equal(specs.length, 436);') && src.includes('assert.equal(chain.length, 436);'),
+        src.includes('assert.equal(specs.length, 450);') && src.includes('assert.equal(chain.length, 450);'),
         `${label} spec wiring must re-pin to 436`,
       );
       assert.ok(
-        src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s13-mfa-begin-setup.spec.ts'"),
+        src.includes("specs[specs.length - 1], 'test/critical/phase1-final-s14-module-documentation.spec.ts'"),
         `${label} spec last-entry must re-pin to the new spec`,
       );
     }
@@ -402,7 +402,7 @@ async function guardChecks(): Promise<void> {
     for (const [label, specPath] of EARLIER_GUARD) {
       const src = fs.readFileSync(specPath, 'utf8');
       assert.ok(
-        src.includes('guard.match(/INV-MFA-BEGIN-SETUP-ON-CONFLICT-42702/g)'),
+        src.includes('guard.match(/INV-MODULE-DOCUMENTATION-S14/g)'),
         `${label} spec guard assertion must re-pin to the new INV`,
       );
     }

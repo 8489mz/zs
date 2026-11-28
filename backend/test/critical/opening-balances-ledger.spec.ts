@@ -895,11 +895,11 @@ async function main(): Promise<void> {
     };
     const serial = String(pkg.scripts['test:critical:serial']);
     const chain = serial.split(' ').filter((t: string) => t.endsWith('.spec.ts'));
-    assert.equal(specs.length, 436);
-    assert.equal(chain.length, 436);
+    assert.equal(specs.length, 450);
+    assert.equal(chain.length, 450);
     assert.deepEqual(chain, specs);
     assert.ok(specs.includes('test/critical/opening-balances-ledger.spec.ts'));
-    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s13-mfa-begin-setup.spec.ts');
+    assert.equal(specs[specs.length - 1], 'test/critical/phase1-final-s14-module-documentation.spec.ts');
     console.log('  8. evidence spec wired into both critical lists (373 = 373, identical order), passed');
   }
 

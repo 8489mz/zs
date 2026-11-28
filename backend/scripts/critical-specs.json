@@ -435,6 +435,20 @@
     "test/critical/phase1-final-s12-crm-baseline.spec.ts",
     "test/critical/phase1-final-s12-addons-baseline.spec.ts",
     "test/critical/phase1-final-s12-module-documentation.spec.ts",
-    "test/critical/phase1-final-s13-mfa-begin-setup.spec.ts"
+    "test/critical/phase1-final-s13-mfa-begin-setup.spec.ts",
+    "test/critical/contracting-guarantee-gateway.spec.ts",
+    "test/critical/contracting-id-derived-numbers-core.spec.ts",
+    "test/critical/contracting-id-derived-numbers-ops.spec.ts",
+    "test/critical/contracting-indirect-allocation.spec.ts",
+    "test/critical/contracting-ipc-invariants.spec.ts",
+    "test/critical/phase1-final-s14-bosta-baseline.spec.ts",
+    "test/critical/p0a-commerce-shipping-rbac.spec.ts",
+    "test/critical/phase1-final-s14-gcc-shipping-baseline.spec.ts",
+    "test/critical/phase1-final-s14-activation-baseline.spec.ts",
+    "test/critical/ai-knowledge-agent.spec.ts",
+    "test/critical/copilot-live-answers.spec.ts",
+    "test/critical/copilot-top-seller.spec.ts",
+    "test/critical/p0a-mfa-ai-settings-boundaries.spec.ts",
+    "test/critical/phase1-final-s14-module-documentation.spec.ts"
   ]
 }
